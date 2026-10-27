@@ -22,8 +22,10 @@ describe('ParseTaskType', () => {
     }
   });
   it('refuses a multiclass task with fewer than three classes or an adverse index out of range', () => {
-    const r = TaskTypeRules.ParseTaskType(parsed('{"kind":"multiclass","classOrder":["a","b"],"adverseIndices":[5]}'));
-    expect(r.Ok).toBe(false);
+    const fewClasses = TaskTypeRules.ParseTaskType(parsed('{"kind":"multiclass","classOrder":["a","b"],"adverseIndices":[0]}'));
+    expect(fewClasses.Ok === false ? fewClasses.Errors : []).toContain('multiclass classOrder must list at least three class labels (two classes is a binary task)');
+    const badIndex = TaskTypeRules.ParseTaskType(parsed('{"kind":"multiclass","classOrder":["a","b","c"],"adverseIndices":[5]}'));
+    expect(badIndex.Ok === false ? badIndex.Errors : []).toContain('multiclass adverseIndices must index classOrder (0..2)');
   });
   it('parses count, continuous, non-negative and forecast kinds', () => {
     expect(TaskTypeRules.ParseTaskType(parsed('{"kind":"count"}'))).toEqual({ Ok: true, Value: { kind: 'count' } });

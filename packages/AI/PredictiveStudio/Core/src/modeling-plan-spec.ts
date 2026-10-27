@@ -95,7 +95,7 @@ export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'll
 export interface FeatureStepWarning {
   /** The name of the candidate feature that was dropped or could not be mapped. */
   FeatureName: string;
-  /** The kind of feature ('numeric' | 'categorical' | 'embedding' | 'llm-derived'). */
+  /** The kind of feature ('numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived'). */
   Kind: CandidateFeatureKind | (string & {});
   /** Explanatory reason why the feature was dropped or requires upstream handling. */
   Reason: string;

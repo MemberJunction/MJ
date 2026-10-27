@@ -87,7 +87,7 @@ export type IncumbentHeuristic = { readonly kind: 'none' } | { readonly kind: 'r
 
 /**
  * Who authored a version or started an action — data, never a permission by itself. `human` is a user; `agent`,
- * `scheduled-job` and `system` are the automated authors, and every rule in this PR accepts them unless a protocol
+ * `scheduled-job` and `system` are the automated authors, and every rule accepts them unless a protocol
  * opts into `GuardFieldsEditableBy: 'human-only'`. The publish record adds the `automated-gate` approver
  * (an automatic publish).
  */

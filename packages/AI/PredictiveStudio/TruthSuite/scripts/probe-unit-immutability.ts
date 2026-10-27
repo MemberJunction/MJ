@@ -9,13 +9,14 @@
  */
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { IMetadataProvider } from '@memberjunction/core';
 import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { LoadClientConfig } from '@memberjunction/testing-integration';
 
 const PROBE_UNIT_NAME = 'Member renewal (immutability probe)';
 const ENTITY_NAME = 'MJ: Prediction Units';
+/** Placeholder author user id: the unit's AuthoredBy JSON needs a UUID-shaped value; it is not resolved to a user. */
+const PROBE_AUTHOR_USER_ID = '3B0F6C59-0000-4000-8000-000000000001';
 
 /** Connect with the system API key on a separate connection and return the provider. */
 async function connect(): Promise<GraphQLDataProvider> {
@@ -41,7 +42,7 @@ function fillProbeUnit(unit: MJPredictionUnitEntity): void {
   unit.ChangeHistoryPolicy = JSON.stringify({ onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' });
   unit.DecisionSpec = JSON.stringify({ action: 'renewal outreach', actorRole: 'membership team', capacityPerPeriod: 150, period: 'month' });
   unit.IncumbentHeuristic = JSON.stringify({ kind: 'none' });
-  unit.AuthoredBy = JSON.stringify({ kind: 'human', userId: '3B0F6C59-0000-4000-8000-000000000001' });
+  unit.AuthoredBy = JSON.stringify({ kind: 'human', userId: PROBE_AUTHOR_USER_ID });
 }
 
 /** Reloads the saved unit and compares its LineageRootID to its ID. */
@@ -56,15 +57,18 @@ async function probeEdit(provider: GraphQLDataProvider): Promise<void> {
   fillProbeUnit(unit);
   const firstSave = await unit.Save();
   console.log(`first save: ${firstSave}`);
-  if (!firstSave) console.log(unit.LatestResult?.CompleteMessage);
-  else console.log(`lineage root equals id: ${await lineageRootEqualsID(provider, unit.ID)}`);
+  if (!firstSave) {
+    console.log(unit.LatestResult?.CompleteMessage);
+    return;
+  }
+  console.log(`lineage root equals id: ${await lineageRootEqualsID(provider, unit.ID)}`);
   unit.LabelWindowDays = 365;
   console.log(`second save: ${await unit.Save()}`);
   console.log(unit.LatestResult?.CompleteMessage);
 }
 
 async function cleanup(provider: GraphQLDataProvider): Promise<void> {
-  const found = await RunView.FromMetadataProvider(provider as IMetadataProvider).RunView<MJPredictionUnitEntity>(
+  const found = await RunView.FromMetadataProvider(provider).RunView<MJPredictionUnitEntity>(
     { EntityName: ENTITY_NAME, ExtraFilter: `Name='${PROBE_UNIT_NAME}'`, ResultType: 'entity_object' },
     provider.CurrentUser,
   );

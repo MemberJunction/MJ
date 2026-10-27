@@ -32,7 +32,7 @@ function baseSpec(overrides: Partial<ModelingPlanSpec> = {}): ModelingPlanSpec {
   };
 }
 
-describe('modelingPlanToPipelineConfig', () => {
+describe('ModelingPlanToPipelineConfig', () => {
   it('maps the plan into a concrete, trainable pipeline configuration', () => {
     const cfg = ModelingPlanToPipelineConfig(baseSpec());
     expect(cfg.targetEntityName).toBe('Memberships');

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity } from '@memberjunction/core';
 
 // Neutralize class-factory registration, as the package's other entity tests do.
@@ -7,8 +7,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
   return { ...actual, RegisterClass: () => (target: object) => target };
 });
 
-import { VersionedRowGuard } from '../custom/MJPredictionUnitEntityServer.server';
-import { MJPredictionUnitEntityServer } from '../custom/MJPredictionUnitEntityServer.server';
+import { MJPredictionUnitEntityServer, VersionedRowGuard } from '../custom/MJPredictionUnitEntityServer.server';
 import { MJEvaluationProtocolEntityServer } from '../custom/MJEvaluationProtocolEntityServer.server';
 import { MJTrainingSnapshotEntityServer } from '../custom/MJTrainingSnapshotEntityServer.server';
 import { MJMLTrainingPipelineEntityServer } from '../custom/MJMLTrainingPipelineEntityServer.server';
@@ -66,9 +65,12 @@ describe.each([
   ['MJ: Prediction Units', MJPredictionUnitEntityServer],
   ['MJ: Evaluation Protocols', MJEvaluationProtocolEntityServer],
 ])('%s Save adopts the lineage root', (_name, ctor) => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it('sets LineageRootID to ID on a new version-1 row before the base save runs', async () => {
     let rootAtBaseSave = '';
-    const baseSave = vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: { LineageRootID: string }) {
+    vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: { LineageRootID: string }) {
       rootAtBaseSave = this.LineageRootID;
       return true;
     });
@@ -78,16 +80,14 @@ describe.each([
     const blank = newRowOf(ctor, { IsSaved: false, Version: 1, ID: 'ID-2', LineageRootID: '' });
     await blank.Save();
     expect(blank.LineageRootID).toBe('ID-2');
-    baseSave.mockRestore();
   });
   it('leaves a later version and a saved row alone', async () => {
-    const baseSave = vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
+    vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
     const later = newRowOf(ctor, { IsSaved: false, Version: 2, ID: 'ID-3', LineageRootID: 'ROOT' });
     await later.Save();
     expect(later.LineageRootID).toBe('ROOT');
     const saved = newRowOf(ctor, { IsSaved: true, Version: 1, ID: 'ID-4', LineageRootID: 'ROOT' });
     await saved.Save();
     expect(saved.LineageRootID).toBe('ROOT');
-    baseSave.mockRestore();
   });
 });

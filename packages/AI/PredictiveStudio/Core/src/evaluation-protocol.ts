@@ -116,7 +116,8 @@ export interface EvaluationProtocolColumns {
 }
 
 /**
- * The Evaluation Protocol's column checks and its typed parser: static members on one owner class. The protocol behaviour rules live in EvaluationProtocolRules (evaluation-protocol-rules.ts).
+ * The Evaluation Protocol's column checks and its typed parser: static members on one owner class. The protocol
+ * behaviour rules live in EvaluationProtocolRules (evaluation-protocol-rules.ts).
  */
 export class EvaluationProtocol {
   /** The only producer of a {@link NonNegative} (a margin or a budget). */

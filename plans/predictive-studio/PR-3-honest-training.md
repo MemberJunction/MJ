@@ -105,6 +105,7 @@ pnpm run build; echo "build exit=$?"           # → build exit=0
 pnpm mj migrate
 pnpm mj codegen --skipfiles
 pnpm mj sync push --dir=metadata --ci
+pnpm mj sync push --dir=metadata-optional/integration-test --ci   # the integration suites' rows; restore the sync write-backs afterwards
 pnpm mj codegen --skipdb
 pnpm run build; echo "build exit=$?"           # → build exit=0
 pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:provision   # PR 2: pstruth schema + entities
@@ -2007,7 +2008,7 @@ baseline the later milestones compare with: the keep-list run's three counts (Co
 **Interfaces:** Produces `JsonValue`, `ParseResult<T>`, `JsonParse.ParseJsonText`, `TaskType`, `TaskTypeRules.ScoreSemantics`,
 `TaskTypeRules.LegacyProblemTypeForTask`, `TaskTypeRules.ParseTaskType` (§5.1).
 
-- [ ] Step 1: Write the failing test `Core/src/__tests__/task-type.test.ts`:
+- [x] Step 1: Write the failing test `Core/src/__tests__/task-type.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2070,8 +2071,8 @@ describe('LegacyProblemTypeForTask', () => {
 });
 ```
 
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test -- task-type` → fails: `Failed to resolve import "../task-type"`.
-- [ ] Step 3: Implement `Core/src/json-value.ts`:
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test -- task-type` → fails: `Failed to resolve import "../task-type"`.
+- [x] Step 3: Implement `Core/src/json-value.ts`:
 
 ```ts
 /**
@@ -2336,7 +2337,7 @@ export * from './json-value';
 export * from './task-type';
 ```
 
-- [ ] Step 4: `pnpm test -- task-type` → `8 passed` (the eight `it()` blocks of Step 1's file); `pnpm run build; echo "build exit=$?"` → `build exit=0`.
+- [x] Step 4: `pnpm test -- task-type` → `8 passed` (the eight `it()` blocks of Step 1's file); `pnpm run build; echo "build exit=$?"` → `build exit=0`.
 
 #### Task M1.2: Core unit, assembly and protocol contracts with parsers
 
@@ -2346,7 +2347,7 @@ export * from './task-type';
 
 **Interfaces:** Produces every name in §5.1's Core table for these three files.
 
-- [ ] Step 1: Write the failing tests. `Core/src/__tests__/prediction-unit.test.ts`:
+- [x] Step 1: Write the failing tests. `Core/src/__tests__/prediction-unit.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2502,9 +2503,9 @@ describe('ToNonNegative', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm test -- prediction-unit evaluation-protocol-shape` → fails: unresolved imports `../prediction-unit`,
+- [x] Step 2: `pnpm test -- prediction-unit evaluation-protocol-shape` → fails: unresolved imports `../prediction-unit`,
   `../evaluation-protocol`.
-- [ ] Step 3: Implement `Core/src/prediction-unit.ts`:
+- [x] Step 3: Implement `Core/src/prediction-unit.ts`:
 
 ```ts
 /**
@@ -3400,7 +3401,7 @@ export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'll
 Append to `Core/src/index.ts`: `export * from './prediction-unit'; export * from './assembly-contract'; export * from
 './evaluation-protocol';`.
 
-- [ ] Step 4: `pnpm test` (Core) → all pass, including `prediction-unit` 6 and `evaluation-protocol-shape` 4;
+- [x] Step 4: `pnpm test` (Core) → all pass, including `prediction-unit` 6 and `evaluation-protocol-shape` 4;
   `pnpm run build; echo "build exit=$?"` → `build exit=0`. Then find every exhaustive switch over `FeatureKind` /
   `CandidateFeatureKind` that the new member breaks: `cd $MJ && pnpm run build 2>&1 | grep -E "error TS(2366|2678|7030)"`
   → for each hit, add a `case 'decision-derived':` that behaves like `'llm-derived'` (a persisted, pinned value; the
@@ -3413,25 +3414,25 @@ time, §5.2; §5.2 + appended CodeGen) ·
 Regenerated `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/MJServer/src/generated/**`,
 `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**`
 
-- [ ] Step 1: Write the "failing test" — the database check that the schema is absent:
+- [x] Step 1: Write the "failing test" — the database check that the schema is absent:
   ```bash
   set -a; source .env.MJ_PS_PR3_<agent>; set +a
   sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d "$DB_DATABASE" -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name='__mj' AND t.name IN ('PredictionUnit','EvaluationProtocol','TrainingSnapshot'); SELECT COUNT(*) FROM __mj.Entity WHERE Name IN ('MJ: Prediction Units','MJ: Evaluation Protocols','MJ: Training Snapshots');"
   ```
   Expected now: `0` and `0`.
-- [ ] Step 2: Name the file now (§5.2): `V$(date -u +%Y%m%d%H%M)__v6.2.x__PS_Honest_Training_Schema.sql` (the newer series
+- [x] Step 2: Name the file now (§5.2): `V$(date -u +%Y%m%d%H%M)__v6.2.x__PS_Honest_Training_Schema.sql` (the newer series
   if A-SERIES found one), then run §8.2 A-SERIES's timestamp check with that name → it prints that name. Write the
   migration with exactly §5.2's SQL. Run `pnpm mj migrate` → `Successfully applied 1 migration`.
-- [ ] Step 3: Run `pnpm mj codegen`, then append the capture exactly as §5.3 steps 2–3. Gates:
+- [x] Step 3: Run `pnpm mj codegen`, then append the capture exactly as §5.3 steps 2–3. Gates:
   `node .github/scripts/check-migration-entityfield-sequence.mjs` → `0 finding(s)`; `npm run check:codegen-tail` → exit 0.
-- [ ] Step 4: Re-run step 1's query → `3` and `3`. Then the column check:
+- [x] Step 4: Re-run step 1's query → `3` and `3`. Then the column check:
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT e.Name, f.Name FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID=f.EntityID WHERE (e.Name='MJ: ML Training Pipelines' AND f.Name IN ('PredictionUnitID','EvaluationProtocolID')) OR (e.Name='MJ: ML Training Runs' AND f.Name IN ('TrainingSnapshotID','EvaluationProtocolID','CodeVersion','ComputeSeconds')) OR (e.Name='MJ: Feature Values' AND f.Name IN ('EffectiveAsOf','InputAsOf')) ORDER BY 1,2; SELECT Name, TrackRecordChanges FROM __mj.Entity WHERE Name IN ('MJ: Prediction Units','MJ: Evaluation Protocols','MJ: Training Snapshots');"
   ```
   Expected: 8 field rows; the three entities with `TrackRecordChanges = 1`.
-- [ ] Step 5: `grep -c "export class MJPredictionUnitEntity extends\|export class MJEvaluationProtocolEntity extends\|export class MJTrainingSnapshotEntity extends" packages/MJCoreEntities/src/generated/entities/__mj.ts` → `3`.
+- [x] Step 5: `grep -c "export class MJPredictionUnitEntity extends\|export class MJEvaluationProtocolEntity extends\|export class MJTrainingSnapshotEntity extends" packages/MJCoreEntities/src/generated/entities/__mj.ts` → `3`.
   `pnpm run build; echo "build exit=$?"` → `0`. Clean-room proof (§5.3 step 4) → no new `CodeGen_Run_*.sql`, no diff.
-- [ ] Step 6: Runtime: the self-referencing version-1 insert works.
+- [x] Step 6: Runtime: the self-referencing version-1 insert works.
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; DECLARE @id UNIQUEIDENTIFIER = NEWID(); BEGIN TRAN; INSERT __mj.PredictionUnit (ID,LineageRootID,Version,Name,UnitRows,LabelRule,LabelWindowDays,TaskType,LabelVersion,Censoring,ChangeHistoryPolicy,DecisionSpec,IncumbentHeuristic,AuthoredBy) VALUES (@id,@id,1,N'probe',N'{}',N'{}',30,N'{}',1,N'{}',N'{}',N'{}',N'{}',N'{}'); SELECT COUNT(*) FROM __mj.PredictionUnit WHERE ID=@id AND LineageRootID=@id; ROLLBACK;"
   ```
@@ -3448,7 +3449,7 @@ Regenerated `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/
 `PredictionUnit.DescribeLabelRule`, `PredictionUnit.UnitRowEntityName`. Produces `VersionedRowGuard.GetVersionedRowUpdateProblem`, `MJPredictionUnitEntityServer.GetPredictionUnitRowProblems`,
 `MJTrainingSnapshotEntityServer.GetTrainingSnapshotRowProblems`, `MJMLTrainingPipelineEntityServer.GetPipelineUnitProtocolProblems` (pure, exported for tests).
 
-- [ ] Step 1: Write the failing test `PredictiveStudioVersionedEntities.test.ts`:
+- [x] Step 1: Write the failing test `PredictiveStudioVersionedEntities.test.ts`:
 
 ```ts
 import { describe, it, expect, vi } from 'vitest';
@@ -3504,9 +3505,9 @@ describe('GetPipelineUnitProtocolProblems', () => {
 });
 ```
 
-- [ ] Step 2: `cd packages/MJCoreEntitiesServer && pnpm test -- PredictiveStudioVersionedEntities` → fails: unresolved
+- [x] Step 2: `cd packages/MJCoreEntitiesServer && pnpm test -- PredictiveStudioVersionedEntities` → fails: unresolved
   imports.
-- [ ] Step 3: Implement. `MJPredictionUnitEntityServer.server.ts`:
+- [x] Step 3: Implement. `MJPredictionUnitEntityServer.server.ts`:
 
 ```ts
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/core';
@@ -3749,11 +3750,11 @@ export * from './custom/MJEvaluationProtocolEntityServer.server';
 export * from './custom/MJTrainingSnapshotEntityServer.server';
 ```
 
-- [ ] Step 4: `pnpm test` (MJCoreEntitiesServer) → all pass incl. the 5 new; `pnpm run build` → exit 0; rebuild the
+- [x] Step 4: `pnpm test` (MJCoreEntitiesServer) → all pass incl. the 5 new; `pnpm run build` → exit 0; rebuild the
   server manifest: `cd packages/ServerBootstrap && pnpm run build; echo "exit=$?"` → `exit=0`, and
   `grep -c "MJPredictionUnitEntityServer\|MJEvaluationProtocolEntityServer\|MJTrainingSnapshotEntityServer" src/generated/mj-class-registrations.ts`
   → `6` (import + registration line each).
-- [ ] Step 5: Runtime verification. Restart MJAPI (4031). Through the GraphQL API (the Explorer is not needed — use
+- [x] Step 5: Runtime verification. Restart MJAPI (4031). Through the GraphQL API (the Explorer is not needed — use
   the truth-suite client `pnpm --filter @memberjunction/predictive-studio-truth-suite exec tsx scripts/probe-unit-immutability.ts`,
   a 40-line script you write in `TruthSuite/scripts/` that logs in with `MJ_API_KEY`, creates a version-1 unit from
   `c1Row()`'s values with `ID = LineageRootID = randomUUID()`, saves it, changes `LabelWindowDays` to 365 and saves
@@ -3772,13 +3773,13 @@ export * from './custom/MJTrainingSnapshotEntityServer.server';
 
 **Files:** Modify this plan's §9 (D3-01) and §8.2 (assumption checks A-4166, A-4104).
 
-- [ ] Step 1: Re-check both PRs: `gh pr view 4166 --json state,mergedAt`; `gh pr view 4104 --json state,mergedAt`.
-- [ ] Step 2: If **neither is merged** (the state at plan time): nothing to code; record in §11 that D3-01 holds.
-- [ ] Step 3: Tick as n/a when #4104 stays closed (Step 1's output; the state at the kickoff refresh). If **#4104 merged**: its `FeatureStepKind` adds `'action'` and its `ProblemType` is unchanged. Add
+- [x] Step 1: Re-check both PRs: `gh pr view 4166 --json state,mergedAt`; `gh pr view 4104 --json state,mergedAt`.
+- [x] Step 2: If **neither is merged** (the state at plan time): nothing to code; record in §11 that D3-01 holds.
+- [x] Step 3: Tick as n/a when #4104 stays closed (Step 1's output; the state at the kickoff refresh). If **#4104 merged**: its `FeatureStepKind` adds `'action'` and its `ProblemType` is unchanged. Add
   `'action'` to M3's unsupported-step refusal list (an Action-computed feature has no as-of semantics until it
   declares a dated source; `unsupported-step-kind`), and regenerate entities after merging `next` (its component
   entities collide only in generated files — re-run §5.3 step 4 to prove the generated output is consistent).
-- [ ] Step 4: Tick as n/a when #4166 stays closed (Step 1's output; the state at the kickoff refresh). If **#4166 merged**: `ProblemType` gains `'sequence'` (HMM latent state, no label window). PR 3 does not
+- [x] Step 4: Tick as n/a when #4166 stays closed (Step 1's output; the state at the kickoff refresh). If **#4166 merged**: `ProblemType` gains `'sequence'` (HMM latent state, no label window). PR 3 does not
   add a `sequence` `TaskKind` (D3-01): a pipeline whose `ProblemType = 'sequence'` is treated as a legacy pipeline,
   trained by #4166's path until M11, and M11 migrates it to `Status = 'Archived'` with a `Notes` line naming D3-01 — it
   cannot be expressed as a Prediction Unit. Widen `TaskTypeRules.LegacyProblemTypeForTask`'s return type to the generated
@@ -30655,6 +30656,8 @@ corrected, B-REGISTRY-TEST).
   gates `BaseEntity` only) and `npm run mj:manifest` (no such script; the root build's `prebuild` regenerates). Reason:
   each claim verified against `origin/next` @ `6e2b57017b`. Scope unchanged: every edit is plan text, no task, milestone
   or allowlist path added; alias deletion in touched files was already D-053.
+- **D3-77** · A version-1 Prediction Unit or Evaluation Protocol row adopts its own ID as its lineage root on create, server-side (`MJPredictionUnitEntityServer.Save` / `MJEvaluationProtocolEntityServer.Save`, `VersionedRowGuard.AdoptOwnLineageRoot`): over GraphQL the client provider never sends a primary key on a create (`GraphQLDataProvider.Save` sends it only for a saved row or an IS-A promotion), so a client cannot pre-choose the ID; the server mints it and the override sets `LineageRootID = ID` before validation. In-process writers that set an explicit ID (M2's `CreatePredictionUnitV1`) keep it. The Core parse rule and the DB CHECK are unchanged. Reason: M1.4 Step 5's expected output requires a v1 created over the wire to save; the fix stays inside allowlisted files. *Scope note for the owner:* the general fix — the client provider sending an explicitly set primary key on create — is a foundational-package change (D-062 (4)) and is not made here. *Rejected:* making `ID` writable through the API by metadata (`IsPrimaryKey` alone makes it read-only client-side); restricting v1 creation to in-process writers.
+- **D3-78** · The keep-list's Feature Pipelines suite is recorded as environment-blocked at every milestone: it needs a bizapps-common install, host CodeGen and an `mj.config.cjs` edit (guides/INTEGRATION_TESTING_QUICKSTART.md), which neither PR 2's nor PR 3's private database has (both hold only `__mj`, `__mj_UDT`, `pstruth`); §4.3's "5 of 5" line came from the guide, not from PR 2's environment. PR 3's feature-pipeline changes are covered by the feature-pipelines unit suites, IT124/IT126 in the deterministic tier and the M3 gates. The owner may order the install before M12; until then every §11 entry records the suite as blocked with this reason.
 
 ### 9.2 Risks
 
@@ -30868,6 +30871,43 @@ Product-direction questions keep a working automated default; the others are dec
 - **State left behind:** none.
 - **Next step (exact):** unchanged — refresh trigger (a) after PR 2 merges, then M1 Task M1.1 Step 1.
 - **Gotchas / decisions:** §8.3 A-PR2-REGISTRY and A-PR2-TREE need a reconciliation pass when PR 2 merges.
+
+### 2026-10-27 13:39 EDT — Claude Fable 5.1 (controller) + Sonnet/Opus subagents — M1
+
+- **Branch / HEAD:** `ps/pr-3-honest-training` @ the checkpoint commit that follows `ad739a4746` (pushed: yes, after step 8).
+- **Database / ports:** `MJ_PS_PR3_claude` (state: clean; the M1.4 probe rows were removed, `SELECT COUNT(*) FROM __mj.PredictionUnit` → 0), MJAPI :4031 (stopped), truth sidecar (stopped).
+- **Done this session:** M1.1 `9261d3fe66` (Core JSON helpers, `TaskType`); M1.2 `b77e1dca92` (unit, assembly and protocol contracts with parsers, `decision-derived`); M1.3 `6f1821aba5` (migration, CodeGen for Prediction Unit, Evaluation Protocol, Training Snapshot); M1.4 `ad739a4746` (immutable-version entity servers, pipeline unit/protocol check); M1.5 n/a (neither #4166 nor #4104 is merged: `gh pr view` → `{"mergedAt":null,"state":"CLOSED"}` for both, so D3-01 holds and Steps 3 and 4 are n/a); this close commit (audit fixes, one strengthened test, plan ticks, D3-77/D3-78, §2.3 line, this entry).
+- **Tests (baseline = M1's start, 2026-10-27 11:59):**
+  - `cd packages/AI/PredictiveStudio/Core && pnpm test` → 162 passed / 0 failed / 0 skipped (11 files; 144 before M1; +8 task-type, +6 prediction-unit, +4 evaluation-protocol-shape = 162).
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 480 passed / 0 failed / 0 skipped (48 files; unchanged by the `FeatureKind` widening).
+  - `cd packages/MJCoreEntitiesServer && pnpm test` → 1034 passed / 0 failed / 0 skipped (71 files; 1025 + 9 new).
+  - `pnpm run build` at the root → exit 0 (310 tasks successful). `node .github/scripts/check-migration-entityfield-sequence.mjs` → "no literal EntityField sequences in changed migrations" (exit 0). `npm run check:codegen-tail` → OK (433 entities, 762 migrations).
+  - Sidecar `pnpm run test:python -- -p no:cacheprovider` → 127 passed / 0 failed / 0 skipped (baseline 127).
+  - `cd packages/TestingFramework/integration-test-suite && pnpm test` → 774 passed / 0 failed / 0 skipped (49 files; baseline 774; the bundle total `toHaveLength` value is 154). PR 3 gate-row count (`Tags LIKE '%owner:PR3%'`, Active) → 0.
+  - Keep-list (run with `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1`): Containment → 10 passed / 0 failed / 0 skipped (of 10, baseline 10 of 10). Feature Pipelines → ENVIRONMENT-BLOCKED (D3-78): bizapps-common is not installed in this database (schemas `__mj`, `__mj_UDT`, `pstruth`; 0 entities with BizApps in name or schema); baseline run: 0 of 5 for that reason (C1 → C2.1, C2.2, C2.3, C2.5 and IT125 "the job-title pipeline is installed (bizapps-common)"). Deterministic → 115 passed / 1 failed / 1 skipped (of 117); equal to the baseline; failed: IT29 - Cache Gauntlet (`cache-gauntlet.CG5`: "TotalRowCount (1) must exceed the truncated row count (1) — this is the #3195 collapse"; a known `next` failure kept as the baseline, D-062 forbids fixing it here); skipped: IT52 (RUN_SEARCH_TESTS not set). No new failure.
+  - Milestone-exit gate: see the commit body (the gate ran after this entry was written).
+- **Runtime verification:** M1.3: absence check `0`/`0`, presence `3`/`3`, 8 new column rows, `TrackRecordChanges = 1` on all three entities, version-1 self-referencing insert accepted (`1`) and rolled back (0 rows); clean-room proof (drop and recreate the database → migrate 144 applied → `codegen --skipfiles` → `sync push --dir=metadata --ci` → `codegen --skipdb`, no new `CodeGen_Run`, generated trees identical). M1.4: probe over the wire (`tsx scripts/probe-unit-immutability.ts`) → `first save: true`, `lineage root equals id: true`, `second save: false` with "MJ: Prediction Units rows are immutable versions; LabelWindowDays cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID)."; `Version | LabelWindowDays` = `1 | 400`; Record Changes Create count 1; `--cleanup` → `delete: true`. Re-run at this close after the guard was restored: same three lines, count 0 afterwards.
+- **Mutation checks (guard → mutation → failing test; each restored and re-run green):**
+  1. `TaskTypeRules.parseBinary` → `order.length !== 2` dropped → `ParseTaskType › refuses a binary task with one class label or a bad adverse index`.
+  2. `TaskTypeRules.parseMulticlass` → `order.length < 3` dropped → `ParseTaskType › refuses a multiclass task with fewer than three classes or an adverse index out of range`. **First run: no test turned red** (the test used a two-class order with an out-of-range index, so the index check alone satisfied `Ok === false`). The test now asserts both messages separately (two classes with a valid index; three classes with index 5); with the mutation it fails, restored it passes.
+  3. `ParseTaskType` Tweedie → `power > 1 && power < 2` → `power > 0` → `ParseTaskType › refuses a Tweedie power outside (1, 2) and an unknown kind`.
+  4. `ParsePredictionUnitRow` next-period check deleted → `ParsePredictionUnitRow › refuses a next-period label on a grain unit`.
+  5. `parseTemporalSpec` `lag < horizon` → `lag < 0` → `ParsePredictionUnitRow › refuses a forecast without a Temporal Spec and a lag inside the horizon`.
+  6. `checkScalarColumns`: (a) version-1 root push deleted, (b) LabelVersion push deleted (each alone) → `ParsePredictionUnitRow › refuses a version-1 row whose lineage root is not itself, and a LabelVersion above Version`.
+  7. `parseDecisionDate` accepts any `advance` → `ParsePredictionUnitRow › reads a fixed decision date that advances each run and refuses any other advance value`.
+  8. `LabelDefinitionChanged` key without `windowDays` → `LabelDefinitionChanged › is true when the outcome window changes and false when only the name changes`.
+  9. `checkAllowedOutcomes`, `checkPromotionMargin`, `checkHoldoutShape`, `IsGuardFieldsEditableBy` (each push neutralised in turn, four runs) → each failed `GetEvaluationProtocolShapeProblems › refuses allowed outcomes without no-signal, a negative margin, fewer than five rolling origins and an unknown guard-field setting`.
+  10. `checkPrimaryScore` `allowed.includes(metric)` → `true` → `GetEvaluationProtocolShapeProblems › refuses a primary score whose metric does not belong to its family`.
+  11. `ToNonNegative` `x < 0` removed → `ToNonNegative › throws below zero`.
+  12. `GetVersionedRowUpdateProblem` always returns null → `GetVersionedRowUpdateProblem › refuses any change to a saved version, naming the fields`.
+  13. `VersionedRowGuard.AddProblems` unwired from `MJPredictionUnitEntityServer.Validate` (`return super.Validate()`) → LIVE: rebuilt MJCoreEntitiesServer, restarted MJAPI, probe printed `first save: true`, `lineage root equals id: true`, `second save: true`; `--cleanup` → `delete: true`; guard restored, rebuilt, MJAPI restarted, probe printed `second save: false`; cleanup → `delete: true`, row count 0.
+  14. `GetTrainingSnapshotRowProblems` `ReadComplete` check dropped → `GetTrainingSnapshotRowProblems › refuses an incomplete read and a malformed hash`.
+  15. `GetPipelineUnitProtocolProblems`: (a) `family !== taskKind` → `false` → `› refuses a protocol whose primary score family differs from the unit task kind`; (b) `UUIDsEqual` check → `false` → `› refuses legacy columns that disagree with the unit`.
+  Result: 15 of 15 rows turn a named test red; one (row 2) needed a strengthened test. `git status --short` after the runs showed only intended edits.
+- **Standards self-audit (`git diff origin/next...HEAD -- packages/` against dev-best-practices.md and constraints §2):** findings and fixes (behaviour unchanged; Core, Engine and MJCoreEntitiesServer rebuilt and re-tested green): (1) `prediction-unit.ts` JSDoc said "this PR" → reworded; missing end-of-file newline → added. (2) `modeling-plan-spec.ts` `FeatureStepWarning.Kind` JSDoc listed four kinds → lists five. (3) `modeling-plan-to-pipeline.ts` map `llmPipelineMap` (now also holds decision-derived features) → `persistedFeaturesByPipeline`. (4) `evaluation-protocol.ts` class JSDoc line (192 characters) → wrapped. (5) `PredictiveStudioVersionedEntities.test.ts`: `mockRestore()` moved to an `afterEach` (`vi.restoreAllMocks()`), duplicate import lines merged, unused spy variables dropped. (6) `probe-unit-immutability.ts`: needless `provider as IMetadataProvider` cast and its type import removed, `probeEdit` returns early when the first save fails, the author user UUID is the constant `PROBE_AUTHOR_USER_ID` with a comment. (7) D-053: `git grep -n "@deprecated"` over the touched product files found two: the plan-mandated `ProblemType` tag in `sidecar-contract.ts` (kept; a type deprecation, not a lowercase alias) and a lowercase alias `modelingPlanToPipelineConfig` in the touched `modeling-plan-to-pipeline.ts`, which I deleted (no caller outside its own doc comment in `agent/index.ts`, now pointing at `ModelingPlanToPipelineConfig`; the test `describe` was renamed to match). Count after: 1. Scans for plan vocabulary (`M<n>`, `D3-xx`, `PR 3`, `§`), `any`, `.Get(`/`.Set(`, `.then(` and dynamic `import(` in M1's added lines found none. Not changed: pre-existing 150-plus-character lines in generated-adjacent contract files; `guides/PREDICTIVE_STUDIO_GUIDE.md` line 829 still names the lowercase alias (outside the allowlist; the guide text is not part of PR 3's M1).
+- **State left behind:** none (servers and sidecar stopped, `lsof -i :4031` empty; the integration-suite benchmark-log rewrites restored from HEAD; database holds no probe data).
+- **Next step (exact):** M2 start: `git fetch origin && git merge origin/next`, then Task M2.1 Step 0 (the parquet reader / `pyarrow==25.0.1` pin) in the TruthSuite venv.
+- **Gotchas / decisions:** (a) the migration carries two generated sections: CodeGen's second pass adds the virtual `TrainingSnapshot` name field on ML Training Runs once the Training Snapshot entity exists; any later DDL change regenerates both. (b) CodeGen writes its capture under `migrations/v5/` by default. (c) `mj migrate` reports "2 applied" because the repeatable `R__RefreshMetadata` reruns. (d) `check:guards` needs the four manifests regenerated (root build / ServerBootstrap builds) before it passes; M1.4 also regenerated ServerBootstrapLite (`pnpm run mj:manifest:server-bootstrap-lite`). (e) Core's and MJCoreEntitiesServer's tsconfigs are not `strict`, so `if (!r.Ok)` does not narrow a `ParseResult`: use `r.Ok === false` / `=== true`. (f) IT29 CG5 is a known `next` failure kept as the baseline. (g) The Feature Pipelines suite is environment-blocked (D3-78). (h) D3-77: a version-1 unit or protocol adopts its own ID as lineage root on create, server-side; scope note for the owner: the general fix (the client provider sending an explicitly set primary key on create) is a foundational-package change (D-062 (4)) and is not made. (i) The keep-list suites need `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1`, otherwise every Containment check is skipped. (j) §2.3's clean-build block now pushes `metadata-optional/integration-test` (the baseline run found it unpushed).
 
 ## 12. Refresh log (append-only)
 

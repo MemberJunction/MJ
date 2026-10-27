@@ -73,7 +73,7 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
 
   const warnings: FeatureStepWarning[] = [];
   const rawColumns: string[] = [];
-  const llmPipelineMap = new Map<string, string[]>();
+  const persistedFeaturesByPipeline = new Map<string, string[]>();
 
   for (const f of selected) {
     switch (f.Kind) {
@@ -87,9 +87,9 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
           (s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline'
         );
         if (pipelineSource) {
-          const list = llmPipelineMap.get(pipelineSource.Ref) ?? [];
+          const list = persistedFeaturesByPipeline.get(pipelineSource.Ref) ?? [];
           list.push(f.Name);
-          llmPipelineMap.set(pipelineSource.Ref, list);
+          persistedFeaturesByPipeline.set(pipelineSource.Ref, list);
         } else {
           warnings.push({
             FeatureName: f.Name,
@@ -123,7 +123,7 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
   if (rawColumns.length > 0) {
     steps.push({ Id: 'select-raw', Kind: 'select', Columns: rawColumns });
   }
-  for (const [pipelineRef, cols] of llmPipelineMap.entries()) {
+  for (const [pipelineRef, cols] of persistedFeaturesByPipeline.entries()) {
     steps.push({
       Id: `llm-derived-${pipelineRef}`,
       Kind: 'llm-derived',
@@ -241,9 +241,4 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
     leakageGuard: buildLeakageGuard(spec),
     validation,
   };
-}
-
-/** @deprecated Use {@link ModelingPlanToPipelineConfig}. */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentIndex?: number): PipelineConfig {
-  return ModelingPlanToPipelineConfig(spec, experimentIndex);
 }
