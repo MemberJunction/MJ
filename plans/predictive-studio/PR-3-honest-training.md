@@ -993,11 +993,17 @@ authoritative. Artifact bytes are never stored here (`StoredArtifactRef.fileId` 
 `reference/contracts/contracts.ts`: `prediction-unit.ts` (C1, the unit columns), `assembly-contract.ts` (C2, snapshot
 columns and files), `evaluation-protocol.ts` (C3, the protocol columns), `trainer-contract.ts` (C4, the sidecar wire),
 the `StoredTrainerResult`/`StoredGateRecord`/`HoldoutCarveSummary`/`TrainingRunResults` stores (D3-04, D3-28) and
-`GateInputs` (the parity case files, D3-57). PascalCase for every other new type and every class, interface method and
-static: `json-value.ts`, `task-type.ts`, `gate.ts` (except `GateInputs`), `incumbent-heuristic.ts`, `store-schemas.ts`,
-`metrics-util.ts`, `evaluation-protocol-rules.ts`, `holdout-carve.ts` (`CarveRow`), `selection.ts`, `trust.ts`, the
-M11 L0 helpers, every Engine module below, the harness additions and the gate checks (§5.4 lists each type it
-introduces with its casing).
+`GateInputs` (the parity case files, D3-57), `task-type.ts`'s `TaskType` (the C1 task-type column), `gate.ts`'s stored
+and parity shapes `PairedComparison`, `GateDecision`, `GateReason`, `StoredInterval`, `StoredGateIntervals`,
+`GateGuardInputs`, `GateGuardRefusal`, `store-schemas.ts`'s `RowProvenance` (`provenance.jsonl`) and
+`snapshot-serialization.ts`'s `SnapshotFeatureColumnHeader` / `SnapshotMatrixHeader` (`matrix.jsonl` line 1). PascalCase
+for every other new type and every class, interface method and static: `json-value.ts`, `task-type.ts` (`TaskTypeRules`,
+`ScoreSemanticsResult`), `gate.ts` (`GateRules`, `GuardedGateDecision`, `IntervalsFromResult`), `incumbent-heuristic.ts`,
+`store-schemas.ts` (`StoreSchemas`), `metrics-util.ts`, `evaluation-protocol-rules.ts` (`ProtocolRefusal`,
+`EvaluationProtocolRules`), `holdout-carve.ts` (`CarveRow`), `selection.ts`, `trust.ts`, the M11 L0 helpers, every Engine
+module below, the harness additions and the gate checks (§5.4 lists each type it introduces with its casing). The naming
+check also walks type literals nested in an exported alias (`Extract<X, { kind: … }>`), so such a line carries the marker
+on the line above (M3.3's `SeriesFeatureRef`); members of an exported interface are judged by name only.
 
 **Engine modules and exports** (`@memberjunction/predictive-studio`).
 
@@ -1967,7 +1973,7 @@ M5.2; `t2` and C2's `n400` M6.8; T2p's `n400` M8.3; N1c's, N1r's and W2-noise's 
 
 **Coding-standards invariants enforced at every milestone (`npm run check:standards` + step 2 self-audit):**
 - **CamelCase wire/persisted interface lines (D-039, D-067):** `npm run check:standards` (`naming-conventions`, severity `error` in `.mj-standards.json`) judges every member of every exported interface, type literal and enum. Only the persisted/wire shapes that §5.1's "Casing per module" paragraph lists as camelCase keep camelCase, and there every camelCase property line carries `// case-violation-ok-legacy-back-compat: contracts.ts wire name` on the line or the line above (as shown in M10.3's `run-evaluation.ts`); every other new exported type is PascalCase. The plan's snippets do not repeat the marker on every line — add it when writing the file.
-- **Deprecated aliases in touched files (§2.5, D-053):** when a task edits an existing file that carries `@deprecated` lowercase aliases (`ps-pipelines.component.ts` in M3.1, `delegation.ts` in M3.6, `maintenance-engine.ts` / `maintenance/metrics.ts` / `experiment/seams.ts` in M6.2, `ml-sidecar.ts` in M6.6, `evaluation-record.ts` / `importance-display.ts` in M7.2, `pipeline-builder.ts` / `business-predictions.view-models.ts` / `ps-predictions-resource.component.ts` in M10.4, `predictive-studio.nav.ts` / `ps-studio-resource.component.ts` in M11.2), delete the `@deprecated` aliases in that file and update any remaining callers (including inline Angular template bindings) in the same commit.
+- **Deprecated aliases in touched files (§2.5, D-053):** when a task edits an existing file that carries `@deprecated` lowercase aliases (by the task that first edits each, verified on `origin/next` @ `6e2b57017b`: `Engine/src/index.ts` in M2.3 (`isModelingPlanApproved`), `operations/delegation.ts` in M2.6 (eight stubs), `scoring/ml-model-inference-processor.ts` in M3.6 (`matrixToFeatureRows`; its test moves to `MLModelInferenceProcessor.MatrixToFeatureRows`), `metrics-util.ts` / `maintenance-engine.ts` / `maintenance/metrics.ts` / `experiment/seams.ts` in M6.2, `ml-sidecar.ts` in M6.6, `evaluation-record.ts` / `importance-display.ts` in M7.2, `agent/pipeline-builder-agent.ts` (four aliases; its test moves to the `PipelineBuilderAgent` statics) and `ml-experiment-results-viewer.component.ts` + `.html` (`formatScore`, `formatImportance`; the template's three bindings become `FormatScore` / `FormatImportance`) in M9.4, `pipeline-builder.ts` / `business-predictions.view-models.ts` / `ps-predictions-resource.component.ts` / `predictive-studio-agent-context.ts` (six aliases) in M10.4, `predictive-studio.nav.ts` / `ps-studio-resource.component.ts` in M11.2), delete the `@deprecated` aliases in that file and update any remaining callers (including inline Angular template bindings) in the same commit. No tool enforces this; the milestone self-audit runs `git grep -n "@deprecated" -- <touched files>` and records 0 lines.
 - **No plan/finding/gate IDs in product code or comments (D-043, D-049):** product files in `packages/` (outside `TruthSuite` and `integration-test-suite/src/checks/ps-*`) must not contain plan IDs (`M1`–`M12`, `D3-xx`, `PR 3`), finding IDs (`F-LK-1`, `F-TR-6`, `F-PIT-1`, etc.), or gate/criterion IDs (`G1.x`, `G2.x`, `S1.x`) in identifiers, strings, or comments — state the domain rule in plain words when writing the file from the plan snippet.
 
 **Milestone end** (every milestone, in this order, conventions §3): (1) the milestone's exit tests, each count recorded
@@ -7053,6 +7059,7 @@ import type { DatedSource, TemporalSpec } from '@memberjunction/predictive-studi
 import { MS_PER_DAY } from '../../prediction-unit/utc-day';
 
 /** A series feature reference, derived from the contract's `series` source (never restated). */
+// case-violation-ok-legacy-back-compat: `kind` is DatedSource's contracts.ts wire discriminant
 export type SeriesFeatureRef = Extract<DatedSource, { kind: 'series' }>['feature'];
 
 export interface SeriesPoint { readonly EntityKey: string; readonly Period: Date; readonly Value: number; readonly RowId: string }
@@ -23794,7 +23801,7 @@ export class LeaderboardRows {
   two exported interfaces (PR 2 already dropped `cvScore` and the CV column). In the template add a column after the
   score column: after `<th class="num">{{ TargetMetricLabel }}</th>` (anchor `m9-cv-column`) add
   `<th class="num">95% interval</th>`, and after the score cell (the `<td class="num">` holding
-  `<strong>{{ formatScore(row.score) }}</strong>`, anchor `m9-cv-cell`) add:
+  `<strong>{{ formatScore(row.score) }}</strong>`, anchor `m9-cv-cell`; this task also renames the template's `formatScore(...)` / `formatImportance(...)` bindings to `FormatScore` / `FormatImportance` and deletes the two `@deprecated` methods, §6 preamble) add:
 
 ```html
 <td class="num muted">
@@ -28286,7 +28293,7 @@ export const STUDIO_SECTIONS: readonly PSSection[] = [
 ];
 ```
 
-  - `predictive-studio-dashboards.module.ts` and `ps-studio-resource.component.ts` (anchor `m11-studio-switch`): because `PSStudioResourceComponent` is module-declared (`standalone: false` in `PredictiveStudioDashboardsModule`), add `PSVersionedListComponent` to `PredictiveStudioDashboardsModule.imports` in `packages/Angular/Explorer/dashboards/src/predictive-studio-dashboards.module.ts` (NOT on `@Component` of `PSStudioResourceComponent`), add the two `@case` blocks after `@case ('home')` and the open handler in `ps-studio-resource.component.ts` (navigation stays here, at L3), and delete the `@deprecated` lowercase getters/methods (`activeSection`, `sectionTitle`, `sectionIcon`, `sections`, `groups`, `sectionsFor`, `selectSection`, `onHomeNavigate`, `onSelectPipeline`, `onSelectSession`, `onCompareRuns`, `onOpenModel`, `onQuickTrainCompleted`, `onPromoteCandidate`, `onBackToHome`, `onClearComparison`) in `ps-studio-resource.component.ts` while updating its inline template bindings to their PascalCase counterparts (§2.5 / D-053):
+  - `predictive-studio-dashboards.module.ts` and `ps-studio-resource.component.ts` (anchor `m11-studio-switch`): because `PSStudioResourceComponent` is module-declared (`standalone: false` in `PredictiveStudioDashboardsModule`), add `PSVersionedListComponent` to `PredictiveStudioDashboardsModule.imports` in `packages/Angular/Explorer/dashboards/src/predictive-studio-dashboards.module.ts` (NOT on `@Component` of `PSStudioResourceComponent`), add the two `@case` blocks after `@case ('home')` and the open handler in `ps-studio-resource.component.ts` (navigation stays here, at L3), and delete the 32 `@deprecated` lowercase members (44 tags across getters, setters and methods on `origin/next`: `activeSection`, `pipelinesComponent`, `onCreatePipelineFromCatalog`, `chatOpen`, `pendingPrompt`, `chatConversation`, `chatConversationId`, `chatIsNewConversation`, `isNavCollapsed`, `navSizePct`, `mainSizePct`, `copilotSizePct`, `toggleNav`, `onNavSplitDragEnd`, `onCopilotSplitDragEnd`, `groups`, `itemsForGroup`, `activeLabel`, `activeSubtitle`, `mapNavigate`, `currentUser`, `chatEnvironmentId`, `modelDevAgentId`, `chatAppContext`, `onAskAgent`, `openCopilot`, `closeChat`, `copilotExpanded`, `toggleCopilotExpanded`, `onNavigationRequest`, `onChatConversationCreated`, `onChatPendingMessageConsumed`; `git grep -n "@deprecated" -- <file>` → 0 lines afterwards) in `ps-studio-resource.component.ts` while updating its inline template bindings to their PascalCase counterparts (§2.5 / D-053):
 
 ```html
 @case ('units') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Prediction Units" (OpenRecord)="OpenVersionedRecord('MJ: Prediction Units', $event)"></mj-ps-versioned-list> }
@@ -28403,7 +28410,7 @@ export const PS_RECORD_PANELS = [PSProtocolLineagePanel, PSUnitVersionsPanel, PS
   public static readonly RecordPanels = PS_RECORD_PANELS;
 ```
 
-  The ML model form's existing `<ps-model-detail>` panel (anchor `m11-model-form-detail`) stays; `MLModelFormPolicy.DecorateChrome` uses `left-nav` layout with `modelOverview` first (`ActiveGroupKey = 'modelOverview'`), and the evaluation panel's `before-fields` slot (`sortKey: 90`) appears as a left-nav section `"Evaluation (protocol results)"` (`ps-model-evaluation`). Step 5's spec selects that section and asserts the stored protocol results.
+  The ML model form's existing `<ps-model-detail>` panel (anchor `m11-model-form-detail`) stays; `MLModelFormPolicy.DecorateChrome` only moves `modelOverview` first and sets no layout, and the form resolves to about five chrome groups (one field-panel group, two related grids, the evaluation contribution, More), below `DEFAULT_AUTO_LEFT_NAV_AT` (8; `ResolveFormLayout` in `@memberjunction/core`), so it renders in `accordion` layout: no rail, and the evaluation panel mounts at the `before-fields` slot (`sortKey: 90`) above the field panels as an expanded `mj-collapsible-panel` (`SectionKey="ps-model-evaluation"`, `[DefaultExpanded]="true"`). The component's line-8 doc comment calling the form a left-nav experience is stale and is not edited (D3-74). Step 5's spec asserts that panel, then its contents.
 
 - [ ] Step 4: Run; expected pass. dashboards `pnpm test` (nav +1) → 0 failed, `pnpm run build` for dashboards → exit 0;
   `npm run check:ui`; `npm run check:standards` (ui-layers: dashboards is a `surface` package; it navigates through
@@ -28474,9 +28481,9 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
 
   test('the model form shows the stored protocol results, readable in light and dark themes', async ({ page }) => {
     await openRecordInApp(page, 'MJ: ML Models', need('PS_C1_MODEL_ID'));
-    const evalNav = page.locator('.mj-forms-chrome-rail-item', { hasText: 'Evaluation (protocol results)' });
-    await expect(evalNav).toHaveCount(1);
-    await evalNav.click();
+    const evalPanel = page.locator('mj-ps-model-evaluation-panel [data-section-key="ps-model-evaluation"]');
+    await expect(evalPanel).toHaveCount(1);
+    await expect(evalPanel.locator('.mj-forms-panel-header')).toContainText('Evaluation (protocol results)');
     await expect(page.locator('[data-testid="ps-eval-outcome"]')).toBeVisible();
     await expect(page.locator('[data-testid="ps-eval-reason"]')).toContainText('[');
     expect(await page.locator('[data-testid="ps-eval-baseline"]').count()).toBeGreaterThanOrEqual(3);
@@ -28485,9 +28492,9 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
     await expect(page.locator('[data-testid="ps-eval-leakage"], [data-testid="ps-eval-leakage-none"]')).toHaveCount(1);
     await expectReadable(page, '[data-testid="ps-eval"]');
     await openRecordInApp(page, 'MJ: ML Models', need('PS_LEGACY_MODEL_ID'));
-    const legacyEvalNav = page.locator('.mj-forms-chrome-rail-item', { hasText: 'Evaluation (protocol results)' });
-    await expect(legacyEvalNav).toHaveCount(1);
-    await legacyEvalNav.click();
+    const legacyEvalPanel = page.locator('mj-ps-model-evaluation-panel [data-section-key="ps-model-evaluation"]');
+    await expect(legacyEvalPanel).toHaveCount(1);
+    await expect(legacyEvalPanel.locator('.mj-forms-panel-header')).toContainText('Evaluation (protocol results)');
     await expect(page.locator('[data-testid="ps-eval-empty"]')).toContainText('not evaluated under an Evaluation Protocol');
   });
 });
@@ -29847,7 +29854,10 @@ agent and the Pipeline Builder, F-DOC-12) is corrected in M12.4.
 tick M11's steps → §11 handoff entry `— M11` → the milestone-exit command above → one checkpoint commit → push).
   M11's two halves (conventions §3): either run M11.1–M11.5 sequentially on `ps/pr-3-honest-training`, or branch `--m11b` after M11.1 Step 3 commits `Core/src/protocol-rows.ts`; each sub-branch (`--m11a`, `--m11b`) ends with its own commit pushed to its own
   same-named upstream; the M11 milestone end above runs on `ps/pr-3-honest-training` once both are merged back and
-  M11.3 Step 6 is done.
+  M11.3 Step 6 is done. The root `pnpm run build` among the milestone-exit commands regenerates the four
+  `mj-class-registrations.ts` manifests (Bootstrap `prebuild`; M11.2's panels and M11.3's action are new registered
+  classes): commit them in M11's checkpoint. `check:guards` gates `BaseEntity` registrations only, and the manifest
+  freshness gate runs on pushes to `next`, so a stale manifest would surface only after merge.
 
 **Checkpoint commit:** `feat(ps): PR 3 M11 — unit and protocol UI, pipeline migration and legacy-path removal, TrainModel gate outputs, guide`
 
@@ -30628,6 +30638,23 @@ corrected, B-REGISTRY-TEST).
   assertions only). The casing invariant now points at §5.1 instead of carrying a second file list, and the public-api
   export states its real reason (the manifest audit, not compiler metadata). Reason: every change was verified against
   `origin/next` @ `6e2b57017b` and the program rules; the fold itself had no §9 or §12 record (conventions §1 step 6).
+- **D3-76** · Second adversarial round (2026-10-27) folded. *Accepted:* the ML Models form renders in `accordion`
+  layout (the policy sets no layout; about five chrome groups against a threshold of 8), so M11.2's spec asserts the
+  mounted `before-fields` panel, not a rail item — this corrects the reviewer's first round and the D3-75 fix alike;
+  M11.2's deprecated-member list for the Studio resource (32 members on `origin/next`, not the 14 the plan named); the §6
+  preamble's touched-file list (M3.1 never touched `ps-pipelines.component.ts`; six stub-carrying files added: Engine
+  `index.ts`, `delegation.ts`, `ml-model-inference-processor.ts`, `pipeline-builder-agent.ts`, the experiment-results
+  viewer, `predictive-studio-agent-context.ts`) and M9.4's template bindings; the §5.1 casing list (`TaskType`, the gate
+  stores, `RowProvenance` and the snapshot headers are camelCase wire shapes); the marker on M3.3's `SeriesFeatureRef`
+  (the naming check walks type literals nested in exported aliases, severity `error` for a type the package does not
+  re-export); a note that M11 commits the regenerated manifests. *Rejected:* "`milestone-exit.mjs` enforces zero
+  `@deprecated` tags" (no such check; the self-audit greps); "`evaluation-record.ts` / `importance-display.ts` do not
+  exist" (both are in Core and M7.2 edits them); "the 14 names live in `ps-overview-resource.component.ts`" (no such
+  file); M11.3's `Holdout` member as a naming finding (interface members are judged by name only); `ProtocolRefusal` as
+  camelCase (it is PascalCase); "`check:guards` fails on unregistered panels and actions" (`check-manifest-registrations.mjs`
+  gates `BaseEntity` only) and `npm run mj:manifest` (no such script; the root build's `prebuild` regenerates). Reason:
+  each claim verified against `origin/next` @ `6e2b57017b`. Scope unchanged: every edit is plan text, no task, milestone
+  or allowlist path added; alias deletion in touched files was already D-053.
 
 ### 9.2 Risks
 
@@ -31064,3 +31091,14 @@ Product-direction questions keep a working automated default; the others are dec
   states the manifest-audit reason for the export.
 - **Anchors:** no anchored line edited; `check-anchors` not re-run (code untouched). `milestone-exit --milestone M1
   --skip-commands` → the same two cadence failures as the 2026-10-26 entry (`# checks 9 · failed 2`, `exit=1`).
+
+### 2026-10-27 — second adversarial round folded (D3-76) — Claude Fable 5.1
+
+- **Trigger:** plan edit (the reviewer's round two on `66120595cc`, verified claim by claim).
+- **Corrected:** M11.2 Step 3 (accordion layout, not left-nav) and Step 5's spec (asserts the mounted
+  `mj-ps-model-evaluation-panel` and its `.mj-forms-panel-header`); M11.2's Studio-resource member list; the §6 preamble's
+  deprecated-alias file list and M9.4's viewer bindings; §5.1's casing list; the M3.3 marker; the M11 milestone-end
+  manifest note.
+- **Scope:** unchanged — no task, milestone or allowlist path added; D-053 already required the alias deletions.
+- **Anchors:** none edited; `milestone-exit --milestone M1 --skip-commands` → the same two cadence failures
+  (`# checks 9 · failed 2`, `exit=1`).
