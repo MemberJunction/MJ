@@ -17,6 +17,7 @@ export class MJEntityFieldValueFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'entityAssociation', sectionName: 'Entity Association', isExpanded: true },
             { sectionKey: 'lookupDefinition', sectionName: 'Lookup Definition', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -20315,6 +20315,17 @@ export const MJEntityFieldValueSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Source: z.union([z.literal('Check'), z.literal('Config'), z.literal('Manual')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Check
+    *   * Config
+    *   * Manual
+        * * Description: Where this value came from. Check = parsed from the column's CHECK constraint by CodeGen. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = entered by a person or by any other process. CodeGen removes Config rows the file no longer declares (when retractRemovedSoftKeys is on) and never removes Manual rows.`),
     EntityField: z.string().describe(`
         * * Field Name: EntityField
         * * Display Name: Entity Field
@@ -21328,6 +21339,16 @@ export const MJEntityOrganicKeySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Source: z.union([z.literal('Config'), z.literal('Manual')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Config
+    *   * Manual
+        * * Description: Where this organic key came from. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = created by a person or by any other process. CodeGen removes Config keys the file no longer declares, with their related entities and unused bridge views (when retractRemovedSoftKeys is on), and never removes Manual keys.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -98137,6 +98158,25 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
     }
 
     /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Check
+    *   * Config
+    *   * Manual
+    * * Description: Where this value came from. Check = parsed from the column's CHECK constraint by CodeGen. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = entered by a person or by any other process. CodeGen removes Config rows the file no longer declares (when retractRemovedSoftKeys is on) and never removes Manual rows.
+    */
+    get Source(): 'Check' | 'Config' | 'Manual' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Check' | 'Config' | 'Manual') {
+        this.Set('Source', value);
+    }
+
+    /**
     * * Field Name: EntityField
     * * Display Name: Entity Field
     * * SQL Data Type: nvarchar(255)
@@ -100935,6 +100975,24 @@ export class MJEntityOrganicKeyEntity extends BaseEntity<MJEntityOrganicKeyEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Config
+    *   * Manual
+    * * Description: Where this organic key came from. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = created by a person or by any other process. CodeGen removes Config keys the file no longer declares, with their related entities and unused bridge views (when retractRemovedSoftKeys is on), and never removes Manual keys.
+    */
+    get Source(): 'Config' | 'Manual' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Config' | 'Manual') {
+        this.Set('Source', value);
     }
 
     /**

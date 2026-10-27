@@ -323,6 +323,7 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
+| `retractRemovedSoftKeys` | Default **false**. When true, CodeGen removes soft FKs, value lists and organic keys it created from `additionalSchemaInfo` once the file stops declaring them, on tables the file still lists. Rows from CHECK constraints or entered by hand (`Source` = `Check` / `Manual`) are never removed. When false, each run reports what it would remove. |
 | `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
 
 ### Peer entity imports (`entityImportPackages`)

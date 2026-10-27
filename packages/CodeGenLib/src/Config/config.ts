@@ -644,6 +644,13 @@ const configInfoSchema = z.object({
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),
+  /**
+   * Remove what CodeGen created from `additionalSchemaInfo` once the file stops declaring it: soft
+   * foreign keys, value lists and organic keys (with their related entities and unused bridge views).
+   * Only tables the file still lists are touched, and only rows CodeGen wrote from the file
+   * (`Source = 'Config'`). Off by default: every run then reports what it would remove (#4535).
+   */
+  retractRemovedSoftKeys: z.boolean().default(false),
 
   /** Entity and field name normalization settings for ALL CAPS database identifiers */
   entityNaming: z.object({
