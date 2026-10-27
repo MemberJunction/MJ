@@ -59,7 +59,7 @@ import {
 // Side-effect import: runs the @RegisterClass decorators for the scoring processor + the
 // MLModelScoreEnricher ('ML Model Score'), and exposes the in-process train delegation helper.
 import {
-  trainModelViaEngine,
+  TrainModelViaEngine,
   LoadMLModelInferenceProcessor,
   LoadMLModelScoreEnricher,
   type TrainModelInput,
@@ -291,7 +291,7 @@ async function main(): Promise<void> {
     }
 
     // ── 2. Train a renewal model IN-PROCESS (TrainingEngine via delegation) ────
-    banner('2. CREATE PIPELINE + TRAIN IN-PROCESS (trainModelViaEngine)');
+    banner('2. CREATE PIPELINE + TRAIN IN-PROCESS (TrainModelViaEngine)');
     algorithm = await ensureDriverNamedAlgorithm(md, user);
     console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
     const pipeline = await createPipeline(md, user, algorithm.id);
@@ -301,7 +301,7 @@ async function main(): Promise<void> {
     const trainStart = Date.now();
     const trainInput: TrainModelInput = { pipelineId: pipeline.ID, sidecarVersion: 'ps-inproc-scored-query' };
     // In-process: calls TrainingEngine.trainModel with production deps (sidecar /train) — NOT the GraphQL op.
-    const trainResult: TrainModelResult = await trainModelViaEngine(trainInput, provider, user);
+    const trainResult: TrainModelResult = await TrainModelViaEngine(trainInput, provider, user);
     modelId = trainResult.model.ID;
     console.log(`  Trained in ${Date.now() - trainStart}ms`);
     console.log(`  modelId = ${trainResult.model.ID}  (status=${trainResult.model.Status}, version=${trainResult.model.Version})`);

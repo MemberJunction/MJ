@@ -18,7 +18,7 @@ import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunctio
 import { type ModelingPlanSpec, TrustVerdicts, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
-import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
+import { TrainModelViaEngine, WasTrainingLeakageFlagged } from '../operations/delegation';
 import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
@@ -181,10 +181,10 @@ export class PredictiveStudioPipelineBuilder {
         const config = ModelingPlanToPipelineConfig(spec);
         recordWarnings(config.warnings);
         const pipeline = await this.createPipeline(config, provider, user);
-        const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+        const trainResult = await TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
         const model = trainResult.model;
         const trust = TrustVerdicts.DeriveTrustVerdict(model);
-        const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
+        const leakageFlagged = WasTrainingLeakageFlagged(trainResult);
         const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
         const leaderboard = TournamentRanking.Leaderboard([{
           Pipeline: pipeline,
@@ -221,10 +221,10 @@ export class PredictiveStudioPipelineBuilder {
           const config = ModelingPlanToPipelineConfig(spec, i);
           recordWarnings(config.warnings);
           const pipeline = await this.createPipeline(config, provider, user);
-          const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+          const trainResult = await TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
           const trust = TrustVerdicts.DeriveTrustVerdict(model);
-          const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
+          const leakageFlagged = WasTrainingLeakageFlagged(trainResult);
           trained.push({
             Pipeline: pipeline,
             Model: model,

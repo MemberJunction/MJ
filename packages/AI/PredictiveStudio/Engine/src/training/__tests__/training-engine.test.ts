@@ -4,6 +4,7 @@ import type {
   MJMLTrainingPipelineEntity,
   MJMLModelEntity,
   MJMLTrainingRunEntity,
+  MJPredictionUnitEntity,
 } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
@@ -17,6 +18,7 @@ import {
   type AsOfStrategy,
   type LeakageGuard,
   type ValidationStrategy,
+  type PredictionUnitColumns,
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training-engine';
@@ -32,10 +34,16 @@ import type {
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type {
   IFeatureDataAccess,
+  ICountingDataAccess,
+  CountRowsResult,
   FetchRowsParams,
   FetchRowsResult,
   SourceRow,
+  IAssemblyMetadata,
+  AssemblyEntityInfo,
+  AssemblyFieldInfo,
 } from '../../feature-assembly';
+import type { IPredictionUnitStore } from '../../prediction-unit';
 
 /**
  * Unit tests for the TrainingEngine. NO live DB, NO live sidecar — every seam is
@@ -140,6 +148,8 @@ class FakeMLPipeline {
     ],
   } satisfies FeatureStepGraph);
   public AsOfStrategy: string | null = JSON.stringify({ Mode: 'none' } as AsOfStrategy);
+  public PredictionUnitID: string | null = null;
+  public EvaluationProtocolID: string | null = null;
   public LeakageGuard: string | null = JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 } as LeakageGuard);
   public ValidationStrategy: string | null = JSON.stringify({
     Strategy: 'train_test_split',
@@ -194,10 +204,12 @@ class FakeRecordLoader implements IRecordLoader {
 class FakeSidecar implements ISidecarTrainer {
   public LastRequest: TrainRequest | null = null;
   public LastHoldout: MatrixData | null = null;
+  public CallCount = 0;
 
   constructor(private readonly response: TrainResponse) {}
 
   async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
+    this.CallCount++;
     this.LastRequest = req;
     this.LastHoldout = lockedHoldout ?? null;
     return this.response;
@@ -559,5 +571,146 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
     const { deps } = buildDeps({ pipeline });
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(JSON.parse(model.Lineage!).lockedHoldoutClassCounts).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prediction Unit pipelines: the unit store, the assembly metadata and a counting data access over one entity.
+// ---------------------------------------------------------------------------
+
+/** Unit-store fake: returns the configured unit row for its ID (one deliberate test-double cast at the seam). */
+class FakePredictionUnitStore implements IPredictionUnitStore {
+  constructor(private readonly unit: PredictionUnitColumns) {}
+  async Load(unitId: string): Promise<MJPredictionUnitEntity | null> {
+    return unitId === this.unit.ID ? (this.unit as unknown as MJPredictionUnitEntity) : null;
+  }
+  async LatestVersion(_lineageRootId: string): Promise<MJPredictionUnitEntity | null> {
+    return this.unit as unknown as MJPredictionUnitEntity;
+  }
+}
+
+/** Assembly metadata describing one entity. */
+class FakeAssemblyMetadata implements IAssemblyMetadata {
+  constructor(private readonly entity: AssemblyEntityInfo) {}
+  Entity(name: string): AssemblyEntityInfo | null {
+    return name === this.entity.Name ? this.entity : null;
+  }
+}
+
+/**
+ * Counting data access over one entity's rows. The unit path reads `complete` (no key paging), so `ExtraFilter` is
+ * not interpreted; `OrderBy '[Field] DESC'` and `MaxRows` are honoured for the corpus-end cutoff read.
+ */
+class FakeCountingDataAccess implements ICountingDataAccess {
+  constructor(private readonly entityName: string, private readonly rows: SourceRow[]) {}
+  async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
+    if (params.EntityName !== this.entityName) {
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `no fixture ${params.EntityName}` };
+    }
+    let rows = [...this.rows];
+    const desc = /^\[(\w+)\] DESC$/.exec(params.OrderBy ?? '');
+    if (desc) {
+      const field = desc[1];
+      rows.sort((a, b) => String(b[field]).localeCompare(String(a[field])));
+    }
+    if (params.MaxRows !== undefined) {
+      rows = rows.slice(0, params.MaxRows);
+    }
+    return { Success: true, Rows: rows, TotalRowCount: this.rows.length };
+  }
+  async fetchEmbedding(): Promise<number[] | null> {
+    return null;
+  }
+  async CountRows(params: { readonly EntityName: string; readonly ExtraFilter?: string }): Promise<CountRowsResult> {
+    return params.EntityName === this.entityName ? { Success: true, Count: this.rows.length } : { Success: false, Count: 0, ErrorMessage: `no fixture ${params.EntityName}` };
+  }
+}
+
+function yearsField(Name: string, TSType: AssemblyFieldInfo['TSType'], SqlType: string): AssemblyFieldInfo {
+  return { Name, SqlType, TSType, AllowUpdateAPI: true, IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false };
+}
+
+const yearsEntity: AssemblyEntityInfo = {
+  ID: 'E-YEARS',
+  Name: 'Years',
+  PrimaryKey: 'ID',
+  TrackRecordChanges: false,
+  Fields: [
+    yearsField('ID', 'string', 'nvarchar'),
+    yearsField('PersonID', 'string', 'nvarchar'),
+    yearsField('StartDate', 'Date', 'date'),
+    yearsField('EventsAttended', 'number', 'int'),
+    yearsField('Renewed', 'boolean', 'bit'),
+  ],
+};
+
+/** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows. */
+function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns): {
+  engine: TrainingEngine;
+  deps: TrainingDeps;
+  sidecar: FakeSidecar;
+  pipeline: FakeMLPipeline;
+  runs: FakeMLRun[];
+} {
+  const pipeline = new FakeMLPipeline();
+  pipeline.PredictionUnitID = 'U-1';
+  pipeline.TargetEntity = 'Years';
+  pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] as SourceBinding[]);
+  pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] } satisfies FeatureStepGraph);
+  const { deps, factory, sidecar } = buildDeps({ pipeline });
+  deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
+  deps.assemblyMetadata = new FakeAssemblyMetadata(yearsEntity);
+  deps.dataAccess = new FakeCountingDataAccess('Years', rows);
+  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs };
+}
+
+describe('TrainingEngine — Prediction Unit pipelines', () => {
+  // 3 cycles × 4 people; the 2026 cycle's outcome window has not closed at the cutoff.
+  const years: SourceRow[] = [];
+  for (const [c, renewedPattern] of [[2024, [true, false, true, true]], [2025, [true, true, false, true]], [2026, [false, false, false, false]]] as const) {
+    renewedPattern.forEach((renewed, p) => years.push({ ID: `y${c}-${p}`, PersonID: `p${p}`, StartDate: `${c}-01-01`, EventsAttended: p + c - 2024, Renewed: renewed }));
+  }
+  const unitColumns: PredictionUnitColumns = {
+    ID: 'U-1', LineageRootID: 'U-1', Version: 1, Name: 'world renewal', LabelVersion: 1, LabelWindowDays: 31, LabelGapDays: 0, GroupKey: null, TemporalSpec: null,
+    UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'column-offset', column: 'StartDate', offsetDays: 334 }, filter: [] }),
+    LabelRule: JSON.stringify({ kind: 'column', column: 'Renewed' }),
+    TaskType: JSON.stringify({ kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }),
+    Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'corpus-end', entity: 'Years', field: 'StartDate' } }),
+    ChangeHistoryPolicy: JSON.stringify({ onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }),
+    DecisionSpec: JSON.stringify({ action: 'a', actorRole: 'r', capacityPerPeriod: null, period: 'year' }),
+    IncumbentHeuristic: JSON.stringify({ kind: 'none' }), AuthoredBy: JSON.stringify({ kind: 'human', userId: 'U' }),
+  };
+
+  it('excludes the unresolved 2026 cycle, stores the counts, and records the unit in the model lineage', async () => {
+    const { engine, deps, sidecar, pipeline } = unitHarness(years, unitColumns);
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const data = sidecar.LastRequest?.data ?? { columns: [], rows: [] };
+    const labelIdx = data.columns.indexOf('__ps_label');
+    expect(data.rows.length + (sidecar.LastHoldout?.rows.length ?? 0)).toBe(8);   // 2024 + 2025 only
+    expect(data.rows.every((r) => r[labelIdx] === '0' || r[labelIdx] === '1')).toBe(true);
+    const results = JSON.parse(run.ValidationResults!);
+    expect(results.schema).toBe('ps-run-results/v2');
+    expect(results.unitResolution).toMatchObject({ rowsRead: 12, censoredRowsExcluded: 4, resolvedRows: 8, dataCutoff: '2026-01-01' });
+    expect(JSON.parse(model.Lineage!)).toMatchObject({ predictionUnitId: 'U-1', predictionUnitVersion: 1, labelVersion: 1 });
+  });
+
+  it('refuses a one-class target before calling the sidecar and records the refusal on the run', async () => {
+    const { engine, deps, sidecar, pipeline, runs } = unitHarness(years.filter((y) => y.Renewed === true), { ...unitColumns, Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2030-01-01' } }) });
+    // Typed: the refusal is identified by its structured fields, never by the message text.
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ name: 'TrainingRefusedError', Refusal: { stage: 'unit', reason: { kind: 'single-valued-target' } } });
+    expect(sidecar.CallCount).toBe(0);
+    const run = runs[0];
+    expect(run.Status).toBe('Failed');
+    expect(JSON.parse(run.ValidationResults!)).toMatchObject({ status: 'refused', refusal: { stage: 'unit', reason: { kind: 'single-valued-target', value: '1' } } });
+  });
+
+  it('refuses maxRows for a unit pipeline (a capped read is not a complete read)', async () => {
+    const { engine, deps, pipeline } = unitHarness(years, unitColumns);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID, maxRows: 5 }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
+  });
+
+  it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
+    const { engine, deps, pipeline } = unitHarness(years, unitColumns);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID, labelEventDates: { p0: new Date('2024-01-01T00:00:00Z') } }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
   });
 });

@@ -24,6 +24,9 @@ import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
 import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
+import { RunViewDataAccess } from '../feature-assembly/data-access';
+import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
@@ -75,18 +78,20 @@ export async function BuildTrainingDeps(provider: IMetadataProvider, user: UserI
     artifactStore: BuildArtifactStore(providerId, entityFactory),
     contextUser: user,
     provider,
+    // The Prediction Unit seams read through the same provider and user as every other training read.
+    predictionUnits: new RunViewPredictionUnitStore(provider, user),
+    assemblyMetadata: new ProviderAssemblyMetadata(provider),
+    dataAccess: new RunViewDataAccess(user, provider),
   };
-}
-
-/** @deprecated Use {@link BuildTrainingDeps}. */
-export async function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
-  return BuildTrainingDeps(provider, user);
 }
 
 /**
  * Train a model by pipeline id, delegating to {@link TrainingEngine.trainModel}
  * with production deps. The `engine` is injectable so unit tests substitute a mock
  * with no live DB / sidecar (mirroring the Action's `createEngine` seam).
+ *
+ * A refused run throws `TrainingRefusedError` unchanged: the run row already records the
+ * refusal, and the operation surfaces its message as the operation's error.
  *
  * @param input the typed training input (pipeline id + optional overrides)
  * @param provider the owning provider
@@ -102,16 +107,6 @@ export async function TrainModelViaEngine(
   return engine.trainModel(input, await BuildTrainingDeps(provider, user));
 }
 
-/** @deprecated Use {@link TrainModelViaEngine}. */
-export async function trainModelViaEngine(
-  input: TrainModelInput,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  engine: TrainingEngine = new TrainingEngine(),
-): Promise<TrainModelResult> {
-  return TrainModelViaEngine(input, provider, user, engine);
-}
-
 /**
  * Whether a training run was leakage-flagged. The engine keeps a flagged model in
  * `Draft` and records a plain-language `LEAKAGE WARNING` in the run's `Notes`
@@ -119,11 +114,6 @@ export async function trainModelViaEngine(
  */
 export function WasTrainingLeakageFlagged(result: TrainModelResult): boolean {
   return (result.run.Notes ?? '').includes('LEAKAGE WARNING');
-}
-
-/** @deprecated Use {@link WasTrainingLeakageFlagged}. */
-export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
-  return WasTrainingLeakageFlagged(result);
 }
 
 // ----- Scoring ----------------------------------------------------------------
@@ -144,11 +134,6 @@ export function BuildProductionMLInferenceDeps(): MLInferenceDeps {
   return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
 }
 
-/** @deprecated Use {@link BuildProductionMLInferenceDeps}. */
-export function buildProductionMLInferenceDeps(): MLInferenceDeps {
-  return BuildProductionMLInferenceDeps();
-}
-
 /**
  * Build the production scoring runner wired with the production {@link MLInferenceDeps}
  * (see {@link BuildProductionMLInferenceDeps}). No provider lookup is needed at score
@@ -156,11 +141,6 @@ export function buildProductionMLInferenceDeps(): MLInferenceDeps {
  */
 export function BuildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
   return new ProductionScoreRecordSetRunner({ deps: BuildProductionMLInferenceDeps() });
-}
-
-/** @deprecated Use {@link BuildScoreRecordSetRunner}. */
-export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
-  return BuildScoreRecordSetRunner();
 }
 
 /**
@@ -177,14 +157,6 @@ export function ScoreRecordSetViaRunner(
   runner: IScoreRecordSetRunner = BuildScoreRecordSetRunner(),
 ): Promise<ScoreRecordSetResult> {
   return runner.run(request);
-}
-
-/** @deprecated Use {@link ScoreRecordSetViaRunner}. */
-export function scoreRecordSetViaRunner(
-  request: ScoreRecordSetRequest,
-  runner: IScoreRecordSetRunner = buildScoreRecordSetRunner(),
-): Promise<ScoreRecordSetResult> {
-  return ScoreRecordSetViaRunner(request, runner);
 }
 
 // ----- Experiment -------------------------------------------------------------
@@ -210,17 +182,6 @@ export async function RunExperimentSessionViaOrchestrator(
   throw new ExperimentSessionsUnavailableError();
 }
 
-/** @deprecated Use {@link RunExperimentSessionViaOrchestrator}. */
-export async function runExperimentSessionViaOrchestrator(
-  plan: ModelingPlanSpec,
-  options: ExperimentRunOptions,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
-): Promise<ExperimentSessionResult> {
-  return RunExperimentSessionViaOrchestrator(plan, options, provider, user, orchestrator);
-}
-
 // ----- Promotion --------------------------------------------------------------
 
 /**
@@ -236,14 +197,6 @@ export function PromoteModelViaGate(
   gate: IModelPromotionGate = new ProductionModelPromotionGate(),
 ): Promise<PromoteModelOutcome> {
   return gate.promote(request);
-}
-
-/** @deprecated Use {@link PromoteModelViaGate}. */
-export function promoteModelViaGate(
-  request: PromoteModelRequest,
-  gate: IModelPromotionGate = new ProductionModelPromotionGate(),
-): Promise<PromoteModelOutcome> {
-  return PromoteModelViaGate(request, gate);
 }
 
 /** Re-export the orchestrator budget type for the operations that map it. */

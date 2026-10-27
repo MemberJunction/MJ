@@ -30,6 +30,9 @@ import type {
   MJMLModelEntity,
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
+import type { ICountingDataAccess } from '../feature-assembly/data-access';
+import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -186,6 +189,14 @@ export interface TrainingDeps {
   contextUser: UserInfo;
   /** The provider every training read runs on; required because the training reads have no global fallback. */
   provider: IMetadataProvider;
+  /** Prediction Unit store for a pipeline that points at a unit; defaults to a `RunViewPredictionUnitStore` on `provider`. */
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Entity metadata the unit row reader resolves against; defaults to a `ProviderAssemblyMetadata` on `provider`. */
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The counting data access the unit rows are read through; defaults to a `RunViewDataAccess` on `provider`. */
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The clock for a unit whose censoring cutoff is `now`; defaults to the current time. */
+  now?: () => Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

@@ -74,7 +74,7 @@ import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 // Side-effect import: runs the @RegisterClass decorator for the 'ML Model' scoring work type, and
 // exposes the in-process train delegation helper + the on-demand "Operate" scoring helper.
 import {
-  trainModelViaEngine,
+  TrainModelViaEngine,
   createScoringProcess,
   LoadMLModelInferenceProcessor,
   type TrainModelInput,
@@ -406,7 +406,7 @@ async function main(): Promise<void> {
     }
 
     // ── 2. Resolve a small scope + train a model IN-PROCESS ───────────────────
-    banner('2. RESOLVE SCOPE + TRAIN IN-PROCESS (trainModelViaEngine)');
+    banner('2. RESOLVE SCOPE + TRAIN IN-PROCESS (TrainModelViaEngine)');
     const scope = await resolveScopeIDs(user);
     console.log(`  Scope: ${scope.ids.length} Membership IDs → filter = ID IN (… ${scope.ids.length} ids …)`);
     algorithm = await ensureDriverNamedAlgorithm(md, user);
@@ -417,7 +417,7 @@ async function main(): Promise<void> {
 
     const trainStart = Date.now();
     const trainInput: TrainModelInput = { pipelineId: pipeline.ID, sidecarVersion: 'ps-inproc-operate-flow' };
-    const trainResult: TrainModelResult = await trainModelViaEngine(trainInput, provider, user);
+    const trainResult: TrainModelResult = await TrainModelViaEngine(trainInput, provider, user);
     modelId = trainResult.model.ID;
     console.log(`  Trained in ${Date.now() - trainStart}ms — modelId=${trainResult.model.ID} (status=${trainResult.model.Status}, version=${trainResult.model.Version})`);
     check(!!modelId, 'training produced a model id');
