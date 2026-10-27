@@ -89,7 +89,7 @@ export interface ModelingPlanSpec {
 }
 
 /** The allowed kinds for candidate features proposed by the Data Scout. */
-export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
 
 /** Structured warning emitted when a candidate feature cannot be mapped to a training pipeline step. */
 export interface FeatureStepWarning {

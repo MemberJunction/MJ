@@ -81,7 +81,8 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
       case 'categorical':
         rawColumns.push(f.Name);
         break;
-      case 'llm-derived': {
+      case 'llm-derived':
+      case 'decision-derived': {
         const pipelineSource = spec.CandidateSources?.find(
           (s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline'
         );
@@ -93,7 +94,7 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
           warnings.push({
             FeatureName: f.Name,
             Kind: f.Kind,
-            Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
+            Reason: `Candidate feature "${f.Name}" (${f.Kind}) was dropped from training pipeline steps. Persisted-value features (llm-derived, decision-derived) require an upstream Feature Pipeline to persist values before training.`,
           });
         }
         break;

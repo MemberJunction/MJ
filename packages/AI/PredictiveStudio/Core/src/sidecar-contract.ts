@@ -17,12 +17,15 @@
  * sidecar. Embedding dimensions arrive as individual `numeric` columns; this
  * `Kind` describes the *origin* of the feature for schema/UI purposes.
  */
-export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
 
 /**
  * The two supported supervised-learning problem shapes. Predictive Studio is
  * deliberately opinionated (plan §1.2) — classification (yes/no, multiclass) and
  * regression (predict a number) cover the canonical use cases.
+ *
+ * @deprecated The declared task is `TaskType` on the Prediction Unit; this two-valued type remains only for the
+ * legacy `TrainRequest` and the `ProblemType` columns, and is removed together with `TrainRequest`.
  */
 export type ProblemType = 'classification' | 'regression';
 
