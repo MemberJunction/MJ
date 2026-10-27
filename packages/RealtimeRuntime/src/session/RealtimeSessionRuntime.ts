@@ -5155,21 +5155,11 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a Remote Browser screencast frame for the
+   * Matches a parsed push-status payload and returns it only when it's a Remote Browser screencast frame for the
    * active session — otherwise `null` (ignored, so delegation progress falls through). Matched by
    * `resolver` + `type`, then scoped to THIS session by `agentSessionID`.
    */
-  private parseScreencastFrame(rawOrParsed: string | Partial<RemoteBrowserScreencastPayload>): RemoteBrowserScreencastPayload | null {
-    let payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>;
-    if (typeof rawOrParsed === 'string') {
-      try {
-        payload = JSON.parse(rawOrParsed);
-      } catch {
-        return null;
-      }
-    } else {
-      payload = rawOrParsed;
-    }
+  private parseScreencastFrame(payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>): RemoteBrowserScreencastPayload | null {
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
       payload?.type === 'RemoteBrowserScreencastFrame' &&
@@ -5202,21 +5192,11 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a Remote Browser audio chunk for the active
+   * Matches a parsed push-status payload and returns it only when it's a Remote Browser audio chunk for the active
    * session — otherwise `null` (ignored). Matched by `resolver` + `type`, then scoped to THIS session by
    * `agentSessionID`.
    */
-  private parseAudioChunk(rawOrParsed: string | Partial<RemoteBrowserAudioChunkPayload>): RemoteBrowserAudioChunkPayload | null {
-    let payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>;
-    if (typeof rawOrParsed === 'string') {
-      try {
-        payload = JSON.parse(rawOrParsed);
-      } catch {
-        return null;
-      }
-    } else {
-      payload = rawOrParsed;
-    }
+  private parseAudioChunk(payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>): RemoteBrowserAudioChunkPayload | null {
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
       payload?.type === 'RemoteBrowserAudioChunk' &&
@@ -5253,20 +5233,10 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a delegation
+   * Matches a parsed push-status payload and returns it only when it's a delegation
    * progress event for the active voice session — otherwise `null` (ignored).
    */
-  private parseProgress(rawOrParsed: string | Partial<RealtimeDelegationProgressPayload>): RealtimeDelegationProgress | null {
-    let payload: RealtimeDelegationProgressPayload;
-    if (typeof rawOrParsed === 'string') {
-      try {
-        payload = JSON.parse(rawOrParsed) as RealtimeDelegationProgressPayload;
-      } catch {
-        return null; // non-JSON or unrelated frame
-      }
-    } else {
-      payload = rawOrParsed as RealtimeDelegationProgressPayload;
-    }
+  private parseProgress(payload: Partial<RealtimeDelegationProgressPayload>): RealtimeDelegationProgress | null {
     const matches =
       payload?.resolver === 'RealtimeClientSessionResolver' &&
       payload?.type === 'RealtimeDelegationProgress' &&
@@ -5275,9 +5245,9 @@ export class RealtimeSessionRuntime {
       return null;
     }
     return {
-      CallID: payload.callID,
-      Step: payload.step,
-      Message: payload.message,
+      CallID: payload.callID as string,
+      Step: payload.step as RealtimeDelegationProgress['Step'],
+      Message: payload.message as string,
       Percentage: payload.percentage
     };
   }
