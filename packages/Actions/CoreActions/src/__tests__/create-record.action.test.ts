@@ -213,13 +213,8 @@ describe('CreateRecordAction', () => {
         });
     });
 
-    describe('unknown-field handling (documents current behavior)', () => {
-        // ⚠️ PRODUCT BUG (documented, not fixed here): unlike WriteEntityFieldsAction,
-        // which rejects unknown fields with VALIDATION_ERROR before mutating anything,
-        // CreateRecordAction silently DROPS unknown fields (LogError only) and still
-        // saves the record — an agent typo'ing a field name gets a SUCCESS result and
-        // a record silently missing that value.
-        it('silently drops unknown fields (LogError only) and still saves successfully', async () => {
+    describe('unknown-field handling', () => {
+        it('fails with INVALID_FIELD_NAMES before saving when a field name is unknown', async () => {
             const entity = new FakeEntity(['Name'], { ID: 'new-7' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
             const params = makeParams(
@@ -232,12 +227,30 @@ describe('CreateRecordAction', () => {
 
             const r = await action.InternalRunAction(params);
 
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(r.Message).toMatch(/Naem/);
+            expect(r.Message).toMatch(/Valid updatable fields: Name/);
+            expect(entity.saveCallCount).toBe(0);
+            expect(entity.values.Name).toBeUndefined();
+        });
+
+        it('sets fields resolved case-insensitively against entity metadata', async () => {
+            const entity = new FakeEntity(['Name'], { ID: 'new-7' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'Fields', Value: { name: 'ok' } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
             expect(r.Success).toBe(true);
-            expect(r.ResultCode).toBe('SUCCESS');
-            expect(entity.saveCallCount).toBe(1);
             expect(entity.values.Name).toBe('ok');
-            expect(entity.values.Naem).toBeUndefined();
-            expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Field 'Naem' does not exist on entity 'Widgets'"));
+            expect(entity.saveCallCount).toBe(1);
         });
     });
 
