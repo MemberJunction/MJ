@@ -64,90 +64,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * swallowed into `LogError` below — yields an empty cache rather than a `TypeError` off
      * `.find()`. Callers already treat a missing system user as `undefined`.
      */
-    private _usersArray: UserInfo[] = this.attachPushHook([]);
-    private readonly _userByIdMap = new Map<string, UserInfo>();
-    private readonly _userByEmailMap = new Map<string, UserInfo>();
-    private readonly _userByNameLowerMap = new Map<string, UserInfo>();
-    private readonly _userByNameExactMap = new Map<string, UserInfo>();
-    private _systemUser: UserInfo | undefined = undefined;
-
-    private get _users(): UserInfo[] {
-      return this._usersArray;
-    }
-
-    private set _users(users: UserInfo[]) {
-      this._usersArray = this.attachPushHook(users);
-      this.rebuildIndexes();
-    }
-
-    /**
-     * Attaches an index-maintaining `push` to the backing array so callers that append in place
-     * (`UserCache.Instance.Users.push(user)` in MJServer auth / MagicLinkService) keep the O(1)
-     * lookup maps current at write time without a per-read heuristic check.
-     */
-    private attachPushHook(users: UserInfo[]): UserInfo[] {
-      if (Array.isArray(users)) {
-        Object.defineProperty(users, 'push', {
-          configurable: true,
-          writable: true,
-          value: (...items: UserInfo[]): number => {
-            const len = Array.prototype.push.apply(users, items);
-            for (const item of items) {
-              this.indexUser(item);
-            }
-            return len;
-          },
-        });
-      }
-      return users;
-    }
-
-    private indexUser(u: UserInfo | undefined): void {
-      if (!u) return;
-      if (u.ID) {
-        const idKey = u.ID.trim().toLowerCase();
-        if (!this._userByIdMap.has(idKey)) {
-          this._userByIdMap.set(idKey, u);
-        }
-        if (this._systemUser === undefined && u.ID.toLowerCase() === SystemUserID.toLowerCase()) {
-          this._systemUser = u;
-        }
-      }
-      if (u.Email) {
-        const emailKey = u.Email.trim().toLowerCase();
-        if (emailKey && !this._userByEmailMap.has(emailKey)) {
-          this._userByEmailMap.set(emailKey, u);
-        }
-      }
-      if (u.Name) {
-        const nameTrimmed = u.Name.trim();
-        if (!this._userByNameExactMap.has(nameTrimmed)) {
-          this._userByNameExactMap.set(nameTrimmed, u);
-        }
-        const nameLower = nameTrimmed.toLowerCase();
-        if (!this._userByNameLowerMap.has(nameLower)) {
-          this._userByNameLowerMap.set(nameLower, u);
-        }
-      }
-    }
-
-    private rebuildIndexes(): void {
-      const users = this._usersArray;
-      this._userByIdMap.clear();
-      this._userByEmailMap.clear();
-      this._userByNameLowerMap.clear();
-      this._userByNameExactMap.clear();
-      this._systemUser = undefined;
-
-      if (!Array.isArray(users)) {
-        return;
-      }
-
-      const len = users.length;
-      for (let i = 0; i < len; i++) {
-        this.indexUser(users[i]);
-      }
-    }
+    private _users: UserInfo[] = [];
 
     /** The provider the last {@link Refresh} read through; every self-refresh reuses it. */
     private _provider: DatabaseProviderBase | null = null;
@@ -235,7 +152,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * explicit assertion where the old one silently inferred the same lie.
      */
     public GetSystemUser(): UserInfo {
-      return this._systemUser as UserInfo;
+      return this.Users.find((u) => u.ID.toLowerCase() === UserCache.Instance.SYSTEM_USER_ID.toLowerCase()) as UserInfo;
     }
 
     /**
@@ -380,11 +297,11 @@ export class UserCache extends BaseSingleton<UserCache> {
      * @returns
      */
     public UserByName(name: string, caseSensitive: boolean = false): UserInfo | undefined {
-      const instance = UserCache.Instance;
-      const item = name.trim();
-      return caseSensitive
-        ? instance._userByNameExactMap.get(item)
-        : instance._userByNameLowerMap.get(item.toLowerCase());
+      return UserCache.Users.find(u => {
+        const comparisonItem = u.Name.trim();
+        const item = name.trim();
+        return caseSensitive ? comparisonItem === item : comparisonItem.toLowerCase() === item.toLowerCase();
+      });
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────────
@@ -428,7 +345,6 @@ export class UserCache extends BaseSingleton<UserCache> {
         const index = this._users.findIndex(u => UUIDsEqual(u.ID, user.ID));
         if (index >= 0) {
           this._users[index] = user;
-          this.rebuildIndexes();
         } else {
           this._users.push(user);
         }
@@ -465,10 +381,10 @@ export class UserCache extends BaseSingleton<UserCache> {
     /** The cached answer for {@link FindUser}'s criteria, without touching the database. */
     private findCached(criteria: { ID?: string; Email?: string }): UserInfo | undefined {
       if (criteria.ID) {
-        return this._userByIdMap.get(criteria.ID.trim().toLowerCase());
+        return this._users.find(u => UUIDsEqual(u.ID, criteria.ID as string));
       }
       const email = criteria.Email?.trim().toLowerCase();
-      return email ? this._userByEmailMap.get(email) : undefined;
+      return email ? this._users.find(u => u.Email?.trim().toLowerCase() === email) : undefined;
     }
 
     private missKey(criteria: { ID?: string; Email?: string }): string | null {

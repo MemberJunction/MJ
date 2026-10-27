@@ -7,7 +7,6 @@
 "@memberjunction/ai-realtime-client": patch
 "@memberjunction/ai-vertex": patch
 "@memberjunction/core": patch
-"@memberjunction/generic-database-provider": patch
 "@memberjunction/global": patch
 "@memberjunction/realtime-runtime": patch
 "@memberjunction/server": patch
@@ -20,4 +19,4 @@ Optimize realtime voice session control/data planes, AI prompt/agent pre-model s
 - **Realtime session usage accumulation fix (`@memberjunction/ai-agents`)**: Preserve `VideoTokens` and `VideoSeconds` modality detail fields when `RealtimeSessionRunner` merges incremental `RealtimeUsage` updates in `sumModalityDetail`, and compute each direction's modality detail once per update instead of twice.
 - **Realtime audio/video data-plane & recording DSP (`@memberjunction/global`, `@memberjunction/ai-agents`, `@memberjunction/ai-bridge-base`, `@memberjunction/ai-bridge-ringcentral`, `@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`)**: Export `IS_LITTLE_ENDIAN` from `@memberjunction/global` and share it across audio/recording codecs; cache mixed timelines across `EncodeWav()` and `GetPeaks()` in `RealtimeRecordingCapture`; evaluate the 65-tap anti-aliasing FIR filter in `StreamingResampler` only at decimated output sample positions; use a 256-entry lookup table in `MuLawToPcm16`; replace the full-buffer concatenation on every `RealtimeRtpSender.Enqueue` call with an $O(1)$ chunk queue; and eliminate redundant per-frame allocations and double `JSON.parse` passes in `FrameSampler`, `Pcm16ToFloat32`, and `RealtimeSessionRuntime`.
 - **AI prompt & agent pre-model scaling (`@memberjunction/ai-prompts`, `@memberjunction/ai-agents`)**: Fast-path clean UTF-8 strings in `BuildTemplateDataObjectShape`; use `AIEngine.Instance.PromptModelsByPromptID` via a single `getPromptModelsForPromptId` helper instead of linear `PromptModels.filter()` scans (`@memberjunction/ai-engine-base`: the index now raises the same `PermissionConstrainedError` as `PromptModels` instead of returning an empty map); and fast-path `EscapeRuntimeStateTags` when message text contains no `<` character.
-- **Core & user cache foundations (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**: Maintain `Map` indexes at write time in `UserCache` for $O(1)$ user lookups by ID, email, exact name, lowercase name, and system user; and consolidate `ProviderBase` `DedupLingerMs` expiry timers into a single `WeakRef(this)` + `.unref()` helper.
+- **Core foundations (`@memberjunction/core`)**: Consolidate `ProviderBase` `DedupLingerMs` expiry timers into a single `WeakRef(this)` + `.unref()` helper.
