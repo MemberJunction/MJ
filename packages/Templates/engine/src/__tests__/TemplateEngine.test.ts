@@ -881,20 +881,42 @@ describe('TemplateEngineServer', () => {
             expect(afterClear.Names.has('childVar')).toBe(true);
         });
 
-        it('should preserve compiled template and referenced-variable caches on subsequent Config(false) calls and clear them on Config(true)', async () => {
+        it('should keep compiled templates across a warm Config(false) and drop them on Config(true)', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const compile = vi.spyOn(engine as unknown as { createNunjucksTemplate: () => unknown }, 'createNunjucksTemplate');
+            try {
+                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(1);
+
+                await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
+                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(1);
+
+                await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
+                await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+                expect(compile).toHaveBeenCalledTimes(2);
+            } finally {
+                compile.mockRestore();
+            }
+        });
+
+        it('should see an edited embedded template after a warm Config(false)', async () => {
             await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
             const text = '{% template "Child" %}{{ a }}';
+            expect(engine.GetReferencedVariables(text).Names.has('childVar')).toBe(true);
 
-            const firstVars = engine.GetReferencedVariables(text);
-            await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
-
-            // Subsequent Config(false) when already configured and Loaded === true should NOT wipe caches
-            await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
-            expect(engine.GetReferencedVariables(text)).toBe(firstVars);
-
-            // Config(true) (forceRefresh) MUST wipe caches
-            await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
-            expect(engine.GetReferencedVariables(text)).not.toBe(firstVars);
+            // AutoRefresh updates the embedded template in place; the parent's text does not change.
+            const content = childTemplate.Content[0];
+            const original = content.TemplateText;
+            content.TemplateText = '{{ editedChildVar }}';
+            try {
+                await engine.Config(false, { ID: 'test-user', Name: 'Test' } as never);
+                const result = engine.GetReferencedVariables(text);
+                expect(result.Names.has('editedChildVar')).toBe(true);
+                expect(result.Names.has('childVar')).toBe(false);
+            } finally {
+                content.TemplateText = original;
+            }
         });
 
         it('should return a frozen result', async () => {

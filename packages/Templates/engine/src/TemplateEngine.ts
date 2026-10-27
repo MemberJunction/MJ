@@ -104,6 +104,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._configuredOnce = true;
         if (shouldClearCache) {
             this.ClearTemplateCache(); // base templates (re)loaded — drop any stale compiled templates
+        } else {
+            // Compiled templates check their own source text, but a variable analysis also follows embedded
+            // templates by name, so an in-place edit of an embedded template would leave it stale.
+            this._referencedVariablesCache.clear();
         }
         this.ensureNunjucksInitialized(contextUser);
     }
@@ -374,8 +378,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * Returns the top-level variable names a template's text reads, following stored templates it
      * pulls in by literal name (`{% include %}`, `{% import %}`, `{% from %}`, `{% extends %}`,
      * `{% template %}`). It sets up the Nunjucks environment first, so the registered extensions' tags
-     * parse before the first {@link Config} too. The result is frozen and cached per template text until
-     * {@link ClearTemplateCache}; a result whose text does not parse is not cached.
+     * parse before the first {@link Config} too. The result is frozen and cached per template text until the
+     * next {@link Config} or {@link ClearTemplateCache}; a result whose text does not parse is not cached.
      */
     public GetReferencedVariables(templateText: string): ReferencedVariablesResult {
         const cached = this._referencedVariablesCache.get(templateText);
