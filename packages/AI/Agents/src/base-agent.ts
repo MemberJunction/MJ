@@ -19572,7 +19572,7 @@ The context is now within limits. Please retry your request with the recovered c
      * - Otherwise defaults to "Information"
      *
      * Request types come from the AI engine's cached `MJ: AI Agent Request Types` rows
-     * (`AIEngineBase.GetAgentRequestTypeByName`), the same source the agent actions use.
+     * (`AIEngineBase.ResolveAgentRequestTypeID`), the same source the agent actions use.
      * @private
      */
     private async resolveRequestTypeId(
@@ -19580,16 +19580,13 @@ The context is now within limits. Please retry your request with the recovered c
         contextUser?: UserInfo
     ): Promise<string | null> {
         try {
-            await AIEngine.Instance.Config(false, contextUser);
-
             // Determine type name based on responseForm content
             let typeName = 'Information'; // default
             if (previousDecision.responseForm) {
                 typeName = this.detectRequestTypeName(previousDecision.responseForm);
             }
 
-            const matchedType = AIEngine.Instance.GetAgentRequestTypeByName(typeName);
-            return matchedType?.ID || null;
+            return await AIEngine.Instance.ResolveAgentRequestTypeID(typeName, contextUser);
         } catch (error) {
             LogError(`Error resolving request type: ${(error as Error).message}`);
             return null;

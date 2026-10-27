@@ -420,6 +420,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetAgentRequestTypeByName(name: string): MJAIAgentRequestTypeEntity | undefined {
         return this.Base.GetAgentRequestTypeByName(name);
     }
+    public async ResolveAgentRequestTypeID(typeName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        return this.Base.ResolveAgentRequestTypeID(typeName, contextUser, provider);
+    }
     /** Cached per-user directory of directly discoverable, active agents the user is permitted to run — see {@link AIEngineBase.GetUserRunnableAgentDirectory}. */
     public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
         return this.Base.GetUserRunnableAgentDirectory(user);

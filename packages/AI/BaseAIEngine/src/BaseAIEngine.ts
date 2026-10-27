@@ -1137,6 +1137,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.AgentRequestTypes.find(t => t.Name.trim().toLowerCase() === normalized);
     }
 
+    /**
+     * Resolves the ID of an agent request type by name, loading the engine first if it has not
+     * been configured yet. Returns `null` when no row matches, so a caller can surface that as a
+     * result code instead of saving a request with an unknown type.
+     */
+    public async ResolveAgentRequestTypeID(typeName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        await this.EnsureLoaded(contextUser, provider);
+        return this.GetAgentRequestTypeByName(typeName)?.ID ?? null;
+    }
+
     /** All agent categories, cached during Config(). Used for hierarchical resolution of
      *  assignment strategies and default storage accounts (category → parent → root). */
     public get AgentCategories(): MJAIAgentCategoryEntity[] {
