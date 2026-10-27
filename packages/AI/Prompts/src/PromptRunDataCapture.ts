@@ -58,10 +58,9 @@ export function ReadServerTemplateDataCaptureDefault(searchFrom: string = proces
 }
 
 const JSON_STRING_NEEDS_ESCAPE = /["\\\x00-\x1f\ud800-\udfff]/;
-const objectByteLengthCache = new WeakMap<object, number>();
 
 /** UTF-8 byte length of a value's JSON form; -1 when it cannot be serialized. */
-function jsonByteLength(value: unknown, allowArrayDecompose: boolean = true): number {
+function jsonByteLength(value: unknown): number {
     if (value === undefined) return 0;
     if (value === null) return 4;
     if (typeof value === 'boolean') return value ? 4 : 5;
@@ -71,38 +70,6 @@ function jsonByteLength(value: unknown, allowArrayDecompose: boolean = true): nu
             return Buffer.byteLength(value, 'utf8') + 2;
         }
         return Buffer.byteLength(JSON.stringify(value), 'utf8');
-    }
-    if (typeof value === 'object') {
-        const cached = objectByteLengthCache.get(value);
-        if (cached !== undefined) {
-            return cached;
-        }
-        if (allowArrayDecompose && Array.isArray(value)) {
-            if (value.length === 0) {
-                objectByteLengthCache.set(value, 2);
-                return 2;
-            }
-            let sum = 2 + (value.length - 1);
-            for (let i = 0; i < value.length; i++) {
-                const elBytes = jsonByteLength(value[i], false);
-                if (elBytes < 0) {
-                    objectByteLengthCache.set(value, -1);
-                    return -1;
-                }
-                sum += elBytes === 0 ? 4 : elBytes;
-            }
-            objectByteLengthCache.set(value, sum);
-            return sum;
-        }
-        try {
-            const json = JSON.stringify(value);
-            const bytes = json === undefined ? 0 : Buffer.byteLength(json, 'utf8');
-            objectByteLengthCache.set(value, bytes);
-            return bytes;
-        } catch {
-            objectByteLengthCache.set(value, -1);
-            return -1;
-        }
     }
     try {
         const json = JSON.stringify(value);
