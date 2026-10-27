@@ -284,12 +284,22 @@ BEGIN
   CREATE TEMP TABLE _uef_fk AS SELECT * FROM __mj."vwForeignKeys";
   ANALYZE _uef_fk;
 
+  -- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536).
   DROP TABLE IF EXISTS _uef_pk;
-  CREATE TEMP TABLE _uef_pk AS SELECT * FROM __mj."vwTablePrimaryKeys";
+  CREATE TEMP TABLE _uef_pk AS
+    SELECT p.*, COUNT(*) OVER (PARTITION BY p."SchemaName", p."TableName") AS "KeyColumnCount"
+    FROM __mj."vwTablePrimaryKeys" p;
   ANALYZE _uef_pk;
 
+  -- Only columns that are, alone, the key of a non-partial unique index or constraint (#4536).
+  -- Composite unique keys are recorded as key sets in EntityUniqueKey, not on their columns.
+  -- DISTINCT: a column can be the sole key of more than one index.
   DROP TABLE IF EXISTS _uef_uk;
-  CREATE TEMP TABLE _uef_uk AS SELECT * FROM __mj."vwTableUniqueKeys";
+  CREATE TEMP TABLE _uef_uk AS
+    SELECT DISTINCT u."SchemaName", u."TableName", u."ColumnName"
+    FROM __mj."vwTableUniqueKeys" u
+    WHERE u."KeyColumnCount" = 1
+      AND NOT u."IsFiltered";
   ANALYZE _uef_uk;
 
   -- Orphan-tolerant renumber (#4050): an EntityField row whose column is no longer in the base
@@ -349,7 +359,7 @@ BEGIN
     re."ID" AS related_entity_id,
     fk."referenced_column"::text AS related_entity_field_name,
     (pk."ColumnName" IS NOT NULL) AS new_is_primary_key,
-    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique,
+    ((pk."ColumnName" IS NOT NULL AND pk."KeyColumnCount" = 1) OR uk."ColumnName" IS NOT NULL) AS new_is_unique,
     -- IS-A inherited row (#4569): a virtual, updatable field on a child entity, copied from its
     -- parent by manageParentEntityFields. The column lives in the parent's table, so the FK lookup
     -- above (keyed on the child's table) finds nothing; its RelatedEntity* values come from the
@@ -387,7 +397,7 @@ BEGIN
       -- "changed" on EVERY run and the UPDATE below would wipe it. Soft-PK rows are excluded from
       -- the PK/unique material-change predicate and their flags are frozen in the UPDATE.
       OR (NOT ef."IsSoftPrimaryKey" AND ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL))
-      OR (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL))
+      OR (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> ((pk."ColumnName" IS NOT NULL AND pk."KeyColumnCount" = 1) OR uk."ColumnName" IS NOT NULL))
       OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
     ) AS is_material_change,
     concat_ws(',',
@@ -406,7 +416,7 @@ BEGIN
       CASE WHEN NOT (e."ParentID" IS NOT NULL AND ef."IsVirtual" AND ef."AllowUpdateAPI")
                 AND COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '') THEN 'RelatedEntityFieldName' END,
       CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)) THEN 'IsPrimaryKey' END,
-      CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)) THEN 'IsUnique' END,
+      CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> ((pk."ColumnName" IS NOT NULL AND pk."KeyColumnCount" = 1) OR uk."ColumnName" IS NOT NULL)) THEN 'IsUnique' END,
       CASE WHEN (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE) THEN 'AllowUpdateAPI' END,
       CASE WHEN (ef."Sequence" <> sq."Sequence") THEN 'Sequence' END
     ) AS change_reasons,

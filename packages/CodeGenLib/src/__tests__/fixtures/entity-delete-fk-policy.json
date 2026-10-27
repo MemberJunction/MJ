@@ -294,6 +294,13 @@
       "reason": "NOT NULL reference; the row cannot exist without the entity."
     },
     {
+      "table": "EntityUniqueKey",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
       "table": "FeatureValue",
       "column": "EntityID",
       "nullable": false,

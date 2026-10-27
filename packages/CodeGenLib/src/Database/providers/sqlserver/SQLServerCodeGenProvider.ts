@@ -2035,13 +2035,19 @@ SELECT [column], [table], [schema_name], referenced_table, referenced_column, [r
 INTO #__mj__CodeGen__vwForeignKeys
 FROM [${schema}].[vwForeignKeys];
 
-SELECT TableName, ColumnName, SchemaName
+-- KeyColumnCount: a column of a composite primary key is not unique on its own (#4536)
+SELECT TableName, ColumnName, SchemaName,
+       COUNT(*) OVER (PARTITION BY SchemaName, TableName) AS KeyColumnCount
 INTO #__mj__CodeGen__vwTablePrimaryKeys
 FROM [${schema}].[vwTablePrimaryKeys];
 
-SELECT TableName, ColumnName, SchemaName
+-- Only columns that are, alone, the key of an unfiltered unique index or constraint (#4536).
+-- Composite unique keys are recorded as key sets in EntityUniqueKey, not on their columns.
+SELECT DISTINCT TableName, ColumnName, SchemaName
 INTO #__mj__CodeGen__vwTableUniqueKeys
-FROM [${schema}].[vwTableUniqueKeys];
+FROM [${schema}].[vwTableUniqueKeys]
+WHERE KeyColumnCount = 1
+  AND IsFiltered = 0;
 `;
     }
 
@@ -2102,7 +2108,7 @@ NumberedRows AS (
       IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
       IsPrimaryKey = CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END,
       IsUnique = CASE
-            WHEN pk.ColumnName IS NOT NULL THEN 1
+            WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1
             WHEN uk.ColumnName IS NOT NULL THEN 1
             ELSE 0
          END,

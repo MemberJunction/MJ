@@ -124,21 +124,33 @@ WHERE
 `],
 
   // ─── 4. vwTableUniqueKeys ─────────────────────────────────────────────────
+  // One row per KEY column of every unique index (#4536). indkey lists the key columns first and
+  // the INCLUDE columns after them; indnkeyatts is how many are keys. Expression key columns
+  // (attnum 0) have no pg_attribute row, so they drop out while KeyColumnCount still counts them.
+  // New columns are appended: CREATE OR REPLACE VIEW cannot reorder existing ones.
   ['vwTableUniqueKeys', `CREATE OR REPLACE VIEW __mj."vwTableUniqueKeys" AS
 SELECT
     n.nspname                                  AS "SchemaName",
     c.relname                                  AS "TableName",
-    a.attname                                  AS "ColumnName"
+    a.attname                                  AS "ColumnName",
+    ix.relname                                 AS "IndexName",
+    cols.ord::integer                          AS "KeyOrdinal",
+    i.indnkeyatts::integer                     AS "KeyColumnCount",
+    (i.indpred IS NOT NULL)                    AS "IsFiltered",
+    pg_catalog.pg_get_expr(i.indpred, i.indrelid) AS "FilterDefinition"
 FROM
     pg_catalog.pg_index i
 INNER JOIN pg_catalog.pg_class c       ON i.indrelid = c.oid
+INNER JOIN pg_catalog.pg_class ix      ON i.indexrelid = ix.oid
 INNER JOIN pg_catalog.pg_namespace n   ON c.relnamespace = n.oid
-CROSS JOIN LATERAL unnest(i.indkey) AS cols(col_num)
+CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS cols(col_num, ord)
 INNER JOIN pg_catalog.pg_attribute a
     ON a.attrelid = c.oid AND a.attnum = cols.col_num
 WHERE
     i.indisunique = true
     AND i.indisprimary = false
+    AND i.indisvalid = true
+    AND cols.ord <= i.indnkeyatts
     -- [Large Schema Series] same namespace exclusion as vwTablePrimaryKeys.
     -- Mirrors migration V202607181800 so a regenerated PG baseline keeps this filter.
     AND n.nspname NOT IN ('pg_catalog', 'information_schema')

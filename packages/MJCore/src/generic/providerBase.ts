@@ -184,6 +184,7 @@ export type EntityMetadataRow = BaseMetadataRow & {
     EntitySettings?: unknown[];
     EntityOrganicKeys?: unknown[];
     EntityAlternateBaseViews?: unknown[];
+    EntityUniqueKeys?: unknown[];
 };
 export type EntityFieldMetadataRow = BaseMetadataRow & {
     ID: string;
@@ -6102,6 +6103,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     simpleMetadata.EntityOrganicKeyRelatedEntities,
                     simpleMetadata.EntityFieldPermissions,
                     simpleMetadata.EntityAlternateBaseViews,
+                    simpleMetadata.EntityUniqueKeys,
                 );
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
@@ -6215,6 +6217,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[],
         fieldPermissions?: EntityFieldPermissionMetadataRow[],
         alternateBaseViews?: EntityChildMetadataRow[],
+        uniqueKeys?: EntityChildMetadataRow[],
     ): EntityInfo[] {
         const result: EntityInfo[] = [];
 
@@ -6261,6 +6264,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const alternateBaseViewsByEntityId = alternateBaseViews && alternateBaseViews.length > 0
             ? this.groupByNormalizedUUID(alternateBaseViews, abv => abv.EntityID)
             : new Map<string, EntityChildMetadataRow[]>();
+        const uniqueKeysByEntityId = uniqueKeys && uniqueKeys.length > 0
+            ? this.groupByNormalizedUUID(uniqueKeys, uk => uk.EntityID)
+            : new Map<string, EntityChildMetadataRow[]>();
 
         for (const e of sortedEntities) {
             const entityIdKey = NormalizeUUID(e.ID);
@@ -6277,6 +6283,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
             if (alternateBaseViews) {
                 e.EntityAlternateBaseViews = alternateBaseViewsByEntityId.get(entityIdKey) || [];
+            }
+            if (uniqueKeys) {
+                e.EntityUniqueKeys = uniqueKeysByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e, this));
         }

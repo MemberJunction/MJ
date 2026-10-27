@@ -6,6 +6,7 @@ import type {
     IMetadataProvider,
     UserInfo,
 } from '@memberjunction/core';
+import { EntityUniqueKeyInfo } from '@memberjunction/core';
 import { ClonePlanner } from '../ClonePlanner';
 import { RecordCloneRequest } from '@memberjunction/record-cloning-base';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
@@ -897,6 +898,66 @@ describe('ClonePlanner', () => {
 
             expect(plan.Blocked).toBe(true);
             expect(plan.Warnings.find((w) => w.Code === 'TARGET_KEY_UNCHANGED')?.Message).toContain('ParentID, TagID');
+        });
+    });
+    // #4536: metadata records each unique index as a key set; IsUnique only marks a column that is a key on its own.
+    describe('unique keys from metadata key sets', () => {
+        const keySet = (fieldNames: string, filter: string | null = null) =>
+            new EntityUniqueKeyInfo({ ID: `uk-${fieldNames}`, EntityID: 'ent-child-id', Name: `UQ_Child_${fieldNames}`, FieldNames: fieldNames, FilterDefinition: filter });
+
+        /** Two children of one parent, both named 'Same'. */
+        const planWithChildKeys = async (keys: EntityUniqueKeyInfo[], relationshipPolicy: 'Deep' | 'Reference' = 'Deep') => {
+            mockRunViewInstance.mockImplementation(async (params: { EntityName: string; Fields?: string[] }) => {
+                if (params.Fields) return { Success: true, Results: [] };
+                return params.EntityName === 'ParentEntity'
+                    ? { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] }
+                    : {
+                          Success: true,
+                          Results: [
+                              { ID: 'child-1', Name: 'Same', ParentID: 'parent-1' },
+                              { ID: 'child-2', Name: 'Same', ParentID: 'parent-1' },
+                          ],
+                      };
+            });
+            const parent = { ...parentEntity, CloneConfig: { Enabled: true, Relationships: { ChildEntity: { Policy: relationshipPolicy } } } } as unknown as EntityInfo;
+            const child = { ...childEntity, UniqueKeySets: keys } as unknown as EntityInfo;
+            const list = [parent, child];
+            const provider = {
+                ...mockProvider,
+                Entities: list,
+                EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null,
+                EntityByID: (id: string) => list.find((e) => e.ID === id) ?? null,
+            } as IMetadataProvider;
+            const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+            mockRunViewInstance.mockReset();
+            return plan;
+        };
+
+        it('blocks two copied siblings that repeat a unique key', async () => {
+            const plan = await planWithChildKeys([keySet('ParentID,Name')]);
+            const collision = plan.Warnings.find((w) => w.Code === 'INTRA_PLAN_COLLISION');
+            expect(collision?.Message).toContain('[ParentID, Name]');
+            expect(plan.Blocked).toBe(true);
+        });
+
+        it('finds no collision without a key set (IsUnique flags alone no longer stand in for one)', async () => {
+            const plan = await planWithChildKeys([]);
+            expect(plan.Warnings.some((w) => w.Code === 'INTRA_PLAN_COLLISION')).toBe(false);
+        });
+
+        it('leaves a filtered key to the database', async () => {
+            const plan = await planWithChildKeys([keySet('ParentID,Name', '([Name] IS NOT NULL)')]);
+            expect(plan.Warnings.some((w) => w.Code === 'INTRA_PLAN_COLLISION')).toBe(false);
+        });
+
+        it('copies a child instead of referencing it when its join column alone is a key', async () => {
+            const plan = await planWithChildKeys([keySet('ParentID')], 'Reference');
+            expect(plan.Warnings.some((w) => w.Code === 'CONSTRAINT_FORCED_DEEP')).toBe(true);
+        });
+
+        it('keeps Reference when the join column is only part of a composite key', async () => {
+            const plan = await planWithChildKeys([keySet('ParentID,Name')], 'Reference');
+            expect(plan.Warnings.some((w) => w.Code === 'CONSTRAINT_FORCED_DEEP')).toBe(false);
         });
     });
 });

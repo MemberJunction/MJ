@@ -43,6 +43,7 @@ import { TrimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { ComputeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
+import { BuildCatalogUniqueKeyColumnsSQL, BuildStoredUniqueKeySetsSQL, BuildUniqueKeySetSyncSQL, DiffUniqueKeySets, GroupUniqueKeyColumns, StoredUniqueKeySet } from "./unique-key-sets";
 import {
    TRACKED_FIELD_COLUMNS,
    FieldChangeReason,
@@ -5044,6 +5045,15 @@ export class ManageMetadataBase {
       }
       logStatus(`      Updated existing entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
+      // Unique keys as column sets (#4536). Unscoped: an index can be added or dropped without any
+      // column changing, so the entity would not be in this pass's filter. One catalog read.
+      const stepUniqueKeysStartTime: Date = new Date();
+      if (! await this.syncEntityUniqueKeys(pool, excludeSchemas)) {
+         logError('Error syncing entity unique keys from schema');
+         bSuccess = false;
+      }
+      logStatus(`      Synced entity unique keys from schema in ${(new Date().getTime() - stepUniqueKeysStartTime.getTime()) / 1000} seconds`);
+
       // Apply soft PK/FK configuration if config file exists
       const stepConfigStartTime: Date = new Date();
       if (! await this.applySoftPKFKConfig(pool)) {
@@ -6269,6 +6279,44 @@ export class ManageMetadataBase {
       }
       catch (e) {
          logError(e as string);
+         return false;
+      }
+   }
+
+   /**
+    * Makes `EntityUniqueKey` match the database catalog (#4536): one row per unique index or unique
+    * constraint on each entity's base table, with its key columns in order. Only entities outside
+    * `excludeSchemas` are read or written. See unique-key-sets.ts.
+    */
+   protected async syncEntityUniqueKeys(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const schema = MjCoreSchema();
+         const catalog = await this.runQuery(pool, BuildCatalogUniqueKeyColumnsSQL(this.dialect, schema, excludeSchemas));
+         const storedRes = await this.runQuery(pool, BuildStoredUniqueKeySetsSQL(this.dialect, schema, excludeSchemas));
+         const desired = GroupUniqueKeyColumns(catalog.recordset.map((r: CodeGenQueryRow) => ({
+            EntityID: String(r.EntityID),
+            IndexName: String(r.IndexName),
+            ColumnName: String(r.ColumnName),
+            KeyOrdinal: Number(r.KeyOrdinal),
+            FilterDefinition: r.FilterDefinition == null ? null : String(r.FilterDefinition),
+         })));
+         const stored: StoredUniqueKeySet[] = storedRes.recordset.map((r: CodeGenQueryRow) => ({
+            ID: String(r.ID),
+            EntityID: String(r.EntityID),
+            Name: String(r.Name),
+            FieldNames: String(r.FieldNames),
+            FilterDefinition: r.FilterDefinition == null ? null : String(r.FilterDefinition),
+         }));
+         const changes = DiffUniqueKeySets(desired, stored);
+         const statements = BuildUniqueKeySetSyncSQL(this.dialect, schema, changes, () => uuidv4());
+         if (statements.length > 0) {
+            await this.logSQLBatchAndExecute(pool, statements, `SQL text to sync entity unique keys (${changes.Inserts.length} added, ${changes.Updates.length} updated, ${changes.Deletes.length} removed)`);
+            logStatus(`   > Entity unique keys: ${changes.Inserts.length} added, ${changes.Updates.length} updated, ${changes.Deletes.length} removed`);
+         }
+         return true;
+      }
+      catch (e) {
+         logError(`Error syncing entity unique keys: ${e}`);
          return false;
       }
    }
