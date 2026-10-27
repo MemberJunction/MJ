@@ -2842,22 +2842,6 @@ type DeniedFieldsMemoEntry = {
 
 const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, DeniedFieldsMemoEntry>>();
 
-type EntityUserPermissionMemoEntry = {
-    permissionsRef: EntityPermissionInfo[];
-    permissionsLen: number;
-    allowCreateAPI: boolean;
-    allowUpdateAPI: boolean;
-    allowDeleteAPI: boolean;
-    roleIds: Set<string>;
-    userPermission?: EntityUserPermissionInfo;
-    rlsExemptCreate?: boolean;
-    rlsExemptRead?: boolean;
-    rlsExemptUpdate?: boolean;
-    rlsExemptDelete?: boolean;
-};
-
-const _entityUserPermissionsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, EntityUserPermissionMemoEntry>>();
-
 /**
  * The field-security generation: one process-wide number that moves whenever an answer derived
  * from field-security configuration may have changed. It moves when an `EntityInfo` is built (a
@@ -4861,45 +4845,10 @@ export class EntityInfo extends BaseInfo {
      * hierarchy. Rows with a missing/unknown Type default to Allow for backwards
      * compatibility with data written before the Type column existed (Phase 2b).
      */
-    private userPermissionMemoEntryFor(user: UserInfo, roleIds: Set<string>): EntityUserPermissionMemoEntry {
-        const permissionsRef = this.Permissions;
-        const permissionsLen = permissionsRef.length;
-        let byUser = _entityUserPermissionsCache.get(this);
-        if (!byUser) {
-            byUser = new WeakMap();
-            _entityUserPermissionsCache.set(this, byUser);
-        }
-        let entry = byUser.get(user);
-        if (
-            !entry ||
-            entry.permissionsRef !== permissionsRef ||
-            entry.permissionsLen !== permissionsLen ||
-            entry.allowCreateAPI !== this.AllowCreateAPI ||
-            entry.allowUpdateAPI !== this.AllowUpdateAPI ||
-            entry.allowDeleteAPI !== this.AllowDeleteAPI ||
-            entry.roleIds !== roleIds
-        ) {
-            entry = {
-                permissionsRef,
-                permissionsLen,
-                allowCreateAPI: this.AllowCreateAPI,
-                allowUpdateAPI: this.AllowUpdateAPI,
-                allowDeleteAPI: this.AllowDeleteAPI,
-                roleIds,
-            };
-            byUser.set(user, entry);
-        }
-        return entry;
-    }
-
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
             const _ = user.UserRoles; // preserve throw-on-null behavior
             const userRoleIds = getUserRoleIdSet(user);
-            const memo = (user && typeof user === 'object') ? this.userPermissionMemoEntryFor(user, userRoleIds) : undefined;
-            if (memo?.userPermission !== undefined) {
-                return memo.userPermission;
-            }
             const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
 
@@ -4928,9 +4877,6 @@ export class EntityInfo extends BaseInfo {
             userPermission.Entity = this;
             userPermission.User = user;
 
-            if (memo) {
-                memo.userPermission = userPermission;
-            }
             return userPermission;
         }
         catch (err) {
@@ -4999,24 +4945,6 @@ export class EntityInfo extends BaseInfo {
         if (userRoleIds.size === 0) {
             return false;
         }
-        const memo = (user && typeof user === 'object') ? this.userPermissionMemoEntryFor(user, userRoleIds) : undefined;
-        if (memo) {
-            switch (type) {
-                case EntityPermissionType.Create:
-                    if (memo.rlsExemptCreate !== undefined) return memo.rlsExemptCreate;
-                    break;
-                case EntityPermissionType.Read:
-                    if (memo.rlsExemptRead !== undefined) return memo.rlsExemptRead;
-                    break;
-                case EntityPermissionType.Update:
-                    if (memo.rlsExemptUpdate !== undefined) return memo.rlsExemptUpdate;
-                    break;
-                case EntityPermissionType.Delete:
-                    if (memo.rlsExemptDelete !== undefined) return memo.rlsExemptDelete;
-                    break;
-            }
-        }
-        let exempt = false;
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
             if (ep.IsDeny) {
@@ -5026,43 +4954,25 @@ export class EntityInfo extends BaseInfo {
                 switch (type) {
                     case EntityPermissionType.Create:
                         if (ep.CanCreate && !ep.CreateRLSFilterID)
-                            exempt = true;
+                            return true;
                         break;
                     case EntityPermissionType.Read:
                         if (ep.CanRead && !ep.ReadRLSFilterID)
-                            exempt = true;
+                            return true;
                         break;
                     case EntityPermissionType.Update:
                         if (ep.CanUpdate && !ep.UpdateRLSFilterID)
-                            exempt = true;
+                            return true;
                         break;
                     case EntityPermissionType.Delete:
                         if (ep.CanDelete && !ep.DeleteRLSFilterID)
-                            exempt = true;
+                            return true;
                         break;
                 }
-                if (exempt) {
-                    break;
-                }
+
             }
         }
-        if (memo) {
-            switch (type) {
-                case EntityPermissionType.Create:
-                    memo.rlsExemptCreate = exempt;
-                    break;
-                case EntityPermissionType.Read:
-                    memo.rlsExemptRead = exempt;
-                    break;
-                case EntityPermissionType.Update:
-                    memo.rlsExemptUpdate = exempt;
-                    break;
-                case EntityPermissionType.Delete:
-                    memo.rlsExemptDelete = exempt;
-                    break;
-            }
-        }
-        return exempt; // if we get here, the user is NOT exempt from RLS for this Permission Type
+        return false; // if we get here, the user is NOT exempt from RLS for this Permission Type
     }
     
     /**
