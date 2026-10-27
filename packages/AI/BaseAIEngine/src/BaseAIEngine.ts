@@ -8,6 +8,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity,
          MJAIAgentPromptEntity,
          MJAIAgentTypeEntity,
+         MJAIAgentRequestTypeEntity,
          MJAIVendorEntity,
          MJAIModelVendorEntity,
          MJAIModelTypeEntity,
@@ -192,6 +193,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agents: MJAIAgentEntityExtended[] = [];
     private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
     private _agentTypes: MJAIAgentTypeEntity[] = [];
+    private _agentRequestTypes: MJAIAgentRequestTypeEntity[] = [];
     private _vendorTypeDefinitions: MJAIVendorTypeDefinitionEntity[] = [];
     private _vendors: MJAIVendorEntity[] = [];
     private _modelVendors: MJAIModelVendorEntity[] = [];
@@ -389,6 +391,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentTypes',
                 EntityName: 'MJ: AI Agent Types',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentRequestTypes',
+                EntityName: 'MJ: AI Agent Request Types',
                 CacheLocal: true
             },
             {
@@ -1108,6 +1115,36 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
         return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
+    }
+
+    /**
+     * The `MJ: AI Agent Request Types` rows (Approval, Information, ...), cached during Config().
+     * Resolve a type with {@link GetAgentRequestTypeByName} instead of hardcoding its ID.
+     */
+    public get AgentRequestTypes(): MJAIAgentRequestTypeEntity[] {
+        return this.GetConfigData<MJAIAgentRequestTypeEntity>('_agentRequestTypes');
+    }
+
+    /**
+     * Finds an agent request type by name (trimmed, case-insensitive), or `undefined` when no
+     * row matches. The small seeded table is scanned directly; no index is kept.
+     */
+    public GetAgentRequestTypeByName(name: string): MJAIAgentRequestTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this.AgentRequestTypes.find(t => t.Name.trim().toLowerCase() === normalized);
+    }
+
+    /**
+     * Resolves the ID of an agent request type by name, loading the engine first if it has not
+     * been configured yet. Returns `null` when no row matches, so a caller can surface that as a
+     * result code instead of saving a request with an unknown type.
+     */
+    public async ResolveAgentRequestTypeID(typeName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        await this.EnsureLoaded(contextUser, provider);
+        return this.GetAgentRequestTypeByName(typeName)?.ID ?? null;
     }
 
     /** All agent categories, cached during Config(). Used for hierarchical resolution of

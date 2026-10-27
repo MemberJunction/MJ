@@ -44,6 +44,11 @@ vi.mock('@memberjunction/core', () => {
             this._contextUser = contextUser;
             this._loaded = true;
         }
+        async EnsureLoaded(contextUser?: unknown) {
+            if (this._loaded) return;
+            this._contextUser = contextUser;
+            this._loaded = true;
+        }
         static _instance: unknown = undefined;
         static getInstance<U>(): U {
             if (!this._instance) {
@@ -169,7 +174,7 @@ describe('AIEngineBase', () => {
                 'ModelCosts', 'ModelPriceTypes', 'ModelPriceUnitTypes',
                 'Configurations', 'ConfigurationParams', 'CredentialBindings',
                 'Modalities', 'AgentModalities', 'ModelModalities',
-                'AgentCoAgents', 'AgentChannels',
+                'AgentCoAgents', 'AgentChannels', 'AgentRequestTypes',
             ];
             for (const p of props) {
                 expect((engine as unknown as Record<string, unknown>)[p]).toEqual([]);
@@ -195,6 +200,20 @@ describe('AIEngineBase', () => {
             expect(coAgentConfig!.CacheLocal).toBe(true);
             expect(channelConfig).toBeDefined();
             expect(channelConfig!.CacheLocal).toBe(true);
+        });
+
+        it('registers agent request types as a locally-cached dataset', async () => {
+            const engine = AIEngineBase.Instance;
+            const loadSpy = vi.spyOn(
+                engine as unknown as { Load: (params: Array<{ PropertyName: string; EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
+                'Load',
+            );
+            await engine.Config(false);
+            const params = loadSpy.mock.calls[0][0];
+            const config = params.find(p => p.PropertyName === '_agentRequestTypes');
+            expect(config).toBeDefined();
+            expect(config!.EntityName).toBe('MJ: AI Agent Request Types');
+            expect(config!.CacheLocal).toBe(true);
         });
 
         it('fetches the binary embedding column for agent notes and examples on database providers only', async () => {
@@ -274,6 +293,45 @@ describe('AIEngineBase', () => {
         it('should return undefined for non-existent name', () => {
             set('_agents', []);
             expect(AIEngineBase.Instance.GetAgentByName('no')).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------
+    // GetAgentRequestTypeByName
+    // -----------------------------------------------
+    describe('GetAgentRequestTypeByName', () => {
+        it('should find a request type case-insensitively with trimming', () => {
+            const types = [{ ID: 'rt1', Name: 'Approval' }, { ID: 'rt2', Name: '  Information ' }];
+            set('_agentRequestTypes', types);
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName(' approval')).toBe(types[0]);
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName('INFORMATION')).toBe(types[1]);
+            expect(AIEngineBase.Instance.AgentRequestTypes).toBe(types);
+        });
+
+        it('should return undefined for a missing or empty name', () => {
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }]);
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName('Escalation')).toBeUndefined();
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName('')).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------
+    // ResolveAgentRequestTypeID
+    // -----------------------------------------------
+    describe('ResolveAgentRequestTypeID', () => {
+        it('should ensure the engine is loaded, then return the matching ID', async () => {
+            const ctx = { ID: 'u1' };
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }, { ID: 'rt2', Name: 'Information' }]);
+            const ensure = vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded');
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID(' approval ', ctx as never)).toBe('rt1');
+            expect(ensure).toHaveBeenCalledWith(ctx, undefined);
+            expect(AIEngineBase.Instance.ContextUser).toBe(ctx);
+        });
+
+        it('should return null when no request type has that name', async () => {
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }]);
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID('Escalation')).toBeNull();
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID('')).toBeNull();
         });
     });
 
