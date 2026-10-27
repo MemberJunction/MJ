@@ -73,6 +73,8 @@ const STEP_ICONS: Record<FeatureStepKind, string> = {
   'llm-derived': 'fa-solid fa-wand-magic-sparkles',
   'flow-agent': 'fa-solid fa-robot',
   'vision-llm': 'fa-solid fa-eye',
+  'windowed-aggregate': 'fa-solid fa-calendar-days',
+  series: 'fa-solid fa-chart-line',
 };
 
 const PS_PIPELINES_STARTER_PROMPT =
@@ -2279,6 +2281,8 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       case 'llm-derived': return { ...base, Kind: 'llm-derived', FeaturePipelineRef: '', Columns: [] };
       case 'flow-agent': return { ...base, Kind: 'flow-agent', FlowAgentRef: '', InputMapping: {}, OutputMapping: {} };
       case 'vision-llm': return { ...base, Kind: 'vision-llm', ImageColumn: '', Prompt: { InlinePrompt: '' }, Output: { FeatureName: '', Kind: 'category' } };
+      case 'windowed-aggregate': return { ...base, Kind: 'windowed-aggregate', FeatureName: '', ChildEntity: '', ForeignKey: '', DateField: '', Aggregate: 'count' };
+      case 'series': return { ...base, Kind: 'series', FeatureName: '', Feature: { kind: 'lag', index: 0 } };
     }
   }
 

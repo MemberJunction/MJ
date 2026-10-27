@@ -11,6 +11,7 @@ export * from './read-policy';
 export * from './assembly-metadata';
 export * from './read-cap-error';
 export * from './as-of';
+export * from './as-of/index';
 export * from './leakage-guard';
 export * from './vision-llm';
 export * from './feature-assembly-executor';

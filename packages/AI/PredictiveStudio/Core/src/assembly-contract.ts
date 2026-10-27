@@ -61,7 +61,7 @@ export type ColumnEncoding =
 export type ColumnEncodingKind = ColumnEncoding['kind'];
 
 export interface MissingValuePolicy {
-  readonly impute: 'median' | 'mode' | 'constant';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly impute: 'mean' | 'median' | 'mode' | 'constant';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly indicator: true;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly constant: string | number | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
