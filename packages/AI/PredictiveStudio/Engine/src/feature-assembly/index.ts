@@ -7,6 +7,8 @@
  */
 
 export * from './data-access';
+export * from './read-policy';
+export * from './assembly-metadata';
 export * from './read-cap-error';
 export * from './as-of';
 export * from './leakage-guard';

@@ -31,3 +31,4 @@ export * from './experiment-sessions';
 export * from './prediction-unit';
 export * from './assembly-contract';
 export * from './evaluation-protocol';
+export * from './training-run-results';
