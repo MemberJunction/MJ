@@ -218,3 +218,14 @@ def _predict(artifact_b64, model_id, fitted, feature_schema, rows) -> dict:
     resp = client.post("/predict", json=payload)
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+def test_train_endpoint_returns_400_naming_text_column() -> None:
+    req = _train_request("logistic_regression", "classification")
+    req["preprocessing"] = []
+    req["data"]["columns"][0] = "Region"
+    req["feature_schema"][0]["Name"] = "Region"
+    req["data"]["rows"][0][0] = "EU"
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 400
+    assert "Region" in resp.json()["detail"]

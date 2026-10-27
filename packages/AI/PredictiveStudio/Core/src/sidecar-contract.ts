@@ -75,6 +75,8 @@ export interface PreprocessingOp {
   fillValue?: string | number;
   /** Number of bins to fit when `op` is `bin`. The sidecar fits the edges; absent ⇒ sidecar default. */
   bins?: number;
+  /** When `op` is `impute`: also emit a `<col>__missing` column (1 where the value was missing) before filling, so a missing value stays distinct from a true zero. */
+  indicator?: boolean; // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**

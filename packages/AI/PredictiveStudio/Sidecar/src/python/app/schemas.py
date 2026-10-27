@@ -47,6 +47,8 @@ class PreprocessingOp(BaseModel):
     fillValue: Optional[Union[str, float, int]] = None
     # bin-specific (the contract leaves `op` open so we extend additively)
     bins: Optional[int] = None
+    # impute-specific: also emit a `<col>__missing` indicator column before filling
+    indicator: bool = False
 
 
 class ValidationConfig(BaseModel):
