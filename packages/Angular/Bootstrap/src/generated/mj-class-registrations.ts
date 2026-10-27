@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (459 classes)
+// @memberjunction/core-entities (462 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -281,6 +281,7 @@ import {
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
+    MJEvaluationProtocolEntity,
     MJExperimentEntity,
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
@@ -358,6 +359,7 @@ import {
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
+    MJPredictionUnitEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -461,6 +463,7 @@ import {
     MJTestTypeEntity,
     MJThemeEntity,
     MJThemeEntityExtended,
+    MJTrainingSnapshotEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1126,6 +1129,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
+    MJEvaluationProtocolEntity,
     MJExperimentEntity,
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
@@ -1203,6 +1207,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
+    MJPredictionUnitEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1268,12 +1273,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
-    MJSearchScopeStorageAccountEntity,
-    MJSearchScopeTestQueryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeStorageAccountEntity,
+    MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
@@ -1310,6 +1315,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestTypeEntity,
     MJThemeEntity,
     MJThemeEntityExtended,
+    MJTrainingSnapshotEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1471,13 +1477,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestRubricFormComponentExtended,
     MJTestRunFeedbackFormComponentExtended,
     MJTestRunFormComponentExtended,
-    MJTestSuiteFormComponentExtended,
-    MJTestSuiteRunFormComponentExtended,
-    MLModelFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJTestSuiteFormComponentExtended,
+    MJTestSuiteRunFormComponentExtended,
+    MLModelFormComponentExtended,
     MLModelFormPolicy,
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
@@ -1642,7 +1648,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 750;
+export const CLASS_REGISTRATIONS_COUNT = 753;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -22,7 +22,8 @@ export class MJMLTrainingPipelineFormComponent extends BaseFormComponent {
             { sectionKey: 'validationAndSafety', sectionName: 'Validation and Safety', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
-            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
+            { sectionKey: 'mJTrainingSnapshots', sectionName: 'Training Snapshots', isExpanded: false }
         ]);
     }
 }

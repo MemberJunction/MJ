@@ -21940,6 +21940,179 @@ export const MJErrorLogSchema = z.object({
 export type MJErrorLogEntityType = z.infer<typeof MJErrorLogSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Evaluation Protocols
+ */
+export const MJEvaluationProtocolSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    LineageRootID: z.string().describe(`
+        * * Field Name: LineageRootID
+        * * Display Name: Lineage Root ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+        * * Description: ID of version 1 of this protocol. Version 1 points at itself.`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Description: Version number within the lineage, starting at 1. A saved version is never updated.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the protocol.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the protocol is for, in plain words.`),
+    Holdout: z.string().describe(`
+        * * Field Name: Holdout
+        * * Display Name: Holdout
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.`),
+    InnerValidation: z.string().describe(`
+        * * Field Name: InnerValidation
+        * * Display Name: Inner Validation
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.`),
+    Seed: z.number().describe(`
+        * * Field Name: Seed
+        * * Display Name: Seed
+        * * SQL Data Type: int
+        * * Description: Random seed for every split, fold, bootstrap and estimator of a run under this protocol.`),
+    HoldoutAccessBudget: z.literal(1).describe(`
+        * * Field Name: HoldoutAccessBudget
+        * * Display Name: Holdout Access Budget
+        * * SQL Data Type: int
+        * * Default Value: 1
+    * * Value List Type: List
+    * * Possible Values 
+    *   * 1
+        * * Description: How many times the locked holdout may be scored per run: always 1, for one declared finalist.`),
+    PrimaryScore: z.string().describe(`
+        * * Field Name: PrimaryScore
+        * * Display Name: Primary Score
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit's task kind.`),
+    SecondaryMetrics: z.string().describe(`
+        * * Field Name: SecondaryMetrics
+        * * Display Name: Secondary Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.`),
+    Baselines: z.string().describe(`
+        * * Field Name: Baselines
+        * * Display Name: Baselines
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.`),
+    Calibration: z.string().describe(`
+        * * Field Name: Calibration
+        * * Display Name: Calibration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.`),
+    Resampling: z.string().describe(`
+        * * Field Name: Resampling
+        * * Display Name: Resampling
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.`),
+    Intervals: z.string().describe(`
+        * * Field Name: Intervals
+        * * Display Name: Intervals
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.`),
+    Promotion: z.string().describe(`
+        * * Field Name: Promotion
+        * * Display Name: Promotion
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.`),
+    AllowedOutcomes: z.string().describe(`
+        * * Field Name: AllowedOutcomes
+        * * Display Name: Allowed Outcomes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.`),
+    LeakageAudit: z.string().describe(`
+        * * Field Name: LeakageAudit
+        * * Display Name: Leakage Audit
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.`),
+    Exclusions: z.string().describe(`
+        * * Field Name: Exclusions
+        * * Display Name: Exclusions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).`),
+    Slices: z.string().describe(`
+        * * Field Name: Slices
+        * * Display Name: Slices
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.`),
+    PredictionIntervals: z.string().nullable().describe(`
+        * * Field Name: PredictionIntervals
+        * * Display Name: Prediction Intervals
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.`),
+    ResidualDiagnostics: z.string().nullable().describe(`
+        * * Field Name: ResidualDiagnostics
+        * * Display Name: Residual Diagnostics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.`),
+    RetrainTriggers: z.string().describe(`
+        * * Field Name: RetrainTriggers
+        * * Display Name: Retrain Triggers
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).`),
+    SearchStrategy: z.string().describe(`
+        * * Field Name: SearchStrategy
+        * * Display Name: Search Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.`),
+    Budgets: z.string().describe(`
+        * * Field Name: Budgets
+        * * Display Name: Budgets
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.`),
+    MinMinorityClassRows: z.number().describe(`
+        * * Field Name: MinMinorityClassRows
+        * * Display Name: Min Minority Class Rows
+        * * SQL Data Type: int
+        * * Default Value: 20
+        * * Description: Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.`),
+    GuardFieldsEditableBy: z.union([z.literal('human-only'), z.literal('non-agent')]).describe(`
+        * * Field Name: GuardFieldsEditableBy
+        * * Display Name: Guard Fields Editable By
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: non-agent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * human-only
+    *   * non-agent
+        * * Description: Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author's version passes the same guard-field validation.`),
+    AuthoredBy: z.string().describe(`
+        * * Field Name: AuthoredBy
+        * * Display Name: Authored By
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Actor who authored this version.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    LineageRoot: z.string().describe(`
+        * * Field Name: LineageRoot
+        * * Display Name: Lineage Root
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEvaluationProtocolEntityType = z.infer<typeof MJEvaluationProtocolSchema>;
+
+/**
  * zod schema definition for the entity MJ: Experiment Session Iterations
  */
 export const MJExperimentSessionIterationSchema = z.object({
@@ -22958,6 +23131,16 @@ export const MJFeatureValueSchema = z.object({
     *   * Human
     *   * Pipeline
         * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).`),
+    EffectiveAsOf: z.date().nullable().describe(`
+        * * Field Name: EffectiveAsOf
+        * * Display Name: Effective As Of
+        * * SQL Data Type: datetimeoffset
+        * * Description: Instant from which this value is the record's value of the feature; as-of assembly reads the latest value with EffectiveAsOf at or before a row's decision date. On a Source = Model row it is the scoring as-of date. NULL = not effective-dated (ineligible for as-of assembly).`),
+    InputAsOf: z.date().nullable().describe(`
+        * * Field Name: InputAsOf
+        * * Display Name: Input As Of
+        * * SQL Data Type: datetimeoffset
+        * * Description: Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf.`),
     RecordProcess: z.string().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -26498,6 +26681,18 @@ export const MJMLTrainingPipelineSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    PredictionUnitID: z.string().nullable().describe(`
+        * * Field Name: PredictionUnitID
+        * * Display Name: Prediction Unit
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Prediction Units (vwPredictionUnits.ID)
+        * * Description: The exact Prediction Unit version this pipeline trains on. NULL only on a pipeline created before Predictive Studio 6.3 that has not been migrated; such a pipeline cannot be trained.`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+        * * Description: The exact Evaluation Protocol version every training run of this pipeline is graded under. Its primary score family must equal the unit's task kind.`),
     TargetEntity: z.string().describe(`
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
@@ -26505,6 +26700,14 @@ export const MJMLTrainingPipelineSchema = z.object({
     Algorithm: z.string().describe(`
         * * Field Name: Algorithm
         * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+    PredictionUnit: z.string().nullable().describe(`
+        * * Field Name: PredictionUnit
+        * * Display Name: Prediction Unit Name
+        * * SQL Data Type: nvarchar(255)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -26606,6 +26809,28 @@ export const MJMLTrainingRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    TrainingSnapshotID: z.string().nullable().describe(`
+        * * Field Name: TrainingSnapshotID
+        * * Display Name: Training Snapshot
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Training Snapshots (vwTrainingSnapshots.ID)
+        * * Description: The Training Snapshot this run trained on; NULL for a run refused before assembly and for runs before Predictive Studio 6.3.`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+        * * Description: The Evaluation Protocol version the run was graded under, pinned when the run started.`),
+    CodeVersion: z.string().nullable().describe(`
+        * * Field Name: CodeVersion
+        * * Display Name: Code Version
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CodeVersion: PS git commit, sidecar version, library versions, thread count and seed the run used.`),
+    ComputeSeconds: z.number().nullable().describe(`
+        * * Field Name: ComputeSeconds
+        * * Display Name: Compute Seconds
+        * * SQL Data Type: decimal(18, 3)
+        * * Description: Measured trainer compute time in seconds, as returned by the sidecar.`),
     Pipeline: z.string().describe(`
         * * Field Name: Pipeline
         * * Display Name: Pipeline
@@ -26617,6 +26842,14 @@ export const MJMLTrainingRunSchema = z.object({
     Algorithm: z.string().describe(`
         * * Field Name: Algorithm
         * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+    TrainingSnapshot: z.string().nullable().describe(`
+        * * Field Name: TrainingSnapshot
+        * * Display Name: Training Snapshot
+        * * SQL Data Type: nvarchar(64)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol Details
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -28377,6 +28610,120 @@ export const MJPhoneNumberSchema = z.object({
 });
 
 export type MJPhoneNumberEntityType = z.infer<typeof MJPhoneNumberSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Prediction Units
+ */
+export const MJPredictionUnitSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    LineageRootID: z.string().describe(`
+        * * Field Name: LineageRootID
+        * * Display Name: Lineage Root
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Prediction Units (vwPredictionUnits.ID)
+        * * Description: ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Description: Version number within the lineage, starting at 1. A saved version is never updated.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the unit, e.g. "Member renewal (person x membership period)".`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the unit predicts and for whom, in plain words.`),
+    UnitRows: z.string().describe(`
+        * * Field Name: UnitRows
+        * * Display Name: Unit Rows
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.`),
+    LabelRule: z.string().describe(`
+        * * Field Name: LabelRule
+        * * Display Name: Label Rule
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.`),
+    LabelWindowDays: z.number().describe(`
+        * * Field Name: LabelWindowDays
+        * * Display Name: Label Window Days
+        * * SQL Data Type: int
+        * * Description: Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).`),
+    LabelGapDays: z.number().describe(`
+        * * Field Name: LabelGapDays
+        * * Display Name: Label Gap Days
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Days between the decision date and the start of the outcome window.`),
+    TaskType: z.string().describe(`
+        * * Field Name: TaskType
+        * * Display Name: Task Type
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.`),
+    LabelVersion: z.number().describe(`
+        * * Field Name: LabelVersion
+        * * Display Name: Label Version
+        * * SQL Data Type: int
+        * * Description: Outcome-definition version: equals the previous version's LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.`),
+    Censoring: z.string().describe(`
+        * * Field Name: Censoring
+        * * Display Name: Censoring
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.`),
+    ChangeHistoryPolicy: z.string().describe(`
+        * * Field Name: ChangeHistoryPolicy
+        * * Display Name: Change History Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.`),
+    GroupKey: z.string().nullable().describe(`
+        * * Field Name: GroupKey
+        * * Display Name: Group Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Field on the row whose value keeps one entity's rows together in grouped folds and the new-entity report; NULL means the grain record key.`),
+    TemporalSpec: z.string().nullable().describe(`
+        * * Field Name: TemporalSpec
+        * * Display Name: Temporal Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.`),
+    DecisionSpec: z.string().describe(`
+        * * Field Name: DecisionSpec
+        * * Display Name: Decision Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.`),
+    IncumbentHeuristic: z.string().describe(`
+        * * Field Name: IncumbentHeuristic
+        * * Display Name: Incumbent Heuristic
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today's rule of thumb, scored as a named comparator on the same holdout.`),
+    AuthoredBy: z.string().describe(`
+        * * Field Name: AuthoredBy
+        * * Display Name: Authored By
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    LineageRoot: z.string().describe(`
+        * * Field Name: LineageRoot
+        * * Display Name: Lineage Root
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJPredictionUnitEntityType = z.infer<typeof MJPredictionUnitSchema>;
 
 /**
  * zod schema definition for the entity MJ: Process Run Details
@@ -37374,6 +37721,233 @@ export const MJThemeSchema = z.object({
 });
 
 export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Training Snapshots
+ */
+export const MJTrainingSnapshotSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentHash: z.string().describe(`
+        * * Field Name: ContentHash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.`),
+    PipelineID: z.string().describe(`
+        * * Field Name: PipelineID
+        * * Display Name: Pipeline
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+        * * Description: The ML Training Pipeline whose feature spec was assembled.`),
+    PredictionUnitID: z.string().describe(`
+        * * Field Name: PredictionUnitID
+        * * Display Name: Prediction Unit
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Prediction Units (vwPredictionUnits.ID)
+        * * Description: The exact Prediction Unit version whose rows were read.`),
+    LabelVersion: z.number().describe(`
+        * * Field Name: LabelVersion
+        * * Display Name: Label Version
+        * * SQL Data Type: int
+        * * Description: The unit's LabelVersion at assembly.`),
+    FeatureSpecVersion: z.number().describe(`
+        * * Field Name: FeatureSpecVersion
+        * * Display Name: Feature Spec Version
+        * * SQL Data Type: int
+        * * Description: The pipeline Version whose FeatureSteps produced the feature spec.`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+        * * Description: The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.`),
+    StorageProviderID: z.string().describe(`
+        * * Field Name: StorageProviderID
+        * * Display Name: Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: The File Storage Provider holding the three files.`),
+    MatrixFileID: z.string().describe(`
+        * * Field Name: MatrixFileID
+        * * Display Name: Matrix File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).`),
+    MatrixSha256: z.string().describe(`
+        * * Field Name: MatrixSha256
+        * * Display Name: Matrix SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the matrix file bytes.`),
+    MatrixSizeBytes: z.number().describe(`
+        * * Field Name: MatrixSizeBytes
+        * * Display Name: Matrix Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Description: Size of the matrix file in bytes.`),
+    RowManifestFileID: z.string().describe(`
+        * * Field Name: RowManifestFileID
+        * * Display Name: Row Manifest File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).`),
+    RowManifestSha256: z.string().describe(`
+        * * Field Name: RowManifestSha256
+        * * Display Name: Row Manifest SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the manifest file bytes.`),
+    RowManifestSizeBytes: z.number().describe(`
+        * * Field Name: RowManifestSizeBytes
+        * * Display Name: Row Manifest Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Description: Size of the manifest file in bytes.`),
+    ProvenanceFileID: z.string().describe(`
+        * * Field Name: ProvenanceFileID
+        * * Display Name: Provenance File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).`),
+    ProvenanceSha256: z.string().describe(`
+        * * Field Name: ProvenanceSha256
+        * * Display Name: Provenance SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the provenance file bytes.`),
+    ProvenanceSizeBytes: z.number().describe(`
+        * * Field Name: ProvenanceSizeBytes
+        * * Display Name: Provenance Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Description: Size of the provenance file in bytes.`),
+    ManifestRowCount: z.number().describe(`
+        * * Field Name: ManifestRowCount
+        * * Display Name: Manifest Row Count
+        * * SQL Data Type: int
+        * * Description: Rows in the manifest (development plus locked holdout).`),
+    HoldoutRowCount: z.number().describe(`
+        * * Field Name: HoldoutRowCount
+        * * Display Name: Holdout Row Count
+        * * SQL Data Type: int
+        * * Description: Manifest rows with role locked-holdout.`),
+    FeatureSpec: z.string().describe(`
+        * * Field Name: FeatureSpec
+        * * Display Name: Feature Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.`),
+    FeatureSchema: z.string().describe(`
+        * * Field Name: FeatureSchema
+        * * Display Name: Feature Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.`),
+    FeatureSchemaHash: z.string().describe(`
+        * * Field Name: FeatureSchemaHash
+        * * Display Name: Feature Schema Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.`),
+    ColumnProvenance: z.string().describe(`
+        * * Field Name: ColumnProvenance
+        * * Display Name: Column Provenance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.`),
+    PinnedFeatureVersions: z.string().describe(`
+        * * Field Name: PinnedFeatureVersions
+        * * Display Name: Pinned Feature Versions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array of FeatureVersionPin for every Feature Value source read.`),
+    RowsRead: z.number().describe(`
+        * * Field Name: RowsRead
+        * * Display Name: Rows Read
+        * * SQL Data Type: int
+        * * Description: Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).`),
+    ReadComplete: z.boolean().describe(`
+        * * Field Name: ReadComplete
+        * * Display Name: Read Complete
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Always 1: a snapshot exists only for a complete read.`),
+    CensoredRowsExcluded: z.number().describe(`
+        * * Field Name: CensoredRowsExcluded
+        * * Display Name: Censored Rows Excluded
+        * * SQL Data Type: int
+        * * Description: Rows excluded because their outcome window had not closed at DataCutoff.`),
+    LabelKnownRowsExcluded: z.number().describe(`
+        * * Field Name: LabelKnownRowsExcluded
+        * * Display Name: Label Known Rows Excluded
+        * * SQL Data Type: int
+        * * Description: Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).`),
+    EmptyLabelRowsExcluded: z.number().describe(`
+        * * Field Name: EmptyLabelRowsExcluded
+        * * Display Name: Empty Label Rows Excluded
+        * * SQL Data Type: int
+        * * Description: Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.`),
+    UncoveredHistoryRowsExcluded: z.string().describe(`
+        * * Field Name: UncoveredHistoryRowsExcluded
+        * * Display Name: Uncovered History Rows Excluded
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array {entity, field, rows}: rows excluded because a field's change history did not cover their decision date (policy exclude-and-count).`),
+    DuplicateRowsRemoved: z.number().describe(`
+        * * Field Name: DuplicateRowsRemoved
+        * * Display Name: Duplicate Rows Removed
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Rows removed as exact duplicates of (entity key, decision date, period).`),
+    ClassBalance: z.string().nullable().describe(`
+        * * Field Name: ClassBalance
+        * * Display Name: Class Balance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.`),
+    DataCutoff: z.date().describe(`
+        * * Field Name: DataCutoff
+        * * Display Name: Data Cutoff
+        * * SQL Data Type: datetimeoffset
+        * * Description: The censoring cutoff the unit resolved to for this assembly.`),
+    AssemblyCodeVersion: z.string().describe(`
+        * * Field Name: AssemblyCodeVersion
+        * * Display Name: Assembly Code Version
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Package version and git commit of the assembly code that built the snapshot.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Pipeline: z.string().describe(`
+        * * Field Name: Pipeline
+        * * Display Name: Pipeline Name
+        * * SQL Data Type: nvarchar(255)`),
+    PredictionUnit: z.string().describe(`
+        * * Field Name: PredictionUnit
+        * * Display Name: Prediction Unit Name
+        * * SQL Data Type: nvarchar(255)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol Name
+        * * SQL Data Type: nvarchar(255)`),
+    StorageProvider: z.string().describe(`
+        * * Field Name: StorageProvider
+        * * Display Name: Storage Provider Name
+        * * SQL Data Type: nvarchar(50)`),
+    MatrixFile: z.string().describe(`
+        * * Field Name: MatrixFile
+        * * Display Name: Matrix File Details
+        * * SQL Data Type: nvarchar(500)`),
+    RowManifestFile: z.string().describe(`
+        * * Field Name: RowManifestFile
+        * * Display Name: Row Manifest File Details
+        * * SQL Data Type: nvarchar(500)`),
+    ProvenanceFile: z.string().describe(`
+        * * Field Name: ProvenanceFile
+        * * Display Name: Provenance File Details
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJTrainingSnapshotEntityType = z.infer<typeof MJTrainingSnapshotSchema>;
 
 /**
  * zod schema definition for the entity MJ: User Application Entities
@@ -102804,6 +103378,442 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
 
 /**
+ * MJ: Evaluation Protocols - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EvaluationProtocol
+ * * Base View: vwEvaluationProtocols
+ * * @description An Evaluation Protocol: the grading rules of a pipeline, saved before any candidate trains — the locked holdout, inner validation, primary proper score, fixed baselines, calibration, intervals, promotion rule and the three allowed outcomes (model, keep-simple-baseline, no-signal), the leakage audit, slices and budgets. Every training run references the exact version it was graded under. Versions are immutable rows; editing inserts the next version. Replaces the ValidationStrategy and LeakageGuard JSON of ML Training Pipelines.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Evaluation Protocols')
+export class MJEvaluationProtocolEntity extends BaseEntity<MJEvaluationProtocolEntityType> {
+    /**
+    * Loads the MJ: Evaluation Protocols record from the database
+    * @param ID: string - primary key value to load the MJ: Evaluation Protocols record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEvaluationProtocolEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: LineageRootID
+    * * Display Name: Lineage Root ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+    * * Description: ID of version 1 of this protocol. Version 1 points at itself.
+    */
+    get LineageRootID(): string {
+        return this.Get('LineageRootID');
+    }
+    set LineageRootID(value: string) {
+        this.Set('LineageRootID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Version number within the lineage, starting at 1. A saved version is never updated.
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the protocol.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the protocol is for, in plain words.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Holdout
+    * * Display Name: Holdout
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.
+    */
+    get Holdout(): string {
+        return this.Get('Holdout');
+    }
+    set Holdout(value: string) {
+        this.Set('Holdout', value);
+    }
+
+    /**
+    * * Field Name: InnerValidation
+    * * Display Name: Inner Validation
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.
+    */
+    get InnerValidation(): string {
+        return this.Get('InnerValidation');
+    }
+    set InnerValidation(value: string) {
+        this.Set('InnerValidation', value);
+    }
+
+    /**
+    * * Field Name: Seed
+    * * Display Name: Seed
+    * * SQL Data Type: int
+    * * Description: Random seed for every split, fold, bootstrap and estimator of a run under this protocol.
+    */
+    get Seed(): number {
+        return this.Get('Seed');
+    }
+    set Seed(value: number) {
+        this.Set('Seed', value);
+    }
+
+    /**
+    * * Field Name: HoldoutAccessBudget
+    * * Display Name: Holdout Access Budget
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Value List Type: List
+    * * Possible Values 
+    *   * 1
+    * * Description: How many times the locked holdout may be scored per run: always 1, for one declared finalist.
+    */
+    get HoldoutAccessBudget(): 1 {
+        return this.Get('HoldoutAccessBudget');
+    }
+    set HoldoutAccessBudget(value: 1) {
+        this.Set('HoldoutAccessBudget', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScore
+    * * Display Name: Primary Score
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit's task kind.
+    */
+    get PrimaryScore(): string {
+        return this.Get('PrimaryScore');
+    }
+    set PrimaryScore(value: string) {
+        this.Set('PrimaryScore', value);
+    }
+
+    /**
+    * * Field Name: SecondaryMetrics
+    * * Display Name: Secondary Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.
+    */
+    get SecondaryMetrics(): string {
+        return this.Get('SecondaryMetrics');
+    }
+    set SecondaryMetrics(value: string) {
+        this.Set('SecondaryMetrics', value);
+    }
+
+    /**
+    * * Field Name: Baselines
+    * * Display Name: Baselines
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.
+    */
+    get Baselines(): string {
+        return this.Get('Baselines');
+    }
+    set Baselines(value: string) {
+        this.Set('Baselines', value);
+    }
+
+    /**
+    * * Field Name: Calibration
+    * * Display Name: Calibration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.
+    */
+    get Calibration(): string {
+        return this.Get('Calibration');
+    }
+    set Calibration(value: string) {
+        this.Set('Calibration', value);
+    }
+
+    /**
+    * * Field Name: Resampling
+    * * Display Name: Resampling
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.
+    */
+    get Resampling(): string {
+        return this.Get('Resampling');
+    }
+    set Resampling(value: string) {
+        this.Set('Resampling', value);
+    }
+
+    /**
+    * * Field Name: Intervals
+    * * Display Name: Intervals
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.
+    */
+    get Intervals(): string {
+        return this.Get('Intervals');
+    }
+    set Intervals(value: string) {
+        this.Set('Intervals', value);
+    }
+
+    /**
+    * * Field Name: Promotion
+    * * Display Name: Promotion
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.
+    */
+    get Promotion(): string {
+        return this.Get('Promotion');
+    }
+    set Promotion(value: string) {
+        this.Set('Promotion', value);
+    }
+
+    /**
+    * * Field Name: AllowedOutcomes
+    * * Display Name: Allowed Outcomes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.
+    */
+    get AllowedOutcomes(): string {
+        return this.Get('AllowedOutcomes');
+    }
+    set AllowedOutcomes(value: string) {
+        this.Set('AllowedOutcomes', value);
+    }
+
+    /**
+    * * Field Name: LeakageAudit
+    * * Display Name: Leakage Audit
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.
+    */
+    get LeakageAudit(): string {
+        return this.Get('LeakageAudit');
+    }
+    set LeakageAudit(value: string) {
+        this.Set('LeakageAudit', value);
+    }
+
+    /**
+    * * Field Name: Exclusions
+    * * Display Name: Exclusions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).
+    */
+    get Exclusions(): string {
+        return this.Get('Exclusions');
+    }
+    set Exclusions(value: string) {
+        this.Set('Exclusions', value);
+    }
+
+    /**
+    * * Field Name: Slices
+    * * Display Name: Slices
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.
+    */
+    get Slices(): string {
+        return this.Get('Slices');
+    }
+    set Slices(value: string) {
+        this.Set('Slices', value);
+    }
+
+    /**
+    * * Field Name: PredictionIntervals
+    * * Display Name: Prediction Intervals
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.
+    */
+    get PredictionIntervals(): string | null {
+        return this.Get('PredictionIntervals');
+    }
+    set PredictionIntervals(value: string | null) {
+        this.Set('PredictionIntervals', value);
+    }
+
+    /**
+    * * Field Name: ResidualDiagnostics
+    * * Display Name: Residual Diagnostics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.
+    */
+    get ResidualDiagnostics(): string | null {
+        return this.Get('ResidualDiagnostics');
+    }
+    set ResidualDiagnostics(value: string | null) {
+        this.Set('ResidualDiagnostics', value);
+    }
+
+    /**
+    * * Field Name: RetrainTriggers
+    * * Display Name: Retrain Triggers
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).
+    */
+    get RetrainTriggers(): string {
+        return this.Get('RetrainTriggers');
+    }
+    set RetrainTriggers(value: string) {
+        this.Set('RetrainTriggers', value);
+    }
+
+    /**
+    * * Field Name: SearchStrategy
+    * * Display Name: Search Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.
+    */
+    get SearchStrategy(): string {
+        return this.Get('SearchStrategy');
+    }
+    set SearchStrategy(value: string) {
+        this.Set('SearchStrategy', value);
+    }
+
+    /**
+    * * Field Name: Budgets
+    * * Display Name: Budgets
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.
+    */
+    get Budgets(): string {
+        return this.Get('Budgets');
+    }
+    set Budgets(value: string) {
+        this.Set('Budgets', value);
+    }
+
+    /**
+    * * Field Name: MinMinorityClassRows
+    * * Display Name: Min Minority Class Rows
+    * * SQL Data Type: int
+    * * Default Value: 20
+    * * Description: Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.
+    */
+    get MinMinorityClassRows(): number {
+        return this.Get('MinMinorityClassRows');
+    }
+    set MinMinorityClassRows(value: number) {
+        this.Set('MinMinorityClassRows', value);
+    }
+
+    /**
+    * * Field Name: GuardFieldsEditableBy
+    * * Display Name: Guard Fields Editable By
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: non-agent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * human-only
+    *   * non-agent
+    * * Description: Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author's version passes the same guard-field validation.
+    */
+    get GuardFieldsEditableBy(): 'human-only' | 'non-agent' {
+        return this.Get('GuardFieldsEditableBy');
+    }
+    set GuardFieldsEditableBy(value: 'human-only' | 'non-agent') {
+        this.Set('GuardFieldsEditableBy', value);
+    }
+
+    /**
+    * * Field Name: AuthoredBy
+    * * Display Name: Authored By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Actor who authored this version.
+    */
+    get AuthoredBy(): string {
+        return this.Get('AuthoredBy');
+    }
+    set AuthoredBy(value: string) {
+        this.Set('AuthoredBy', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LineageRoot
+    * * Display Name: Lineage Root
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LineageRoot(): string {
+        return this.Get('LineageRoot');
+    }
+}
+
+
+/**
  * MJ: Experiment Session Iterations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ExperimentSessionIteration
@@ -105332,6 +106342,32 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
     set Source(value: 'Human' | 'Pipeline') {
         this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: EffectiveAsOf
+    * * Display Name: Effective As Of
+    * * SQL Data Type: datetimeoffset
+    * * Description: Instant from which this value is the record's value of the feature; as-of assembly reads the latest value with EffectiveAsOf at or before a row's decision date. On a Source = Model row it is the scoring as-of date. NULL = not effective-dated (ineligible for as-of assembly).
+    */
+    get EffectiveAsOf(): Date | null {
+        return this.Get('EffectiveAsOf');
+    }
+    set EffectiveAsOf(value: Date | null) {
+        this.Set('EffectiveAsOf', value);
+    }
+
+    /**
+    * * Field Name: InputAsOf
+    * * Display Name: Input As Of
+    * * SQL Data Type: datetimeoffset
+    * * Description: Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf.
+    */
+    get InputAsOf(): Date | null {
+        return this.Get('InputAsOf');
+    }
+    set InputAsOf(value: Date | null) {
+        this.Set('InputAsOf', value);
     }
 
     /**
@@ -114351,6 +115387,34 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     }
 
     /**
+    * * Field Name: PredictionUnitID
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Prediction Units (vwPredictionUnits.ID)
+    * * Description: The exact Prediction Unit version this pipeline trains on. NULL only on a pipeline created before Predictive Studio 6.3 that has not been migrated; such a pipeline cannot be trained.
+    */
+    get PredictionUnitID(): string | null {
+        return this.Get('PredictionUnitID');
+    }
+    set PredictionUnitID(value: string | null) {
+        this.Set('PredictionUnitID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+    * * Description: The exact Evaluation Protocol version every training run of this pipeline is graded under. Its primary score family must equal the unit's task kind.
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
     * * Field Name: TargetEntity
     * * Display Name: Target Entity
     * * SQL Data Type: nvarchar(255)
@@ -114366,6 +115430,24 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     */
     get Algorithm(): string {
         return this.Get('Algorithm');
+    }
+
+    /**
+    * * Field Name: PredictionUnit
+    * * Display Name: Prediction Unit Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PredictionUnit(): string | null {
+        return this.Get('PredictionUnit');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
     }
 }
 
@@ -114615,6 +115697,60 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     }
 
     /**
+    * * Field Name: TrainingSnapshotID
+    * * Display Name: Training Snapshot
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Training Snapshots (vwTrainingSnapshots.ID)
+    * * Description: The Training Snapshot this run trained on; NULL for a run refused before assembly and for runs before Predictive Studio 6.3.
+    */
+    get TrainingSnapshotID(): string | null {
+        return this.Get('TrainingSnapshotID');
+    }
+    set TrainingSnapshotID(value: string | null) {
+        this.Set('TrainingSnapshotID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+    * * Description: The Evaluation Protocol version the run was graded under, pinned when the run started.
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
+    * * Field Name: CodeVersion
+    * * Display Name: Code Version
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CodeVersion: PS git commit, sidecar version, library versions, thread count and seed the run used.
+    */
+    get CodeVersion(): string | null {
+        return this.Get('CodeVersion');
+    }
+    set CodeVersion(value: string | null) {
+        this.Set('CodeVersion', value);
+    }
+
+    /**
+    * * Field Name: ComputeSeconds
+    * * Display Name: Compute Seconds
+    * * SQL Data Type: decimal(18, 3)
+    * * Description: Measured trainer compute time in seconds, as returned by the sidecar.
+    */
+    get ComputeSeconds(): number | null {
+        return this.Get('ComputeSeconds');
+    }
+    set ComputeSeconds(value: number | null) {
+        this.Set('ComputeSeconds', value);
+    }
+
+    /**
     * * Field Name: Pipeline
     * * Display Name: Pipeline
     * * SQL Data Type: nvarchar(255)
@@ -114639,6 +115775,24 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     */
     get Algorithm(): string {
         return this.Get('Algorithm');
+    }
+
+    /**
+    * * Field Name: TrainingSnapshot
+    * * Display Name: Training Snapshot
+    * * SQL Data Type: nvarchar(64)
+    */
+    get TrainingSnapshot(): string | null {
+        return this.Get('TrainingSnapshot');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
     }
 }
 
@@ -119305,6 +120459,303 @@ export class MJPhoneNumberEntity extends BaseEntity<MJPhoneNumberEntityType> {
     */
     get NumberPool(): string | null {
         return this.Get('NumberPool');
+    }
+}
+
+
+/**
+ * MJ: Prediction Units - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: PredictionUnit
+ * * Base View: vwPredictionUnits
+ * * @description A Prediction Unit: what one training row is (one grain record, or one grain record per period of a dated child entity), its decision date, the outcome rule and the window over which the outcome is observed, how unresolved rows are censored, and the declared task type. Every ML Training Pipeline references exactly one version. Versions are immutable rows: editing a unit inserts the next version with the same LineageRootID, so a trained model keeps pointing at the version it used.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Prediction Units')
+export class MJPredictionUnitEntity extends BaseEntity<MJPredictionUnitEntityType> {
+    /**
+    * Loads the MJ: Prediction Units record from the database
+    * @param ID: string - primary key value to load the MJ: Prediction Units record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJPredictionUnitEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: LineageRootID
+    * * Display Name: Lineage Root
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Prediction Units (vwPredictionUnits.ID)
+    * * Description: ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.
+    */
+    get LineageRootID(): string {
+        return this.Get('LineageRootID');
+    }
+    set LineageRootID(value: string) {
+        this.Set('LineageRootID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Version number within the lineage, starting at 1. A saved version is never updated.
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the unit, e.g. "Member renewal (person x membership period)".
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the unit predicts and for whom, in plain words.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: UnitRows
+    * * Display Name: Unit Rows
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.
+    */
+    get UnitRows(): string {
+        return this.Get('UnitRows');
+    }
+    set UnitRows(value: string) {
+        this.Set('UnitRows', value);
+    }
+
+    /**
+    * * Field Name: LabelRule
+    * * Display Name: Label Rule
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.
+    */
+    get LabelRule(): string {
+        return this.Get('LabelRule');
+    }
+    set LabelRule(value: string) {
+        this.Set('LabelRule', value);
+    }
+
+    /**
+    * * Field Name: LabelWindowDays
+    * * Display Name: Label Window Days
+    * * SQL Data Type: int
+    * * Description: Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).
+    */
+    get LabelWindowDays(): number {
+        return this.Get('LabelWindowDays');
+    }
+    set LabelWindowDays(value: number) {
+        this.Set('LabelWindowDays', value);
+    }
+
+    /**
+    * * Field Name: LabelGapDays
+    * * Display Name: Label Gap Days
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Days between the decision date and the start of the outcome window.
+    */
+    get LabelGapDays(): number {
+        return this.Get('LabelGapDays');
+    }
+    set LabelGapDays(value: number) {
+        this.Set('LabelGapDays', value);
+    }
+
+    /**
+    * * Field Name: TaskType
+    * * Display Name: Task Type
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.
+    */
+    get TaskType(): string {
+        return this.Get('TaskType');
+    }
+    set TaskType(value: string) {
+        this.Set('TaskType', value);
+    }
+
+    /**
+    * * Field Name: LabelVersion
+    * * Display Name: Label Version
+    * * SQL Data Type: int
+    * * Description: Outcome-definition version: equals the previous version's LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.
+    */
+    get LabelVersion(): number {
+        return this.Get('LabelVersion');
+    }
+    set LabelVersion(value: number) {
+        this.Set('LabelVersion', value);
+    }
+
+    /**
+    * * Field Name: Censoring
+    * * Display Name: Censoring
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.
+    */
+    get Censoring(): string {
+        return this.Get('Censoring');
+    }
+    set Censoring(value: string) {
+        this.Set('Censoring', value);
+    }
+
+    /**
+    * * Field Name: ChangeHistoryPolicy
+    * * Display Name: Change History Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.
+    */
+    get ChangeHistoryPolicy(): string {
+        return this.Get('ChangeHistoryPolicy');
+    }
+    set ChangeHistoryPolicy(value: string) {
+        this.Set('ChangeHistoryPolicy', value);
+    }
+
+    /**
+    * * Field Name: GroupKey
+    * * Display Name: Group Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Field on the row whose value keeps one entity's rows together in grouped folds and the new-entity report; NULL means the grain record key.
+    */
+    get GroupKey(): string | null {
+        return this.Get('GroupKey');
+    }
+    set GroupKey(value: string | null) {
+        this.Set('GroupKey', value);
+    }
+
+    /**
+    * * Field Name: TemporalSpec
+    * * Display Name: Temporal Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.
+    */
+    get TemporalSpec(): string | null {
+        return this.Get('TemporalSpec');
+    }
+    set TemporalSpec(value: string | null) {
+        this.Set('TemporalSpec', value);
+    }
+
+    /**
+    * * Field Name: DecisionSpec
+    * * Display Name: Decision Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.
+    */
+    get DecisionSpec(): string {
+        return this.Get('DecisionSpec');
+    }
+    set DecisionSpec(value: string) {
+        this.Set('DecisionSpec', value);
+    }
+
+    /**
+    * * Field Name: IncumbentHeuristic
+    * * Display Name: Incumbent Heuristic
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today's rule of thumb, scored as a named comparator on the same holdout.
+    */
+    get IncumbentHeuristic(): string {
+        return this.Get('IncumbentHeuristic');
+    }
+    set IncumbentHeuristic(value: string) {
+        this.Set('IncumbentHeuristic', value);
+    }
+
+    /**
+    * * Field Name: AuthoredBy
+    * * Display Name: Authored By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.
+    */
+    get AuthoredBy(): string {
+        return this.Get('AuthoredBy');
+    }
+    set AuthoredBy(value: string) {
+        this.Set('AuthoredBy', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LineageRoot
+    * * Display Name: Lineage Root
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LineageRoot(): string {
+        return this.Get('LineageRoot');
     }
 }
 
@@ -144031,6 +145482,574 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
     }
     set LoginScreenDraft(value: string | null) {
         this.Set('LoginScreenDraft', value);
+    }
+}
+
+
+/**
+ * MJ: Training Snapshots - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TrainingSnapshot
+ * * Base View: vwTrainingSnapshots
+ * * @description A Training Snapshot: the frozen data one training run learned from — the feature matrix, the row manifest (row id, entity key, decision date, group key, period, role) and per-value provenance as three write-once files, plus the content hash that fingerprints them together with the unit, label, feature-spec and protocol versions. Immutable; identical assemblies share one snapshot (unique ContentHash). Retraining from a snapshot reproduces the run.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Training Snapshots')
+export class MJTrainingSnapshotEntity extends BaseEntity<MJTrainingSnapshotEntityType> {
+    /**
+    * Loads the MJ: Training Snapshots record from the database
+    * @param ID: string - primary key value to load the MJ: Training Snapshots record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTrainingSnapshotEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.
+    */
+    get ContentHash(): string {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: PipelineID
+    * * Display Name: Pipeline
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: The ML Training Pipeline whose feature spec was assembled.
+    */
+    get PipelineID(): string {
+        return this.Get('PipelineID');
+    }
+    set PipelineID(value: string) {
+        this.Set('PipelineID', value);
+    }
+
+    /**
+    * * Field Name: PredictionUnitID
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Prediction Units (vwPredictionUnits.ID)
+    * * Description: The exact Prediction Unit version whose rows were read.
+    */
+    get PredictionUnitID(): string {
+        return this.Get('PredictionUnitID');
+    }
+    set PredictionUnitID(value: string) {
+        this.Set('PredictionUnitID', value);
+    }
+
+    /**
+    * * Field Name: LabelVersion
+    * * Display Name: Label Version
+    * * SQL Data Type: int
+    * * Description: The unit's LabelVersion at assembly.
+    */
+    get LabelVersion(): number {
+        return this.Get('LabelVersion');
+    }
+    set LabelVersion(value: number) {
+        this.Set('LabelVersion', value);
+    }
+
+    /**
+    * * Field Name: FeatureSpecVersion
+    * * Display Name: Feature Spec Version
+    * * SQL Data Type: int
+    * * Description: The pipeline Version whose FeatureSteps produced the feature spec.
+    */
+    get FeatureSpecVersion(): number {
+        return this.Get('FeatureSpecVersion');
+    }
+    set FeatureSpecVersion(value: number) {
+        this.Set('FeatureSpecVersion', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Evaluation Protocols (vwEvaluationProtocols.ID)
+    * * Description: The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
+    * * Field Name: StorageProviderID
+    * * Display Name: Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: The File Storage Provider holding the three files.
+    */
+    get StorageProviderID(): string {
+        return this.Get('StorageProviderID');
+    }
+    set StorageProviderID(value: string) {
+        this.Set('StorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: MatrixFileID
+    * * Display Name: Matrix File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).
+    */
+    get MatrixFileID(): string {
+        return this.Get('MatrixFileID');
+    }
+    set MatrixFileID(value: string) {
+        this.Set('MatrixFileID', value);
+    }
+
+    /**
+    * * Field Name: MatrixSha256
+    * * Display Name: Matrix SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the matrix file bytes.
+    */
+    get MatrixSha256(): string {
+        return this.Get('MatrixSha256');
+    }
+    set MatrixSha256(value: string) {
+        this.Set('MatrixSha256', value);
+    }
+
+    /**
+    * * Field Name: MatrixSizeBytes
+    * * Display Name: Matrix Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Description: Size of the matrix file in bytes.
+    */
+    get MatrixSizeBytes(): number {
+        return this.Get('MatrixSizeBytes');
+    }
+    set MatrixSizeBytes(value: number) {
+        this.Set('MatrixSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: RowManifestFileID
+    * * Display Name: Row Manifest File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).
+    */
+    get RowManifestFileID(): string {
+        return this.Get('RowManifestFileID');
+    }
+    set RowManifestFileID(value: string) {
+        this.Set('RowManifestFileID', value);
+    }
+
+    /**
+    * * Field Name: RowManifestSha256
+    * * Display Name: Row Manifest SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the manifest file bytes.
+    */
+    get RowManifestSha256(): string {
+        return this.Get('RowManifestSha256');
+    }
+    set RowManifestSha256(value: string) {
+        this.Set('RowManifestSha256', value);
+    }
+
+    /**
+    * * Field Name: RowManifestSizeBytes
+    * * Display Name: Row Manifest Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Description: Size of the manifest file in bytes.
+    */
+    get RowManifestSizeBytes(): number {
+        return this.Get('RowManifestSizeBytes');
+    }
+    set RowManifestSizeBytes(value: number) {
+        this.Set('RowManifestSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceFileID
+    * * Display Name: Provenance File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).
+    */
+    get ProvenanceFileID(): string {
+        return this.Get('ProvenanceFileID');
+    }
+    set ProvenanceFileID(value: string) {
+        this.Set('ProvenanceFileID', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceSha256
+    * * Display Name: Provenance SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the provenance file bytes.
+    */
+    get ProvenanceSha256(): string {
+        return this.Get('ProvenanceSha256');
+    }
+    set ProvenanceSha256(value: string) {
+        this.Set('ProvenanceSha256', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceSizeBytes
+    * * Display Name: Provenance Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Description: Size of the provenance file in bytes.
+    */
+    get ProvenanceSizeBytes(): number {
+        return this.Get('ProvenanceSizeBytes');
+    }
+    set ProvenanceSizeBytes(value: number) {
+        this.Set('ProvenanceSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: ManifestRowCount
+    * * Display Name: Manifest Row Count
+    * * SQL Data Type: int
+    * * Description: Rows in the manifest (development plus locked holdout).
+    */
+    get ManifestRowCount(): number {
+        return this.Get('ManifestRowCount');
+    }
+    set ManifestRowCount(value: number) {
+        this.Set('ManifestRowCount', value);
+    }
+
+    /**
+    * * Field Name: HoldoutRowCount
+    * * Display Name: Holdout Row Count
+    * * SQL Data Type: int
+    * * Description: Manifest rows with role locked-holdout.
+    */
+    get HoldoutRowCount(): number {
+        return this.Get('HoldoutRowCount');
+    }
+    set HoldoutRowCount(value: number) {
+        this.Set('HoldoutRowCount', value);
+    }
+
+    /**
+    * * Field Name: FeatureSpec
+    * * Display Name: Feature Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.
+    */
+    get FeatureSpec(): string {
+        return this.Get('FeatureSpec');
+    }
+    set FeatureSpec(value: string) {
+        this.Set('FeatureSpec', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchema
+    * * Display Name: Feature Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.
+    */
+    get FeatureSchema(): string {
+        return this.Get('FeatureSchema');
+    }
+    set FeatureSchema(value: string) {
+        this.Set('FeatureSchema', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchemaHash
+    * * Display Name: Feature Schema Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.
+    */
+    get FeatureSchemaHash(): string {
+        return this.Get('FeatureSchemaHash');
+    }
+    set FeatureSchemaHash(value: string) {
+        this.Set('FeatureSchemaHash', value);
+    }
+
+    /**
+    * * Field Name: ColumnProvenance
+    * * Display Name: Column Provenance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.
+    */
+    get ColumnProvenance(): string {
+        return this.Get('ColumnProvenance');
+    }
+    set ColumnProvenance(value: string) {
+        this.Set('ColumnProvenance', value);
+    }
+
+    /**
+    * * Field Name: PinnedFeatureVersions
+    * * Display Name: Pinned Feature Versions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array of FeatureVersionPin for every Feature Value source read.
+    */
+    get PinnedFeatureVersions(): string {
+        return this.Get('PinnedFeatureVersions');
+    }
+    set PinnedFeatureVersions(value: string) {
+        this.Set('PinnedFeatureVersions', value);
+    }
+
+    /**
+    * * Field Name: RowsRead
+    * * Display Name: Rows Read
+    * * SQL Data Type: int
+    * * Description: Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).
+    */
+    get RowsRead(): number {
+        return this.Get('RowsRead');
+    }
+    set RowsRead(value: number) {
+        this.Set('RowsRead', value);
+    }
+
+    /**
+    * * Field Name: ReadComplete
+    * * Display Name: Read Complete
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Always 1: a snapshot exists only for a complete read.
+    */
+    get ReadComplete(): boolean {
+        return this.Get('ReadComplete');
+    }
+    set ReadComplete(value: boolean) {
+        this.Set('ReadComplete', value);
+    }
+
+    /**
+    * * Field Name: CensoredRowsExcluded
+    * * Display Name: Censored Rows Excluded
+    * * SQL Data Type: int
+    * * Description: Rows excluded because their outcome window had not closed at DataCutoff.
+    */
+    get CensoredRowsExcluded(): number {
+        return this.Get('CensoredRowsExcluded');
+    }
+    set CensoredRowsExcluded(value: number) {
+        this.Set('CensoredRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: LabelKnownRowsExcluded
+    * * Display Name: Label Known Rows Excluded
+    * * SQL Data Type: int
+    * * Description: Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).
+    */
+    get LabelKnownRowsExcluded(): number {
+        return this.Get('LabelKnownRowsExcluded');
+    }
+    set LabelKnownRowsExcluded(value: number) {
+        this.Set('LabelKnownRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: EmptyLabelRowsExcluded
+    * * Display Name: Empty Label Rows Excluded
+    * * SQL Data Type: int
+    * * Description: Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.
+    */
+    get EmptyLabelRowsExcluded(): number {
+        return this.Get('EmptyLabelRowsExcluded');
+    }
+    set EmptyLabelRowsExcluded(value: number) {
+        this.Set('EmptyLabelRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: UncoveredHistoryRowsExcluded
+    * * Display Name: Uncovered History Rows Excluded
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array {entity, field, rows}: rows excluded because a field's change history did not cover their decision date (policy exclude-and-count).
+    */
+    get UncoveredHistoryRowsExcluded(): string {
+        return this.Get('UncoveredHistoryRowsExcluded');
+    }
+    set UncoveredHistoryRowsExcluded(value: string) {
+        this.Set('UncoveredHistoryRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: DuplicateRowsRemoved
+    * * Display Name: Duplicate Rows Removed
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Rows removed as exact duplicates of (entity key, decision date, period).
+    */
+    get DuplicateRowsRemoved(): number {
+        return this.Get('DuplicateRowsRemoved');
+    }
+    set DuplicateRowsRemoved(value: number) {
+        this.Set('DuplicateRowsRemoved', value);
+    }
+
+    /**
+    * * Field Name: ClassBalance
+    * * Display Name: Class Balance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.
+    */
+    get ClassBalance(): string | null {
+        return this.Get('ClassBalance');
+    }
+    set ClassBalance(value: string | null) {
+        this.Set('ClassBalance', value);
+    }
+
+    /**
+    * * Field Name: DataCutoff
+    * * Display Name: Data Cutoff
+    * * SQL Data Type: datetimeoffset
+    * * Description: The censoring cutoff the unit resolved to for this assembly.
+    */
+    get DataCutoff(): Date {
+        return this.Get('DataCutoff');
+    }
+    set DataCutoff(value: Date) {
+        this.Set('DataCutoff', value);
+    }
+
+    /**
+    * * Field Name: AssemblyCodeVersion
+    * * Display Name: Assembly Code Version
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Package version and git commit of the assembly code that built the snapshot.
+    */
+    get AssemblyCodeVersion(): string {
+        return this.Get('AssemblyCodeVersion');
+    }
+    set AssemblyCodeVersion(value: string) {
+        this.Set('AssemblyCodeVersion', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Pipeline
+    * * Display Name: Pipeline Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Pipeline(): string {
+        return this.Get('Pipeline');
+    }
+
+    /**
+    * * Field Name: PredictionUnit
+    * * Display Name: Prediction Unit Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PredictionUnit(): string {
+        return this.Get('PredictionUnit');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
+    }
+
+    /**
+    * * Field Name: StorageProvider
+    * * Display Name: Storage Provider Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get StorageProvider(): string {
+        return this.Get('StorageProvider');
+    }
+
+    /**
+    * * Field Name: MatrixFile
+    * * Display Name: Matrix File Details
+    * * SQL Data Type: nvarchar(500)
+    */
+    get MatrixFile(): string {
+        return this.Get('MatrixFile');
+    }
+
+    /**
+    * * Field Name: RowManifestFile
+    * * Display Name: Row Manifest File Details
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RowManifestFile(): string {
+        return this.Get('RowManifestFile');
+    }
+
+    /**
+    * * Field Name: ProvenanceFile
+    * * Display Name: Provenance File Details
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ProvenanceFile(): string {
+        return this.Get('ProvenanceFile');
     }
 }
 
