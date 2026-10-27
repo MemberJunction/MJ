@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider, IRunViewProvider, RelatedRecordLoadMode, RelatedRecordRemovalMode } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider, RelatedRecordLoadMode, RelatedRecordRemovalMode } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -638,7 +638,8 @@ export class PushService {
           TransformStatement: ComposeStatementTransforms(this.envSqlLog.Redactor.Transform, this.lookupSqlLog.Rewriter.Transform),
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
           schemaPlaceholders,
-          escapeFlywaySyntax: schemaPlaceholders !== undefined,
+          // Escaping is tied to migration output, never to whether placeholder rules exist
+          escapeFlywaySyntax: this.syncConfig?.sqlLogging?.formatAsMigration === true || this.syncConfig?.sqlLogging?.escapeFlywaySyntax === true,
           description: 'MetadataSync push operation',
           statementTypes: "mutations",
           prettyPrint: true,
@@ -2593,8 +2594,7 @@ export class PushService {
       return; // no SQL provider, so no catalog to read unique keys from
     }
     // Rows are found on the record's provider, so the lookup sees what its transaction wrote
-    const runViewProvider = (recordProvider ?? this.transactionProvider()) as unknown as IRunViewProvider;
-    const reader = new DatabaseNaturalKeyReader(host, this.contextUser, runViewProvider, this.uniqueKeyCache);
+    const reader = new DatabaseNaturalKeyReader(host, this.contextUser, recordProvider ?? this.transactionProvider(), this.uniqueKeyCache);
     const conflict = await new NaturalKeyPreflight(reader).Check(entity);
     if (conflict) {
       const recordKey = Object.entries(resolvedPrimaryKey)
@@ -2606,7 +2606,7 @@ export class PushService {
 
   /** The provider that owns the push transaction, as the metadata provider a read joins it through. */
   private transactionProvider(): IMetadataProvider {
-    return this.hostProvider() as unknown as IMetadataProvider;
+    return this.hostProvider();
   }
 
   /**

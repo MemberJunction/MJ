@@ -10,7 +10,9 @@
 /**
  * One schema-name to Flyway-placeholder rule for a migration-formatted SQL log. Same shape as
  * `SQLOutput.schemaPlaceholders` in `mj.config.cjs`, so a repo declares the mapping once and
- * CodeGen and the SQL logger agree.
+ * CodeGen and the SQL logger read the same array. They apply it differently: CodeGen goes in
+ * declared order and needs no `.` after the schema name; the SQL logger needs the `.` and skips a
+ * name preceded by a word character, `$`, `@` or `#`.
  */
 export interface SqlSchemaPlaceholder {
   /** The schema name as it appears in captured SQL, e.g. `__mj_BizAppsAccounting` */
@@ -48,10 +50,11 @@ export interface SqlLoggingOptions {
    * ]
    * ```
    *
-   * The rules run in one pass, longest schema name first, so a short rule never matches the
-   * prefix of a longer schema name and an emitted placeholder is never rewritten again. A schema
-   * name is rewritten only when a `.` follows it (optionally after a closing `]`) and no word
-   * character precedes it, so the bare name in text data is left alone.
+   * The rules run in one pass, so an emitted placeholder is never rewritten again. A schema name
+   * is rewritten only when a `.` follows it (optionally after a closing `]`), which also keeps a
+   * short rule off the prefix of a longer schema name, and no word character, `$`, `@` or `#`
+   * precedes it. Code and string data are treated alike: `__mj.` inside a quoted literal is
+   * rewritten; a bare name with no `.` after it is left alone.
    *
    * Ignored unless `formatAsMigration` is true.
    */

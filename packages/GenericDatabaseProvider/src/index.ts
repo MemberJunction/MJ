@@ -32,7 +32,7 @@ export {
 // field-level access on an FLS-enabled entity.
 export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
 export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
-export { SqlLoggingSessionImpl } from './SqlLogger.js';
+export { SqlLoggingSessionImpl, SCHEMA_PLACEHOLDER_LOOKBEHIND } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
 export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';

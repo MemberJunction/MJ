@@ -51,8 +51,17 @@ describe('ApplySchemaPlaceholders', () => {
     );
   });
 
-  it('leaves a schema name inside string data alone', () => {
+  it('leaves a bare schema name, and one that ends a longer word, alone', () => {
     const sql = "SET @Description_abc = N'Tables live in the __mj schema; see my__mj.notes'";
+    expect(ApplySchemaPlaceholders(sql, APP_RULES)).toBe(sql);
+  });
+
+  it('rewrites `schema.` inside string data too, since it does not tell code from data', () => {
+    expect(ApplySchemaPlaceholders("SET @Description_abc = N'see __mj.Entity'", APP_RULES)).toBe("SET @Description_abc = N'see ${mjSchema}.Entity'");
+  });
+
+  it('matches the provider logger: a name after `@` or `#` is a variable or temp table, not a schema', () => {
+    const sql = 'SELECT @__mj.x, #__mj.y';
     expect(ApplySchemaPlaceholders(sql, APP_RULES)).toBe(sql);
   });
 });

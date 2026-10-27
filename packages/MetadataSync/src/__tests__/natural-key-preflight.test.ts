@@ -3,8 +3,9 @@
  * existing row is named in place of a constraint violation.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { BaseEntity, EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import type { BaseEntity, DatabaseProviderBase, EntityFieldInfo, EntityInfo, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import {
+  DatabaseNaturalKeyReader,
   GroupUniqueKeyRows,
   NaturalKeyConflictMessage,
   NaturalKeyPreflight,
@@ -63,6 +64,23 @@ describe('NaturalKeyPreflight', () => {
     expect(message).toContain(`no row has primary key {ID=${SEED_ID}}, but row {ID=${EXISTING_ID}} already has the same EntityID, RoleID, Type`);
     expect(message).toContain(UQ.Name);
     expect(message).toContain('"@lookup:MJ: Entity Permissions.EntityID=…&RoleID=…&Type=…"');
+  });
+});
+
+describe('DatabaseNaturalKeyReader.FindKey', () => {
+  it('quotes each key column with the provider, so a reserved-word or spaced name still filters', async () => {
+    const provider = { PlatformKey: 'sqlserver', QuoteIdentifier: (name: string) => `[${name}]` } as unknown as DatabaseProviderBase;
+    const runView = vi.fn(async (_params: RunViewParams) => ({ Success: true, Results: [{ ID: EXISTING_ID }] }));
+    const rows = { RunView: runView } as unknown as IMetadataProvider;
+    const field = (name: string, needsQuotes: boolean) => ({ Name: name, NeedsQuotes: needsQuotes }) as unknown as EntityFieldInfo;
+
+    const found = await new DatabaseNaturalKeyReader(provider, {} as UserInfo, rows).FindKey(info, [
+      { Field: field('Order', true), Value: "O'Brien" },
+      { Field: field('Line No', false), Value: 3 },
+    ]);
+
+    expect(found).toEqual({ ID: EXISTING_ID });
+    expect(runView.mock.calls[0][0].ExtraFilter).toBe("[Order] = 'O''Brien' AND [Line No] = 3");
   });
 });
 

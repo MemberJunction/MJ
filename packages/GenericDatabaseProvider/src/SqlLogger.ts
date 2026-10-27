@@ -29,6 +29,13 @@ interface StatementParts {
   paramComment?: string;
 }
 
+/**
+ * What may not come right before a schema name for it to be rewritten to a placeholder: a word
+ * character, `$`, `@` (a variable) or `#` (a temp table). Shared with MetadataSync's `SQLLogger` so
+ * both rewrites match the same names.
+ */
+export const SCHEMA_PLACEHOLDER_LOOKBEHIND = '(?<![\\w$@#])';
+
 /** Compiled `schemaPlaceholders` rules: one regex over every schema and a schema -> placeholder map. */
 interface SchemaPlaceholderMatcher {
   regex: RegExp;
@@ -594,12 +601,13 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
-   * Compiles `schemaPlaceholders` into one regex, alternation ordered longest schema first. A
-   * single pass means a short rule (`__mj`) never matches the prefix of a longer schema
-   * (`__mj_BizAppsAccounting`) whatever the declared order, and an emitted placeholder is never
-   * matched again. A match needs a following `.` (after an optional `]`) and no preceding word
-   * character, so a bare schema name in text data is left alone. Returns null when no rule has
-   * both a schema and a placeholder.
+   * Compiles `schemaPlaceholders` into one regex. A single pass means an emitted placeholder is
+   * never matched again. A short rule (`__mj`) cannot match the prefix of a longer schema
+   * (`__mj_BizAppsAccounting`) because a match needs a following `.` (after an optional `]`); the
+   * longest-first order of the alternation is kept for readability, not relied on. Nothing may
+   * precede the name that {@link SCHEMA_PLACEHOLDER_LOOKBEHIND} excludes. The match does not tell
+   * code from string data: `__mj.` inside a quoted literal is rewritten too; only a bare name with
+   * no `.` after it is left alone. Returns null when no rule has both a schema and a placeholder.
    */
   private static _compileSchemaPlaceholders(rules: SqlSchemaPlaceholder[] | undefined): SchemaPlaceholderMatcher | null {
     const placeholderBySchema = new Map<string, string>();
@@ -617,7 +625,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       .map((schema) => SqlLoggingSessionImpl._escapeRegex(schema))
       .join('|');
     return {
-      regex: new RegExp(`(?<![\\w$@#])(\\[?)(${alternation})(\\]?)\\.`, 'g'),
+      regex: new RegExp(`${SCHEMA_PLACEHOLDER_LOOKBEHIND}(\\[?)(${alternation})(\\]?)\\.`, 'g'),
       placeholderBySchema,
     };
   }

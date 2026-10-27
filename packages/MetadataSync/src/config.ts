@@ -153,10 +153,14 @@ export interface SyncConfig {
      * Schema name → Flyway placeholder rules for a `formatAsMigration` log, the same shape as
      * `mj.config.cjs` `SQLOutput.schemaPlaceholders` (which is used when this is absent). An Open
      * App maps its own schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Without
-     * either, the core schema becomes `${flyway:defaultSchema}`. When rules resolve, `${...}` inside
-     * captured string data is escaped too.
+     * either, the core schema becomes `${flyway:defaultSchema}`. Used only with `formatAsMigration`.
      */
     schemaPlaceholders?: SqlSchemaPlaceholder[];
+    /**
+     * Escape `${...}` inside captured string data so Flyway does not read it as a placeholder.
+     * Always on with `formatAsMigration`; set this to escape a plain log too. Defaults to false.
+     */
+    escapeFlywaySyntax?: boolean;
   };
   /** Watch command configuration */
   watch?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub

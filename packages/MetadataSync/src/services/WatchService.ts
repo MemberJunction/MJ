@@ -519,7 +519,8 @@ export class WatchService {
             TransformStatement: ComposeStatementTransforms(this.envSqlLog.Redactor.Transform, this.lookupSqlLog.Rewriter.Transform),
             formatAsMigration: syncConfig.sqlLogging?.formatAsMigration || false,
             schemaPlaceholders,
-            escapeFlywaySyntax: schemaPlaceholders !== undefined,
+            // Escaping is tied to migration output, never to whether placeholder rules exist
+            escapeFlywaySyntax: syncConfig.sqlLogging?.formatAsMigration === true || syncConfig.sqlLogging?.escapeFlywaySyntax === true,
             description: 'MetadataSync watch operation',
             logRecordChangeMetadata: true,
             // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate

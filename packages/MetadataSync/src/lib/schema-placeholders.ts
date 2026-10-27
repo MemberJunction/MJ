@@ -8,7 +8,7 @@
  * CodeGen already reads).
  * @module schema-placeholders
  */
-import type { SqlSchemaPlaceholder } from '@memberjunction/generic-database-provider';
+import { SCHEMA_PLACEHOLDER_LOOKBEHIND, type SqlSchemaPlaceholder } from '@memberjunction/generic-database-provider';
 import type { MJConfig, SyncConfig } from '../config';
 import { EscapeRegExp } from './sql-set-line';
 
@@ -31,9 +31,10 @@ export function ResolveSchemaPlaceholders(syncConfig: SyncConfig | null | undefi
 }
 
 /**
- * Rewrites each `schema.` / `[schema].` in `sql` to its placeholder in one pass, longest schema first,
- * so `__mj` never matches the start of `__mj_BizApps`. A match needs a following `.` and no word
- * character before it, so a schema name inside string data is left alone. Brackets are kept.
+ * Rewrites each `schema.` / `[schema].` in `sql` to its placeholder in one pass. A match needs a
+ * following `.`, so `__mj` never matches the start of `__mj_BizApps`, and nothing before it that
+ * {@link SCHEMA_PLACEHOLDER_LOOKBEHIND} excludes. Code and string data are treated alike: `__mj.`
+ * inside a quoted literal is rewritten too. Brackets are kept.
  */
 export function ApplySchemaPlaceholders(sql: string, rules: readonly SqlSchemaPlaceholder[]): string {
   const bySchema = new Map<string, string>();
@@ -46,7 +47,7 @@ export function ApplySchemaPlaceholders(sql: string, rules: readonly SqlSchemaPl
     return sql;
   }
   const alternatives = [...bySchema.keys()].sort((a, b) => b.length - a.length).map(EscapeRegExp).join('|');
-  const pattern = new RegExp(`(?<![\\w$])(\\[?)(${alternatives})(\\]?)\\.`, 'g');
+  const pattern = new RegExp(`${SCHEMA_PLACEHOLDER_LOOKBEHIND}(\\[?)(${alternatives})(\\]?)\\.`, 'g');
   return sql.replace(pattern, (_match, open: string, schema: string, close: string) => `${open}${bySchema.get(schema)}${close}.`);
 }
 

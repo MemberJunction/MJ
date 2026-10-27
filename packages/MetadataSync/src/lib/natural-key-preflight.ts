@@ -9,7 +9,7 @@
  * seed can be re-keyed with `@lookup`.
  * @module natural-key-preflight
  */
-import { RunView, type BaseEntity, type DatabaseProviderBase, type EntityFieldInfo, type EntityInfo, type IRunViewProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, type BaseEntity, type DatabaseProviderBase, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 
 /** One unique key of a table: its name and its columns in key order. */
 export interface UniqueKeyColumns {
@@ -110,19 +110,23 @@ interface UniqueKeyCatalogRow {
 export class DatabaseNaturalKeyReader implements NaturalKeyReader {
   private readonly provider: DatabaseProviderBase;
   private readonly contextUser: UserInfo;
-  private readonly runViewProvider: IRunViewProvider | undefined;
+  private readonly rowProvider: IMetadataProvider | undefined;
   private readonly cache: Map<string, Promise<UniqueKeyColumns[]>>;
 
-  /** `cache` (entity name → keys) can be shared by readers that find rows on different providers. */
+  /**
+   * `rowProvider` is the provider rows are found on (the record's, so the read joins its
+   * transaction); `cache` (entity name → keys) can be shared by readers that find rows on
+   * different providers.
+   */
   constructor(
     provider: DatabaseProviderBase,
     contextUser: UserInfo,
-    runViewProvider?: IRunViewProvider,
+    rowProvider?: IMetadataProvider,
     cache: Map<string, Promise<UniqueKeyColumns[]>> = new Map()
   ) {
     this.provider = provider;
     this.contextUser = contextUser;
-    this.runViewProvider = runViewProvider;
+    this.rowProvider = rowProvider;
     this.cache = cache;
   }
 
@@ -136,8 +140,9 @@ export class DatabaseNaturalKeyReader implements NaturalKeyReader {
   }
 
   async FindKey(info: EntityInfo, values: ReadonlyArray<{ Field: EntityFieldInfo; Value: unknown }>): Promise<Record<string, unknown> | null> {
-    const filter = values.map(({ Field, Value }) => `${Field.Name} = ${this.literal(Field, Value)}`).join(' AND ');
-    const rv = this.runViewProvider ? new RunView(this.runViewProvider) : new RunView();
+    // Quoted, so a reserved-word or spaced column name still filters (rather than failing the read)
+    const filter = values.map(({ Field, Value }) => `${this.provider.QuoteIdentifier(Field.Name)} = ${this.literal(Field, Value)}`).join(' AND ');
+    const rv = this.rowProvider ? RunView.FromMetadataProvider(this.rowProvider) : new RunView();
     const result = await rv.RunView<Record<string, unknown>>(
       {
         EntityName: info.Name,

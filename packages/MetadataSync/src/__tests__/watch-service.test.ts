@@ -626,15 +626,26 @@ describe('WatchService — save path', () => {
     expect(syncEngine.BeforeLookupCreateSaveSource).toBeNull();
   });
 
-  it('passes the .mj-sync.json schema placeholder rules, with the Flyway escape, to the watch log', async () => {
+  it('passes the .mj-sync.json schema placeholder rules to the watch log without turning on the Flyway escape', async () => {
     const rules = [{ schema: '__mj', placeholder: '${mjSchema}' }];
     await fs.writeJson(path.join(root, '.mj-sync.json'), { version: '1.0.0', sqlLogging: { enabled: true, schemaPlaceholders: rules } });
 
     const result = await service.Watch({}, callbacks());
 
     expect(sqlLog.options?.schemaPlaceholders).toEqual(rules);
-    expect(sqlLog.options?.escapeFlywaySyntax).toBe(true);
+    expect(sqlLog.options?.escapeFlywaySyntax).toBe(false);
     await result.stop();
+  });
+
+  it('turns on the Flyway escape for a migration-formatted watch log, or when escapeFlywaySyntax is set', async () => {
+    for (const sqlLogging of [{ enabled: true, formatAsMigration: true }, { enabled: true, escapeFlywaySyntax: true }]) {
+      await fs.writeJson(path.join(root, '.mj-sync.json'), { version: '1.0.0', sqlLogging });
+
+      const result = await service.Watch({}, callbacks());
+
+      expect(sqlLog.options?.escapeFlywaySyntax).toBe(true);
+      await result.stop();
+    }
   });
 
   it('closes the SQL log and the lookup-create hook when the start fails', async () => {

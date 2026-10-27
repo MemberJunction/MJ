@@ -836,27 +836,22 @@ export class RecordDependencyAnalyzer {
    *
    * This is simply the reverse of the forward topological sort used for creates.
    */
-  public ReverseTopologicalSort(
-    records: FlattenedRecord[],
-    reverseDependencies: Map<string, ReverseDependency[]>
-  ): FlattenedRecord[][] {
+  public ReverseTopologicalSort(records: FlattenedRecord[]): FlattenedRecord[][] {
     // The same DFS order and level grouping the forward sort uses, over only these records: a
     // dependency outside the set has no level, so it is ignored. The DFS visits each record's
     // dependencies before the record, so the levels do not depend on the input order (#4935).
     const byId = new Map(records.map((record) => [record.id, record] as const));
     const ordered = DependencyOrder(records, byId);
-    const forwardLevels = this.groupByDependencyLevels(ordered, new Map()).filter((level) => level !== undefined);
+    // A record's level is one more than its highest dependency's, so the levels have no gaps
+    const forwardLevels = this.groupByDependencyLevels(ordered, new Map());
 
     // Forward level 0 (roots) deletes last; the highest level (leaves) deletes first
     return forwardLevels.reverse();
   }
 
   /** @deprecated Use {@link ReverseTopologicalSort}. */
-  public reverseTopologicalSort(
-    records: FlattenedRecord[],
-    reverseDependencies: Map<string, ReverseDependency[]>
-  ): FlattenedRecord[][] {
-    return this.ReverseTopologicalSort(records, reverseDependencies);
+  public reverseTopologicalSort(records: FlattenedRecord[]): FlattenedRecord[][] {
+    return this.ReverseTopologicalSort(records);
   }
 
   /**

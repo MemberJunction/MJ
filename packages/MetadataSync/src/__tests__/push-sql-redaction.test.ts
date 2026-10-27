@@ -150,16 +150,24 @@ describe('push SQL log redaction', () => {
     expect(sql).toBe([TOKEN_COMMENT, "SET @OwnerID_6679d1fd77d5 = (SELECT [ID] FROM [dbo].[User] WHERE [Email] = N'a@example.com')"].join('\n'));
   });
 
-  it('passes no schema rules when none are configured, and the sync config rules with the Flyway escape when they are', async () => {
-    expect(capturedOptions?.escapeFlywaySyntax).toBe(capturedOptions?.schemaPlaceholders !== undefined);
-
+  it('passes the sync config schema rules without turning on the Flyway escape for a plain log', async () => {
     const rules = [{ schema: '__mj_App', placeholder: '${flyway:defaultSchema}' }, { schema: '__mj', placeholder: '${mjSchema}' }];
     const config = { version: '1.0', sqlLogging: { enabled: true, outputDirectory: './sql', schemaPlaceholders: rules } } as SyncConfig;
     service['syncConfig'] = config;
     await service['startSqlLogging'](new SQLLogger(config), {}, dir, {});
 
     expect(capturedOptions?.schemaPlaceholders).toEqual(rules);
-    expect(capturedOptions?.escapeFlywaySyntax).toBe(true);
+    expect(capturedOptions?.escapeFlywaySyntax).toBe(false);
+  });
+
+  it('turns on the Flyway escape for a migration-formatted log, or when escapeFlywaySyntax is set', async () => {
+    for (const sqlLogging of [{ enabled: true, outputDirectory: './sql', formatAsMigration: true }, { enabled: true, outputDirectory: './sql', escapeFlywaySyntax: true }]) {
+      const config = { version: '1.0', sqlLogging } as SyncConfig;
+      service['syncConfig'] = config;
+      await service['startSqlLogging'](new SQLLogger(config), {}, dir, {});
+
+      expect(capturedOptions?.escapeFlywaySyntax).toBe(true);
+    }
   });
 
   it('drops the lookup rewriter and its own lookup-create hook when the log closes', () => {

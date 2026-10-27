@@ -126,7 +126,7 @@ describe('RecordDependencyAnalyzer.ReverseTopologicalSort', () => {
   const P = record('Prompt', ['Template']);
   const M = record('Model', ['Prompt']);
   const sort = (records: FlattenedRecord[]) =>
-    new RecordDependencyAnalyzer().ReverseTopologicalSort(records, new Map()).map((level) => level.map((r) => r.id));
+    new RecordDependencyAnalyzer().ReverseTopologicalSort(records).map((level) => level.map((r) => r.id));
 
   /** The first level index that holds `id`. */
   const levelOf = (levels: string[][], id: string) => levels.findIndex((level) => level.includes(id));

@@ -26,7 +26,9 @@ export class SQLLogger {
   
   /**
    * `schemaPlaceholders` are the rules a migration-format log applies (see `ResolveSchemaPlaceholders`);
-   * without them, `__mj` becomes `${flyway:defaultSchema}`.
+   * without them, `__mj` becomes `${flyway:defaultSchema}`. Kept for API callers: `mj sync push`
+   * passes no rules here and writes its log through the provider's `SqlLoggingSessionImpl`, so the
+   * tests of this parameter cover no production path.
    */
   constructor(syncConfig: SyncConfig | null, schemaPlaceholders?: SqlSchemaPlaceholder[]) {
     this.options = {
@@ -135,7 +137,7 @@ export class SQLLogger {
         '',
         '-- Note: schema names are written as Flyway placeholders',
         '',
-        // One pass, longest schema first, brackets kept; a schema name in string data is left alone
+        // One pass, brackets kept; `schema.` inside string data is rewritten too
         ...this.statements.map(stmt => ApplySchemaPlaceholders(stmt, this.schemaPlaceholders))
       ].join('\n');
     } else {
