@@ -51,7 +51,11 @@ async function main(): Promise<void> {
     Read: { mode: 'complete' },
     Now: new Date(),
   });
-  console.log(JSON.stringify(out.Status === 'read' ? out.Counts : out.Refusal));
+  if (out.Status === 'refused') {
+    console.log(JSON.stringify(out.Refusal));
+    process.exit(1);
+  }
+  console.log(JSON.stringify(out.Counts));
 }
 
 main().then(

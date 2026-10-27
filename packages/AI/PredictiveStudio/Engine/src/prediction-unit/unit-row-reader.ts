@@ -97,6 +97,22 @@ export class PredictionUnitRowReader {
     return value instanceof Date ? UtcDay.UtcDayIso(value) : String(value);
   }
 
+  /** True for a cell with no value: null, undefined or the empty string. */
+  private static isEmptyCell(value: CellValue): boolean {
+    return value === null || value === undefined || value === '';
+  }
+
+  /**
+   * A row's period index as an integer. `Number()` coerces an absent index (null, '') to 0, which would label the row
+   * against the entity's first period, so an absent or non-integer index fails loudly instead.
+   */
+  private static requirePeriodIndex(value: CellValue, what: string): number {
+    if (PredictionUnitRowReader.isEmptyCell(value)) throw new Error(`PredictionUnitRowReader: ${what} is empty`);
+    const idx = Number(value);
+    if (!Number.isInteger(idx)) throw new Error(`PredictionUnitRowReader: ${what} is not an integer`);
+    return idx;
+  }
+
   /** Lower-cased key for in-memory matching. `??` keeps a legitimate 0/false key value; only null/undefined become ''. */
   private static keyOf(v: CellValue): string {
     return (v instanceof Date ? UtcDay.UtcDayIso(v) : String(v ?? '')).toLowerCase();
@@ -163,7 +179,7 @@ export class PredictionUnitRowReader {
         EntityKey: entityKey,
         DecisionDate: decision,
         WindowEnd: windowEnd,
-        GroupKey: unit.groupKey ? PredictionUnitRowReader.keyOf(row[unit.groupKey]) : entityKey.toLowerCase(),
+        GroupKey: unit.groupKey ? PredictionUnitRowReader.requireKey(row[unit.groupKey], `${rowEntity.Name}.${unit.groupKey} of ${rowId}`).toLowerCase() : entityKey.toLowerCase(),
         Period: unit.rows.kind === 'grain-x-periods' ? decision : unit.temporal ? UtcDay.ToUtcDay(row[unit.temporal.timeColumn]) : null,
         Label: label.Label,
         Source: row,
@@ -221,16 +237,18 @@ export class PredictionUnitRowReader {
         return (row) => ({ Label: PredictionUnitRowReader.CanonicalLabel(row[rule.column], unit.label.outcome), Known: false });
       case 'next-period':
         if (unit.rows.kind !== 'grain-x-periods') return PredictionUnitRowReader.unitRefusal({ kind: 'unresolved-reference', entity: rowEntity.Name, field: rule.periodIndexField });
-        return this.nextPeriodLabeler(rule, unit.rows, rows);
+        return this.nextPeriodLabeler(rule, unit.rows, rowEntity, rows);
       case 'child-event':
         return this.childEventLabeler(rule, unit.label.outcome, deps);
     }
   }
 
   /** next-period: 1 when the period `offset` later falls in the window; label known when it is on or before the decision. */
-  private nextPeriodLabeler(rule: Extract<LabelRule, { kind: 'next-period' }>, unitRows: Extract<UnitRows, { kind: 'grain-x-periods' }>, rows: readonly SourceRow[]): Labeler {
+  private nextPeriodLabeler(rule: Extract<LabelRule, { kind: 'next-period' }>, unitRows: Extract<UnitRows, { kind: 'grain-x-periods' }>, rowEntity: AssemblyEntityInfo, rows: readonly SourceRow[]): Labeler {
     const byKey = new Map<string, Map<number, Date>>();
     for (const r of rows) {
+      // A row without an index is never a "next period"; it is not indexed (a candidate without one fails when labelled).
+      if (PredictionUnitRowReader.isEmptyCell(r[rule.periodIndexField])) continue;
       const idx = Number(r[rule.periodIndexField]);
       const d = UtcDay.ToUtcDay(r[unitRows.periodDate]);
       if (!Number.isInteger(idx) || d === null) continue;
@@ -240,7 +258,9 @@ export class PredictionUnitRowReader {
       byKey.set(k, m);
     }
     return (row, entityKey, decision, windowStart, windowEnd) => {
-      const next = byKey.get(entityKey.toLowerCase())?.get(Number(row[rule.periodIndexField]) + rule.offset);
+      const rowId = PredictionUnitRowReader.requireKey(row[rowEntity.PrimaryKey], `${rowEntity.Name}.${rowEntity.PrimaryKey}`);
+      const idx = PredictionUnitRowReader.requirePeriodIndex(row[rule.periodIndexField], `${rowEntity.Name}.${rule.periodIndexField} of ${rowId}`);
+      const next = byKey.get(entityKey.toLowerCase())?.get(idx + rule.offset);
       if (next !== undefined && next.getTime() <= decision.getTime()) return { Label: null, Known: true };
       const inWindow = next !== undefined && next.getTime() > windowStart.getTime() && next.getTime() <= windowEnd.getTime();
       return { Label: inWindow ? '1' : '0', Known: false };

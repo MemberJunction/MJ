@@ -75,19 +75,35 @@ describe('PredictionUnitRowReader', () => {
   it('excludes an empty-string label as unlabelled instead of keeping it as a class', async () => {
     tables.Grain = [{ ID: 'g1', D: '2020-01-01', Y: 'yes' }, { ID: 'g2', D: '2020-01-01', Y: '' }, { ID: 'g3', D: '2020-01-01', Y: 'no' }];
     entities.Grain = { ID: 'E-G', Name: 'Grain', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('D', 'Date'), field('Y')] };
-    const grainUnit: PredictionUnitSpec = {
-      ...unit,
-      rows: { kind: 'grain', grainEntity: 'Grain', decisionDate: { kind: 'column', column: 'D' }, filter: [] },
-      label: { ...unit.label, rule: { kind: 'column', column: 'Y' }, windowDays: 30, outcome: { kind: 'binary', classOrder: ['no', 'yes'], adverseIndex: 0 } },
-      censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
-    };
-    const out = await new PredictionUnitRowReader().Read(grainUnit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
-    expect(out.Status === 'read' && out.Counts.emptyLabelRowsExcluded).toBe(1);
-    expect(out.Status === 'read' && out.Rows.map((r) => r.Label)).toEqual(['yes', 'no']);
+    try {
+      const grainUnit: PredictionUnitSpec = {
+        ...unit,
+        rows: { kind: 'grain', grainEntity: 'Grain', decisionDate: { kind: 'column', column: 'D' }, filter: [] },
+        label: { ...unit.label, rule: { kind: 'column', column: 'Y' }, windowDays: 30, outcome: { kind: 'binary', classOrder: ['no', 'yes'], adverseIndex: 0 } },
+        censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
+      };
+      const out = await new PredictionUnitRowReader().Read(grainUnit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
+      expect(out.Status === 'read' && out.Counts.emptyLabelRowsExcluded).toBe(1);
+      expect(out.Status === 'read' && out.Rows.map((r) => r.Label)).toEqual(['yes', 'no']);
+    } finally {
+      delete tables.Grain;
+      delete entities.Grain;
+    }
   });
   it('fails on a period row with no foreign key instead of keying it as "undefined"', async () => {
     tables.Periods.push({ ID: 'x1', PeriodIndex: 1, OrderDate: '2022-02-01' });
-    await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow();
-    tables.Periods.pop();
+    try {
+      await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow();
+    } finally {
+      tables.Periods.pop();
+    }
+  });
+  it('fails on a period row with no period index instead of labelling it against period 0', async () => {
+    tables.Periods.push({ ID: 'x2', PersonID: 'A', OrderDate: '2022-02-01' });
+    try {
+      await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow(/PeriodIndex/);
+    } finally {
+      tables.Periods.pop();
+    }
   });
 });
