@@ -1,7 +1,12 @@
-import { BaseEntity, EntityInfo, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { MJEvaluationProtocolEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
 import {
+    JsonParse,
+    PredictionUnit,
+    TaskTypeRules,
     validateLeakageGuard,
     DOMINANCE_THRESHOLD_DEFAULT,
     type LeakageGuard,
@@ -9,6 +14,9 @@ import {
     type LeakageGuardValidationContext,
     type SourceBinding,
 } from '@memberjunction/predictive-studio-core';
+
+/** What the pipeline check needs to know about its unit (resolved by ValidateAsync). */
+export interface PipelineUnitFacts { readonly TaskType: string; readonly RowEntityID: string; readonly DescribedLabel: string }
 
 /**
  * Server-side ML Training Pipeline entity. Its job is to make the leakage guard
@@ -38,18 +46,31 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         const result = await super.ValidateAsync();
         if (!result.Success) return result;
 
-        // Fast-path: the guard can only become newly unsound when the guard itself,
-        // or the sources its entries are checked against, are being changed.
-        if (!this.needsLeakageGuardCheck()) return result;
+        await this.runLeakageGuardCheck(result);
+        if (this.needsUnitProtocolCheck()) await this.checkUnitAndProtocol(result);
+        return result;
+    }
+
+    /**
+     * Fast-path: the guard can only become newly unsound when the guard itself,
+     * or the sources its entries are checked against, are being changed.
+     */
+    private async runLeakageGuardCheck(result: ValidationResult): Promise<void> {
+        if (!this.needsLeakageGuardCheck()) return;
 
         const guard = this.parseLeakageGuard(result);
-        if (guard === null) return result;   // parse failure already recorded
+        if (guard === null) return;   // parse failure already recorded
 
         const context = this.buildValidationContext();
         const issues = validateLeakageGuard(guard, context);
         this.applyIssues(result, issues);
+    }
 
-        return result;
+    /** Whether the unit and protocol agreement needs re-checking: on insert, or when any column it reads changes. */
+    private needsUnitProtocolCheck(): boolean {
+        if (!this.IsSaved) return true;
+        return ['PredictionUnitID', 'EvaluationProtocolID', 'TargetEntityID', 'ProblemType', 'TargetVariable']
+            .some((name) => this.GetFieldByName(name)?.Dirty ?? false);
     }
 
     /**
@@ -114,7 +135,8 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
      */
     private buildValidationContext(): LeakageGuardValidationContext {
         const bindings = this.parseSourceBindings();
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const dataProvider = this.ProviderToUse;
+        const provider = VersionedRowGuard.IsMetadataProvider(dataProvider) ? dataProvider : undefined;
 
         const columns: string[] = [];
         let fullyResolved = true;
@@ -165,6 +187,99 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
             // check down rather than producing bogus "matches no column" errors.
             return [];
         }
+    }
+
+    /**
+     * A pipeline that names a unit must agree with it (legacy TargetEntityID/ProblemType/TargetVariable are derived from
+     * the unit), and a protocol it names must score the unit's task family. Pure.
+     */
+    public static GetPipelineUnitProtocolProblems(
+        pipeline: Pick<MJMLTrainingPipelineEntity, 'TargetEntityID' | 'ProblemType' | 'TargetVariable'>,
+        unit: PipelineUnitFacts,
+        protocol: Pick<MJEvaluationProtocolEntity, 'PrimaryScore'> | null,
+    ): string[] {
+        const problems: string[] = [];
+        const taskJson = JsonParse.ParseJsonText(unit.TaskType, 'TaskType');
+        const task = taskJson.Ok === true ? TaskTypeRules.ParseTaskType(taskJson.Value) : null;
+        const taskKind = task !== null && task.Ok === true ? task.Value.kind : null;
+        if (!UUIDsEqual(pipeline.TargetEntityID, unit.RowEntityID)) {
+            problems.push(`TargetEntityID must be the unit's row entity (${unit.RowEntityID}) when PredictionUnitID is set`);
+        }
+        // One derivation of the legacy value (TaskTypeRules), shared with every writer of ProblemType.
+        const expectedProblemType = task !== null && task.Ok === true ? TaskTypeRules.LegacyProblemTypeForTask(task.Value) : 'regression';
+        if (pipeline.ProblemType !== expectedProblemType) problems.push(`ProblemType must be ${expectedProblemType} for a ${taskKind || 'unknown'} unit`);
+        if (pipeline.TargetVariable !== unit.DescribedLabel) problems.push(`TargetVariable must read "${unit.DescribedLabel}" (the unit's outcome rule)`);
+        if (protocol) {
+            const primary = JsonParse.ParseJsonText(protocol.PrimaryScore, 'PrimaryScore');
+            const family = primary.Ok === true && JsonParse.IsJsonObject(primary.Value) ? JsonParse.JsonString(primary.Value, 'family') : null;
+            if (family !== taskKind) {
+                problems.push(`The Evaluation Protocol scores family "${family || 'unknown'}" but the Prediction Unit declares task "${taskKind || 'unknown'}"; ranking a ${taskKind || 'unknown'} model by a ${family || 'unknown'} score is refused`);
+            }
+        }
+        return problems;
+    }
+
+    private async checkUnitAndProtocol(result: ValidationResult): Promise<void> {
+        const unitID = this.PredictionUnitID;
+        if (!unitID) return;
+        const provider = this.ProviderToUse;
+        if (!VersionedRowGuard.IsMetadataProvider(provider)) return;
+        const { unitRow, protocol } = await this.loadUnitAndProtocol(provider, unitID, this.EvaluationProtocolID);
+        if (!unitRow) {
+            this.fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} was not found`);
+            return;
+        }
+        if (this.EvaluationProtocolID && !protocol) {
+            this.fail(result, 'EvaluationProtocolID', `Evaluation Protocol ${this.EvaluationProtocolID} was not found`);
+            return;
+        }
+        const spec = PredictionUnit.ParsePredictionUnitRow(unitRow);
+        if (spec.Ok === false) {
+            this.fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} does not parse: ${spec.Errors.join('; ')}`);
+            return;
+        }
+        const rowEntityName = PredictionUnit.UnitRowEntityName(spec.Value.rows);
+        const facts: PipelineUnitFacts = {
+            TaskType: unitRow.TaskType,
+            RowEntityID: provider.EntityByName(rowEntityName)?.ID || `(unknown entity ${rowEntityName})`,
+            DescribedLabel: PredictionUnit.DescribeLabelRule(spec.Value),
+        };
+        for (const problem of MJMLTrainingPipelineEntityServer.GetPipelineUnitProtocolProblems(this, facts, protocol)) {
+            this.fail(result, 'PredictionUnitID', problem);
+        }
+    }
+
+    /**
+     * Reads the bound unit row (every column, for the parser) and the bound protocol's primary score, in parallel, as
+     * plain rows (nothing is mutated). A failed read is reported as "not found" by the caller.
+     */
+    private async loadUnitAndProtocol(
+        provider: IEntityDataProvider & IMetadataProvider,
+        unitID: string,
+        protocolID: string | null,
+    ): Promise<{ unitRow: MJPredictionUnitEntity | null; protocol: Pick<MJEvaluationProtocolEntity, 'PrimaryScore'> | null }> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const [units, protocols] = await Promise.all([
+            rv.RunView<MJPredictionUnitEntity>(
+                { EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitID)}'`, ResultType: 'simple' },
+                this.ContextCurrentUser,
+            ),
+            protocolID
+                ? rv.RunView<Pick<MJEvaluationProtocolEntity, 'PrimaryScore'>>(
+                    { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(protocolID)}'`, Fields: ['PrimaryScore'], ResultType: 'simple' },
+                    this.ContextCurrentUser,
+                )
+                : null,
+        ]);
+        return {
+            unitRow: units.Success ? units.Results[0] || null : null,
+            protocol: protocols !== null && protocols.Success ? protocols.Results[0] || null : null,
+        };
+    }
+
+    private fail(result: ValidationResult, field: string, message: string): void {
+        result.Success = false;
+        result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
     }
 
     /** Fold guard issues into the entity's ValidationResult. */
