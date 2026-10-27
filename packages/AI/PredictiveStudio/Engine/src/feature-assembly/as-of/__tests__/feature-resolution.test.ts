@@ -68,6 +68,49 @@ describe('ResolveFeatureColumns', () => {
   });
 });
 
+describe('ResolveFeatureColumns — deny lists and windowed aggregates', () => {
+  const orders: AssemblyEntityInfo = { ID: 'E-O', Name: 'Orders', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [
+    f('ID', 'string', false, 'uniqueidentifier'), f('PersonID', 'string', false, 'uniqueidentifier', 'People'), f('OrderDate', 'Date'), f('Amount', 'number'),
+  ] };
+  const md: IAssemblyMetadata = { Entity: (n) => ({ Years: years, People: people, Orders: orders }[n] ?? null) };
+  const spend: FeatureStepGraph['Steps'][number] = {
+    Id: 'w', Kind: 'windowed-aggregate', FeatureName: 'SpendLastYear', ChildEntity: 'Orders', ForeignKey: 'PersonID', OwnerKeyField: 'PersonID',
+    DateField: 'OrderDate', Aggregate: 'sum', ValueField: 'Amount', WindowDays: 365,
+  };
+  it('drops a preprocessing step on a deny-listed column instead of refusing the pipeline', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [
+      { Id: 's', Kind: 'select', Columns: ['EventsAttended', 'Region'] },
+      { Id: 'i', Kind: 'impute', Column: 'EventsAttended', Strategy: 'mean' },
+      { Id: 'z', Kind: 'standardize', Columns: ['EventsAttended'] },
+      { Id: 'o', Kind: 'onehot', Column: 'EventsAttended' },
+      { Id: 'b', Kind: 'bin', Column: 'EventsAttended', Bins: 4 },
+    ] }, unitSpec, years, md, { denyFields: [' eventsattended '], denySources: [] });
+    expect(r.Status).toBe('resolved');
+    if (r.Status !== 'resolved') return;
+    expect(r.Columns.map((c) => c.name)).toEqual(['Region']);
+    expect(r.ExplicitOps).toEqual([{ op: 'standardize', cols: [] }]);
+  });
+  it('maps a windowed aggregate onto a numeric column spec', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [spend] }, unitSpec, years, md, { denyFields: [], denySources: [] });
+    expect(r).toEqual({ Status: 'resolved', ExplicitOps: [], Columns: [{
+      name: 'SpendLastYear',
+      source: { kind: 'windowed-aggregate', childEntity: 'Orders', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'OrderDate', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: 365, filter: [] },
+      encoding: { kind: 'numeric', nonNumericValue: 'fail' },
+      missing: { impute: 'median', indicator: true, constant: null },
+    }] });
+  });
+  it('skips a windowed aggregate over a deny-listed child entity or with a deny-listed feature name', () => {
+    const bySource = FeatureResolver.ResolveFeatureColumns({ Steps: [spend] }, unitSpec, years, md, { denyFields: [], denySources: ['orders'] });
+    expect(bySource).toEqual({ Status: 'resolved', Columns: [], ExplicitOps: [] });
+    const byName = FeatureResolver.ResolveFeatureColumns({ Steps: [spend] }, unitSpec, years, md, { denyFields: ['SpendLastYear'], denySources: [] });
+    expect(byName).toEqual({ Status: 'resolved', Columns: [], ExplicitOps: [] });
+  });
+  it('refuses a windowed aggregate whose owner key field is not on the unit row', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ ...spend, OwnerKeyField: 'MemberID' }] }, unitSpec, years, md, { denyFields: [], denySources: [] });
+    expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'MemberID' } });
+  });
+});
+
 describe('ResolveFeatureColumns — forecast units', () => {
   const t3: AssemblyEntityInfo = { ID: 'E-T', Name: 'T3', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [f('ID', 'string', false, 'uniqueidentifier'), f('T', 'Date'), f('LagTarget', 'number'), f('SamePeriodTarget', 'number'), f('Target', 'number')] };
   const md: IAssemblyMetadata = { Entity: (n) => (n === 'T3' ? t3 : null) };
@@ -76,5 +119,14 @@ describe('ResolveFeatureColumns — forecast units', () => {
     expect(refused).toEqual({ Status: 'refused', Refusal: { kind: 'future-period-lag', column: 'SamePeriodTarget', lag: 0, horizonPeriods: 1 } });
     const accepted = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['LagTarget'], PeriodOffsets: { LagTarget: 1 } }] }, forecastUnit, t3, md, { denyFields: [], denySources: [] });
     expect(accepted.Status).toBe('resolved');
+  });
+  it('refuses a column declared fewer periods back than the horizon', () => {
+    const horizonTwo: PredictionUnitSpec = { ...forecastUnit, temporal: { timeColumn: 'T', horizonPeriods: 2, lags: [2, 12], rollingWindows: [], period: 'month', seasonality: 12 } };
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['LagTarget'], PeriodOffsets: { LagTarget: 1 } }] }, horizonTwo, t3, md, { denyFields: [], denySources: [] });
+    expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'future-period-lag', column: 'LagTarget', lag: 1, horizonPeriods: 2 } });
+  });
+  it('refuses a series step whose index is outside the Temporal Spec', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'series', FeatureName: 'Lag5', Feature: { kind: 'lag', index: 5 } }] }, forecastUnit, t3, md, { denyFields: [], denySources: [] });
+    expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'T3', field: 'TemporalSpec.lag[5]' } });
   });
 });

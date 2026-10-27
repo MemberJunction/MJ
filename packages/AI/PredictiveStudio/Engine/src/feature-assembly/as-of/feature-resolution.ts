@@ -7,7 +7,7 @@
  * column. Steps with no as-of semantics are refused.
  */
 import type { AssemblyRefusal, ColumnEncoding, ColumnEncodingKind, FeatureColumnSpec, FeatureStep, FeatureStepGraph, MissingValuePolicy, PredictionUnitSpec, PreprocessingOp, ProtocolExclusions } from '@memberjunction/predictive-studio-core';
-import { PredictionUnit } from '@memberjunction/predictive-studio-core';
+import { NormalizeName, PredictionUnit } from '@memberjunction/predictive-studio-core';
 import type { AssemblyEntityInfo, AssemblyFieldInfo, IAssemblyMetadata } from '../assembly-metadata';
 import { AssemblyRefused } from './refusal';
 
@@ -36,8 +36,8 @@ export class FeatureResolver {
     protected readonly Metadata: IAssemblyMetadata,
     exclusions: ProtocolExclusions,
   ) {
-    this.deny = new Set(exclusions.denyFields.map((x) => x.toLowerCase()));
-    this.denySources = new Set(exclusions.denySources.map((x) => x.toLowerCase()));
+    this.deny = new Set(exclusions.denyFields.map(NormalizeName));
+    this.denySources = new Set(exclusions.denySources.map(NormalizeName));
   }
 
   /** Resolves every step in order; the first refusal ends resolution (no partial column list). */
@@ -96,7 +96,9 @@ export class FeatureResolver {
       case 'flow-agent':
       case 'vision-llm':
         throw new AssemblyRefused({ kind: 'unsupported-step-kind', stepId: step.Id, stepKind: step.Kind });
+      // A preprocessing step on a deny-listed column is dropped, never refused: the explicit deny is the stronger instruction.
       case 'impute': {
+        if (this.isDenied(step.Column)) return;
         const index = this.byName.get(step.Column);
         if (index === undefined) throw new AssemblyRefused({ kind: 'unresolved-column', entity: this.RowEntity.Name, field: step.Column });
         // `??`: a FillValue of 0 or '' is a legitimate fill; only an absent one becomes null.
@@ -104,13 +106,15 @@ export class FeatureResolver {
         return;
       }
       case 'standardize':
-        for (const col of step.Columns) this.requireColumn(col);
-        this.ops.push({ op: 'standardize', cols: step.Columns.filter((col) => !this.deny.has(col.toLowerCase())) });
+        for (const col of step.Columns) if (!this.isDenied(col)) this.requireColumn(col);
+        this.ops.push({ op: 'standardize', cols: step.Columns.filter((col) => !this.isDenied(col)) });
         return;
       case 'onehot':
+        if (this.isDenied(step.Column)) return;
         this.requireColumn(step.Column);
         return;   // categorical columns are one-hot encoded with the assembly's preprocessing ops; the step only names one
       case 'bin':
+        if (this.isDenied(step.Column)) return;
         this.requireColumn(step.Column);
         this.ops.push({ op: 'bin', col: step.Column, bins: step.Bins });
         return;
@@ -120,12 +124,12 @@ export class FeatureResolver {
   /** `select`: one typed column per field, read from the row entity or (through a key field) another entity. */
   protected ResolveSelect(step: Extract<FeatureStep, { Kind: 'select' }>): void {
     const entityName = step.Entity || this.RowEntity.Name;
-    if (this.denySources.has(entityName.toLowerCase())) return;
+    if (this.denySources.has(NormalizeName(entityName))) return;
     const entity = entityName === this.RowEntity.Name ? this.RowEntity : this.Metadata.Entity(entityName);
     if (!entity) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entityName, field: '*' });
     const keyField = entity.Name === this.RowEntity.Name ? null : this.selectKeyField(step, entity);
     for (const col of step.Columns) {
-      if (this.deny.has(col.toLowerCase())) continue;
+      if (this.isDenied(col)) continue;
       const field = entity.Fields.find((x) => x.Name === col);
       if (!field) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entity.Name, field: col });
       if (entity.Name === this.RowEntity.Name) this.checkForecastOffset(step, col);
@@ -139,8 +143,15 @@ export class FeatureResolver {
     }
   }
 
-  /** `windowed-aggregate`: one numeric column summarising a dated child entity; every named child field must exist. */
+  /**
+   * `windowed-aggregate`: one numeric column summarising a dated child entity; every named child field and the owner key
+   * field on the unit row must exist. A deny-listed child entity or feature name skips the step.
+   */
   protected ResolveWindowedAggregate(step: Extract<FeatureStep, { Kind: 'windowed-aggregate' }>): void {
+    if (this.denySources.has(NormalizeName(step.ChildEntity)) || this.isDenied(step.FeatureName)) return;
+    if (step.OwnerKeyField && !this.RowEntity.Fields.some((x) => x.Name === step.OwnerKeyField)) {
+      throw new AssemblyRefused({ kind: 'unresolved-column', entity: this.RowEntity.Name, field: step.OwnerKeyField });
+    }
     const child = this.Metadata.Entity(step.ChildEntity);
     if (!child) throw new AssemblyRefused({ kind: 'unresolved-column', entity: step.ChildEntity, field: '*' });
     for (const fld of [step.ForeignKey, step.DateField, step.EndDateField, step.VoidedAtField, step.ValueField].filter((x): x is string => !!x)) {
@@ -186,6 +197,11 @@ export class FeatureResolver {
     if (offset === undefined || offset < t.horizonPeriods) {
       throw new AssemblyRefused({ kind: 'future-period-lag', column: col, lag: offset || 0, horizonPeriods: t.horizonPeriods });
     }
+  }
+
+  /** True when the field deny list names this column (names compared as the leakage guard normalizes them). */
+  private isDenied(column: string): boolean {
+    return this.deny.has(NormalizeName(column));
   }
 
   private add(c: FeatureColumnSpec): void {
