@@ -5,11 +5,33 @@
  * logic that ensures deterministic fields are the PRIMARY source, with
  * LLM providing enriched descriptions as a FALLBACK.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
+import type { IMetadataProvider, IRunViewProvider, UserInfo } from '@memberjunction/core';
 import { BuildFieldsFromSelectColumns } from '../custom/query-extraction/resolve';
-import type { ExtractedField } from '../custom/query-extraction/types';
+import type { ExtractedField, ParameterExtractionResult, QuerySyncContext } from '../custom/query-extraction/types';
+
+// The E4 pin below drives the REAL pipeline merge; only the database writes and the LLM call are stubbed.
+const { mockSyncFields, mockRunLLMEnrichment } = vi.hoisted(() => ({
+    mockSyncFields: vi.fn<(queryID: string, fields: ExtractedField[]) => Promise<void>>(),
+    mockRunLLMEnrichment: vi.fn<() => Promise<ParameterExtractionResult | null>>(),
+}));
+
+vi.mock('../custom/query-extraction/sync', () => ({
+    SyncParameters: vi.fn().mockResolvedValue(undefined),
+    SyncFields: mockSyncFields,
+    SyncEntities: vi.fn().mockResolvedValue(undefined),
+    SyncDependencies: vi.fn().mockResolvedValue(undefined),
+    RemoveAllRecords: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../custom/query-extraction/enrich', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../custom/query-extraction/enrich')>();
+    return { ...actual, RunLLMEnrichment: mockRunLLMEnrichment };
+});
+
+import { RunExtractionPipeline } from '../custom/query-extraction/pipeline';
 
 const tsqlDialect = new SQLServerDialect();
 const extractSelectColumns = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractSelectColumns(sql, dialect);
@@ -339,16 +361,57 @@ describe('Merge Priority: Deterministic vs LLM', () => {
         expect(result[1].type).toBe('string'); // Non-computed: deterministic type preserved
     });
 
-    it('should use LLM sourceEntity when deterministic has none', () => {
-        const det: ExtractedField[] = [
-            { name: 'SpeakerName', description: 'Name', type: 'string', optional: false, isComputed: false, sourceEntity: null },
-        ];
-        const llm: ExtractedField[] = [
-            { name: 'SpeakerName', description: 'Speaker name', type: 'string', optional: false, sourceEntity: 'Speakers' },
-        ];
+    // Pinned: the LLM writes descriptions only; it never sets SourceEntityID / SourceFieldName
+    // (DISCUSSION §6, 2026-10-26: binding split). E4. Inverted from "should use LLM sourceEntity when
+    // deterministic has none", and moved off the local mirror onto the real pipeline merge (pipeline.ts
+    // supplementDeterministicWithLLM: `sourceEntity: df.sourceEntity ?? llmMatch.sourceEntity`).
+    // Observed today: the field handed to SyncFields carries the LLM's guess (expected undefined/null,
+    // received 'Speakers').
+    describe('LLM source attribution (real pipeline merge)', () => {
+        const ctx = (): QuerySyncContext => ({
+            queryID: 'q-speakers',
+            queryName: 'Speaker Names',
+            sql: 'SELECT s.Name AS SpeakerName FROM ext.Speakers s',
+            isSaved: true,
+            contextUser: { ID: 'user-1' } as UserInfo,
+            metadataProvider: { Entities: [] } as Pick<IMetadataProvider, 'Entities'> as IMetadataProvider,
+            runViewProvider: {} as IRunViewProvider,
+        });
 
-        const result = supplementDeterministicWithLLM(det, llm);
-        expect(result[0].sourceEntity).toBe('Speakers');
+        beforeEach(() => {
+            vi.clearAllMocks();
+            mockSyncFields.mockResolvedValue(undefined);
+            mockRunLLMEnrichment.mockResolvedValue({
+                parameters: [],
+                selectClause: [{
+                    name: 'SpeakerName', description: 'Full name of the speaker', type: 'string', optional: false,
+                    sourceEntity: 'Speakers', sourceFieldName: 'FullName',
+                }],
+            });
+        });
+
+        it('protect: the LLM description reaches the synced field', async () => {
+            await RunExtractionPipeline(ctx());
+            const synced = mockSyncFields.mock.calls[0]?.[1];
+            expect(synced?.map(f => [f.name, f.description])).toEqual([['SpeakerName', 'Full name of the speaker']]);
+        });
+
+        it.fails('should never take sourceEntity from the LLM when deterministic has none', async () => {
+            await RunExtractionPipeline(ctx());
+            const synced = mockSyncFields.mock.calls[0]?.[1];
+            expect(synced).toHaveLength(1);
+            expect(synced?.[0].sourceEntity ?? null).toBeNull();
+            expect(synced?.[0].sourceFieldName).toBe('Name');
+        });
+
+        // Pinned: the LLM writes descriptions only (DISCUSSION §6, 2026-10-26). E4, LLM-only branch: when the
+        // parser yields no columns the LLM's selectClause is synced as-is, sources included.
+        // Observed today: expected [[null, null]], received [['Speakers', 'FullName']].
+        it.fails('should never take sourceEntity / sourceFieldName from LLM-only fields', async () => {
+            await RunExtractionPipeline({ ...ctx(), sql: 'EXEC ext.spSpeakerNames' });
+            const synced = mockSyncFields.mock.calls[0]?.[1];
+            expect(synced?.map(f => [f.sourceEntity ?? null, f.sourceFieldName ?? null])).toEqual([[null, null]]);
+        });
     });
 
     it('should not overwrite existing deterministic sourceEntity with LLM', () => {

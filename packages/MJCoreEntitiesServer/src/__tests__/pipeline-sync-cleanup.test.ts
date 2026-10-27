@@ -112,6 +112,24 @@ describe('Pipeline sync stage — stale record cleanup', () => {
             expect(fieldCleanupCall).toBeUndefined();
             expect(mockSyncFields).not.toHaveBeenCalled();
         });
+
+        // Pinned: a parse/describe failure keeps the existing field rows AND records it in ExtractionStatus
+        // (DISCUSSION §6, 2026-10-27: "describe failure keeps rows and sets ExtractionStatus"). E7.
+        // The test above is the keep half and stays a passing assertion; the silence is the bug.
+        // `ExtractionStatus` does not exist yet (not on MJQueryEntity, not on PipelineResult), so this pins
+        // today's observable surface: the pipeline result the entity reads after extraction. When the
+        // column lands, replace with: the saved query's ExtractionStatus names the stale fields.
+        // Observed today: the result is `{ UsesTemplate: false }` with no status (toMatchObject fails on
+        // the missing ExtractionStatus property).
+        it.fails('should keep existing fields AND report a stale-fields extraction status when finalFields is null', async () => {
+            mockRunLLMEnrichment.mockResolvedValue(null);
+
+            const result = await RunExtractionPipeline(buildCtx('EXEC sp_SomeStoredProc @Param1 = 1'));
+
+            expect(mockSyncFields).not.toHaveBeenCalled();
+            expect(mockRemoveAllRecords.mock.calls.some((call: unknown[]) => call[1] === 'MJ: Query Fields')).toBe(false);
+            expect(result).toMatchObject({ ExtractionStatus: expect.stringMatching(/\S/) });
+        });
     });
 
     describe('when deterministic extraction produces fields (even without LLM)', () => {

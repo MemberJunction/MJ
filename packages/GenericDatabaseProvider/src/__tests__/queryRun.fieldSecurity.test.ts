@@ -219,8 +219,44 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
     it('checks the entities the SQL reads even when the query declares none', async () => {
         const result = await runAs('SELECT ID, Amount FROM vwPayroll', staff);
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/Denied entities: Payroll/);
         expect(provider.Executed).toEqual([]);
+    });
+
+    // Pinned: the refusal no longer lists "Denied entities" (DISCUSSION §6, 2026-10-27; Topic 3e item 5). TEST-INVENTORY F2.
+    // Inverted from the assertion `toMatch(/Denied entities: Payroll/)` that used to sit in the test above; the refusal half stays there as `it`.
+    // Observed today: "User does not have permission to run query 'q-1' (ID: q-1). Denied entities: Payroll."
+    it.fails('refuses a query reading an entity the user cannot read without naming that entity', async () => {
+        const result = await runAs('SELECT ID, Amount FROM vwPayroll', staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).not.toMatch(/Denied entities/);
+        expect(result.ErrorMessage).not.toMatch(/Payroll/);
+    });
+
+    const REFUSAL = "Query 'Payroll Report' does not exist or you do not have permission to run it.";
+
+    // Pinned: one query-level refusal identical to the not-found case (DISCUSSION §6, 2026-10-27; Topic 3e item 1). TEST-INVENTORY F1.
+    // Observed today: "User does not have permission to run query 'Payroll Report' (ID: q-1). Denied entities: Payroll."
+    it.fails('refuses a denied query with the not-found message', async () => {
+        const result = await runAs('SELECT ID, Amount FROM vwPayroll', staff, { Name: 'Payroll Report' });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(REFUSAL);
+    });
+
+    // Pinned: one query-level refusal identical to the not-found case (DISCUSSION §6, 2026-10-27; Topic 3e item 1). TEST-INVENTORY F1.
+    // Observed today: "Query 'Payroll Report' not found".
+    it.fails('refuses a query that does not exist with the same message as a denied one', async () => {
+        provider.SeedQueries([]);
+        const result = await provider.Run({ QueryName: 'Payroll Report' }, staff);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(REFUSAL);
+    });
+
+    // Pinned: one query-level refusal identical to the not-found case (DISCUSSION §6, 2026-10-27; Topic 3e item 1). TEST-INVENTORY F1.
+    // Observed today: the field-security refusal is "User does not have permission to run query 'Payroll Report' (ID: q-1)."
+    it.fails('refuses a query reading a denied field with the not-found message', async () => {
+        const result = await runAs('SELECT ID, Salary FROM vwPeople', staff, { Name: 'Payroll Report' });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(REFUSAL);
     });
 
     it('checks an entity read only inside a subquery', async () => {

@@ -140,3 +140,28 @@ describe("assertReadOnlyClause", () => {
         });
     });
 });
+
+/**
+ * MySQL comment syntax. In MySQL `--` starts a comment only when followed by whitespace or a control
+ * character, so `--1` is NOT a comment there: `SELECT 1 --1 INTO OUTFILE '/tmp/x'` is `SELECT 1 - (-1)
+ * INTO OUTFILE ...`, a file write. The only non-T-SQL key today is 'ansi' (the PostgreSQL grammar),
+ * which reads `--1 ...` as a line comment, sees `SELECT 1`, and lets the text through.
+ */
+describe("assertReadOnlyNativeQuery: MySQL '--' comment rule", () => {
+    const MYSQL_OUTFILE_BEHIND_DASHES = "SELECT 1 --1 INTO OUTFILE '/tmp/x'";
+
+    it("refuses the same write with no '--' in front of it (the INTO check works)", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT 1 INTO OUTFILE '/tmp/x'", "ansi")).toThrow(/SELECT \.\.\. INTO/);
+    });
+
+    // Pinned: EDS dialects live in sql-dialect; a MySQL source is screened under the MySQL dialect's
+    // comment rules, fail closed (IMPLEMENTATION-PLAN §3 / DISCUSSION §6, 2026-10-27). EDS screen bypass row.
+    // Observed today: AssertReadOnlyNativeQuery(..., "ansi") does not throw ("expected [Function] to throw
+    // an error"): the ANSI grammar treats "--1 INTO OUTFILE '/tmp/x'" as a comment.
+    // Intended API: a MySQL dialect key backed by a sql-dialect MySQL dialect, e.g.
+    // AssertReadOnlyNativeQuery(MYSQL_OUTFILE_BEHIND_DASHES, "mysql"), which must throw. Until that key
+    // exists, a MySQL source is screened with "ansi", so this pins the call a MySQL source makes today.
+    it.fails("refuses 'SELECT 1 --1 INTO OUTFILE' for a MySQL source", () => {
+        expect(() => AssertReadOnlyNativeQuery(MYSQL_OUTFILE_BEHIND_DASHES, "ansi")).toThrow();
+    });
+});

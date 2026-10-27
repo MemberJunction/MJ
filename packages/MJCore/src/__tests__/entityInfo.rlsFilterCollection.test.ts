@@ -120,6 +120,24 @@ describe('GetUserRowLevelSecurityInfo collects filters only from rows that GRANT
         expect(clause).toContain(' OR ');
     });
 
+    // Pinned: #4078 RLS parentheses — the OR'd role filters are wrapped as one group, so a predicate
+    // ANDed beside them (`WHERE ID = @x AND <clause>`) cannot bind to only the first filter
+    // (DISCUSSION §6, 2026-10-27). TEST-INVENTORY I4. Observed today: the clause is
+    // "(OrganizationID = '{{UserOrganizationID}}') OR (UserID = 'U0000000-…-000000000001')" — each filter wrapped, the group not
+    // (expected "(...) OR (...)" to be "((...) OR (...))").
+    it.fails('two granting rows OR their filters inside one enclosing pair of parentheses (#4078)', () => {
+        const entity = buildEntityInfo([
+            buildPermission({ RoleID: ROLE_A_ID, CreateRLSFilterID: FILTER_1_ID }),
+            buildPermission({ RoleID: ROLE_B_ID, CreateRLSFilterID: FILTER_2_ID }),
+        ]);
+        const user = buildUser([ROLE_A_ID, ROLE_B_ID]);
+        const f1 = filter1.MarkupFilterText(user);
+        const f2 = filter2.MarkupFilterText(user);
+
+        const clause = entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
+        expect(clause).toBe(`((${f1}) OR (${f2}))`);
+    });
+
     it('a user whose only row does not grant the operation collects nothing (the permission gate refuses them anyway)', () => {
         const entity = buildEntityInfo([
             buildPermission({ RoleID: ROLE_B_ID, CanCreate: false, CreateRLSFilterID: FILTER_2_ID }),

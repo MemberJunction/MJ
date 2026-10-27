@@ -492,13 +492,13 @@ describe('MaxRows row cap — outer wrap', () => {
 
 describe('MaxRows row cap — incompatible shapes left alone', () => {
 
-    it('does not modify a SELECT … INTO statement (write op, validator should block)', () => {
+    // Pinned: the lexer read-only check runs on every path, so SELECT … INTO is refused on the saved path (DISCUSSION §6, 2026-10-27). W3.
+    // Was: 'does not modify a SELECT … INTO statement (write op, validator should block)', which asserted the
+    // statement passed through uncapped. Observed today: no error; FinalSQL is 'SELECT * INTO #temp FROM Users'.
+    it.fails('refuses a SELECT … INTO statement on the saved-query path (it writes a table)', () => {
         stubMetadata();
         const sql = 'SELECT * INTO #temp FROM Users';
-        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
-        expect(result.FinalSQL).not.toMatch(/FETCH\s+NEXT\s+10/i);
-        expect(result.FinalSQL).toContain('INTO #temp');
+        expect(() => RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 })).toThrow(/read query|write statement/i);
     });
 
     it('preserves FOR JSON AUTO and never wraps it in a derived table', () => {
@@ -1109,7 +1109,10 @@ describe('RenderTrace', () => {
 
 describe('RenderTrace — pipeline stage visibility', () => {
 
-    it('AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', () => {
+    // Pinned: render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
+    // Was: 'AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', which asserted the token
+    // survived. Observed today: AfterComposition still contains '{{ Status | sqlString }}' (compose runs before render).
+    it.fails('AfterComposition is the assembled SQL with values rendered, no Nunjucks tokens left', () => {
         stubMetadata();
         const sql = `SELECT * FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`;
         const result = RenderPipeline.Run(sql, {
@@ -1117,8 +1120,9 @@ describe('RenderTrace — pipeline stage visibility', () => {
             UsesTemplate: true,
             Parameters: { Status: 'Active' },
         });
-        // AfterComposition still has the Nunjucks token (composition runs before templates)
-        expect(result.Trace.AfterComposition).toContain('{{ Status | sqlString }}');
+        // AfterComposition is the assembled SQL: the value is rendered, no template tag remains
+        expect(result.Trace.AfterComposition).not.toMatch(/\{\{|\{%/);
+        expect(result.Trace.AfterComposition).toContain("'Active'");
         // AfterTemplates has the resolved value
         expect(result.Trace.AfterTemplates).toContain("'Active'");
         expect(result.Trace.AfterTemplates).not.toContain('{{ Status');
@@ -1135,9 +1139,7 @@ describe('RenderTrace — pipeline stage visibility', () => {
         expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
-    it('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', () => {
-        stubMetadata();
-        const sql = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
+    const skipFailureCaseSQL = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
 FROM [document].[vwMemberEngagementLogs] mel
 INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
 INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
@@ -1145,14 +1147,39 @@ WHERE mel.IsMemberInitiated = 1
   AND mel.[Date] >= {{ StartDate | sqlDate }}
 GROUP BY t.ID
 ORDER BY Cnt DESC`;
+
+    it('trace captures the template and cap stages for TRY_CAST query with MaxRows (the Skip failure case)', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run(skipFailureCaseSQL, {
+            Platform: 'sqlserver',
+            MaxRows: 10,
+            UsesTemplate: true,
+            Parameters: { StartDate: '2024-01-01' },
+        });
+        expect(result.Trace.AfterComposition).toContain('TRY_CAST');
+        expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 t\.ID/);
+        expect(result.FinalSQL).toMatch(/ORDER\s+BY\s+Cnt\s+DESC$/i);
+        expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
+    });
+
+    // Pinned: render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
+    // Was: 'trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', which asserted
+    // AfterComposition still held '{{ StartDate | sqlDate }}'. The stage assertions that do not depend on that
+    // are kept in the test above. Observed today: AfterComposition contains '{{ StartDate | sqlDate }}'.
+    it.fails('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case), AfterComposition already rendered', () => {
+        stubMetadata();
+        const sql = skipFailureCaseSQL;
         const result = RenderPipeline.Run(sql, {
             Platform: 'sqlserver',
             MaxRows: 10,
             UsesTemplate: true,
             Parameters: { StartDate: '2024-01-01' },
         });
-        // AfterComposition: Nunjucks tokens still present
-        expect(result.Trace.AfterComposition).toContain('{{ StartDate | sqlDate }}');
+        // AfterComposition: the assembled SQL, values rendered, no template tags
+        expect(result.Trace.AfterComposition).not.toMatch(/\{\{|\{%/);
+        expect(result.Trace.AfterComposition).toMatch(/2024-01-01/);
         expect(result.Trace.AfterComposition).toContain('TRY_CAST');
         // AfterTemplates: Nunjucks resolved, but no MaxRows wrapping yet
         expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);

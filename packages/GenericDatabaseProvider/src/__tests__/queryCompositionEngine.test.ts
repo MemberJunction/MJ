@@ -2448,4 +2448,71 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
         });
     });
+
+    // ================================================================
+    // Same-name queries in two categories: resolution by full category path + name (TEST-INVENTORY CR3)
+    // ================================================================
+    describe('same-name queries in two categories (full category path + name)', () => {
+        /** Runs a composition and returns the resolved query id, or the error message when it is refused. */
+        function resolveOrError(sql: string, inlineDeps?: QueryDependencySpec[]): { QueryID?: string; Error?: string } {
+            try {
+                const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+                return { QueryID: result.CTEs[0]?.QueryID };
+            } catch (error: unknown) {
+                return { Error: error instanceof Error ? error.message : String(error) };
+            }
+        }
+
+        // Built per test: the shared config restores mocks after each test, which resets the vi.fn members.
+        const byActivity = (): MJQueryEntityExtended => makeQueryInfo({ ID: 'lb-org', Name: 'Leaderboard', CategoryPath: '/Organizations/', SQL: 'SELECT 1 AS OrgBoard' });
+        const byEngagement = (): MJQueryEntityExtended => makeQueryInfo({ ID: 'lb-eng', Name: 'Leaderboard', CategoryPath: '/Engagement/', SQL: 'SELECT 2 AS EngBoard' });
+        const nested = (): MJQueryEntityExtended => makeQueryInfo({ ID: 'roster-nested', Name: 'Active Member Roster', CategoryPath: '/Members/Roster/', SQL: 'SELECT 3 AS Roster' });
+
+        it('resolves each same-named metadata query by its own category path', () => {
+            mockQueryEngineQueries([byActivity(), byEngagement()]);
+            expect(resolveOrError('SELECT * FROM {{query:"Organizations/Leaderboard"}} l').QueryID).toBe('lb-org');
+            expect(resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l').QueryID).toBe('lb-eng');
+        });
+
+        it('resolves each same-named inline dependency by its own category path', () => {
+            mockQueryEngineQueries([]);
+            const inline: QueryDependencySpec[] = [
+                { Name: 'Leaderboard', CategoryPath: '/Organizations/', SQL: 'SELECT 1 AS OrgBoard' },
+                { Name: 'Leaderboard', CategoryPath: '/Engagement/', SQL: 'SELECT 2 AS EngBoard' },
+            ];
+            expect(resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l', inline).QueryID)
+                .toBe('__inline__/engagement/leaderboard');
+        });
+
+        // Pinned: composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3.
+        // Observed today: the path match fails, the name-only fallback finds the one "Leaderboard" and resolves to 'lb-org' (Organizations).
+        it.fails('refuses a reference whose category path matches no query, even when the name alone is unique', () => {
+            mockQueryEngineQueries([byActivity()]);
+            const outcome = resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l');
+            expect(outcome.QueryID).toBeUndefined();
+            expect(outcome.Error).toMatch(/not found/i);
+        });
+
+        // Pinned: composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3.
+        // Observed today: "Roster/Active Member Roster" (missing the "Members" parent) resolves to 'roster-nested' via the name-only fallback.
+        it.fails('refuses a partial category path (a sub-category without its parent)', () => {
+            mockQueryEngineQueries([nested()]);
+            const outcome = resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r');
+            expect(outcome.QueryID).toBeUndefined();
+            expect(outcome.Error).toMatch(/not found/i);
+        });
+
+        // Pinned: composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3.
+        // Observed today: findInlineDependency falls back to the first same-named inline dependency and resolves to '__inline__/organizations/leaderboard'.
+        it.fails('refuses an inline reference whose category path matches neither same-named dependency (no first-by-name pick)', () => {
+            mockQueryEngineQueries([]);
+            const inline: QueryDependencySpec[] = [
+                { Name: 'Leaderboard', CategoryPath: '/Organizations/', SQL: 'SELECT 1 AS OrgBoard' },
+                { Name: 'Leaderboard', CategoryPath: '/Engagement/', SQL: 'SELECT 2 AS EngBoard' },
+            ];
+            const outcome = resolveOrError('SELECT * FROM {{query:"Trends/Leaderboard"}} l', inline);
+            expect(outcome.QueryID).toBeUndefined();
+            expect(outcome.Error).toMatch(/not found/i);
+        });
+    });
 });
