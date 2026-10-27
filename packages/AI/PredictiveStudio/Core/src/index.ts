@@ -21,6 +21,8 @@ export * from './modeling-plan-schema';
 export * from './metrics-util';
 export * from './trust';
 export * from './outcome-config';
+export * from './json-value';
+export * from './task-type';
 export * from './at-risk-rules';
 export * from './importance-display';
 export * from './evaluation-record';

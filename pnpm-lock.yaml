@@ -1424,6 +1424,9 @@ importers:
 
   packages/AI/PredictiveStudio/Core:
     dependencies:
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.5
+        version: link:../../../MJGlobal
       zod:
         specifier: ^3.25.0
         version: 3.25.76
