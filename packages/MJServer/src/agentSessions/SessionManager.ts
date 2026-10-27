@@ -423,13 +423,14 @@ export class SessionManager {
         agentSessionID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        preloadedSession?: MJAIAgentSessionEntity,
     ): Promise<boolean> {
         const key = agentSessionID.toLowerCase();
         const reactivating = this.shouldForceWrite(key, provider);
         if (!reactivating && !this.heartbeatWriteDue(key)) {
             return true; // coalesced — skip the DB round-trip
         }
-        return this.persistHeartbeat(agentSessionID, contextUser, provider);
+        return this.persistHeartbeat(agentSessionID, contextUser, provider, preloadedSession);
     }
 
     /**
@@ -680,8 +681,9 @@ export class SessionManager {
         agentSessionID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        preloadedSession?: MJAIAgentSessionEntity,
     ): Promise<boolean> {
-        const session = await this.loadSession(agentSessionID, contextUser, provider);
+        const session = preloadedSession ?? (await this.loadSession(agentSessionID, contextUser, provider));
         if (!session || session.Status === 'Closed') {
             return false;
         }

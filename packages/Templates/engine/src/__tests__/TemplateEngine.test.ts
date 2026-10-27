@@ -881,6 +881,22 @@ describe('TemplateEngineServer', () => {
             expect(afterClear.Names.has('childVar')).toBe(true);
         });
 
+        it('should preserve compiled template and referenced-variable caches on subsequent Config(false) calls and clear them on Config(true)', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const text = '{% template "Child" %}{{ a }}';
+
+            const firstVars = engine.GetReferencedVariables(text);
+            await engine.RenderTemplateSimple('Hello {{ name }}', { name: 'World' });
+
+            // Subsequent Config(false) when already configured and Loaded === true should NOT wipe caches
+            await engine.Config(false, { ID: 'test-user-2', Name: 'Test2' } as never);
+            expect(engine.GetReferencedVariables(text)).toBe(firstVars);
+
+            // Config(true) (forceRefresh) MUST wipe caches
+            await engine.Config(true, { ID: 'test-user-2', Name: 'Test2' } as never);
+            expect(engine.GetReferencedVariables(text)).not.toBe(firstVars);
+        });
+
         it('should return a frozen result', async () => {
             await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
 

@@ -877,6 +877,62 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(store.TokensCompletion).toBe(200);
         expect(store.TokensUsed).toBe(1000);
     });
+
+    it('reuses the active prompt-run entity and parsed messages across turns and usage checkpoints (1 Load per session) and evicts on FinalizeCoAgentRun', async () => {
+        const promptRun = makeRun({ ID: 'pr-cached', Messages: null, TokensPrompt: 0, TokensCompletion: 0, TokensUsed: 0 });
+        const agentRun = makeRun({ ID: 'co-run-cached' });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+        const svc = new RealtimeClientSessionService();
+
+        for (let i = 0; i < 5; i++) {
+            await svc.AppendPromptRunMessage('pr-cached', 'user', `u-${i}`, false, contextUser, prov);
+            await svc.AppendPromptRunMessage('pr-cached', 'assistant', `a-${i}`, false, contextUser, prov);
+            await svc.AccumulatePromptRunUsage('pr-cached', 10, 5, contextUser, prov);
+        }
+
+        // Loaded only ONCE across all 15 writes during the active session.
+        expect(promptRun.Load).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(promptRun.Messages as string)).toHaveLength(10);
+        expect(promptRun.TokensPrompt).toBe(50);
+        expect(promptRun.TokensCompletion).toBe(25);
+
+        await svc.FinalizeCoAgentRun('co-run-cached', 'pr-cached', contextUser, prov, true);
+        expect(promptRun.Status).toBe('Completed');
+    });
+
+    it('calls assembleMemoryContext and loadAppAgentSettings at most once per PrepareRealtimeSessionParams', async () => {
+        class CountingPrepService extends TestableService {
+            public MemoryCalls = 0;
+            public AppSettingsCalls = 0;
+            protected override async assembleMemoryContext(): Promise<string> {
+                this.MemoryCalls++;
+                return 'MEMORY_BLOCK';
+            }
+            protected override async loadAppAgentSettings(): Promise<null> {
+                this.AppSettingsCalls++;
+                return null;
+            }
+            protected override async resolveAppRealtimeOverrides(
+                applicationId: string | undefined,
+                user: UserInfo,
+                prov: IMetadataProvider,
+                getAppSettings?: () => Promise<null>
+            ): Promise<string | null> {
+                return super.resolveAppRealtimeOverrides(applicationId, user, prov, getAppSettings);
+            }
+        }
+        const svc = new CountingPrepService();
+        const prep = await svc.PrepareRealtimeSessionParams(
+            makePrepInput({ ApplicationID: 'app-1' }),
+            contextUser,
+            provider,
+        );
+        expect(prep.Success).toBe(true);
+        expect(svc.MemoryCalls).toBe(1);
+        expect(svc.AppSettingsCalls).toBe(1);
+        expect(prep.SessionParams?.InitialContext).toBe('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+    });
 });
 
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {

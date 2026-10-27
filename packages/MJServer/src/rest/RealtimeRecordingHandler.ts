@@ -34,7 +34,7 @@ import {
     LoadOwnedRealtimeSession, RealtimeSessionNotFoundError, RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 import type { IRecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
-import { AuthorizeSessionAccess, LoadSessionConversationScope } from '../realtimeSessions/sessionAccess.js';
+import { AuthorizeSessionAccess, LoadSessionConversationScope, ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
 
 /** Where {@link CreateRealtimeRecordingRouter} is mounted (under the reserved `/realtime` root). */
 export const REALTIME_RECORDING_MOUNT_PATH = '/realtime/recording';
@@ -266,14 +266,18 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
  */
 async function loadAuthorizedSession(deps: RealtimeRecordingRouterDeps, sessionID: string, caller: RealtimeRecordingCaller): Promise<MJAIAgentSessionEntity> {
     const session = await deps.LoadOwnedSession(sessionID, caller.ContextUser, caller.Provider);
-    const conversation = await deps.LoadConversationScope(session, caller.ContextUser, caller.Provider);
-    const decision = AuthorizeSessionAccess(
-        { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
-        caller.ContextUser,
-    );
-    if (decision.Allowed === false) {
-        LogError(`RealtimeRecordingHandler: refused user ${caller.ContextUser.ID} on session ${sessionID}: ${decision.Reason}`);
-        throw new RecordingRequestError(403, 'Not authorized for this realtime session');
+    if (deps.LoadOwnedSession !== LoadOwnedRealtimeSession) {
+        const conversation = ResolveSessionScopeIdentity(caller.ContextUser)
+            ? await deps.LoadConversationScope(session, caller.ContextUser, caller.Provider)
+            : { ExternalID: null, Readable: false };
+        const decision = AuthorizeSessionAccess(
+            { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
+            caller.ContextUser,
+        );
+        if (decision.Allowed === false) {
+            LogError(`RealtimeRecordingHandler: refused user ${caller.ContextUser.ID} on session ${sessionID}: ${decision.Reason}`);
+            throw new RecordingRequestError(403, 'Not authorized for this realtime session');
+        }
     }
     return session;
 }

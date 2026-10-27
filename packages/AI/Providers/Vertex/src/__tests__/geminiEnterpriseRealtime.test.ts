@@ -357,6 +357,27 @@ describe('GeminiEnterpriseRealtime', () => {
         it('mints no Gemini Developer API token', async () => {
             await expect(new TestEnterprise(serviceAccountKey()).MintDeveloperToken()).rejects.toThrow('mints no Gemini Developer API tokens');
         });
+
+        it('reuses the VertexAccessTokenProvider and GoogleAuth across GeminiEnterpriseRealtime instances created with the same key', async () => {
+            const fakeAuth = new FakeGoogleAuth();
+            const createAuthSpy = vi
+                .spyOn(
+                    GeminiEnterpriseRealtime.prototype as unknown as { CreateGoogleAuth: (o: GoogleAuthOptions) => VertexGoogleAuth },
+                    'CreateGoogleAuth',
+                )
+                .mockReturnValue(fakeAuth);
+            const sharedKey = serviceAccountKey({ project_id: 'shared-cache-project' });
+            const driver1 = new GeminiEnterpriseRealtime(sharedKey);
+            const driver2 = new GeminiEnterpriseRealtime(sharedKey);
+
+            const grant1 = openFresh(await driver1.CreateClientSession(makeParams()));
+            const grant2 = openFresh(await driver2.CreateClientSession(makeParams()));
+            await grant1.Policy.UpstreamHeaders();
+            await grant2.Policy.UpstreamHeaders();
+
+            expect(createAuthSpy).toHaveBeenCalledTimes(1);
+            expect(fakeAuth.Urls).toHaveLength(2);
+        });
     });
 
     describe('client-direct mint', () => {
