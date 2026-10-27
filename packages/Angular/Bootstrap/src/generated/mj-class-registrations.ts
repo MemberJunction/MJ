@@ -726,7 +726,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (110 classes)
+// @memberjunction/ng-dashboards (111 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -747,6 +747,7 @@ import {
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ChiefOfStaffDashboardComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -1525,6 +1526,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ChiefOfStaffDashboardComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,

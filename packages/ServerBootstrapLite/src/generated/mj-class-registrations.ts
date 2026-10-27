@@ -1243,7 +1243,6 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -1341,7 +1340,7 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -1365,6 +1364,7 @@ import {
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -1855,11 +1855,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -2059,11 +2059,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
+    GetTypeformFileContentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
     GetTypeformStatisticsAction,
@@ -2263,11 +2263,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
+    MLModelScoreEnricher,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
-    MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
@@ -2389,7 +2389,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -2467,12 +2466,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     InviteToListAction,
     JSONTransformAction,
     ListMCPToolsAction,
+    ListObjectsAction,
+    ListStorageAccountsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
-    ListObjectsAction,
-    ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
@@ -2491,7 +2490,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -2515,6 +2514,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
