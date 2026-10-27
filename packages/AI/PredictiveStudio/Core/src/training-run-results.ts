@@ -47,17 +47,16 @@ export type TrainingRunResults =
 
 // The stored envelope is parsed with zod, never `JSON.parse(...) as T`: the column is text any writer
 // (a migration, a hand edit, an older build) can change, so every member is checked before the type is trusted.
-// This package compiles without `strictNullChecks`, where zod infers every member as optional, so the schemas cannot
-// carry a `z.ZodType<T>` annotation; the parse result is asserted to the stored type after zod has checked it.
+// Each schema is annotated with the TypeScript type it parses, so `tsc` refuses a schema whose output does not fit it.
 // Every later task that adds an envelope member, a refusal stage or a refusal kind extends these schemas in the same
 // task and adds a case to `training-run-results.test.ts` (the union cannot make `tsc` notice a missing variant).
-const pipelineRefusalSchema = z.discriminatedUnion('kind', [
+const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unit-required'), pipelineId: z.string(), why: z.string() }),
   z.object({ kind: z.literal('protocol-required'), pipelineId: z.string() }),
   z.object({ kind: z.literal('input-not-accepted'), input: z.enum(['asOf', 'labelEventDates', 'maxRows']), why: z.string() }),
   z.object({ kind: z.literal('unit-invalid'), unitId: z.string(), errors: z.array(z.string()) }),
 ]);
-const unitRefusalSchema = z.discriminatedUnion('kind', [
+const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('single-valued-target'), value: z.string(), rows: z.number() }),
   z.object({ kind: z.literal('task-type-mismatch'), declared: z.enum(TASK_KINDS as [TaskKind, ...TaskKind[]]), observed: z.string() }),
   z.object({ kind: z.literal('unresolved-reference'), entity: z.string(), field: z.string().nullable() }),
@@ -66,7 +65,7 @@ const unitRefusalSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('missing-decision-date'), entity: z.string(), rows: z.number() }),
   z.object({ kind: z.literal('no-resolved-rows'), censored: z.number(), labelKnown: z.number(), emptyLabel: z.number() }),
 ]);
-const assemblyRefusalSchema = z.discriminatedUnion('kind', [
+const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('select-changes-after-decision-date'), entity: z.string(), field: z.string(), changesAfter: z.number() }),
   z.object({ kind: z.literal('decision-date-before-change-history'), entity: z.string(), field: z.string(), historyStart: z.string().nullable(), rowsAffected: z.number() }),
   z.object({ kind: z.literal('truncated-read'), entity: z.string(), rowsExpected: z.number(), rowsRead: z.number() }),
@@ -77,20 +76,20 @@ const assemblyRefusalSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unresolved-column'), entity: z.string(), field: z.string() }),
   z.object({ kind: z.literal('unsupported-step-kind'), stepId: z.string(), stepKind: z.string() }),
 ]);
-const trainingRefusalSchema = z.discriminatedUnion('stage', [
+const trainingRefusalSchema: z.ZodType<TrainingRefusal> = z.discriminatedUnion('stage', [
   z.object({ stage: z.literal('pipeline'), reason: pipelineRefusalSchema }),
   z.object({ stage: z.literal('unit'), reason: unitRefusalSchema }),
   z.object({ stage: z.literal('assembly'), reason: assemblyRefusalSchema }),
 ]);
-const unitResolutionCountsSchema = z.object({
+const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
   rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
   emptyLabelRowsExcluded: z.number(), duplicateRowsRemoved: z.number(), resolvedRows: z.number(), dataCutoff: z.string(),
 });
-const legacyTrainerMetricsSchema = z.object({
+const legacyTrainerMetricsSchema: z.ZodType<LegacyTrainerMetrics> = z.object({
   metrics: z.record(z.number()), holdoutMetrics: z.record(z.number()).nullable(),
   trainingRowCount: z.number(), holdoutRowCount: z.number(),
 });
-const trainingRunResultsSchema = z.discriminatedUnion('status', [
+const trainingRunResultsSchema: z.ZodType<TrainingRunResults> = z.discriminatedUnion('status', [
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('refused'), refusal: trainingRefusalSchema }),
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('completed'), unitResolution: unitResolutionCountsSchema, legacy: legacyTrainerMetricsSchema.nullable() }),
 ]);
@@ -106,7 +105,7 @@ export class TrainingRunResultsParser {
     }
     const parsed = trainingRunResultsSchema.safeParse(json.Value);
     return parsed.success
-      ? { Ok: true, Value: parsed.data as TrainingRunResults }
+      ? { Ok: true, Value: parsed.data }
       : { Ok: false, Errors: parsed.error.issues.map((i) => `ValidationResults.${i.path.join('.')}: ${i.message}`) };
   }
 }
