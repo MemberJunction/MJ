@@ -463,7 +463,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         resolvedResults?: RunViewResult[];
         resolvedAt?: number;
         entityNames?: Set<string>;
-        lingerTimer?: ReturnType<typeof setTimeout>;
     }>();
 
     private _lingerInvalidationWired = false;
@@ -592,11 +591,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public InvalidateRunViewDedupCache(entityNames?: readonly string[]): void {
         const names = (entityNames ?? []).map(n => n?.trim().toLowerCase()).filter((n): n is string => !!n);
         if (names.length === 0) {
-            for (const entry of this._inflightViews.values()) {
-                if (entry.lingerTimer) {
-                    clearTimeout(entry.lingerTimer);
-                }
-            }
             this._inflightViews.clear();
             return;
         }
@@ -612,9 +606,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected invalidateInflightViewsForEntity(lowerEntityName: string): void {
         for (const [key, entry] of this._inflightViews) {
             if (entry.entityNames?.has(lowerEntityName)) {
-                if (entry.lingerTimer) {
-                    clearTimeout(entry.lingerTimer);
-                }
                 this._inflightViews.delete(key);
             }
         }
@@ -1491,33 +1482,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── Fresh execution ──
         const promise = this.executeRunViewsPipeline<T>(params, contextUser)
             .then(results => {
-                // Stash resolved results for the linger window. Safety cap: under
-                // extreme churn (hundreds of distinct keys resolving within one linger
-                // window) skip lingering rather than hold more result arrays in memory —
-                // the linger is a latency optimization, never a correctness requirement.
-                const entry = this._inflightViews.get(key);
-                if (entry && entry.promise === promise) {
-                    if (ProviderBase.DedupLingerMs > 0 && this._inflightViews.size <= ProviderBase.MaxLingerEntries) {
-                        const resolvedAt = Date.now();
-                        entry.resolvedResults = results as RunViewResult[];
-                        entry.resolvedAt = resolvedAt;
-
-                        // Schedule cleanup after linger expires via WeakRef so the active timer
-                        // never pins short-lived per-request provider instances in memory.
-                        const selfRef = new WeakRef(this);
-                        const timer = setTimeout(() => {
-                            const self = selfRef.deref();
-                            const current = self?._inflightViews.get(key);
-                            if (current && current.resolvedAt === resolvedAt) {
-                                self?._inflightViews.delete(key);
-                            }
-                        }, ProviderBase.DedupLingerMs);
-                        timer?.unref?.();
-                        entry.lingerTimer = timer;
-                    } else {
-                        this._inflightViews.delete(key);
-                    }
-                }
+                this.stashInflightLingerResult(key, promise, results as RunViewResult[], true);
                 return results as RunViewResult[];
             })
             .catch(err => {
@@ -1537,6 +1502,46 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     // ── Dedup helpers ──────────────────────────────────────────────────
+
+    /**
+     * Stashes resolved RunViews results on `_inflightViews` for `DedupLingerMs` and schedules
+     * cleanup via an isolated static `WeakRef` timer helper so the timer closure's V8 lexical
+     * context never retains `this`, `promise`, or `results` on short-lived per-request providers.
+     */
+    private stashInflightLingerResult(
+        key: string,
+        promise: Promise<RunViewResult[]>,
+        results: RunViewResult[],
+        enforceMaxEntries: boolean,
+    ): void {
+        const entry = this._inflightViews.get(key);
+        if (!entry || entry.promise !== promise) {
+            return;
+        }
+        if (ProviderBase.DedupLingerMs > 0 && (!enforceMaxEntries || this._inflightViews.size <= ProviderBase.MaxLingerEntries)) {
+            const resolvedAt = Date.now();
+            entry.resolvedResults = results;
+            entry.resolvedAt = resolvedAt;
+            ProviderBase.scheduleInflightLingerExpiry(new WeakRef(this), key, resolvedAt);
+        } else {
+            this._inflightViews.delete(key);
+        }
+    }
+
+    private static scheduleInflightLingerExpiry(
+        selfRef: WeakRef<ProviderBase>,
+        key: string,
+        resolvedAt: number,
+    ): void {
+        const timer = setTimeout(() => {
+            const self = selfRef.deref();
+            const current = self?._inflightViews.get(key);
+            if (current && current.resolvedAt === resolvedAt) {
+                self?._inflightViews.delete(key);
+            }
+        }, ProviderBase.DedupLingerMs);
+        timer?.unref?.();
+    }
 
     /**
      * The original RunViews execution pipeline (pre-processing, cache,
@@ -1880,26 +1885,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── Fresh execution ──
         const promise = this.executeRunViewsPipeline<T>(params, contextUser)
             .then(results => {
-                const entry = this._inflightViews.get(key);
-                if (entry && entry.promise === promise) {
-                    const resolvedAt = Date.now();
-                    entry.resolvedResults = results as RunViewResult[];
-                    entry.resolvedAt = resolvedAt;
-                    if (ProviderBase.DedupLingerMs > 0) {
-                        const selfRef = new WeakRef(this);
-                        const timer = setTimeout(() => {
-                            const self = selfRef.deref();
-                            const current = self?._inflightViews.get(key);
-                            if (current && current.resolvedAt === resolvedAt) {
-                                self?._inflightViews.delete(key);
-                            }
-                        }, ProviderBase.DedupLingerMs);
-                        timer?.unref?.();
-                        entry.lingerTimer = timer;
-                    } else {
-                        this._inflightViews.delete(key);
-                    }
-                }
+                this.stashInflightLingerResult(key, promise, results as RunViewResult[], false);
                 return results as RunViewResult[];
             })
             .catch(err => {

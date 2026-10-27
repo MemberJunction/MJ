@@ -277,7 +277,6 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // must not leave an entity-event batch behind. A batch whose owner is collected is
         // unreachable while its entities keep counting as pending, which makes every cached read
         // of them miss for the life of the process.
-        this.InvalidateRunViewDedupCache?.();
         await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
