@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { OrdinalCompare } from '@memberjunction/global';
 import type { PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { PredictionUnitRowReader } from '../unit-row-reader';
-import type { ICountingDataAccess, CountRowsResult, FetchRowsParams, FetchRowsResult, SourceRow } from '../../feature-assembly/data-access';
+import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
+import type { SourceRow } from '../../feature-assembly/data-access';
 import type { IAssemblyMetadata, AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
 
 const tables: Record<string, SourceRow[]> = {
@@ -23,19 +23,6 @@ const tables: Record<string, SourceRow[]> = {
   Orders: [{ ID: 'o1', OrderDate: '2026-07-30' }, { ID: 'o2', OrderDate: '2025-01-01' }],
   People: [{ ID: 'A' }, { ID: 'B' }, { ID: 'C' }, { ID: 'D' }],
 };
-
-class TableDataAccess implements ICountingDataAccess {
-  async fetchRows(p: FetchRowsParams): Promise<FetchRowsResult> {
-    let rows = [...(tables[p.EntityName] || [])];
-    if (p.OrderBy?.includes('DESC')) {
-      const field = /\[(\w+)\]/.exec(p.OrderBy)?.[1] || '';
-      rows.sort((x, y) => OrdinalCompare(String(y[field]), String(x[field])));   // ordinal, like the database
-    }
-    return { Success: true, Rows: rows.slice(0, p.MaxRows ?? rows.length), TotalRowCount: rows.length };
-  }
-  async fetchEmbedding(): Promise<number[] | null> { return null; }
-  async CountRows(p: { EntityName: string }): Promise<CountRowsResult> { return { Success: true, Count: (tables[p.EntityName] || []).length }; }
-}
 
 const field = (Name: string, TSType: 'string' | 'number' | 'Date' | 'boolean' = 'string') => ({ Name, SqlType: 'nvarchar', TSType, AllowUpdateAPI: false, IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false });
 const entities: Record<string, AssemblyEntityInfo> = {
@@ -58,7 +45,7 @@ const unit: PredictionUnitSpec = {
 
 describe('PredictionUnitRowReader', () => {
   it('yields resolved person-periods with their labels and counts every exclusion', async () => {
-    const out = await new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') });
+    const out = await new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') });
     expect(out.Status).toBe('read');
     if (out.Status !== 'read') return;
     expect(out.Rows.map((r) => [r.RowId, r.Label])).toEqual([
@@ -69,7 +56,7 @@ describe('PredictionUnitRowReader', () => {
     expect(out.Rows[0].DecisionDate.toISOString()).toBe('2022-01-10T00:00:00.000Z');
   });
   it('refuses a unit whose row entity is not registered', async () => {
-    const out = await new PredictionUnitRowReader().Read({ ...unit, rows: { kind: 'grain-x-periods', grainEntity: 'People', childEntity: 'Nope', foreignKey: 'PersonID', periodDate: 'OrderDate', filter: [] } }, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
+    const out = await new PredictionUnitRowReader().Read({ ...unit, rows: { kind: 'grain-x-periods', grainEntity: 'People', childEntity: 'Nope', foreignKey: 'PersonID', periodDate: 'OrderDate', filter: [] } }, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
     expect(out).toEqual({ Status: 'refused', Refusal: { stage: 'unit', reason: { kind: 'unresolved-reference', entity: 'Nope', field: null } } });
   });
   it('excludes an empty-string label as unlabelled instead of keeping it as a class', async () => {
@@ -82,7 +69,7 @@ describe('PredictionUnitRowReader', () => {
         label: { ...unit.label, rule: { kind: 'column', column: 'Y' }, windowDays: 30, outcome: { kind: 'binary', classOrder: ['no', 'yes'], adverseIndex: 0 } },
         censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
       };
-      const out = await new PredictionUnitRowReader().Read(grainUnit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
+      const out = await new PredictionUnitRowReader().Read(grainUnit, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
       expect(out.Status === 'read' && out.Counts.emptyLabelRowsExcluded).toBe(1);
       expect(out.Status === 'read' && out.Rows.map((r) => r.Label)).toEqual(['yes', 'no']);
     } finally {
@@ -93,7 +80,7 @@ describe('PredictionUnitRowReader', () => {
   it('fails on a period row with no foreign key instead of keying it as "undefined"', async () => {
     tables.Periods.push({ ID: 'x1', PeriodIndex: 1, OrderDate: '2022-02-01' });
     try {
-      await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow();
+      await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow();
     } finally {
       tables.Periods.pop();
     }
@@ -101,7 +88,7 @@ describe('PredictionUnitRowReader', () => {
   it('fails on a period row with no period index instead of labelling it against period 0', async () => {
     tables.Periods.push({ ID: 'x2', PersonID: 'A', OrderDate: '2022-02-01' });
     try {
-      await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow(/PeriodIndex/);
+      await expect(new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') })).rejects.toThrow(/PeriodIndex/);
     } finally {
       tables.Periods.pop();
     }
@@ -118,7 +105,7 @@ describe('PredictionUnitRowReader', () => {
         label: { ...unit.label, rule: { kind: 'child-event', childEntity: 'Gifts', foreignKey: 'OwnerID', dateField: 'At', aggregate: 'sum', valueField: 'Amount', ownerKeyField: null, filter: [] }, windowDays: 30, outcome: { kind: 'continuous' } },
         censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
       };
-      await expect(new PredictionUnitRowReader().Read(sumUnit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() })).rejects.toThrow(/Gifts\.Amount of e2 is not a number/);
+      await expect(new PredictionUnitRowReader().Read(sumUnit, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() })).rejects.toThrow(/Gifts\.Amount of e2 is not a number/);
     } finally {
       delete tables.Grain;
       delete tables.Gifts;
