@@ -14,7 +14,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     Metadata: {
       get Provider() {
         return {
-          Roles: [{ ID: '00000000-0000-4000-8000-000000000099', Name: 'Widget Guest' }],
+          Roles: [
+            { ID: '00000000-0000-4000-8000-000000000099', Name: 'Widget Guest' },
+            { ID: '00000000-0000-4000-8000-000000000088', Name: 'UI' },
+          ],
         };
       },
     },
@@ -375,7 +378,33 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
     expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
   });
 
+  describe('guest role isolation (MJ#6043): every anonymous guest is one shared user, so only a scope-keyed role may be a guest role', () => {
+    const UI_ROLE_ID = '00000000-0000-4000-8000-000000000088';
+
+    it('refuses to mint when the widget guest role is not scope-isolated and the deployment has not allowed it', async () => {
+      widgetOverrides = { GuestRoleID: UI_ROLE_ID };
+      const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+      const minted = await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: 'https://acme.com', ProofKey: key.PublicJwk });
+      expect(minted).toMatchObject({ success: false, errorCode: 'guest_role_not_isolated' });
+      expect(minted.token).toBeUndefined();
+    });
+
+    it('mints when the deployment explicitly lists that role as grantable to anonymous visitors', async () => {
+      widgetOverrides = { GuestRoleID: UI_ROLE_ID };
+      const service = new WidgetSessionService('https://mj.example.com', makeConfig(), { GrantableRoleNames: ['ui'] });
+      const minted = await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: 'https://acme.com', ProofKey: key.PublicJwk });
+      expect(minted.success).toBe(true);
+    });
+  });
+
   describe('each refusal is for exactly one defect in an otherwise valid token and proof', () => {
+    it('refuses a refresh whose widget guest role is not scope-isolated (MJ#6043), so a token minted before the policy changed cannot be renewed', async () => {
+      widgetOverrides = { GuestRoleID: '00000000-0000-4000-8000-000000000088' /* UI */ };
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await refresh(service, signGuestToken());
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'guest_role_not_isolated' });
+    });
+
     // Every case below is the positive control ('accepts a valid token passed as BearerToken') with one thing
     // changed, and carries a valid proof made by the key the token is bound to. A token missing some other piece
     // would be refused before the check under test ran, and the test would pass with that check deleted.

@@ -16,12 +16,27 @@ import { AppContext } from '../types.js';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { SessionManager, SessionAuthorizationError } from '../agentSessions/index.js';
+import { SessionManager, SessionAuthorizationError, type SessionCloseReason } from '../agentSessions/index.js';
 import {
     LoadOwnedRealtimeSession,
     RealtimeSessionNotFoundError,
     RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
+
+/** The `CloseReason` values a client may stamp on its own session; `Janitor` and `Shutdown` are the server's. */
+const CLIENT_CLOSE_REASONS: readonly SessionCloseReason[] = ['Explicit', 'Error'];
+
+/** Reads the mutation's optional `closeReason`: absent means `Explicit`; a server-only or unknown value is refused. */
+function ParseClientCloseReason(closeReason: string | null | undefined): SessionCloseReason {
+    if (closeReason == null || closeReason === '') {
+        return 'Explicit';
+    }
+    const match = CLIENT_CLOSE_REASONS.find((r) => r === closeReason);
+    if (!match) {
+        throw new Error(`Unsupported close reason '${closeReason}': a client may close its session as ${CLIENT_CLOSE_REASONS.join(' or ')}`);
+    }
+    return match;
+}
 
 /** Result of {@link AgentSessionResolver.StartAgentSession}. */
 @ObjectType()
@@ -80,15 +95,22 @@ export class AgentSessionResolver extends ResolverBase {
     /**
      * Close a session. Rejects unless the caller owns it. Returns `true` on a successful (or
      * idempotent) close, `false` if the session can't be loaded.
+     *
+     * `closeReason` is what the row records as its `CloseReason`: `Explicit` (the default, and what
+     * every client sent before the argument existed) when the user or host ended the call, `Error`
+     * when the client ended it because the start or the call failed (MJ#6013). The other reasons are
+     * the server's own (janitor, shutdown) and are refused from a client.
      */
     @Mutation(() => Boolean)
     async CloseAgentSession(
         @Arg('agentSessionId') agentSessionId: string,
         @Ctx() { userPayload, providers }: AppContext,
+        @Arg('closeReason', () => String, { nullable: true }) closeReason?: string | null,
     ): Promise<boolean> {
+        const reason = ParseClientCloseReason(closeReason);
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         await this.loadOwnedSession(agentSessionId, contextUser, provider);
-        return this.sessionManager.CloseSession(agentSessionId, contextUser, provider);
+        return this.sessionManager.CloseSession(agentSessionId, contextUser, provider, reason);
     }
 
     /**
