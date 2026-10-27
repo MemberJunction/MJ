@@ -69,6 +69,18 @@ class NonNumericFeatureError(ValueError):
         self.value = value
 
 
+def _present_float(value: Any, column: str) -> Optional[float]:
+    """Float for a present numeric value, ``None`` when missing.
+
+    Raises:
+        NonNumericFeatureError: When the value is present but not a number.
+    """
+    f = _to_float(value)
+    if f is None and not _is_missing(value):
+        raise NonNumericFeatureError(column, value)
+    return f
+
+
 # ---------------------------------------------------------------------------
 # FIT helpers — each returns the learned params for one op (train only)
 # ---------------------------------------------------------------------------
@@ -189,7 +201,7 @@ def _apply_impute(params: Dict[str, Any], row: Dict[str, Any], out: List[Tuple[s
 def _apply_standardize(params: Dict[str, Any], row: Dict[str, Any]) -> None:
     """Apply fitted standardization: z-score each column; missing values become 0."""
     for col, st in params["stats"].items():
-        val = _to_float(row.get(col))
+        val = _present_float(row.get(col), col)
         if val is None:
             row[col] = 0.0  # centered missing -> 0 after standardization
         else:
@@ -218,7 +230,7 @@ def _apply_bin(params: Dict[str, Any], row: Dict[str, Any]) -> None:
     """
     col = params["col"]
     edges = params["edges"]
-    val = _to_float(row.get(col))
+    val = _present_float(row.get(col), col)
     if val is None:
         row[col] = 0
         return
@@ -242,9 +254,10 @@ def _transform_one(
 ) -> List[Tuple[str, Any]]:
     """Apply the fitted ops to a single row dict, returning ordered columns.
 
-    Non-onehot ops mutate the row in place (impute/standardize/bin). Onehot ops
-    emit indicator columns immediately at their position and consume the raw
-    column. After all ops run, any remaining row keys are emitted as pass-through
+    Non-onehot ops mutate the row in place (impute/standardize/bin); an impute op
+    with the indicator flag also emits its ``<col>__missing`` column into ``out``.
+    Onehot ops emit indicator columns immediately at their position and consume the
+    raw column. After all ops run, any remaining row keys are emitted as pass-through
     numeric columns in insertion order.
     """
     out: List[Tuple[str, Any]] = []
@@ -339,9 +352,13 @@ def _build_matrix(
 ) -> Tuple[np.ndarray, List[str]]:
     """Transform every record and assemble a dense float matrix.
 
-    Determines the global output column order from the first record (or uses
-    ``force_columns`` when supplied, e.g. at predict time), then projects every
-    row onto that exact column set — filling absent columns with 0.0.
+    The output column order is the missing indicators (impute op order), then the
+    one-hot columns (op order), then the passthrough features; ``force_columns``
+    replaces it when supplied (predict time). Every row is projected onto that exact
+    column set — filling absent columns with 0.0.
+
+    Raises:
+        ValueError: When the assembled output columns contain a duplicate name.
     """
     onehot_cols = {op["col"] for op in fitted_ops if op["op"] == "onehot"}
     # pass-through feature columns = declared features minus those consumed by onehot
@@ -369,6 +386,9 @@ def _build_matrix(
             if op["op"] == "onehot":
                 ordered.extend(f"{op['col']}={cat}" for cat in op["vocabulary"])
         ordered.extend(passthrough)
+        duplicates = sorted({c for c in ordered if ordered.count(c) > 1})
+        if duplicates:
+            raise ValueError(f"Duplicate output column '{duplicates[0]}' in the training matrix")
         output_columns = ordered
 
     matrix = np.array(
