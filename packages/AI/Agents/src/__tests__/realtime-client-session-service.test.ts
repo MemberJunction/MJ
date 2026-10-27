@@ -878,26 +878,65 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(store.TokensUsed).toBe(1000);
     });
 
-    it('reuses the active prompt-run entity and parsed messages across turns and usage checkpoints (1 Load per session) and evicts on FinalizeCoAgentRun', async () => {
-        const promptRun = makeRun({ ID: 'pr-cached', Messages: null, TokensPrompt: 0, TokensCompletion: 0, TokensUsed: 0 });
-        const agentRun = makeRun({ ID: 'co-run-cached' });
-        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
-        const svc = new RealtimeClientSessionService();
+    it('does not overwrite Status/CompletedAt/Success when another host or janitor instance finalizes the run before a late usage flush', async () => {
+        const store = {
+            Status: 'Running',
+            CompletedAt: undefined as Date | undefined,
+            Success: undefined as boolean | undefined,
+            Messages: null as string | null,
+            TokensPrompt: 0,
+            TokensCompletion: 0,
+            TokensUsed: 0,
+        };
+        const crossHostProvider: IMetadataProvider = {
+            GetEntityObject: vi.fn(async () => {
+                const entity: Record<string, unknown> = {
+                    Load: async () => {
+                        entity.Status = store.Status;
+                        entity.CompletedAt = store.CompletedAt;
+                        entity.Success = store.Success;
+                        entity.Messages = store.Messages;
+                        entity.TokensPrompt = store.TokensPrompt;
+                        entity.TokensCompletion = store.TokensCompletion;
+                        entity.TokensUsed = store.TokensUsed;
+                        return true;
+                    },
+                    Save: async () => {
+                        store.Status = entity.Status as string;
+                        store.CompletedAt = entity.CompletedAt as Date | undefined;
+                        store.Success = entity.Success as boolean | undefined;
+                        store.Messages = entity.Messages as string | null;
+                        store.TokensPrompt = entity.TokensPrompt as number;
+                        store.TokensCompletion = entity.TokensCompletion as number;
+                        store.TokensUsed = entity.TokensUsed as number;
+                        return true;
+                    },
+                    LatestResult: { CompleteMessage: '' },
+                };
+                return entity;
+            }),
+        } as unknown as IMetadataProvider;
 
-        for (let i = 0; i < 5; i++) {
-            await svc.AppendPromptRunMessage('pr-cached', 'user', `u-${i}`, false, contextUser, prov);
-            await svc.AppendPromptRunMessage('pr-cached', 'assistant', `a-${i}`, false, contextUser, prov);
-            await svc.AccumulatePromptRunUsage('pr-cached', 10, 5, contextUser, prov);
-        }
+        const hostA = new RealtimeClientSessionService();
+        const hostB = new RealtimeClientSessionService();
 
-        // Loaded only ONCE across all 15 writes during the active session.
-        expect(promptRun.Load).toHaveBeenCalledTimes(1);
-        expect(JSON.parse(promptRun.Messages as string)).toHaveLength(10);
-        expect(promptRun.TokensPrompt).toBe(50);
-        expect(promptRun.TokensCompletion).toBe(25);
+        await hostA.AppendPromptRunMessage('pr-cross-host', 'user', 'hello', false, contextUser, crossHostProvider);
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 30, 15, contextUser, crossHostProvider);
 
-        await svc.FinalizeCoAgentRun('co-run-cached', 'pr-cached', contextUser, prov, true);
-        expect(promptRun.Status).toBe('Completed');
+        // Host B (or SessionJanitor) reaps/finalizes the prompt run.
+        await hostB.FinalizeCoAgentRun(null, 'pr-cross-host', contextUser, crossHostProvider, true);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+
+        // A post-close usage flush arrives on Host A; it must accumulate tokens without reverting Status to 'Running'.
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 20, 10, contextUser, crossHostProvider);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+        expect(store.TokensPrompt).toBe(50);
+        expect(store.TokensCompletion).toBe(25);
+        expect(store.TokensUsed).toBe(75);
     });
 
     it('calls assembleMemoryContext and loadAppAgentSettings at most once per PrepareRealtimeSessionParams', async () => {
@@ -916,9 +955,8 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
                 applicationId: string | undefined,
                 user: UserInfo,
                 prov: IMetadataProvider,
-                getAppSettings?: () => Promise<null>
             ): Promise<string | null> {
-                return super.resolveAppRealtimeOverrides(applicationId, user, prov, getAppSettings);
+                return super.resolveAppRealtimeOverrides(applicationId, user, prov);
             }
         }
         const svc = new CountingPrepService();

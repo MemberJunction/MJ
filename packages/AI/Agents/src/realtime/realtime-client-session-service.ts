@@ -30,6 +30,7 @@
  * @author MemberJunction.com
  */
 
+import { AsyncLocalStorage } from 'async_hooks';
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
@@ -922,35 +923,25 @@ export class RealtimeClientSessionService {
     });
 
     /**
-     * Bounded in-memory cache of active `MJAIPromptRunEntityExtended` instances and their parsed
-     * message arrays, keyed by `promptRunID`. Avoids re-loading the entity from SQL and re-parsing
-     * the growing `Messages` JSON blob on every transcript turn and 10s usage checkpoint, while
-     * preserving serialized write safety via {@link promptRunWriteChains}.
+     * Per-`PrepareRealtimeSessionParams` memo of `loadAppAgentSettings` results so `resolveAppRealtimeOverrides`
+     * and `resolveSessionClientToolTiers` share a single lookup per prepare call without threading a closure
+     * through protected method signatures.
      */
-    protected readonly activePromptRuns = new MJLruCache<
-        string,
-        { entity: MJAIPromptRunEntityExtended; messages: Array<{ role: string; content: string }> }
-    >({
-        maxSize: 5_000,
-        ttlMs: 4 * 60 * 60 * 1000,
-    });
+    private readonly appSettingsMemo = new AsyncLocalStorage<Map<string, Promise<IAgentSettings | null>>>();
 
-    private async getOrLoadActivePromptRun(
-        promptRunID: string,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<{ entity: MJAIPromptRunEntityExtended; messages: Array<{ role: string; content: string }> } | null> {
-        const cached = this.activePromptRuns.Get(promptRunID);
-        if (cached) {
-            return cached;
+    private getAppAgentSettings(applicationId: string | undefined, contextUser: UserInfo): Promise<IAgentSettings | null> {
+        const store = this.appSettingsMemo.getStore();
+        if (!store) {
+            return this.loadAppAgentSettings(applicationId, contextUser);
         }
-        const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
-        if (!(await promptRun.Load(promptRunID))) {
-            return null;
+        const key = `${applicationId?.trim() ?? ''}|${contextUser?.ID ?? ''}`;
+        const existing = store.get(key);
+        if (existing) {
+            return existing;
         }
-        const entry = { entity: promptRun, messages: this.parsePromptRunMessages(promptRun.Messages) };
-        this.activePromptRuns.Set(promptRunID, entry);
-        return entry;
+        const loading = this.loadAppAgentSettings(applicationId, contextUser);
+        store.set(key, loading);
+        return loading;
     }
 
     /**
@@ -1335,70 +1326,67 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<RealtimeSessionParamsPrep> {
-        await this.configureEngine(contextUser, provider);
+        return this.appSettingsMemo.run(new Map(), async () => {
+            await this.configureEngine(contextUser, provider);
 
-        const coAgent = this.resolveCoAgent(input);
-        if (!coAgent) {
-            return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
-        }
-
-        // Effective config via the surface-agnostic cascade: type DefaultConfiguration < co-agent
-        // TypeConfiguration < TARGET agent TypeConfiguration < APP (Application.AgentSettings.Realtime) <
-        // runtime overrides (authorization-gated upstream). This is the identical precedence on every host.
-        const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
-        let appSettingsPromise: Promise<IAgentSettings | null> | undefined;
-        const getAppSettings = (): Promise<IAgentSettings | null> => {
-            appSettingsPromise ??= this.loadAppAgentSettings(input.ApplicationID, contextUser);
-            return appSettingsPromise;
-        };
-        const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider, getAppSettings);
-        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
-        this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
-
-        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
-        if (!outcome.Resolution) {
-            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
-        }
-        const resolution = outcome.Resolution;
-
-        let hostTools = input.HostTools;
-        if (input.ResolveHostTools) {
-            const dynamicHostTools = input.ResolveHostTools({
-                ModelID: resolution.ModelID,
-                ModelVendorID: resolution.ModelVendorID,
-                DriverClass: resolution.DriverClass,
-            });
-            if (dynamicHostTools !== undefined) {
-                hostTools = dynamicHostTools;
+            const coAgent = this.resolveCoAgent(input);
+            if (!coAgent) {
+                return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
             }
-        }
 
-        const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
-        // One answer for the whole session: it lowers channel exposure here and keeps the driver from
-        // turning on provider features that store session data (Gemini session resumption).
-        const zeroDataRetention = this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID);
-        // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
-        // folds the app tier into the capability manifest the prompt renders. The scoped input is what
-        // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
-        const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention, getAppSettings);
-        // A session nobody would see an avatar in (a phone call, an app without agent video) asks the driver for none
-        // and keeps the persona's voice.
-        const avatar = WithoutUnseenAvatar(
-            this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
-            scoped.Input,
-        );
-        const sessionParams: RealtimeSessionParams = {
-            ...(await this.buildSessionParams(
-                scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
-                resolution.ModelID, resolution.ModelVendorID, avatar,
-            )),
-            ZeroDataRetention: zeroDataRetention,
-        };
+            // Effective config via the surface-agnostic cascade: type DefaultConfiguration < co-agent
+            // TypeConfiguration < TARGET agent TypeConfiguration < APP (Application.AgentSettings.Realtime) <
+            // runtime overrides (authorization-gated upstream). This is the identical precedence on every host.
+            const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
+            const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider);
+            const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
+            this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
 
-        return {
-            Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
-            ClientPolicy: scoped.ClientPolicy, AvatarResolution: avatar,
-        };
+            const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
+            if (!outcome.Resolution) {
+                return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
+            }
+            const resolution = outcome.Resolution;
+
+            let hostTools = input.HostTools;
+            if (input.ResolveHostTools) {
+                const dynamicHostTools = input.ResolveHostTools({
+                    ModelID: resolution.ModelID,
+                    ModelVendorID: resolution.ModelVendorID,
+                    DriverClass: resolution.DriverClass,
+                });
+                if (dynamicHostTools !== undefined) {
+                    hostTools = dynamicHostTools;
+                }
+            }
+
+            const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
+            // One answer for the whole session: it lowers channel exposure here and keeps the driver from
+            // turning on provider features that store session data (Gemini session resumption).
+            const zeroDataRetention = this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID);
+            // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
+            // folds the app tier into the capability manifest the prompt renders. The scoped input is what
+            // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
+            const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
+            // A session nobody would see an avatar in (a phone call, an app without agent video) asks the driver for none
+            // and keeps the persona's voice.
+            const avatar = WithoutUnseenAvatar(
+                this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
+                scoped.Input,
+            );
+            const sessionParams: RealtimeSessionParams = {
+                ...(await this.buildSessionParams(
+                    scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+                    resolution.ModelID, resolution.ModelVendorID, avatar,
+                )),
+                ZeroDataRetention: zeroDataRetention,
+            };
+
+            return {
+                Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
+                ClientPolicy: scoped.ClientPolicy, AvatarResolution: avatar,
+            };
+        });
     }
 
     /**
@@ -1423,10 +1411,9 @@ export class RealtimeClientSessionService {
         effectiveConfig: RealtimeCoAgentConfig,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        modelHasZeroDataRetention = false,
-        getAppSettings?: () => Promise<IAgentSettings | null>
+        modelHasZeroDataRetention = false
     ): Promise<{ Input: PrepareClientSessionInput; ClientPolicy?: RealtimeSessionClientPolicy }> {
-        const tiers = await this.resolveSessionClientToolTiers(input.ApplicationID, input.TargetAgentID, contextUser, getAppSettings);
+        const tiers = await this.resolveSessionClientToolTiers(input.ApplicationID, input.TargetAgentID, contextUser);
         const appContext = this.withAppToolTier(input.AppContext, tiers.App, input.TargetAgentID);
         const candidates = input.ChannelCandidates ?? [];
         if (candidates.length === 0) {
@@ -1513,12 +1500,11 @@ export class RealtimeClientSessionService {
     protected async resolveSessionClientToolTiers(
         applicationId: string | undefined,
         targetAgentId: string,
-        contextUser: UserInfo,
-        getAppSettings?: () => Promise<IAgentSettings | null>
+        contextUser: UserInfo
     ): Promise<RealtimeSessionClientTools> {
         const tiers: RealtimeSessionClientTools = {};
         try {
-            const settings = await (getAppSettings ? getAppSettings() : this.loadAppAgentSettings(applicationId, contextUser));
+            const settings = await this.getAppAgentSettings(applicationId, contextUser);
             const definitions = AIEngine.Instance.ClientToolDefinitions ?? [];
             const app = ResolveAppClientToolMetadata(settings?.ClientTools, definitions, ref =>
                 LogStatus(`RealtimeClientSessionService: the app's client tool '${ref.Name ?? ref.ClientToolDefinitionID}' matches no tool definition — skipping it.`));
@@ -1605,10 +1591,9 @@ export class RealtimeClientSessionService {
         applicationId: string | undefined,
         contextUser: UserInfo,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        provider: IMetadataProvider,
-        getAppSettings?: () => Promise<IAgentSettings | null>
+        provider: IMetadataProvider
     ): Promise<string | null> {
-        const settings = await (getAppSettings ? getAppSettings() : this.loadAppAgentSettings(applicationId, contextUser));
+        const settings = await this.getAppAgentSettings(applicationId, contextUser);
         if (!settings) {
             return null;
         }
@@ -2108,7 +2093,6 @@ export class RealtimeClientSessionService {
         // Serialize the finalize against any in-flight message/usage writes so it can't race them — and so a
         // late usage flush queued behind it sees the run already Completed.
         await this.serializePromptRunWrite(promptRunID, async () => {
-            this.activePromptRuns.Delete(promptRunID);
             const run = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
             if (!(await run.Load(promptRunID)) || run.Status !== 'Running') {
                 return false;
@@ -2158,12 +2142,12 @@ export class RealtimeClientSessionService {
         // the Messages we write here (and vice-versa). See promptRunWriteChains.
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
-                const entry = await this.getOrLoadActivePromptRun(promptRunID, contextUser, provider);
-                if (!entry) {
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
+                if (!(await promptRun.Load(promptRunID))) {
                     LogError(`AppendPromptRunMessage: co-agent prompt run ${promptRunID} not found — transcript turn dropped.`);
                     return false;
                 }
-                const { entity: promptRun, messages } = entry;
+                const messages = this.parsePromptRunMessages(promptRun.Messages);
                 const last = messages[messages.length - 1];
                 if (replacePrevious && last && last.role === role) {
                     last.content = content;
@@ -2172,13 +2156,11 @@ export class RealtimeClientSessionService {
                 }
                 promptRun.Messages = JSON.stringify(messages);
                 if (!(await promptRun.Save())) {
-                    this.activePromptRuns.Delete(promptRunID);
                     LogError(`AppendPromptRunMessage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     return false;
                 }
                 return true;
             } catch (error) {
-                this.activePromptRuns.Delete(promptRunID);
                 LogError(`AppendPromptRunMessage: append failed for prompt run ${promptRunID}: ${(error as Error).message}`);
                 return false;
             }
@@ -2213,12 +2195,11 @@ export class RealtimeClientSessionService {
     ): Promise<boolean> {
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
-                const entry = await this.getOrLoadActivePromptRun(promptRunID, contextUser, provider);
-                if (!entry) {
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
+                if (!(await promptRun.Load(promptRunID))) {
                     LogError(`AccumulatePromptRunUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
                     return false;
                 }
-                const promptRun = entry.entity;
                 promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
                 promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
                 promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
@@ -2226,13 +2207,11 @@ export class RealtimeClientSessionService {
                     this.mergeUsageDetails(promptRun, details);
                 }
                 if (!(await promptRun.Save())) {
-                    this.activePromptRuns.Delete(promptRunID);
                     LogError(`AccumulatePromptRunUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     return false;
                 }
                 return true;
             } catch (error) {
-                this.activePromptRuns.Delete(promptRunID);
                 LogError(`AccumulatePromptRunUsage: usage accumulation failed for prompt run ${promptRunID}: ${(error as Error).message}`);
                 return false;
             }
@@ -2893,7 +2872,7 @@ export class RealtimeClientSessionService {
         const directTools = this.projectDirectActions(input, effectiveConfig, driverClass);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools, memoryContext);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, effectiveConfig, hasDirectTools, memoryContext);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -3048,7 +3027,7 @@ export class RealtimeClientSessionService {
     /**
      * Assembles the companion system prompt: the framing ("you are the voice for the target"), the
      * co-agent's own system prompt text, the TARGET agent's identity/capabilities (Name +
-     * Description), the conversation history, and the same memory/context a loop agent assembles.
+     * Description), the conversation history, and the pre-assembled memory/context.
      *
      * When the effective configuration carries a voice persona (`realtime.voice.default`), a
      * short "Voice & manner" section (tone / speaking style) is appended after the co-agent's
@@ -3056,19 +3035,17 @@ export class RealtimeClientSessionService {
      *
      * @param input The prepare-session input.
      * @param coAgent The resolved co-agent.
-     * @param contextUser The calling user.
-     * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona source).
+     * @param hasDirectTools Whether direct action/channel tools are projected onto the session.
+     * @param memoryContext The pre-assembled memory/context block from {@link assembleMemoryContext}.
      * @returns The concatenated system prompt (never empty — the framing is always present).
      */
     protected async buildCompanionSystemPrompt(
         input: PrepareClientSessionInput,
         coAgent: MJAIAgentEntityExtended,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
         hasDirectTools = false,
-        precomputedMemoryContext?: string
+        memoryContext = ''
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -3088,9 +3065,6 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
-        const memoryContext = precomputedMemoryContext !== undefined
-            ? precomputedMemoryContext
-            : await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
         return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
