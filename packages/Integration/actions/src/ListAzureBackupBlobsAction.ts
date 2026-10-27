@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { BaseIntegrationAction } from './BaseIntegrationAction.js';
+import { BaseIntegrationAction, TrimTrailingChars } from './BaseIntegrationAction.js';
 
 export interface AzureBlobItem {
     Name: string;
@@ -18,15 +18,6 @@ export interface AzureBlobItem {
 function decodeXml(str: string): string {
     const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
     return str.replace(/&(amp|lt|gt|quot|apos);/g, (_match, name: string) => entities[name]);
-}
-
-/** The string without any trailing occurrences of `ch`, without a regular expression on caller input. */
-function trimTrailing(str: string, ch: string): string {
-    let end = str.length;
-    while (end > 0 && str[end - 1] === ch) {
-        end--;
-    }
-    return str.slice(0, end);
 }
 
 /**
@@ -55,7 +46,7 @@ function readElement(xml: string, tag: string, from: number): { Text: string; En
  */
 export function ParseAzureListBlobsXml(xml: string, containerUrl: string): { blobs: AzureBlobItem[]; nextMarker?: string } {
     const blobs: AzureBlobItem[] = [];
-    const cleanBaseUrl = trimTrailing(containerUrl, '/');
+    const cleanBaseUrl = TrimTrailingChars(containerUrl, '/');
 
     const marker = readElement(xml, 'NextMarker', 0)?.Text.trim();
     const nextMarker = marker && marker.length > 0 ? marker : undefined;
@@ -150,7 +141,7 @@ export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
 
             const prefix = this.getStringParam(params, 'Prefix');
             const cleanSas = sasToken.replace(/^\?/, '').trim();
-            const cleanContainerUrl = trimTrailing(containerUrl, '/');
+            const cleanContainerUrl = TrimTrailingChars(containerUrl, '/');
 
             LogStatus(`[ListAzureBackupBlobsAction] Querying container '${cleanContainerUrl}' with prefix '${prefix ?? ''}'...`);
 

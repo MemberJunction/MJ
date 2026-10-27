@@ -11,6 +11,7 @@ import {
     BaseIntegrationAction,
     SqlBackupFileListEntry,
     SqlBackupHeaderInfo,
+    TrimTrailingChars,
     type LongRunningSqlRunner
 } from './BaseIntegrationAction.js';
 
@@ -459,8 +460,8 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         }
 
         // Normalize trailing slashes
-        const dataDir = customDataDir.replace(/[\\/]+$/, '');
-        const logDir = customLogDir.replace(/[\\/]+$/, '');
+        const dataDir = TrimTrailingChars(customDataDir, '\\/');
+        const logDir = TrimTrailingChars(customLogDir, '\\/');
 
         let dataCount = 0;
         let logCount = 0;

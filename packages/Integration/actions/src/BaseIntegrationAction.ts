@@ -16,6 +16,19 @@ export interface LongRunningSqlRunner {
     Dispose(): Promise<void>;
 }
 
+/**
+ * The string without any trailing run of the given characters. A loop rather than a `[...]+$`
+ * regular expression: that pattern has polynomial worst-case cost, and every path trimmed here is
+ * caller-supplied input (a container URL, a backup path, a data directory).
+ */
+export function TrimTrailingChars(value: string, chars: string): string {
+    let end = value.length;
+    while (end > 0 && chars.includes(value[end - 1])) {
+        end--;
+    }
+    return value.slice(0, end);
+}
+
 /** The runtime shape of an mssql pool that its type definitions leave out: the config it was built from. */
 interface ConnectionPoolWithConfig extends sql.ConnectionPool {
     config?: sql.config;
