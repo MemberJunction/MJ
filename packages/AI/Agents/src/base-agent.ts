@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
@@ -19450,9 +19450,9 @@ The context is now within limits. Please retry your request with the recovered c
             return categoryStrategy;
         }
 
-        // 4. Request Type's DefaultAssignmentStrategy
-        if (requestTypeId && this._requestTypeCache) {
-            const requestType = this._requestTypeCache.find(t => UUIDsEqual(t.ID, requestTypeId));
+        // 4. Request Type's DefaultAssignmentStrategy (request types are cached on the AI engine)
+        if (requestTypeId) {
+            const requestType = AIEngine.Instance.AgentRequestTypes.find(t => UUIDsEqual(t.ID, requestTypeId));
             if (requestType) {
                 const rtStrategy = parseAssignmentStrategy(requestType.DefaultAssignmentStrategy);
                 if (rtStrategy) {
@@ -19571,25 +19571,16 @@ The context is now within limits. Please retry your request with the recovered c
      * - If there's a responseForm with fields, uses "Information"
      * - Otherwise defaults to "Information"
      *
-     * Caches the request type lookup for the duration of this agent execution.
+     * Request types come from the AI engine's cached `MJ: AI Agent Request Types` rows
+     * (`AIEngineBase.GetAgentRequestTypeByName`), the same source the agent actions use.
      * @private
      */
-    private _requestTypeCache: MJAIAgentRequestTypeEntity[] | null = null;
-
     private async resolveRequestTypeId(
         previousDecision: BaseAgentNextStep,
         contextUser?: UserInfo
     ): Promise<string | null> {
         try {
-            // Load request types if not cached
-            if (!this._requestTypeCache) {
-                const rv = new RunView();
-                const result = await rv.RunView<MJAIAgentRequestTypeEntity>({
-                    EntityName: 'MJ: AI Agent Request Types',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                this._requestTypeCache = result.Success ? result.Results : [];
-            }
+            await AIEngine.Instance.Config(false, contextUser);
 
             // Determine type name based on responseForm content
             let typeName = 'Information'; // default
@@ -19597,7 +19588,7 @@ The context is now within limits. Please retry your request with the recovered c
                 typeName = this.detectRequestTypeName(previousDecision.responseForm);
             }
 
-            const matchedType = this._requestTypeCache.find(t => t.Name === typeName);
+            const matchedType = AIEngine.Instance.GetAgentRequestTypeByName(typeName);
             return matchedType?.ID || null;
         } catch (error) {
             LogError(`Error resolving request type: ${(error as Error).message}`);

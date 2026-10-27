@@ -18,7 +18,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
          MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJAIAgentPromptEntity,
-         MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
+         MJAIAgentTypeEntity, MJAIAgentRequestTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
          MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
@@ -251,6 +251,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentRequestTypes(): MJAIAgentRequestTypeEntity[] { return this.Base.AgentRequestTypes; }
     public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
     public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
@@ -415,6 +416,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
     public GetAgentByID(agentId: string): MJAIAgentEntityExtended {
         return this.Base.GetAgentByID(agentId);
+    }
+    public GetAgentRequestTypeByName(name: string): MJAIAgentRequestTypeEntity | undefined {
+        return this.Base.GetAgentRequestTypeByName(name);
     }
     /** Cached per-user directory of directly discoverable, active agents the user is permitted to run — see {@link AIEngineBase.GetUserRunnableAgentDirectory}. */
     public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
