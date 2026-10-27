@@ -970,7 +970,7 @@ export class IntegrationDataService {
       return p?.Value != null ? String(p.Value) : undefined;
     };
 
-    const totalRows = getOutputParamVal('TotalRowsInserted') ?? getOutputParamVal('TotalRowsTransferred');
+    const totalRows = getOutputParamVal('TotalRowsTransferred');
 
     return {
       Success: result.Success,

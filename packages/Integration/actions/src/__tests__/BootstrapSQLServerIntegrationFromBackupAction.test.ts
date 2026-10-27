@@ -28,6 +28,19 @@ vi.mock('@memberjunction/integration-engine', () => {
     };
 });
 
+let mockGetCompanyIntegrationObjectFn: ReturnType<typeof vi.fn>;
+
+vi.mock('@memberjunction/integration-engine-base', () => {
+    return {
+        IntegrationEngineBase: {
+            Instance: {
+                Config: () => Promise.resolve(),
+                GetCompanyIntegrationObject: (...args: unknown[]) => mockGetCompanyIntegrationObjectFn(...args),
+            },
+        },
+    };
+});
+
 vi.mock('@memberjunction/credentials', () => {
     const instance = {
         Config: (...args: unknown[]) => mockCredentialConfigFn(...args),
@@ -95,6 +108,7 @@ interface MockSqlOptions {
     pkType?: string;
     compositePk?: boolean;
     stagingDbExists?: boolean;
+    failOnHeader?: boolean;
 }
 
 function createMockSqlExecutor(options: MockSqlOptions = {}): {
@@ -123,6 +137,9 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
         }
 
         if (sql.includes('RESTORE HEADERONLY')) {
+            if (options.failOnHeader) {
+                return Promise.reject(new Error('Cannot open backup device: 403 Server failed to authenticate the request'));
+            }
             return Promise.resolve([{
                 BackupStartDate: new Date('2026-10-26T01:00:00.000Z'),
                 BackupFinishDate: new Date('2026-10-26T04:00:00.000Z'),
@@ -155,6 +172,7 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
                 { COLUMN_NAME: 'CustomerID', DATA_TYPE: pkDataType, IS_NULLABLE: 'NO' },
                 { COLUMN_NAME: 'CustomerName', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'YES' },
                 { COLUMN_NAME: 'EmailAddress', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'YES' },
+                { COLUMN_NAME: 'ModifiedAt', DATA_TYPE: 'datetime2', IS_NULLABLE: 'NO' },
                 { COLUMN_NAME: 'ID', DATA_TYPE: 'uniqueidentifier', IS_NULLABLE: 'NO' },
                 { COLUMN_NAME: '__mj_integration_SyncStatus', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'NO' },
                 { COLUMN_NAME: '__mj_integration_LastSyncedAt', DATA_TYPE: 'datetimeoffset', IS_NULLABLE: 'YES' },
@@ -235,6 +253,10 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             }
             return undefined;
         });
+
+        mockGetCompanyIntegrationObjectFn = vi.fn().mockImplementation((_ciID: string, objectName: string) =>
+            objectName === 'sales.Customer' ? { ID: 'obj-cust', Name: 'sales.Customer', IncrementalWatermarkField: 'ModifiedAt' } : undefined
+        );
 
         mockEntityByNameFn = vi.fn().mockImplementation((name: string) => {
             if (name === 'MJ: Company Integration Record Maps') {
@@ -453,6 +475,9 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(batch).not.toContain('[SyncedAt]');
             expect(batch).toContain("N'Active' AS [__mj_integration_SyncStatus]");
             expect(batch).toContain('@RestoreTimestamp AS [__mj_integration_LastSyncedAt]');
+            // The watermark column comes from MJ: Integration Objects, where the engine reads it.
+            expect(mockGetCompanyIntegrationObjectFn).toHaveBeenCalledWith('ci-001', 'sales.Customer');
+            expect(batch).toContain('CAST(s.[ModifiedAt] AS NVARCHAR(255)) AS [__mj_integration_LastSeenModifiedValue]');
             expect(batch).toContain('[MJ_Staging_TestDB].[sales].[Customer] s WITH (NOLOCK)');
 
             // The record map pairs the generated key with the source key of the same row via OUTPUT.
@@ -542,10 +567,14 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const result = await action['InternalRunAction'](params);
 
             expect(result.Success).toBe(true);
-            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
+            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @LastID < @MaxID'));
             expect(chunkedSql).toBeDefined();
             expect(chunkedSql).toContain('@ChunkSize BIGINT = 500000');
-            expect(chunkedSql).toContain('WHERE s.[CustomerID] >= @CurrentID AND s.[CustomerID] < @CurrentID + @ChunkSize');
+            // Pages are bounded by row count (TOP n keys after the last one), not by key range, so
+            // sparse identity/snowflake keys cost rows / BatchSize iterations, never (max - min) / BatchSize.
+            expect(chunkedSql).toContain('SELECT TOP (@ChunkSize) [CustomerID] FROM [MJ_Staging_');
+            expect(chunkedSql).toContain('WHERE s.[CustomerID] > @LastID AND s.[CustomerID] <= @NextID');
+            expect(chunkedSql).not.toContain('@CurrentID + @ChunkSize');
             expect(chunkedSql).toContain('MERGE INTO [raw_erp].[Customer] WITH (TABLOCK)');
             expect(chunkedSql).toContain('NEWID()');
             expect(chunkedSql).not.toContain('NEWSEQUENTIALID()');
@@ -565,7 +594,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const result = await action['InternalRunAction'](params);
 
             expect(result.Success).toBe(true);
-            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
+            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @LastID < @MaxID'));
             expect(chunkedSql).toBeUndefined(); // Must NOT chunk on UUID PK
 
             const singleSql = mockSql.executedSql.find(s => s.includes('MERGE INTO [raw_erp].[Customer] WITH (TABLOCK)'));
@@ -586,7 +615,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const result = await action['InternalRunAction'](params);
 
             expect(result.Success).toBe(true);
-            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
+            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @LastID < @MaxID'));
             expect(chunkedSql).toBeUndefined(); // Must NOT chunk on composite PK
         });
     });
@@ -687,7 +716,87 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
     });
 
+    describe('Storage credential handling', () => {
+        it('creates or alters the credential with this run\'s token and keeps the secret out of SQL logging', async () => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'sv=2024&sig=secret',
+            });
+
+            await action['InternalRunAction'](params);
+
+            const credentialCall = mockSql.mockExecuteSql.mock.calls.find(call => String(call[0]).includes('CREATE CREDENTIAL'));
+            expect(credentialCall).toBeDefined();
+            const [sql, , options] = credentialCall!;
+            // An existing credential (left by an earlier run) gets THIS token instead of being kept.
+            expect(sql).toContain('ALTER CREDENTIAL [https://storage.blob.core.windows.net/backups]');
+            expect(sql).toContain('CREATE CREDENTIAL [https://storage.blob.core.windows.net/backups]');
+            expect(sql).not.toContain('IF NOT EXISTS');
+            expect(options).toMatchObject({ ignoreLogging: true, isMutation: true });
+        });
+
+        it('drops the credential when the run fails before the restore (bad SAS token at HEADERONLY)', async () => {
+            mockSql = createMockSqlExecutor({ failOnHeader: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'bad-token',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('failed to authenticate');
+            expect(mockSql.executedSql.some(s => s.includes('DROP CREDENTIAL [https://storage.blob.core.windows.net/backups]'))).toBe(true);
+            // No restore was started, so nothing is dropped.
+            expect(mockSql.executedSql.some(s => s.includes('DROP DATABASE'))).toBe(false);
+        });
+
+        it('can drop a staging database left in RESTORING state by a failed restore', async () => {
+            mockSql = createMockSqlExecutor({ failOnInsert: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Staging_FailDb',
+            });
+
+            await action['InternalRunAction'](params);
+
+            const dropSql = mockSql.executedSql.find(s => s.includes('DROP DATABASE [MJ_Staging_FailDb]'));
+            expect(dropSql).toContain("state_desc = 'ONLINE'");
+            expect(dropSql?.indexOf("state_desc = 'ONLINE'")).toBeLessThan(dropSql!.indexOf('SET SINGLE_USER'));
+        });
+    });
+
     describe('Watermark Seeding (Zero-Gap Invariant)', () => {
+        it('does not seed a map whose table was skipped, so its pre-backup rows are not lost', async () => {
+            mockRunViewFn = vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'map-cust-001', CompanyIntegrationID: 'ci-001', ExternalObjectName: 'sales.Customer', EntityID: 'entity-cust-001', SyncEnabled: true, SyncDirection: 'Pull', Priority: 1 },
+                    { ID: 'map-orphan-002', CompanyIntegrationID: 'ci-001', ExternalObjectName: 'sales.Orphan', EntityID: 'entity-missing', SyncEnabled: true, SyncDirection: 'Pull', Priority: 2 },
+                ],
+            });
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            expect(mockWatermarkUpdateFn).toHaveBeenCalledTimes(1);
+            expect(mockWatermarkUpdateFn).toHaveBeenCalledWith('map-cust-001', expect.any(String), expect.anything(), 'Pull');
+        });
+
         it('seeds WatermarkService with BackupStartDate for each processed EntityMap', async () => {
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',

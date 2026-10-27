@@ -11941,6 +11941,9 @@ importers:
       '@memberjunction/integration-engine':
         specifier: 6.2.0-edge.5
         version: link:../engine
+      '@memberjunction/integration-engine-base':
+        specifier: 6.2.0-edge.5
+        version: link:../engine-base
       '@memberjunction/schema-engine':
         specifier: 6.2.0-edge.5
         version: link:../../SchemaEngine

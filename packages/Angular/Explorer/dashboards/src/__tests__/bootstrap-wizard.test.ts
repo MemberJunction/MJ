@@ -181,7 +181,7 @@ describe('Bootstrap Wizard Review Fixes', () => {
         Message: 'Done',
         Result: [
           { Name: 'BackupStartDate', Value: '2026-10-26T00:00:00Z', Type: 'Output' },
-          { Name: 'TotalRowsInserted', Value: 1250000, Type: 'Output' },
+          { Name: 'TotalRowsTransferred', Value: 1250000, Type: 'Output' },
           { Name: 'DurationSeconds', Value: 42, Type: 'Output' },
           { Name: 'StagingDatabaseDropped', Value: 'true', Type: 'Output' },
           { Name: 'TablesProcessed', Value: 5, Type: 'Output' },

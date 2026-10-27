@@ -254,7 +254,10 @@ export abstract class BaseIntegrationAction extends BaseAction {
     }
 
     /**
-     * Ensures the SQL Server Database Scoped / Server Credential exists for the Azure Storage container URL.
+     * Ensures the SQL Server credential for the Azure Storage container URL exists and carries THIS
+     * run's SAS token. An existing credential is altered rather than kept, so a credential left behind by
+     * an earlier run (or created by hand) never makes a corrected token silently ineffective. The
+     * statement embeds the secret, so it is excluded from SQL logging.
      */
     protected async ensureStorageCredential(
         executor: DatabaseProviderBase,
@@ -265,13 +268,15 @@ export abstract class BaseIntegrationAction extends BaseAction {
         const cleanSas = EscapeSQLString(sasToken);
         const cleanUrl = EscapeSQLString(containerUrl);
         const sql = `
-IF NOT EXISTS (SELECT 1 FROM sys.credentials WHERE name = N'${cleanUrl}')
-BEGIN
-    CREATE CREDENTIAL [${cleanUrl}]
+IF EXISTS (SELECT 1 FROM sys.credentials WHERE name = N'${cleanUrl}')
+    ALTER CREDENTIAL [${cleanUrl}]
     WITH IDENTITY = 'SHARED ACCESS SIGNATURE',
     SECRET = N'${cleanSas}';
-END`;
-        await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: 'Ensure Azure Storage Credential' }, contextUser);
+ELSE
+    CREATE CREDENTIAL [${cleanUrl}]
+    WITH IDENTITY = 'SHARED ACCESS SIGNATURE',
+    SECRET = N'${cleanSas}';`;
+        await executor.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'Ensure Azure Storage Credential' }, contextUser);
     }
 
     /**
@@ -315,10 +320,6 @@ END`;
         if (lower === 'true' || lower === '1') return true;
         if (lower === 'false' || lower === '0') return false;
         return defaultValue;
-    }
-
-    protected getBooleanParam(params: RunActionParams, name: string, defaultValue: boolean): boolean {
-        return this.getBoolParam(params, name, defaultValue);
     }
 
     protected getStringListParam(params: RunActionParams, name: string): string[] | undefined {

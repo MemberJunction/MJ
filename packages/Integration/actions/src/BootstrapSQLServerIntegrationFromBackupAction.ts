@@ -3,6 +3,7 @@ import { LogError, LogStatus, RunView, DatabaseProviderBase, LocalCacheManager, 
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { WatermarkService } from '@memberjunction/integration-engine';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { MJCompanyIntegrationEntityMapEntity } from '@memberjunction/core-entities';
 import { ValidateIdentifier } from '@memberjunction/schema-engine';
 import {
@@ -188,6 +189,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             // 7. Execute Local In-Engine Minimally-Logged ETL
             let totalRowsInserted = 0;
             const tableResults: TableEtlResult[] = [];
+            const loadedMaps: MJCompanyIntegrationEntityMapEntity[] = [];
 
             for (const map of entityMaps) {
                 const entityInfo = sqlExecutor.EntityByID(map.EntityID);
@@ -225,12 +227,15 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
 
                 totalRowsInserted += result.RowsTransferred;
                 tableResults.push(result);
+                loadedMaps.push(map);
             }
 
-            // 8. Seed Watermark via WatermarkService (Zero-Gap Invariant)
+            // 8. Seed Watermark via WatermarkService (Zero-Gap Invariant). Only a map whose table was
+            //    actually loaded is seeded: seeding a skipped map would make its next incremental sync
+            //    start after the backup date and lose every pre-backup row for good.
             LogStatus(`[BootstrapSQLServer] Seeding sync watermarks with BackupStartDate: ${headerInfo.BackupStartDate.toISOString()}...`);
             const watermarkService = new WatermarkService();
-            for (const map of entityMaps) {
+            for (const map of loadedMaps) {
                 await watermarkService.Update(
                     map.ID,
                     headerInfo.BackupStartDate.toISOString(),
@@ -270,16 +275,11 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             const message = error instanceof Error ? error.message : String(error);
             LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Failure: ${message}`);
 
-            // Automated fail-safe cleanup if failure occurred after staging database creation
-            if (stagingDbCreated && stagingDbName && sqlExecutor) {
-                try {
-                    await this.dropStagingDatabase(sqlExecutor, stagingDbName, params.ContextUser);
-                    if (containerUrl) {
-                        await this.dropStorageCredential(sqlExecutor, containerUrl, params.ContextUser);
-                    }
-                } catch (cleanupErr) {
-                    LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure cleanup failed: ${cleanupErr}`);
-                }
+            // Automated fail-safe cleanup: the staging database if the restore was started (a restore that
+            // failed midway leaves it in RESTORING state), and the storage credential whenever it was
+            // created, including a failure before the restore (a bad SAS token fails at HEADERONLY).
+            if (sqlExecutor) {
+                await this.cleanUpAfterFailure(sqlExecutor, stagingDbCreated ? stagingDbName : '', containerUrl, params.ContextUser);
             }
 
             return {
@@ -291,6 +291,29 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         } finally {
             if (runner) {
                 await runner.Dispose();
+            }
+        }
+    }
+
+    /** Best-effort teardown after a failure; each step is attempted even if the previous one failed. */
+    protected async cleanUpAfterFailure(
+        executor: DatabaseProviderBase,
+        stagingDbName: string,
+        containerUrl: string,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        if (stagingDbName) {
+            try {
+                await this.dropStagingDatabase(executor, stagingDbName, contextUser);
+            } catch (cleanupErr) {
+                LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure drop of [${stagingDbName}] failed: ${cleanupErr}`);
+            }
+        }
+        if (containerUrl) {
+            try {
+                await this.dropStorageCredential(executor, containerUrl, contextUser);
+            } catch (cleanupErr) {
+                LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure drop of credential '${containerUrl}' failed: ${cleanupErr}`);
             }
         }
     }
@@ -466,10 +489,12 @@ WITH
     ): Promise<void> {
         ValidateIdentifier(stagingDbName, 'database');
         const cleanDbName = EscapeSQLString(stagingDbName);
+        // A database left in RESTORING state by a failed restore cannot be ALTERed, but it can be dropped.
         const sql = `
 IF DB_ID(N'${cleanDbName}') IS NOT NULL
 BEGIN
-    ALTER DATABASE [${stagingDbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    IF EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${cleanDbName}' AND state_desc = 'ONLINE')
+        ALTER DATABASE [${stagingDbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
     DROP DATABASE [${stagingDbName}];
 END`;
         await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: `DROP DATABASE [${stagingDbName}]` }, contextUser);
@@ -522,24 +547,21 @@ END`;
     }
 
     /**
-     * Resolves the watermark column for an entity map if configured.
+     * The source object's incremental watermark column, read from `MJ: Integration Objects` — the same
+     * place the external-data-source connector reads it when it syncs deltas — when the staged table
+     * carries that column.
      */
-    protected resolveWatermarkColumn(
-        entityMap: MJCompanyIntegrationEntityMapEntity,
-        sourceColSet: Set<string>
-    ): string | undefined {
-        if (entityMap.Configuration) {
-            try {
-                const parsed = JSON.parse(entityMap.Configuration) as Record<string, unknown>;
-                const fieldName = String(parsed.IncrementalWatermarkField ?? parsed.WatermarkField ?? '').trim();
-                if (fieldName && sourceColSet.has(fieldName.toLowerCase())) {
-                    return fieldName;
-                }
-            } catch {
-                // Ignore JSON parse errors in Configuration
-            }
-        }
-        return undefined;
+    protected async resolveWatermarkColumn(
+        companyIntegrationID: string,
+        externalObjectName: string,
+        sourceColSet: Set<string>,
+        contextUser?: UserInfo
+    ): Promise<string | undefined> {
+        const engine = IntegrationEngineBase.Instance;
+        await engine.Config(false, contextUser);
+        const object = engine.GetCompanyIntegrationObject(companyIntegrationID, externalObjectName);
+        const fieldName = object?.IncrementalWatermarkField?.trim();
+        return fieldName && sourceColSet.has(fieldName.toLowerCase()) ? fieldName : undefined;
     }
 
     /**
@@ -596,7 +618,7 @@ END`;
             throw new Error("Entity 'MJ: Company Integration Record Maps' does not have AllowDirectSQLDelete enabled, so existing record maps cannot be cleared for a re-run.");
         }
 
-        const watermarkSourceCol = this.resolveWatermarkColumn(entityMap, sourceColSet);
+        const watermarkSourceCol = await this.resolveWatermarkColumn(companyIntegrationID, externalObjectName, sourceColSet, contextUser);
         const mappings = this.buildColumnMappings(sourceColumns, targetColMap, targetPkCol, watermarkSourceCol);
         const totalRows = await this.queryTableRowCount(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         const chunkPkCol = this.resolveChunkColumn(pkColumns, sourceColumns, totalRows, batchSize);
@@ -776,17 +798,24 @@ DROP TABLE #MJRecordMap;`;
 `;
     }
 
-    /** The chunked form of the load: the MERGE repeated over integer key ranges of `BatchSize`. */
+    /**
+     * The chunked form of the load: the MERGE repeated over pages of `BatchSize` ROWS, each page bounded
+     * by the next `TOP (n)` key after the last one loaded. Paging by row count rather than by key range
+     * keeps the iteration count at rows / BatchSize however sparse the keys are (identity seeds,
+     * snowflake IDs), where a key-range loop would spin through empty ranges for hours.
+     */
     private buildChunkedLoad(spec: TableLoadBatchSpec, stagingSource: string): string {
         const pkCol = spec.ChunkPkCol!;
-        const merge = this.buildMergeStatement(spec, stagingSource, `s.[${pkCol}] >= @CurrentID AND s.[${pkCol}] < @CurrentID + @ChunkSize`);
-        return `    DECLARE @MinID BIGINT = (SELECT ISNULL(MIN([${pkCol}]), 0) FROM ${stagingSource});
+        const merge = this.buildMergeStatement(spec, stagingSource, `s.[${pkCol}] > @LastID AND s.[${pkCol}] <= @NextID`);
+        return `    DECLARE @ChunkSize BIGINT = ${Math.floor(spec.BatchSize)};
+    DECLARE @LastID BIGINT = (SELECT ISNULL(MIN([${pkCol}]), 0) - 1 FROM ${stagingSource});
     DECLARE @MaxID BIGINT = (SELECT ISNULL(MAX([${pkCol}]), 0) FROM ${stagingSource});
-    DECLARE @CurrentID BIGINT = @MinID;
-    DECLARE @ChunkSize BIGINT = ${Math.floor(spec.BatchSize)};
-    WHILE @CurrentID <= @MaxID
+    DECLARE @NextID BIGINT;
+    WHILE @LastID < @MaxID
     BEGIN
-${merge}        SET @CurrentID = @CurrentID + @ChunkSize;
+        SET @NextID = (SELECT MAX(page.[${pkCol}]) FROM (SELECT TOP (@ChunkSize) [${pkCol}] FROM ${stagingSource} WHERE [${pkCol}] > @LastID ORDER BY [${pkCol}]) AS page);
+        IF @NextID IS NULL BREAK;
+${merge}        SET @LastID = @NextID;
     END
 `;
     }

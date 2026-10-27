@@ -346,7 +346,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional SQL Server credential name to use for Azure RESTORE. If omitted, a temporary credential is created using SasToken",
+            "Description": "ID of the MJ: Credentials record whose SasToken (or Secret/Key) value holds the container SAS token; the SQL Server credential is always created from the resolved token. Either this or SasToken is required for Azure Blob sources",
             "IsRequired": false
           },
           "primaryKey": {
@@ -471,7 +471,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "TotalRowsInserted",
+            "Name": "TotalRowsTransferred",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -480,6 +480,34 @@
           },
           "primaryKey": {
             "ID": "377E3023-A993-4F1A-8F5B-8D2B476D23F5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TablesProcessed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of entity map tables loaded into their target tables",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6888EF76-2BA3-4550-9641-1064E0044F53"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the staging database the backup was restored into (retained when DropStagingDbOnComplete is false)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5022E81D-D280-4FCF-9A02-E0B40CCC67BD"
           }
         },
         {
