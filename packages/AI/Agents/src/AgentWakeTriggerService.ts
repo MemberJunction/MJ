@@ -26,7 +26,6 @@ import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
-    MJUserEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
@@ -134,6 +133,17 @@ export interface AgentWakeTriggerResult {
 /**
  * Service that evaluates and schedules event-driven `AgentWake` routines on `MJ: User Routines`.
  */
+interface ImmediateWakeRoutineParams {
+    targetUserID: string;
+    targetAgentID: string;
+    workstreamKey: string;
+    wakeReason: string;
+    resumeState: AgentWakeResumeState;
+    contextUser: UserInfo;
+    metadataProvider?: IMetadataProvider;
+    now: Date;
+}
+
 export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerService> {
     public constructor() {
         super();
@@ -358,8 +368,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         const senderUser = await this.resolveVerifiedInternalSender(
             normalizedFrom,
             input.users,
-            input.systemContextUser,
-            md
+            input.systemContextUser
         );
         if (!senderUser) {
             LogStatus(
@@ -497,8 +506,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
     private async resolveVerifiedInternalSender(
         normalizedFromAddress: string,
         injectedUsers: UserInfo[] | undefined,
-        contextUser: UserInfo,
-        md: IMetadataProvider
+        contextUser: UserInfo
     ): Promise<UserInfo | null> {
         if (injectedUsers) {
             const match = injectedUsers.find(
@@ -514,27 +522,12 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             return contextUser;
         }
 
-        const rv = RunView.FromMetadataProvider(md);
-        const safeEmail = EscapeSQLString(normalizedFromAddress);
-        const res = await rv.RunView<MJUserEntity>(
-            {
-                EntityName: 'MJ: Users',
-                ExtraFilter: `IsActive=1 AND LOWER(Email)='${safeEmail}'`,
-                MaxRows: 1,
-                ResultType: 'entity_object',
-            },
-            contextUser
-        );
-        if (res.Success && res.Results.length > 0) {
-            const userEntity = res.Results[0];
-            const verifiedUser = new UserInfo(md, {
-                ID: userEntity.ID,
-                Name: userEntity.Name,
-                Email: userEntity.Email,
-                IsActive: userEntity.IsActive,
-                UserRoles: [],
-            });
-            return verifiedUser;
+        // UserCache returns a fully hydrated UserInfo (roles included) and falls back to the database
+        // on a miss. A hand-built UserInfo with no roles cannot pass the entity permission checks that
+        // `routine.Save()` and the policy lookup run as this user.
+        const cached = await UserCache.Instance.FindUser({ Email: normalizedFromAddress });
+        if (cached && cached.IsActive !== false) {
+            return cached;
         }
         return null;
     }
@@ -612,16 +605,42 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return `${trigger}${status}${id ? ` (${String(id)})` : ''}${subjectText}`;
     }
 
-    private async upsertImmediateWakeRoutine(params: {
-        targetUserID: string;
-        targetAgentID: string;
-        workstreamKey: string;
-        wakeReason: string;
-        resumeState: AgentWakeResumeState;
-        contextUser: UserInfo;
-        metadataProvider?: IMetadataProvider;
-        now: Date;
-    }): Promise<AgentWakeTriggerResult> {
+    /**
+     * In-process write chains keyed by `${targetUserID}:${targetAgentID}:${workstreamKey}` so two
+     * events for the same routine arriving in the same Node process never both miss the existing
+     * row (duplicate OneShot routines) or overwrite each other's `pendingEvents`. Same pattern as
+     * `CredentialEngine.enqueueCredentialWrite`. Cross-process races are not covered here; the
+     * dispatcher coalesces on claim.
+     */
+    private _wakeWriteChains: Map<string, Promise<void>> = new Map();
+
+    private wakeWriteKey(targetUserID: string, targetAgentID: string, workstreamKey: string): string {
+        return `${targetUserID}:${targetAgentID}:${workstreamKey}`.toLowerCase();
+    }
+
+    private enqueueWakeWrite<T>(key: string, operation: () => Promise<T>): Promise<T> {
+        const prev = this._wakeWriteChains.get(key) ?? Promise.resolve();
+        const next = prev.then(operation, operation);
+        // The chain link swallows the rejection (it surfaces to this call's caller via `next`) so an
+        // un-awaited chain never emits an unhandled rejection, and cleans the map up once it drains.
+        const link: Promise<void> = next.then(
+            () => undefined,
+            () => undefined
+        ).finally(() => {
+            if (this._wakeWriteChains.get(key) === link) {
+                this._wakeWriteChains.delete(key);
+            }
+        });
+        this._wakeWriteChains.set(key, link);
+        return next;
+    }
+
+    private upsertImmediateWakeRoutine(params: ImmediateWakeRoutineParams): Promise<AgentWakeTriggerResult> {
+        const key = this.wakeWriteKey(params.targetUserID, params.targetAgentID, params.workstreamKey);
+        return this.enqueueWakeWrite(key, () => this.upsertImmediateWakeRoutineUnlocked(params));
+    }
+
+    private async upsertImmediateWakeRoutineUnlocked(params: ImmediateWakeRoutineParams): Promise<AgentWakeTriggerResult> {
         try {
             const md: IMetadataProvider = params.metadataProvider ?? Metadata.Provider;
             const saveUser = this.resolveRoutineSaveUser(params.targetUserID, params.contextUser);

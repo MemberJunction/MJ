@@ -13,8 +13,9 @@ import { AgentWakeTriggerService } from '../AgentWakeTriggerService';
 const runViewMock = vi.fn();
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-0000000005E5';
 const systemUser = { ID: SYSTEM_USER_ID, Name: 'System', Email: 'system@mj.local', Type: 'Owner', IsActive: true, UserRoles: [] } as unknown as UserInfo;
+const findUserMock = vi.fn();
 vi.mock('@memberjunction/generic-database-provider', () => ({
-    UserCache: { Instance: { GetSystemUser: () => systemUser } },
+    UserCache: { Instance: { GetSystemUser: () => systemUser, FindUser: (criteria: { ID?: string; Email?: string }) => findUserMock(criteria) } },
 }));
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -128,6 +129,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
 
     beforeEach(() => {
         runViewMock.mockReset();
+        findUserMock.mockReset();
         AgentUserPolicyEngine.Instance.ClearCache();
     });
 
@@ -405,6 +407,24 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(savedRoutines[0].Status).toBe('Active');
         });
 
+        it('serializes concurrent triggers for the same user, agent and workstream into one routine', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_ALICE_ID }));
+            serveExistingRoutines(savedRoutines);
+
+            // Both triggers start before either lookup resolves — the in-process race the write lock must close.
+            await Promise.all([
+                AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                    approvedRequest('req-A', 'A'), aliceUser, provider, FIXED_NOW),
+                AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                    approvedRequest('req-B', 'B'), aliceUser, provider, new Date(FIXED_NOW.getTime() + 1_000)),
+            ]);
+
+            expect(new Set(savedRoutines.map((r) => r.ID)).size).toBe(1);
+            const pending = savedRoutines[0].WakeConfigurationObject?.resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+            expect(pending.map((e) => e['requestID'])).toEqual(['req-A', 'req-B']);
+        });
+
         it('does not queue the same request and status twice', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
             AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_ALICE_ID }));
@@ -470,6 +490,56 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 senderEmail: 'alice@company.com',
                 subject: 'Prep briefing notes for tomorrow board call',
             });
+        });
+
+        it('resolves a sender that is not injected through UserCache so the save user carries roles', async () => {
+            const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Active' })
+            );
+            const cachedAlice = {
+                ...createUser(USER_ALICE_ID, 'Alice Executive', 'alice@company.com'),
+                UserRoles: [{ RoleName: 'Developer' }],
+            } as unknown as UserInfo;
+            findUserMock.mockResolvedValue(cachedAlice);
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const result = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'cos@company.com',
+                fromAddress: 'ALICE@company.com',
+                subject: 'Weekly check-in',
+                systemContextUser: serviceUser,
+                metadataProvider: provider,
+                identities: [utilityIdentity],
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(true);
+            expect(findUserMock).toHaveBeenCalledWith({ Email: 'alice@company.com' });
+            // No raw MJ: Users query — the cache (which loads roles) is the lookup.
+            expect(runViewMock.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Users')).toBe(false);
+            expect(capturedContextUsers[0].ID).toBe(USER_ALICE_ID);
+            expect(capturedContextUsers[0].UserRoles).toHaveLength(1);
+            expect(savedRoutines[0].UserID).toBe(USER_ALICE_ID);
+        });
+
+        it('rejects a non-injected sender that UserCache cannot resolve', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            findUserMock.mockResolvedValue(undefined);
+
+            const result = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+                toAddress: 'cos@company.com',
+                fromAddress: 'stranger@elsewhere.com',
+                subject: 'hello',
+                systemContextUser: serviceUser,
+                metadataProvider: provider,
+                identities: [utilityIdentity],
+                now: FIXED_NOW,
+            });
+
+            expect(result.triggered).toBe(false);
+            expect(result.resultCode).toBe('UNVERIFIED_EXTERNAL_SENDER');
+            expect(savedRoutines).toHaveLength(0);
         });
 
         it('rejects inbound utility mailbox emails from unverified external senders', async () => {
