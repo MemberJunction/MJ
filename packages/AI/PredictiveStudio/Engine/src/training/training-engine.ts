@@ -180,6 +180,7 @@ export class TrainingEngine {
     try {
       if (input.maxRows !== null && input.maxRows !== undefined) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows', why: 'a Prediction Unit pipeline reads every unit row; a capped read is not a complete read' } });
       if (input.labelEventDates) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: 'decision dates come from the Prediction Unit' } });
+      if (resolved.asOf.Mode !== 'none') throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } });
       const unit = await this.loadUnitSpec(unitId, deps);
       const metadata = deps.assemblyMetadata || new ProviderAssemblyMetadata(this.requireProvider(deps));
       // requireProvider: the unit path reads through the request's provider, never a global RunView.
@@ -240,15 +241,22 @@ export class TrainingEngine {
     return deps.provider;
   }
 
-  /** Record a refused run: `Failed`, the `refused` envelope in ValidationResults and the refusal sentence in Notes. */
+  /**
+   * Record a refused run (best-effort — never masks the refusal): `Failed`, the `refused` envelope in
+   * ValidationResults and the refusal sentence in Notes. The caller rethrows the refusal.
+   */
   private async finalizeRunRefused(run: MJMLTrainingRunEntity, err: TrainingRefusedError): Promise<void> {
     const results: TrainingRunResults = { schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: err.Refusal };
     run.Status = 'Failed';
     run.CompletedAt = new Date();
     run.ValidationResults = JSON.stringify(results);
     run.Notes = err.message;
-    if (!(await run.Save())) {
-      LogError(`TrainingEngine: failed to record the refusal on run ${run.ID}: ${run.LatestResult?.CompleteMessage || 'unknown error'}`);
+    try {
+      if (!(await run.Save())) {
+        LogError(`TrainingEngine: failed to record the refusal on run ${run.ID}: ${run.LatestResult?.CompleteMessage || 'unknown error'}`);
+      }
+    } catch (saveErr) {
+      LogError(`TrainingEngine: failed to record the refusal on run ${run.ID}: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
     }
   }
 

@@ -123,6 +123,7 @@ class FakeMLRun extends FakeEntity {
   public StartedAt: Date | null = null;
   public CompletedAt: Date | null = null;
   public ComputeCost: number | null = null;
+  public EvaluationProtocolID: string | null = null;
   public TokensUsed: number | null = null;
   public Notes: string | null = null;
 }
@@ -707,6 +708,20 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   it('refuses maxRows for a unit pipeline (a capped read is not a complete read)', async () => {
     const { engine, deps, pipeline } = unitHarness(years, unitColumns);
     await expect(engine.trainModel({ pipelineId: pipeline.ID, maxRows: 5 }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
+  });
+
+  it('refuses an as-of strategy for a unit pipeline before calling the sidecar (decision dates come from the unit)', async () => {
+    const { engine, deps, sidecar, pipeline } = unitHarness(years, unitColumns);
+    pipeline.AsOfStrategy = JSON.stringify({ Mode: 'column', Column: 'StartDate' } satisfies AsOfStrategy);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf' } } });
+    expect(sidecar.CallCount).toBe(0);
+  });
+
+  it("copies the pipeline's EvaluationProtocolID onto the run", async () => {
+    const { engine, deps, pipeline, runs } = unitHarness(years, unitColumns);
+    pipeline.EvaluationProtocolID = 'EP-1';
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(runs[0].EvaluationProtocolID).toBe('EP-1');
   });
 
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
