@@ -74,3 +74,71 @@ export type {
     MJASTAnnotation,
     MJASTWalkResult,
 } from './mj-ast-types.js';
+
+// ─── MJ Query language: token stream and template layer ───────────────
+export { MakeDiagnostic, MakeSpan, SpanContains } from './common/analysis.js';
+export type { Analysis, Diagnostic, DiagnosticSeverity, Span } from './common/analysis.js';
+export { MJQueryDiagnosticCodes } from './common/diagnosticCodes.js';
+export type { MJQueryDiagnosticCode } from './common/diagnosticCodes.js';
+export { SqlTokens, IsSignificantToken } from './lexer/sqlTokens.js';
+export type { SqlToken, SqlTokenKind, TemplateSqlContext, TemplateTagForm, TemplateTagInfo } from './lexer/sqlTokenTypes.js';
+export { QueryTemplate } from './template/queryTemplate.js';
+export { TemplateExpressionParser } from './template/expressionParser.js';
+export type { ParsedExpression, ParsedArgument, ParsedArguments } from './template/expressionParser.js';
+export { ExpressionChildren, WalkExpression } from './template/expressionTypes.js';
+export type {
+    TemplateExpression,
+    TemplateBinaryOperator,
+    TemplateUnaryOperator,
+    TemplateLiteralValue,
+    UnsupportedConstruct,
+    NameExpression,
+    ContextExpression,
+    LoopMemberExpression,
+    LiteralExpression,
+    UnaryExpression,
+    BinaryExpression,
+    FilterExpression,
+    UnsupportedExpression,
+} from './template/expressionTypes.js';
+export { AllNodes, ChildBodies, NodeExpressions } from './template/templateNodes.js';
+export type {
+    TemplateNode,
+    SqlTextNode,
+    ExpressionNode,
+    IfNode,
+    IfBranch,
+    ElseBranch,
+    ForNode,
+    SetNode,
+    CompositionNode,
+    CompositionArgument,
+    DocCommentNode,
+    UnknownTemplateNode,
+} from './template/templateNodes.js';
+export {
+    MJ_QUERY_SQL_FILTERS,
+    MJ_QUERY_CONTEXT_TOKENS,
+    MJ_QUERY_LOOP_MEMBERS,
+    MJ_QUERY_BLOCK_TAGS,
+    DEFAULT_FILTER_NAME,
+    FindSqlFilter,
+    ContextTokenFilters,
+} from './template/queryLanguage.js';
+export type { TemplateParameterType, MJQuerySqlFilter } from './template/queryLanguage.js';
+export type { TemplateParameter, ParameterUse, ContextTokenUse } from './template/parameterAnalysis.js';
+export type { ValueUseRole } from './template/templateWalker.js';
+export type { CompositionReference } from './template/compositionReferences.js';
+export type { TemplateDocComments, DocCommentEntry, DocCommentSource } from './template/docComments.js';
+export { BranchVariantValues } from './template/branchVariants.js';
+export type { BranchVariant, BranchVariantSet, BranchToggle } from './template/branchVariants.js';
+export type { BranchValue } from './template/branchEvaluator.js';
+export type {
+    QueryTemplateValidateOptions,
+    QueryTemplateValidationMode,
+    QueryTemplateValidation,
+    DeclaredTemplateParameter,
+    CompositionTarget,
+    CompositionTargetParameter,
+    CompositionResolver,
+} from './template/validationTypes.js';
