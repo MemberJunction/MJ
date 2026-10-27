@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, IMetadataProvider, Metadata, LogError, CompositeKey, EntityInfo } from "@memberjunction/core";
 
 /**
  * Abstract base class for record mutation actions (Create, Update, Delete).
@@ -154,6 +154,40 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         }
 
         return { success: true };
+    }
+
+    /**
+     * Maps the caller's field names onto the entity's own spelling (case-insensitive) and names the ones the
+     * entity does not have. A misspelled field has to be refused before anything is written: setting it would
+     * be dropped on the floor, and the caller told the write succeeded with that value silently missing.
+     */
+    protected ResolveFieldNames(entityInfo: EntityInfo, fields: Record<string, unknown>): { resolved: Record<string, unknown>; unknown: string[] } {
+        const canonicalByLowerName = new Map<string, string>(entityInfo.Fields.map((f) => [f.Name.toLowerCase(), f.Name]));
+        const resolved: Record<string, unknown> = {};
+        const unknown: string[] = [];
+        for (const [name, value] of Object.entries(fields)) {
+            const canonical = canonicalByLowerName.get(name.trim().toLowerCase());
+            if (canonical) {
+                resolved[canonical] = value;
+            } else {
+                unknown.push(name);
+            }
+        }
+        return { resolved, unknown };
+    }
+
+    /**
+     * The failure for a Fields object that names fields the entity does not have, listing the ones a caller
+     * can write (the metadata's read-only fields — keys, computed and system columns — are left out).
+     */
+    protected UnknownFieldsResult(entityName: string, entityInfo: EntityInfo, unknown: string[]): ActionResultSimple {
+        const known = entityInfo.Fields.filter((f) => !f.ReadOnly).map((f) => f.Name);
+        return {
+            Success: false,
+            ResultCode: 'UNKNOWN_ENTITY_FIELDS',
+            Message: `Entity '${entityName}' has no field named ${unknown.map((name) => `'${name}'`).join(', ')}; nothing was changed. ` +
+                `Its fields are: ${known.join(', ')}.`
+        };
     }
 
     /**

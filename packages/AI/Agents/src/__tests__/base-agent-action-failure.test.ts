@@ -920,6 +920,38 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(guidanceMsg).toContain("DO NOT retry calling 'Perplexity Search' with identical arguments");
         });
 
+        it('a refusal by the user\'s agent policy gets a policy directive, not the "adjust your parameters" warning', async () => {
+            harness.runAction = () => {
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = "Action 'Perplexity Search' targets external recipients and RequireApprovalForExternalComms is enabled.";
+                ar.Params = [];
+                // The policy gate's code matches none of the action's metadata result codes: Result stays
+                // undefined and only the text code carries it.
+                ar.ResultCode = 'POLICY_APPROVAL_REQUIRED';
+                return ar;
+            };
+
+            const { agent } = makeAgent([
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+
+            const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
+            const guidanceMsg = contents.find(c => c.includes('[CRITICAL/POLICY_APPROVAL_REQUIRED]'));
+
+            expect(guidanceMsg).toBeDefined();
+            expect(guidanceMsg).toContain("DO NOT retry 'Perplexity Search'");
+            expect(guidanceMsg).toContain('ask them to approve it');
+            expect(contents.some(c => c.includes('[WARNING/ACTION_FAILURE]'))).toBe(false);
+            // The text code reaches the model's result view instead of a bare ERROR.
+            expect(contents.some(c => c.includes('POLICY_APPROVAL_REQUIRED —'))).toBe(true);
+        });
+
         it('once the budget is spent the directive says ATTEMPTS_EXHAUSTED, never REPEATED_IDENTICAL_CALL', async () => {
             harness.runAction = () => {
                 harness.runActionCallCount++;

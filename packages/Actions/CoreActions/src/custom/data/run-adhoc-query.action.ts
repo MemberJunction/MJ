@@ -619,6 +619,15 @@ export class RunAdhocQueryAction extends BaseAction {
         }
     }
 
+    /** The `## Data` section: where the rows are, never the rows. */
+    private describeDataLocation(rowCount: number, hasFormattedResults: boolean): string {
+        if (rowCount === 0) {
+            return `## Data\n*No rows returned*`;
+        }
+        const alsoFormatted = hasFormattedResults ? ' (also rendered in the `FormattedResults` output parameter)' : '';
+        return `## Data\n${rowCount.toLocaleString()} row${rowCount !== 1 ? 's' : ''} in the \`Results\` output parameter${alsoFormatted}.`;
+    }
+
     /**
      * Build detailed message with query results for agent consumption
      */
@@ -677,23 +686,11 @@ export class RunAdhocQueryAction extends BaseAction {
             lines.push('');
         }
 
-        // Results Data (if applicable)
+        // The rows themselves are NOT repeated here. They go out in the Results output parameter (and in
+        // FormattedResults when a format was asked for), which an agent reads alongside this message; a
+        // copy in the message put every result set into the context a second (and third) time.
         if (returnType === 'data only' || returnType === 'data and analysis') {
-            if (results.length > 0) {
-                lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
-                if (formattedData) {
-                    lines.push('```');
-                    lines.push(formattedData);
-                    lines.push('```');
-                } else {
-                    lines.push('```json');
-                    // fls-guard: query rows; the SQL is refused before it runs if it reads a field the caller is denied
-                    lines.push(JSON.stringify(results, null, 2));
-                    lines.push('```');
-                }
-            } else {
-                lines.push(`## Data\n*No rows returned*`);
-            }
+            lines.push(this.describeDataLocation(results.length, formattedData !== undefined));
         }
 
         lines.push(`\n---`);

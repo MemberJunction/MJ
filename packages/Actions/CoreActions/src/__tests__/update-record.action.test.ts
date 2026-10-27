@@ -264,12 +264,10 @@ describe('UpdateRecordAction', () => {
         });
     });
 
-    describe('unknown-field handling (documents current behavior)', () => {
-        // ⚠️ PRODUCT BUG (documented, not fixed here): unlike WriteEntityFieldsAction,
-        // which rejects unknown fields with VALIDATION_ERROR, UpdateRecordAction
-        // silently skips them (LogError only). A typo'd field name is dropped while
-        // the rest of the update proceeds as SUCCESS.
-        it('silently skips unknown fields (LogError only) while applying the known ones', async () => {
+    describe('unknown-field handling', () => {
+        // A misspelled field used to be skipped (LogError only) while the rest of the update went through as
+        // SUCCESS, and a payload of nothing but typos came back as a NO_CHANGES success.
+        it('refuses an unknown field with UNKNOWN_ENTITY_FIELDS and writes nothing, even alongside a known one', async () => {
             const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
             const params = makeParams(
@@ -283,20 +281,16 @@ describe('UpdateRecordAction', () => {
 
             const r = await action.InternalRunAction(params);
 
-            expect(r.Success).toBe(true);
-            expect(r.ResultCode).toBe('SUCCESS');
-            expect(entity.values.Status).toBe('Active');
-            expect(entity.values.Stauts).toBeUndefined();
-            expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Field 'Stauts' does not exist on entity 'Widgets'"));
-
-            const updatedOut = findOutput(params.Params, 'UpdatedFields');
-            expect(updatedOut?.Value).toEqual({ Status: { oldValue: 'Draft', newValue: 'Active' } });
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('UNKNOWN_ENTITY_FIELDS');
+            expect(r.Message).toContain("'Stauts'");
+            expect(r.Message).toContain('Status');
+            expect(entity.values.Status).toBe('Draft');
+            expect(entity.saveCallCount).toBe(0);
+            expect(findOutput(params.Params, 'UpdatedFields')).toBeUndefined();
         });
 
-        // ⚠️ PRODUCT BUG (documented, not fixed here): when EVERY field is unknown,
-        // the action reports Success=true / NO_CHANGES — the caller has no signal
-        // that its entire payload was ignored.
-        it('returns a NO_CHANGES success when every supplied field is unknown', async () => {
+        it('names every unknown field when the whole payload is unknown, instead of a NO_CHANGES success', async () => {
             const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
             const params = makeParams(
@@ -310,9 +304,30 @@ describe('UpdateRecordAction', () => {
 
             const r = await action.InternalRunAction(params);
 
-            expect(r.Success).toBe(true);
-            expect(r.ResultCode).toBe('NO_CHANGES');
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('UNKNOWN_ENTITY_FIELDS');
+            expect(r.Message).toContain("'Stauts', 'Nmae'");
             expect(entity.saveCallCount).toBe(0);
+        });
+
+        it('accepts a field name in the wrong case and updates it under the entity\'s own spelling', async () => {
+            const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { status: 'Active' } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values.Status).toBe('Active');
+            expect(findOutput(params.Params, 'UpdatedFields')?.Value).toEqual({ Status: { oldValue: 'Draft', newValue: 'Active' } });
         });
     });
 

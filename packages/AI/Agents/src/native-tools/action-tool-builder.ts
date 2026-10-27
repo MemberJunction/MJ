@@ -229,10 +229,13 @@ export function BuildToolFromAction(action: MJActionEntityExtended, params: read
     const properties: Record<string, ParamValueSchema> = {};
     const required: string[] = [];
 
-    for (const param of params) {
-        if (param.Type !== 'Input' && param.Type !== 'Both') {
-            continue;
-        }
+    // Declared in name order, so the schema is byte-identical on every request that declares the same
+    // tool. The engine hands the params over in load order, which is not stable across processes, and a
+    // tool declaration that differs only in property order still misses the provider's prompt cache.
+    const declared = params
+        .filter((param) => param.Type === 'Input' || param.Type === 'Both')
+        .sort((a, b) => CompareToolNames(a.Name, b.Name));
+    for (const param of declared) {
         properties[param.Name] = declareParam(param);
         if (param.IsRequired) {
             required.push(param.Name);
@@ -288,8 +291,19 @@ export function BuildActionToolSet(
         byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool, params });
         tools.push(tool);
     }
+    // Same reason as the parameter order inside each tool: the actions arrive in load order.
+    tools.sort((a, b) => CompareToolNames(a.name, b.name));
 
     return { tools, byToolName };
+}
+
+/**
+ * Ordinal comparison for the names that decide tool-declaration order. Deliberately not `localeCompare`:
+ * the order has to be the same in every process, whatever its locale, or the declarations differ between
+ * servers for the same agent.
+ */
+export function CompareToolNames(a: string, b: string): number {
+    return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** @deprecated Use {@link BuildActionToolSet}. */

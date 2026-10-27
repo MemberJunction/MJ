@@ -213,15 +213,12 @@ describe('CreateRecordAction', () => {
         });
     });
 
-    describe('unknown-field handling (documents current behavior)', () => {
-        // ⚠️ PRODUCT BUG (documented, not fixed here): unlike WriteEntityFieldsAction,
-        // which rejects unknown fields with VALIDATION_ERROR before mutating anything,
-        // CreateRecordAction silently DROPS unknown fields (LogError only) and still
-        // saves the record — an agent typo'ing a field name gets a SUCCESS result and
-        // a record silently missing that value.
-        it('silently drops unknown fields (LogError only) and still saves successfully', async () => {
-            const entity = new FakeEntity(['Name'], { ID: 'new-7' });
-            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
+    describe('unknown-field handling', () => {
+        // A misspelled field used to be dropped (LogError only) while the record still saved as SUCCESS —
+        // the agent was told the write worked with that value silently missing.
+        it('refuses an unknown field with UNKNOWN_ENTITY_FIELDS before creating anything, naming the entity\'s fields', async () => {
+            const entity = new FakeEntity(['Name', 'Status'], { ID: 'new-7' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
             const params = makeParams(
                 [
                     { Name: 'EntityName', Value: 'Widgets' },
@@ -232,12 +229,32 @@ describe('CreateRecordAction', () => {
 
             const r = await action.InternalRunAction(params);
 
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('UNKNOWN_ENTITY_FIELDS');
+            expect(r.Message).toContain("'Naem'");
+            expect(r.Message).toContain('Name, Status');
+            expect(entity.newRecordCalled).toBe(false);
+            expect(entity.saveCallCount).toBe(0);
+            expect(entity.values.Name).toBeUndefined();
+        });
+
+        it('accepts a field name in the wrong case and writes it under the entity\'s own spelling', async () => {
+            const entity = new FakeEntity(['Name'], { ID: 'new-8' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'Fields', Value: { name: 'lower-cased key' } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
             expect(r.Success).toBe(true);
-            expect(r.ResultCode).toBe('SUCCESS');
             expect(entity.saveCallCount).toBe(1);
-            expect(entity.values.Name).toBe('ok');
-            expect(entity.values.Naem).toBeUndefined();
-            expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Field 'Naem' does not exist on entity 'Widgets'"));
+            expect(entity.values.Name).toBe('lower-cased key');
+            expect(entity.values.name).toBeUndefined();
         });
     });
 

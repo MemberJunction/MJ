@@ -224,11 +224,10 @@ export class RunStoredQueryAction extends BaseAction {
 
         lines.push('\n---\n');
 
+        // The rows go out in the Results and FormattedResults output parameters, which an agent reads
+        // alongside this message; a copy here put every result set into the context a third time.
         if (results.length > 0) {
-            lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
-            lines.push('```');
-            lines.push(formattedData);
-            lines.push('```');
+            lines.push(`## Data\n${results.length.toLocaleString()} row${results.length !== 1 ? 's' : ''} in the \`Results\` output parameter (also rendered in \`FormattedResults\`).`);
         } else {
             lines.push('## Data\n*No rows returned*');
         }

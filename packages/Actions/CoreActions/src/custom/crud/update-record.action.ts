@@ -1,6 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
-import { LogError } from "@memberjunction/core";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
 
@@ -47,7 +46,7 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was updated successfully
-     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, RECORD_NOT_FOUND, VALIDATION_ERROR, 
+     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, RECORD_NOT_FOUND, UNKNOWN_ENTITY_FIELDS, VALIDATION_ERROR,
      *                 PERMISSION_DENIED, NO_CHANGES, CONCURRENT_UPDATE
      *   - Message: Details about the operation
      *   - Params: Output parameter 'UpdatedFields' contains the fields that were actually changed
@@ -76,24 +75,27 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
 
+            // A field the entity does not have is refused before anything is written, not skipped: a skipped
+            // typo used to come back as SUCCESS (or NO_CHANGES) with that value never saved.
+            const { resolved, unknown } = this.ResolveFieldNames(entityInfo!, fields);
+            if (unknown.length > 0) {
+                return this.UnknownFieldsResult(entityName, entityInfo!, unknown);
+            }
+
             // Track which fields are actually being changed
             const updatedFields: Record<string, { oldValue: any, newValue: any }> = {};
             let hasChanges = false;
 
             // Set each field value
-            for (const [fieldName, fieldValue] of Object.entries(fields)) {
-                if (fieldName in entity!) {
-                    const currentValue = entity!.Get(fieldName);
-                    if (currentValue !== fieldValue) {
-                        entity!.Set(fieldName, fieldValue);
-                        updatedFields[fieldName] = {
-                            oldValue: currentValue,
-                            newValue: fieldValue
-                        };
-                        hasChanges = true;
-                    }
-                } else {
-                    LogError(`Field '${fieldName}' does not exist on entity '${entityName}'`);
+            for (const [fieldName, fieldValue] of Object.entries(resolved)) {
+                const currentValue = entity!.Get(fieldName);
+                if (currentValue !== fieldValue) {
+                    entity!.Set(fieldName, fieldValue);
+                    updatedFields[fieldName] = {
+                        oldValue: currentValue,
+                        newValue: fieldValue
+                    };
+                    hasChanges = true;
                 }
             }
 
