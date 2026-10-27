@@ -346,7 +346,7 @@ describe('AgentUserPolicyEngine', () => {
             });
 
             const weekendCall = engine.EvaluateActionExecution({
-                actionName: 'Prepare Chief of Staff Outbound Call',
+                actionName: 'Prepare Outbound Call Brief',
                 params: {},
                 contextUser: aliceUser,
                 policy,
