@@ -22,7 +22,7 @@ import { MentionParserService } from '../../services/mention-parser.service';
 import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
 import { SavePinState } from '../../utils/pin-state';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
-import { MarkdownService } from '@memberjunction/ng-markdown';
+import { MarkdownService, type ImageClickedEventArgs } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -1663,7 +1663,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
       return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
@@ -2647,6 +2647,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** @deprecated Use {@link OnAttachmentClick}. */
   public onAttachmentClick(attachment: MessageAttachment): void {
     return this.OnAttachmentClick(attachment);
+  }
+
+  /**
+   * An image in the message text was clicked: open it in the chat's image viewer, the way an
+   * attachment thumbnail opens there.
+   */
+  public OnMarkdownImageClicked(image: ImageClickedEventArgs): void {
+    this.AttachmentClicked.emit({
+      id: image.Src,
+      type: 'Image',
+      mimeType: '',
+      fileName: image.Alt || null,
+      sizeBytes: 0,
+      contentUrl: image.Src,
+    });
   }
 
   /**

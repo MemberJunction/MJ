@@ -690,6 +690,20 @@ export abstract class BaseRealtimeClient {
     public abstract RequestSpokenUpdate(instructions: string): void;
 
     /**
+     * Asks the model to speak ONE turn that is part of the conversation — captioned, transcribed and
+     * persisted like any turn the model takes on its own (an interviewer's greeting, a guide's opening).
+     *
+     * The deliberate contrast with {@link RequestSpokenUpdate}: an update is disposable narration a
+     * container throws away; a turn is the record (MJ#4591). Drivers implement it with the same wire
+     * mechanics and collision rule as their spoken update, tagging the reply `Kind: 'normal'`.
+     * Optional: a driver from before this capability existed omits it, and a container falls back to
+     * the spoken update rather than going silent.
+     *
+     * @param instructions What to say, in the host's words; the model speaks in its own persona.
+     */
+    public RequestSpokenTurn?(instructions: string): void;
+
+    /**
      * Feeds an executed tool's result back to the model, correlated by `callID`, and ensures
      * the model SPEAKS the result as soon as possible: immediately when idle, otherwise
      * queued behind the in-flight response (e.g. a progress narration) so the trigger is

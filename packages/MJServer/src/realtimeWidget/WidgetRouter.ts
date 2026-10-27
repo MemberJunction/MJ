@@ -55,7 +55,9 @@ function ensureWidgetSigning(publicUrl: string, widgetConfig: WidgetConfig): voi
 export function CreateWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router; authenticatedRouter: Router } {
   ensureWidgetSigning(publicUrl, config);
 
-  const service = new WidgetSessionService(publicUrl, config);
+  // A widget may hand an anonymous guest only a scope-isolated role (MJ#6043); the opt-in list is the one
+  // magic-link invites already use, so an admin declares "safe for anonymous visitors" in one place.
+  const service = new WidgetSessionService(publicUrl, config, { GrantableRoleNames: configInfo.magicLink?.grantableRoleNames ?? [] });
 
   // Per-instance DYNAMIC mint limiter (W6 hardening): keyed by (widgetKey + IP) so each widget
   // deployment gets its own bucket and one abusive IP can't exhaust a shared instance's budget for
