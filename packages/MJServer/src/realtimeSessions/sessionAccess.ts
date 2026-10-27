@@ -163,7 +163,7 @@ export async function LoadSessionForAccess(
     if (!(await session.Load(agentSessionId))) {
         return null;
     }
-    const conversation = await LoadSessionConversationScope(session, contextUser, provider);
+    const conversation = await LoadConversationScope(session.ConversationID, contextUser, provider);
     return { Session: session, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable };
 }
 
@@ -183,8 +183,9 @@ export interface ConversationScope extends SessionConversationScope {
 
 /**
  * Reads an already-loaded session's conversation under `contextUser` (so its row-level security applies).
- * A missing conversation, a refused read and a failed read (logged) all report `Readable: false`. For
- * callers that loaded the session through another gate and only need the scope half of
+ * A missing conversation, an unscoped named caller (for whom {@link AuthorizeSessionAccess} decides before
+ * reading conversation fields), a refused read, and a failed read (logged) all report `Readable: false`.
+ * For callers that loaded the session through another gate and only need the scope half of
  * {@link AuthorizeSessionAccess}'s subject.
  */
 export async function LoadSessionConversationScope(
@@ -192,7 +193,7 @@ export async function LoadSessionConversationScope(
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<SessionConversationScope> {
-    if (!session.ConversationID) {
+    if (!session.ConversationID || !ResolveSessionScopeIdentity(contextUser)) {
         return { ExternalID: null, Readable: false };
     }
     const { ExternalID, Readable } = await LoadConversationScope(session.ConversationID, contextUser, provider);

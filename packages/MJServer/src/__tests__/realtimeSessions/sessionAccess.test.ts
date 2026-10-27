@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { AuthorizeSessionAccess, AuthorizeConversationTurn, AuthorizeAnonymousRoomSessions, LoadSessionForAccess, LoadConversationScope } from '../../realtimeSessions/sessionAccess.js';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { AuthorizeSessionAccess, AuthorizeConversationTurn, AuthorizeAnonymousRoomSessions, LoadSessionForAccess, LoadSessionConversationScope, LoadConversationScope } from '../../realtimeSessions/sessionAccess.js';
 
 const OWNER = 'AAAAAAAA-0000-4000-8000-000000000001';
 const OTHER = 'AAAAAAAA-0000-4000-8000-000000000002';
@@ -187,6 +188,25 @@ describe('LoadSessionForAccess', () => {
         const loaded = await LoadSessionForAccess(SESSION_ID, USER, fakeProvider({ session: { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID }, conversation: { ExternalID: null } }));
         expect(loaded?.ConversationExternalID).toBeNull();
         expect(loaded?.ConversationReadable).toBe(true);
+    });
+});
+
+describe('LoadSessionConversationScope', () => {
+    const sessionWithConversation = { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID } as unknown as MJAIAgentSessionEntity;
+
+    it('skips reading the conversation when the caller is an unscoped named user', async () => {
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        const scope = await LoadSessionConversationScope(sessionWithConversation, USER, provider);
+        expect(scope).toEqual({ ExternalID: null, Readable: false });
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+
+    it('reads the conversation when the caller carries a scope identity', async () => {
+        const scopedUser = { ID: OWNER, MagicLinkScope: { ResourceID: 'scope-1' } } as unknown as UserInfo;
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        const scope = await LoadSessionConversationScope(sessionWithConversation, scopedUser, provider);
+        expect(scope).toEqual({ ExternalID: 'scope-1', Readable: true });
+        expect(provider.GetEntityObject).toHaveBeenCalledTimes(1);
     });
 });
 

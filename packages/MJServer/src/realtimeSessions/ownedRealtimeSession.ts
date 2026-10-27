@@ -8,7 +8,7 @@
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
-import { AuthorizeSessionAccess, LoadSessionConversationScope, ResolveSessionScopeIdentity } from './sessionAccess.js';
+import { AuthorizeSessionAccess, LoadSessionConversationScope } from './sessionAccess.js';
 
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 
@@ -54,9 +54,7 @@ export async function LoadOwnedRealtimeSession(
         );
         throw new RealtimeSessionOwnershipError(agentSessionId);
     }
-    const conversation = ResolveSessionScopeIdentity(contextUser)
-        ? await LoadSessionConversationScope(session, contextUser, provider)
-        : { ExternalID: null, Readable: false };
+    const conversation = await LoadSessionConversationScope(session, contextUser, provider);
     const access = AuthorizeSessionAccess(
         { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
         contextUser,
