@@ -147,7 +147,7 @@ describe('push SQL log redaction', () => {
 
     const sql = transform([tokenLine('6679d1fd77d5'), `SET @OwnerID_6679d1fd77d5 = '${ID_VALUE}'`].join('\n'));
 
-    expect(sql).toBe([TOKEN_COMMENT, "SET @OwnerID_6679d1fd77d5 = (SELECT [ID] FROM [dbo].[User] WHERE [Email] = N'a@example.com')"].join('\n'));
+    expect(sql).toBe([TOKEN_COMMENT, "SET @OwnerID_6679d1fd77d5 = (SELECT [ID] FROM [dbo].[User] WHERE LOWER([Email]) = LOWER(N'a@example.com'))"].join('\n'));
   });
 
   it('passes the sync config schema rules without turning on the Flyway escape for a plain log', async () => {
