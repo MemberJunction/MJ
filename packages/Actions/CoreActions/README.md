@@ -81,7 +81,7 @@ Several abstract base classes reduce duplication across related actions:
 | `BaseRecordMutationAction` | `crud/base-record-mutation.action.ts` | Shared parameter extraction, entity loading, error analysis for Create/Update/Delete |
 | `BaseFileStorageAction` | `files/base-file-storage.action.ts` | Common storage-provider resolution for all `File Storage: *` actions |
 | `BaseFileHandlerAction` | `utilities/base-file-handler.ts` | Multi-source file loading (Storage, URL, direct data) |
-| `BaseUserScopedCommunicationAction` | `ai/chief-of-staff-calendar-email.action.ts` | Mailbox security gate and provider resolution for the Chief of Staff `* My *` email/calendar actions; pins every mailbox operation to `ContextUser.Email` |
+| `BaseUserScopedCommunicationAction` | `ai/user-scoped-communication.action.ts` | Mailbox security gate and provider resolution for the Chief of Staff `* My *` email/calendar actions; pins every mailbox operation to `ContextUser.Email` |
 
 ### Generated Actions
 
@@ -158,8 +158,8 @@ Actions used by the Chief of Staff agent (and other autonomous agents) to manage
 |---|---|---|
 | `Configure Agent User Policy` | `ConfigureAgentUserPolicyAction` | Create or update the caller's `MJ: AI Agent User Policies` row for an agent (channel modes, coordination mode, action and entity rules); always bound to `ContextUser.ID` |
 | `Schedule Next Agent Wake` | `ScheduleNextAgentWakeAction` | Upsert the agent's next `AgentWake` row in `MJ: User Routines`, keyed by `(UserID, TargetID, WorkstreamKey)`; one-shot or cron schedule |
-| `Send Chief of Staff Inter-Agent Request` | `ChiefOfStaffInterAgentRequestAction` | Send a structured follow-up to another user, or that user's Chief of Staff, as an `MJ: AI Agent Requests` row; checks both users' coordination policy |
-| `Prepare Chief of Staff Outbound Call` | `PrepareChiefOfStaffOutboundCallAction` | Validate `PhoneChannelMode` and approval rules, then build a locked outbound-call brief with mandatory upfront AI disclosure |
+| `Send Inter-Agent Request` | `SendInterAgentRequestAction` | Send a structured follow-up to another user, or that user's Chief of Staff, as an `MJ: AI Agent Requests` row; checks both users' coordination policy |
+| `Prepare Outbound Call Brief` | `PrepareOutboundCallBriefAction` | Validate `PhoneChannelMode` and approval rules, then build a locked outbound-call brief with mandatory upfront AI disclosure |
 | `Verify My Communication Capabilities` | `VerifyMyCommunicationCapabilitiesAction` | Preflight: reports the enterprise communication posture, active providers, the caller's channel permissions, utility mailboxes and external scheduling connectors |
 | `Get My Calendar Events and Availability` | `GetMyCalendarAndAvailabilityAction` | Read the caller's events, free/busy, meeting-time suggestions, or HubSpot/Calendly availability |
 | `Manage My Calendar Event` | `ManageMyCalendarEventAction` | Create, update, respond to or cancel an event on the caller's calendar, or create a Calendly single-use link; enforces `CalendarChannelMode` |

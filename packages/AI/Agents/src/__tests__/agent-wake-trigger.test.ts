@@ -184,7 +184,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             });
         });
 
-        it('wakes the target user Chief of Staff on incoming InterAgentCoS request and wakes sender Chief of Staff on resolution', async () => {
+        it('wakes the target user Chief of Staff on incoming InterAgent request and wakes sender Chief of Staff on resolution', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
             AgentUserPolicyEngine.Instance.SetCachedPolicy(
                 createPolicy({
@@ -212,13 +212,13 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 senderAgentID: COS_AGENT_ID,
                 targetUserID: USER_BOB_ID,
                 targetUserName: 'Bob Peer',
-                deliveryMode: 'InterAgentCoS',
+                deliveryMode: 'InterAgent',
                 subject: 'Confirm Q4 Launch Dependencies',
                 message: 'Can Bob confirm engineering readiness by Friday?',
                 workstreamKey: 'q4-launch-sync',
             };
 
-            // Step A: Newly created InterAgentCoS request wakes Bob's Chief of Staff
+            // Step A: Newly created InterAgent request wakes Bob's Chief of Staff
             const incomingReq = {
                 ID: 'req-inter-agent-1',
                 AgentID: COS_AGENT_ID,
@@ -248,7 +248,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 messageBody: 'Can Bob confirm engineering readiness by Friday?',
             });
 
-            // Step B: Resolved InterAgentCoS request wakes Alice's (sender's) Chief of Staff
+            // Step B: Resolved InterAgent request wakes Alice's (sender's) Chief of Staff
             const resolvedReq = {
                 ...incomingReq,
                 Status: 'Responded',
@@ -275,6 +275,36 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 response: 'Confirmed — engineering is ready for Friday.',
                 targetUserID: USER_BOB_ID,
             });
+        });
+    });
+
+    describe('1a. Legacy envelope values', () => {
+        it('still wakes the target Chief of Staff for an in-flight envelope written with the pre-rename InterAgentCoS delivery mode', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_BOB_ID }));
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const legacyRequest = {
+                ID: 'req-legacy-1',
+                AgentID: COS_AGENT_ID,
+                RequestForUserID: USER_BOB_ID,
+                Status: 'Requested',
+                Request: 'Legacy coordination request',
+                Comments: JSON.stringify({
+                    interAgentCoordination: true,
+                    deliveryMode: 'InterAgentCoS',
+                    senderUserID: USER_ALICE_ID,
+                    senderAgentID: COS_AGENT_ID,
+                    targetUserID: USER_BOB_ID,
+                    subject: 'Legacy',
+                }),
+            } as unknown as MJAIAgentRequestEntity;
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeOnIncomingInterAgentRequest(
+                legacyRequest, aliceUser, provider, FIXED_NOW);
+
+            expect(result.triggered).toBe(true);
+            expect(savedRoutines[0].UserID).toBe(USER_BOB_ID);
         });
     });
 

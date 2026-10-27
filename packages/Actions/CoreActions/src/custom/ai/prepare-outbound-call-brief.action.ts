@@ -10,7 +10,7 @@ import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-r
 /**
  * Locked outbound telephony brief enforced before any Chief of Staff voice session or outbound call.
  */
-export interface ChiefOfStaffOutboundCallBrief {
+export interface OutboundCallBrief {
     briefVersion: '1.0';
     agentID: string;
     agentDisplayName: string;
@@ -38,11 +38,11 @@ const CORE_CALL_PROHIBITIONS: ReadonlyArray<string> = [
 
 /**
  * Action that validates `PhoneChannelMode` and approval guardrails on the caller's
- * `MJ: AI Agent User Policies` and constructs a locked `ChiefOfStaffOutboundCallBrief`
+ * `MJ: AI Agent User Policies` and constructs a locked `OutboundCallBrief`
  * with mandatory upfront AI disclosure before any outbound telephony call.
  */
-@RegisterClass(BaseAction, 'Prepare Chief of Staff Outbound Call')
-export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
+@RegisterClass(BaseAction, 'Prepare Outbound Call Brief')
+export class PrepareOutboundCallBriefAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -50,7 +50,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
                 return {
                     Success: false,
                     ResultCode: 'MISSING_USER_CONTEXT',
-                    Message: 'Prepare Chief of Staff Outbound Call requires a valid ContextUser.',
+                    Message: 'Prepare Outbound Call Brief requires a valid ContextUser.',
                     Params: params.Params,
                 };
             }
@@ -114,7 +114,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             const callerName = contextUser.Name || contextUser.Email || 'my principal';
             const mandatoryUpfrontDisclosure = `Hello ${ targetRecipientName }, I am ${ agentDisplayName }, an AI assistant calling on behalf of ${ callerName }.`;
 
-            const brief: ChiefOfStaffOutboundCallBrief = {
+            const brief: OutboundCallBrief = {
                 briefVersion: '1.0',
                 agentID: agent.ID,
                 agentDisplayName,
@@ -193,7 +193,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            LogError(`PrepareChiefOfStaffOutboundCallAction error: ${ message }`);
+            LogError(`PrepareOutboundCallBriefAction error: ${ message }`);
             return {
                 Success: false,
                 ResultCode: 'UNEXPECTED_ERROR',

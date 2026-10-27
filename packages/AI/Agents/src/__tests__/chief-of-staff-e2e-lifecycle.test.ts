@@ -48,8 +48,8 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         const actionLookups = agents[0].relatedEntities['MJ: AI Agent Actions'].map((a) => a.fields.ActionID);
         expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Schedule Next Agent Wake');
         expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Configure Agent User Policy');
-        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Chief of Staff Inter-Agent Request');
-        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Prepare Chief of Staff Outbound Call');
+        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Send Inter-Agent Request');
+        expect(actionLookups).toContain('@lookup:MJ: Actions.Name=Prepare Outbound Call Brief');
 
         const templateContent = fs.readFileSync(templatePath, 'utf8');
         expect(DetectVolatilePlaceholders(templateContent)).toEqual([]);
@@ -90,7 +90,7 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
                 rationale: 'External emails require explicit executive sign-off',
             },
             {
-                actionPattern: 'Prepare Chief of Staff Outbound Call',
+                actionPattern: 'Prepare Outbound Call Brief',
                 policy: 'Allow',
                 timeWindows: [
                     {

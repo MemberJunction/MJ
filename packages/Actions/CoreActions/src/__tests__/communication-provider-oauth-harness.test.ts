@@ -94,7 +94,7 @@ import {
     VerifyMyCommunicationCapabilitiesAction,
     GetMyCalendarAndAvailabilityAction,
     ManageMyCalendarEventAction,
-} from '../custom/ai/chief-of-staff-calendar-email.action';
+} from '../custom/ai/user-scoped-communication.action';
 import {
     CommunicationUserOAuthService,
     IOAuthTokenTransport,

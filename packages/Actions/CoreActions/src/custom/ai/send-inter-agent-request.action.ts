@@ -12,7 +12,7 @@ import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-r
  * Structured payload stored inside `MJAIAgentRequestEntity.Comments` (and reflected in `Request`)
  * for Chief-of-Staff-to-Chief-of-Staff or Chief-of-Staff-to-User follow-ups across workstreams.
  */
-export interface ChiefOfStaffInterAgentEnvelope {
+export interface InterAgentCoordinationEnvelope {
     protocolVersion: '1.0';
     interAgentCoordination: true;
     senderUserID: string;
@@ -36,11 +36,11 @@ export interface ChiefOfStaffInterAgentEnvelope {
  * 1. Verifies the sender's `MJ: AI Agent User Policies` allows active follow-ups (`CoordinationMode`
  *    must be `'ActiveFollowUp'` or `'FullDelegate'`, and `AllowInterAgentCoordination` must not be `false`).
  * 2. Checks the target user's policy: if the target user has `AllowInterAgentCoordination === true`
- *    and an active Chief of Staff policy, marks `DeliveryMode = 'InterAgentCoS'` so the target user's
+ *    and an active Chief of Staff policy, marks `DeliveryMode = 'InterAgent'` so the target user's
  *    Chief of Staff can triage it on its next wake; otherwise delivers as `'DirectUserRequest'`.
  */
-@RegisterClass(BaseAction, 'Send Chief of Staff Inter-Agent Request')
-export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
+@RegisterClass(BaseAction, 'Send Inter-Agent Request')
+export class SendInterAgentRequestAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -48,7 +48,7 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
                 return {
                     Success: false,
                     ResultCode: 'MISSING_USER_CONTEXT',
-                    Message: 'Send Chief of Staff Inter-Agent Request requires a valid ContextUser.',
+                    Message: 'Send Inter-Agent Request requires a valid ContextUser.',
                     Params: params.Params,
                 };
             }
@@ -112,11 +112,11 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
                 targetUserId,
                 contextUser
             );
-            const deliveryMode: 'InterAgentCoS' | 'DirectUserRequest' =
+            const deliveryMode: 'InterAgent' | 'DirectUserRequest' =
                 targetPolicy &&
                 targetPolicy.Status === 'Active' &&
                 targetPolicy.AllowInterAgentCoordination !== false
-                    ? 'InterAgentCoS'
+                    ? 'InterAgent'
                     : 'DirectUserRequest';
 
             const priority = this.clampPriority(this.getNumericParam(params, 'Priority') ?? 50);
@@ -126,7 +126,7 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
             const issueId = this.getStringParam(params, 'IssueID');
             const requestedFields = this.parseObjectParam<string[]>(params, 'RequestedFields');
 
-            const envelope: ChiefOfStaffInterAgentEnvelope = {
+            const envelope: InterAgentCoordinationEnvelope = {
                 protocolVersion: '1.0',
                 interAgentCoordination: true,
                 senderUserID: contextUser.ID,
@@ -196,7 +196,7 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            LogError(`ChiefOfStaffInterAgentRequestAction error: ${ message }`);
+            LogError(`SendInterAgentRequestAction error: ${ message }`);
             return {
                 Success: false,
                 ResultCode: 'UNEXPECTED_ERROR',

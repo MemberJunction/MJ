@@ -76,7 +76,7 @@ import {
     GetMyCalendarAndAvailabilityAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
-} from '../custom/ai/chief-of-staff-calendar-email.action';
+} from '../custom/ai/user-scoped-communication.action';
 
 const aliceUser = {
     ID: 'user-alice-1',

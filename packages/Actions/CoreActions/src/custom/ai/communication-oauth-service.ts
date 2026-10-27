@@ -26,7 +26,7 @@ import { UserInfo } from '@memberjunction/core';
 import { BaseSingleton, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJCommunicationProviderEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { BaseUserScopedCommunicationAction } from './chief-of-staff-calendar-email.action';
+import { BaseUserScopedCommunicationAction } from './user-scoped-communication.action';
 
 /**
  * Values stored in a per-user delegated OAuth 2.0 (`3LO`) credential.

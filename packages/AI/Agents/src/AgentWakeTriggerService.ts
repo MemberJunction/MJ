@@ -7,8 +7,8 @@
  *      `OriginatingTaskID == null`) transitions from `'Requested'` to `'Approved' | 'Rejected' | 'Responded'`,
  *      schedules an immediate `AgentWake` routine (`MJ: User Routines` with `RoutineType = 'AgentWake'`,
  *      `NextRunAt = now`) for the owning user's agent (or the sender user's Chief of Staff on a
- *      `ChiefOfStaffInterAgentEnvelope` resolution) with the resolved request context in `resumeState`.
- *    - When a new peer-to-peer `InterAgentCoS` request (`interAgentCoordination: true`) is created with
+ *      `InterAgentCoordinationEnvelope` resolution) with the resolved request context in `resumeState`.
+ *    - When a new peer-to-peer `InterAgent` request (`interAgentCoordination: true`) is created with
  *      `Status = 'Requested'`, schedules an immediate `AgentWake` routine for the target user's Chief of Staff
  *      (when their `MJ: AI Agent User Policies` row is active and `AllowInterAgentCoordination !== false`).
  * 2. **Inbound Utility Mailbox Wake**:
@@ -38,11 +38,11 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 export type AgentWakeResumeState = NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['resumeState']>;
 
 /**
- * Envelope shape stored in `MJAIAgentRequestEntity.Comments` by `Send Chief of Staff Inter-Agent Request`.
+ * Envelope shape stored in `MJAIAgentRequestEntity.Comments` by `Send Inter-Agent Request`.
  */
 export interface InterAgentCoordinationEnvelopeShape {
     interAgentCoordination?: boolean;
-    /** Written by `ChiefOfStaffInterAgentEnvelope` (`Send Chief of Staff Inter-Agent Request`). */
+    /** Written by `InterAgentCoordinationEnvelope` (`Send Inter-Agent Request`). */
     protocolVersion?: string;
     /** @deprecated older envelopes; prefer `protocolVersion`. */
     envelopeVersion?: string;
@@ -53,9 +53,10 @@ export interface InterAgentCoordinationEnvelopeShape {
     targetUserID?: string;
     targetUserName?: string;
     targetUserEmail?: string;
-    deliveryMode?: 'InterAgentCoS' | 'DirectUserRequest';
+    /** `InterAgentCoS` is the pre-rename value still present on in-flight rows; treated exactly like `InterAgent`. */
+    deliveryMode?: 'InterAgent' | 'InterAgentCoS' | 'DirectUserRequest';
     subject?: string;
-    /** Message body as written by `ChiefOfStaffInterAgentEnvelope`. */
+    /** Message body as written by `InterAgentCoordinationEnvelope`. */
     message?: string;
     /** @deprecated older envelopes; prefer `message`. */
     messageBody?: string;
@@ -159,7 +160,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
      * `OriginatingTaskID == null`) and schedules an immediate `AgentWake` routine for the
      * appropriate user's agent.
      *
-     * - For peer-to-peer `InterAgentCoS` requests (`interAgentCoordination: true` in `Comments`),
+     * - For peer-to-peer `InterAgent` requests (`interAgentCoordination: true` in `Comments`),
      *   wakes the **sender user's** Chief of Staff (`envelope.senderUserID`) with the peer's response.
      * - For standard action-created approval requests (Calendar, Email, Outbound Call),
      *   wakes the **request owner's** agent (`request.RequestForUserID`) with the approval outcome.
@@ -263,8 +264,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
     /**
      * Evaluates a newly created `MJAIAgentRequestEntity` (`Status === 'Requested'`) and, when it
-     * carries a peer-to-peer `InterAgentCoS` envelope (`interAgentCoordination: true`,
-     * `deliveryMode === 'InterAgentCoS'`), schedules an immediate `AgentWake` routine for the
+     * carries a peer-to-peer `InterAgent` envelope (`interAgentCoordination: true`,
+     * `deliveryMode === 'InterAgent'`), schedules an immediate `AgentWake` routine for the
      * target user's Chief of Staff so it can triage the incoming request.
      */
     public async TriggerWakeOnIncomingInterAgentRequest(
@@ -279,12 +280,12 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
         const envelope = this.parseInterAgentEnvelope(request.Comments);
         if (!envelope || envelope.interAgentCoordination !== true || envelope.deliveryMode === 'DirectUserRequest') {
-            return this.notTriggered('SKIPPED_NOT_APPLICABLE', 'Request is not an InterAgentCoS coordination request.');
+            return this.notTriggered('SKIPPED_NOT_APPLICABLE', 'Request is not an InterAgent coordination request.');
         }
 
         const targetUserID = envelope.targetUserID || request.RequestForUserID;
         if (!targetUserID) {
-            return this.notTriggered('SKIPPED_NOT_APPLICABLE', 'No targetUserID found on InterAgentCoS request.');
+            return this.notTriggered('SKIPPED_NOT_APPLICABLE', 'No targetUserID found on InterAgent request.');
         }
 
         const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(

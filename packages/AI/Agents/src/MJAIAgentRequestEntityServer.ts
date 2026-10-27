@@ -77,7 +77,7 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
                     LogError(`Failed to schedule resolution wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
                 });
             } else if (wasNewRecord && this.Status === 'Requested') {
-                // Newly created peer-to-peer InterAgentCoS request — schedule immediate AgentWake for target user's CoS
+                // Newly created peer-to-peer InterAgent request — schedule immediate AgentWake for target user's CoS
                 AgentWakeTriggerService.Instance.TriggerWakeOnIncomingInterAgentRequest(
                     this,
                     this.ContextCurrentUser,

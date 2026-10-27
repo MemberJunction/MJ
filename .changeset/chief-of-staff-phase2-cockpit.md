@@ -3,6 +3,9 @@
 "@memberjunction/ai-agents": minor
 "@memberjunction/core-actions": minor
 "@memberjunction/credentials": minor
+"@memberjunction/ai-engine-base": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
 ---
 
 Chief of Staff Phase 2: Executive Cockpit, event-driven agent wakes, and a per-user OAuth prototype.
@@ -12,3 +15,4 @@ Chief of Staff Phase 2: Executive Cockpit, event-driven agent wakes, and a per-u
 - **Per-user OAuth 2.0 (3LO) prototype (`CommunicationUserOAuthService`, `@memberjunction/core-actions`; `@memberjunction/credentials`).** PKCE S256 authorization flow with four enterprise gates (admin opt-in, allowed email domains, allowed tenant IDs, strict principal match) and owner-bound credential storage: `CredentialEngine.StoreUserDelegatedCredential` / `GetUserDelegatedCredential` / `RevokeUserDelegatedCredential`, with `CredentialOwnerMismatchError` thrown when a delegated credential is resolved by a different user. Off by default: the administrator gates (`AllowUserDelegatedOAuth`, `AllowedEmailDomains`, `AllowedOAuthTenantIDs`) live on `MJ: Communication Providers` and credentials are stored through `CredentialEngine`; there are no API routes or token transport implementation yet, and no communication provider consumes the stored token.
 - **Chief of Staff actions.** Approval requests created by the calendar/email, inter-agent and outbound-call actions now carry the `Approval` request type. The agent prompt template and action descriptions name the BizApps entities correctly (`MJ_BizApps_Tasks: Tasks`, `MJ_BizApps_Issues: Issues`) and warn against querying system catalogs.
 - **Generic entity field resolution.** `Create Record` and `Update Record` resolve field names through entity metadata, so they work on OpenApp entities without a generated TypeScript subclass.
+- **Review follow-ups.** `AIEngineBase` caches `MJ: AI Agent Request Types` (`AgentRequestTypes`, `GetAgentRequestTypeByName`), and the approval-creating actions resolve the `Approval` type by name instead of a hardcoded id (new result code `REQUEST_TYPE_NOT_FOUND`); the cockpit resolves the agent by name too. The inter-agent and outbound-call actions are renamed after what they do: `Send Inter-Agent Request` (`SendInterAgentRequestAction`, envelope type `InterAgentCoordinationEnvelope`, delivery mode `InterAgent`; the previous `InterAgentCoS` value is still accepted on in-flight rows) and `Prepare Outbound Call Brief` (`PrepareOutboundCallBriefAction`, `OutboundCallBrief`). `AgentWakeTriggerService` resolves inbound-mailbox senders through `UserCache` (roles loaded) and serializes wake upserts per user, agent and workstream. `CredentialEngine` hides `UserOAuth3LO:*` rows from the shared accessors (`Credentials`, `GetCredentialById`, `GetCredentialByName`, `GetDefaultCredentialForType`), checks the stored owner before overwriting a delegated row, and serializes the delegated create path.
