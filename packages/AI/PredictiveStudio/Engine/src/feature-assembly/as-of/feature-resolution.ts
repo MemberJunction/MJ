@@ -147,10 +147,15 @@ export class FeatureResolver {
 
   /**
    * `windowed-aggregate`: one numeric column summarising a dated child entity; every named child field and the owner key
-   * field on the unit row must exist. A deny-listed child entity or feature name skips the step.
+   * field on the unit row must exist, and a sum, mean or distinct must name a value field. A deny-listed child entity or
+   * feature name skips the step.
    */
   protected ResolveWindowedAggregate(step: Extract<FeatureStep, { Kind: 'windowed-aggregate' }>): void {
     if (this.denySources.has(NormalizeName(step.ChildEntity)) || this.isDenied(step.FeatureName)) return;
+    // A sum, mean or distinct reads the value field; without one, distinct would count the text "null".
+    if (!step.ValueField && (step.Aggregate === 'sum' || step.Aggregate === 'mean' || step.Aggregate === 'distinct')) {
+      throw new AssemblyRefused({ kind: 'unresolved-column', entity: step.ChildEntity, field: 'valueField' });
+    }
     if (step.OwnerKeyField && !this.RowEntity.Fields.some((x) => x.Name === step.OwnerKeyField)) {
       throw new AssemblyRefused({ kind: 'unresolved-column', entity: this.RowEntity.Name, field: step.OwnerKeyField });
     }

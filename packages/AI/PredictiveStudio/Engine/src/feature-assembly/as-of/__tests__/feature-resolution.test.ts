@@ -109,6 +109,12 @@ describe('ResolveFeatureColumns — deny lists and windowed aggregates', () => {
     const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ ...spend, OwnerKeyField: 'MemberID' }] }, unitSpec, years, md, { denyFields: [], denySources: [] });
     expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'MemberID' } });
   });
+  it('refuses a distinct, sum or mean aggregate that names no value field', () => {
+    for (const aggregate of ['distinct', 'sum', 'mean'] as const) {
+      const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ ...spend, Aggregate: aggregate, ValueField: undefined }] }, unitSpec, years, md, { denyFields: [], denySources: [] });
+      expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Orders', field: 'valueField' } });
+    }
+  });
 });
 
 describe('ResolveFeatureColumns — forecast units', () => {

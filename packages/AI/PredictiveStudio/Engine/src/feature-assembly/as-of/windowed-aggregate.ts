@@ -3,13 +3,15 @@
  *
  * Summaries of a dated child table as of a decision date: rows dated in (d − windowDays, d] (or on/before d when no
  * window), minus rows voided on or before d, then count | sum | mean | distinct | days-since, or active-at
- * (dateField <= d and (endDateField null or >= d)). Generalises the executor's two hard-coded aggregates.
+ * (dateField <= d and (endDateField null or >= d)). Generalises the executor's two hard-coded aggregates. sum and
+ * mean skip a missing value (null, undefined or blank) and refuse a present value that is not a number.
  */
 import { OrdinalCompare } from '@memberjunction/global';
 import type { WindowedAggregateSource } from '@memberjunction/predictive-studio-core';
 import type { SourceRow } from '../data-access';
 import { PredictionUnitRowReader } from '../../prediction-unit/unit-row-reader';
 import { MS_PER_DAY, UtcDay, type CellValue } from '../../prediction-unit/utc-day';
+import { AssemblyRefused } from './refusal';
 
 /** One child row reduced to what an as-of aggregate reads: its day, end and void days, value and change stamp. */
 export interface ChildRow {
@@ -62,16 +64,36 @@ export class WindowedAggregates {
     }
     const from = spec.windowDays === null ? Number.NEGATIVE_INFINITY : d - spec.windowDays * MS_PER_DAY;
     const inWindow = live.filter((c) => c.Day.getTime() > from && c.Day.getTime() <= d);
-    const numbers = inWindow.map((c) => Number(c.Value)).filter((n) => Number.isFinite(n));
     switch (spec.aggregate) {
       case 'count': return { Value: inWindow.length, Contributors: inWindow };
-      case 'sum': return { Value: numbers.reduce((s, n) => s + n, 0), Contributors: inWindow };
-      case 'mean': return { Value: numbers.length > 0 ? numbers.reduce((s, n) => s + n, 0) / numbers.length : null, Contributors: inWindow };
+      case 'sum': return { Value: WindowedAggregates.numericValues(inWindow, spec).reduce((s, n) => s + n, 0), Contributors: inWindow };
+      case 'mean': {
+        const numbers = WindowedAggregates.numericValues(inWindow, spec);
+        return { Value: numbers.length > 0 ? numbers.reduce((s, n) => s + n, 0) / numbers.length : null, Contributors: inWindow };
+      }
       case 'distinct': return { Value: new Set(inWindow.map((c) => String(c.Value))).size, Contributors: inWindow };
       case 'days-since': {
         const latest = inWindow[inWindow.length - 1];
         return { Value: latest ? Math.round((d - latest.Day.getTime()) / MS_PER_DAY) : null, Contributors: latest ? [latest] : [] };
       }
     }
+  }
+
+  /**
+   * The numbers a sum or mean reads: a missing value (null, undefined or a blank string) is skipped so it neither adds
+   * nor counts in a mean's denominator; a present value that is not a number refuses, so it is never silently dropped.
+   */
+  private static numericValues(rows: readonly ChildRow[], spec: WindowedAggregateSource): number[] {
+    const out: number[] = [];
+    for (const c of rows) {
+      const v = c.Value;
+      if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) continue;
+      const n = Number(v);
+      if (!Number.isFinite(n)) {
+        throw new AssemblyRefused({ kind: 'non-numeric-in-numeric-column', column: `${spec.childEntity}.${spec.valueField}`, sampleValue: String(v) });
+      }
+      out.push(n);
+    }
+    return out;
   }
 }
