@@ -624,7 +624,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CredentialID",
+            "Name": "StorageCredentialID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -788,7 +788,7 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "CredentialID",
+            "Name": "StorageCredentialID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -839,6 +839,20 @@
           },
           "primaryKey": {
             "ID": "89CC9C5A-3C45-45CC-9B30-C3221409B7BD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Stripes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of media-set files (stripes) the backup spans",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DC9EDAD6-E703-4CF0-898E-32B22AC08840"
           }
         },
         {

@@ -85,7 +85,7 @@ Queries an Azure Blob Storage container via the Azure REST API to discover avail
 |-----------|-----------|------|----------|-------------|
 | `ContainerUrl` | Input | string | Yes | Azure Blob Storage container URL |
 | `SasToken` | Input | string | No | Shared Access Signature token for container access (redacted from logs) |
-| `CredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
+| `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
 | `Prefix` | Input | string | No | Optional prefix to filter blob names (e.g. `AdventureWorks_`) |
 | `Blobs` | Output | string | — | JSON-serialized array of `{ Name, Url, SizeBytes, LastModified }` |
 | `BlobCount` | Output | number | — | Total number of blobs found |
@@ -109,7 +109,7 @@ Inspects SQL Server backup files (.bak) from Azure Blob Storage or local disk by
 | `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being inspected |
 | `BackupUrls` | Input | string | Yes | Single backup URL/path or comma-separated list of URLs/paths for striped sets |
 | `SasToken` | Input | string | No | Shared Access Signature token for Azure Blob container access (redacted from logs) |
-| `CredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
+| `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
 | `BackupStartDate` | Output | string | — | ISO UTC timestamp when backup was initiated |
 | `DatabaseName` | Output | string | — | Original database name from backup header |
 | `BackupSizeBytes` | Output | number | — | Total size of the backup in bytes |

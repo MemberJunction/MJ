@@ -141,7 +141,7 @@ export abstract class BaseIntegrationAction extends BaseAction {
             return directSas.replace(/^\?/, '').trim();
         }
 
-        const credId = this.getStringParam(params, 'StorageCredentialID') ?? this.getStringParam(params, 'CredentialID');
+        const credId = this.getStringParam(params, 'StorageCredentialID');
         if (credId) {
             await CredentialEngine.Instance.Config(false, params.ContextUser);
             const credential = CredentialEngine.Instance.getCredentialById(credId);
@@ -160,7 +160,7 @@ export abstract class BaseIntegrationAction extends BaseAction {
             return token.replace(/^\?/, '').trim();
         }
 
-        throw new Error("Either 'SasToken' or 'CredentialID'/'StorageCredentialID' parameter must be provided.");
+        throw new Error("Either 'SasToken' or 'StorageCredentialID' parameter must be provided.");
     }
 
     /**

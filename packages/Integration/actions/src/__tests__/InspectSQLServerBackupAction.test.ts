@@ -171,6 +171,9 @@ describe('InspectSQLServerBackupAction', () => {
             const backupSize = result.Params?.find(p => p.Name === 'BackupSizeBytes');
             expect(backupSize?.Value).toBe(104857600);
 
+            const stripeCountParam = result.Params?.find(p => p.Name === 'Stripes');
+            expect(stripeCountParam?.Value).toBe(2);
+
             const filesParam = result.Params?.find(p => p.Name === 'Files');
             expect(filesParam).toBeDefined();
             const files = JSON.parse(String(filesParam?.Value));

@@ -75,7 +75,7 @@ export function ParseAzureListBlobsXml(xml: string, containerUrl: string): { blo
  * Parameters (Input):
  *   - ContainerUrl (required): Azure Blob Storage container URL (e.g. https://storage.blob.core.windows.net/backups)
  *   - SasToken (optional): Shared Access Signature token for container access
- *   - CredentialID (optional): MJ Credentials record ID storing the SAS token
+ *   - StorageCredentialID (optional): MJ Credentials record ID storing the SAS token
  *   - Prefix (optional): Optional prefix to filter blob names (e.g. "mydb_backup_")
  *
  * Parameters (Output):
@@ -106,13 +106,12 @@ export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
                 };
             }
 
-            let sasToken = '';
-            try {
-                sasToken = await this.resolveSasToken(params);
-            } catch {
-                // SAS token is optional if the container allows public/anonymous read
-                sasToken = '';
-            }
+            // A container that allows anonymous listing needs no token, so the token is optional — but a
+            // token or credential the caller DID supply must resolve, or a wrong credential ID would
+            // surface as a baffling Azure 403/404 instead of "credential not found".
+            const credentialSupplied = this.getStringParam(params, 'SasToken') !== undefined
+                || this.getStringParam(params, 'StorageCredentialID') !== undefined;
+            const sasToken = credentialSupplied ? await this.resolveSasToken(params) : '';
 
             const prefix = this.getStringParam(params, 'Prefix');
             const cleanSas = sasToken.replace(/^\?/, '').trim();

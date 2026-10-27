@@ -267,8 +267,8 @@ describe('Bootstrap Wizard Review Fixes', () => {
         Message: 'Backup inspected successfully',
         Result: [
           { Name: 'DatabaseName', Value: 'AdventureWorks2022', Type: 'Output' },
-          { Name: 'BackupStartDateUTC', Value: '2026-10-26T02:00:00Z', Type: 'Output' },
-          { Name: 'SizeFormatted', Value: '24.8 GB', Type: 'Output' },
+          { Name: 'BackupStartDate', Value: '2026-10-26T02:00:00.000Z', Type: 'Output' },
+          { Name: 'BackupSizeBytes', Value: 26628587520, Type: 'Output' },
           { Name: 'Stripes', Value: 2, Type: 'Output' },
         ],
         Params: []
@@ -286,8 +286,8 @@ describe('Bootstrap Wizard Review Fixes', () => {
 
       expect(res.Success).toBe(true);
       expect(res.DatabaseName).toBe('AdventureWorks2022');
-      expect(res.BackupStartDateUTC).toBe('2026-10-26T02:00:00Z');
-      expect(res.SizeFormatted).toBe('24.8 GB');
+      expect(res.BackupStartDate).toBe('2026-10-26T02:00:00.000Z');
+      expect(res.SizeBytes).toBe(26628587520);
       expect(res.Stripes).toBe(2);
     });
   });
@@ -303,8 +303,8 @@ describe('Bootstrap Wizard Review Fixes', () => {
         Message: 'Listed 2 blobs',
         Result: {
           Blobs: [
-            { Name: 'backup1.bak', SizeBytes: 1073741824, SizeFormatted: '1.00 GB', LastModified: '2026-10-26T00:00:00Z' },
-            { Name: 'readme.txt', SizeBytes: 2048, SizeFormatted: '2.00 KB', LastModified: '2026-10-25T00:00:00Z' }
+            { Name: 'backup1.bak', SizeBytes: 1073741824, LastModified: '2026-10-26T00:00:00Z' },
+            { Name: 'readme.txt', SizeBytes: 2048, LastModified: '2026-10-25T00:00:00Z' }
           ]
         },
         Params: []
@@ -325,6 +325,7 @@ describe('Bootstrap Wizard Review Fixes', () => {
       expect(res.Blobs.length).toBe(2);
       expect(res.Blobs[0].Name).toBe('backup1.bak');
       expect(res.Blobs[0].IsBak).toBe(true);
+      expect(res.Blobs[0].SizeFormatted).toBe('1 GB');
       expect(res.Blobs[1].Name).toBe('readme.txt');
       expect(res.Blobs[1].IsBak).toBe(false);
     });

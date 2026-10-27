@@ -187,6 +187,42 @@ describe('ListAzureBackupBlobsAction', () => {
             vi.unstubAllGlobals();
         });
 
+        it('fails with the credential error, not an Azure error, when a supplied StorageCredentialID cannot be resolved', async () => {
+            const fetchMock = vi.fn();
+            vi.stubGlobal('fetch', fetchMock);
+            mockCredentialConfigFn.mockResolvedValue(undefined);
+            mockGetCredentialByIdFn.mockReturnValue(undefined);
+
+            const params = makeParams({
+                ContainerUrl: 'https://myaccount.blob.core.windows.net/sql-backups',
+                StorageCredentialID: 'cred-does-not-exist',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('LIST_BLOBS_FAILED');
+            expect(result.Message).toContain("Credential with ID 'cred-does-not-exist' was not found");
+            expect(fetchMock).not.toHaveBeenCalled();
+
+            vi.unstubAllGlobals();
+        });
+
+        it('lists anonymously when no token or credential was supplied at all', async () => {
+            const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => SAMPLE_AZURE_XML });
+            vi.stubGlobal('fetch', fetchMock);
+
+            const params = makeParams({ ContainerUrl: 'https://myaccount.blob.core.windows.net/sql-backups' });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const calledUrl = fetchMock.mock.calls[0][0] as string;
+            expect(calledUrl).toBe('https://myaccount.blob.core.windows.net/sql-backups?restype=container&comp=list');
+
+            vi.unstubAllGlobals();
+        });
+
         it('follows NextMarker pagination to aggregate all pages', async () => {
             const fetchMock = vi.fn()
                 .mockResolvedValueOnce({

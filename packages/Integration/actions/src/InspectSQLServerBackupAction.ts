@@ -12,12 +12,13 @@ import { BaseIntegrationAction } from './BaseIntegrationAction.js';
  *   - CompanyIntegrationID (required): ID of the Company Integration being inspected
  *   - BackupUrls (required): Single backup URL/path or comma-separated list of URLs/paths for striped sets
  *   - SasToken (optional): Shared Access Signature token for container access
- *   - CredentialID (optional): MJ Credentials record ID storing the SAS token
+ *   - StorageCredentialID (optional): MJ Credentials record ID storing the SAS token
  *
  * Parameters (Output):
  *   - BackupStartDate: ISO UTC timestamp when the backup was initiated
  *   - DatabaseName: Original database name recorded in the backup header
  *   - BackupSizeBytes: Total size of the backup in bytes
+ *   - Stripes: Number of media-set files (stripes) the backup spans
  *   - Files: JSON-serialized array of { LogicalName, PhysicalName, Type, SizeBytes }
  */
 @RegisterClass(BaseAction, 'Inspect SQL Server Backup')
@@ -86,6 +87,7 @@ export class InspectSQLServerBackupAction extends BaseIntegrationAction {
             this.addOutputParam(params, 'BackupStartDate', headerInfo.BackupStartDate.toISOString());
             this.addOutputParam(params, 'DatabaseName', headerInfo.DatabaseName);
             this.addOutputParam(params, 'BackupSizeBytes', backupSizeBytes);
+            this.addOutputParam(params, 'Stripes', backupUrls.length);
             this.addOutputParam(params, 'Files', JSON.stringify(fileList));
 
             return {

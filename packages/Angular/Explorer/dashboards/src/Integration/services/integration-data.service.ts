@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { ActionParam } from '@memberjunction/actions-base';
+import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
 import { DateCellDayKey } from '../../shared/date-cell';
+import { FormatBytes } from './backup-source.helpers';
 import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
@@ -219,9 +220,10 @@ export interface InspectBackupResult {
   Success: boolean;
   Message: string;
   DatabaseName?: string;
-  BackupStartDateUTC?: string;
-  SizeFormatted?: string;
+  /** ISO UTC timestamp the backup began; the watermark a bootstrap seeds. */
+  BackupStartDate?: string;
   SizeBytes?: number;
+  /** Number of media-set files the backup spans. */
   Stripes?: number;
 }
 
@@ -898,6 +900,60 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 
+  /** Run a named MJ action through the GraphQL action client; undefined when the action is not registered. */
+  private async runNamedAction(actionName: string, params: ActionParam[]): Promise<ActionResult | undefined> {
+    const actionID = await this.lookupActionID(actionName);
+    if (!actionID) {
+      return undefined;
+    }
+    const provider = this.Provider as unknown as GraphQLDataProvider;
+    const actionClient = new GraphQLActionClient(provider);
+    return actionClient.RunAction(actionID, params);
+  }
+
+  /** Input params from a name → value map; undefined values are omitted, booleans become 'true'/'false'. */
+  private buildActionParams(values: Record<string, string | number | boolean | undefined>): ActionParam[] {
+    return Object.entries(values)
+      .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined && entry[1] !== '')
+      .map(([Name, value]) => ({ Name, Value: typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value), Type: 'Input' as const }));
+  }
+
+  /**
+   * The raw value of an action output. The server returns outputs in `Result` as an array of
+   * `{ Name, Value }` params (or, for some callers, a keyed object); `Params` holds the inputs.
+   */
+  private readOutputValue(result: ActionResult, name: string): unknown {
+    const lower = name.toLowerCase();
+    const resultData: unknown = result.Result;
+    if (Array.isArray(resultData)) {
+      const param = resultData.find((item: { Name?: string }) => item?.Name?.toLowerCase() === lower);
+      return param && 'Value' in param ? param.Value : undefined;
+    }
+    if (resultData && typeof resultData === 'object') {
+      const record = resultData as Record<string, unknown>;
+      const key = Object.keys(record).find(k => k.toLowerCase() === lower);
+      if (key !== undefined && record[key] != null) {
+        return record[key];
+      }
+    }
+    const param = result.Params?.find(p => p.Name?.toLowerCase() === lower);
+    return param?.Value ?? undefined;
+  }
+
+  private readOutputParam(result: ActionResult, name: string): string | undefined {
+    const value = this.readOutputValue(result, name);
+    return value != null ? String(value) : undefined;
+  }
+
+  private readOutputNumber(result: ActionResult, name: string): number | undefined {
+    const text = this.readOutputParam(result, name);
+    if (text === undefined || text.trim() === '') {
+      return undefined;
+    }
+    const value = Number(text);
+    return Number.isFinite(value) ? value : undefined;
+  }
+
   /** Run the SQL Server Backup Bootstrap action */
   async RunBootstrapFromBackup(
     companyIntegrationID: string,
@@ -920,67 +976,33 @@ export class IntegrationDataService {
     DurationSeconds?: number;
     StagingDatabaseDropped?: boolean;
   }> {
-    const actionID = await this.lookupActionID('Bootstrap SQL Server Integration From Backup');
-    if (!actionID) {
+    const result = await this.runNamedAction('Bootstrap SQL Server Integration From Backup', this.buildActionParams({
+      CompanyIntegrationID: companyIntegrationID,
+      BackupUrls: options.BackupUrls,
+      SasToken: options.SasToken,
+      StorageCredentialID: options.StorageCredentialID,
+      StagingDatabaseName: options.StagingDatabaseName,
+      DropStagingDbOnComplete: options.DropStagingDbOnComplete,
+      TruncateTargetBeforeLoad: options.TruncateTargetBeforeLoad,
+      BatchSize: options.BatchSize,
+    }));
+    if (!result) {
       return {
         Success: false,
         Message: 'Action "Bootstrap SQL Server Integration From Backup" not found. Ensure the action is registered.'
       };
     }
 
-    const provider = this.Provider as unknown as GraphQLDataProvider;
-    const actionClient = new GraphQLActionClient(provider);
-    const params: ActionParam[] = [
-      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' },
-      { Name: 'BackupUrls', Value: options.BackupUrls, Type: 'Input' },
-    ];
-    if (options.SasToken) {
-      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' });
-    }
-    if (options.StorageCredentialID) {
-      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' });
-    }
-    if (options.StagingDatabaseName) {
-      params.push({ Name: 'StagingDatabaseName', Value: options.StagingDatabaseName, Type: 'Input' });
-    }
-    if (options.DropStagingDbOnComplete !== undefined) {
-      params.push({ Name: 'DropStagingDbOnComplete', Value: options.DropStagingDbOnComplete ? 'true' : 'false', Type: 'Input' });
-    }
-    if (options.TruncateTargetBeforeLoad !== undefined) {
-      params.push({ Name: 'TruncateTargetBeforeLoad', Value: options.TruncateTargetBeforeLoad ? 'true' : 'false', Type: 'Input' });
-    }
-    if (options.BatchSize) {
-      params.push({ Name: 'BatchSize', Value: String(options.BatchSize), Type: 'Input' });
-    }
-
-    const result = await actionClient.RunAction(actionID, params);
-
-    const getOutputParamVal = (name: string): string | undefined => {
-      if (Array.isArray(result.Result)) {
-        const p = result.Result.find((item: { Name?: string }) => item?.Name?.toLowerCase() === name.toLowerCase());
-        if (p && 'Value' in p && p.Value != null) return String(p.Value);
-      } else if (result.Result && typeof result.Result === 'object') {
-        const resObj = result.Result as unknown as Record<string, unknown>;
-        const key = Object.keys(resObj).find(k => k.toLowerCase() === name.toLowerCase());
-        if (key && resObj[key] != null) {
-          return String(resObj[key]);
-        }
-      }
-      const p = result.Params?.find((item: { Name: string }) => item.Name?.toLowerCase() === name.toLowerCase());
-      return p?.Value != null ? String(p.Value) : undefined;
-    };
-
-    const totalRows = getOutputParamVal('TotalRowsTransferred');
-
+    const dropped = this.readOutputParam(result, 'StagingDatabaseDropped');
     return {
       Success: result.Success,
       Message: result.Message ?? '',
-      BackupStartDate: getOutputParamVal('BackupStartDate'),
-      StagingDatabaseName: getOutputParamVal('StagingDatabaseName') ?? options.StagingDatabaseName,
-      TablesProcessed: getOutputParamVal('TablesProcessed') ? Number(getOutputParamVal('TablesProcessed')) : undefined,
-      TotalRowsTransferred: totalRows ? Number(totalRows) : undefined,
-      DurationSeconds: getOutputParamVal('DurationSeconds') ? Number(getOutputParamVal('DurationSeconds')) : undefined,
-      StagingDatabaseDropped: getOutputParamVal('StagingDatabaseDropped') === '1' || getOutputParamVal('StagingDatabaseDropped') === 'true',
+      BackupStartDate: this.readOutputParam(result, 'BackupStartDate'),
+      StagingDatabaseName: this.readOutputParam(result, 'StagingDatabaseName') ?? options.StagingDatabaseName,
+      TablesProcessed: this.readOutputNumber(result, 'TablesProcessed'),
+      TotalRowsTransferred: this.readOutputNumber(result, 'TotalRowsTransferred'),
+      DurationSeconds: this.readOutputNumber(result, 'DurationSeconds'),
+      StagingDatabaseDropped: dropped === '1' || dropped === 'true',
     };
   }
 
@@ -996,55 +1018,26 @@ export class IntegrationDataService {
       StorageCredentialID?: string;
     }
   ): Promise<InspectBackupResult> {
-    const actionID = await this.lookupActionID('Inspect SQL Server Backup');
-    if (!actionID) {
+    const result = await this.runNamedAction('Inspect SQL Server Backup', this.buildActionParams({
+      CompanyIntegrationID: companyIntegrationID,
+      BackupUrls: options.BackupUrls,
+      SasToken: options.SasToken,
+      StorageCredentialID: options.StorageCredentialID,
+    }));
+    if (!result) {
       return {
         Success: false,
         Message: 'Action "Inspect SQL Server Backup" not found. Ensure the action is registered.'
       };
     }
 
-    const provider = this.Provider as unknown as GraphQLDataProvider;
-    const actionClient = new GraphQLActionClient(provider);
-    const params: ActionParam[] = [
-      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' },
-      { Name: 'BackupUrls', Value: options.BackupUrls, Type: 'Input' },
-    ];
-    if (options.SasToken) {
-      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' });
-    }
-    if (options.StorageCredentialID) {
-      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' });
-    }
-
-    const result = await actionClient.RunAction(actionID, params);
-
-    const getOutputParamVal = (name: string): string | undefined => {
-      if (Array.isArray(result.Result)) {
-        const p = result.Result.find((item: { Name?: string }) => item?.Name?.toLowerCase() === name.toLowerCase());
-        if (p && 'Value' in p && p.Value != null) return String(p.Value);
-      } else if (result.Result && typeof result.Result === 'object') {
-        const resObj = result.Result as unknown as Record<string, unknown>;
-        const key = Object.keys(resObj).find(k => k.toLowerCase() === name.toLowerCase());
-        if (key && resObj[key] != null) {
-          return String(resObj[key]);
-        }
-      }
-      const p = result.Params?.find((item: { Name: string }) => item.Name?.toLowerCase() === name.toLowerCase());
-      return p?.Value != null ? String(p.Value) : undefined;
-    };
-
-    const sizeBytes = getOutputParamVal('SizeBytes') ?? getOutputParamVal('BackupSizeBytes');
-    const stripes = getOutputParamVal('Stripes') ?? getOutputParamVal('StripeCount');
-
     return {
       Success: result.Success,
       Message: result.Message ?? '',
-      DatabaseName: getOutputParamVal('DatabaseName'),
-      BackupStartDateUTC: getOutputParamVal('BackupStartDateUTC') ?? getOutputParamVal('BackupStartDate'),
-      SizeFormatted: getOutputParamVal('SizeFormatted'),
-      SizeBytes: sizeBytes ? Number(sizeBytes) : undefined,
-      Stripes: stripes ? Number(stripes) : undefined,
+      DatabaseName: this.readOutputParam(result, 'DatabaseName'),
+      BackupStartDate: this.readOutputParam(result, 'BackupStartDate'),
+      SizeBytes: this.readOutputNumber(result, 'BackupSizeBytes'),
+      Stripes: this.readOutputNumber(result, 'Stripes'),
     };
   }
 
@@ -1061,8 +1054,14 @@ export class IntegrationDataService {
       Prefix?: string;
     }
   ): Promise<ListAzureBackupBlobsResult> {
-    const actionID = await this.lookupActionID('List Azure Backup Blobs');
-    if (!actionID) {
+    const result = await this.runNamedAction('List Azure Backup Blobs', this.buildActionParams({
+      CompanyIntegrationID: companyIntegrationID,
+      ContainerUrl: options.ContainerUrl,
+      SasToken: options.SasToken,
+      StorageCredentialID: options.StorageCredentialID,
+      Prefix: options.Prefix,
+    }));
+    if (!result) {
       return {
         Success: false,
         Message: 'Action "List Azure Backup Blobs" not found. Ensure the action is registered.',
@@ -1070,79 +1069,40 @@ export class IntegrationDataService {
       };
     }
 
-    const provider = this.Provider as unknown as GraphQLDataProvider;
-    const actionClient = new GraphQLActionClient(provider);
-    const params: ActionParam[] = [
-      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' },
-      { Name: 'ContainerUrl', Value: options.ContainerUrl, Type: 'Input' },
-    ];
-    if (options.SasToken) {
-      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' });
-    }
-    if (options.StorageCredentialID) {
-      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' });
-    }
-    if (options.Prefix) {
-      params.push({ Name: 'Prefix', Value: options.Prefix, Type: 'Input' });
-    }
-
-    const result = await actionClient.RunAction(actionID, params);
-
-    let rawBlobs: unknown[] = [];
-    if (Array.isArray(result.Result)) {
-      const blobsParam = result.Result.find((item: { Name?: string }) => item?.Name?.toLowerCase() === 'blobs');
-      if (blobsParam && typeof (blobsParam as { Value: unknown }).Value === 'string') {
-        try {
-          rawBlobs = JSON.parse((blobsParam as { Value: string }).Value);
-        } catch {
-          rawBlobs = [];
-        }
-      } else if (blobsParam && Array.isArray((blobsParam as { Value: unknown }).Value)) {
-        rawBlobs = (blobsParam as { Value: unknown[] }).Value;
-      } else if (result.Result.length > 0 && 'Name' in result.Result[0] && !('Type' in result.Result[0])) {
-        rawBlobs = result.Result;
-      }
-    } else if (result.Result && typeof result.Result === 'object') {
-      const resObj = result.Result as unknown as Record<string, unknown>;
-      if (Array.isArray(resObj['Blobs'])) {
-        rawBlobs = resObj['Blobs'] as unknown[];
-      } else if (typeof resObj['Blobs'] === 'string') {
-        try {
-          rawBlobs = JSON.parse(resObj['Blobs']);
-        } catch {
-          rawBlobs = [];
-        }
-      }
-    }
-
-    const formatBytes = (bytes: number): string => {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      Blobs: this.parseBlobList(this.readOutputValue(result, 'Blobs'))
     };
+  }
 
-    const blobs: AzureBlobItem[] = rawBlobs.map((b: unknown) => {
-      const item = b as Record<string, unknown>;
-      const name = String(item['Name'] ?? item['name'] ?? '');
-      const sizeBytes = Number(item['SizeBytes'] ?? item['sizeBytes'] ?? item['ContentLength'] ?? 0);
-      const sizeFormatted = String(item['SizeFormatted'] ?? item['sizeFormatted'] ?? formatBytes(sizeBytes));
-      const lastModifiedRaw = item['LastModified'] ?? item['lastModified'];
+  /** The action's `Blobs` output: a JSON string of `{ Name, SizeBytes, LastModified }` items, or that array already parsed. */
+  private parseBlobList(raw: unknown): AzureBlobItem[] {
+    let items: unknown[] = [];
+    if (typeof raw === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        items = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        items = [];
+      }
+    } else if (Array.isArray(raw)) {
+      items = raw;
+    }
+
+    return items.map((entry: unknown) => {
+      const item = (entry ?? {}) as Record<string, unknown>;
+      const name = String(item['Name'] ?? '');
+      const sizeBytes = Number(item['SizeBytes'] ?? 0);
+      const lastModifiedRaw = item['LastModified'];
       return {
         Name: name,
         SizeBytes: sizeBytes,
-        SizeFormatted: sizeFormatted,
+        SizeFormatted: FormatBytes(sizeBytes),
         LastModified: lastModifiedRaw ? new Date(String(lastModifiedRaw)) : undefined,
         IsBak: name.toLowerCase().endsWith('.bak')
       };
     });
-
-    return {
-      Success: result.Success,
-      Message: result.Message ?? '',
-      Blobs: blobs
-    };
   }
 
   /** Load schedule data for all company integrations (includes new scheduling fields) */

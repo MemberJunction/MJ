@@ -20,6 +20,7 @@ import {
   AzureBlobItem,
   ListAzureBackupBlobsResult
 } from '../../services/integration-data.service';
+import { BuildBackupUrlList, DeriveContainerUrl, FirstBackupUrl, FormatBytes } from '../../services/backup-source.helpers';
 
 export interface BootstrapResultSummary {
   Success: boolean;
@@ -158,18 +159,12 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
     this.AzureBrowseError = null;
     let container = this.AzureContainerUrl.trim();
 
-    // Auto-detect container URL from existing BackupUrls if empty
+    // Auto-detect the container URL from an already-entered blob URL
     if (!container && this.BackupUrls) {
-      const first = this.BackupUrls.split(',')[0].trim();
-      if (first.startsWith('http')) {
-        try {
-          const u = new URL(first);
-          const segs = u.pathname.split('/').filter(s => s.length > 0);
-          if (segs.length > 0) {
-            container = `${u.origin}/${segs[0]}`;
-            this.AzureContainerUrl = container;
-          }
-        } catch {}
+      const derived = DeriveContainerUrl(FirstBackupUrl(this.BackupUrls));
+      if (derived) {
+        container = derived;
+        this.AzureContainerUrl = derived;
       }
     }
 
@@ -252,15 +247,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   }
 
   private syncAzureSelectedToBackupUrls(): void {
-    const container = (this.AzureContainerUrl.trim() || '').replace(/\/+$/, '');
-    if (this.SelectedAzureBlobs.size === 0) {
-      this.BackupUrls = '';
-    } else {
-      const urls = Array.from(this.SelectedAzureBlobs).map(name => {
-        return container ? `${container}/${name}` : name;
-      });
-      this.BackupUrls = urls.join(', ');
-    }
+    this.BackupUrls = BuildBackupUrlList(this.AzureContainerUrl, this.SelectedAzureBlobs);
     this.cdr.detectChanges();
   }
 
@@ -319,11 +306,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   }
 
   public FormatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return FormatBytes(bytes);
   }
 
   public GoToStep(step: WizardStepType): void {

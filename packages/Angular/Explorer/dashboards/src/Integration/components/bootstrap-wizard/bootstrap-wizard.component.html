@@ -299,11 +299,11 @@
                       </div>
                       <div class="metadata-item">
                         <span class="meta-label">Backup Start Date (UTC)</span>
-                        <span class="meta-value">{{ VerifiedBackupHeader.BackupStartDateUTC }}</span>
+                        <span class="meta-value">{{ VerifiedBackupHeader.BackupStartDate }}</span>
                       </div>
                       <div class="metadata-item">
                         <span class="meta-label">Backup Size</span>
-                        <span class="meta-value">{{ VerifiedBackupHeader.SizeFormatted || (VerifiedBackupHeader.SizeBytes ? FormatBytes(VerifiedBackupHeader.SizeBytes) : '—') }}</span>
+                        <span class="meta-value">{{ VerifiedBackupHeader.SizeBytes != null ? FormatBytes(VerifiedBackupHeader.SizeBytes) : '—' }}</span>
                       </div>
                       <div class="metadata-item">
                         <span class="meta-label">Stripes</span>
