@@ -11,6 +11,7 @@
  * @author MemberJunction.com
  */
 
+import { createHash } from 'crypto';
 import { GoogleGenAI, Modality, type GoogleGenAIOptions, type LiveConnectConfig, type LiveConnectParameters } from '@google/genai';
 import { GoogleAuth, type GoogleAuthOptions } from 'google-auth-library';
 import {
@@ -109,22 +110,31 @@ export interface GeminiEnterpriseLiveClient {
 }
 
 /**
- * Process-wide bounded cache of `VertexAccessTokenProvider` and Vertex `GoogleGenAI` Live clients keyed by
- * `${keySource}|${credentialsJson}`. Because `RealtimeClientSessionService` instantiates a fresh
- * `GeminiEnterpriseRealtime` per session via `ClassFactory.CreateInstance`, sharing the token provider and
- * client across instances with identical credentials preserves `google-auth-library`'s ~55-minute OAuth
- * access-token cache across concurrent sessions instead of minting a fresh OAuth token on every session.
+ * Process-wide bounded cache of `VertexGoogleAuth` instances keyed by a SHA-256 hash of the credential source
+ * and payload. Because `RealtimeClientSessionService` instantiates a fresh `GeminiEnterpriseRealtime` per session
+ * via `ClassFactory.CreateInstance`, caching inside `CreateGoogleAuth` preserves `google-auth-library`'s ~55-minute
+ * OAuth access-token cache across concurrent sessions while letting subclasses that override `CreateGoogleAuth`
+ * naturally supply their own auth client.
  */
-class GeminiEnterpriseClientCache extends BaseSingleton<GeminiEnterpriseClientCache> {
-    public readonly TokenProviders = new MJLruCache<string, VertexAccessTokenProvider>({ maxSize: 64 });
-    public readonly VertexClients = new MJLruCache<string, Promise<GeminiEnterpriseLiveClient>>({ maxSize: 64 });
+class GeminiEnterpriseAuthCache extends BaseSingleton<GeminiEnterpriseAuthCache> {
+    private readonly authByCredentialHash = new MJLruCache<string, VertexGoogleAuth>({ maxSize: 64 });
 
     public constructor() {
         super();
     }
 
-    public static get Instance(): GeminiEnterpriseClientCache {
-        return GeminiEnterpriseClientCache.getInstance<GeminiEnterpriseClientCache>();
+    public static get Instance(): GeminiEnterpriseAuthCache {
+        return GeminiEnterpriseAuthCache.getInstance<GeminiEnterpriseAuthCache>();
+    }
+
+    public GetOrCreate(credentialHash: string, create: () => VertexGoogleAuth): VertexGoogleAuth {
+        const existing = this.authByCredentialHash.Get(credentialHash);
+        if (existing) {
+            return existing;
+        }
+        const created = create();
+        this.authByCredentialHash.Set(credentialHash, created);
+        return created;
     }
 }
 
@@ -159,7 +169,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     private readonly credentialsProblem: string | null;
     /** Whether the key is the platform's environment key, the only key that may name a key file. */
     private readonly keySource: VertexKeySource;
-    private readonly cacheKey: string | null;
+    private readonly credentialHash: string | null;
     private tokenProvider: VertexAccessTokenProvider | null = null;
     private vertexClient: Promise<GeminiEnterpriseLiveClient> | null = null;
 
@@ -173,7 +183,9 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
         this.credentials = read.Credentials;
         this.credentialsProblem = read.Problem;
         this.keySource = VertexKeySourceOf(DRIVER_CLASS, credentialsJson);
-        this.cacheKey = read.Credentials ? `${this.keySource}|${credentialsJson}` : null;
+        this.credentialHash = read.Credentials
+            ? createHash('sha256').update(`${this.keySource}|${credentialsJson}`).digest('hex')
+            : null;
     }
 
     /** Gemini Enterprise: what a model renders (live avatars) is looked up on this endpoint. */
@@ -254,11 +266,16 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
 
     /**
      * Creation seam for the `GoogleAuth` that mints this driver's tokens (tests return a fake).
+     * Shares the underlying `GoogleAuth` across driver instances with identical credentials (keyed by SHA-256 hash)
+     * so `google-auth-library`'s OAuth token cache survives across sessions.
      *
      * @param options The credentials' `google-auth-library` options, with the `cloud-platform` scope.
      */
     protected CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
-        return new GoogleAuth(options);
+        if (!this.credentialHash) {
+            return new GoogleAuth(options);
+        }
+        return GeminiEnterpriseAuthCache.Instance.GetOrCreate(this.credentialHash, () => new GoogleAuth(options));
     }
 
     /**
@@ -296,14 +313,6 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
         return GeminiEnterpriseRealtime.defaultLiveUrl(credentials, location);
     }
 
-    private usesDefaultSeams(): boolean {
-        return (
-            this.CreateGoogleAuth === GeminiEnterpriseRealtime.prototype.CreateGoogleAuth &&
-            this.CreateVertexClient === GeminiEnterpriseRealtime.prototype.CreateVertexClient &&
-            this.LiveUrl === GeminiEnterpriseRealtime.prototype.LiveUrl
-        );
-    }
-
     /**
      * The headers for one upstream open: the key's Google Cloud API key as `x-goog-api-key`, as `@google/genai` sends it
      * in Vertex mode; else a bearer token, minted (or taken from the library's cache) now.
@@ -314,17 +323,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             return { [API_KEY_HEADER]: credentials.apiKey };
         }
         if (!this.tokenProvider) {
-            const canShare = this.usesDefaultSeams() && this.cacheKey !== null;
-            const shared = canShare ? GeminiEnterpriseClientCache.Instance.TokenProviders.Get(this.cacheKey!) : undefined;
-            if (shared) {
-                this.tokenProvider = shared;
-            } else {
-                const created = new VertexAccessTokenProvider(credentials, this.keySource, (options) => this.CreateGoogleAuth(options));
-                this.tokenProvider = created;
-                if (canShare) {
-                    GeminiEnterpriseClientCache.Instance.TokenProviders.Set(this.cacheKey!, created);
-                }
-            }
+            this.tokenProvider = new VertexAccessTokenProvider(credentials, this.keySource, (options) => this.CreateGoogleAuth(options));
         }
         return this.tokenProvider.GetRequestHeaders(url);
     }
@@ -332,29 +331,13 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     /** The bridged sessions' client, built once; a build that fails (an unreadable key file) is retried next time. */
     private ensureVertexClient(): Promise<GeminiEnterpriseLiveClient> {
         if (!this.vertexClient) {
-            const credentials = this.requireCredentials();
-            const canShare = this.usesDefaultSeams() && this.cacheKey !== null;
-            const shared = canShare ? GeminiEnterpriseClientCache.Instance.VertexClients.Get(this.cacheKey!) : undefined;
-            if (shared) {
-                this.vertexClient = shared;
-            } else {
-                const building = this.buildVertexClient(credentials);
-                this.vertexClient = building;
-                if (canShare) {
-                    const key = this.cacheKey!;
-                    GeminiEnterpriseClientCache.Instance.VertexClients.Set(key, building);
-                    building.catch(() => {
-                        if (GeminiEnterpriseClientCache.Instance.VertexClients.Get(key) === building) {
-                            GeminiEnterpriseClientCache.Instance.VertexClients.Delete(key);
-                        }
-                    });
+            const building = this.buildVertexClient(this.requireCredentials());
+            this.vertexClient = building;
+            building.catch(() => {
+                if (this.vertexClient === building) {
+                    this.vertexClient = null;
                 }
-                building.catch(() => {
-                    if (this.vertexClient === building) {
-                        this.vertexClient = null;
-                    }
-                });
-            }
+            });
         }
         return this.vertexClient;
     }

@@ -358,25 +358,26 @@ describe('GeminiEnterpriseRealtime', () => {
             await expect(new TestEnterprise(serviceAccountKey()).MintDeveloperToken()).rejects.toThrow('mints no Gemini Developer API tokens');
         });
 
-        it('reuses the VertexAccessTokenProvider and GoogleAuth across GeminiEnterpriseRealtime instances created with the same key', async () => {
-            const fakeAuth = new FakeGoogleAuth();
-            const createAuthSpy = vi
-                .spyOn(
-                    GeminiEnterpriseRealtime.prototype as unknown as { CreateGoogleAuth: (o: GoogleAuthOptions) => VertexGoogleAuth },
-                    'CreateGoogleAuth',
-                )
-                .mockReturnValue(fakeAuth);
+        it('reuses the GoogleAuth token cache across GeminiEnterpriseRealtime instances created with the same key', async () => {
+            const getHeadersSpy = vi
+                .spyOn(GoogleAuth.prototype, 'getRequestHeaders')
+                .mockResolvedValue(new Headers({ Authorization: `Bearer ${ACCESS_TOKEN}` }));
             const sharedKey = serviceAccountKey({ project_id: 'shared-cache-project' });
+            const distinctKey = serviceAccountKey({ project_id: 'distinct-cache-project' });
             const driver1 = new GeminiEnterpriseRealtime(sharedKey);
             const driver2 = new GeminiEnterpriseRealtime(sharedKey);
+            const driver3 = new GeminiEnterpriseRealtime(distinctKey);
 
             const grant1 = openFresh(await driver1.CreateClientSession(makeParams()));
             const grant2 = openFresh(await driver2.CreateClientSession(makeParams()));
+            const grant3 = openFresh(await driver3.CreateClientSession(makeParams()));
             await grant1.Policy.UpstreamHeaders();
             await grant2.Policy.UpstreamHeaders();
+            await grant3.Policy.UpstreamHeaders();
 
-            expect(createAuthSpy).toHaveBeenCalledTimes(1);
-            expect(fakeAuth.Urls).toHaveLength(2);
+            expect(getHeadersSpy).toHaveBeenCalledTimes(3);
+            expect(getHeadersSpy.mock.instances[0]).toBe(getHeadersSpy.mock.instances[1]);
+            expect(getHeadersSpy.mock.instances[2]).not.toBe(getHeadersSpy.mock.instances[0]);
         });
     });
 
