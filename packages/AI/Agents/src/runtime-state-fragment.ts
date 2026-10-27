@@ -165,8 +165,19 @@ const FRAGMENT_TAG_PATTERN = new RegExp(`<\\s*(/?)\\s*(${RUNTIME_STATE_TAG}|${AG
  * is pre-existing, layout-independent, and addressed structurally elsewhere.
  */
 export function EscapeRuntimeStateTags(text: string): string {
+    if (!text.includes('<')) {
+        return text;
+    }
     return text.replace(FRAGMENT_TAG_PATTERN, (_m, slash: string, tag: string) => `&lt;${slash}${tag.toLowerCase()}&gt;`);
 }
+
+interface EscapedMessageMemoEntry {
+    content: ChatMessageContent;
+    toolCalls: ChatToolCall[] | undefined;
+    result: ChatMessage;
+}
+
+const escapedMessageCache = new WeakMap<object, EscapedMessageMemoEntry>();
 
 /**
  * Returns a copy of the message with fragment tag literals escaped in its text content (string content,
@@ -174,16 +185,24 @@ export function EscapeRuntimeStateTags(text: string): string {
  * needed escaping, so untouched messages keep their identity.
  */
 export function EscapeRuntimeStateTagsInMessage<M>(message: ChatMessage<M>): ChatMessage<M> {
+    const cached = escapedMessageCache.get(message);
+    if (cached && cached.content === message.content && cached.toolCalls === message.toolCalls) {
+        return cached.result as ChatMessage<M>;
+    }
     const escapedContent = escapeContent(message.content);
     const escapedCalls = escapeToolCalls(message.toolCalls);
     if (escapedContent === message.content && !escapedCalls.changed) {
+        escapedMessageCache.set(message, { content: message.content, toolCalls: message.toolCalls, result: message });
         return message;
     }
-    return {
+    const result: ChatMessage<M> = {
         ...message,
         content: escapedContent,
         ...(message.toolCalls ? { toolCalls: escapedCalls.calls } : {})
     };
+    escapedMessageCache.set(message, { content: message.content, toolCalls: message.toolCalls, result });
+    escapedMessageCache.set(result, { content: result.content, toolCalls: result.toolCalls, result });
+    return result;
 }
 
 function escapeValue(val: unknown): { value: unknown; changed: boolean } {

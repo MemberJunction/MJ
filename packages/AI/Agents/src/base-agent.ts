@@ -6362,9 +6362,21 @@ export class BaseAgent {
         });
     }
 
+    private static readonly messageFingerprintCache = new WeakMap<
+        ChatMessage,
+        { role: string; content: ChatMessage['content']; toolCalls: AgentChatMessage['toolCalls']; fp: string }
+    >();
+
     /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
     private static messageFingerprint(m: ChatMessage): string {
-        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        const toolCalls = (m as AgentChatMessage).toolCalls;
+        const cached = BaseAgent.messageFingerprintCache.get(m);
+        if (cached && cached.role === m.role && cached.content === m.content && cached.toolCalls === toolCalls) {
+            return cached.fp;
+        }
+        const fp = JSON.stringify([m.role, m.content, toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        BaseAgent.messageFingerprintCache.set(m, { role: m.role, content: m.content, toolCalls, fp });
+        return fp;
     }
 
     /**
