@@ -1164,15 +1164,10 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Returns all AIPromptModel rows for a prompt via AIEngine's O(1) PromptModelsByPromptID index
-   * when populated, falling back to linear filtering when PromptModelsByPromptID is empty/unmocked.
+   * Returns all AIPromptModel rows for a prompt via AIEngine's O(1) PromptModelsByPromptID index.
    */
   protected getPromptModelsForPromptId(promptId: string): MJAIPromptModelEntity[] {
-    const byPromptId = AIEngine.Instance.PromptModelsByPromptID;
-    if (byPromptId && byPromptId.size > 0) {
-      return byPromptId.get(NormalizeUUID(promptId)) ?? [];
-    }
-    return AIEngine.Instance.PromptModels.filter(pm => UUIDsEqual(pm.PromptID, promptId));
+    return AIEngine.Instance.PromptModelsByPromptID.get(NormalizeUUID(promptId)) ?? [];
   }
 
   /**
