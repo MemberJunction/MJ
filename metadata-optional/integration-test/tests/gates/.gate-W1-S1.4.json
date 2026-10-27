@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S1.4",
+    "Description": "Gate G1.7 (phase 1, dataset W1, criterion S1.4): a W1 renewal unit filtered to renewed years only (a one-class target) is refused before training with single-valued-target, 1 of 1, and no model is created. It fails when the unit target validation drops the one-class check, so training starts.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.7\",\"owner:PR3\",\"phase:1\",\"dataset:W1\",\"criterion:S1.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The one-class target is refused with single-valued-target; no model created."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s1-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "B2E85BF6-D748-4DA9-84EE-A763798F8929"
+  }
+}

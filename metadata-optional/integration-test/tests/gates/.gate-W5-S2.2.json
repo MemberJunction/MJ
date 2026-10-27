@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W5 -> S2.2",
+    "Description": "Gate G1.3 (phase 1, dataset W5, criterion S2.2): on W5 (seed 42) the unit excludes the 2,147 censored newest-cycle membership years, no censored row reaches the training matrix (0), and a dry-run score of the newest cycle has a mean prediction within 0.05 of that cycle's mean planted TrueP. It fails when the unit row reader skips the censoring step, so censored rows are trained on.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.3\",\"owner:PR3\",\"phase:1\",\"dataset:W5\",\"criterion:S2.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "censoredRowsExcluded = 2,147, 0 censored rows in the training matrix, newest-cycle mean prediction within 0.05 of mean TrueP."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w5-s2-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "59F19AC8-9047-4D97-B8BF-E9E7E0D10E3E"
+  }
+}

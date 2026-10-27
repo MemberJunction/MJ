@@ -81,6 +81,9 @@ export interface GateMeasurement {
   Detail: string;
 }
 
+/** One row of a world's truth.csv (`MembershipYearID,Cycle,TrueP,Drawn,Censored`). */
+export interface WorldTruthRow { readonly Cycle: number; readonly TrueP: number; readonly Censored: boolean }
+
 /** What `Promote` reports: whether the operation applied the transition and the model's status after it. */
 export interface PromoteAttempt { Promoted: boolean; Status: MJMLModelEntity['Status'] }
 
@@ -107,4 +110,6 @@ export interface TruthHarness {
   GenerateStory(modelId: string): Promise<string | null>;
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
+  /** The planted truth of a loaded W1–W8 seed, keyed by lower-cased MembershipYearID. */
+  ReadWorldTruth(dataset: LoadedDataset): Promise<ReadonlyMap<string, WorldTruthRow>>;
 }

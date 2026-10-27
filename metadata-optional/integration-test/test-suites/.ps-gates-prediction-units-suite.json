@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Prediction Units",
+      "Description": "The twelve Prediction Unit, as-of assembly and snapshot gates (G1.1–G1.12). Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Prediction Units\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> S1.1",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D4FD330-8135-43AB-A7E5-E458F38AEA51"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> S2.2",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "68B93A73-B9E1-480B-B2AF-6573FB0E4E5C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W5 -> S2.2",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E9379051-C41A-43DD-AFB0-0A3A9C4A1A8D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> S2.3",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AC47DE98-433C-486F-9338-7F81FF5A68DC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S1.4",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2DFD3AD3-23E0-4E53-B8C5-581A81DE46BF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R3 -> S1.4",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F4C5945A-4A85-47F3-92AF-626E5993E4AF"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "79DB668C-356A-46E7-8A6C-E54142072541"
+    }
+  }
+]

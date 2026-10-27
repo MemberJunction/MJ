@@ -362,7 +362,12 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-eval-harness': 7,
         'prompt-runner': 1,
+        'ps-gate-c1-s1-1': 1,
+        'ps-gate-c1-s2-2': 1,
+        'ps-gate-c1-s2-3': 1,
+        'ps-gate-r3-s1-4': 1,
         'ps-gate-t4-s6-5': 1,
+        'ps-gate-w1-s1-4': 1,
         'ps-gate-w1-s5-4': 1,
         'ps-gate-w1-s7-3': 1,
         'ps-gate-w1-s7-5': 1,
@@ -373,6 +378,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w2-s5-3': 1,
         'ps-gate-w3-c1-1': 1,
         'ps-gate-w4-s2-1': 1,
+        'ps-gate-w5-s2-2': 1,
         'ps-gate-w7-s4-2': 1,
         'ps-truth-datasets': 68,
         'query-approvals': 5,
@@ -450,7 +456,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(154);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(160);
     });
 });
 
@@ -677,7 +683,12 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'ps-gate-c1-s1-1.G1.1',
+        'ps-gate-c1-s2-2.G1.2',
+        'ps-gate-c1-s2-3.G1.6',
+        'ps-gate-r3-s1-4.G1.8',
         'ps-gate-t4-s6-5.G0.11',
+        'ps-gate-w1-s1-4.G1.7',
         'ps-gate-w1-s5-4.G0.10',
         'ps-gate-w1-s7-3.G0.7',
         'ps-gate-w1-s7-5.G0.1',
@@ -688,6 +699,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-w2-s5-3.G0.9',
         'ps-gate-w3-c1-1.G0.3',
         'ps-gate-w4-s2-1.G0.8',
+        'ps-gate-w5-s2-2.G1.3',
         'ps-gate-w7-s4-2.G0.12',
         'ps-truth-datasets.C2-s2201',
         'ps-truth-datasets.C4-s2202',

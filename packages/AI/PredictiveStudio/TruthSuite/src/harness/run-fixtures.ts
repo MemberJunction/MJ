@@ -11,6 +11,7 @@ import { HarnessAgent } from './agent';
 import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
 import { HarnessCleanup, RunRecords } from './cleanup';
+import { HarnessWorldTruth } from './world-truth';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
 import type { CandidateModel, LoadedDataset, TruthHarness } from './types';
 
@@ -197,6 +198,7 @@ export class RunFixtures {
       GenerateStory: (modelId) => HarnessAgent.GenerateStory(ctx, modelId),
       Judge: (module, args) => JudgeBridge.Judge(module, args),
       WriteArtifact: (name, data) => HarnessArtifacts.WriteArtifact(name, data),
+      ReadWorldTruth: (dataset) => HarnessWorldTruth.ReadWorldTruth(dataset),
     });
   }
 }

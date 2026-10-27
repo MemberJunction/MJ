@@ -1,17 +1,19 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLModelEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJPredictionUnitEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import { HarnessAgent } from './agent';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
 /**
- * The pipelines and models one harness created, by ID: the pipelines it created, the models its trainings produced, and
- * the pipelines (found by exact name) and models of its agent runs. Cleanup deletes exactly these. A read by name
+ * The pipelines, models and Prediction Units one harness created, by ID: the pipelines it created, the models its
+ * trainings produced, the unit versions its fixtures saved, and the pipelines (found by exact name) and models of its
+ * agent runs. Cleanup deletes exactly these. A read by name
  * prefix (`LIKE`) only observes: it never adds a pipeline, and adds a model only when its pipeline is already recorded.
  */
 export class RunRecords {
   public readonly PipelineIDs = new UUIDSet();
   public readonly ModelIDs = new UUIDSet();
+  public readonly PredictionUnitIDs = new UUIDSet();
   private readonly agentPipelineNames = new Set<string>();
 
   /** The exact pipeline names of every builder-agent run the harness started (cleanup looks them up again). */
@@ -32,6 +34,11 @@ export class RunRecords {
   /** Record a model the run trained (or an agent run of it built). */
   public RecordModel(id: string): void {
     this.ModelIDs.Add(id);
+  }
+
+  /** Record a Prediction Unit version the run saved (every version, not only the lineage root). */
+  public RecordPredictionUnit(id: string): void {
+    this.PredictionUnitIDs.Add(id);
   }
 
   /** Record what a builder-agent run created: its pipelines (a failed run's too) and the model it built, if any. */
@@ -89,9 +96,13 @@ export type CleanupModelRow = CleanupRow & Pick<MJMLModelEntity, 'PipelineID' | 
 /** A scoring Record Process row: a cleanup row with the configuration that names its model. */
 export type CleanupRecordProcessRow = CleanupRow & Pick<MJRecordProcessEntity, 'Configuration'>;
 
+/** A Prediction Unit row: a cleanup row with its version (later versions are deleted before their lineage root). */
+export type CleanupPredictionUnitRow = CleanupRow & Pick<MJPredictionUnitEntity, 'Version'>;
+
 /** Where cleanup reads the rows it deletes (the entity layer in a run; a fake in a unit test). */
 export interface CleanupStore {
   Models(filter: string): Promise<CleanupModelRow[]>;
+  PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]>;
   RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]>;
   Rows(entityName: string, filter: string): Promise<CleanupRow[]>;
 }
@@ -102,6 +113,7 @@ export class HarnessCleanup {
   public static EntityStore(provider: IMetadataProvider, user: UserInfo): CleanupStore {
     return {
       Models: (filter) => HarnessCleanup.load<MJMLModelEntity>(provider, user, 'MJ: ML Models', filter),
+      PredictionUnits: (filter) => HarnessCleanup.load<MJPredictionUnitEntity>(provider, user, 'MJ: Prediction Units', filter),
       RecordProcesses: (filter) => HarnessCleanup.load<MJRecordProcessEntity>(provider, user, 'MJ: Record Processes', filter),
       Rows: (entityName, filter) => HarnessCleanup.load<BaseEntity & { ID: string }>(provider, user, entityName, filter),
     };
@@ -110,8 +122,8 @@ export class HarnessCleanup {
   /**
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
-   * runs, run details and watermarks; training runs; then models, their artifact files, and pipelines.
-   * Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed.
+   * runs, run details and watermarks; training runs; then models, their artifact files, pipelines, and last the recorded
+   * Prediction Unit versions (pipelines reference them). Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed.
    */
   public static async DeleteRecorded(store: CleanupStore, records: RunRecords): Promise<string[]> {
     const modelFilter = HarnessCleanup.anyIn([['ID', records.ModelIDs], ['PipelineID', records.PipelineIDs]]);
@@ -145,7 +157,24 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', models, (id) => records.ModelIDs.Delete(id))),
       ...(await HarnessCleanup.deleteAll('MJ: Files', files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', pipelines, (id) => records.PipelineIDs.Delete(id))),
+      ...(await HarnessCleanup.deletePredictionUnits(store, records)),
     ];
+    return failures;
+  }
+
+  /**
+   * Delete the recorded Prediction Unit versions, newest Version first, one Version at a time: every later version
+   * references its lineage root (a self-referential key), so the root goes last. Returns one line per failed delete.
+   */
+  private static async deletePredictionUnits(store: CleanupStore, records: RunRecords): Promise<string[]> {
+    const filter = HarnessCleanup.anyIn([['ID', records.PredictionUnitIDs]]);
+    const units = filter ? await store.PredictionUnits(filter) : [];
+    const versions = [...new Set(units.map((u) => u.Version))].sort((a, b) => b - a);
+    const failures: string[] = [];
+    for (const v of versions) {
+      const stage = units.filter((u) => u.Version === v);
+      failures.push(...(await HarnessCleanup.deleteAll('MJ: Prediction Units', stage, (id) => records.PredictionUnitIDs.Delete(id))));
+    }
     return failures;
   }
 

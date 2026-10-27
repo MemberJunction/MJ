@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
-import { HarnessCleanup, RunRecords, type CleanupModelRow, type CleanupRecordProcessRow, type CleanupRow, type CleanupStore } from '../cleanup';
+import { HarnessCleanup, RunRecords, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow, type CleanupStore } from '../cleanup';
 
 const P1 = 'aaaaaaaa-0000-0000-0000-000000000001'; // lower case: UUIDSet normalises IDs to lower case
 const M1 = 'bbbbbbbb-0000-0000-0000-000000000001';
@@ -10,6 +10,9 @@ const F1 = 'cccccccc-0000-0000-0000-000000000001'; // M1's artifact file
 const RP1 = 'dddddddd-0000-0000-0000-000000000001'; // M2's scoring Record Process
 const RP_OTHER = 'dddddddd-0000-0000-0000-000000000002'; // another model's process: never touched
 const PR1 = 'eeeeeeee-0000-0000-0000-000000000001'; // RP1's process run
+const U1 = '11111111-0000-0000-0000-000000000001'; // a unit's lineage root (Version 1)
+const U2 = '11111111-0000-0000-0000-000000000002'; // its Version 2
+const U3 = '11111111-0000-0000-0000-000000000003'; // its Version 3
 
 /** A fake store: answers from fixed rows, records each filter and every delete in order. */
 class FakeStore implements CleanupStore {
@@ -36,6 +39,10 @@ class FakeStore implements CleanupStore {
   public async Models(filter: string): Promise<CleanupModelRow[]> {
     this.Filters.push(`MJ: ML Models | ${filter}`);
     return [this.row('MJ: ML Models', M1, AGENT_P, F1), this.row('MJ: ML Models', M2, P1)];
+  }
+  public async PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]> {
+    this.Filters.push(`MJ: Prediction Units | ${filter}`);
+    return [{ ...this.row('MJ: Prediction Units', U1), Version: 1 }, { ...this.row('MJ: Prediction Units', U3), Version: 3 }, { ...this.row('MJ: Prediction Units', U2), Version: 2 }];
   }
   public async RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]> {
     this.Filters.push(`MJ: Record Processes | ${filter}`);
@@ -86,6 +93,17 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, new RunRecords())).toEqual([]);
     expect(store.Filters).toEqual([]);
+  });
+
+  it('deletes recorded Prediction Units after the pipelines, newest Version first', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    for (const id of [U1, U2, U3]) records.RecordPredictionUnit(id);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Filters[store.Filters.length - 1]).toBe(`MJ: Prediction Units | ID IN ('${U1}','${U2}','${U3}')`);
+    expect(store.Deleted.slice(-4)).toEqual([`MJ: ML Training Pipelines:${AGENT_P}`, `MJ: Prediction Units:${U3}`, `MJ: Prediction Units:${U2}`, `MJ: Prediction Units:${U1}`]);
+    expect(records.PredictionUnitIDs.Size).toBe(0);
   });
 
   it('reports every failed delete and keeps its ID recorded', async () => {
