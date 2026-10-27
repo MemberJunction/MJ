@@ -83,6 +83,7 @@ export class GetRecordAction extends BaseRecordMutationAction {
             }
 
             // Get all field values
+            // fls-guard: loaded as params.ContextUser; width follows its user
             const recordData = entity!.GetAll();
 
             // Add output parameter with the record data

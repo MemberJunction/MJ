@@ -34,6 +34,12 @@ export type UserPayload = {
    */
   emailVerified?: boolean;
   /**
+   * Set only on a payload elevated by `ElevateUserPayload`: the principal the elevated user stands in for (a public
+   * widget guest). The run's own records are written as `userRecord`, but the guest's conversation is written as
+   * this user, because only a conversation's owner (or a grantee) may write its messages (MJ#4791).
+   */
+  ElevatedFrom?: UserInfo;
+  /**
    * The caller's IANA time zone, from the request's `x-mj-timezone` header, when it names a zone
    * this runtime knows. Undefined when the header is absent or invalid; callers then use UTC. The
    * view and query resolvers pass it on as `RunViewParams.TimeZone` / `RunQueryParams.TimeZone`.

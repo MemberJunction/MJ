@@ -54,6 +54,7 @@ function toSnapshot(loaded: LoadedSessionForAccess): SessionSnapshot {
         AgentSessionID: Session.ID,
         OwnerUserID: Session.UserID,
         ConversationExternalID: loaded.ConversationExternalID,
+        ConversationReadable: loaded.ConversationReadable,
         Status: Session.Status,
         ConfigRaw: Session.Config_,
         // `__mj_CreatedAt` is the row's creation instant — i.e. the session start. It is read-only and

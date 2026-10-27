@@ -5,6 +5,7 @@ import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { HardenNunjucksRuntime } from "./NunjucksSandbox";
 import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
+import { CurrentTemplateRenderUser, RunAsTemplateRenderUser } from "./TemplateRenderUser";
 import { TemplateRenderOptions, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
 
 // Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
@@ -300,7 +301,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      
             const env = options?.autoescape === false ? this.getRawTemplateEnv() : this._nunjucksEnv;
             const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true, env);
-            const result = await this.renderTemplateAsync(template, mergedData); 
+            const result = await this.renderTemplateAsync(template, mergedData, this.resolveRenderUser(options));
             return {
                 Success: true,
                 Output: result,
@@ -346,7 +347,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 }
                 this._simpleTemplateCache.set(cacheKey, template);
             }
-            const result = await this.renderTemplateAsync(template, data);
+            const result = await this.renderTemplateAsync(template, data, this.resolveRenderUser(options));
             return {
                 Success: true,
                 Output: result,
@@ -464,12 +465,29 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
+     * The user a render runs as: the one the caller passed, else the user of the render this one is
+     * nested in. There is no fallback to this engine's context user: that is whoever last configured
+     * the process-wide engine, so it may be another request's user. A render with no user runs its
+     * extensions with no user, and an extension that needs one fails the render with an error rather
+     * than run as nobody (an `{% AIPrompt %}` tag does). Every server caller should pass `ContextUser`.
+     */
+    private resolveRenderUser(options?: TemplateRenderOptions): UserInfo | undefined {
+        return options?.ContextUser ?? CurrentTemplateRenderUser();
+    }
+
+    /**
      * Promisifies the Nunjucks template rendering process.
      * @param template the Nunjucks template object
      * @param data the data to render the template with
+     * @param renderUser the user registered extensions act for during this render
      */
-    protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
+    protected async renderTemplateAsync(template: nunjucks.Template, data: any, renderUser?: UserInfo): Promise<string> {
         HardenNunjucksRuntime(); // no-op unless something replaced a guarded nunjucks hook
+        return RunAsTemplateRenderUser(renderUser ?? this.resolveRenderUser(), () => this.renderInCurrentScope(template, data));
+    }
+
+    /** Renders `template` with `data`, inside the caller's render-user scope. */
+    private renderInCurrentScope(template: nunjucks.Template, data: any): Promise<string> {
         return new Promise((resolve, reject) => {
             template.render(data, (err, result) => {
                 if (err) {
