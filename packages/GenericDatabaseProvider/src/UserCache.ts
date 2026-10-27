@@ -64,19 +64,75 @@ export class UserCache extends BaseSingleton<UserCache> {
      * swallowed into `LogError` below — yields an empty cache rather than a `TypeError` off
      * `.find()`. Callers already treat a missing system user as `undefined`.
      */
-    private _users: UserInfo[] = [];
-    private _indexedUsersRef: UserInfo[] | null = null;
-    private _indexedUsersLen: number = -1;
-    private _indexedFirstUser: UserInfo | undefined = undefined;
-    private _indexedLastUser: UserInfo | undefined = undefined;
+    private _usersArray: UserInfo[] = this.attachPushHook([]);
     private readonly _userByIdMap = new Map<string, UserInfo>();
     private readonly _userByEmailMap = new Map<string, UserInfo>();
     private readonly _userByNameLowerMap = new Map<string, UserInfo>();
     private readonly _userByNameExactMap = new Map<string, UserInfo>();
     private _systemUser: UserInfo | undefined = undefined;
 
+    private get _users(): UserInfo[] {
+      return this._usersArray;
+    }
+
+    private set _users(users: UserInfo[]) {
+      this._usersArray = this.attachPushHook(users);
+      this.rebuildIndexes();
+    }
+
+    /**
+     * Attaches an index-maintaining `push` to the backing array so callers that append in place
+     * (`UserCache.Instance.Users.push(user)` in MJServer auth / MagicLinkService) keep the O(1)
+     * lookup maps current at write time without a per-read heuristic check.
+     */
+    private attachPushHook(users: UserInfo[]): UserInfo[] {
+      if (Array.isArray(users)) {
+        Object.defineProperty(users, 'push', {
+          configurable: true,
+          writable: true,
+          value: (...items: UserInfo[]): number => {
+            const len = Array.prototype.push.apply(users, items);
+            for (const item of items) {
+              this.indexUser(item);
+            }
+            return len;
+          },
+        });
+      }
+      return users;
+    }
+
+    private indexUser(u: UserInfo | undefined): void {
+      if (!u) return;
+      if (u.ID) {
+        const idKey = u.ID.trim().toLowerCase();
+        if (!this._userByIdMap.has(idKey)) {
+          this._userByIdMap.set(idKey, u);
+        }
+        if (this._systemUser === undefined && u.ID.toLowerCase() === SystemUserID.toLowerCase()) {
+          this._systemUser = u;
+        }
+      }
+      if (u.Email) {
+        const emailKey = u.Email.trim().toLowerCase();
+        if (emailKey && !this._userByEmailMap.has(emailKey)) {
+          this._userByEmailMap.set(emailKey, u);
+        }
+      }
+      if (u.Name) {
+        const nameTrimmed = u.Name.trim();
+        if (!this._userByNameExactMap.has(nameTrimmed)) {
+          this._userByNameExactMap.set(nameTrimmed, u);
+        }
+        const nameLower = nameTrimmed.toLowerCase();
+        if (!this._userByNameLowerMap.has(nameLower)) {
+          this._userByNameLowerMap.set(nameLower, u);
+        }
+      }
+    }
+
     private rebuildIndexes(): void {
-      const users = this._users;
+      const users = this._usersArray;
       this._userByIdMap.clear();
       this._userByEmailMap.clear();
       this._userByNameLowerMap.clear();
@@ -84,60 +140,12 @@ export class UserCache extends BaseSingleton<UserCache> {
       this._systemUser = undefined;
 
       if (!Array.isArray(users)) {
-        this._indexedUsersRef = null;
-        this._indexedUsersLen = -1;
-        this._indexedFirstUser = undefined;
-        this._indexedLastUser = undefined;
         return;
       }
 
-      const sysIdLower = SystemUserID.toLowerCase();
       const len = users.length;
       for (let i = 0; i < len; i++) {
-        const u = users[i];
-        if (!u) continue;
-        if (u.ID) {
-          const idKey = u.ID.trim().toLowerCase();
-          if (!this._userByIdMap.has(idKey)) {
-            this._userByIdMap.set(idKey, u);
-          }
-          if (this._systemUser === undefined && u.ID.toLowerCase() === sysIdLower) {
-            this._systemUser = u;
-          }
-        }
-        if (u.Email) {
-          const emailKey = u.Email.trim().toLowerCase();
-          if (emailKey && !this._userByEmailMap.has(emailKey)) {
-            this._userByEmailMap.set(emailKey, u);
-          }
-        }
-        if (u.Name) {
-          const nameTrimmed = u.Name.trim();
-          if (!this._userByNameExactMap.has(nameTrimmed)) {
-            this._userByNameExactMap.set(nameTrimmed, u);
-          }
-          const nameLower = nameTrimmed.toLowerCase();
-          if (!this._userByNameLowerMap.has(nameLower)) {
-            this._userByNameLowerMap.set(nameLower, u);
-          }
-        }
-      }
-      this._indexedUsersRef = users;
-      this._indexedUsersLen = len;
-      this._indexedFirstUser = len > 0 ? users[0] : undefined;
-      this._indexedLastUser = len > 0 ? users[len - 1] : undefined;
-    }
-
-    private ensureIndexes(): void {
-      const users = this._users;
-      const len = Array.isArray(users) ? users.length : -1;
-      if (
-        this._indexedUsersRef !== users ||
-        this._indexedUsersLen !== len ||
-        this._indexedFirstUser !== (len > 0 ? users[0] : undefined) ||
-        this._indexedLastUser !== (len > 0 ? users[len - 1] : undefined)
-      ) {
-        this.rebuildIndexes();
+        this.indexUser(users[i]);
       }
     }
 
@@ -227,7 +235,6 @@ export class UserCache extends BaseSingleton<UserCache> {
      * explicit assertion where the old one silently inferred the same lie.
      */
     public GetSystemUser(): UserInfo {
-      this.ensureIndexes();
       return this._systemUser as UserInfo;
     }
 
@@ -250,7 +257,6 @@ export class UserCache extends BaseSingleton<UserCache> {
         const users = await this.LoadUsers(provider);
         if (users) {
           this._users = users;
-          this.rebuildIndexes();
           this._recentMisses.clear();
           this._lastStamp = await this.readDatabaseStamp(provider);
 
@@ -285,7 +291,6 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     public SetUsers(users: UserInfo[]): void {
       this._users = users;
-      this.rebuildIndexes();
       this._recentMisses.clear();
     }
 
@@ -376,7 +381,6 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     public UserByName(name: string, caseSensitive: boolean = false): UserInfo | undefined {
       const instance = UserCache.Instance;
-      instance.ensureIndexes();
       const item = name.trim();
       return caseSensitive
         ? instance._userByNameExactMap.get(item)
@@ -424,10 +428,10 @@ export class UserCache extends BaseSingleton<UserCache> {
         const index = this._users.findIndex(u => UUIDsEqual(u.ID, user.ID));
         if (index >= 0) {
           this._users[index] = user;
+          this.rebuildIndexes();
         } else {
           this._users.push(user);
         }
-        this.rebuildIndexes();
         LogStatusEx({ message: `UserCache: loaded user ${user.ID} on demand — it was created after this process last refreshed`, verboseOnly: true });
         return user;
       } catch (e) {
@@ -460,7 +464,6 @@ export class UserCache extends BaseSingleton<UserCache> {
 
     /** The cached answer for {@link FindUser}'s criteria, without touching the database. */
     private findCached(criteria: { ID?: string; Email?: string }): UserInfo | undefined {
-      this.ensureIndexes();
       if (criteria.ID) {
         return this._userByIdMap.get(criteria.ID.trim().toLowerCase());
       }
@@ -635,7 +638,6 @@ export class UserCache extends BaseSingleton<UserCache> {
           const users = await this.LoadUsers(provider);
           if (users) {
             this._users = users;
-            this.rebuildIndexes();
             this._recentMisses.clear();
             this._lastStamp = await this.readDatabaseStamp(provider);
           }
