@@ -75,8 +75,16 @@ for (let i = 0; i < lines.length; i++) {
     }
     summaries.push(block);
 }
-/** `|` would break out of a markdown table cell. */
-const cell = (s) => (s ? s.replace(/\|/g, '\\|') : '—');
+/**
+ * `|` would break out of a markdown table cell, and vitest prints it inside the counter lines
+ * ("125 passed | 6 skipped"). Substitute the HTML entity rather than backslash-escaping: the
+ * input can contain backslashes (Windows paths, regexes in test names), and a `\`-escape that
+ * does not ALSO escape backslashes is incomplete — `\|` would become `\\|`, which renders as a
+ * literal backslash plus an unescaped pipe and breaks the cell anyway. CodeQL flagged exactly
+ * that (`js/incomplete-sanitization`). An entity introduces no escape character, so there is
+ * nothing to double-escape; it renders as `|`.
+ */
+const cell = (s) => (s ? s.replace(/\|/g, '&#124;') : '—');
 const turboFailed = uniq(all(/^Failed: {2,}(.+)$/gm).map((m) => m[1].trim()));
 const cmdErrors = uniq(all(/command finished with error: command \(([^)]+)\)/g).map((m) => m[1].trim()));
 const timeouts = all(/Test timed out in (\d+)ms/g).map((m) => m[1]);
