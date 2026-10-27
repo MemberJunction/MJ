@@ -173,10 +173,23 @@ export function ReadExternalDataSourceID(configuration: string | null | undefine
  * value becomes that directory; otherwise the directory is appended as a further comma-separated entry.
  */
 export function AppendDirectoryPreset(currentBackupUrls: string, directory: string): string {
-  const separator = /^[A-Za-z]:|\\/.test(directory) ? '\\' : '/';
-  const entry = `${directory.replace(/[\\/]+$/, '')}${separator}`;
-  const current = currentBackupUrls.trim().replace(/,\s*$/, '');
+  const separator = /^[A-Za-z]:/.test(directory) || directory.includes('\\') ? '\\' : '/';
+  const entry = `${TrimTrailingChars(directory, '\\/')}${separator}`;
+  const current = TrimTrailingChars(currentBackupUrls.trim(), ', \t');
   return current ? `${current}, ${entry}` : entry;
+}
+
+/**
+ * The string without any trailing run of the given characters. A loop rather than a `[...]+$`
+ * regular expression: that pattern has polynomial worst-case cost on user-typed input, which is
+ * what every path here is.
+ */
+export function TrimTrailingChars(value: string, chars: string): string {
+  let end = value.length;
+  while (end > 0 && chars.includes(value[end - 1])) {
+    end--;
+  }
+  return value.slice(0, end);
 }
 
 /**
@@ -185,7 +198,7 @@ export function AppendDirectoryPreset(currentBackupUrls: string, directory: stri
  * names are passed through as given.
  */
 export function BuildBackupUrlList(containerUrl: string, blobNames: Iterable<string>): string {
-  const base = containerUrl.trim().replace(/\/+$/, '');
+  const base = TrimTrailingChars(containerUrl.trim(), '/');
   return Array.from(blobNames)
     .map(name => (base ? `${base}/${name}` : name))
     .join(', ');

@@ -8,6 +8,7 @@ import {
   ProgressLinesFromEvents,
   ReadExternalDataSourceID,
   SummarizeBootstrapRun,
+  TrimTrailingChars,
 } from '../Integration/services/backup-source.helpers';
 
 describe('backup-source helpers', () => {
@@ -77,6 +78,16 @@ describe('backup-source helpers', () => {
       expect(ReadExternalDataSourceID('{"schedule":"daily"}')).toBeUndefined();
       expect(ReadExternalDataSourceID('{"externalDataSourceID":""}')).toBeUndefined();
       expect(ReadExternalDataSourceID('[1,2]')).toBeUndefined();
+    });
+  });
+
+  describe('TrimTrailingChars', () => {
+    it('strips only the trailing run of the given characters', () => {
+      expect(TrimTrailingChars('https://x/c///', '/')).toBe('https://x/c');
+      expect(TrimTrailingChars('C:\\a\\b\\', '\\/')).toBe('C:\\a\\b');
+      expect(TrimTrailingChars('a, b, ', ', ')).toBe('a, b');
+      expect(TrimTrailingChars('', '/')).toBe('');
+      expect(TrimTrailingChars('///', '/')).toBe('');
     });
   });
 

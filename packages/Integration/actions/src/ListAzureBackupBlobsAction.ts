@@ -12,15 +12,42 @@ export interface AzureBlobItem {
 }
 
 /**
- * Decodes XML entities.
+ * Decodes the five predefined XML entities in one pass. A single pass (rather than one replace per
+ * entity) is what keeps `&amp;lt;` decoding to the literal text `&lt;`, not to `<`.
  */
 function decodeXml(str: string): string {
-    return str
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'");
+    const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+    return str.replace(/&(amp|lt|gt|quot|apos);/g, (_match, name: string) => entities[name]);
+}
+
+/** The string without any trailing occurrences of `ch`, without a regular expression on caller input. */
+function trimTrailing(str: string, ch: string): string {
+    let end = str.length;
+    while (end > 0 && str[end - 1] === ch) {
+        end--;
+    }
+    return str.slice(0, end);
+}
+
+/**
+ * The text of the first `<tag>...</tag>` element at or after `from`, and the offset just past it, or
+ * undefined when the element is absent. Plain index arithmetic rather than a regular expression over
+ * the response body: the body is remote input, and a pattern with an unbounded lazy match over it
+ * has polynomial worst-case cost on a crafted payload.
+ */
+function readElement(xml: string, tag: string, from: number): { Text: string; End: number } | undefined {
+    const open = `<${tag}>`;
+    const close = `</${tag}>`;
+    const start = xml.indexOf(open, from);
+    if (start < 0) {
+        return undefined;
+    }
+    const textStart = start + open.length;
+    const end = xml.indexOf(close, textStart);
+    if (end < 0) {
+        return undefined;
+    }
+    return { Text: xml.slice(textStart, end), End: end + close.length };
 }
 
 /**
@@ -28,44 +55,52 @@ function decodeXml(str: string): string {
  */
 export function ParseAzureListBlobsXml(xml: string, containerUrl: string): { blobs: AzureBlobItem[]; nextMarker?: string } {
     const blobs: AzureBlobItem[] = [];
-    const cleanBaseUrl = containerUrl.replace(/\/+$/, '');
+    const cleanBaseUrl = trimTrailing(containerUrl, '/');
 
-    // Extract next marker if present
-    const markerMatch = /<NextMarker>([\s\S]*?)<\/NextMarker>/i.exec(xml);
-    const nextMarker = markerMatch && markerMatch[1].trim().length > 0 ? markerMatch[1].trim() : undefined;
+    const marker = readElement(xml, 'NextMarker', 0)?.Text.trim();
+    const nextMarker = marker && marker.length > 0 ? marker : undefined;
 
-    const blobRegex = /<Blob>([\s\S]*?)<\/Blob>/gi;
-    let match: RegExpExecArray | null;
-
-    while ((match = blobRegex.exec(xml)) !== null) {
-        const blobContent = match[1];
-
-        const nameMatch = /<Name>([\s\S]*?)<\/Name>/i.exec(blobContent);
-        if (!nameMatch) continue;
-        const name = decodeXml(nameMatch[1].trim());
-
-        const lengthMatch = /<Content-Length>([\s\S]*?)<\/Content-Length>/i.exec(blobContent);
-        const sizeBytes = lengthMatch ? parseInt(lengthMatch[1].trim(), 10) : 0;
-
-        const modifiedMatch = /<Last-Modified>([\s\S]*?)<\/Last-Modified>/i.exec(blobContent);
-        let lastModified = '';
-        if (modifiedMatch) {
-            const parsedDate = new Date(modifiedMatch[1].trim());
-            lastModified = isNaN(parsedDate.getTime()) ? modifiedMatch[1].trim() : parsedDate.toISOString();
+    let cursor = 0;
+    for (;;) {
+        const blob = readElement(xml, 'Blob', cursor);
+        if (!blob) {
+            break;
         }
-
-        const encodedPath = name.split('/').map(encodeURIComponent).join('/');
-        const url = `${cleanBaseUrl}/${encodedPath}`;
-
-        blobs.push({
-            Name: name,
-            Url: url,
-            SizeBytes: isNaN(sizeBytes) ? 0 : sizeBytes,
-            LastModified: lastModified,
-        });
+        cursor = blob.End;
+        const item = parseBlobElement(blob.Text, cleanBaseUrl);
+        if (item) {
+            blobs.push(item);
+        }
     }
 
     return { blobs, nextMarker };
+}
+
+/** One `<Blob>` element's item, or undefined when it carries no name. */
+function parseBlobElement(blobXml: string, cleanBaseUrl: string): AzureBlobItem | undefined {
+    const nameText = readElement(blobXml, 'Name', 0)?.Text.trim();
+    if (!nameText) {
+        return undefined;
+    }
+    const name = decodeXml(nameText);
+
+    const lengthText = readElement(blobXml, 'Content-Length', 0)?.Text.trim();
+    const sizeBytes = lengthText ? parseInt(lengthText, 10) : 0;
+
+    const modifiedText = readElement(blobXml, 'Last-Modified', 0)?.Text.trim();
+    let lastModified = '';
+    if (modifiedText) {
+        const parsedDate = new Date(modifiedText);
+        lastModified = isNaN(parsedDate.getTime()) ? modifiedText : parsedDate.toISOString();
+    }
+
+    const encodedPath = name.split('/').map(encodeURIComponent).join('/');
+    return {
+        Name: name,
+        Url: `${cleanBaseUrl}/${encodedPath}`,
+        SizeBytes: isNaN(sizeBytes) ? 0 : sizeBytes,
+        LastModified: lastModified,
+    };
 }
 
 /**
@@ -115,7 +150,7 @@ export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
 
             const prefix = this.getStringParam(params, 'Prefix');
             const cleanSas = sasToken.replace(/^\?/, '').trim();
-            const cleanContainerUrl = containerUrl.replace(/\/+$/, '');
+            const cleanContainerUrl = trimTrailing(containerUrl, '/');
 
             LogStatus(`[ListAzureBackupBlobsAction] Querying container '${cleanContainerUrl}' with prefix '${prefix ?? ''}'...`);
 
