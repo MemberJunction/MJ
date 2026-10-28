@@ -5,14 +5,12 @@ import {
   Input,
   OnChanges,
   OnDestroy,
-  OnInit,
   Output,
   SimpleChanges,
   inject
 } from '@angular/core';
-import { RunView, LogError } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import {
   IntegrationDataService,
   EntityMapRow,
@@ -21,26 +19,17 @@ import {
   ListAzureBackupBlobsResult
 } from '../../services/integration-data.service';
 import {
-  AppendDirectoryPreset,
   BootstrapProgressLine,
   BootstrapResultSummary,
-  BuildBackupUrlList,
-  DeriveContainerUrl,
-  FirstBackupUrl,
-  FormatBytes,
   ProgressLinesFromEvents,
   SummarizeBootstrapRun,
 } from '../../services/backup-source.helpers';
+import { BackupSourceValue, DefaultBackupSourceValue, IsBackupSourceValid } from '../backup-source-picker/backup-source-picker.component';
 
 export type { AzureBlobItem, InspectBackupResult, ListAzureBackupBlobsResult, BootstrapResultSummary, BootstrapProgressLine };
 
 /** How often the wizard asks the server for new run events while a bootstrap is running. */
 const RUN_POLL_INTERVAL_MS = 2500;
-
-export interface DirectoryPreset {
-  Label: string;
-  Path: string;
-}
 
 export type WizardStepType = 1 | 2 | 3 | 4;
 export type ExecutionStatusType = 'idle' | 'running' | 'succeeded' | 'failed';
@@ -51,7 +40,7 @@ export type ExecutionStatusType = 'idle' | 'running' | 'succeeded' | 'failed';
   templateUrl: './bootstrap-wizard.component.html',
   styleUrls: ['./bootstrap-wizard.component.css']
 })
-export class BootstrapWizardComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
+export class BootstrapWizardComponent extends BaseAngularComponent implements OnChanges, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private integrationService = inject(IntegrationDataService);
 
@@ -64,40 +53,14 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   // Wizard state
   CurrentStep: WizardStepType = 1;
 
-  // Step 1: Configuration
-  SourceType: 'azure' | 'local' = 'azure';
-  BackupUrls = '';
-  AuthMode: 'sas' | 'credential' = 'sas';
-  SasToken = '';
-  SelectedCredentialID = '';
+  // Step 1: Configuration — the backup source half is owned by <app-backup-source-picker>
+  Source: BackupSourceValue = DefaultBackupSourceValue();
+  /** The header of the local backup the picker last verified, if any. */
+  VerifiedBackup: InspectBackupResult | null = null;
   StagingDatabaseName = '';
   DropStagingDbOnComplete = true;
   TruncateTargetBeforeLoad = false;
   BatchSize = 500000;
-
-  AvailableCredentials: MJCredentialEntity[] = [];
-  IsLoadingCredentials = false;
-  CredentialsError: string | null = null;
-
-  // Azure Blob Browser State
-  AzureContainerUrl = '';
-  IsBrowsingAzure = false;
-  AzureBlobs: AzureBlobItem[] = [];
-  SelectedAzureBlobs: Set<string> = new Set<string>();
-  AzureBlobSearch = '';
-  AzureBrowseError: string | null = null;
-  ShowOnlyBakBlobs = true;
-
-  // Local File & Verification State
-  IsVerifyingBackup = false;
-  VerifiedBackupHeader: InspectBackupResult | null = null;
-  VerifyBackupError: string | null = null;
-  DirectoryPresets: DirectoryPreset[] = [
-    { Label: 'Linux MSSQL Default', Path: '/var/opt/mssql/backup' },
-    { Label: 'Windows MSSQL Default', Path: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL\\Backup' },
-    { Label: 'Windows C:\\SQLBackups', Path: 'C:\\SQLBackups' },
-    { Label: 'Root /backups', Path: '/backups' }
-  ];
 
   // Step 2: Inspection & Preview
   EntityMaps: EntityMapRow[] = [];
@@ -117,14 +80,9 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   // Step 4: Completion
   ResultSummary: BootstrapResultSummary | null = null;
 
-  ngOnInit(): void {
-    this.RefreshLocalFiles();
-  }
-
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['IsOpen'] && this.IsOpen) {
       this.resetWizard();
-      this.loadCredentials();
     }
   }
 
@@ -138,178 +96,12 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   }
 
   public get IsStep1Valid(): boolean {
-    const hasUrls = this.BackupUrls.trim().length > 0;
-    const hasDbName = this.StagingDatabaseName.trim().length > 0;
-
-    if (this.SourceType === 'local') {
-      return hasUrls && hasDbName;
-    }
-
-    const hasAuth = this.AuthMode === 'sas'
-      ? this.SasToken.trim().length > 0
-      : this.SelectedCredentialID.trim().length > 0;
-    return hasUrls && hasAuth && hasDbName;
+    return IsBackupSourceValid(this.Source) && this.StagingDatabaseName.trim().length > 0;
   }
 
-  public SetSourceType(type: 'azure' | 'local'): void {
-    if (this.SourceType === type) return;
-    this.SourceType = type;
-    this.BackupUrls = '';
-    this.SelectedAzureBlobs.clear();
-    this.RefreshLocalFiles();
-    this.cdr.detectChanges();
-  }
-
-  // --- Azure Blob Browser Methods ---
-
-  public async BrowseAzureBlobs(): Promise<void> {
-    this.AzureBrowseError = null;
-    let container = this.AzureContainerUrl.trim();
-
-    // Auto-detect the container URL from an already-entered blob URL
-    if (!container && this.BackupUrls) {
-      const derived = DeriveContainerUrl(FirstBackupUrl(this.BackupUrls));
-      if (derived) {
-        container = derived;
-        this.AzureContainerUrl = derived;
-      }
-    }
-
-    if (!container) {
-      this.AzureBrowseError = 'Please enter an Azure Container URL (e.g. https://myaccount.blob.core.windows.net/backups).';
-      this.cdr.detectChanges();
-      return;
-    }
-
-    const isSas = this.AuthMode === 'sas';
-    const sas = isSas ? this.SasToken.trim() : undefined;
-    const credId = !isSas ? this.SelectedCredentialID : undefined;
-
-    if (isSas && !sas) {
-      this.AzureBrowseError = 'Please provide a SAS token with List (l) and Read (r) permissions.';
-      this.cdr.detectChanges();
-      return;
-    }
-
-    if (!isSas && !credId) {
-      this.AzureBrowseError = 'Please select a storage credential.';
-      this.cdr.detectChanges();
-      return;
-    }
-
-    this.IsBrowsingAzure = true;
-    this.cdr.detectChanges();
-
-    try {
-      const result = await this.integrationService.ListAzureBackupBlobs(
-        this.CompanyIntegration?.ID ?? '',
-        {
-          ContainerUrl: container,
-          SasToken: sas,
-          StorageCredentialID: credId
-        }
-      );
-
-      if (result.Success) {
-        this.AzureBlobs = result.Blobs;
-        if (result.Blobs.length === 0) {
-          this.AzureBrowseError = 'No blobs found in this container.';
-        }
-      } else {
-        this.AzureBrowseError = result.Message || 'Failed to list container blobs.';
-      }
-    } catch (err) {
-      this.AzureBrowseError = err instanceof Error ? err.message : String(err);
-    } finally {
-      this.IsBrowsingAzure = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  public get FilteredAzureBlobs(): AzureBlobItem[] {
-    let list = this.AzureBlobs;
-    if (this.ShowOnlyBakBlobs) {
-      list = list.filter(b => b.IsBak);
-    }
-    if (this.AzureBlobSearch.trim()) {
-      const q = this.AzureBlobSearch.trim().toLowerCase();
-      list = list.filter(b => b.Name.toLowerCase().includes(q));
-    }
-    return list;
-  }
-
-  public ToggleAzureBlob(blobName: string): void {
-    if (this.SelectedAzureBlobs.has(blobName)) {
-      this.SelectedAzureBlobs.delete(blobName);
-    } else {
-      this.SelectedAzureBlobs.add(blobName);
-    }
-    this.syncAzureSelectedToBackupUrls();
-  }
-
-  public SelectSingleAzureBlob(blobName: string): void {
-    this.SelectedAzureBlobs.clear();
-    this.SelectedAzureBlobs.add(blobName);
-    this.syncAzureSelectedToBackupUrls();
-  }
-
-  private syncAzureSelectedToBackupUrls(): void {
-    this.BackupUrls = BuildBackupUrlList(this.AzureContainerUrl, this.SelectedAzureBlobs);
-    this.cdr.detectChanges();
-  }
-
-  // --- Local Backup File & Verification Methods ---
-
-  public RefreshLocalFiles(): void {
-    this.VerifiedBackupHeader = null;
-    this.VerifyBackupError = null;
-  }
-
-  public ApplyDirectoryPreset(path: string): void {
-    this.BackupUrls = AppendDirectoryPreset(this.BackupUrls, path);
-    this.RefreshLocalFiles();
-    this.cdr.detectChanges();
-  }
-
-  public OnBackupPathChanged(): void {
-    this.RefreshLocalFiles();
-  }
-
-  public async VerifyLocalBackup(): Promise<void> {
-    if (!this.BackupUrls.trim()) {
-      this.VerifyBackupError = 'Please enter a backup file path to verify.';
-      this.cdr.detectChanges();
-      return;
-    }
-
-    this.IsVerifyingBackup = true;
-    this.VerifyBackupError = null;
-    this.VerifiedBackupHeader = null;
-    this.cdr.detectChanges();
-
-    try {
-      const result = await this.integrationService.InspectSQLServerBackup(
-        this.CompanyIntegration?.ID ?? '',
-        {
-          BackupUrls: this.BackupUrls.trim()
-        }
-      );
-
-      if (result.Success) {
-        this.VerifiedBackupHeader = result;
-      } else {
-        this.VerifyBackupError = result.Message || 'Failed to inspect SQL Server backup header.';
-      }
-    } catch (err) {
-      this.VerifyBackupError = err instanceof Error ? err.message : String(err);
-    } finally {
-      this.IsVerifyingBackup = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  public FormatBytes(bytes: number): string {
-    return FormatBytes(bytes);
+  /** The picker read a local backup's header. */
+  public OnVerified(result: InspectBackupResult): void {
+    this.VerifiedBackup = result;
   }
 
   public GoToStep(step: WizardStepType): void {
@@ -341,13 +133,13 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const isAzure = this.SourceType === 'azure';
+      const isAzure = this.Source.SourceType === 'azure';
       const started = await this.integrationService.StartBootstrapFromBackup(
         this.CompanyIntegration.ID,
         {
-          BackupUrls: this.BackupUrls.trim(),
-          SasToken: isAzure && this.AuthMode === 'sas' ? this.SasToken.trim() : undefined,
-          StorageCredentialID: isAzure && this.AuthMode === 'credential' ? this.SelectedCredentialID : undefined,
+          BackupUrls: this.Source.BackupUrls.trim(),
+          SasToken: isAzure && this.Source.AuthMode === 'sas' ? this.Source.SasToken.trim() : undefined,
+          StorageCredentialID: isAzure && this.Source.AuthMode === 'credential' ? this.Source.StorageCredentialID : undefined,
           StagingDatabaseName: this.StagingDatabaseName.trim(),
           DropStagingDbOnComplete: this.DropStagingDbOnComplete,
           TruncateTargetBeforeLoad: this.TruncateTargetBeforeLoad,
@@ -449,17 +241,8 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
 
   private resetWizard(): void {
     this.CurrentStep = 1;
-    this.SourceType = 'azure';
-    this.BackupUrls = '';
-    this.AuthMode = 'sas';
-    this.SasToken = '';
-    this.SelectedCredentialID = '';
-    this.AzureContainerUrl = '';
-    this.AzureBlobs = [];
-    this.SelectedAzureBlobs.clear();
-    this.AzureBlobSearch = '';
-    this.AzureBrowseError = null;
-    this.RefreshLocalFiles();
+    this.Source = DefaultBackupSourceValue();
+    this.VerifiedBackup = null;
     this.DropStagingDbOnComplete = true;
     this.TruncateTargetBeforeLoad = false;
     this.BatchSize = 500000;
@@ -477,33 +260,6 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
       this.StagingDatabaseName = `MJ_Staging_${cleanId}_${Date.now().toString().slice(-4)}`;
     } else {
       this.StagingDatabaseName = `MJ_Staging_${Date.now()}`;
-    }
-  }
-
-  private async loadCredentials(): Promise<void> {
-    this.IsLoadingCredentials = true;
-    this.CredentialsError = null;
-    try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJCredentialEntity>({
-        EntityName: 'MJ: Credentials',
-        ExtraFilter: 'IsActive = 1',
-        OrderBy: 'Name ASC',
-        ResultType: 'entity_object',
-      });
-      if (result.Success) {
-        this.AvailableCredentials = result.Results ?? [];
-      } else {
-        this.CredentialsError = result.ErrorMessage || 'Failed to load credentials.';
-        LogError(`[BootstrapWizard] Error loading credentials: ${result.ErrorMessage}`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.CredentialsError = msg;
-      LogError(`[BootstrapWizard] Exception loading credentials: ${msg}`);
-    } finally {
-      this.IsLoadingCredentials = false;
-      this.cdr.detectChanges();
     }
   }
 

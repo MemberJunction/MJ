@@ -26,5 +26,11 @@ export * from './components/widgets/run-history-panel.component';
 // Bootstrap Wizard
 export * from './components/bootstrap-wizard/bootstrap-wizard.component';
 
+// Backup source picker (shared by the bootstrap and archive seed wizards)
+export * from './components/backup-source-picker/backup-source-picker.component';
+
+// Archive Seed Wizard
+export * from './components/archive-seed-wizard/archive-seed-wizard.component';
+
 // Module
 export * from './integration.module';

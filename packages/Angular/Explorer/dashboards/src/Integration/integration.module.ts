@@ -34,6 +34,8 @@ import { IntegrationCardComponent } from './components/widgets/integration-card.
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
 import { VisualFieldEditorComponent } from './components/visual-editor/visual-editor.component';
 import { BootstrapWizardComponent } from './components/bootstrap-wizard/bootstrap-wizard.component';
+import { BackupSourcePickerComponent } from './components/backup-source-picker/backup-source-picker.component';
+import { ArchiveSeedWizardComponent } from './components/archive-seed-wizard/archive-seed-wizard.component';
 import { IntegrationDataService } from './services/integration-data.service';
 
 @NgModule({
@@ -47,7 +49,9 @@ import { IntegrationDataService } from './services/integration-data.service';
     IntegrationCardComponent,
     RunHistoryPanelComponent,
     VisualFieldEditorComponent,
-    BootstrapWizardComponent
+    BootstrapWizardComponent,
+    BackupSourcePickerComponent,
+    ArchiveSeedWizardComponent
   ],
   imports: [
     CommonModule,
@@ -86,7 +90,9 @@ import { IntegrationDataService } from './services/integration-data.service';
     IntegrationCardComponent,
     RunHistoryPanelComponent,
     VisualFieldEditorComponent,
-    BootstrapWizardComponent
+    BootstrapWizardComponent,
+    BackupSourcePickerComponent,
+    ArchiveSeedWizardComponent
   ]
 })
 export class IntegrationModule { }

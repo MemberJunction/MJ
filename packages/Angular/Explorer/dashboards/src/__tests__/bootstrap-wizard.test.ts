@@ -2,6 +2,11 @@ import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BootstrapWizardComponent } from '../Integration/components/bootstrap-wizard/bootstrap-wizard.component';
+import {
+  BackupSourcePickerComponent,
+  BackupSourceValue,
+  DefaultBackupSourceValue
+} from '../Integration/components/backup-source-picker/backup-source-picker.component';
 import { ConnectionsComponent } from '../Integration/components/connections/connections.component';
 import {
   IntegrationDataService,
@@ -71,24 +76,30 @@ describe('Bootstrap Wizard Review Fixes', () => {
       const wizard = Object.create(BootstrapWizardComponent.prototype) as BootstrapWizardComponent;
       wizard.IsOpen = true;
       wizard.CurrentStep = 1;
-      wizard.SourceType = 'azure';
-      wizard.BackupUrls = '';
-      wizard.AuthMode = 'sas';
-      wizard.SasToken = '';
-      wizard.SelectedCredentialID = '';
+      wizard.Source = DefaultBackupSourceValue();
       wizard.StagingDatabaseName = 'MJ_Staging_Test';
       wizard.DropStagingDbOnComplete = true;
       wizard.TruncateTargetBeforeLoad = false;
       wizard.ExecutionStatus = 'idle';
-      wizard.DirectoryPresets = [
+      wizard.Closed = { emit: vi.fn() } as unknown as typeof wizard.Closed;
+      (wizard as unknown as Record<string, unknown>)['cdr'] = { detectChanges: vi.fn() };
+      return wizard;
+    }
+
+    /** The backup source picker owns the source half of step 1 (presets, verification, Azure browsing). */
+    function createPicker(): BackupSourcePickerComponent {
+      const picker = Object.create(BackupSourcePickerComponent.prototype) as BackupSourcePickerComponent;
+      (picker as unknown as Record<string, unknown>)['_value'] = DefaultBackupSourceValue();
+      picker.DirectoryPresets = [
         { Label: 'Linux MSSQL Default', Path: '/var/opt/mssql/backup' },
         { Label: 'Windows MSSQL Default', Path: 'C:\\Program Files\\Microsoft SQL Server\\MSSQL\\Backup' },
         { Label: 'Windows C:\\SQLBackups', Path: 'C:\\SQLBackups' },
         { Label: 'Root /backups', Path: '/backups' }
       ];
-      wizard.Closed = { emit: vi.fn() } as unknown as typeof wizard.Closed;
-      (wizard as unknown as Record<string, unknown>)['cdr'] = { detectChanges: vi.fn() };
-      return wizard;
+      picker.SelectedAzureBlobs = new Set<string>();
+      picker.ValueChange = { emit: vi.fn() } as unknown as typeof picker.ValueChange;
+      (picker as unknown as Record<string, unknown>)['cdr'] = { detectChanges: vi.fn() };
+      return picker;
     }
 
     it('extends BaseAngularComponent', () => {
@@ -96,9 +107,9 @@ describe('Bootstrap Wizard Review Fixes', () => {
     });
 
     it('has PascalCase properties on DirectoryPreset', () => {
-      const wizard = createWizard();
-      expect(wizard.DirectoryPresets[0].Label).toBe('Linux MSSQL Default');
-      expect(wizard.DirectoryPresets[0].Path).toBe('/var/opt/mssql/backup');
+      const picker = createPicker();
+      expect(picker.DirectoryPresets[0].Label).toBe('Linux MSSQL Default');
+      expect(picker.DirectoryPresets[0].Path).toBe('/var/opt/mssql/backup');
     });
 
     it('does not mutate @Input() IsOpen on Close()', () => {
@@ -111,43 +122,66 @@ describe('Bootstrap Wizard Review Fixes', () => {
     });
 
     it('RefreshLocalFiles resets verification state', () => {
-      const wizard = createWizard();
-      wizard.VerifiedBackupHeader = { Success: true, Message: 'Verified' };
-      wizard.VerifyBackupError = 'Previous error';
-      wizard.RefreshLocalFiles();
-      expect(wizard.VerifiedBackupHeader).toBeNull();
-      expect(wizard.VerifyBackupError).toBeNull();
+      const picker = createPicker();
+      picker.VerifiedBackupHeader = { Success: true, Message: 'Verified' };
+      picker.VerifyBackupError = 'Previous error';
+      picker.RefreshLocalFiles();
+      expect(picker.VerifiedBackupHeader).toBeNull();
+      expect(picker.VerifyBackupError).toBeNull();
     });
 
     it('ApplyDirectoryPreset starts a path entry for the user to complete, never a bare directory entry', () => {
-      const wizard = createWizard();
-      wizard.ApplyDirectoryPreset('/var/opt/mssql/backup');
-      expect(wizard.BackupUrls).toBe('/var/opt/mssql/backup/');
+      const picker = createPicker();
+      picker.ApplyDirectoryPreset('/var/opt/mssql/backup');
+      expect(picker.Value.BackupUrls).toBe('/var/opt/mssql/backup/');
+      expect(picker.ValueChange.emit).toHaveBeenLastCalledWith(picker.Value);
 
-      wizard.BackupUrls = '/var/opt/mssql/backup/db_1.bak';
-      wizard.ApplyDirectoryPreset('C:\\SQLBackups');
-      expect(wizard.BackupUrls).toBe('/var/opt/mssql/backup/db_1.bak, C:\\SQLBackups\\');
+      picker.Value = { ...picker.Value, BackupUrls: '/var/opt/mssql/backup/db_1.bak' };
+      picker.ApplyDirectoryPreset('C:\\SQLBackups');
+      expect(picker.Value.BackupUrls).toBe('/var/opt/mssql/backup/db_1.bak, C:\\SQLBackups\\');
     });
 
     it('validates Step 1 correctly for local vs azure sources', () => {
       const wizard = createWizard();
+      const withSource = (patch: Partial<BackupSourceValue>): void => { wizard.Source = { ...wizard.Source, ...patch }; };
 
       // Azure requires URLs, DB name, and Auth
-      wizard.SourceType = 'azure';
-      wizard.BackupUrls = '';
+      withSource({ SourceType: 'azure', BackupUrls: '' });
       expect(wizard.IsStep1Valid).toBe(false);
 
-      wizard.BackupUrls = 'https://blob.core.windows.net/backups/db.bak';
-      wizard.SasToken = 'sp=rl&sig=xyz';
+      withSource({ BackupUrls: 'https://blob.core.windows.net/backups/db.bak' });
+      expect(wizard.IsStep1Valid).toBe(false); // no SAS token yet
+      withSource({ SasToken: 'sp=rl&sig=xyz' });
       expect(wizard.IsStep1Valid).toBe(true);
+
+      // Credential mode needs a selected credential instead of a SAS token
+      withSource({ AuthMode: 'credential' });
+      expect(wizard.IsStep1Valid).toBe(false);
+      withSource({ StorageCredentialID: 'cred-1' });
+      expect(wizard.IsStep1Valid).toBe(true);
+
+      // The staging database name is still required
+      wizard.StagingDatabaseName = '  ';
+      expect(wizard.IsStep1Valid).toBe(false);
+      wizard.StagingDatabaseName = 'MJ_Staging_Test';
 
       // Local requires URLs and DB name only (host auth is handled by SQL Server instance)
-      wizard.SourceType = 'local';
-      wizard.BackupUrls = '';
+      withSource({ SourceType: 'local', BackupUrls: '', SasToken: '', StorageCredentialID: '' });
       expect(wizard.IsStep1Valid).toBe(false);
 
-      wizard.BackupUrls = '/var/opt/mssql/backup/db.bak';
+      withSource({ BackupUrls: '/var/opt/mssql/backup/db.bak' });
       expect(wizard.IsStep1Valid).toBe(true);
+    });
+
+    it('the picker clears the backup paths and selected blobs when the source type changes', () => {
+      const picker = createPicker();
+      picker.Value = { ...picker.Value, BackupUrls: 'https://acct/backups/a.bak' };
+      picker.SelectedAzureBlobs.add('a.bak');
+      picker.SetSourceType('local');
+      expect(picker.Value.SourceType).toBe('local');
+      expect(picker.Value.BackupUrls).toBe('');
+      expect(picker.SelectedAzureBlobs.size).toBe(0);
+      expect(picker.ValueChange.emit).toHaveBeenCalledWith(picker.Value);
     });
 
     it('Task 9: defaults TruncateTargetBeforeLoad to false', () => {
