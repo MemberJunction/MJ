@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
     IsPrefixPromptCache,
@@ -587,3 +587,16 @@ describe('Lockstep — the JSONType source CodeGen generates from declares what 
     });
 });
 
+
+describe('ResolveEffectiveModelConfiguration — prototype pollution (CodeQL #169, #553)', () => {
+    afterEach(() => {
+        delete (Object.prototype as { polluted?: unknown }).polluted;
+    });
+
+    it('does not write a __proto__ layer key into Object.prototype', () => {
+        const hostile = JSON.parse('{"__proto__":{"polluted":1},"Realtime":{"__proto__":{"polluted":1}}}') as AIModelConfiguration;
+        const effective = ResolveEffectiveModelConfiguration({ Realtime: { FullDuplex: true } }, hostile);
+        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(effective).toEqual({ Realtime: { FullDuplex: true } });
+    });
+});
