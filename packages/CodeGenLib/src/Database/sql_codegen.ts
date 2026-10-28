@@ -4,8 +4,8 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import type { SQLPassFailure } from './sqlPassFailures';
-import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult, OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
+import { DescribeSQLPassFailure, SQLObjectKeyFromDescription, type SQLPassFailure } from './sqlPassFailures';
+import { CodeGenDatabaseProvider, CRUDType, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult, OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
 
 import { AutoIndexForeignKeys, AutoIndexSoftPrimaryKeys, configInfo, CustomSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { EntityInCustomBaseViewRefreshScope, ShouldEmitCascadeForRelatedEntity } from './schema-filters';
@@ -315,6 +315,39 @@ export class SQLCodeGenBase {
         this.sqlPassFailures.push({ Step: step, EntityName: null, Message: message });
     }
 
+    /**
+     * Records each failed batch the provider collected while executing SQL files (see
+     * `CodeGenDatabaseProvider.SQLObjectFailures`), tied to the entity whose base view or CRUD
+     * routine the batch names, or to no entity when it names none of them. Returns how many it
+     * recorded; 0 means the provider gave no object-level detail.
+     */
+    protected RecordSQLObjectFailures(step: string, entities: EntityInfo[]): number {
+        const failures = this._dbProvider.SQLObjectFailures;
+        if (failures.length === 0) return 0;
+        const ownerByObject = new Map<string, string>();
+        for (const e of entities) {
+            const names = [
+                e.BaseView,
+                e.GeneratedViewName,
+                this._dbProvider.getCRUDRoutineName(e, CRUDType.Create),
+                this._dbProvider.getCRUDRoutineName(e, CRUDType.Update),
+                this._dbProvider.getCRUDRoutineName(e, CRUDType.Delete),
+            ];
+            for (const name of names) {
+                if (name) ownerByObject.set(`${e.SchemaName}.${name}`.toLowerCase(), e.Name);
+            }
+        }
+        for (const f of failures) {
+            const key = SQLObjectKeyFromDescription(f.Object);
+            this.sqlPassFailures.push({
+                Step: step,
+                EntityName: key ? ownerByObject.get(key) ?? null : null,
+                Message: `${f.Object}: ${f.Message.substring(0, 400)}`,
+            });
+        }
+        return failures.length;
+    }
+
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
@@ -530,6 +563,7 @@ export class SQLCodeGenBase {
             // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
             StartSpinner('Executing entity SQL files...');
             const step2eStartTime: Date = new Date();
+            this._dbProvider.ClearSQLObjectFailures();
 
             let executionSuccess = false;
             if (useProviderPhasedExecution) {
@@ -559,7 +593,9 @@ export class SQLCodeGenBase {
             let overallSuccess = entityGenSuccess && beforeScriptsSucceeded;
             if (!executionSuccess) {
                 FailSpinner('Failed to execute entity SQL files');
-                this.RecordSQLPassStepFailure('Executing entity SQL files', 'One or more entity SQL files had failed batches');
+                if (this.RecordSQLObjectFailures('Executing entity SQL files', includedEntities) === 0) {
+                    this.RecordSQLPassStepFailure('Executing entity SQL files', 'One or more entity SQL files had failed batches');
+                }
                 TempBatchFile.cleanup(); // Cleanup on error
                 overallSuccess = false;
                 // Continue to manage entity fields metadata even after SQL execution failure.
@@ -903,13 +939,28 @@ export class SQLCodeGenBase {
         }
     }
 
+    /**
+     * Executes each entity's permissions files. An entity with a failure already recorded this pass
+     * (its view or a CRUD routine failed to create) is skipped with one warning naming that first
+     * failure: its GRANTs would only fail with `Cannot find the object`, burying the real cause.
+     * The recorded failure already fails the run, so a skip does not fail this step.
+     */
     public async ApplyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {
             let bSuccess = true;
+            const firstFailureByEntity = new Map<string, SQLPassFailure>();
+            for (const f of this.sqlPassFailures) {
+                if (f.EntityName && !firstFailureByEntity.has(f.EntityName)) firstFailureByEntity.set(f.EntityName, f);
+            }
 
             for (let i = 0; i < entities.length; i += batchSize) {
                 const batch = entities.slice(i, i + batchSize);
                 const promises = batch.map(async (e) => {
+                    const firstFailure = firstFailureByEntity.get(e.Name);
+                    if (firstFailure) {
+                        LogWarning(`Skipping permissions for entity ${e.Name}: its objects failed earlier in this run. First failure: ${DescribeSQLPassFailure(firstFailure)}`);
+                        return true;
+                    }
                     // generate the file names for the entity
                     const files = this.GetEntityPermissionFileNames(e);
                     let innerSuccess: boolean = true;

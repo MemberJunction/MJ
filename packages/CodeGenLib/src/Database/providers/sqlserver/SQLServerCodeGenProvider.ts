@@ -2172,7 +2172,8 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
      * Executes a SQL file against SQL Server over the shared in-process mssql pool, one `GO`
      * batch at a time. Every batch runs even after one fails, so a single run reports the
      * complete set of broken objects; each failure is logged as an error naming the object the
-     * batch acts on (`CREATE PROCEDURE [s].[spX]`, `GRANT ON [s].[vwX]`). Returns `false` when
+     * batch acts on (`CREATE PROCEDURE [s].[spX]`, `GRANT ON [s].[vwX]`) and recorded in
+     * {@link SQLObjectFailures}. Returns `false` when
      * any batch failed or the file could not be read, `true` otherwise. A failed batch used to be
      * logged as a warning with the file still reported as successful, which hid procedures that
      * had been dropped and never recreated (#4000).
@@ -2202,6 +2203,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
             }
 
             if (failures.length > 0) {
+                this.sqlObjectFailures.push(...failures.map(f => ({ File: filePath, Object: f.Object, Message: f.Message })));
                 const list = failures.map(f => `  - ${f.Object}: ${f.Message.substring(0, 400)}`).join('\n');
                 logError(`[CodeGen] ${failures.length} SQL batch(es) failed in ${path.basename(filePath)}:\n${list}`);
                 return false;
