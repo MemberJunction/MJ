@@ -98,6 +98,7 @@ import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-stor
 import { SnapshotRetrainer } from '../snapshot/snapshot-retrainer';
 import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
 import { TrainRequestBuilder } from './train-request';
+import { ComputePricing } from './compute-cost';
 import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage } from './types';
 import type { UnitModelLineage } from './unit-model-lineage';
 
@@ -166,10 +167,12 @@ export class TrainingEngine {
    * @returns the produced `Draft` model and the `Completed`/`Failed` training run
    */
   public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+    // The compute rate is read before anything is written or trained, so a misconfigured rate fails fast.
+    const usdPerSecond = ComputePricing.ReadComputeRate();
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
     return resolved.pipeline.PredictionUnitID
-      ? this.trainUnitPipeline(resolved, resolved.pipeline.PredictionUnitID, input, deps)
-      : this.trainLegacyPipeline(resolved, input, deps);
+      ? this.trainUnitPipeline(resolved, resolved.pipeline.PredictionUnitID, input, deps, usdPerSecond)
+      : this.trainLegacyPipeline(resolved, input, deps, usdPerSecond);
   }
 
   /**
@@ -177,7 +180,7 @@ export class TrainingEngine {
    * is written; a point-in-time AsOfStrategy is refused on the run (`unit-required`); then the target entity is
    * assembled, the locked holdout carved and the sidecar trained.
    */
-  private async trainLegacyPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
+  private async trainLegacyPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     // Validates the evaluation settings (an unknown MajorityBaselineRule is refused) before any row is written.
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
@@ -214,7 +217,7 @@ export class TrainingEngine {
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps);
+      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, usdPerSecond);
       return { model, run };
     } catch (err) {
       await this.recordRunError(run, err, deps);
@@ -242,7 +245,7 @@ export class TrainingEngine {
    * the run row as a `refused` envelope; the counts, the unit's identity and the snapshot are stored on a completed run
    * and its model. Deps without a snapshot file store are incomplete and the run fails before anything is read.
    */
-  private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
+  private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps, usdPerSecond: number | null): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
     try {
@@ -260,7 +263,7 @@ export class TrainingEngine {
       run.TrainingSnapshotID = snapshot.Entity.ID;
       const unitResolved: ResolvedPipeline = { ...resolved, targetEntityName: unitRead.RowEntity.Name, targetVariable: LABEL_COLUMN, problemType: TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome) };
       const lineage = this.unitLineage(unit, resolved, unitRead, assembly.Features, assembly.Assembled.CategoryLevels, snapshot.Entity);
-      const model = await this.fitUnitModel(run, unitResolved, input, snapshot.Content, deps, majorityBaselineRule, lineage, unitRead.Counts, assembly.Assembled.UncoveredRowsExcluded);
+      const model = await this.fitUnitModel(run, unitResolved, input, snapshot.Content, deps, majorityBaselineRule, lineage, unitRead.Counts, assembly.Assembled.UncoveredRowsExcluded, usdPerSecond);
       return { model, run };
     } catch (err) {
       await this.recordRunError(run, err, deps);
@@ -343,6 +346,7 @@ export class TrainingEngine {
     lineage: UnitModelLineage,
     counts: UnitResolutionCounts,
     uncovered: readonly UncoveredRowsCount[],
+    usdPerSecond: number | null,
   ): Promise<MJMLModelEntity> {
     const request = this.legacyRequestFor(resolved);
     const { Response: response, Split: split } = await SnapshotRetrainer.TrainOnSnapshot(content, request, deps.sidecar);
@@ -354,7 +358,7 @@ export class TrainingEngine {
     });
     const dominance = this.checkLeakage(response, resolved.leakageGuard);
     const model = await this.createModelRow(resolved, input, schema, split, response, evaluation, deps, lineage);
-    await this.finalizeUnitRunSuccess(run, model, schema, resolved, response, dominance, evaluation, counts, split, uncovered, request);
+    await this.finalizeUnitRunSuccess(run, model, schema, resolved, response, dominance, evaluation, counts, split, uncovered, request, usdPerSecond);
     return model;
   }
 
@@ -507,6 +511,7 @@ export class TrainingEngine {
     split: LockedHoldoutSplit,
     uncovered: readonly UncoveredRowsCount[],
     request: LegacyRequestConfig,
+    usdPerSecond: number | null,
   ): Promise<void> {
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts,
@@ -519,6 +524,7 @@ export class TrainingEngine {
     run.ValidationResults = JSON.stringify(results);
     run.Status = 'Completed';
     run.CompletedAt = new Date();
+    TrainingEngine.recordCompute(run, response, usdPerSecond);
     run.Notes = TrainingEngine.withUncoveredNote(this.buildRunNotes(dominance, evaluation), uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
@@ -594,7 +600,7 @@ export class TrainingEngine {
     response: TrainResponse,
     dominance: DominanceResult,
     evaluation: EvaluationRecord,
-    deps: TrainingDeps,
+    usdPerSecond: number | null,
   ): Promise<void> {
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
@@ -606,9 +612,18 @@ export class TrainingEngine {
     });
     run.Status = 'Completed';
     run.CompletedAt = new Date();
-    run.ComputeCost = 0;
+    TrainingEngine.recordCompute(run, response, usdPerSecond);
     run.Notes = this.buildRunNotes(dominance, evaluation);
     await this.saveOrThrow(run, 'finalize ML Training Run');
+  }
+
+  /**
+   * Record the compute a run really used: the sidecar's measured wall-clock training seconds, priced at the configured
+   * rate (NULL when no rate is configured), never a constant.
+   */
+  private static recordCompute(run: MJMLTrainingRunEntity, response: TrainResponse, usdPerSecond: number | null): void {
+    run.ComputeSeconds = response.duration_sec;
+    run.ComputeCost = ComputePricing.ComputeCostFor(response.duration_sec, usdPerSecond);
   }
 
   /** Record a failed run (best-effort — never masks the original error). */

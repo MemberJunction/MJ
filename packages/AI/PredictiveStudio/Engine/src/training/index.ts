@@ -16,3 +16,5 @@ export * from './training-refusal';
 export * from './locked-holdout';
 export * from './train-request';
 export * from './training-engine';
+export * from './compute-cost';
+export * from './trainer-result';

@@ -359,6 +359,8 @@ export class ExperimentOrchestrator {
         provider: deps.provider,
       });
 
+      // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) counts as unbudgeted: it adds 0 to the
+      // session's MaxComputeCost sum.
       const computeCost = result.ComputeCost ?? 0;
       iteration.Score = result.Score;
       iteration.ComputeCost = computeCost;

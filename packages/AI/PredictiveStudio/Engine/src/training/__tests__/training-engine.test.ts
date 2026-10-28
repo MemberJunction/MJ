@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
@@ -48,6 +48,14 @@ import { SnapshotFiles, type SnapshotContent } from '../../snapshot/snapshot-ser
  * Run, leakage-dominance handling, and Save-failure surfacing. The fakes are shared
  * (`__tests__/fakes/training-fakes`).
  */
+
+// No compute rate unless a test sets one, whatever the shell exports: an unpriced run records a NULL cost.
+beforeEach(() => {
+  vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /** In-memory feature data access backing the assembler (no DB); records every read so tests can check its ORDER BY. */
 class InMemoryDataAccess implements IFeatureDataAccess {
@@ -140,6 +148,8 @@ describe('TrainingEngine.trainModel — happy path', () => {
     expect(run.CompletedAt).toBeInstanceOf(Date);
     expect(JSON.parse(run.FeaturesUsed!)).toEqual(['tenure', 'events_at_signup', 'city']);
     expect(run.Notes).toContain('No single-feature dominance');
+    expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec); // real compute, never 0
+    expect(run.ComputeCost).toBeNull(); // no PS_COMPUTE_USD_PER_SECOND rate in unit tests: cost unknown
 
     // --- TrainRequest shape: preprocessing ops present, holdout fraction respected ---
     const req = sidecar.LastRequest!;
@@ -499,6 +509,14 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(sidecar.CallCount).toBe(0);
   });
 
+  it("records the sidecar's measured seconds as the run's compute, unpriced when no rate is configured", async () => {
+    const { engine, deps, pipeline } = unitHarness(years, unitColumns);
+    const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(run.Status).toBe('Completed');
+    expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec); // real compute, never 0
+    expect(run.ComputeCost).toBeNull();
+  });
+
   it("copies the pipeline's EvaluationProtocolID onto the run", async () => {
     const { engine, deps, pipeline, runs } = unitHarness(years, unitColumns);
     pipeline.EvaluationProtocolID = 'EP-1';
@@ -561,5 +579,31 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
     const { engine, deps, pipeline } = unitHarness(years, unitColumns);
     await expect(engine.trainModel({ pipelineId: pipeline.ID, labelEventDates: { p0: new Date('2024-01-01T00:00:00Z') } }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
+  });
+});
+
+describe('TrainingEngine — compute pricing on the run', () => {
+  it('prices the measured seconds at the configured rate per second', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.5');
+    const { deps } = buildDeps();
+    const { run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec);
+    expect(run.ComputeCost).toBeCloseTo(cleanResponse.duration_sec * 0.5, 12);
+  });
+
+  it('prices a Prediction Unit run by the same rule', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0');
+    const { engine, deps, pipeline } = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect([run.ComputeSeconds, run.ComputeCost]).toEqual([cleanResponse.duration_sec, 0]);
+  });
+
+  it('refuses a malformed rate before any row is written or any model is trained', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', 'cheap');
+    const { deps, factory, sidecar } = buildDeps();
+    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(RangeError);
+    expect(sidecar.CallCount).toBe(0);
+    expect(factory.Runs.length).toBe(0);
+    expect(factory.Models.length).toBe(0);
   });
 });
