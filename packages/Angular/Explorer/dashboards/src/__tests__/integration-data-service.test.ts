@@ -2,7 +2,7 @@
  * Tests for IntegrationDataService
  * Covers pure logic methods (KPI computation, formatting, status calculation)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { IntegrationDataService, IntegrationSummary, IntegrationRunRow } from '../Integration/services/integration-data.service';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 
@@ -147,6 +147,38 @@ describe('IntegrationDataService', () => {
     it('should return days for days ago', () => {
       const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
       expect(createService().ComputeRelativeTime(twoDaysAgo)).toBe('2d ago');
+    });
+  });
+
+  describe('archive seed', () => {
+    it('InspectSQLServerBackup(null, ...) omits CompanyIntegrationID', async () => {
+      const svc = new IntegrationDataService();
+      const run = vi.spyOn(svc as unknown as { runNamedAction: (n: string, p: unknown[]) => Promise<unknown> }, 'runNamedAction')
+        .mockResolvedValue({ Success: true, Message: '', Result: [], Params: [] });
+      await svc.InspectSQLServerBackup(null, { BackupUrls: '/b/a.bak' });
+      const params = run.mock.calls[0][1] as { Name: string }[];
+      expect(params.map(p => p.Name)).not.toContain('CompanyIntegrationID');
+      expect(params.map(p => p.Name)).toContain('BackupUrls');
+    });
+
+    it('passes the archive seed calls through to the client', async () => {
+      const svc = new IntegrationDataService();
+      const client = {
+        StartArchiveSeed: vi.fn().mockResolvedValue({ Success: true, JobID: 'j' }),
+        SelectArchiveSeedTables: vi.fn().mockResolvedValue({ Success: true }),
+        FinishArchiveSeed: vi.fn().mockResolvedValue({ Success: true }),
+        GetArchiveSeedState: vi.fn().mockResolvedValue({ Success: true }),
+      };
+      vi.spyOn(svc as unknown as { getIntegrationClient: () => unknown }, 'getIntegrationClient').mockReturnValue(client);
+      const input = { CompanyID: 'c', ConnectionName: 'n', BackupUrls: 'u' };
+      expect((await svc.StartArchiveSeed(input)).JobID).toBe('j');
+      await svc.SelectArchiveSeedTables('j', ['dbo.A']);
+      await svc.FinishArchiveSeed('j', true);
+      await svc.GetArchiveSeedState('j');
+      expect(client.StartArchiveSeed).toHaveBeenCalledWith(input);
+      expect(client.SelectArchiveSeedTables).toHaveBeenCalledWith('j', ['dbo.A']);
+      expect(client.FinishArchiveSeed).toHaveBeenCalledWith('j', true);
+      expect(client.GetArchiveSeedState).toHaveBeenCalledWith('j');
     });
   });
 });

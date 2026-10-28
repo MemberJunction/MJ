@@ -4,6 +4,9 @@
  * so the Explorer surface holds no domain logic and the rules are unit-testable on their own.
  */
 
+import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
+import type { IntegrationArchiveSeedSummary, IntegrationArchiveSeedTable } from '@memberjunction/graphql-dataprovider';
+
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
 /** Outcome of a bootstrap run as the wizard's completion step shows it. */
@@ -202,4 +205,72 @@ export function BuildBackupUrlList(containerUrl: string, blobNames: Iterable<str
   return Array.from(blobNames)
     .map(name => (base ? `${base}/${name}` : name))
     .join(', ');
+}
+
+/** Wizard steps of the archive seed flow: Archive, Restore, Tables, Build, Cleanup, Done. */
+export type ArchiveSeedWizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+
+/** The wizard step that shows an archive seed job in the given state. */
+export function StepForSeedState(state: string, hasTables: boolean): ArchiveSeedWizardStep {
+  switch (state) {
+    case 'AwaitingSelection':
+      return 3;
+    case 'Building':
+    case 'Mapping':
+    case 'Loading':
+    case 'Seeding':
+      return 4;
+    case 'AwaitingCleanupDecision':
+      return 5;
+    case 'Done':
+      return 6;
+    case 'Failed':
+      return hasTables ? 4 : 2;
+    default:
+      return 2;
+  }
+}
+
+/** The tables the job's `Tables` stage event reported, or undefined when absent or unreadable. */
+export function ReadSeedTablesFromEvents(events: readonly BootstrapRunEvent[]): IntegrationArchiveSeedTable[] | undefined {
+  const event = [...events].reverse().find(ev => ev.EventType === 'stage.complete' && ev.Stage === 'Tables' && ev.DataJSON);
+  if (!event?.DataJSON) {
+    return undefined;
+  }
+  const tables = parseOutputs(event.DataJSON)['tables'];
+  return Array.isArray(tables) ? (tables as IntegrationArchiveSeedTable[]) : undefined;
+}
+
+function readSeededFromBackup(configuration: string | null | undefined): Record<string, unknown> | undefined {
+  if (!configuration) {
+    return undefined;
+  }
+  const seeded = parseOutputs(configuration)['seededFromBackup'];
+  return seeded && typeof seeded === 'object' ? (seeded as Record<string, unknown>) : undefined;
+}
+
+/** The archive seed job ID a connection records in its Configuration (`seededFromBackup.jobID`). */
+export function ReadSeededJobID(configuration: string | null | undefined): string | undefined {
+  const id = readSeededFromBackup(configuration)?.['jobID'];
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+/** True when the connection was seeded from a backup and its data source is still Disabled (awaiting a live source). */
+export function IsSeededAwaitingSource(configuration: string | null | undefined, dataSourceStatus: MJExternalDataSourceEntity['Status'] | null | undefined): boolean {
+  return readSeededFromBackup(configuration) !== undefined && dataSourceStatus === 'Disabled';
+}
+
+/** The wizard's completion summary for an archive seed job. */
+export function SummarizeArchiveSeed(summary: IntegrationArchiveSeedSummary | undefined, error: string | undefined): BootstrapResultSummary {
+  if (error || !summary) {
+    return { Success: false, Message: error ?? 'Archive seed did not complete.' };
+  }
+  return {
+    Success: true,
+    Message: 'Archive seed completed.',
+    TablesProcessed: summary.TablesProcessed,
+    TotalRowsTransferred: summary.TotalRowsTransferred,
+    DurationSeconds: summary.DurationSeconds,
+    StagingDatabaseDropped: summary.StagingDatabaseDropped,
+  };
 }

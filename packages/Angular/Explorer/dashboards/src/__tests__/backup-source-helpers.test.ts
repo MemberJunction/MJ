@@ -5,7 +5,12 @@ import {
   DeriveContainerUrl,
   FirstBackupUrl,
   FormatBytes,
+  IsSeededAwaitingSource,
   ProgressLinesFromEvents,
+  ReadSeedTablesFromEvents,
+  ReadSeededJobID,
+  StepForSeedState,
+  SummarizeArchiveSeed,
   ReadExternalDataSourceID,
   SummarizeBootstrapRun,
   TrimTrailingChars,
@@ -150,6 +155,61 @@ describe('backup-source helpers', () => {
     it('passes names through when no container is known and yields an empty string for no names', () => {
       expect(BuildBackupUrlList('', ['a.bak'])).toBe('a.bak');
       expect(BuildBackupUrlList('https://x/c', [])).toBe('');
+    });
+  });
+});
+
+describe('archive seed helpers', () => {
+  describe('StepForSeedState', () => {
+    it.each([
+      ['Created', false, 2], ['Restoring', false, 2], ['Discovering', false, 2],
+      ['AwaitingSelection', true, 3],
+      ['Building', true, 4], ['Mapping', true, 4], ['Loading', true, 4], ['Seeding', true, 4],
+      ['AwaitingCleanupDecision', true, 5], ['Done', true, 6],
+      ['Failed', true, 4], ['Failed', false, 2],
+    ])('maps %s (hasTables=%s) to step %i', (state, hasTables, step) => {
+      expect(StepForSeedState(state, hasTables)).toBe(step);
+    });
+  });
+
+  describe('ReadSeedTablesFromEvents', () => {
+    const tables = [{ Name: 'dbo.A', ColumnCount: 2, HasPrimaryKey: true }];
+    it('reads the Tables stage event tables', () => {
+      const events = [
+        { Seq: 1, Ts: 't', EventType: 'stage.complete', Stage: 'Restore' },
+        { Seq: 2, Ts: 't', EventType: 'stage.complete', Stage: 'Tables', DataJSON: JSON.stringify({ tables }) },
+      ];
+      expect(ReadSeedTablesFromEvents(events)).toEqual(tables);
+    });
+    it('is undefined without a Tables event or on bad JSON', () => {
+      expect(ReadSeedTablesFromEvents([])).toBeUndefined();
+      expect(ReadSeedTablesFromEvents([{ Seq: 1, Ts: 't', EventType: 'stage.complete', Stage: 'Tables', DataJSON: 'nope' }])).toBeUndefined();
+    });
+  });
+
+  describe('ReadSeededJobID / IsSeededAwaitingSource', () => {
+    const config = JSON.stringify({ seededFromBackup: { jobID: 'job-1' } });
+    it('reads the job id', () => {
+      expect(ReadSeededJobID(config)).toBe('job-1');
+      expect(ReadSeededJobID('{}')).toBeUndefined();
+      expect(ReadSeededJobID('bad')).toBeUndefined();
+      expect(ReadSeededJobID(null)).toBeUndefined();
+    });
+    it('is awaiting only when seeded and Disabled', () => {
+      expect(IsSeededAwaitingSource(config, 'Disabled')).toBe(true);
+      expect(IsSeededAwaitingSource(config, 'Active')).toBe(false);
+      expect(IsSeededAwaitingSource('{}', 'Disabled')).toBe(false);
+      expect(IsSeededAwaitingSource(undefined, 'Disabled')).toBe(false);
+    });
+  });
+
+  describe('SummarizeArchiveSeed', () => {
+    it('summarizes a successful seed', () => {
+      const res = SummarizeArchiveSeed({ TablesProcessed: 3, TotalRowsTransferred: 90, DurationSeconds: 12, StagingDatabaseDropped: true }, undefined);
+      expect(res).toMatchObject({ Success: true, TablesProcessed: 3, TotalRowsTransferred: 90, DurationSeconds: 12, StagingDatabaseDropped: true });
+    });
+    it('reports the error on failure', () => {
+      expect(SummarizeArchiveSeed(undefined, 'boom')).toEqual({ Success: false, Message: 'boom' });
     });
   });
 });

@@ -30,6 +30,8 @@ import {
   GraphQLActionClient,
   IntegrationRunEvent,
   IntegrationRunSummary,
+  IntegrationArchiveSeedStartInput,
+  IntegrationArchiveSeedState,
   DiscoveredObjectResult,
   DiscoveredFieldResult,
   DiscoveryResult,
@@ -1028,12 +1030,32 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message ?? '', Run: result.Run, Errors: result.Errors ?? [] };
   }
 
+  /** Launches a detached archive seed job (restore, discover, then wait for a table selection). */
+  async StartArchiveSeed(input: IntegrationArchiveSeedStartInput): Promise<Awaited<ReturnType<GraphQLIntegrationClient['StartArchiveSeed']>>> {
+    return this.getIntegrationClient().StartArchiveSeed(input);
+  }
+
+  /** Records the tables to seed and resumes the job. */
+  async SelectArchiveSeedTables(jobID: string, tableNames: string[]): Promise<Awaited<ReturnType<GraphQLIntegrationClient['SelectArchiveSeedTables']>>> {
+    return this.getIntegrationClient().SelectArchiveSeedTables(jobID, tableNames);
+  }
+
+  /** Completes the job, optionally dropping the staging database. */
+  async FinishArchiveSeed(jobID: string, dropStaging: boolean): Promise<Awaited<ReturnType<GraphQLIntegrationClient['FinishArchiveSeed']>>> {
+    return this.getIntegrationClient().FinishArchiveSeed(jobID, dropStaging);
+  }
+
+  /** The archive seed job's current state. */
+  async GetArchiveSeedState(jobID: string): Promise<{ Success: boolean; Message?: string; State?: IntegrationArchiveSeedState }> {
+    return this.getIntegrationClient().GetArchiveSeedState(jobID);
+  }
+
   /**
    * Inspects SQL Server backup headers (via 'Inspect SQL Server Backup' server action)
    * to verify backup availability, database name, temporal start timestamp, and stripe count.
    */
   async InspectSQLServerBackup(
-    companyIntegrationID: string,
+    companyIntegrationID: string | null,
     options: {
       BackupUrls: string;
       SasToken?: string;
@@ -1041,7 +1063,7 @@ export class IntegrationDataService {
     }
   ): Promise<InspectBackupResult> {
     const result = await this.runNamedAction('Inspect SQL Server Backup', this.buildActionParams({
-      CompanyIntegrationID: companyIntegrationID,
+      CompanyIntegrationID: companyIntegrationID ?? undefined,
       BackupUrls: options.BackupUrls,
       SasToken: options.SasToken,
       StorageCredentialID: options.StorageCredentialID,
@@ -1068,7 +1090,7 @@ export class IntegrationDataService {
    * avoiding browser CORS restrictions and SAS token exposure.
    */
   async ListAzureBackupBlobs(
-    companyIntegrationID: string,
+    companyIntegrationID: string | null,
     options: {
       ContainerUrl: string;
       SasToken?: string;
@@ -1077,7 +1099,7 @@ export class IntegrationDataService {
     }
   ): Promise<ListAzureBackupBlobsResult> {
     const result = await this.runNamedAction('List Azure Backup Blobs', this.buildActionParams({
-      CompanyIntegrationID: companyIntegrationID,
+      CompanyIntegrationID: companyIntegrationID ?? undefined,
       ContainerUrl: options.ContainerUrl,
       SasToken: options.SasToken,
       StorageCredentialID: options.StorageCredentialID,
