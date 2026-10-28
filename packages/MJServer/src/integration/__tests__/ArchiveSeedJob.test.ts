@@ -33,6 +33,8 @@ const USER = { ID: 'u-1' } as UserInfo;
 const PROVIDER = {} as IMetadataProvider;
 const RESTORE = 'Restore SQL Server Backup To Staging';
 const DROP = 'Drop SQL Server Staging Database';
+const LOAD = 'Load SQL Server Integration From Staging';
+const MINUTE = 60_000;
 const INPUT: ArchiveSeedStartInput = {
   CompanyID: 'co-1',
   ConnectionName: 'Legacy ERP',
@@ -86,10 +88,23 @@ class FakeRecords implements ArchiveSeedRecords {
     if (!ci) throw new Error(`no company integration ${id}`);
     ci.Configuration = configuration;
   }
+  /** Each EntityMapsFor call returns the next entry; the last one repeats. */
+  public MapsSequence: ArchiveSeedEntityMap[][] = [[]];
+  public EntityMapsCalls = 0;
+  public OnEntityMapsFor: (() => void) | undefined;
+  public BulkLoadable: string[][] = [];
+  public Log: string[] | undefined;
+
   public async EntityMapsFor(): Promise<ArchiveSeedEntityMap[]> {
-    return [];
+    this.OnEntityMapsFor?.();
+    const maps = this.MapsSequence[Math.min(this.EntityMapsCalls, this.MapsSequence.length - 1)];
+    this.EntityMapsCalls++;
+    return maps;
   }
-  public async MarkEntitiesBulkLoadable(): Promise<void> {}
+  public async MarkEntitiesBulkLoadable(entityIDs: string[]): Promise<void> {
+    this.BulkLoadable.push(entityIDs);
+    this.Log?.push('MarkEntitiesBulkLoadable');
+  }
   public ResolveUser(): UserInfo | undefined {
     return USER;
   }
@@ -101,7 +116,9 @@ class FakeRecords implements ArchiveSeedRecords {
 class FakeStore implements ArchiveSeedStore {
   public Jobs = new Map<string, ArchiveSeedStoredJob>();
   public Failed: { JobID: string; Message: string }[] = [];
+  public Completed: string[] = [];
   public Updates: ArchiveSeedWork[] = [];
+  public ApplyStatus: ArchiveSeedApplyWorkStatus | undefined;
 
   public async Create(work: ArchiveSeedWork, companyIntegrationID: string): Promise<string> {
     const id = `job-${this.Jobs.size + 1}`;
@@ -117,12 +134,14 @@ class FakeStore implements ArchiveSeedStore {
     job.Work = work;
     this.Updates.push(work);
   }
-  public async Complete(): Promise<void> {}
+  public async Complete(jobID: string): Promise<void> {
+    this.Completed.push(jobID);
+  }
   public async Fail(jobID: string, message: string): Promise<void> {
     this.Failed.push({ JobID: jobID, Message: message });
   }
   public async ApplyWorkStatus(): Promise<ArchiveSeedApplyWorkStatus | undefined> {
-    return undefined;
+    return this.ApplyStatus;
   }
 }
 
@@ -135,12 +154,15 @@ class FakeActions implements ArchiveSeedActions {
   public Calls: { Name: string; Params: ActionParam[] }[] = [];
   public RestoreSucceeds = true;
   public DropSucceeds = true;
+  public LoadSucceeds = true;
+  public Log: string[] | undefined;
 
   constructor(private readonly root: string) {}
 
   public async Run(actionName: string, params: ActionParam[]): Promise<ActionResult> {
     this.Calls.push({ Name: actionName, Params: params });
-    const stage = actionName === RESTORE ? 'Restore' : 'Cleanup';
+    this.Log?.push(actionName);
+    const stage = actionName === RESTORE ? 'Restore' : actionName === LOAD ? 'Load' : 'Cleanup';
     const emitter = this.resumeRun(params);
     emitter?.StageStart(stage, `${actionName} started`);
     const result = this.resultFor(actionName);
@@ -174,7 +196,17 @@ class FakeActions implements ArchiveSeedActions {
       result.Message = 'DROP DATABASE failed';
       return result;
     }
+    if (actionName === LOAD && !this.LoadSucceeds) {
+      result.Success = false;
+      result.ResultCode = 'LOAD_FAILED';
+      result.Message = 'bulk copy failed';
+      return result;
+    }
     result.Success = true;
+    if (actionName === LOAD) {
+      result.Params = [Output('TablesProcessed', '2'), Output('TotalRowsTransferred', '1234'), Output('DurationSeconds', '42'), Output('StagingDatabaseDropped', 'false')];
+      return result;
+    }
     result.Params = actionName === RESTORE
       ? [
           Output('BackupStartDate', '2026-10-01T03:00:00.000Z'),
@@ -223,6 +255,7 @@ describe('ArchiveSeedJob', () => {
   let apply: FakeApply;
   let discovery: FakeDiscovery;
   let job: ArchiveSeedJob;
+  let clock: Date;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'archive-seed-job-'));
@@ -238,9 +271,10 @@ describe('ArchiveSeedJob', () => {
       Actions: actions,
       Store: store,
       CreateEmitter: manifest => new IntegrationProgressEmitter(manifest, { rootDir: root, maxRunDirs: 0 }),
-      Now: () => new Date(2026, 9, 28, 14, 5),
+      Now: () => clock,
     };
-    job = new ArchiveSeedJob(deps);
+    clock = new Date(2026, 9, 28, 14, 5);
+    job = new ArchiveSeedJob(deps, { pollIntervalMs: 1 });
   });
 
   afterEach(() => {
@@ -428,5 +462,275 @@ describe('ArchiveSeedJob', () => {
     // Run A was already completed at handoff; the failure is recorded on the job, not appended after run.complete.
     expect(Events(RunID).at(-1)?.eventType).toBe('run.complete');
     expect(state?.RunClosed).toBe(true);
+  });
+
+  // ---------------------------------------------------------------- resume, load, finish
+
+  const MAPS: ArchiveSeedEntityMap[] = [
+    { ID: 'em-1', EntityID: 'ent-orders', ExternalObjectName: 'DBO.ORDERS' },
+    { ID: 'em-2', EntityID: 'ent-customers', ExternalObjectName: 'dbo.Customers' },
+  ];
+
+  /** A job in Building: restored, discovered, selected, and handed to the (fake) apply. */
+  async function ToBuilding(): Promise<{ JobID: string; RunID: string; CompanyIntegrationID: string }> {
+    const started = await StartToSelection();
+    await job.SelectTables(started.JobID, ['dbo.Orders', 'dbo.Customers'], USER, PROVIDER);
+    return started;
+  }
+
+  /** A job parked at AwaitingCleanupDecision after a successful phase B. */
+  async function ToCleanupDecision(): Promise<{ JobID: string; RunID: string; CompanyIntegrationID: string }> {
+    const started = await ToBuilding();
+    records.MapsSequence = [MAPS];
+    await job.Resume(started.JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+    return started;
+  }
+
+  function SetState(jobID: string, patch: Partial<ArchiveSeedWork>): void {
+    const stored = store.Jobs.get(jobID);
+    if (!stored) throw new Error(`no job ${jobID}`);
+    stored.Work = { ...stored.Work, ...patch };
+  }
+
+  function CurrentRun(jobID: string): string {
+    const runID = store.Jobs.get(jobID)?.Work.CurrentRunID;
+    if (!runID) throw new Error('no run');
+    return runID;
+  }
+
+  it('Resume in Building waits for the entity maps, marks the entities bulk-loadable, loads, and parks at AwaitingCleanupDecision with a summary', async () => {
+    const { JobID, RunID, CompanyIntegrationID } = await ToBuilding();
+    records.MapsSequence = [[], [], MAPS];
+    const log: string[] = [];
+    records.Log = log;
+    actions.Log = log;
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('AwaitingCleanupDecision');
+    expect(records.EntityMapsCalls).toBe(3);
+    expect(records.BulkLoadable).toEqual([['ent-orders', 'ent-customers']]);
+    expect(log).toEqual(['MarkEntitiesBulkLoadable', LOAD]);
+    expect(state?.Summary).toEqual({ TablesProcessed: 2, TotalRowsTransferred: 1234, DurationSeconds: 42, StagingDatabaseDropped: false });
+    expect(store.Updates.map(u => u.State).slice(-4)).toEqual(['Mapping', 'Loading', 'Seeding', 'AwaitingCleanupDecision']);
+
+    const runB = CurrentRun(JobID);
+    expect(runB).not.toBe(RunID);
+    const loadParams = Object.fromEntries((actions.Calls.find(c => c.Name === LOAD)?.Params ?? []).map(p => [p.Name, p.Value]));
+    expect(loadParams).toMatchObject({ CompanyIntegrationID, ProgressRunID: runB, StagingDatabaseName: 'MJ_Staging_ERP', DropStagingDbOnComplete: 'false' });
+
+    const events = Events(runB);
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events[0].eventType).toBe('run.start');
+    const summary = events.find(e => e.eventType === 'stage.complete' && e.stage === 'Summary');
+    expect(summary?.data).toEqual(state?.Summary);
+    expect(events.some(e => e.eventType === 'run.complete' || e.eventType === 'run.fail')).toBe(false);
+    expect(store.Failed).toEqual([]);
+  });
+
+  it('opening run B persists its ID with RunClosed false and a phase B manifest; Finish closes it', async () => {
+    const { JobID, RunID } = await ToBuilding();
+    records.MapsSequence = [MAPS];
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const mapping = store.Updates.find(u => u.State === 'Mapping');
+    expect(mapping?.CurrentRunID).toBeDefined();
+    expect(mapping?.CurrentRunID).not.toBe(RunID);
+    expect(mapping?.RunClosed).toBe(false);
+    const manifest = JSON.parse(readFileSync(join(root, CurrentRun(JobID), 'manifest.json'), 'utf-8'));
+    expect(manifest.context).toMatchObject({ kind: 'ArchiveSeed', jobID: JobID, phase: 'B' });
+
+    await job.Finish(JobID, false, USER, PROVIDER);
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.RunClosed).toBe(true);
+    expect(Events(CurrentRun(JobID)).at(-1)?.eventType).toBe('run.complete');
+  });
+
+  it('Resume in Mapping re-enters the wait on the existing run B without starting it again', async () => {
+    const { JobID, CompanyIntegrationID } = await ToBuilding();
+    const runB = 'archive-seed-run-b';
+    const opened = new IntegrationProgressEmitter(
+      { runID: runB, runKind: 'Other', companyIntegrationID: CompanyIntegrationID, startedAt: clock.toISOString(), context: { kind: 'ArchiveSeed', jobID: JobID, phase: 'B' } },
+      { rootDir: root, maxRunDirs: 0 },
+    );
+    opened.RunStart('run B');
+    await opened.Flush();
+    SetState(JobID, { State: 'Mapping', CurrentRunID: runB, RunClosed: false });
+    records.MapsSequence = [[], MAPS];
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    expect(CurrentRun(JobID)).toBe(runB);
+    expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('AwaitingCleanupDecision');
+    const events = Events(runB);
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.filter(e => e.eventType === 'run.start')).toHaveLength(1);
+  });
+
+  it('Resume is safe to call repeatedly while phase B is in flight', async () => {
+    const { JobID } = await ToBuilding();
+    records.MapsSequence = [[], [], MAPS];
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    expect(actions.Names().filter(n => n === LOAD)).toHaveLength(1);
+    expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('AwaitingCleanupDecision');
+  });
+
+  it('Resume in Building fails when the apply work row is Failed', async () => {
+    const { JobID } = await ToBuilding();
+    store.ApplyStatus = { Status: 'Failed', ErrorMessage: 'CodeGen exploded' };
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('CodeGen exploded');
+    expect(actions.Names()).not.toContain(LOAD);
+    expect(actions.Names().at(-1)).toBe(DROP);
+    expect(records.DeletedDataSources).toEqual([state?.ArchiveDataSourceID]);
+    expect(store.Failed).toHaveLength(1);
+    const events = Events(CurrentRun(JobID));
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.filter(e => e.eventType === 'run.fail')).toHaveLength(1);
+    expect(events.at(-1)?.eventType).toBe('run.fail');
+  });
+
+  it('Resume in Building fails after the apply timeout', async () => {
+    const { JobID } = await ToBuilding();
+    records.OnEntityMapsFor = () => {
+      clock = new Date(clock.getTime() + 31 * MINUTE);
+    };
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('Timed out waiting for entity maps');
+    expect(records.EntityMapsCalls).toBe(1);
+    expect(records.BulkLoadable).toEqual([]);
+    expect(actions.Names()).not.toContain(LOAD);
+  });
+
+  it('a load failure fails the job, which drops staging on run B and terminates it once', async () => {
+    const { JobID } = await ToBuilding();
+    records.MapsSequence = [MAPS];
+    actions.LoadSucceeds = false;
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toContain('bulk copy failed');
+    expect(actions.Names().slice(-2)).toEqual([LOAD, DROP]);
+    const events = Events(CurrentRun(JobID));
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.filter(e => e.eventType === 'stage.error' && e.stage === 'Load')).toHaveLength(1);
+    expect(events.filter(e => e.eventType === 'run.fail')).toHaveLength(1);
+    expect(events.at(-1)?.eventType).toBe('run.fail');
+  });
+
+  it('Resume in Restoring fails the job as interrupted and cleans up', async () => {
+    const { JobID, RunID } = await StartToSelection();
+    const archiveID = store.Jobs.get(JobID)?.Work.ArchiveDataSourceID;
+    SetState(JobID, { State: 'Restoring' });
+    const callsBefore = actions.Calls.length;
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('interrupted during Restoring');
+    expect(actions.Names().slice(callsBefore)).toEqual([DROP]);
+    expect(records.DeletedDataSources).toEqual([archiveID]);
+    expect(store.Failed).toEqual([{ JobID, Message: 'interrupted during Restoring' }]);
+    const events = Events(RunID);
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.filter(e => e.eventType === 'stage.error' && e.stage === 'Restore')).toHaveLength(1);
+    expect(events.at(-1)?.eventType).toBe('run.fail');
+  });
+
+  it('Resume never throws for a missing or terminal job and is a no-op while awaiting a recent decision', async () => {
+    await expect(job.Resume('job-missing', USER, PROVIDER)).resolves.toBeUndefined();
+    const { JobID } = await ToCleanupDecision();
+    const updates = store.Updates.length;
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+    expect(store.Updates.length).toBe(updates);
+    await job.Finish(JobID, false, USER, PROVIDER);
+    const done = store.Updates.length;
+    await expect(job.Resume(JobID, USER, PROVIDER)).resolves.toBeUndefined();
+    await job.WaitForIdle();
+    expect(store.Updates.length).toBe(done);
+    expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('Done');
+  });
+
+  it('Finish with dropStaging drops staging, deletes the archive source, repoints the configuration, completes run B and the store', async () => {
+    const { JobID, CompanyIntegrationID } = await ToCleanupDecision();
+    const before = await job.GetState(JobID, USER, PROVIDER);
+    expect(records.Configuration(CompanyIntegrationID).externalDataSourceID).toBe(before?.ArchiveDataSourceID);
+
+    await job.Finish(JobID, true, USER, PROVIDER);
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Done');
+    expect(state?.Summary?.StagingDatabaseDropped).toBe(true);
+    expect(actions.Names().at(-1)).toBe(DROP);
+    const dropParams = Object.fromEntries((actions.Calls.at(-1)?.Params ?? []).map(p => [p.Name, p.Value]));
+    expect(dropParams).toMatchObject({ StagingDatabaseName: 'MJ_Staging_ERP', ProgressRunID: CurrentRun(JobID) });
+    expect(records.DeletedDataSources).toEqual([before?.ArchiveDataSourceID]);
+    expect(records.Configuration(CompanyIntegrationID).externalDataSourceID).toBe(before?.DeferredDataSourceID);
+    expect(store.Updates.map(u => u.State).slice(-2)).toEqual(['CleaningUp', 'Done']);
+    expect(store.Completed).toEqual([JobID]);
+    expect(store.Failed).toEqual([]);
+    const events = Events(CurrentRun(JobID));
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.at(-1)?.eventType).toBe('run.complete');
+  });
+
+  it('Finish without dropStaging keeps staging and reports StagingDatabaseDropped false', async () => {
+    const { JobID } = await ToCleanupDecision();
+    const callsBefore = actions.Calls.length;
+
+    await job.Finish(JobID, false, USER, PROVIDER);
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Done');
+    expect(state?.Summary?.StagingDatabaseDropped).toBe(false);
+    expect(actions.Calls.length).toBe(callsBefore);
+    expect(store.Completed).toEqual([JobID]);
+    expect(Events(CurrentRun(JobID)).at(-1)?.eventType).toBe('run.complete');
+  });
+
+  it('Finish refuses a job that is not awaiting the cleanup decision', async () => {
+    const { JobID } = await StartToSelection();
+    await expect(job.Finish(JobID, true, USER, PROVIDER)).rejects.toThrow(/AwaitingCleanupDecision/);
+    await expect(job.Finish('job-missing', true, USER, PROVIDER)).rejects.toThrow(/not found/);
+  });
+
+  it('Resume in AwaitingCleanupDecision after 24 h finishes keeping the archive', async () => {
+    const { JobID } = await ToCleanupDecision();
+    const callsBefore = actions.Calls.length;
+    clock = new Date(clock.getTime() + 24 * 60 * MINUTE + 1);
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Done');
+    expect(state?.Summary?.StagingDatabaseDropped).toBe(false);
+    expect(actions.Calls.length).toBe(callsBefore);
+    expect(store.Completed).toEqual([JobID]);
   });
 });
