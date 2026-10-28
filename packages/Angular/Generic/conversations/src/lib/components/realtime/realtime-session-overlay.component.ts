@@ -448,7 +448,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * A generic hook fired when ANY control is invoked — even one the host hid via inputs
    * and re-rendered itself. Lets a host observe/react to the full control surface from a
-   * single binding.
+   * single binding. An open of the typing box that first reveals the conversation reports
+   * `'captions'` and `'reveal-text'` before `'type'`.
    */
   @Output() ControlInvoked = new EventEmitter<RealtimeControlId>();
 
@@ -1913,10 +1914,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    *
    * Invariant: the typing box is open only while the conversation is readable — a participant must
    * see what they type (Caliber). Readable = the thread is shown AND captions are on: a console keeps
-   * the thread with captions off, but the thread then hides every caption turn. So an open while the
-   * conversation is unreadable reveals it first, through the same path as the hero's "Show the
-   * conversation" ({@link OnTextReveal}: captions on and persisted, {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a
-   * programmatic open) funnels through here; {@link OnCaptionsToggled} holds the other half.
+   * the thread with captions off, but the thread then hides every caption turn. (While the agent's
+   * video presents in the hero, captions run over the video instead, and the thread waits for an
+   * explicit reveal.) So an open while the conversation is unreadable reveals it first, through the
+   * same path as the hero's "Show the conversation" ({@link OnTextReveal}: captions on and persisted,
+   * {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a programmatic
+   * open) funnels through here; {@link OnCaptionsToggled} holds the other half.
    */
   public OnComposerOpenChanged(open: boolean): void {
     // The host disallows typing: refuse any open (closing is always allowed). Checked before the reveal,

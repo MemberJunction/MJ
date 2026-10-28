@@ -1976,7 +1976,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       });
     });
 
-    describe('the typing box is open only while the conversation is visible (Caliber follow-up)', () => {
+    describe('the typing box is open only while the conversation is readable (Caliber follow-up)', () => {
       /** A live call in the orb chrome with captions off, so the thread is hidden behind the hero. */
       const renderHidden = async (inputs: Record<string, unknown> = {}) => {
         const call = await renderCall('orb', inputs);
