@@ -517,6 +517,24 @@ jobs:
           # disables). This lane has no LLM credentials, so pin it off explicitly —
           # tiers.ts's own doc comment assumes CI does this, and nothing did.
           RUN_AGENT_TESTS: '0'
+          # ── EXPERIMENT (do not merge without reading the result) ────────────────────
+          # Measuring how much of this step is blind waiting. agent-live-shared.ts defines
+          #     AGENT_LIVE_SETTLE_MS = Number(process.env.AGENT_LIVE_SETTLE_MS ?? 5000)
+          # and the deterministic tier executes that sleep ~17 times (13 in native-tool-loop's
+          # shared run() helper, 3 in performance-benchmark, 1 in agent-carry-forward) for ~85s
+          # of pure wall clock. The sleeps appear to be waiting for the 500ms-debounced metadata
+          # refresh that every metadata-member write schedules (providerBase.ts
+          # RefreshAfterMetadataMemberChange), but nothing proves 5s is the figure that is needed.
+          #
+          # Green at 500ms => the 5s was never load-bearing and these become bounded condition
+          # waits. Red => the failures name exactly which checks need settling time, which is the
+          # input required to write correct predicates anyway. Either outcome is the answer.
+          #
+          # The fallback is the literal '5000', NOT ''. `?? 5000` is nullish coalescing, so an
+          # EMPTY string is kept and Number('') is 0 — the `${{ cond && 'x' || '' }}` idiom used
+          # for RUN_MUTATION_TESTS above would silently disable settling everywhere, including
+          # the nightly. Scoped to pull_request so an open experiment cannot perturb the crons.
+          AGENT_LIVE_SETTLE_MS: ${{ github.event_name == 'pull_request' && '500' || '5000' }}
         run: |
           set -o pipefail
           pnpm run test:integration 2>&1 | tee /tmp/integration.log
