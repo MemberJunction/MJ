@@ -306,13 +306,14 @@
                 [attr.aria-label]="FocusPillMuted ? 'Unmute microphone' : 'Mute microphone'">
           <i class="fa-solid" [class.fa-microphone]="!FocusPillMuted" [class.fa-microphone-slash]="FocusPillMuted" aria-hidden="true"></i>
         </button>
-        @if (Ui.allowTextReveal) {
-          <button type="button" class="board-focus-pill__btn"
-                  (click)="OnFocusPillExit()"
-                  title="Show thread" aria-label="Show the conversation thread">
-            <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
-          </button>
-        }
+        <!-- The focus-mode exit, always offered: it is the only way off a focused surface. With text
+             disallowed the column comes back as the orb hero, so it is labelled as a return to the call. -->
+        <button type="button" class="board-focus-pill__btn"
+                (click)="OnFocusPillExit()"
+                [title]="Ui.allowTextReveal ? 'Show thread' : 'Back to the call'"
+                [attr.aria-label]="Ui.allowTextReveal ? 'Show the conversation thread' : 'Leave focus mode and return to the call'">
+          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+        </button>
         @if (StagePlugin; as stagePlugin) {
           <mj-media-move-menu
             [Key]="stagePlugin.ChannelName"

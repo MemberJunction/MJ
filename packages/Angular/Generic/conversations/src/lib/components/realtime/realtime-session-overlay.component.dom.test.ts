@@ -19,6 +19,7 @@ import {
   type RealtimeChannelContext,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
+  type RealtimeDelegationNarration,
   type RealtimeDelegationProgress,
   type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
@@ -101,6 +102,8 @@ function fakeSession() {
   const active$ = new BehaviorSubject(false);
   /** The progress of the agent's runs, as the runtime reports it: a run's first report gives the call an Activity tab. */
   const progress$ = new Subject<RealtimeDelegationProgress>();
+  /** The spoken progress notes of the agent's runs, as the runtime emits them (latest only). */
+  const narration$ = new Subject<RealtimeDelegationNarration>();
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   /** The element each screen share asked to show alone (`null` for a whole screen, window or tab). */
@@ -117,7 +120,7 @@ function fakeSession() {
     Captions$: captions$.asObservable(),
     DelegationProgress$: progress$.asObservable(),
     DelegationResult$: EMPTY,
-    DelegationNarration$: EMPTY,
+    DelegationNarration$: narration$.asObservable(),
     ThoughtNarration$: EMPTY,
     ConnectionState$: state$.asObservable(),
     ModelName$: new BehaviorSubject<string | null>(null).asObservable(),
@@ -175,7 +178,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels };
+  return { service, channels$, focus$, activity$, captures$, offers$, microphone$, holdSwitch, captions$, sources$, notice$, state$, active$, progress$, calls, sharedPanels, narration$ };
 }
 
 /**
@@ -1814,7 +1817,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     });
 
     it('AllowTextReveal=false also removes typing, the hero reveal button and the captions control', async () => {
-      const { f } = await renderCall('console', { AllowTextReveal: false, ShowCaptionsControl: false });
+      const { f } = await renderCall('console', { AllowTextReveal: false });
       expect(query(f, '.hero')).not.toBeNull();
       expect(query(f, 'mj-realtime-session-thread')).toBeNull();
       expect(query(f, '.hero__reveal')).toBeNull();
@@ -1901,7 +1904,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
     });
 
-    it('the focus pill hides End and Show-thread when the host disallows them', async () => {
+    it('the focus pill hides End when the host disallows it, and keeps its exit as "Back to the call" when text is disallowed', async () => {
       const { f, board, focus$ } = await renderWithBoard(undefined, new TestWhiteboardChannel(), 'console');
       f.componentInstance.ShowEnd = false;
       f.componentInstance.AllowTextReveal = false;
@@ -1910,6 +1913,36 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(query(f, '.board-focus-pill')).not.toBeNull();
       expect(query(f, '.board-focus-pill__btn--end')).toBeNull();
       expect(query(f, '[aria-label="Show the conversation thread"]')).toBeNull();
+      // The exit is the only way off a focused surface, so a pure-voice user keeps it, relabelled.
+      const exit = query(f, '[aria-label="Leave focus mode and return to the call"]') as HTMLButtonElement;
+      expect(exit).not.toBeNull();
+      expect(exit.title).toBe('Back to the call');
+      exit.click();
+      await settle();
+      expect(board.FocusExits).toBe(1);
+    });
+
+    describe('the narration note under the banner', () => {
+      /** A live call at the thread's disclosure level, with a spoken progress note and no working card. */
+      const renderNarrating = async (inputs: Record<string, unknown> = {}) => {
+        const call = await renderCall('console', inputs);
+        call.f.componentInstance.Disclosure.Raise('text');
+        call.narration$.next({ Text: 'Looking that up now' });
+        call.f.detectChanges();
+        await settle();
+        return call;
+      };
+
+      it('shows by default', async () => {
+        const { f } = await renderNarrating();
+        expect(query(f, '.banner-live-note')?.textContent).toContain('Looking that up now');
+      });
+
+      it('is absent under AllowTextReveal=false', async () => {
+        const { f } = await renderNarrating({ AllowTextReveal: false });
+        expect(f.componentInstance.State.Narration).toBe('Looking that up now');
+        expect(query(f, '.banner-live-note')).toBeNull();
+      });
     });
   });
 });
