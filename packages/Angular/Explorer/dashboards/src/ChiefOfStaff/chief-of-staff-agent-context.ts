@@ -279,6 +279,8 @@ export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgen
 export const BIZAPPS_PEOPLE_ENTITY_NAME = 'MJ_BizApps_Common: People';
 /** OpenApp entity linking tasks to the people assigned to them. */
 export const BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME = 'MJ_BizApps_Tasks: Task Assignments';
+/** OpenApp entity holding priority objectives and their milestones. */
+export const BIZAPPS_TASKS_ENTITY_NAME = 'MJ_BizApps_Tasks: Tasks';
 
 /** CSS modifier for a task priority badge, keyed by the Tasks `Priority` value list (Critical/High/Medium/Low). */
 export function GetTaskPriorityClass(priority: string | null): string {
@@ -317,6 +319,10 @@ export type PersonTaskScope =
  * `peopleEntityId` is the `MJ: Entities` ID of {@link BIZAPPS_PEOPLE_ENTITY_NAME}: Task Assignments has no
  * PersonID column, its assignee is the polymorphic (`AssigneeEntityID`, `AssigneeRecordID`) pair, so the
  * person is matched on both.
+ *
+ * The scope covers the whole tree of every root objective the person owns: milestones added under their
+ * objective by an administrator, a teammate or the agent load with it, whoever created them. Children of a
+ * task the person is merely assigned to are not pulled in, so scope never widens to a sibling tree.
  */
 export async function ResolvePersonTaskScope(
     runner: TaskScopeQueryRunner,
@@ -329,11 +335,12 @@ export async function ResolvePersonTaskScope(
         return { HasLinkedPerson: false };
     }
     const assignedTaskIDs = await loadAssignedTaskIDs(runner, peopleEntityId, match.PersonID);
+    const ownedRootIDs = await loadOwnedRootTaskIDs(runner, match.PersonID, assignedTaskIDs);
     return {
         HasLinkedPerson: true,
         PersonID: match.PersonID,
         MatchedBy: match.MatchedBy,
-        Filter: BuildPersonScopedTaskFilter(match.PersonID, assignedTaskIDs),
+        Filter: BuildPersonScopedTaskFilter(match.PersonID, assignedTaskIDs, ownedRootIDs),
     };
 }
 
@@ -387,17 +394,53 @@ async function loadAssignedTaskIDs(runner: TaskScopeQueryRunner, peopleEntityId:
     return assignments.Results.map((a) => a.TaskID).filter((id) => !!id);
 }
 
-/**
- * ExtraFilter for `MJ_BizApps_Tasks: Tasks` limiting rows to work the given person created or is assigned to.
- * `assignedTaskIDs` come from `MJ_BizApps_Tasks: Task Assignments` for the same person.
- */
-export function BuildPersonScopedTaskFilter(personID: string, assignedTaskIDs: readonly string[]): string {
+/** IDs of the root objectives the person created or is assigned to; their whole trees belong on the cockpit. */
+async function loadOwnedRootTaskIDs(runner: TaskScopeQueryRunner, personID: string, assignedTaskIDs: readonly string[]): Promise<string[]> {
+    const roots = await runner.RunView<{ ID: string }>({
+        EntityName: BIZAPPS_TASKS_ENTITY_NAME,
+        ExtraFilter: BuildOwnedRootTasksFilter(personID, assignedTaskIDs),
+        Fields: ['ID'],
+        ResultType: 'simple',
+    });
+    if (!roots.Success) {
+        throw new Error(roots.ErrorMessage ?? 'Failed to load the owned root objectives.');
+    }
+    return roots.Results.map((r) => r.ID).filter((id) => !!id);
+}
+
+/** ExtraFilter for `MJ_BizApps_Tasks: Tasks` selecting the root tasks (no parent) the person created or is assigned to. */
+export function BuildOwnedRootTasksFilter(personID: string, assignedTaskIDs: readonly string[]): string {
+    return `ParentID IS NULL AND (${buildCreatedOrAssignedClause(personID, assignedTaskIDs)})`;
+}
+
+function buildCreatedOrAssignedClause(personID: string, assignedTaskIDs: readonly string[]): string {
     const createdClause = `CreatedByPersonID = '${EscapeSQLString(personID)}'`;
     if (assignedTaskIDs.length === 0) {
         return createdClause;
     }
-    const idList = assignedTaskIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
-    return `${createdClause} OR ID IN (${idList})`;
+    return `${createdClause} OR ID IN (${quoteIDList(assignedTaskIDs)})`;
+}
+
+function quoteIDList(ids: readonly string[]): string {
+    return ids.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+}
+
+/**
+ * ExtraFilter for `MJ_BizApps_Tasks: Tasks` limiting rows to work the given person created or is assigned to,
+ * plus every task under a root objective they own (`RootParentID` is the view's computed root, which for a
+ * root task is its own ID). `assignedTaskIDs` come from `MJ_BizApps_Tasks: Task Assignments` for the same
+ * person; `ownedRootIDs` from {@link BuildOwnedRootTasksFilter}.
+ */
+export function BuildPersonScopedTaskFilter(
+    personID: string,
+    assignedTaskIDs: readonly string[],
+    ownedRootIDs: readonly string[] = [],
+): string {
+    const createdOrAssigned = buildCreatedOrAssignedClause(personID, assignedTaskIDs);
+    if (ownedRootIDs.length === 0) {
+        return createdOrAssigned;
+    }
+    return `${createdOrAssigned} OR RootParentID IN (${quoteIDList(ownedRootIDs)})`;
 }
 
 export function FormatTaskMetricProgress(task: BizAppsTaskRecordLike): string | null {

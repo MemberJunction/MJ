@@ -44,6 +44,7 @@ import {
     PolicyPhoneChannelModeValue,
     ResolvePersonTaskScope,
     BIZAPPS_PEOPLE_ENTITY_NAME,
+    BIZAPPS_TASKS_ENTITY_NAME,
     PolicyStatusValue,
     PriorityObjectiveCardViewModel,
     RequestSummaryItem,
@@ -58,7 +59,6 @@ import {
 } from './chief-of-staff-agent-context';
 
 /** OpenApp entity the cockpit reads and edits for priorities and OKRs. Not a core entity: never assume its key is `ID`. */
-const BIZAPPS_TASKS_ENTITY_NAME = 'MJ_BizApps_Tasks: Tasks';
 
 export interface GovernancePolicyDraft {
     DisplayNameOverride: string;

@@ -7,6 +7,7 @@ import {
     BuildTaskRecordKey,
     BuildCockpitScopeFilters,
     BuildPersonScopedTaskFilter,
+    BuildOwnedRootTasksFilter,
     CalculateChiefOfStaffMetrics,
     ComputeTaskMetricPercent,
     GetTaskPriorityClass,
@@ -384,7 +385,24 @@ describe('BuildPersonScopedTaskFilter', () => {
     });
 
     it('escapes single quotes in identifiers', () => {
-        expect(BuildPersonScopedTaskFilter("x'y", ["a'b"])).toBe("CreatedByPersonID = 'x''y' OR ID IN ('a''b')");
+        expect(BuildPersonScopedTaskFilter("x'y", ["a'b"], ["r'c"])).toBe(
+            "CreatedByPersonID = 'x''y' OR ID IN ('a''b') OR RootParentID IN ('r''c')",
+        );
+    });
+
+    it('includes every task under a root objective the person owns, whoever created the children', () => {
+        const filter = BuildPersonScopedTaskFilter('AAAAAAAA-0000-0000-0000-000000000001', [], ['RRRRRRRR-0000-0000-0000-000000000001']);
+        expect(filter).toBe(
+            "CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001' OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000001')",
+        );
+    });
+});
+
+describe('BuildOwnedRootTasksFilter', () => {
+    it('selects only root tasks the person created or is assigned to', () => {
+        expect(BuildOwnedRootTasksFilter('AAAAAAAA-0000-0000-0000-000000000001', ['BBBBBBBB-0000-0000-0000-000000000001'])).toBe(
+            "ParentID IS NULL AND (CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001' OR ID IN ('BBBBBBBB-0000-0000-0000-000000000001'))",
+        );
     });
 });
 
@@ -411,19 +429,24 @@ describe('ResolvePersonTaskScope', () => {
         };
     }
 
-    it('resolves the linked person and builds a filter over created and assigned tasks', async () => {
+    it('resolves the linked person and builds a filter over created, assigned and owned-tree tasks', async () => {
         const runner = makeRunner({
             'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
             'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'TTTTTTTT-0000-0000-0000-000000000001' }],
+            'MJ_BizApps_Tasks: Tasks': [{ ID: 'RRRRRRRR-0000-0000-0000-000000000001' }],
         });
         const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
         expect(scope.HasLinkedPerson).toBe(true);
         if (scope.HasLinkedPerson) {
             expect(scope.PersonID).toBe('PPPPPPPP-0000-0000-0000-000000000001');
             expect(scope.Filter).toBe(
-                "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001')",
+                "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001') OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000001')",
             );
         }
+        // Owned roots are looked up on the Tasks entity so children created by other people load with the objective.
+        expect(runner.Calls[2]).toBe(
+            "MJ_BizApps_Tasks: Tasks :: ParentID IS NULL AND (CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001'))",
+        );
         expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
         // Task Assignments has no PersonID column: the assignee is the polymorphic (AssigneeEntityID, AssigneeRecordID) pair.
         expect(runner.Calls[1]).toBe(
