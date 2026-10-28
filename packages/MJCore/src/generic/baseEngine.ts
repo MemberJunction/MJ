@@ -350,11 +350,16 @@ export class PermissionConstrainedError extends Error {
     }
 }
 
-/** A reload of one engine property started by a peer's cache change. */
+/**
+ * The reload of one engine property that a change made elsewhere asked for: a peer's cache change,
+ * or a remote-invalidate event that carried no row to apply.
+ */
 interface ExternalChangeReload {
     /** Another event arrived while this reload was running, so it must run once more. */
     Again: boolean;
-    /** Settles when the last requested reload has finished. */
+    /** True when the next reload must read past the cache, because an event that asked for it did. */
+    BypassCache: boolean;
+    /** Settles when the last requested reload has finished; rejects only when that one threw. */
     Done: Promise<void>;
 }
 
@@ -430,9 +435,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
-     * Reloads started by {@link OnExternalCacheChange}, keyed by config PropertyName. While one is
-     * running, further events for that property set `Again` instead of starting another, so a
-     * burst of peer events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
+     * Reloads started by {@link OnExternalCacheChange} and by the no-row fallback of
+     * {@link HandleRemoteInvalidateEvent}, keyed by config PropertyName. While one is running,
+     * further events for that property set `Again` instead of starting another, so a burst of
+     * events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
      */
     private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
 
@@ -1098,9 +1104,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true; // No entity name, nothing to do
             }
 
-            const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
-                return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
-            });
+            const matchingConfigs = this.AutoRefreshConfigsForEntity(entityName);
 
             if (matchingConfigs.length === 0) {
                 return true;
@@ -1128,23 +1132,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from server (missing data or apply failure). Bypass the cache
-            // for the same reason as the local-event path: this fetch runs BECAUSE a
-            // (cross-server) write signaled the cache stale, so reading back through it would
-            // re-sync the pre-write snapshot.
-            let refreshCount = 0;
+            // Fallback: re-fetch from the server (no row, or it could not be applied).
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
-                if (!this.configLoadedSuccessfully(config.PropertyName)) {
-                    // Same one-shot hazard as the debounced path: the invalidation event is
-                    // consumed, so a transient failure here needs a bounded retry too.
-                    this.scheduleEventRefreshRetry(config, 1);
-                }
-                refreshCount++;
-            }
-
-            if (refreshCount > 0) {
-                await this.AdditionalLoading(this._contextUser);
+                await this.reloadAfterRemoteInvalidate(config);
             }
 
             return true;
@@ -1153,6 +1143,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             LogError(e);
             return false;
         }
+    }
+
+    /**
+     * Reloads one config because a remote-invalidate event said it changed but carried no row to
+     * apply. A burst of such events shares reloads (see {@link reloadAfterExternalChange}), so a
+     * server that saves many rows of one entity costs this engine at most two reloads per burst
+     * instead of one per row, and the reload that runs last began after the last event arrived.
+     *
+     * The reload reads past the cache: it runs because a write elsewhere made the cached copy
+     * stale, and reading back through the cache would restore the pre-write snapshot. A transient
+     * failure gets the bounded retry, since the event that asked for this reload is consumed.
+     */
+    private async reloadAfterRemoteInvalidate(config: BaseEnginePropertyConfig): Promise<void> {
+        let succeeded: boolean;
+        try {
+            await this.reloadAfterExternalChange(config, /*bypassCache*/ true);
+            succeeded = this.configLoadedSuccessfully(config.PropertyName);
+        } catch (e: unknown) {
+            LogError(e);
+            succeeded = false;
+        }
+        if (!succeeded) {
+            this.scheduleEventRefreshRetry(config, 1);
+        }
+    }
+
+    /**
+     * The entity configs that refresh automatically when a record of `entityName` changes.
+     * Matching ignores case and surrounding whitespace.
+     */
+    protected AutoRefreshConfigsForEntity(entityName: string): BaseEnginePropertyConfig[] {
+        const name = entityName.trim().toLowerCase();
+        return this._metadataConfigs.filter((config: BaseEnginePropertyConfig) =>
+            config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === name
+        );
     }
 
     /**
@@ -2671,38 +2696,67 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Reloads a config after a peer's cache change, coalescing overlapping requests: an event that
-     * arrives while a reload for the same property is running asks for one more reload after it
-     * instead of starting its own. Every caller's promise settles only after a reload that began
+     * Reloads a config after a change made elsewhere, coalescing overlapping requests: an event
+     * that arrives while a reload for the same property is running asks for one more reload after
+     * it instead of starting its own. Every caller's promise settles only after a reload that began
      * after its event, so no change is missed, but N events in a burst cost at most two reloads.
+     * Requests for different properties never share a reload.
+     *
+     * @param bypassCache - Read past the cache. When any request folded into a reload asks for
+     *   it, that reload bypasses the cache.
      */
-    private reloadAfterExternalChange(config: BaseEnginePropertyConfig): Promise<void> {
+    private reloadAfterExternalChange(config: BaseEnginePropertyConfig, bypassCache: boolean = false): Promise<void> {
         const running = this._externalChangeReloads.get(config.PropertyName);
         if (running) {
             running.Again = true;
+            running.BypassCache = running.BypassCache || bypassCache;
             return running.Done;
         }
-        const reload: ExternalChangeReload = { Again: false, Done: Promise.resolve() };
+        const reload: ExternalChangeReload = { Again: false, BypassCache: bypassCache, Done: Promise.resolve() };
         this._externalChangeReloads.set(config.PropertyName, reload);
         reload.Done = this.runExternalChangeReloads(config, reload);
         return reload.Done;
     }
 
-    /** Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one. */
+    /**
+     * Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one.
+     * A reload that throws does not end the loop while another is pending, so an event that
+     * arrived during a failed reload is still served; the error surfaces only when the last
+     * reload is the one that threw.
+     */
     private async runExternalChangeReloads(config: BaseEnginePropertyConfig, reload: ExternalChangeReload): Promise<void> {
         try {
+            let lastError: Error | null = null;
             do {
+                const bypassCache = reload.BypassCache;
                 reload.Again = false;
-                // The reload replaces the property, so the derived state has to be rebuilt too —
-                // and the reload must NOT emit on its own, or a subscriber wakes between the new
-                // rows and the rebuild and reads derived state still pointing at the instances
-                // this reload discarded.
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
-                await this.RebuildDerivedState(this._contextUser);
-                this.emitPropertyChange(config.PropertyName);
+                reload.BypassCache = false;
+                lastError = await this.runOneExternalChangeReload(config, bypassCache);
+                if (lastError && reload.Again) {
+                    LogError(lastError);
+                }
             } while (reload.Again);
+            if (lastError) {
+                throw lastError;
+            }
         } finally {
             this._externalChangeReloads.delete(config.PropertyName);
+        }
+    }
+
+    /** One reload for {@link runExternalChangeReloads}. Returns the error it threw, or null. */
+    private async runOneExternalChangeReload(config: BaseEnginePropertyConfig, bypassCache: boolean): Promise<Error | null> {
+        try {
+            // The reload replaces the property, so the derived state has to be rebuilt too —
+            // and the reload must NOT emit on its own, or a subscriber wakes between the new
+            // rows and the rebuild and reads derived state still pointing at the instances
+            // this reload discarded.
+            await this.LoadSingleConfig(config, this._contextUser, bypassCache, /*suppressEmit*/ true);
+            await this.RebuildDerivedState(this._contextUser);
+            this.emitPropertyChange(config.PropertyName);
+            return null;
+        } catch (e: unknown) {
+            return e instanceof Error ? e : new Error(String(e));
         }
     }
 
