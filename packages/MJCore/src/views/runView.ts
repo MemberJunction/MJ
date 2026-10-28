@@ -248,6 +248,11 @@ export class RunViewParams {
     IgnoreMaxRows?: boolean;
     /**
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
+     *
+     * `TotalRowCount` with `MaxRows`: when the page comes back full, a second query counts the
+     * matching rows, except for `MaxRows: 1`, where `TotalRowCount` is the number of rows returned
+     * (0 or 1). A caller that needs a total alongside one row should use `MaxRows: 2` or more, or a
+     * separate `ResultType: 'count_only'` read.
      */
     MaxRows?: number;
     /**

@@ -1,5 +1,22 @@
 # @memberjunction/ng-realtime-media
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [0581392]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [1141164]
+- Updated dependencies [a610c6e]
+- Updated dependencies [cb1e602]
+- Updated dependencies [db4e210]
+- Updated dependencies [c4645bc]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ai-realtime-client@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

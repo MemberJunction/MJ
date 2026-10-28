@@ -1,5 +1,31 @@
 # @memberjunction/ai-elevenlabs
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- b5c11d3: Adds ElevenLabs' **Eleven Realtime** speech-to-speech models, `eleven_realtime_v1_mini` and `eleven_realtime_v1_max`, as realtime models for voice co-agents, on both the server-bridged and the browser-direct topology.
+  - **Server driver `ElevenRealtime`** (`@memberjunction/ai-elevenlabs`). Eleven Realtime follows the OpenAI Realtime spec over a WebSocket, so the driver subclasses the shared `OpenAIRealtime` implementation the way the Grok Voice driver does, with its own provider profile. It differs from OpenAI in two places. ElevenLabs takes its API key as `xi-api-key`, not as a bearer token, so client secrets are minted from `/v1/convai/realtime/client_secrets` with that header, and the server-bridged session mints a secret before opening its socket instead of sending the API key on it. And ElevenLabs' turn eagerness is `low` / `medium` / `high`, so MJ's `auto` is sent as `medium`.
+  - **What the profile turns on**, read from the session ElevenLabs echoes back: MCP tools and an output voice (ElevenLabs voice ids) are on. Reasoning effort and parallel tool calls are off: ElevenLabs accepts both fields but does not keep them, and Max's reasoning is not a session setting. No input-transcription model is sent, because the cascade transcribes the user itself.
+  - **Browser client `ElevenRealtimeClient`** (`@memberjunction/ai-realtime-client`, provider key `eleven-realtime`): a WebSocket client that authenticates with the minted secret in the `openai-insecure-api-key.` subprotocol, as the `openai` SDK does. It is loaded wherever the other realtime clients are.
+  - **Catalog** (metadata): **Eleven Realtime v1 Max** and **Eleven Realtime v1 Mini**, each with Eleven Labs as model developer and as inference provider through `ElevenRealtime`. No cost rows: ElevenLabs published no API pricing at launch.
+  - This is a separate product from the ElevenLabs Agents Platform model (`ElevenLabsRealtime`), which is unchanged; its premade voice list now comes from a shared `ElevenLabsPremadeVoices()`.
+
+### Patch Changes
+
+- c4645bc: Two ElevenLabs realtime fixes. The client driver now sends a tool's result to ElevenLabs as the JSON string `SendToolResult` was given, instead of parsing it into an object first; the platform takes `client_tool_result.result` as a string and closed the conversation about 0.1 to 1 s after every object-shaped result, so any client tool call (whiteboard, remote browser, hub tools) ended a live ElevenLabs voice session (MJ#4806). The server-bridged `ElevenLabsRealtimeSession` had the same defect and is fixed the same way; both `ParseToolOutput` helpers are removed. The provider's managed-agent ensure cache now lives in a process-wide `ElevenLabsManagedAgentCache` (a `BaseSingleton`, one map per API key) instead of on the driver instance: the session service builds a new driver for every session, so the instance cache never hit and every voice session start made the list → get (→ PATCH) → signed-URL round-trips, about 3.8 s, before it could connect (MJ#4803). After the first session per agent in a process, a start fetches only the signed URL for ten minutes; after that the next start re-verifies the agent, so drift made elsewhere is repaired. The fingerprint, in-flight-promise sharing and failure-eviction semantics are unchanged.
+- Updated dependencies [4c6a28b]
+- Updated dependencies [709de1a]
+- Updated dependencies [914e6ff]
+- Updated dependencies [1141164]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-openai@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

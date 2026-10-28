@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/record-cloning",
   "type": "module",
-  "version": "6.2.0-edge.5",
+  "version": "6.2.0-edge.6",
   "description": "Engine for MemberJunction record cloning: planning, materialization, and composite execution",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,12 +15,12 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.5",
-    "@memberjunction/core-entities": "6.2.0-edge.5",
-    "@memberjunction/global": "6.2.0-edge.5",
-    "@memberjunction/record-graph": "6.2.0-edge.5",
-    "@memberjunction/record-cloning-base": "6.2.0-edge.5",
-    "@memberjunction/record-set-processor-base": "6.2.0-edge.5"
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
+    "@memberjunction/record-graph": "6.2.0-edge.6",
+    "@memberjunction/record-cloning-base": "6.2.0-edge.6",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.6"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

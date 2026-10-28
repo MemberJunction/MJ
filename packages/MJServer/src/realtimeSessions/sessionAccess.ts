@@ -200,6 +200,36 @@ export async function LoadSessionConversationScope(
 }
 
 /**
+ * Decides whether `contextUser` may address an already-loaded `session`: the {@link AuthorizeSessionAccess}
+ * decision, reading the session's conversation only when that decision needs it.
+ *
+ * {@link AuthorizeSessionAccess} decides a principal without a scope identity — a named user with no magic-link
+ * scope, the usual signed-in caller — from the owner check alone, and refuses a non-owner before it looks at
+ * anything else, so neither needs the conversation read. This function and that one encode the same rule on
+ * purpose and live together for that reason: change the rule there, change the read here. The
+ * `AuthorizeLoadedSession` table test in `sessionAccess.test.ts` fails if the two ever disagree.
+ *
+ * @param session - the session, loaded through the caller's own gate
+ * @param contextUser - the authenticated caller; the conversation, when read, is read as this user (RLS applies)
+ * @param provider - the request-scoped provider
+ */
+export async function AuthorizeLoadedSession(
+    session: MJAIAgentSessionEntity,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+): Promise<SessionAccessDecision> {
+    const ownsSession = !!contextUser?.ID && !!session.UserID && UUIDsEqual(session.UserID, contextUser.ID);
+    if (!ownsSession || !ResolveSessionScopeIdentity(contextUser)) {
+        return AuthorizeSessionAccess({ SessionUserID: session.UserID, ConversationExternalID: null, ConversationReadable: false }, contextUser);
+    }
+    const conversation = await LoadSessionConversationScope(session, contextUser, provider);
+    return AuthorizeSessionAccess(
+        { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
+        contextUser,
+    );
+}
+
+/**
  * Reads a conversation's owner and scope id under `contextUser` (so its row-level security applies), for a
  * caller that addresses the conversation directly rather than through a session — a text agent turn, for
  * example, whose only handle is a message in it. Together with the caller's principal this is exactly the
