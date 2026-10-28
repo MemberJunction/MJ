@@ -14,12 +14,15 @@ async function main() {
   const git = simpleGit();
 
   console.log('Fetching and merging main branch...');
-  const { lockfileConflicted } = await mergeMainIntoNext(git);
+  const { lockfileConflicted, manifestsResolved } = await mergeMainIntoNext(git);
   if (lockfileConflicted) {
     console.log(`${LOCKFILE} conflicted — regenerating it from the merged manifests.`);
   }
+  if (manifestsResolved.length > 0) {
+    console.log(`Resolved ${manifestsResolved.length} version-only package.json conflict(s) — ${LOCKFILE} must follow them.`);
+  }
 
-  await refreshLockfile(git, { required: lockfileConflicted });
+  await refreshLockfile(git, { required: lockfileConflicted || manifestsResolved.length > 0 });
 
   // `next` is protected and only the release App may push to it — see nextPushRemote().
   // The merge above still reads from `origin`; only the write is redirected.

@@ -11,8 +11,9 @@
  *
  * Two distinct things make the push fail, and a PR is the answer to both:
  *
- *   1. A CONFLICT. ci/back-merge.mjs refuses to guess at anything but the lockfile (see
- *      the note there on why `-X theirs` was removed), so a real conflict aborts the merge
+ *   1. A CONFLICT. ci/back-merge.mjs refuses to guess at anything but the lockfile and
+ *      version-only package.json bumps (see the note there on why `-X theirs` was
+ *      removed), so a real conflict aborts the merge
  *      and leaves `next` untouched. No amount of credential fixing helps: a human has to
  *      resolve it, and a PR is where they do that.
  *   2. A REJECTED PUSH. `next` is protected; the release identity must hold a ruleset

@@ -40,26 +40,235 @@ export function nextPushRemote() {
 }
 
 /**
- * Paths a conflicted back-merge may resolve without a human.
+ * Paths a conflicted back-merge may resolve without a human, whatever their content.
  *
  * The lockfile qualifies because it is *derived* — regenerated from the package.json files
  * that merged cleanly — so discarding both conflicting sides loses no information. Nothing
  * else belongs in this set: for a hand-authored file, picking a side by rule is
- * indistinguishable from deleting whichever side lost.
+ * indistinguishable from deleting whichever side lost. (A package.json can still be
+ * resolved, but only after its content proves main's side is derived — see
+ * {@link analyzeManifestConflict}.)
  */
 const REGENERABLE_ON_CONFLICT = new Set([LOCKFILE]);
 
+/** package.json sections whose `@memberjunction/*` entries `changeset version` rewrites. */
+const DEPENDENCY_SECTIONS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+
+const INTERNAL_SCOPE = '@memberjunction/';
+
 /**
- * Split a merge's conflicted paths into "we can regenerate it" and "a human must look".
+ * @param {string} path
+ * @returns {boolean} whether the path is a package manifest
+ */
+export function isManifestPath(path) {
+    return path === 'package.json' || path.endsWith('/package.json');
+}
+
+/**
+ * Split a merge's conflicted paths into "we can regenerate it", "a manifest that may be
+ * resolvable if main's side is only a version bump", and "a human must look".
  *
  * @param {string[]} conflictedPaths
- * @returns {{unresolvable: string[], lockfileConflicted: boolean}}
+ * @returns {{unresolvable: string[], manifests: string[], lockfileConflicted: boolean}}
  */
 export function classifyMergeConflicts(conflictedPaths = []) {
+    const remaining = conflictedPaths.filter((p) => !REGENERABLE_ON_CONFLICT.has(p));
     return {
-        unresolvable: conflictedPaths.filter((p) => !REGENERABLE_ON_CONFLICT.has(p)),
+        unresolvable: remaining.filter((p) => !isManifestPath(p)),
+        manifests: remaining.filter(isManifestPath),
         lockfileConflicted: conflictedPaths.includes(LOCKFILE),
     };
+}
+
+/**
+ * Every version string `changeset version` may rewrite in a manifest: the package's own
+ * `version`, and each `@memberjunction/*` dependency, keyed so two manifests can be
+ * compared entry by entry.
+ *
+ * @param {Record<string, unknown>} manifest
+ * @returns {Map<string, string>} e.g. `version` -> `6.1.0`, `dependencies:@memberjunction/core` -> `6.1.0`
+ */
+function versionEntries(manifest) {
+    const entries = new Map();
+    if (typeof manifest.version === 'string') entries.set('version', manifest.version);
+    for (const section of DEPENDENCY_SECTIONS) {
+        const deps = manifest[section];
+        if (deps === null || typeof deps !== 'object') continue;
+        for (const [name, value] of Object.entries(deps)) {
+            if (name.startsWith(INTERNAL_SCOPE) && typeof value === 'string') {
+                entries.set(`${section}:${name}`, value);
+            }
+        }
+    }
+    return entries;
+}
+
+/**
+ * Set every entry named in `versions` on a copy of `manifest`. Entries the manifest does
+ * not have are skipped, so keys and key order are never changed.
+ *
+ * @param {Record<string, unknown>} manifest
+ * @param {(key: string, current: string) => string} pick — the value to store for an entry
+ * @returns {Record<string, unknown>}
+ */
+function mapVersionEntries(manifest, pick) {
+    const copy = structuredClone(manifest);
+    if (typeof copy.version === 'string') copy.version = pick('version', copy.version);
+    for (const section of DEPENDENCY_SECTIONS) {
+        const deps = copy[section];
+        if (deps === null || typeof deps !== 'object') continue;
+        for (const [name, value] of Object.entries(deps)) {
+            if (name.startsWith(INTERNAL_SCOPE) && typeof value === 'string') {
+                deps[name] = pick(`${section}:${name}`, value);
+            }
+        }
+    }
+    return copy;
+}
+
+/**
+ * Decide whether a conflicted package.json can be resolved without a human, and if so,
+ * how.
+ *
+ * It can when main's side differs from the merge base ONLY in version strings that
+ * `changeset version` writes — the package's own `version` and `@memberjunction/*`
+ * dependency versions — all moved to one release version. Main's side then carries no
+ * information beyond "bump to X", so the resolution is next's file with every entry that
+ * was at a pre-release version moved to X. Next's hand-authored changes all survive, and
+ * main's side is regenerated rather than picked over.
+ *
+ * `@memberjunction/*` entries that main did not move (packages outside the release, such
+ * as ones published from other repos) keep next's value.
+ *
+ * @param {{base: string, ours: string, theirs: string}} sides — the merge base, next's
+ *   side and main's side, as file text
+ * @returns {{resolvable: true, content: string, releaseVersion: string, oldVersions: string[]}
+ *   | {resolvable: false, reason: string}}
+ */
+export function analyzeManifestConflict({ base, ours, theirs }) {
+    let baseJson;
+    let oursJson;
+    let theirsJson;
+    try {
+        baseJson = JSON.parse(base);
+        oursJson = JSON.parse(ours);
+        theirsJson = JSON.parse(theirs);
+    } catch (error) {
+        return { resolvable: false, reason: `a side is not valid JSON (${error.message})` };
+    }
+
+    // What main changed, entry by entry. An entry main added or removed is not a bump.
+    const baseVersions = versionEntries(baseJson);
+    const theirVersions = versionEntries(theirsJson);
+    const bumps = [];
+    for (const [key, value] of theirVersions) {
+        if (!baseVersions.has(key)) {
+            return { resolvable: false, reason: `main added ${key}` };
+        }
+        if (baseVersions.get(key) !== value) bumps.push({ key, from: baseVersions.get(key), to: value });
+    }
+    for (const key of baseVersions.keys()) {
+        if (!theirVersions.has(key)) return { resolvable: false, reason: `main removed ${key}` };
+    }
+
+    // Main's side with its version moves undone must be the merge base exactly — same
+    // fields, same values, same key order. Anything else is a real change on main.
+    const theirsUnbumped = mapVersionEntries(theirsJson, (key) => baseVersions.get(key));
+    if (JSON.stringify(theirsUnbumped) !== JSON.stringify(baseJson)) {
+        return { resolvable: false, reason: 'main changed more than version strings' };
+    }
+    if (bumps.length === 0) {
+        return { resolvable: false, reason: 'main changed no version strings' };
+    }
+
+    const targets = new Set(bumps.map((b) => b.to));
+    if (targets.size !== 1) {
+        return {
+            resolvable: false,
+            reason: `main moved versions to more than one value (${[...targets].join(', ')})`,
+        };
+    }
+    const [releaseVersion] = targets;
+    const oldVersions = new Set(bumps.map((b) => b.from));
+
+    const resolved = mapVersionEntries(oursJson, (_key, value) =>
+        oldVersions.has(value) ? releaseVersion : value
+    );
+
+    const stale = findStaleVersions(resolved, oldVersions);
+    if (stale.length > 0) {
+        return { resolvable: false, reason: `still at a pre-release version: ${stale.join(', ')}` };
+    }
+
+    return {
+        resolvable: true,
+        content: serializeLike(ours, resolved, oldVersions, releaseVersion),
+        releaseVersion,
+        oldVersions: [...oldVersions],
+    };
+}
+
+/**
+ * Postcondition on a resolved manifest: name every version entry still at a pre-release
+ * version. Non-empty means the resolution would leave a stale internal dependency on next
+ * (for example one next added after the release was cut), so it must not be committed.
+ *
+ * @param {Record<string, unknown>} manifest
+ * @param {Set<string>} oldVersions
+ * @returns {string[]}
+ */
+export function findStaleVersions(manifest, oldVersions) {
+    return [...versionEntries(manifest)]
+        .filter(([, value]) => oldVersions.has(value))
+        .map(([key, value]) => `${key}@${value}`);
+}
+
+/**
+ * Write `resolved` as next's file text with only the moved version strings changed, so
+ * next's layout (inline arrays, spacing) survives byte for byte. Falls back to
+ * JSON.stringify with next's indent — the layout `changeset version` itself writes — when
+ * the text edit does not parse back to exactly `resolved` (for example a nested `version`
+ * key the pattern also matched).
+ *
+ * @param {string} oursText — next's file
+ * @param {Record<string, unknown>} resolved
+ * @param {Set<string>} oldVersions
+ * @param {string} releaseVersion
+ * @returns {string}
+ */
+function serializeLike(oursText, resolved, oldVersions, releaseVersion) {
+    const escape = (text) => text.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+    const olds = [...oldVersions].map(escape).join('|');
+    const pattern = new RegExp(`("(?:version|${escape(INTERNAL_SCOPE)}[^"]+)"\\s*:\\s*")(${olds})(")`, 'g');
+    const edited = oursText.replace(pattern, `$1${releaseVersion}$3`);
+    try {
+        if (JSON.stringify(JSON.parse(edited)) === JSON.stringify(resolved)) return edited;
+    } catch {
+        // fall through to a full rewrite
+    }
+    const indent = /^([ \t]+)"/m.exec(oursText)?.[1] ?? '  ';
+    return JSON.stringify(resolved, null, indent) + (oursText.endsWith('\n') ? '\n' : '');
+}
+
+/**
+ * Read the three sides of a conflicted path from the index (stage 1 = merge base,
+ * 2 = ours/next, 3 = theirs/main).
+ *
+ * @param {import('simple-git').SimpleGit} client
+ * @param {string} path
+ * @returns {Promise<{base: string, ours: string, theirs: string} | null>} null when a side
+ *   is missing (added or deleted on one side), which is never a plain version bump.
+ */
+async function readConflictSides(client, path) {
+    try {
+        const [base, ours, theirs] = await Promise.all(
+            [1, 2, 3].map((stage) => client.raw(['show', `:${stage}:${path}`]))
+        );
+        if ([base, ours, theirs].some((side) => typeof side !== 'string')) return null;
+        return { base, ours, theirs };
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -70,16 +279,22 @@ export function classifyMergeConflicts(conflictedPaths = []) {
  * then identical and the strategy never actually fired. Releases ship from a `release/*`
  * prep branch cut at an earlier commit (DEPLOYMENT.md Step 9), so by the time this runs
  * `next` has hours of merges main has never seen — and `-X theirs` would resolve every
- * conflicting hunk in main's favour, silently discarding all of it. The lockfile is the
- * one exception, and it gets regenerated rather than guessed at.
+ * conflicting hunk in main's favour, silently discarding all of it. Two exceptions, both
+ * regenerated rather than guessed at: the lockfile, and a package.json whose main side is
+ * only the release's version bump (see {@link analyzeManifestConflict}). Every edit next
+ * made between the release cut and the publish survives either way.
  *
  * @param {import('simple-git').SimpleGit} client
- * @returns {Promise<{lockfileConflicted: boolean}>} whether the caller must regenerate the
- *   lockfile before pushing.
+ * @param {{writeFile?: (path: string, content: string) => void}} [opts] — how a resolved
+ *   manifest is written to the working tree (replaced in tests).
+ * @returns {Promise<{lockfileConflicted: boolean, manifestsResolved: string[]}>}
+ *   `lockfileConflicted` — the committed lockfile is a placeholder; `manifestsResolved` —
+ *   package.json files rewritten to the release version. The caller must regenerate the
+ *   lockfile before pushing when either is set.
  * @throws when anything else conflicts, or when the merge fails for a non-conflict reason.
  *   The working tree is left clean (the merge is aborted) and next is untouched.
  */
-export async function mergeMainIntoNext(client) {
+export async function mergeMainIntoNext(client, { writeFile = defaultWriteFile } = {}) {
     const branch = (await client.revparse(['--abbrev-ref', 'HEAD'])).trim();
     if (branch !== 'next') {
         throw new Error(`the main -> next back-merge must run on next, but HEAD is '${branch}'.`);
@@ -88,7 +303,7 @@ export async function mergeMainIntoNext(client) {
     await client.fetch('origin', 'main');
     try {
         await client.merge(['--no-edit', 'origin/main']);
-        return { lockfileConflicted: false };
+        return { lockfileConflicted: false, manifestsResolved: [] };
     } catch (mergeError) {
         const status = await client.status();
         const conflicted = status.conflicted ?? [];
@@ -100,32 +315,58 @@ export async function mergeMainIntoNext(client) {
             );
         }
 
-        const { unresolvable, lockfileConflicted } = classifyMergeConflicts(conflicted);
+        const { unresolvable, manifests, lockfileConflicted } = classifyMergeConflicts(conflicted);
+
+        // Decide every manifest before touching the tree, so a single real conflict aborts
+        // the whole merge with nothing half-written.
+        const resolutions = [];
+        const reasons = [];
+        for (const path of manifests) {
+            const sides = await readConflictSides(client, path);
+            const verdict = sides
+                ? analyzeManifestConflict(sides)
+                : { resolvable: false, reason: 'a side is missing (added or deleted)' };
+            if (verdict.resolvable) {
+                resolutions.push({ path, content: verdict.content, releaseVersion: verdict.releaseVersion });
+            } else {
+                unresolvable.push(path);
+                reasons.push(`${path}: ${verdict.reason}`);
+            }
+        }
+
         if (unresolvable.length > 0) {
             await client.merge(['--abort']);
+            const detail = reasons.length > 0 ? ` (${reasons.join('; ')})` : '';
             throw new Error(
-                `main -> next back-merge conflicts outside ${LOCKFILE}: ${unresolvable.join(', ')}. ` +
+                `main -> next back-merge conflicts that are not a lockfile or a version-only ` +
+                    `package.json bump: ${unresolvable.join(', ')}${detail}. ` +
                     `The merge was aborted and next is unchanged on the remote. The release itself is ` +
                     `already published — only the back-merge is outstanding, so resolve it by hand: ` +
                     `git checkout next && git merge origin/main. Original error: ${mergeError.message}`
             );
         }
 
+        for (const { path, content, releaseVersion } of resolutions) {
+            console.log(`${path}: main's side is only the bump to ${releaseVersion}; keeping next's file at that version.`);
+            writeFile(path, content);
+            await client.add(path);
+        }
+
         // Take next's copy purely as a placeholder to complete the merge commit; the caller
         // must regenerate it before pushing. `--ours` rather than `--theirs` so that if
         // anything downstream goes wrong, the failure mode is a stale lockfile on a tree that
         // never gets pushed, not a lockfile missing post-pin dependencies.
-        //
-        // `unresolvable` is empty here, so conflicted ⊆ REGENERABLE_ON_CONFLICT — this loop is
-        // bounded by that set's size.
-        for (const path of conflicted) {
-            await client.raw(['checkout', '--ours', '--', path]);
-            await client.add(path);
+        if (lockfileConflicted) {
+            await client.raw(['checkout', '--ours', '--', LOCKFILE]);
+            await client.add(LOCKFILE);
         }
         await client.raw(['commit', '--no-edit']);
-        return { lockfileConflicted };
+        return { lockfileConflicted, manifestsResolved: resolutions.map((r) => r.path) };
     }
 }
+
+/** Write a resolved manifest into the working tree. */
+const defaultWriteFile = (path, content) => fs.writeFileSync(path, content);
 
 /** Rewrite the lockfile from the merged manifests. Side effect: runs pnpm. */
 const defaultInstall = () => execSync('pnpm install --lockfile-only', { stdio: 'inherit' });
@@ -135,7 +376,7 @@ const defaultInstall = () => execSync('pnpm install --lockfile-only', { stdio: '
  *
  * @param {import('simple-git').SimpleGit} client
  * @param {{required: boolean, runInstall?: () => void}} opts — `required` is set when the
- *   merge resolved a lockfile conflict. The committed lockfile is then a placeholder that
+ *   merge resolved a lockfile or package.json conflict. The committed lockfile is then a placeholder that
  *   neither side of the merge vouches for, so a failed regeneration MUST fail the job
  *   rather than push a wrong lockfile. When it is false the refresh is best-effort: an
  *   already-published release must not be failed by a lockfile hiccup.
