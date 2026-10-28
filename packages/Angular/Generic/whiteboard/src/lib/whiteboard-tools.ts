@@ -1411,7 +1411,8 @@ function withFinalStop(text: string): string {
  * `widget …`. Name the widget the way every other tool result does (`"Quiz" (html-2)`).
  */
 function brandOutline(outline: string, label: string): string {
-  return outline.replace(/^widget(?: "[^"\n]*")?/, `widget ${label}`);
+  // A replacer function, so `$&` / `$1` in a widget title stay literal.
+  return outline.replace(/^widget(?: "[^"\n]*")?/, () => `widget ${label}`);
 }
 
 function inspectToolResult(itemId: string, label: string, r: WhiteboardWidgetInspectResult): WhiteboardToolResult {

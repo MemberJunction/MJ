@@ -247,6 +247,12 @@ describe('E2E polish (2026-10-28 live run)', () => {
     }
   });
 
+  it('a widget title containing replacement patterns ($&, $1) is used literally', () => {
+    const inspectArgs: WhiteboardWidgetToolArgs = { Op: 'inspect', ItemID: 'html-1' };
+    const r = parse(FormatWhiteboardWidgetToolResult(inspectArgs, { Ok: true, Result: { outline: 'widget\nh2 "Q1"', actions: [] } }, 'Price $& tax $1'));
+    expect(r.outline.split('\n')[0]).toBe('widget "Price $& tax $1" (html-1)');
+  });
+
   it('a failed step error ends with exactly one full stop', () => {
     const operateArgs: WhiteboardWidgetToolArgs = { Op: 'operate', ItemID: 'html-1', Steps: [{ Target: 'Pluto', Op: 'click' }] };
     const r = parse(FormatWhiteboardWidgetToolResult(operateArgs,
