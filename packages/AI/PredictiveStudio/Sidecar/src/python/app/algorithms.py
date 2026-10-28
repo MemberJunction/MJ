@@ -197,37 +197,56 @@ TabularFamily = Literal["binary", "multiclass", "continuous", "count", "non-nega
 EstimatorParams = Dict[str, Union[HyperparameterValue, Tuple[int, ...]]]
 
 
+# A layer-size value as a request or catalog carries it: an int, the catalog's "n,m,..." string, or a JSON list.
+LayerSizesValue = Union[HyperparameterValue, List[HyperparameterValue], Tuple[HyperparameterValue, ...]]
+
+
 class ObjectiveOverrideError(ValueError):
-    """Raised when a candidate's hyperparameters name a keyword the task type fixes: the objective, its evaluation
-    metric or power, the random seed, or the thread count (including the libraries' aliases for each)."""
+    """Raised when a candidate's hyperparameters name a keyword the task type fixes: the objective (including the
+    multiclass strategy), its evaluation metric or power, a random seed, the thread count, or the tree method and
+    device (including the libraries' aliases for each)."""
+
+
+class InvalidTweediePowerError(ValueError):
+    """Raised when a non-negative target's declared ``tweedie_power`` is missing or outside the open interval (1, 2)
+    of the compound Poisson-gamma distribution."""
 
 
 # Every keyword some trainer factory fixes. A candidate naming any of them is refused whatever its driver, so a key a
 # driver happens not to set today cannot become a silent override when that driver starts fixing it.
 _FIXED_KEYS: FrozenSet[str] = frozenset({
     # objective and the metric/power/link that complete it
-    "objective", "objective_type", "application", "app", "loss", "criterion", "eval_metric",
+    "objective", "objective_type", "application", "app", "loss", "criterion", "multi_class",
+    "eval_metric", "metric", "metrics", "metric_types",
     "tweedie_variance_power", "power", "link",
-    # seeds
+    # seeds, including LightGBM's sub-seeds (each would otherwise replace the one derived from the protocol seed)
     "random_state", "seed", "random_seed",
-    # thread counts and the deterministic-histogram switches
+    "bagging_seed", "feature_fraction_seed", "data_random_seed", "extra_seed", "drop_seed",
+    # thread counts, the deterministic-histogram switches, and the tree method and device (a GPU fit is not
+    # bit-reproducible)
     "n_jobs", "nthread", "num_threads", "deterministic", "force_row_wise", "force_col_wise",
+    "tree_method", "device", "device_type",
 })
 
 
-def parse_hidden_layer_sizes(value: HyperparameterValue) -> Tuple[int, ...]:
-    """Parse the catalog's ``hidden_layer_sizes`` (``"100"`` or ``"100,50"``, or a bare int) to the int tuple sklearn
-    needs.
+def parse_hidden_layer_sizes(value: LayerSizesValue) -> Tuple[int, ...]:
+    """Parse ``hidden_layer_sizes`` to the int tuple sklearn needs: the catalog's ``"100"`` or ``"100,50"``, a bare
+    int, or a request's JSON list (or tuple) of ints.
 
     Raises:
-        ValueError: When the value is missing, a bool, a non-integral number, or names a non-positive layer size.
+        ValueError: When the value is missing, a bool, a non-integral number, an empty list, a list holding anything
+            but positive ints, or names a non-positive layer size.
     """
-    if isinstance(value, bool) or value is None:
+    if isinstance(value, (list, tuple)):
+        if any(isinstance(v, bool) or not isinstance(v, int) for v in value):
+            raise ValueError(f"hidden_layer_sizes must be a list of positive integers, got {value!r}")
+        sizes = tuple(int(v) for v in value if isinstance(v, int))
+    elif isinstance(value, bool) or value is None:
         raise ValueError(f"hidden_layer_sizes must be a positive int or 'n,m,...', got {value!r}")
-    if isinstance(value, float) and not value.is_integer():
+    elif isinstance(value, float) and not value.is_integer():
         raise ValueError(f"hidden_layer_sizes must be whole numbers, got {value!r}")
-    if isinstance(value, (int, float)):
-        sizes: Tuple[int, ...] = (int(value),)
+    elif isinstance(value, (int, float)):
+        sizes = (int(value),)
     else:
         try:
             sizes = tuple(int(part.strip()) for part in value.split(",") if part.strip() != "")
@@ -256,6 +275,7 @@ def tabular_estimator(driver: str, family: TabularFamily, hp: Dict[str, Hyperpar
     Raises:
         AlgorithmNotSupportedError: For an unknown driver, or a driver that cannot fit ``family``.
         ObjectiveOverrideError: When ``hp`` names a keyword the factory fixes.
+        InvalidTweediePowerError: When a non-negative target's ``tweedie_power`` is missing or outside (1, 2).
     """
     builder = _TABULAR_BUILDERS.get(driver)
     if builder is None:
@@ -270,9 +290,11 @@ def tabular_estimator(driver: str, family: TabularFamily, hp: Dict[str, Hyperpar
 
 
 def _declared_tweedie_power(driver: str, tweedie_power: float | None) -> float:
-    """The Tweedie power a non-negative target declares; a non-negative candidate without one cannot be built."""
+    """The Tweedie power a non-negative target declares, strictly between 1 (Poisson) and 2 (gamma)."""
     if tweedie_power is None:
-        raise AlgorithmNotSupportedError(f"{driver} needs the declared Tweedie power for non-negative targets")
+        raise InvalidTweediePowerError(f"{driver} needs the declared tweedie_power for non-negative targets")
+    if not 1.0 < tweedie_power < 2.0:
+        raise InvalidTweediePowerError(f"tweedie_power must lie strictly between 1 and 2, got {tweedie_power!r}")
     return tweedie_power
 
 
@@ -282,7 +304,10 @@ def _glm(driver: str, family: TabularFamily, params: EstimatorParams, seed: int,
     if driver == "logistic_regression":
         if family not in ("binary", "multiclass"):
             raise AlgorithmNotSupportedError("logistic_regression supports binary and multiclass only")
-        return LogisticRegression(**{"max_iter": 5000, "C": 1.0, **params, "random_state": seed, "n_jobs": threads})
+        fixed: EstimatorParams = {"random_state": seed, "n_jobs": threads}
+        if family == "multiclass":
+            fixed["multi_class"] = "multinomial"  # one softmax likelihood, not one-vs-rest
+        return LogisticRegression(**{"max_iter": 5000, "C": 1.0, **params, **fixed})
     if driver == "ridge":
         if family != "continuous":
             raise AlgorithmNotSupportedError("ridge supports continuous targets only")
@@ -309,14 +334,15 @@ def _forest(family: TabularFamily, params: EstimatorParams, seed: int, threads: 
 def _trainer_mlp(family: TabularFamily, params: EstimatorParams, seed: int) -> object:
     """Multi-layer perceptron (binary, multiclass and continuous only); the catalog's string layer sizes are parsed.
 
-    sklearn's MLP has no ``n_jobs``: its matrix products run in the BLAS, whose threads the process environment holds.
+    sklearn's MLP has no ``n_jobs``: its matrix products run in the BLAS, so its threads are bounded by the process's
+    BLAS limits. The test runners and the truth sidecar pin those to one thread through the environment; the trainer
+    holds them to ``threads`` with ``threadpool_limits`` around each fit.
     """
     if family in ("count", "non-negative"):
         raise AlgorithmNotSupportedError("mlp has no Poisson/Tweedie objective; it cannot rank by deviance")
     mlp_params: EstimatorParams = {"max_iter": 500, **params, "random_state": seed}
-    layers = params.get("hidden_layer_sizes")
-    if layers is not None and not isinstance(layers, tuple):
-        mlp_params["hidden_layer_sizes"] = parse_hidden_layer_sizes(layers)
+    if "hidden_layer_sizes" in params:
+        mlp_params["hidden_layer_sizes"] = parse_hidden_layer_sizes(params["hidden_layer_sizes"])
     if family in ("binary", "multiclass"):
         return MLPClassifier(**mlp_params)
     return MLPRegressor(**mlp_params)
@@ -324,10 +350,10 @@ def _trainer_mlp(family: TabularFamily, params: EstimatorParams, seed: int) -> o
 
 def _trainer_xgboost(family: TabularFamily, params: EstimatorParams, seed: int, threads: int,
                      tweedie_power: float | None) -> object:
-    """XGBoost with the histogram tree method; the objective and its evaluation metric follow the family."""
+    """XGBoost with the histogram tree method on the CPU; the objective and its evaluation metric follow the family."""
     _require(_HAVE_XGB, "xgboost")
-    tunable: EstimatorParams = {"tree_method": "hist", "verbosity": 0, **params}
-    fixed: EstimatorParams = {"n_jobs": threads, "random_state": seed}
+    tunable: EstimatorParams = {"verbosity": 0, **params}
+    fixed: EstimatorParams = {"n_jobs": threads, "random_state": seed, "tree_method": "hist", "device": "cpu"}
     if family == "binary":
         return XGBClassifier(**tunable, **fixed, objective="binary:logistic", eval_metric="logloss")
     if family == "multiclass":

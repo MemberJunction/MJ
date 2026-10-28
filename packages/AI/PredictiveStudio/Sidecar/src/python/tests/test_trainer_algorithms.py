@@ -58,6 +58,21 @@ def test_objective_override_is_refused() -> None:
         ("lightgbm", "multiclass", "deterministic", False),
         ("lightgbm", "continuous", "force_row_wise", False),
         ("lightgbm", "count", "seed", 3),
+        ("logistic_regression", "multiclass", "multi_class", "ovr"),
+        ("xgboost", "binary", "tree_method", "exact"),
+        ("xgboost", "binary", "device", "cuda"),
+        ("xgboost", "binary", "nthread", 8),
+        ("lightgbm", "binary", "application", "regression"),
+        ("lightgbm", "binary", "loss", "huber"),
+        ("lightgbm", "binary", "metric", "auc"),
+        ("lightgbm", "binary", "metrics", "auc"),
+        ("lightgbm", "binary", "metric_types", "auc"),
+        ("lightgbm", "binary", "bagging_seed", 1),
+        ("lightgbm", "binary", "feature_fraction_seed", 1),
+        ("lightgbm", "binary", "data_random_seed", 1),
+        ("lightgbm", "binary", "extra_seed", 1),
+        ("lightgbm", "binary", "drop_seed", 1),
+        ("random_forest", "continuous", "criterion", "absolute_error"),
     ],
 )
 def test_fixed_keyword_collision_is_a_typed_refusal(driver: str, family: algorithms.TabularFamily, key: str,
@@ -66,3 +81,34 @@ def test_fixed_keyword_collision_is_a_typed_refusal(driver: str, family: algorit
     TypeError from the estimator constructor."""
     with pytest.raises(algorithms.ObjectiveOverrideError, match=f"'{key}'"):
         algorithms.tabular_estimator(driver, family, {key: value}, 0, 1, None)
+
+
+def test_multiclass_logistic_regression_is_multinomial() -> None:
+    est = algorithms.tabular_estimator("logistic_regression", "multiclass", {}, 0, 1, None)
+    assert est.get_params()["multi_class"] == "multinomial"
+
+
+def test_xgboost_tree_method_and_device_are_fixed() -> None:
+    params = algorithms.tabular_estimator("xgboost", "continuous", {"n_estimators": 5}, 0, 1, None).get_params()
+    assert (params["tree_method"], params["device"]) == ("hist", "cpu")
+
+
+@pytest.mark.parametrize("driver", ["xgboost", "lightgbm", "tweedie_glm"])
+@pytest.mark.parametrize("power", [0.5, 1.0, 2.0, 2.5])
+def test_tweedie_power_outside_the_open_unit_interval_above_one_is_refused(driver: str, power: float) -> None:
+    """A compound Poisson-gamma Tweedie needs a variance power strictly between 1 and 2."""
+    with pytest.raises(algorithms.InvalidTweediePowerError, match="tweedie_power"):
+        algorithms.tabular_estimator(driver, "non-negative", {}, 0, 1, power)
+
+
+def test_legacy_mlp_accepts_a_json_list_of_layer_sizes() -> None:
+    """The /train request carries hidden_layer_sizes as a JSON list as well as the catalog's string."""
+    est = algorithms.build_estimator("mlp", "classification", {"hidden_layer_sizes": [100, 50]})
+    assert est.hidden_layer_sizes == (100, 50)
+    assert algorithms.parse_hidden_layer_sizes((8, 4)) == (8, 4)
+
+
+@pytest.mark.parametrize("value", [[], [100, "a"], [0], [True], [1.5], [[100]]])
+def test_invalid_layer_size_lists_are_refused(value: object) -> None:
+    with pytest.raises(ValueError, match="hidden_layer_sizes"):
+        algorithms.build_estimator("mlp", "classification", {"hidden_layer_sizes": value})
