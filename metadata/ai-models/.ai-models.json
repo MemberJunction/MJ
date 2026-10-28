@@ -29372,5 +29372,284 @@
     "primaryKey": {
       "ID": "841DCD4E-4BB0-431C-B46E-7F5D80D84C7F"
     }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K3.1 Pro",
+      "PowerRank": 23,
+      "Description": "Moonshot AI's frontier open-weight MoE, released October 23, 2026 as the direct successor to Kimi K3. 3T-class sparse-activation parameters, 1M (1,048,576) token context, native multimodal input, and a benchmark sheet Moonshot positions at or near the open-weights frontier. Priced at $2.00 input / $10.00 output per 1M tokens with a $0.20 cached-input rate — a one-third reduction from Kimi K3's $3/$15 — and flat across the full context window with no long-prompt surcharge. API id `kimi-k3.1-pro` on the OpenAI-compatible endpoint https://api.moonshot.ai/v1. Open weights were announced for release by November 4, 2026 and were not yet published at the time of this record. MaxOutputTokens mirrors Kimi K3's 262,144: reachable sources disagree (a documented `max_completion_tokens` default of 131,072 configurable upward, versus listings of 512K and 1M), and Moonshot's own pricing page was not reachable from this environment to settle it.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Kimi K3",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "045776C9-0AB3-4A15-AD09-7F83D6631A43"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k3.1-pro",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "7CF36A4D-E241-49BB-AEF1-B33487542CA2"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k3.1-pro",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B4D1B236-BF30-4403-A89A-CB203F224BAC"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-10-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 10,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Kimi K3.1 Pro pricing on the Moonshot AI first-party API as of its 2026-10-23 launch: $2.00/1M input, $10.00/1M output, $0.20/1M cached input, flat across the full 1M-token context (no long-prompt surcharge). VERIFICATION STANDARD: corroborated — platform.moonshot.ai was DNS-blocked from the research environment on 2026-10-26, so this is multi-source agreement across independent launch coverage rather than a first-party rate-card read. Re-verify against https://platform.moonshot.ai/docs/pricing/chat when egress allows. Sources: https://www.yottalabs.ai/post/kimi-k3-1-pro-specs-price-open-weights-benchmarks ; https://kingy.ai/blog/kimi-k3-1-pro-launch-features-benchmarks-access/ ; https://www.orcarouter.ai/blog/kimi-k3-1-pro-release"
+          },
+          "primaryKey": {
+            "ID": "0DAE39D4-7C94-4C6B-95CC-8FC68BEFAA18"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D981BC20-A2C9-4F31-B7AD-0D30FAFAB58D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K3.1 Pro Highspeed",
+      "PowerRank": 23,
+      "Description": "Moonshot AI's high-throughput serving tier for Kimi K3.1 Pro, launched alongside it on October 23, 2026. Identical weights and capabilities to standard Kimi K3.1 Pro; Moonshot claims equivalent intelligence at roughly 2-3x the generated-token speed for 2x the price ($4.00 input / $20.00 output per 1M tokens, cached input unchanged at $0.20). Invoked through its own API id (`kimi-k3.1-pro-highspeed`), not a per-request flag, which is why it is modelled as its own record rather than a second vendor row on Kimi K3.1 Pro — the same convention MJ already uses for Kimi K3 Fast. Use for latency-sensitive agentic loops where iteration speed dominates token cost; use standard Kimi K3.1 Pro for batch and throughput-insensitive work.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": false,
+      "SpeedRank": 8,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "77049650-D54A-408C-A6BF-1AB771783044"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k3.1-pro-highspeed",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "8FBB71CB-AAFE-41AC-B3BE-6663AF331B40"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-10-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Kimi K3.1 Pro Highspeed pricing on the Moonshot AI first-party API as of its 2026-10-23 launch: $4.00/1M input, $20.00/1M output (2x the standard tier), cached input unchanged at $0.20/1M. VERIFICATION STANDARD: corroborated — platform.moonshot.ai was DNS-blocked from the research environment on 2026-10-26, so this is multi-source agreement across independent launch coverage rather than a first-party rate-card read. Re-verify against https://platform.moonshot.ai/docs/pricing/chat when egress allows. Sources: https://www.yottalabs.ai/post/kimi-k3-1-pro-specs-price-open-weights-benchmarks ; https://kingy.ai/blog/kimi-k3-1-pro-launch-features-benchmarks-access/"
+          },
+          "primaryKey": {
+            "ID": "5890B0BD-053E-45BC-9760-D8F8C2671F1D"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "34A8308E-D2D5-4A2E-B331-93DB16543B71"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MiniMax-M3.1-Flash",
+      "PowerRank": 19,
+      "Description": "MiniMax's agent-focused Flash-tier model, generally available October 19, 2026 after a September 27 preview (`MiniMax-M3.1-Flash-Preview`). Sparse-attention MoE in the M3 line, 1M token context with flat pricing across the whole window and no long-context step-up — unlike MiniMax-M3, which doubles above 512K. Thinking is always on with effort levels low through max. Text, image and video input. MiniMax reports roughly one-third the cost and about 3x the speed of M3 on agentic workloads. Priced at $0.15/1M input, $0.60/1M output, $0.015/1M cached input. Open weights were announced for release shortly after launch; reports as of 2026-10-26 conflict on whether they have been published. MaxOutputTokens mirrors MiniMax-M3's 131,072 — third-party listings disagree (128K on some, 512K on others) and platform.minimax.io was not reachable from this environment to settle it.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9DC9CCA4-3B1A-4116-A83B-EAC92133E016"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MiniMaxLLM",
+            "APIName": "MiniMax-M3.1-Flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C1E375C2-34C6-4547-9675-059928CE622C"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "StartedAt": "2026-10-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.015,
+            "CacheWritePricePerUnit": null,
+            "Comments": "MiniMax-M3.1-Flash pricing on the MiniMax first-party API as of its 2026-10-19 GA: $0.15/1M input, $0.60/1M output, $0.015/1M cached input, flat across the full 1M-token context with no long-context surcharge. VERIFICATION STANDARD: corroborated — MiniMax's own announcement (https://www.minimax.io/blog/minimax-m31f) carries these figures and is quoted consistently by independent coverage, but minimax.io was DNS-blocked from the research environment on 2026-10-26, so the page was not read directly. Third-party hosts charge more (Venice.ai lists $0.19/$0.75) and are not modelled here. Sources: https://www.minimax.io/blog/minimax-m31f ; https://www.marktechpost.com/2026/10/19/minimax-m3-1-flash-release/ ; https://llm-stats.com/models/minimax-m3.1-flash"
+          },
+          "primaryKey": {
+            "ID": "597A19C6-2E26-4AE8-998A-36612F82B41D"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3CBA2D72-2FFC-4BFA-8DF2-3D3C2D8177FA"
+    }
   }
 ]
