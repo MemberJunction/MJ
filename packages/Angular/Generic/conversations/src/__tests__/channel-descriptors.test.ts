@@ -69,8 +69,17 @@ describe('shipped channel descriptors', () => {
     expect(Object.entries(flags).filter(([, level]) => level === null).length).toBeGreaterThan(5);
   });
 
-  it('no other shipped channel has a verb that returns channel data (the whiteboard and media verbs only act and report an id)', () => {
-    for (const channel of [new RealtimeWhiteboardChannel(), new RealtimeMediaChannel()]) {
+  it('the whiteboard marks only its widget verbs (they return widget contents) as returning state', () => {
+    const returning = new RealtimeWhiteboardChannel().GetDescriptor().Verbs.filter((v) => v.ReturnsChannelData);
+    expect(Object.fromEntries(returning.map((v) => [v.NativeToolName, v.ReturnsChannelData]))).toEqual({
+      Whiteboard_InspectWidget: 'state',
+      Whiteboard_OperateWidget: 'state',
+      Whiteboard_CallWidget: 'state',
+    });
+  });
+
+  it('no other shipped channel has a verb that returns channel data (the media verbs only act and report an id)', () => {
+    for (const channel of [new RealtimeMediaChannel()]) {
       expect(channel.GetDescriptor().Verbs.filter((v) => v.ReturnsChannelData)).toEqual([]);
     }
   });

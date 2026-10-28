@@ -47,7 +47,8 @@ The package is organized in layers, each usable on its own:
 | **Tool API** | `whiteboard-tools.ts` | The `Whiteboard_*` JSON tool definitions + `ApplyWhiteboardAgentTool`, the pure execute-one-call round-trip. |
 | **Components** | `whiteboard-*.component.ts` | Host (full surface), board (canvas), toolbar, zoom cluster, "What the agent sees" popover, read-only snapshot. All standalone. |
 | **Export** | `whiteboard-export.ts` | Pure builders for a self-contained HTML document and a standalone SVG. |
-| **Widget bridge** | `whiteboard-widget-bridge.ts` | The `MJWhiteboard.submit` postMessage contract for sandboxed HTML widgets. |
+| **Widget bridge** | `whiteboard-widget-bridge.ts` | The in-frame helper injected into every sandboxed HTML widget: `MJWhiteboard.submit`, the ambient recorder, and the frame's half of the two-way protocol (inspect / operate / call / state). |
+| **Widget protocol + broker** | `whiteboard-widget-protocol.ts`, `whiteboard-widget-broker.ts` | The host half of the two-way protocol: wire markers, validators, caps, deadlines, error codes, and `WhiteboardWidgetBroker` (per-widget request/reply queue). Angular-free. |
 | **Context menu** | `whiteboard-context-menu.ts` | The pure right-click menu model (what is offered per item kind). |
 
 ## Core Concepts
@@ -112,6 +113,8 @@ The serialized shape is **version 2 (paged)**:
 The host renders the complete experience: header (title, saved chip, ownership legend, "What [Agent] sees" popover, Focus toggle, export menu), the canvas with floating toolbar, page strip + zoom cluster, the agent-action toast with Undo, and the status footer.
 
 **Narrowing the tools.** Pass `[ToolRoster]="['select','pan','pen','sticky','text','eraser']"` to offer a subset; `null` (the default) is all eleven. The roster governs **which tools are available**, and it closes every door to a tool it leaves out: the toolbar button, the single-letter keyboard shortcut, and the canvas right-click "add … here" action. Gating only the toolbar would be the CSS hack with a nicer API — the keyboard and the context menu were exactly how a hidden tool stayed reachable. If the active tool leaves the roster the host moves to `select`, or to the roster's first entry when `select` is not on it, and a request to switch to a tool that is not on the roster is ignored rather than redirected. An empty roster (or one naming no real tool) narrows the palette to nothing and lands the active tool on `select` — the board always holds a tool, and `select` is the one that can create nothing. It still does **not** make the board read-only; that is `[ReadOnly]="true"`, a separate input on the same host.
+
+The roster is the **user's** palette only. How far the **agent** may reach into live HTML widgets is a separate input, `[AgentWidgetAccess]` (`'full'` | `'inspect-only'` | `'off'`, see [Agent widget access](#agent-widget-access)); neither one affects the other.
 
 What the roster does **not** do: it is not a content policy. It does not restrict what already exists on the board or what an agent places, and it does not gate authoring on existing items — Duplicate, z-order, Delete and pasting an image all keep working regardless of the roster. The one exception is **Restyle…**, which is hidden when the roster omits `text`: Restyle opens the text tool's style flyout, so without that tool the entry would be present and do nothing. That is the other axis: `[ReadOnly]="true"` renders the board with no toolbar and no keyboard, guards every mutation, and hides the agent toast's Undo — pan and zoom stay live, because reading a board you cannot change still means moving around it. The roster narrows *which tools*; ReadOnly decides *whether anything mutates*.
 
@@ -198,9 +201,11 @@ The agent-facing surface is intentionally transport-agnostic — it is just *nam
    `ApplyWhiteboardAgentTool` never throws — malformed args, unknown tools, unknown item IDs, and host-canceled operations all return `{ success: false, error }` so the model can self-correct conversationally. Each call runs as ONE undo batch (author `'agent'`).
 
    Prefer the host's `ApplyAgentTool(toolName, argsJson)` when a surface is bound — same round-trip plus the UI garnish (violet pop-in, action toast with Undo, gliding presence cursor).
+
+   The three **widget tools** talk to a live widget frame, so they need a rendered board and resolve asynchronously: route them to the host's `ApplyAgentToolAsync(toolName, argsJson): Promise<string>` (it accepts every tool, never rejects). The synchronous paths stay as they were and answer a widget tool with a structured failure instead: `ApplyWhiteboardAgentTool` returns `errorCode: 'surface_unavailable'`, the host's `ApplyAgentTool` returns `'async_required'`. `IsWhiteboardWidgetToolName(name)` tells the two kinds apart.
 3. **Feed perception.** Subscribe the host's `SceneDelta` output (debounced 750 ms, coalesced) and pipe each JSON delta into the agent's context as background information. Use `CurrentSeq` / `BuildSceneDelta(sinceToken)` directly if you manage your own cadence.
 
-The tool set: `AddNote`, `AddShape`, `AddText`, `AddMarkdown`, `AddHtml`, `UpdateContent`, `DrawConnector`, `Highlight`, `MoveItem`, `RemoveItem`, `StyleItem`, plus the page tools `AddPage` (`{ name? }` — create + switch), `SwitchPage` (`{ name }` — page name, case-insensitive, or id) and `RenamePage` (`{ name, newName }`) — see `WHITEBOARD_TOOL_NAMES` and the per-tool schemas in `whiteboard-tools.ts`. Item tools always target the **active page**; page-tool results carry `pageId` instead of `itemId`. Content sizes are capped (`WHITEBOARD_MARKDOWN_MAX_CHARS` = 32 000, `WHITEBOARD_HTML_MAX_CHARS` = 64 000).
+The tool set (18): `AddNote`, `AddShape`, `AddText`, `AddMarkdown`, `AddHtml`, `UpdateContent`, `DrawConnector`, `Highlight`, `MoveItem`, `RemoveItem`, `StyleItem`, `SetTag` (`{ itemId, tag? }` — set or clear an item's role tag; empty clears), the page tools `AddPage` (`{ name? }` — create + switch), `SwitchPage` (`{ name }` — page name, case-insensitive, or id) and `RenamePage` (`{ name, newName }`), and the widget tools `InspectWidget`, `OperateWidget` and `CallWidget` (`WHITEBOARD_WIDGET_TOOL_NAMES`, see [Agents and live widgets](#agents-and-live-widgets)) — see `WHITEBOARD_TOOL_NAMES` and the per-tool schemas in `whiteboard-tools.ts`. Item and widget tools always target the **active page**; page-tool results carry `pageId` instead of `itemId`. Content sizes are capped (`WHITEBOARD_MARKDOWN_MAX_CHARS` = 32 000, `WHITEBOARD_HTML_MAX_CHARS` = 64 000).
 
 > **Reference integration:** `@memberjunction/ng-conversations` wires this package into MJ realtime voice sessions as a pluggable channel (`RealtimeWhiteboardChannel`) and ships a saved-board artifact viewer — both are thin consumers of the APIs above.
 
@@ -238,7 +243,7 @@ board.ItemRemoving$.subscribe((e) => {
 | Before (cancelable) | After | Fired when |
 |---|---|---|
 | `ContentApplying` | `ContentApplied` | An in-board editor commit — inline sticky/text/shape edit, or the markdown/HTML rich editor's Apply/Done — is about to write to the engine. Args: `ItemID`, `Kind`, mutable `Content` (+ `Title` for HTML widgets). |
-| `WidgetSubmitting` | `WidgetSubmitted` | A sandboxed widget's `MJWhiteboard.submit(data)` passed validation. Cancel to drop the submission. |
+| `WidgetSubmitting` | `WidgetSubmitted` | A sandboxed widget's `MJWhiteboard.submit(data)` passed validation. Cancel to drop the submission. The event's optional `Author` is `'agent'` when an agent's widget command caused the submit (absent means the user). **Consumers that record or grade user answers should check it**: an agent operating a widget now produces real submits too. |
 
 `RealtimeWhiteboardHostComponent` **mirrors** all engine pairs as outputs (`ItemAdding`/`ItemAdded`, `ItemUpdating`/`ItemUpdated`, `ItemRemoving`/`ItemRemoved`) and **forwards** the board pairs — so template-driven consumers get the entire surface in one place. Mirrors re-emit synchronously, so `Cancel = true` set in a template handler still vetoes the engine mutation.
 
@@ -251,7 +256,7 @@ board.ItemRemoving$.subscribe((e) => {
   (WidgetSubmitted)="forwardToAgent($event)" />
 ```
 
-## Sandboxed HTML Widgets & the Input Bridge
+## Sandboxed HTML Widgets & the Two-Way Bridge
 
 HTML widgets are self-contained documents (inline CSS/JS) rendered inside an iframe whose `sandbox` attribute is **`allow-scripts` only**:
 
@@ -259,13 +264,121 @@ HTML widgets are self-contained documents (inline CSS/JS) rendered inside an ifr
 - Angular's sanitizer is bypassed *only* for the iframe `srcdoc` (the payload never touches the app's DOM). The trusted value is produced by the view-scoped `wbWidgetSrcdoc` pure pipe (`WhiteboardWidgetSrcdocPipe`), which fixes the lifecycle contract:
   - **Widget documents are rebuilt per mount.** Every time a frame is (re)created — switching whiteboard pages away and back, the viewport-lazy toggle, panel collapse/expand, whole-board re-creation — the new view gets a new pipe instance and a freshly built document, so a re-mounted widget always renders exactly what the first mount rendered. (Do not reintroduce a component-level per-item `SafeHtml` cache: a stale instance handed to a re-created frame means no `srcdoc` write and a blank widget.)
   - **Still-mounted widgets never reload on unrelated board activity.** For an unchanged `Html` source the pipe returns the identical `SafeHtml` instance, so whole-scene `'replace'` ops (page rename, undo/redo of other items, `LoadFromJSON` restores) cause no `srcdoc` rewrite and no iframe reload — widget runtime state survives. Only an actual content edit reloads the frame.
-- Off-screen widgets render as placeholders — live frames are only instantiated near the viewport. Re-entering the viewport re-creates the frame from a freshly built document (internal widget state resets — acceptable for board decorations).
+- Off-screen widgets render as placeholders — live frames are only instantiated near the viewport (`ShouldMountWidget`: near the viewport, or pinned mounted by an agent command). Re-entering the viewport re-creates the frame from a freshly built document, and the frame gets its **saved widget state** back on ready (see [Widget state](#widget-state-what-persists-and-where)), so a widget that keeps state, or relies on automatic form state, comes back where it was.
 
-The only way data flows out is `postMessage`, governed by the **input bridge**:
+The only way data flows between widget and host is `postMessage`, in both directions:
 
-1. `InjectWhiteboardSubmitHelper` prepends (idempotently) a tiny helper defining `window.MJWhiteboard.submit(data)` to every widget's srcdoc.
-2. The board owns a single `window` `'message'` listener and validates each event with `EvaluateWidgetSubmitMessage`: the bridge marker must be present, `event.source` must resolve to a *tracked* widget iframe (anything else is dropped), and the JSON-serialized payload is capped at `WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS` (8 000 chars).
-3. Accepted submissions flow through `WidgetSubmitting` (cancelable) → `WidgetSubmitted`.
+1. `InjectWhiteboardSubmitHelper` prepends (idempotently) ONE helper script to every widget's srcdoc. It defines the `MJWhiteboard` API below, the ambient interaction recorder, and the frame's half of the command channel.
+2. The board owns a single `window` `'message'` listener. Submissions are validated with `EvaluateWidgetSubmitMessage` (bridge marker present, `event.source` resolves to a *tracked* widget iframe, payload capped at `WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS` = 8 000 chars); ready / actions / state / reply messages with `EvaluateWidgetChannelMessage` (same source rule, shape-checked and size-capped). Anything else is dropped.
+3. Accepted submissions flow through `WidgetSubmitting` (cancelable) → `WidgetSubmitted`; protocol messages go to the board's `WhiteboardWidgetBroker`.
+4. Host → widget commands (`inspect` / `operate` / `call` / `restoreState` / `hello`) carry `__mjWhiteboardCommand`; the helper accepts them only from `parent`. The full wire contract is the table at the top of `whiteboard-widget-protocol.ts`.
+
+### The widget-author API (`MJWhiteboard`)
+
+Everything is optional. A widget that never calls the API still works: the agent can inspect and operate its controls, and its form state is kept automatically.
+
+| API | What it does |
+|---|---|
+| `MJWhiteboard.submit(data)` | Send an explicit submission to the host (`WidgetSubmitted`; MJ's channel forwards it to the agent). JSON-serialized, ≤ 8 000 chars. |
+| `MJWhiteboard.onAction(name, handler, description?)` / `offAction(name)` | Register (or remove) a named action the agent can call with `Whiteboard_CallWidget` — "drive it by meaning" (`next`, `reset`, `expand`). The handler gets the call's payload and may return a JSON value or a Promise of one; that is the tool result. Names match `^[A-Za-z][\w-]{0,39}$`, ≤ 30 actions, descriptions ≤ 200 chars. Changes are announced to the host (debounced 100 ms). |
+| `MJWhiteboard.setState(obj)` / `onRestore(fn)` | Declared state: save any JSON-serializable progress; `fn` gets it back (or `null`) **once per document** after a re-mount, page switch or session resume. A widget that registers `onRestore` owns its state fully: automatic form state is off for it. |
+| `MJWhiteboard.configure({ agentOperable, autoState })` | `agentOperable: false` refuses operate and call (`not_operable`); inspect still works. `autoState: false` turns off automatic form state. |
+| `data-mj-agent="off"` | On a control or any ancestor: the agent cannot operate it (`not_operable`); the outline marks it `[not operable]`. Use it for graded answers. |
+| `data-mj-keep-live` | On `<html>` or `<body>`: no automatic form state (form values are not kept across re-mounts). |
+
+```html
+<button aria-label="Next question" onclick="next()">Next</button>
+<script>
+  let q = 0;
+  function next() { q++; render(); MJWhiteboard.setState({ q }); }
+  MJWhiteboard.onAction('next', () => { next(); return { question: q }; }, 'Go to the next question');
+  MJWhiteboard.onRestore((saved) => { if (saved) { q = saved.q; render(); } });
+</script>
+```
+
+Give every control an `aria-label` or `name`: labels are how the agent targets controls and how the outline reads.
+
+**Automatic form state.** For a widget with no `onRestore` handler (most agent-written widgets), the helper captures form values itself — the same field identity as auto-submit (label or name; checkbox groups as arrays) — plus the **last submit** (`{ data, at }`). On re-mount it restores the fields that still exist and dispatches `input` + `change` so the widget's own code re-syncs. The restore is silent: no ambient notes, no auto-submit, no submissions, no state echo. Opt out with `data-mj-keep-live` or `configure({ autoState: false })`.
+
+### Agents and live widgets
+
+Three tools let an agent use a widget the way a person would, without rewriting its HTML (which would reload it and wipe the user's answers):
+
+| Tool | Args | Result (besides `success`, `itemId`, `summary`, `error`, `errorCode`) | Deadline |
+|---|---|---|---|
+| `Whiteboard_InspectWidget` | `itemId` | `outline` (controls with refs `f1`/`a1`, labels, current values), `actions` (`[{ name, description? }]`), `state?` (declared state, clipped), `answered?` (`{ at, data }`, the last submit) | 6 s |
+| `Whiteboard_OperateWidget` | `itemId`, `steps: [{ target, op, value? }]` (1–5) | `steps: [{ ok, errorCode?, error? }]`, the new `outline`, `submitted?` (data a submit triggered by the steps carried) | 9 s |
+| `Whiteboard_CallWidget` | `itemId`, `action`, `payload?` (JSON text or plain text) | `result` (the handler's return value) | 12 s |
+
+```text
+widget "Planet quiz"
+h2 "Question 1 of 3"
+f1 radio "Mercury" (group "answer") = unchecked
+f2 radio "Venus" (group "answer") = checked
+f3 range "Confidence" = 40 (0–100)
+f4 text "Card number" = [REDACTED, not writable]
+a1 button "Submit"
+a2 button "Hint" [disabled]
+```
+
+- **Targets** are a ref from the latest inspect, an exact label, a unique partial label, or a CSS selector; each step re-resolves its target when it runs. Ops: `click`, `set` (text / number / date), `select` (option label or value), `check`, `uncheck`, `focus`. Steps run in order and stop at the first failure. Values go through the prototype setter plus bubbling `input` + `change`, so framework-built widgets see a real change.
+- **What the user sees.** Inspect never moves the viewport: an off-screen widget is pinned mounted (`PinMount`) for the read, and the presence cursor reads "… is looking at …". Operate and call pan to the widget only if it is off-screen and the user isn't mid-gesture (`RevealItem`), ring each control they touch, and show a separate widget toast (`Ava clicked "Submit" in Planet quiz`) with **no Undo** — they are not board edits, so they never enter the undo history.
+- **Deadlines** run end to end from when the command is queued (queue wait, mount, ready handshake, the op itself): `WHITEBOARD_WIDGET_DEADLINES_MS`, all under the 15 s point where realtime models move on without a tool result. Commands to one widget run one at a time; different widgets run in parallel.
+- **Untrusted data.** Widget code shares its frame with the helper and can forge replies, so every outline, state and result is data for the model, never instructions (the tool descriptions say so).
+
+Error codes (`errorCode`, `WhiteboardWidgetErrorCode`):
+
+| Code | Meaning |
+|---|---|
+| `widget_not_found` | No such widget on the active page; when it is on another page the message says so and names `Whiteboard_SwitchPage`. |
+| `not_html` | The item is not an HTML widget. |
+| `surface_unavailable` | No rendered board (the pure `ApplyWhiteboardAgentTool`, or no surface bound). |
+| `async_required` | A widget tool was sent through the sync `ApplyAgentTool`. |
+| `widget_not_ready` / `widget_timeout` | The widget never reported ready / did not answer within the deadline. |
+| `widget_reloaded` / `widget_unmounted` | The widget's document reloaded, or its frame unmounted, while the command was in flight. |
+| `stale_ref` / `ambiguous_target` / `target_not_found` | The ref is from an older outline / a label matched several controls (the candidates are listed) / nothing matched. |
+| `disabled` / `not_operable` | The control is disabled or read-only / the widget or control opted out, or the field is protected. |
+| `unknown_action` / `action_failed` | No action by that name (registered names are listed) / the handler threw or returned something not JSON-serializable. |
+| `access_denied` / `vetoed` | The access policy does not allow this tool / the integration vetoed this one command. |
+| `invalid_args` | Missing or malformed arguments. |
+
+### Authorship: who submitted?
+
+`WhiteboardWidgetSubmitEvent` and `WhiteboardWidgetInteractionEvent` carry an optional `Author?: WhiteboardAuthor` — absent means `'user'`. It is `'agent'` only when all three checks agree:
+
+1. **In the frame, `isTrusted` first.** A real user event is trusted and tagged user. Events the agent's steps cause (including the trusted `input` / `change` / `submit` a scripted click fires synchronously) are tagged agent. An explicit `MJWhiteboard.submit` is agent only inside the agent's window and when the last input before it was the agent's.
+2. **The agent window.** The tag is only possible while an agent command runs and shortly after.
+3. **The host gate.** The board keeps `'agent'` only if its broker's window for that widget is open (`WHITEBOARD_WIDGET_AGENT_WINDOW_MS` = 1 750 ms after the command); otherwise it rewrites it to `'user'`.
+
+So widget code cannot make a learner's real click look like the agent's. Integrations use `Author` to avoid echo: MJ's channel sends no note for agent interactions or agent submits (the operate result already carries `submitted`).
+
+### Agent widget access
+
+`[AgentWidgetAccess]` on the host — `'full'` (default) | `'inspect-only'` | `'off'` — limits the widget tools; a refused call returns `access_denied` with a sentence saying what is still allowed. It is a normalizing setter (anything unrecognized reads as `'full'`), so an integration can assign it directly on a dynamically created host. Helpers: `NormalizeWhiteboardWidgetAccess`, `MinWhiteboardWidgetAccess` (`off < inspect-only < full`), `IsWhiteboardWidgetToolAllowed`. Widgets narrow it further per control with `data-mj-agent="off"` / `configure({ agentOperable: false })`.
+
+This is **not** `[ToolRoster]`: the roster narrows the **user's** drawing palette; `AgentWidgetAccess` governs what the **agent** may do inside widgets. MJ's realtime channel adds per-session config and subclass hooks on top (see the [Realtime Channels Guide](../../../../guides/REALTIME_CHANNELS_GUIDE.md#example-the-whiteboards-widget-keys)).
+
+### Widget state: what persists and where
+
+Widget state is **runtime data, not board content**. `WhiteboardState` keeps one opaque JSON string per widget (the helper's envelope of declared state, automatic fields and last submit, ≤ `WHITEBOARD_WIDGET_STATE_MAX_CHARS` = 4 000 chars) in a side map:
+
+| API | Purpose |
+|---|---|
+| `GetWidgetState(id)` / `SetWidgetState(id, json \| null)` | Read / set / clear one widget's state. Oversize values are refused, never clipped. |
+| `WidgetStatesToJSON()` | `Record<itemId, json>` for items that still exist on any page — what a host persists. |
+| `LoadWidgetStates(record)` | Replace (never merge) the whole map, typically right after `LoadFromJSON` on resume. |
+| `WidgetStateChanged$` | One `WhiteboardWidgetStateChangedEventArgs` (`ItemID`) per change; the host re-emits it as the `WidgetStateChanged` output. |
+| `FindItemPage(id)` | The page (`{ ID, Name }`) holding an item, searching every page. |
+
+What that means:
+
+- **Kept** across scrolling a widget away, page switches, panel collapse, and `UpdateContent` (new code reading the same keys continues). Undo of a single remove brings the state back.
+- **Not** in `ToJSON` / `LoadFromJSON`, undo snapshots, `Changed$` / the journal, LiveKit sync, or Save-to-artifact. Undo/redo of other edits never rewinds a widget, and peers and artifacts never see learner answers. `Clear` and page removal prune the removed items' entries; a newly minted item ID drops any stale entry.
+- **Across sessions** only if the host saves `WidgetStatesToJSON()` next to the board and calls `LoadWidgetStates` on restore. MJ's channel does this as a sibling `widgetStates` key in its session save (unless configured off).
+
+The host also forwards `WidgetActionsChanged` (`WhiteboardWidgetActionsChangedEventArgs`: item ID, title, actions) whenever a widget reports the actions it offers.
+
+**Privacy.** `type="password"` and `type="hidden"` fields are never in outlines, ambient notes, auto-submits or saved state. **Protected** fields (credit card, CVV, one-time code, SSN, password-like labels, `autocomplete="cc-*"` / `one-time-code`) show as `[REDACTED, not writable]` in outlines, can't be operated, and are never captured. Values are clipped; outlines are capped at 3 000 chars.
 
 Markdown panels are the *non-executing* sibling: rendered through the shared `mj-markdown` component on the live board (sanitized, no raw-HTML passthrough) and through an inert escape-first renderer in exports.
 
@@ -305,11 +418,19 @@ WhiteboardState, WhiteboardItem (union), WhiteboardItemInput, WhiteboardItemPatc
 WhiteboardChange, WhiteboardSceneDelta, WhiteboardSceneSummary, WHITEBOARD_DEFAULTS,
 WhiteboardItemAddingEventArgs / Added / Updating / Updated / Removing / Removed,
 WhiteboardPageInfo, WhiteboardScenePage,
-WhiteboardPageAddingEventArgs / Added / Switching / Switched / Renaming / Renamed / Removing / Removed
+WhiteboardPageAddingEventArgs / Added / Switching / Switched / Renaming / Renamed / Removing / Removed,
+WhiteboardWidgetStateChangedEventArgs
 
 // Tools
 WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES, WHITEBOARD_TOOL_PREFIX,
-WhiteboardToolDefinition, WhiteboardToolResult, ApplyWhiteboardAgentTool
+WhiteboardToolDefinition, WhiteboardToolResult, ApplyWhiteboardAgentTool,
+WHITEBOARD_WIDGET_TOOL_NAMES, IsWhiteboardWidgetToolName, WhiteboardWidgetAccess,
+NormalizeWhiteboardWidgetAccess, MinWhiteboardWidgetAccess, IsWhiteboardWidgetToolAllowed,
+WhiteboardWidgetActionsChangedEventArgs
+
+// Two-way widget protocol
+WhiteboardWidgetBroker, WhiteboardWidgetErrorCode, EvaluateWidgetChannelMessage,
+WHITEBOARD_WIDGET_DEADLINES_MS, WHITEBOARD_WIDGET_AGENT_WINDOW_MS, WHITEBOARD_WIDGET_STATE_MAX_CHARS
 
 // Components
 RealtimeWhiteboardHostComponent, RealtimeWhiteboardBoardComponent,

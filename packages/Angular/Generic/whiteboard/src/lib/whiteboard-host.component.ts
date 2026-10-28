@@ -7,14 +7,21 @@ import { Subscription } from 'rxjs';
 import {
   WhiteboardFontFamily, WhiteboardItemAddedEventArgs, WhiteboardItemAddingEventArgs,
   WhiteboardItemRemovedEventArgs, WhiteboardItemRemovingEventArgs,
-  WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState
+  WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState,
+  WhiteboardWidgetStateChangedEventArgs
 } from './whiteboard-state';
 import { WhiteboardTool, WhiteboardToolRoster, ClampToolToRoster, IsToolAllowed, SameRoster } from './whiteboard-tool-roster';
 import {
   BuildWhiteboardExportHtml, BuildWhiteboardExportHtmlAllPages, BuildWhiteboardExportSvg,
   BuildWhiteboardExportSvgPages
 } from './whiteboard-export';
-import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult } from './whiteboard-tools';
+import {
+  ApplyWhiteboardAgentTool, BuildWhiteboardWidgetCommandArgs, FormatWhiteboardWidgetToolFailure,
+  FormatWhiteboardWidgetToolResult, IsWhiteboardWidgetToolAllowed, IsWhiteboardWidgetToolName,
+  NormalizeWhiteboardWidgetAccess, ParseWhiteboardWidgetToolArgs, WHITEBOARD_TOOL_NAMES,
+  WhiteboardToolResult, WhiteboardWidgetAccess, WhiteboardWidgetActionsChangedEventArgs,
+  WhiteboardWidgetToolArgs, WhiteboardWidgetToolName
+} from './whiteboard-tools';
 import {
   RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence,
   WhiteboardContentAppliedEventArgs, WhiteboardContentApplyingEventArgs
@@ -22,6 +29,7 @@ import {
 import {
   WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
+import type { WhiteboardWidgetStep } from './whiteboard-widget-protocol';
 import { NormalizeWhiteboardPenPalette, RealtimeWhiteboardToolbarComponent, SameWhiteboardPenColor, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
@@ -32,6 +40,8 @@ const SCENE_DELTA_DEBOUNCE_MS = 750;
 const TOAST_MS = 6000;
 /** How long the presence cursor lingers after the agent's last board action. */
 const PRESENCE_MS = 4200;
+/** The host CSS custom property holding the agent (violet) accent — the operate feedback ring color. */
+const AGENT_ACCENT_PROPERTY = '--sage';
 
 /**
  * LIVE WHITEBOARD host (`mj-realtime-whiteboard-host`): board header (title / saved chip /
@@ -165,6 +175,24 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    */
   @Input() ReadOnly = false;
 
+  /**
+   * How far the agent may reach into live HTML widgets: `'full'` (default) inspects,
+   * operates and calls; `'inspect-only'` refuses operate / call; `'off'` refuses all three
+   * widget tools. Refusals come back as `errorCode: 'access_denied'`.
+   *
+   * A normalizing setter (anything unrecognized reads as `'full'`) rather than
+   * `ngOnChanges`: a realtime channel's `BindSurface` assigns it directly on a
+   * dynamically-created component, where no `ngOnChanges` fires.
+   */
+  @Input()
+  set AgentWidgetAccess(value: WhiteboardWidgetAccess) {
+    this._agentWidgetAccess = NormalizeWhiteboardWidgetAccess(value);
+  }
+  get AgentWidgetAccess(): WhiteboardWidgetAccess {
+    return this._agentWidgetAccess;
+  }
+  private _agentWidgetAccess: WhiteboardWidgetAccess = 'full';
+
   /** Debounced (750 ms), coalesced scene-delta JSON — the live perception feed. */
   @Output() SceneDelta = new EventEmitter<string>();
   /** The user clicked Undo on the agent-action toast (the undo itself already applied). */
@@ -200,6 +228,16 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Output() ContentApplying = new EventEmitter<WhiteboardContentApplyingEventArgs>();
   /** AFTER event (forwarded from the board): an editor commit applied. */
   @Output() ContentApplied = new EventEmitter<WhiteboardContentAppliedEventArgs>();
+  /**
+   * AFTER event (re-emitted from {@link WhiteboardState.WidgetStateChanged$}): a widget's
+   * saved runtime state changed. Integration layers persist it alongside the board.
+   */
+  @Output() WidgetStateChanged = new EventEmitter<WhiteboardWidgetStateChangedEventArgs>();
+  /**
+   * AFTER event (forwarded from the board): a widget reported the actions it offers, on
+   * ready and whenever they change. Integration layers tell their agent about them.
+   */
+  @Output() WidgetActionsChanged = new EventEmitter<WhiteboardWidgetActionsChangedEventArgs>();
 
   // Engine mutation mirrors — the same before/after events {@link WhiteboardState} raises,
   // re-emitted as component outputs so template-driven consumers can bind them without
@@ -298,6 +336,13 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   public ToastText: string | null = null;
   private toastPhrases: string[] = [];
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * The WIDGET toast ("Ava clicked “Submit” in Planet quiz"): what the agent did inside a
+   * widget. Separate from {@link ToastText} on purpose — it never merges with board-edit
+   * phrases and offers no Undo, because a widget action is not a board edit.
+   */
+  public WidgetToastText: string | null = null;
+  private widgetToastTimer: ReturnType<typeof setTimeout> | null = null;
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // perception feed state
@@ -331,7 +376,8 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       this.State.ItemUpdating$.subscribe((e) => this.ItemUpdating.emit(e)),
       this.State.ItemUpdated$.subscribe((e) => this.ItemUpdated.emit(e)),
       this.State.ItemRemoving$.subscribe((e) => this.ItemRemoving.emit(e)),
-      this.State.ItemRemoved$.subscribe((e) => this.ItemRemoved.emit(e))
+      this.State.ItemRemoved$.subscribe((e) => this.ItemRemoved.emit(e)),
+      this.State.WidgetStateChanged$.subscribe((e) => this.WidgetStateChanged.emit(e))
     );
     this.ticker = setInterval(() => {
       this.NowTick = Date.now();
@@ -351,6 +397,9 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     if (this.toastTimer) {
       clearTimeout(this.toastTimer);
     }
+    if (this.widgetToastTimer) {
+      clearTimeout(this.widgetToastTimer);
+    }
     if (this.presenceTimer) {
       clearTimeout(this.presenceTimer);
     }
@@ -368,6 +417,10 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * integration layer feeds back to the realtime model as the `tool_response`.
    */
   public ApplyAgentTool(toolName: string, argsJson: string): string {
+    if (IsWhiteboardWidgetToolName(toolName)) {
+      return FormatWhiteboardWidgetToolFailure('async_required',
+        `${toolName} talks to a live widget and runs asynchronously; call ApplyAgentToolAsync.`);
+    }
     const resultJson = ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
     let result: WhiteboardToolResult | null = null;
     try {
@@ -382,6 +435,63 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     }
     this.cdr.markForCheck();
     return resultJson;
+  }
+
+  /**
+   * Execute any of the whiteboard tools, including the three WIDGET tools
+   * (`Whiteboard_InspectWidget` / `OperateWidget` / `CallWidget`), which talk to a live
+   * widget frame and therefore resolve asynchronously. Board tools take the same path as
+   * {@link ApplyAgentTool}. Always resolves with the result JSON; never rejects.
+   */
+  public async ApplyAgentToolAsync(toolName: string, argsJson: string): Promise<string> {
+    if (!IsWhiteboardWidgetToolName(toolName)) {
+      return this.ApplyAgentTool(toolName, argsJson);
+    }
+    try {
+      return await this.applyWidgetTool(toolName, argsJson);
+    }
+    catch (err) {
+      // The broker never rejects; this guards the garnish so a UI fault can't drop a tool result.
+      const message = err instanceof Error ? err.message : String(err);
+      return FormatWhiteboardWidgetToolFailure('action_failed', `The widget command failed: ${message}`);
+    }
+  }
+
+  private async applyWidgetTool(toolName: WhiteboardWidgetToolName, argsJson: string): Promise<string> {
+    if (!IsWhiteboardWidgetToolAllowed(this._agentWidgetAccess, toolName)) {
+      return FormatWhiteboardWidgetToolFailure('access_denied', this.widgetAccessDeniedMessage());
+    }
+    const parsed = ParseWhiteboardWidgetToolArgs(toolName, argsJson);
+    if (parsed.Ok === false) {
+      return FormatWhiteboardWidgetToolFailure('invalid_args', parsed.Error, parsed.ItemID);
+    }
+    const board = this.Board;
+    if (!board) {
+      return FormatWhiteboardWidgetToolFailure('surface_unavailable', 'The whiteboard is not rendered yet; try again in a moment.');
+    }
+    const args = parsed.Args;
+    const acting = args.Op !== 'inspect';
+    this.showWidgetPresence(args.ItemID, acting);
+    const outcome = await board.SendWidgetCommand({
+      ItemID: args.ItemID,
+      Op: args.Op,
+      Args: BuildWhiteboardWidgetCommandArgs(args, acting ? this.resolveAgentRingColor() : null),
+      Reveal: acting,
+      ByAgent: true
+    });
+    const resultJson = FormatWhiteboardWidgetToolResult(args, outcome, this.widgetTitle(args.ItemID));
+    if (acting && outcome.Ok) {
+      this.maybeShowWidgetToast(args, resultJson);
+    }
+    this.cdr.markForCheck();
+    return resultJson;
+  }
+
+  /** The `access_denied` message: what the current {@link AgentWidgetAccess} still allows. */
+  private widgetAccessDeniedMessage(): string {
+    return this._agentWidgetAccess === 'off'
+      ? 'Widget access is off for this session: you cannot inspect, operate or call widgets.'
+      : 'Widget access is inspect-only for this session: you can read widgets with Whiteboard_InspectWidget but not operate or call them.';
   }
 
   // ────────────────────────────────────────────── header actions
@@ -696,7 +806,107 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  private showAgentPresence(itemId: string | undefined): void {
+  /**
+   * Move the presence cursor to a widget the agent is reading ("… is looking at …") or
+   * driving ("… is using …"). Only for a widget on the active page; never moves the viewport.
+   */
+  private showWidgetPresence(itemId: string, acting: boolean): void {
+    const item = this.State.GetItem(itemId);
+    if (!item || item.Kind !== 'html') {
+      return;
+    }
+    const verb = acting ? 'is using' : 'is looking at';
+    this.showAgentPresence(itemId, `${this.AgentName} ${verb} ${this.widgetDisplayName(itemId)}`);
+    this.cdr.markForCheck();
+  }
+
+  /** The widget's header title, or `''` (for result summaries). */
+  private widgetTitle(itemId: string): string {
+    const item = this.State.GetItem(itemId);
+    return item && item.Kind === 'html' ? item.Title ?? '' : '';
+  }
+
+  /** How a widget is named in presence labels and toasts: its title, else its ID. */
+  private widgetDisplayName(itemId: string): string {
+    return this.widgetTitle(itemId) || itemId;
+  }
+
+  /**
+   * The operate feedback ring's color, resolved at RUNTIME from the host's agent accent
+   * token (so it follows the theme and no color literal lives in code). `null` when the
+   * token doesn't resolve to a concrete color here (the helper then uses its default).
+   */
+  private resolveAgentRingColor(): string | null {
+    try {
+      const value = getComputedStyle(this.host.nativeElement).getPropertyValue(AGENT_ACCENT_PROPERTY).trim();
+      return value && !value.includes('var(') ? value : null;
+    }
+    catch {
+      return null;
+    }
+  }
+
+  /** Show the widget toast for an operate / call that changed something. */
+  private maybeShowWidgetToast(args: WhiteboardWidgetToolArgs, resultJson: string): void {
+    let result: WhiteboardToolResult | null = null;
+    try {
+      result = JSON.parse(resultJson) as WhiteboardToolResult;
+    }
+    catch {
+      result = null;
+    }
+    const phrase = result ? RealtimeWhiteboardHostComponent.widgetPhrase(args, result) : null;
+    if (phrase) {
+      this.showWidgetToast(`${this.AgentName} ${phrase} in ${this.widgetDisplayName(args.ItemID)}`);
+    }
+  }
+
+  private showWidgetToast(text: string): void {
+    this.WidgetToastText = text;
+    if (this.widgetToastTimer) {
+      clearTimeout(this.widgetToastTimer);
+    }
+    this.widgetToastTimer = setTimeout(() => {
+      this.widgetToastTimer = null;
+      this.WidgetToastText = null;
+      this.cdr.markForCheck();
+    }, TOAST_MS);
+  }
+
+  /**
+   * What the agent did, for the widget toast: the last step that ran (`clicked "Submit"`),
+   * `ran N steps`, or `ran "next"` for a call. `null` when nothing ran.
+   */
+  private static widgetPhrase(args: WhiteboardWidgetToolArgs, result: WhiteboardToolResult): string | null {
+    if (args.Op === 'call') {
+      return result.success ? `ran "${args.Action}"` : null;
+    }
+    if (args.Op !== 'operate') {
+      return null;
+    }
+    const ran = (result.steps ?? []).filter((s) => s.ok).length;
+    if (ran === 0) {
+      return null;
+    }
+    const step = args.Steps[ran - 1];
+    const phrase = RealtimeWhiteboardHostComponent.stepPhrase(step);
+    return ran > 1 ? `${phrase} (${ran} steps)` : phrase;
+  }
+
+  /** One step as a toast fragment; a bare ref (`f7`) reads as "a control" rather than leaking an ID. */
+  private static stepPhrase(step: WhiteboardWidgetStep): string {
+    const name = /^[fa]\d+$/.test(step.Target) ? 'a control' : `"${step.Target}"`;
+    switch (step.Op) {
+      case 'click': return `clicked ${name}`;
+      case 'set': return `set ${name}`;
+      case 'select': return step.Value ? `picked "${step.Value}"` : `picked ${name}`;
+      case 'check': return `checked ${name}`;
+      case 'uncheck': return `unchecked ${name}`;
+      default: return `focused ${name}`;
+    }
+  }
+
+  private showAgentPresence(itemId: string | undefined, label?: string): void {
     let x = 480;
     let y = 220;
     const item = itemId ? this.State.GetItem(itemId) : undefined;
@@ -705,7 +915,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       x = b.X + b.W + 14;
       y = b.Y + b.H / 2 - 13;
     }
-    this.AgentPresence = { Active: true, X: x, Y: y, Label: `${this.AgentName} is drawing…` };
+    this.AgentPresence = { Active: true, X: x, Y: y, Label: label ?? `${this.AgentName} is drawing…` };
     if (this.presenceTimer) {
       clearTimeout(this.presenceTimer);
     }
