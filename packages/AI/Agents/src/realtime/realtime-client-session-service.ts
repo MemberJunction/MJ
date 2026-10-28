@@ -2846,8 +2846,8 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const directTools = this.projectDirectActions(input, effectiveConfig, driverClass);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools, memoryContext);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -3013,6 +3013,10 @@ export class RealtimeClientSessionService {
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona source).
+     * @param hasDirectTools Whether direct action/channel tools are projected onto the session.
+     * @param memoryContext The memory/context block when the caller already assembled it (as
+     *   {@link buildSessionParams} does); omitted, it is assembled here. Last and optional so overrides
+     *   written against the earlier signature (bizapps-caliber's persona seam) keep working.
      * @returns The concatenated system prompt (never empty — the framing is always present).
      */
     protected async buildCompanionSystemPrompt(
@@ -3021,7 +3025,8 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
-        hasDirectTools = false
+        hasDirectTools = false,
+        memoryContext?: string
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -3041,9 +3046,9 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        const memory = memoryContext ?? await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memory]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
@@ -3789,11 +3794,17 @@ export class RealtimeClientSessionService {
      * @returns The active action entities assigned to the agent.
      */
     protected getTargetAgentActions(targetAgentID: string): MJActionEntityExtended[] {
-        const agentActions = (AIEngine.Instance.AgentActions ?? []).filter(
-            aa => UUIDsEqual(aa.AgentID, targetAgentID) && aa.Status === 'Active'
-        );
-        return (ActionEngineServer.Instance.Actions ?? []).filter(a =>
-            agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
+        const activeActionIds = new Set<string>();
+        for (const aa of AIEngine.Instance.AgentActions ?? []) {
+            if (aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID) && aa.ActionID) {
+                activeActionIds.add(NormalizeUUID(aa.ActionID));
+            }
+        }
+        if (activeActionIds.size === 0) {
+            return [];
+        }
+        return (ActionEngineServer.Instance.Actions ?? []).filter(
+            a => a.Status === 'Active' && activeActionIds.has(NormalizeUUID(a.ID))
         );
     }
 
@@ -3972,8 +3983,8 @@ export class RealtimeClientSessionService {
         }
 
         const projection = input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID) : undefined;
-        const candidateWireMap = this.BuildWireActionMap(this.getTargetAgentActions(target.ID));
-        const action = this.findWireAction(projection, call.ToolName) ?? this.findWireAction(candidateWireMap, call.ToolName);
+        const action = this.findWireAction(projection, call.ToolName)
+            ?? this.findWireAction(this.BuildWireActionMap(this.getTargetAgentActions(target.ID)), call.ToolName);
 
         if (!action) {
             return {
@@ -4067,8 +4078,17 @@ export class RealtimeClientSessionService {
         if (!wireMap) {
             return undefined;
         }
+        const exact = wireMap.get(toolName);
+        if (exact) {
+            return exact;
+        }
         const wanted = toolName.trim().toLowerCase();
-        return wireMap.get(toolName) ?? Array.from(wireMap.entries()).find(([wireName]) => wireName.toLowerCase() === wanted)?.[1];
+        for (const [wireName, action] of wireMap.entries()) {
+            if (wireName.toLowerCase() === wanted) {
+                return action;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -4079,7 +4099,15 @@ export class RealtimeClientSessionService {
         projection: Map<string, MJActionEntityExtended> | undefined,
         action: MJActionEntityExtended
     ): boolean {
-        return !projection || Array.from(projection.values()).some(projected => UUIDsEqual(projected.ID, action.ID));
+        if (!projection) {
+            return true;
+        }
+        for (const projected of projection.values()) {
+            if (UUIDsEqual(projected.ID, action.ID)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

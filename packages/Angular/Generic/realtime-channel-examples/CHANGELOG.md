@@ -1,5 +1,32 @@
 # @memberjunction/ng-realtime-channel-examples
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [709de1a]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [914e6ff]
+- Updated dependencies [1141164]
+- Updated dependencies [a610c6e]
+- Updated dependencies [cb1e602]
+- Updated dependencies [c4645bc]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [5931f0d]
+- Updated dependencies [c159f99]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/realtime-runtime@6.2.0-edge.6
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes
