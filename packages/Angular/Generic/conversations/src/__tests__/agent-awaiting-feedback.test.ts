@@ -126,6 +126,8 @@ interface DetailStub {
     Status: string;
     Message: string;
     Error?: string | null;
+    IsSaved?: boolean;
+    Load?: (id: string) => Promise<boolean>;
 }
 
 interface AppliedUpdate {
@@ -140,17 +142,31 @@ interface FailureHarness {
     userMessage: DetailStub;
     updates: AppliedUpdate[];
     watchesStarted: string[];
+    settled: Array<{ detailId: string; message: string }>;
     apply(result: ExecuteAgentResult | null | undefined, failedVerb?: string): Promise<void>;
 }
 
 function buildFailureHarness(): FailureHarness {
-    const agentBubble: DetailStub = { ID: 'detail-agent', Status: 'In-Progress', Message: '' };
+    // The server writes the reply, so on the post-ACK path the component reloads the row it
+    // wrote (IsSaved + Load) before deciding whether the run is still live; the stub stays
+    // In-Progress on reload, which is the "still running" case.
+    const agentBubble: DetailStub = { ID: 'detail-agent', Status: 'In-Progress', Message: '', IsSaved: true, Load: async () => true };
     const userMessage: DetailStub = { ID: 'detail-user', Status: 'In-Progress', Message: 'do the thing' };
     const updates: AppliedUpdate[] = [];
     const watchesStarted: string[] = [];
+    const settled: Array<{ detailId: string; message: string }> = [];
 
     const component = Object.create(MessageInputComponent.prototype) as MessageInputComponent;
     Object.assign(component as unknown as Record<string, unknown>, {
+        MessageSent: { emit: (): void => undefined },
+        inFlightWatches: new Map<string, ReturnType<typeof setTimeout>>(),
+        markMessageComplete: (): void => undefined,
+        // A genuine failure settles the reply the server wrote: Error status, the failure text.
+        settleReply: async (detail: DetailStub, message: string): Promise<void> => {
+            settled.push({ detailId: detail.ID, message });
+            detail.Message = message;
+            detail.Status = 'Error';
+        },
         updateConversationDetail: async (
             detail: DetailStub,
             message: string,
@@ -183,6 +199,7 @@ function buildFailureHarness(): FailureHarness {
         userMessage,
         updates,
         watchesStarted,
+        settled,
         apply: (result, failedVerb) =>
             apply(
                 agentBubble as unknown as MJConversationDetailEntity,
@@ -260,10 +277,12 @@ describe('MessageInputComponent.applyAgentFailureToDetail — an awaiting run is
             agentRun: { Status: 'Failed', ErrorMessage: 'Pipeline blew up' },
         } as unknown as ExecuteAgentResult);
 
-        const bubbleUpdate = harness.updates.find((u) => u.detailId === 'detail-agent');
-        expect(bubbleUpdate?.status).toBe('Error');
-        expect(bubbleUpdate?.message).toContain('Pipeline blew up');
-        expect(harness.agentBubble.Error).toBe('Pipeline blew up');
+        // A genuine failure settles the reply the server wrote — never the awaiting path.
+        expect(harness.settled).toHaveLength(1);
+        expect(harness.settled[0].detailId).toBe('detail-agent');
+        expect(harness.settled[0].message).toContain('Pipeline blew up');
+        expect(harness.agentBubble.Status).toBe('Error');
+        expect(harness.updates.find((u) => u.detailId === 'detail-agent')).toBeUndefined();
     });
 
     it('still keeps a post-ACK disconnect In-Progress and starts the watch', async () => {
@@ -275,7 +294,11 @@ describe('MessageInputComponent.applyAgentFailureToDetail — an awaiting run is
             requestAcknowledged: true,
         } as unknown as ExecuteAgentResult);
 
-        expect(harness.updates.find((u) => u.detailId === 'detail-agent')?.status).toBe('In-Progress');
+        // Still running on the server: the bubble keeps In-Progress (on screen only) and the
+        // watch follows the row until the server writes a terminal status.
+        expect(harness.agentBubble.Status).toBe('In-Progress');
+        expect(harness.agentBubble.Message).toContain('still running');
         expect(harness.watchesStarted).toEqual(['detail-agent']);
+        expect(harness.settled).toHaveLength(0);
     });
 });

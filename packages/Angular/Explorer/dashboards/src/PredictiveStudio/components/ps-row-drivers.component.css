@@ -1,0 +1,24 @@
+.pg-detail-drivers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pg-detail-driver-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+}
+
+.pg-detail-driver-label {
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

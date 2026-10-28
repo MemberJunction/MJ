@@ -156,7 +156,11 @@ describe('the pipeline gates use the floor', () => {
 
     it('PKClassify sheds the tail on a small heap the fraction cannot protect', async () => {
         // 30 objects: the gate is read every 25, so the last 5 are shed.
-        const objects = Array.from({ length: 30 }, (_, i) => ({ ID: `o${i}`, Name: `Obj${i}` }));
+        const objects = Array.from({ length: 30 }, (_, i) => {
+            const o: Record<string, unknown> = { ID: `o${i}`, Name: `Obj${i}`, Status: 'Active' };
+            o.Get = (c: string) => o[c] ?? null;
+            return o;
+        });
         vi.spyOn(IntegrationEngineBase, 'Instance', 'get').mockReturnValue({
             Config: async () => undefined,
             RefreshCatalog: async () => undefined,
@@ -166,7 +170,16 @@ describe('the pipeline gates use the floor', () => {
         const opts = {
             CompanyIntegration: { ID: 'CI-1', IntegrationID: 'INT-1' },
             ContextUser: { ID: 'U-1' },
-            Provider: {},
+            // The stage reads through the catalog writer, which queries per call: the objects in
+            // scope, then ONE key scan that reports every object as already keyed.
+            Provider: {
+                RunView: async (p: { EntityName: string }) => ({
+                    Success: true,
+                    Results: p.EntityName === 'MJ: Integration Objects'
+                        ? objects
+                        : objects.map(o => ({ IntegrationObjectID: o.ID, IsPrimaryKey: true })),
+                }),
+            },
         } as unknown as ConnectorCreationPipelineOptions;
         const emitter = makeEmitter();
 

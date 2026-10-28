@@ -361,14 +361,33 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
   return this.CombineMultipleSQLFiles(files);
  }
  
+ /**
+  * Refreshes an entity's base view so its cached column list matches the objects it selects from.
+  * For a LAYERED entity the CodeGen-owned inner view is refreshed first and the application-owned
+  * outer view second: the outer view selects from the inner one, so refreshing it first would bind
+  * it to the inner view's stale column list (#4336). The outer refresh is skipped while the outer
+  * view does not exist yet (the bootstrap pass of a newly layered entity). Returns false when any
+  * refresh failed.
+  */
  public async RecompileSingleBaseView(ds: CodeGenConnection, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
   try {
     if (!this.dbProvider.NeedsViewRefresh) {
       return true;
     }
-    const refreshSQL = this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
-    await this.ExecuteSQLScript(ds, refreshSQL, false);
-    return true;
+    const outerRefresh = this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+    const statements: string[] = entity.HasLayeredBaseView
+      ? [
+          this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName),
+          this.dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.BaseView, outerRefresh.trim()),
+        ]
+      : [outerRefresh];
+    let success = true;
+    for (const statement of statements) {
+      if (!await this.ExecuteSQLScript(ds, statement, false)) {
+        success = false;
+      }
+    }
+    return success;
   }
   catch (e) {
     logError(e as string);
@@ -476,14 +495,26 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
    return failures.length === 0;
  }
  
+ /**
+  * Executes every file, in order, even after one fails, so a single run surfaces every broken
+  * object instead of stopping at the first (each provider logs its own failures). Returns false
+  * when any file failed.
+  */
  public async ExecuteSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {
+    const failedFiles: string[] = [];
     for (const filePath of filePaths) {
        const startTime = Date.now();
-       if (!await this.ExecuteSQLFile(filePath))
-          return false;
+       const ok = await this.ExecuteSQLFile(filePath);
+       if (!ok) {
+          failedFiles.push(filePath);
+       }
        const endTime = Date.now();
        if (outputMessages)
-          console.log(`      Executed ${filePath} in ${endTime - startTime}ms`);
+          console.log(`      ${ok ? 'Executed' : 'FAILED'} ${filePath} in ${endTime - startTime}ms`);
+    }
+    if (failedFiles.length > 0) {
+       logError(`${failedFiles.length} of ${filePaths.length} SQL file(s) had failures:\n${failedFiles.map(f => `  - ${path.basename(f)}`).join('\n')}`);
+       return false;
     }
     return true;
  }
@@ -515,12 +546,12 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
     fs.writeFileSync(scriptFilePath, scriptText);
 
     LogIf(configInfo.verboseOutput, `Executing batch SQL script: ${scriptFilePath}`);
-    await this.ExecuteSQLFile(scriptFilePath);
+    const success = await this.ExecuteSQLFile(scriptFilePath);
 
     // Remove the temporary file
     AttemptDeleteFile(scriptFilePath, 3, 2000); // don't await this, just fire and forget
 
-    return true;
+    return success;
   } 
   catch (error) {
     console.error(error);

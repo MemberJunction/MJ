@@ -58,11 +58,12 @@
             <span class="ls__hint">The sign-in button is a stand-in. The real one opens your sign-in provider.</span>
           </div>
 
-          <div class="ls__frame" [class.ls__frame--phone]="Stacked" [style]="FrameStyle">
+          <div class="ls__frame" #frame [class.ls__frame--phone]="Stacked" [style]="FrameStyle">
             <!-- Clicking the page selects what was clicked: a block (it stops the click), the sign-in column,
                  or else the story panel, which in the centered layout is the whole background. -->
             <div class="lp" [class.lp--reverse]="Design.Layout === 'split-reverse'" [class.lp--centered]="Design.Layout === 'centered'"
                  [class.lp--stacked]="Stacked" [class.lp--surface-on]="Surface === 'Banner' && Design.Layout === 'centered'"
+                 [style.transform]="Stacked ? null : 'scale(' + DesktopScale + ')'"
                  (click)="SelectSurface('Banner', $event)">
               <div class="lp__banner" [class.lp__banner--center]="Design.Alignment === 'center' || Stacked"
                    [class.lp__surface-on]="Surface === 'Banner' && Design.Layout !== 'centered'">

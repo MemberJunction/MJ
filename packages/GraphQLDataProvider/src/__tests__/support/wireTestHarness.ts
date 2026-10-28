@@ -22,6 +22,8 @@ import {
     BaseEntity,
     EntityField,
     EntityInfo,
+    RunQueryParams,
+    RunQueryResult,
     RunViewParams,
     RunViewResult,
     UserInfo,
@@ -103,6 +105,14 @@ export class WireTestGraphQLProvider extends GraphQLDataProvider {
      */
     public CallResolvePrimaryKeyField(entity: BaseEntity, keyFieldName: string, keyColumnCount: number): EntityField {
         return this.ResolvePrimaryKeyField(entity, keyFieldName, keyColumnCount);
+    }
+
+    public CallInternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.InternalRunQuery(params, contextUser);
+    }
+
+    public CallInternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        return this.InternalRunQueries(params, contextUser);
     }
 }
 

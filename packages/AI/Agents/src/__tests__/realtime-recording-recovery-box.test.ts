@@ -18,7 +18,8 @@ import { BoxFileStorage } from '@memberjunction/storage';
 import { RecoverRealtimeRecordingFromSegments, WriteRealtimeRecordingSegment } from '../realtime/realtime-recording-store';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
-const SESSION = 'sess-box';
+const SESSION = '11111111-2222-4333-8444-666666666666';
+const BOX_FILE = '77777777-8888-4999-8aaa-bbbbbbbbbbbb';
 const FOLDER = `realtime-recordings/${SESSION}`;
 const user = {} as UserInfo;
 
@@ -110,6 +111,17 @@ interface SessionRow { RecordingFileID: string | null }
 class FakeProvider {
     public readonly Row: SessionRow = { RecordingFileID: null };
     public readonly Links: string[] = [];
+    public readonly MJCoreSchemaName = '__mj';
+    public readonly Dialect = {
+        ProcedureCallSyntax: (schema: string, name: string, params: string[]): string => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
+        ParameterPlaceholder: (index: number): string => `@p${index}`,
+    };
+    /** The recording file is stamped only through the ledger proc, as in production. */
+    public async ExecuteSQL(sql: string, params?: unknown[]): Promise<unknown[]> {
+        if (!sql.includes('spStampAIAgentSessionRecordingFile')) return [];
+        if (params?.[1] != null) this.Row.RecordingFileID = params[1] as string;
+        return [{ RecordingStatus: null }];
+    }
     public EntityByName(name: string): { ID: string } | undefined { return name === 'MJ: AI Agent Sessions' ? { ID: 'ent-sessions' } : undefined; }
     public async GetEntityObject(name: string): Promise<unknown> {
         if (name === 'MJ: File Entity Record Links') {
@@ -119,10 +131,9 @@ class FakeProvider {
         }
         const row = this.Row;
         const s = {
-            RecordingFileID: null as string | null, RecordingMedia: null as string | null, RecordingStartedAt: null as Date | null,
+            ID: SESSION, RecordingFileID: null as string | null,
             LatestResult: { CompleteMessage: '' },
             async Load() { s.RecordingFileID = row.RecordingFileID; return true; },
-            async Save() { row.RecordingFileID = s.RecordingFileID; return true; },
         };
         return s;
     }
@@ -146,7 +157,7 @@ beforeEach(() => {
     uploadFileMock.mockReset();
     uploadFileMock.mockImplementation(async (args: { fileName: string; content: Buffer; mimeType: string }) => {
         const ok = await driver.PutObject(`${FOLDER}/${args.fileName}`, args.content, args.mimeType);
-        return ok ? { FileID: 'file-box-1' } : { FileID: null, ErrorMessage: 'put failed' };
+        return ok ? { FileID: BOX_FILE } : { FileID: null, ErrorMessage: 'put failed' };
     });
 });
 
@@ -182,7 +193,7 @@ describe('RecoverRealtimeRecordingFromSegments on Box', () => {
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
 
         expect(result.Outcome).toBe('Recovered');
-        expect(provider.Row.RecordingFileID).toBe('file-box-1');
+        expect(provider.Row.RecordingFileID).toBe(BOX_FILE);
         expect(box.FileNames(FOLDER).filter((n) => n.startsWith('seg-'))).toEqual([]);
     });
 });
