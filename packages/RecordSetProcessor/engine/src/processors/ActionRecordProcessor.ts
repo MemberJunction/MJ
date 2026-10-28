@@ -77,11 +77,15 @@ export class ActionRecordProcessor implements IRecordProcessor {
             Filters: [],
         });
 
+        // The engine writes the log row fire-and-forget, so ActionExecutionLogID can name a row that does
+        // not exist yet. Pass the promise on without awaiting it: the tracker's queued detail write waits
+        // for the log row, and this record's loop slot does not (GenericProcessRunTracker.RecordResult).
         return {
             Status: result.Success ? 'Succeeded' : 'Failed',
             ResultPayload: ActionRecordProcessor.extractOutputs(result.Params),
             ErrorMessage: result.Success ? undefined : (result.Message ?? 'Action failed'),
             ActionExecutionLogID: result.LogEntry?.ID,
+            ActionExecutionLogPersisted: result.LogEntryPersisted,
         };
     }
 }

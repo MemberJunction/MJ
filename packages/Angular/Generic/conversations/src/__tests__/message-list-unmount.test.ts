@@ -309,4 +309,38 @@ describe('MessageListComponent — DOM unmount', () => {
     expect(constructed).toBe(1);
   });
 
+  it('unsubscribes all dynamic @Output() EventEmitter subscriptions when a mounted row is unmounted into a spacer (MJ-NG-6)', () => {
+    const messages = Array.from({ length: 40 }, (_, i) => detail(`d-${i}`, i + 1));
+    const h = createHarness(messages);
+    const unsubscribed: number[] = [];
+
+    h.createComponent.mockImplementation(() => ({
+      instance: new Proxy({} as Record<string, unknown>, {
+        get: (t, p: string) => (
+          p in t
+            ? t[p]
+            : {
+                subscribe: vi.fn().mockImplementation(() => ({
+                  unsubscribe: () => { unsubscribed.push(1); }
+                }))
+              }
+        ),
+        set: (t, p: string, v) => { t[p] = v; return true; }
+      }),
+      changeDetectorRef: { markForCheck: vi.fn(), detectChanges: vi.fn() },
+      location: { nativeElement: { offsetHeight: 140 } },
+      destroy: vi.fn()
+    }));
+
+    // Mount the top 20 items
+    h.open['computeMountedRange'] = () => ({ start: 0, end: 19 });
+    invokePrivate(h.component, 'updateMessages', messages);
+    expect(unsubscribed.length).toBe(0);
+
+    // Scroll to bottom so top 20 items are swapped for spacers via ensureSpacer -> destroyRenderedEntry
+    h.open['computeMountedRange'] = (t: unknown[]) => ({ start: t.length - 20, end: t.length - 1 });
+    invokePrivate(h.component, 'updateMessages', messages);
+    expect(unsubscribed.length).toBeGreaterThanOrEqual(20 * 20);
+  });
+
 });

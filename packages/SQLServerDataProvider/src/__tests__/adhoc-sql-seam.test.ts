@@ -18,10 +18,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 
 import { SQLExpressionValidator } from '@memberjunction/global';
-import type { RunQueryParams, RunQueryResult, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
+import type { RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import { SystemUserID } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
-import { TEST_USER } from './helpers/entity-fixtures';
+
+/**
+ * These tests cover how ad-hoc SQL is validated, paged, retried and shaped on SQL Server, over a
+ * mock connection with no entity metadata, so they run as the system user: a non-system caller's
+ * ad-hoc SQL must read only entity views it can read in full, which is covered in
+ * GenericDatabaseProvider's queryRun.fieldSecurity.test.ts.
+ */
+const SYSTEM_USER = new UserInfo(undefined, { ID: SystemUserID, Name: 'System', Email: 'system@example.com', IsActive: true, UserRoles: [] });
 
 /** Structural view of the provider's private surface the harness needs to seed. */
 interface ProviderPrivateSurface {
@@ -63,7 +72,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
     mssqlState.QueueResult({ rows: [{ ID: '1', Name: 'Alice' }] });
 
-    const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, SYSTEM_USER);
 
     expect(validatorSpy).toHaveBeenCalledTimes(1);
     expect(validatorSpy).toHaveBeenCalledWith(sqlText, 'sqlserver');
@@ -82,7 +91,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     ];
     mssqlState.QueueResult({ rows });
 
-    const result = await provider.RunQueryDirect({ SQL: 'SELECT ID, Name FROM __mj.vwUsers' }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: 'SELECT ID, Name FROM __mj.vwUsers' }, SYSTEM_USER);
 
     expect(result.Success).toBe(true);
     expect(result.QueryID).toBe('');
@@ -102,7 +111,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const expected = SQLExpressionValidator.Instance.ValidateFullQuery(badSQL, 'sqlserver');
     expect(expected.valid).toBe(false);
 
-    const result = await provider.RunQueryDirect({ SQL: badSQL }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: badSQL }, SYSTEM_USER);
 
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toBe(expected.error);
@@ -115,7 +124,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
   it('rejects multi-statement SQL injection attempts before execution', async () => {
     const provider = makeProvider();
 
-    const result = await provider.RunQueryDirect({ SQL: 'SELECT 1; DELETE FROM Users' }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: 'SELECT 1; DELETE FROM Users' }, SYSTEM_USER);
 
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toBeTruthy();
@@ -129,7 +138,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const sqlText = "SELECT COUNT(*) AS [Today's Count] FROM __mj.vwUsers WHERE Status = 'Active'";
     mssqlState.QueueResult({ rows: [{ "Today's Count": 3 }] });
 
-    const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, SYSTEM_USER);
 
     expect(result.Success).toBe(true);
     expect(mssqlState.Queries).toHaveLength(1);
@@ -142,7 +151,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     // provider's one-shot retry (covered by the next test).
     mssqlState.QueueResult({ error: new Error("Invalid column name 'Bogus'") });
 
-    const result = await provider.RunQueryDirect({ SQL: 'SELECT Bogus FROM __mj.vwUsers' }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: 'SELECT Bogus FROM __mj.vwUsers' }, SYSTEM_USER);
 
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toContain('Ad-hoc query execution failed');
@@ -158,7 +167,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     mssqlState.QueueResult({ error: new Error('Connection lost - socket dropped by load balancer') });
     mssqlState.QueueResult({ rows: [{ ID: '1' }] });
 
-    const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, SYSTEM_USER);
 
     expect(result.Success).toBe(true);
     expect(result.Results).toEqual([{ ID: '1' }]);
@@ -175,7 +184,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
 
     const result = await provider.RunQueryDirect(
       { SQL: 'SELECT ID FROM __mj.vwUsers', StartRow: 1, MaxRows: 2 },
-      TEST_USER,
+      SYSTEM_USER,
     );
 
     expect(result.Success).toBe(true);
@@ -195,7 +204,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
 
     const result = await provider.RunQueryDirect(
       { SQL: sqlText, QueryID: 'AAAAAAAA-0000-0000-0000-000000000001' },
-      TEST_USER,
+      SYSTEM_USER,
     );
 
     expect(validatorSpy).toHaveBeenCalledWith(sqlText, 'sqlserver');
@@ -212,7 +221,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
 
     const result = await provider.RunQueryDirect(
       { QueryID: 'AAAAAAAA-0000-0000-0000-000000000001' },
-      TEST_USER,
+      SYSTEM_USER,
     );
 
     // No metadata is loaded in this harness, so the saved-query path errors —

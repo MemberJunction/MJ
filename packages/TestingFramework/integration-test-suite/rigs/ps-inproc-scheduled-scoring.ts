@@ -40,6 +40,7 @@
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
+import { PromoteToPublished } from './lib/ps-promote';
 import {
   RunView,
   UserInfo,
@@ -389,10 +390,13 @@ async function main(): Promise<void> {
     modelId = trainResult.model.ID;
     console.log(`  Trained in ${Date.now() - trainStart}ms — modelId=${trainResult.model.ID} (status=${trainResult.model.Status}, version=${trainResult.model.Version})`);
     check(!!modelId, 'training produced a model id');
+    // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
+    console.log(`  promoted → ${await PromoteToPublished(provider, user, modelId, TAG)}`);
 
     // ── 3. Bind the model to a MONTHLY write-back schedule — ONE helper call ───
     banner('3. createScheduledModelScoring(...) — bind model → monthly RenewalScore write-back');
     const scheduled = await createScheduledModelScoring({
+      provider,
       modelId: modelId!,
       targetEntityName: 'Memberships',
       outputField: OUTPUT_FIELD,
@@ -470,7 +474,7 @@ async function main(): Promise<void> {
     // path now (we can't wait a month) and assert the column was written back.
     banner('6. RUN THE RECORD PROCESS NOW (RecordProcessExecutor.RunByID)');
     const runStart = Date.now();
-    const runResult = await new RecordProcessExecutor().RunByID(rp.ID, { contextUser: user, triggeredBy: 'OnDemand' });
+    const runResult = await new RecordProcessExecutor().RunByID(rp.ID, { ContextUser: user, TriggeredBy: 'OnDemand' });
     console.log(`  Run: Status=${runResult.Status} Processed=${runResult.Processed} Success=${runResult.Success} Error=${runResult.Error} Skipped=${runResult.Skipped} (${Date.now() - runStart}ms)`);
     check(runResult.Status === 'Completed', `run Status = 'Completed' (got '${runResult.Status}')`);
     check(runResult.Success > 0, `run scored > 0 records (Success=${runResult.Success})`);

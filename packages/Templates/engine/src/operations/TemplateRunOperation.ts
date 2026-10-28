@@ -55,6 +55,8 @@ export class TemplateRunServerOperation extends TemplateRunOperation {
             contentResult.Results[0],
             input.data ?? {},
             true /* skip validation for execution */,
+            undefined,
+            { ContextUser: user },
         );
         if (!result.Success) {
             throw new Error(result.Message ?? 'Template render failed');

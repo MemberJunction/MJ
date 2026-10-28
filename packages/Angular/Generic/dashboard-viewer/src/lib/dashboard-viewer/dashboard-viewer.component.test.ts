@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import type { ApplicationRef, ChangeDetectorRef, ElementRef, EnvironmentInjector, Injector } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import type { ResolvedLayoutConfig } from 'golden-layout';
 import type { DashboardPanel, PanelInteractionEvent } from '../models/dashboard-types';
+import type { DashboardPartContext, DashboardPartEventArgs, DashboardPartInterface } from '../models/dashboard-properties';
 import type { StackActionEvent } from '../services/golden-layout-wrapper.service';
 import { LayoutEditError } from '../models/dashboard-layout-editor';
 
@@ -98,6 +100,19 @@ vi.mock('@memberjunction/ng-base-types', () => ({
 vi.mock('@memberjunction/core', () => ({
   Metadata: {},
   RunView: class {},
+  // What the dashboard property code reads from core: a fixed zone, fixed-value defaults, and no type
+  // errors (the resolver and validator are tested against the real core in models/*.test.ts).
+  GetLocalTimeZone: () => 'UTC',
+  ResolvePropertyDefault: (def: { Value?: unknown }) => def.Value ?? null,
+  IsPropertyValueOfType: () => true,
+  ValidatePropertyDefault: () => [],
+  PROPERTY_VALUE_TYPES: ['string', 'number', 'boolean', 'date', 'uuid'],
+}));
+
+/** LoadPartInterface: what each part declares, for the save check. */
+const loadPartInterfaceMock = vi.fn();
+vi.mock('../models/dashboard-part-interfaces', () => ({
+  LoadPartInterface: (...args: unknown[]) => loadPartInterfaceMock(...args),
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -681,7 +696,11 @@ function showEveryPart(
 
 /** A part component that the viewer created with Angular's createComponent. */
 interface PartComponentDouble {
-  instance: { ConfigureRequested: Subject<void>; RemoveRequested: Subject<void>; NavigationRequested: Subject<void> };
+  instance: {
+    ConfigureRequested: Subject<void>; RemoveRequested: Subject<void>; NavigationRequested: Subject<void>;
+    PartEvent: Subject<DashboardPartEventArgs>; Provider?: IMetadataProvider | null;
+    Panel?: DashboardPanel; PropertyContext?: DashboardPartContext; WiredEvents?: string[];
+  };
   location: { nativeElement: HTMLElement };
   hostView: object;
   destroy: ReturnType<typeof vi.fn>;
@@ -717,7 +736,7 @@ describe('DashboardViewerComponent overlapping layout builds', () => {
     createComponentMock.mockReset();
     createComponentMock.mockImplementation((): PartComponentDouble => {
       const part: PartComponentDouble = {
-        instance: { ConfigureRequested: new Subject<void>(), RemoveRequested: new Subject<void>(), NavigationRequested: new Subject<void>() },
+        instance: { ConfigureRequested: new Subject<void>(), RemoveRequested: new Subject<void>(), NavigationRequested: new Subject<void>(), PartEvent: new Subject<DashboardPartEventArgs>() },
         location: { nativeElement: document.createElement('div') },
         hostView: {},
         destroy: vi.fn(),
@@ -999,6 +1018,27 @@ describe('DashboardViewerComponent overlapping layout builds', () => {
     expect(createPartInstanceMock).not.toHaveBeenCalled();
     expect(shown.at(-1)?.textContent).toContain(prompt);
   });
+
+  it("hands the viewer's provider to each part it creates", async () => {
+    const provider = { InstanceConnectionString: 'http://other-server/' } as unknown as IMetadataProvider;
+    const viewer = createViewer({ width: 800, height: 600 });
+    viewer.Provider = provider;
+    viewer.Dashboard = partsDashboard('dash-1', 'part-1', 'part-2');
+    await finishLayout();
+
+    expect(partComponents).toHaveLength(2);
+    expect(partComponents.map((part) => part.instance.Provider)).toEqual([provider, provider]);
+  });
+
+  it('leaves a part on its own default provider when the viewer has none, as before', async () => {
+    const viewer = createViewer({ width: 800, height: 600 });
+    viewer.Provider = null;
+    viewer.Dashboard = partsDashboard('dash-1', 'part-1');
+    await finishLayout();
+
+    expect(partComponents).toHaveLength(1);
+    expect('Provider' in partComponents[0].instance).toBe(false);
+  });
 });
 
 /** The ID of the View part type. */
@@ -1255,5 +1295,213 @@ describe('DashboardViewerComponent layout edits', () => {
         { panelId: 'L', interactionType: 'custom', payload: { action: 'remove-part-requested', panelTitle: 'Legacy', partTypeName: null } },
       ]);
     });
+  });
+});
+
+describe('DashboardViewerComponent properties, mappings and wires', () => {
+  let DashboardViewerComponent: typeof import('./dashboard-viewer.component').DashboardViewerComponent;
+  type Viewer = InstanceType<typeof DashboardViewerComponent>;
+  let partComponents: PartComponentDouble[];
+
+  const CHAPTER_A = 'chapter-a';
+  const CHAPTER_B = 'chapter-b';
+  const CHAPTER_C = 'chapter-c';
+  const chapterProperty = { Name: 'Chapter', Type: 'uuid', Default: { Value: CHAPTER_C } };
+  const leftWire = { Panel: 'left', Event: 'RecordSelected', Value: 'ID', Property: 'Chapter' };
+  /** What the right part declares: a ChapterID input; the left part raises RecordSelected with ID. */
+  const rightInterface: DashboardPartInterface = {
+    Inputs: [{ Name: 'ChapterID', Type: 'uuid', IsRequired: false, HasOwnDefault: false, ServerSet: false }],
+    Events: [],
+  };
+  const leftInterface: DashboardPartInterface = { Inputs: [], Events: [{ Name: 'RecordSelected', Values: [{ Name: 'ID', Type: 'uuid' }] }] };
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    MockResizeObserver.instances = [];
+    getLayoutConfigMock.mockReset();
+    getLayoutConfigMock.mockReturnValue(null);
+    initializeMock.mockReset();
+    initializeMock.mockImplementation(showEveryPart);
+    partTypesDouble.splice(0, partTypesDouble.length, TEST_PART_TYPE);
+    createPartInstanceMock.mockReset();
+    createPartInstanceMock.mockImplementation(async () => ({}));
+    loadPartInterfaceMock.mockReset();
+    loadPartInterfaceMock.mockImplementation(async (config: { type: string }) => (config.type === 'Left' ? leftInterface : rightInterface));
+    partComponents = [];
+    createComponentMock.mockReset();
+    createComponentMock.mockImplementation((): PartComponentDouble => {
+      const part: PartComponentDouble = {
+        instance: { ConfigureRequested: new Subject<void>(), RemoveRequested: new Subject<void>(), NavigationRequested: new Subject<void>(), PartEvent: new Subject<DashboardPartEventArgs>() },
+        location: { nativeElement: document.createElement('div') },
+        hostView: {},
+        destroy: vi.fn(),
+      };
+      partComponents.push(part);
+      return part;
+    });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    ({ DashboardViewerComponent } = await import('./dashboard-viewer.component'));
+  });
+
+  afterEach(() => {
+    partTypesDouble.splice(0, partTypesDouble.length);
+    createComponentMock.mockReset();
+    initializeMock.mockReset();
+  });
+
+  /** A dashboard with a left and a right part, and whatever properties, wires and right-part mappings it is given. */
+  function bindingsDashboard(extra: Record<string, unknown> = {}, rightMappings: object[] | null = null): MJDashboardEntity & { Save: ReturnType<typeof vi.fn> } {
+    const part = (id: string, type: string, config: Record<string, unknown> = {}) => ({
+      type: 'component',
+      componentState: { id, partTypeId: TEST_PART_TYPE.ID, title: `Part ${id}`, icon: TEST_PART_TYPE.Icon, config: { type, ...config } },
+    });
+    const right = rightMappings ? part('right', 'Right', { inputMappings: rightMappings }) : part('right', 'Right');
+    const config = { layout: { root: { type: 'stack', content: [part('left', 'Left'), right] } }, settings: {}, ...extra };
+    return {
+      ID: 'dash-1',
+      Name: 'Dashboard',
+      UIConfigDetails: JSON.stringify(config),
+      Save: vi.fn(async (): Promise<boolean> => true),
+    } as unknown as MJDashboardEntity & { Save: ReturnType<typeof vi.fn> };
+  }
+
+  async function show(dashboard: MJDashboardEntity, host?: Record<string, string | null>): Promise<Viewer> {
+    const viewer = new DashboardViewerComponent(
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+      { attachView: vi.fn(), detachView: vi.fn() } as unknown as ApplicationRef,
+      {} as unknown as Injector,
+      {} as unknown as EnvironmentInjector,
+    );
+    viewer.LayoutContainer = { nativeElement: createContainer({ width: 800, height: 600 }) } as ElementRef<HTMLElement>;
+    if (host) viewer.Properties = host;
+    viewer.Dashboard = dashboard;
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+    return viewer;
+  }
+
+  const left = () => partComponents[0].instance;
+  const right = () => partComponents[1].instance;
+
+  it('hands parts no context and no wired events, and saves the saved JSON unchanged, on a dashboard without properties, mappings or wires', async () => {
+    const dashboard = bindingsDashboard();
+    const saved = dashboard.UIConfigDetails;
+    const viewer = await show(dashboard);
+
+    expect(partComponents).toHaveLength(2);
+    for (const part of partComponents) {
+      expect('PropertyContext' in part.instance).toBe(false);
+      expect('WiredEvents' in part.instance).toBe(false);
+    }
+    expect(await viewer.save()).toBe(true);
+    expect(dashboard.UIConfigDetails).toBe(saved);
+    expect(loadPartInterfaceMock).not.toHaveBeenCalled();
+  });
+
+  it("hands each part the host's value for a property", async () => {
+    await show(bindingsDashboard({ Properties: [chapterProperty] }), { Chapter: CHAPTER_A });
+    expect(right().PropertyContext?.Values).toEqual({ Chapter: CHAPTER_A });
+    expect(left().PropertyContext?.Values).toEqual({ Chapter: CHAPTER_A });
+  });
+
+  it('hands a part with mappings a context even when the dashboard has no properties', async () => {
+    await show(bindingsDashboard({}, [{ Input: 'ChapterID', Default: { Value: CHAPTER_B } }]));
+    expect(right().PropertyContext).toEqual({ Properties: [], Values: {} });
+    expect('PropertyContext' in left()).toBe(false);
+  });
+
+  it("sets a wired property from a View part's selection for the other parts, never for the part itself, and raises record-select", async () => {
+    const viewer = await show(bindingsDashboard({ Properties: [chapterProperty], Wires: [leftWire] }));
+    const interactions: PanelInteractionEvent[] = [];
+    viewer.PanelInteraction.subscribe(event => interactions.push(event));
+
+    expect(left().WiredEvents).toEqual(['RecordSelected']);
+    expect('WiredEvents' in right()).toBe(false);
+    left().PartEvent.next({ Event: 'RecordSelected', Values: { ID: CHAPTER_B, Name: 'B' } });
+
+    expect(right().PropertyContext?.Values.Chapter).toBe(CHAPTER_B);
+    expect(left().PropertyContext?.Values.Chapter).toBe(CHAPTER_C);
+    expect(interactions).toEqual([{ panelId: 'left', interactionType: 'record-select', payload: { event: 'RecordSelected', values: { ID: CHAPTER_B, Name: 'B' } } }]);
+  });
+
+  it("does the same for a Query part's row and a component's event", async () => {
+    const wires = [
+      { Panel: 'left', Event: 'RowSelected', Value: 'ChapterID', Property: 'Chapter' },
+      { Panel: 'left', Event: 'onPick', Value: 'chapter', Property: 'Chapter' },
+    ];
+    const viewer = await show(bindingsDashboard({ Properties: [chapterProperty], Wires: wires }));
+    const interactions: PanelInteractionEvent[] = [];
+    viewer.PanelInteraction.subscribe(event => interactions.push(event));
+
+    left().PartEvent.next({ Event: 'RowSelected', Values: { ChapterID: CHAPTER_A } });
+    expect(right().PropertyContext?.Values.Chapter).toBe(CHAPTER_A);
+    left().PartEvent.next({ Event: 'onPick', Values: { chapter: CHAPTER_B } });
+    expect(right().PropertyContext?.Values.Chapter).toBe(CHAPTER_B);
+    expect(interactions.map(i => i.payload['event'])).toEqual(['RowSelected']);
+  });
+
+  it("keeps the host's value over an event's", async () => {
+    await show(bindingsDashboard({ Properties: [chapterProperty], Wires: [leftWire] }), { Chapter: CHAPTER_A });
+    left().PartEvent.next({ Event: 'RecordSelected', Values: { ID: CHAPTER_B } });
+    expect(right().PropertyContext?.Values.Chapter).toBe(CHAPTER_A);
+  });
+
+  it('returns the property to its default when the selection is cleared', async () => {
+    await show(bindingsDashboard({ Properties: [chapterProperty], Wires: [leftWire] }));
+    left().PartEvent.next({ Event: 'RecordSelected', Values: { ID: CHAPTER_B } });
+    left().PartEvent.next({ Event: 'RecordSelected', Values: null });
+    expect(right().PropertyContext?.Values.Chapter).toBe(CHAPTER_C);
+  });
+
+  it('drops event values when the parts are rebuilt, since the new parts have no selection', async () => {
+    const viewer = await show(bindingsDashboard({ Properties: [chapterProperty], Wires: [leftWire] }));
+    left().PartEvent.next({ Event: 'RecordSelected', Values: { ID: CHAPTER_B } });
+    viewer.IsEditing = true;
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+    expect(partComponents).toHaveLength(4);
+    expect(partComponents[3].instance.PropertyContext?.Values.Chapter).toBe(CHAPTER_C);
+  });
+
+  it('refuses to save a mapping from a property the dashboard does not have, and says why', async () => {
+    const dashboard = bindingsDashboard({ Properties: [chapterProperty] }, [{ Input: 'ChapterID', Property: 'Gone' }]);
+    const viewer = await show(dashboard);
+    const errors: string[] = [];
+    viewer.error.subscribe(e => errors.push(e.message));
+
+    expect(await viewer.save()).toBe(false);
+    expect(viewer.LastSaveError).toContain('"Gone"');
+    expect(errors[0]).toContain("can't be saved");
+    expect(dashboard.Save).not.toHaveBeenCalled();
+  });
+
+  it('refuses to save a wire from an event the part does not raise', async () => {
+    const dashboard = bindingsDashboard({ Properties: [chapterProperty], Wires: [{ ...leftWire, Event: 'RowSelected' }] });
+    const viewer = await show(dashboard);
+    expect(await viewer.save()).toBe(false);
+    expect(viewer.LastSaveError).toContain('doesn\'t raise "RowSelected"');
+  });
+
+  it('saves valid properties, mappings and wires', async () => {
+    const dashboard = bindingsDashboard({ Properties: [chapterProperty], Wires: [leftWire] }, [{ Input: 'ChapterID', Property: 'Chapter' }]);
+    const viewer = await show(dashboard);
+    expect(await viewer.save()).toBe(true);
+    expect(viewer.LastSaveError).toBeNull();
+    expect(JSON.parse(dashboard.UIConfigDetails).Wires).toEqual([leftWire]);
+  });
+
+  it('removes the Properties and Wires keys when the designer empties them', async () => {
+    const viewer = await show(bindingsDashboard({ Properties: [chapterProperty], Wires: [leftWire] }));
+    const applied = viewer.SetPropertiesAndWires([], []);
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(200);
+    await applied;
+    const config = viewer.getConfig();
+    expect(config && 'Properties' in config).toBe(false);
+    expect(config && 'Wires' in config).toBe(false);
+    expect(viewer.HasUnsavedChanges).toBe(true);
   });
 });

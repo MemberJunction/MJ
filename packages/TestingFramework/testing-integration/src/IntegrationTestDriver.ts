@@ -48,7 +48,7 @@ import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
-import { TestOutcome, WriteOutcomesFile } from './test-runner';
+import { IsCheckSkip, TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
 
 const TARGET_TYPE = 'Integration Check Bundle';
@@ -297,8 +297,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
             // would double-count the per-check skips.
             if (bundle.length > 0 && outcomes.length > 0 && outcomes.every(o => o.Skipped)) {
                 this.logToTestRun(context, 'warn',
-                    `${bundleType}: all ${outcomes.length} check(s) were gated out — nothing ran. ` +
-                    `Set RUN_MUTATION_TESTS=1 (or the live-model gate) to execute them. This bundle ` +
+                    `${bundleType}: all ${outcomes.length} check(s) were skipped — nothing ran. ` +
+                    `Each skip's reason is logged above: a gate (RUN_MUTATION_TESTS=1 or the live-model ` +
+                    `gate) or a fixture that could not be set up. This bundle ` +
                     `verified NOTHING on this run.`);
             }
         } catch (fxErr) {
@@ -398,6 +399,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
             outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
             this.logToTestRun(context, 'info', `✓ ${id}`);
         } catch (checkErr) {
+            if (IsCheckSkip(checkErr)) {
+                this.recordSkippedCheck(context, oracleResults, outcomes, id, name, `SKIPPED: ${checkErr.message}`);
+                return;
+            }
             const durationMs = Date.now() - checkStart;
             const message = (checkErr as Error).message;
             oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs } });

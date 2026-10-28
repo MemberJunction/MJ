@@ -61,6 +61,7 @@ vi.mock('@memberjunction/core', () => {
     QueryParameterInfo,
     QueryInfo,
     EntityFieldTSType,
+    QUERY_CONTEXT_NAME: 'Context',
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     Metadata: { Provider: { Queries: [] } },

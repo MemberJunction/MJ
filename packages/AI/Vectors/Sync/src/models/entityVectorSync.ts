@@ -4,7 +4,7 @@ import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompt
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -121,7 +121,7 @@ export class EntityVectorSyncer extends VectorBase {
     // Parse configuration for pipeline tuning
     const docConfig = this.parseDocumentConfig(entityDocument);
     const pipelineConfig = docConfig.pipeline;
-    const delayTimeMS: number = pipelineConfig?.delayBetweenCallsMs ?? 250;
+    const delayTimeMS: number = pipelineConfig?.delayBetweenCallsMs ?? 0;
 
     const md = this.ProviderToUse;
     const entity: EntityInfo | undefined = md.Entities.find((e) => UUIDsEqual(e.ID, params.entityID));
@@ -393,7 +393,9 @@ export class EntityVectorSyncer extends VectorBase {
       // No pre-validation — entity records commonly have null fields (e.g. Bio, State)
       // and the Nunjucks templates handle missing data gracefully via {% if Field %} conditionals.
       // Pass SuppressWarnings=true since entity doc vectorization doesn't need warnings for missing fields.
-      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true, true);
+      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(
+        template, templateContent, entityData, true, true, { ContextUser: this.CurrentUser }
+      );
       if (result.Success) {
         validEntries.push({ text: result.Output, record: entityData });
       } else {
@@ -422,7 +424,9 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    if (delayTimeMS > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    }
 
     if (!embeddings || !embeddings.Success || !embeddings.Vectors || embeddings.Vectors.length === 0) {
       const msg = `Embedding model "${embeddingModelAPIName}" failed: ${embeddings?.ErrorMessage ?? 'Returned 0 vectors'}. Check credentials and check model availability.`;
@@ -667,8 +671,26 @@ export class EntityVectorSyncer extends VectorBase {
    *   __mj_* fields can be included by name. Only genuinely unstorable binary types are
    *   refused (with a logged warning, never a silent drop).
    * "exclude" strategy: all eligible fields except those listed with included=false.
+   *
+   * Whatever the strategy, a field that field-level security restricts for any role is never
+   * stored: vector metadata is shared by every reader of the index. Naming one explicitly is
+   * refused with a logged warning.
    */
   private getDisplayFields(entityInfo: EntityInfo | undefined, metadataConfig?: EntityDocumentMetadataConfig): EntityFieldInfo[] {
+    const configured = this.getConfiguredDisplayFields(entityInfo, metadataConfig);
+    const restricted = GetIndexRestrictedFieldNames(entityInfo);
+    if (restricted.size === 0) return configured;
+    return configured.filter(f => {
+      if (!restricted.has(f.Name.toLowerCase())) return true;
+      if (metadataConfig?.fields?.[f.Name]?.included === true) {
+        LogError(`Field "${f.Name}" of "${entityInfo?.Name}" is restricted by field-level security for at least one role and cannot be stored in vector metadata — ignoring its explicit inclusion`);
+      }
+      return false;
+    });
+  }
+
+  /** The display fields the entity document's metadata configuration selects, before field-level security is applied. */
+  private getConfiguredDisplayFields(entityInfo: EntityInfo | undefined, metadataConfig?: EntityDocumentMetadataConfig): EntityFieldInfo[] {
     if (!entityInfo) return [];
 
     const strategy = metadataConfig?.fieldStrategy ?? 'all';
@@ -801,8 +823,11 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * Adds the system-injected RecordID / Entity / TemplateID keys — omitted entirely
-   * under the 'explicit' strategy, where metadata contains only configured fields.
+   * Adds the system-injected RecordID / Entity / EntityDocumentID / TemplateID keys — omitted
+   * entirely under the 'explicit' strategy, where metadata contains only configured fields.
+   *
+   * EntityDocumentID is what scopes a query to one document when several documents share an
+   * index (`SharedIndexFilterOptions.EntityDocumentIDs`) — duplicate detection filters on it.
    */
   protected addSystemMetadata(
     metadata: Record<string, string | number | boolean>,
@@ -814,6 +839,7 @@ export class EntityVectorSyncer extends VectorBase {
     if (explicit) return;
     metadata['RecordID'] = String(embeddingItem.__mj_compositeKey ?? '');
     metadata['Entity'] = entityDocument.Entity;
+    metadata['EntityDocumentID'] = entityDocument.ID;
     metadata['TemplateID'] = templateContent.ID;
   }
 
@@ -941,7 +967,9 @@ export class EntityVectorSyncer extends VectorBase {
       }
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    if (delayTimeMS > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    }
     return batch;
   }
 
@@ -1506,7 +1534,7 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   private templateDataBuilder(): EntityDocumentTemplateDataBuilder {
-    return new EntityDocumentTemplateDataBuilder(super.RunView, super.CurrentUser);
+    return new EntityDocumentTemplateDataBuilder(super.RunView, super.CurrentUser, super.Provider);
   }
 
   /**
@@ -1589,8 +1617,14 @@ export class EntityVectorSyncer extends VectorBase {
         LogError('Error getting existing Entity Record Documents', undefined, result?.ErrorMessage);
       }
 
-      for (const item of items) {
-        await this.saveEntityRecordDocument(item, existingByRecordID.get(String(item.__mj_recordID)), md, contextUser);
+      const saveConcurrency = 10;
+      for (let i = 0; i < items.length; i += saveConcurrency) {
+        const chunk = items.slice(i, i + saveConcurrency);
+        await Promise.all(
+          chunk.map((item) =>
+            this.saveEntityRecordDocument(item, existingByRecordID.get(String(item.__mj_recordID)), md, contextUser)
+          )
+        );
       }
     }
   }
@@ -1637,7 +1671,7 @@ export class EntityVectorSyncer extends VectorBase {
     erdEntity.EntityDocumentID = entityDocumentID;
     erdEntity.ContextCurrentUser = contextUser;
 
-    const erdEntitySaveResult: boolean = await erdEntity.Save();
+    const erdEntitySaveResult: boolean = await erdEntity.Save({ SaveReturnMode: 'datestamps_only' });
     if (!erdEntitySaveResult) {
       LogError('Error saving Entity Record Document Entity', undefined, erdEntity.LatestResult);
     }

@@ -664,8 +664,28 @@ describe('AnthropicLLM', () => {
                 const apiMessages = callArgs.messages;
                 const lastMessage = apiMessages[apiMessages.length - 1];
                 expect(lastMessage.role).toBe('assistant');
-                // The content is formatted through formatMessagesWithCaching, so check for the prefill text
-                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":', cache_control: { type: 'ephemeral' } }]);
+                // The content is formatted through formatMessagesWithCaching. enableCaching: false is
+                // honoured, so the prefill carries no cache breakpoint.
+                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":' }]);
+            });
+
+            it('caches by default when enableCaching is not set', async () => {
+                const mockFinalMessage = vi.fn().mockResolvedValue({
+                    content: [{ type: 'text', text: 'completed response' }],
+                    usage: { input_tokens: 10, output_tokens: 5 },
+                    stop_reason: 'end_turn'
+                });
+                mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage: mockFinalMessage }) });
+
+                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                    messages: [{ role: ChatMessageRole.user, content: 'Generate JSON' }],
+                    model: 'claude-sonnet-4-20250514',
+                    maxOutputTokens: 1024,
+                    assistantPrefill: '{"data":'
+                });
+
+                const apiMessages = mockStream.mock.calls[0][0].messages;
+                expect(apiMessages[apiMessages.length - 1].content).toEqual([{ type: 'text', text: '{"data":', cache_control: { type: 'ephemeral' } }]);
             });
 
             it('should not add prefill message when assistantPrefill is not set', async () => {
@@ -695,6 +715,251 @@ describe('AnthropicLLM', () => {
                 // Should only have the user message, no assistant prefill
                 expect(apiMessages).toHaveLength(1);
                 expect(apiMessages[0].role).toBe('user');
+            });
+
+            it('should omit prefill message when thinking is enabled (non-streaming)', async () => {
+                const mockFinalMessage = vi.fn().mockResolvedValue({
+                    content: [{ type: 'text', text: 'response' }],
+                    usage: { input_tokens: 10, output_tokens: 5 },
+                    stop_reason: 'end_turn'
+                });
+                const mockOn = vi.fn().mockReturnValue({ finalMessage: mockFinalMessage });
+                mockStream.mockReturnValue({ on: mockOn });
+
+                const params = {
+                    messages: [
+                        { role: ChatMessageRole.user, content: 'Hello' }
+                    ],
+                    model: 'claude-sonnet-4-20250514',
+                    effortLevel: 'medium',
+                    reasoningBudgetTokens: 2048,
+                    assistantPrefill: '```json',
+                    enableCaching: false
+                };
+
+                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](params);
+
+                const callArgs = mockStream.mock.calls[0][0];
+                const apiMessages = callArgs.messages;
+                // Last message must be user, prefill must be omitted
+                expect(apiMessages[apiMessages.length - 1].role).toBe('user');
+            });
+
+            it('should omit prefill message when model uses adaptive thinking (Claude 5)', async () => {
+                const mockFinalMessage = vi.fn().mockResolvedValue({
+                    content: [{ type: 'text', text: 'response' }],
+                    usage: { input_tokens: 10, output_tokens: 5 },
+                    stop_reason: 'end_turn'
+                });
+                const mockOn = vi.fn().mockReturnValue({ finalMessage: mockFinalMessage });
+                mockStream.mockReturnValue({ on: mockOn });
+
+                const params = {
+                    messages: [
+                        { role: ChatMessageRole.user, content: 'Hello' }
+                    ],
+                    model: 'claude-sonnet-5',
+                    assistantPrefill: '```json',
+                    enableCaching: false
+                };
+
+                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](params);
+
+                const callArgs = mockStream.mock.calls[0][0];
+                const apiMessages = callArgs.messages;
+                expect(apiMessages[apiMessages.length - 1].role).toBe('user');
+            });
+        });
+
+        describe('createStreamingRequest with assistantPrefill', () => {
+            // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Response prefill and forced tool use")
+            const lastRole = (): string => {
+                const apiMessages = mockCreate.mock.calls[0][0].messages;
+                return apiMessages[apiMessages.length - 1].role;
+            };
+
+            it('includes the prefill on a pre-4.6 model with thinking off', async () => {
+                mockCreate.mockResolvedValue({});
+                await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
+                    messages: [{ role: ChatMessageRole.user, content: 'Generate JSON' }],
+                    model: 'claude-sonnet-4-5',
+                    assistantPrefill: '{"data":',
+                    enableCaching: false
+                });
+                expect(lastRole()).toBe('assistant');
+                expect(mockCreate.mock.calls[0][0].thinking).toBeUndefined();
+            });
+
+            it('omits the prefill on a pre-4.6 model when budget-form thinking is on', async () => {
+                mockCreate.mockResolvedValue({});
+                await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
+                    messages: [{ role: ChatMessageRole.user, content: 'Generate JSON' }],
+                    model: 'claude-sonnet-4-5',
+                    effortLevel: 'medium',
+                    reasoningBudgetTokens: 2048,
+                    maxOutputTokens: 8000,
+                    assistantPrefill: '{"data":',
+                    enableCaching: false
+                });
+                expect(mockCreate.mock.calls[0][0].thinking).toBeDefined();
+                expect(lastRole()).toBe('user');
+            });
+
+            it('omits the prefill on a Claude 4.6+ model even with thinking off', async () => {
+                mockCreate.mockResolvedValue({});
+                await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
+                    messages: [{ role: ChatMessageRole.user, content: 'Generate JSON' }],
+                    model: 'claude-sonnet-4-6',
+                    assistantPrefill: '{"data":',
+                    enableCaching: false
+                });
+                expect(mockCreate.mock.calls[0][0].thinking).toBeUndefined();
+                expect(lastRole()).toBe('user');
+            });
+        });
+    });
+
+    describe('sampling parameters (temperature, top_p, top_k)', () => {
+        // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
+        //
+        // Two distinct rules, with different model sets:
+        //   (a) ALWAYS-REJECT models (Claude Opus 4.7/4.8, every Claude 5, Mythos Preview) return 400 for any
+        //       non-default temperature / top_p / top_k on every request, thinking or not — and for temperature
+        //       plus top_p together even at their defaults.
+        //   (b) older models reject temperature and top_k only while thinking is on, and allow top_p in [0.95, 1].
+        // Claude Opus 4.6 and Sonnet 4.6 are in neither list: they take adaptive thinking but keep accepting
+        // sampling parameters while thinking is off.
+        const okStream = (): void => {
+            const finalMessage = vi.fn().mockResolvedValue({
+                content: [{ type: 'text', text: 'response' }],
+                usage: { input_tokens: 10, output_tokens: 5 },
+                stop_reason: 'end_turn'
+            });
+            mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage }) });
+        };
+        const userMessages = [{ role: ChatMessageRole.user, content: 'Hello' }];
+        type SamplingParams = { model: string; effortLevel?: string; reasoningBudgetTokens?: number; maxOutputTokens?: number; temperature?: number; topP?: number; topK?: number };
+        const sentNonStreaming = async (params: SamplingParams): Promise<Record<string, unknown>> => {
+            okStream();
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ messages: userMessages, enableCaching: false, ...params });
+            return mockStream.mock.calls[0][0];
+        };
+        const sentStreaming = async (params: SamplingParams): Promise<Record<string, unknown>> => {
+            mockCreate.mockResolvedValue({});
+            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({ messages: userMessages, enableCaching: false, ...params });
+            return mockCreate.mock.calls[0][0];
+        };
+        // Budget-form thinking on a pre-4.6 model. Non-streaming defaults the budget; streaming needs ≥ 1024 from the caller.
+        const budgetThinking = { effortLevel: 'medium', reasoningBudgetTokens: 2048, maxOutputTokens: 8000 };
+
+        describe('temperature', () => {
+            it('drops a non-default temperature on an always-reject model even when no thinking block is sent (non-streaming)', async () => {
+                // No effortLevel → BuildAnthropicThinking returns {} → no `thinking` in the request. The API still
+                // rejects non-default temperature on Claude 4.7+/5 "regardless of whether thinking is used".
+                const sent = await sentNonStreaming({ model: 'claude-sonnet-5', temperature: 0.3 });
+                expect(sent.thinking).toBeUndefined();
+                expect(sent.temperature).toBeUndefined();
+            });
+
+            it('drops a non-default temperature on an always-reject model even when no thinking block is sent (streaming)', async () => {
+                const sent = await sentStreaming({ model: 'claude-opus-4-7', temperature: 0.3 });
+                expect(sent.thinking).toBeUndefined();
+                expect(sent.temperature).toBeUndefined();
+            });
+
+            // The review finding on PR #6046: 4.6 takes adaptive thinking but is NOT in the always-reject list, and
+            // thinking is off there until asked for. A tuned temperature must reach the API.
+            it.each(['claude-opus-4-6', 'claude-sonnet-4-6'])('keeps a non-default temperature on %s with thinking off (non-streaming)', async (model) => {
+                const sent = await sentNonStreaming({ model, temperature: 0.3 });
+                expect(sent.thinking).toBeUndefined();
+                expect(sent.temperature).toBe(0.3);
+            });
+
+            it.each(['claude-opus-4-6', 'claude-sonnet-4-6'])('keeps a non-default temperature on %s with thinking off (streaming)', async (model) => {
+                const sent = await sentStreaming({ model, temperature: 0.3 });
+                expect(sent.thinking).toBeUndefined();
+                expect(sent.temperature).toBe(0.3);
+            });
+
+            it('keeps a non-default temperature on a pre-4.6 model when thinking is off', async () => {
+                const sent = await sentNonStreaming({ model: 'claude-sonnet-4-5', temperature: 0.3 });
+                expect(sent.temperature).toBe(0.3);
+            });
+
+            // The case the original guard (claude-opus-4-5 + thinking) existed for, on both paths.
+            it('drops a non-default temperature on a pre-4.6 model when budget-form thinking is on (non-streaming)', async () => {
+                const sent = await sentNonStreaming({ model: 'claude-opus-4-5', effortLevel: 'medium', temperature: 0.3 });
+                expect(sent.thinking).toBeDefined();
+                expect(sent.temperature).toBeUndefined();
+            });
+
+            it('drops a non-default temperature on a pre-4.6 model when budget-form thinking is on (streaming)', async () => {
+                const sent = await sentStreaming({ model: 'claude-sonnet-4-5', ...budgetThinking, temperature: 0.3 });
+                expect(sent.thinking).toBeDefined();
+                expect(sent.temperature).toBeUndefined();
+            });
+
+            it('keeps temperature 1 (the default) when thinking is on (non-streaming)', async () => {
+                const sent = await sentNonStreaming({ model: 'claude-sonnet-5', effortLevel: 'medium', temperature: 1 });
+                expect(sent.thinking).toBeDefined();
+                expect(sent.temperature).toBe(1);
+            });
+
+            it('keeps temperature 1 (the default) when thinking is on (streaming)', async () => {
+                const sent = await sentStreaming({ model: 'claude-sonnet-5', effortLevel: 'medium', temperature: 1 });
+                expect(sent.thinking).toBeDefined();
+                expect(sent.temperature).toBe(1);
+            });
+        });
+
+        describe('top_k', () => {
+            it('is sent on a pre-4.6 model with thinking off (both paths)', async () => {
+                expect((await sentNonStreaming({ model: 'claude-sonnet-4-5', topK: 40 })).top_k).toBe(40);
+                expect((await sentStreaming({ model: 'claude-sonnet-4-5', topK: 40 })).top_k).toBe(40);
+            });
+
+            it('is dropped on a pre-4.6 model while thinking is on (both paths)', async () => {
+                expect((await sentNonStreaming({ model: 'claude-sonnet-4-5', effortLevel: 'medium', topK: 40 })).top_k).toBeUndefined();
+                expect((await sentStreaming({ model: 'claude-sonnet-4-5', ...budgetThinking, topK: 40 })).top_k).toBeUndefined();
+            });
+
+            it('is dropped on an always-reject model even with thinking off (both paths)', async () => {
+                expect((await sentNonStreaming({ model: 'claude-sonnet-5', topK: 40 })).top_k).toBeUndefined();
+                expect((await sentStreaming({ model: 'claude-opus-4-8', topK: 40 })).top_k).toBeUndefined();
+            });
+
+            it('is sent on Claude 4.6 with thinking off', async () => {
+                expect((await sentNonStreaming({ model: 'claude-opus-4-6', topK: 40 })).top_k).toBe(40);
+            });
+        });
+
+        describe('top_p', () => {
+            it('is sent on a pre-4.6 model with thinking off (both paths)', async () => {
+                expect((await sentNonStreaming({ model: 'claude-sonnet-4-5', topP: 0.9 })).top_p).toBe(0.9);
+                expect((await sentStreaming({ model: 'claude-sonnet-4-5', topP: 0.9 })).top_p).toBe(0.9);
+            });
+
+            it('is dropped on an always-reject model even with thinking off (both paths)', async () => {
+                // The docs: non-default top_p is a 400, and so is temperature plus top_p together even at their
+                // defaults — so the driver sends no top_p at all to these models.
+                expect((await sentNonStreaming({ model: 'claude-sonnet-5', topP: 0.9 })).top_p).toBeUndefined();
+                expect((await sentStreaming({ model: 'claude-sonnet-5', topP: 0.9 })).top_p).toBeUndefined();
+            });
+
+            it('is dropped alongside temperature 1 on an always-reject model (the both-at-defaults case)', async () => {
+                const sent = await sentNonStreaming({ model: 'claude-sonnet-5', temperature: 1, topP: 0.99 });
+                expect(sent.temperature).toBe(1);
+                expect(sent.top_p).toBeUndefined();
+            });
+
+            it('is kept in [0.95, 1] on a pre-4.6 model while thinking is on', async () => {
+                expect((await sentNonStreaming({ model: 'claude-sonnet-4-5', effortLevel: 'medium', topP: 0.97 })).top_p).toBe(0.97);
+                expect((await sentStreaming({ model: 'claude-sonnet-4-5', ...budgetThinking, topP: 1 })).top_p).toBe(1);
+            });
+
+            it('is dropped below 0.95 on a pre-4.6 model while thinking is on (both paths)', async () => {
+                expect((await sentNonStreaming({ model: 'claude-sonnet-4-5', effortLevel: 'medium', topP: 0.9 })).top_p).toBeUndefined();
+                expect((await sentStreaming({ model: 'claude-sonnet-4-5', ...budgetThinking, topP: 0.9 })).top_p).toBeUndefined();
             });
         });
     });
@@ -1080,6 +1345,33 @@ describe('AnthropicLLM — native tool calling', () => {
             const sent = mockCreate.mock.calls[0][0];
             expect(sent.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
             expect(sent.output_config).toBeUndefined();
+        });
+
+        it('omits temperature when thinking is enabled with non-1 temperature (non-streaming)', async () => {
+            okStream();
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ ...base, model: 'claude-sonnet-5', effortLevel: 'medium', temperature: 0.2 });
+
+            const sent = mockStream.mock.calls[0][0];
+            expect(sent.thinking).toEqual({ type: 'adaptive' });
+            expect(sent.temperature).toBeUndefined();
+        });
+
+        it('omits temperature when thinking is enabled with non-1 temperature (streaming)', async () => {
+            mockCreate.mockResolvedValue({});
+            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({ ...base, model: 'claude-sonnet-5', effortLevel: '50', temperature: 0.2 });
+
+            const sent = mockCreate.mock.calls[0][0];
+            expect(sent.thinking).toEqual({ type: 'adaptive' });
+            expect(sent.temperature).toBeUndefined();
+        });
+
+        it('preserves temperature when thinking is off on a pre-4.6 model (adaptive-thinking models reject it regardless; see the temperature suite)', async () => {
+            okStream();
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ ...base, model: 'claude-sonnet-4-5', temperature: 0.7 });
+
+            const sent = mockStream.mock.calls[0][0];
+            expect(sent.thinking).toBeUndefined();
+            expect(sent.temperature).toBe(0.7);
         });
     });
 });
