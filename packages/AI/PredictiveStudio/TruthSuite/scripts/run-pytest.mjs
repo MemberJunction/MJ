@@ -2,7 +2,7 @@
 /**
  * run-pytest.mjs — run TruthSuite's Python tests using its bundled .venv.
  * `--mypy` type-checks the Python package and its tests, and the sidecar's trainer-contract, column-encoding,
- * snapshot-loading and inner-fold modules and test fixtures (`mypy --strict`, python/mypy.ini), instead.
+ * snapshot-loading, inner-fold and estimator-factory modules and test fixtures (`mypy --strict`, python/mypy.ini), instead.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -30,8 +30,8 @@ if (process.platform === 'darwin') {
   env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH ? `${libomp}:${env.DYLD_LIBRARY_PATH}` : libomp;
 }
 
-// The sidecar's trainer contract, its column encoding, its snapshot loading, its inner-validation folds and test
-// fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
+// The sidecar's trainer contract, its column encoding, its snapshot loading, its inner-validation folds, its estimator
+// factories and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
 const SIDECAR_TYPED_MODULES = [
   'app/trainer_schemas.py',
   'app/failures.py',
@@ -39,6 +39,7 @@ const SIDECAR_TYPED_MODULES = [
   'app/encoding.py',
   'app/snapshot.py',
   'app/folds.py',
+  'app/algorithms.py',
   'tests/tools/trainer_fixture.py',
   'tests/tools/trainer_scaffold.py',
 ].map((m) => path.join('..', 'Sidecar', 'src', 'python', m));

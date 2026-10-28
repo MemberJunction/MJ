@@ -3,7 +3,8 @@
  * run-pytest.mjs — run the Python sidecar's pytest suite using the bundled venv.
  *
  * Runs from `src/python/` (the pytest rootdir) so `app` and `tests` import as
- * top-level packages. On macOS injects DYLD_LIBRARY_PATH for libomp so
+ * top-level packages. Pins the hash seed and holds BLAS/OpenMP to one thread so
+ * seeded fits are reproducible. On macOS injects DYLD_LIBRARY_PATH for libomp so
  * xgboost/lightgbm load.
  */
 import { spawnSync } from 'node:child_process';
@@ -22,7 +23,16 @@ if (isPath && !existsSync(venvPython)) {
   process.exit(1);
 }
 
-const env = { ...process.env };
+// Fixed hash seed and single-threaded BLAS/OpenMP for the child, so seeded single-threaded fits (the MLP's matrix
+// products run in the BLAS) are bit-identical run to run.
+const env = {
+  ...process.env,
+  PYTHONHASHSEED: '0',
+  OMP_NUM_THREADS: '1',
+  OPENBLAS_NUM_THREADS: '1',
+  MKL_NUM_THREADS: '1',
+  NUMEXPR_NUM_THREADS: '1',
+};
 if (process.platform === 'darwin') {
   const libomp = '/opt/homebrew/opt/libomp/lib';
   env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH ? `${libomp}:${env.DYLD_LIBRARY_PATH}` : libomp;
