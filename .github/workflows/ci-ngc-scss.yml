@@ -21,6 +21,13 @@ on:
       - '.github/scripts/ci/ngc-scss-allowlist.txt'
       - '.github/workflows/ci-ngc-scss.yml'
 
+# Cancel superseded runs for the same ref. Without this a second push to a PR leaves the
+# first run burning a runner for a commit nobody will merge; 108 such runner-minutes were
+# measured across this repo in a single 23-hour window (2026-10-27).
+concurrency:
+  group: ci-ngc-scss-${{ github.ref }}
+  cancel-in-progress: true
+
 # Least-privilege token: nothing in this workflow writes to the repository.
 permissions:
   contents: read
