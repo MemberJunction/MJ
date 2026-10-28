@@ -30,8 +30,9 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[Chrome]` | `'orb'\|'console'\|'auto'` | `'auto'` | Which chrome (see above). |
 | `[ConsoleBreakpointPx]` | `number` | `560` | Width at/above which `auto` may become a console. |
 | `[Compact]` | `boolean` | `false` | Force dense spacing/type (else inferred from width). |
-| `[AutoHideControls]` | `boolean` | `true` | Fade non‑essential controls when idle (orb only). |
+| `[AutoHideControls]` | `boolean` | `true` | Deprecated no‑op (the fade was never implemented). |
 | `[AllowTextReveal]` | `boolean` | `true` | Can the user open the transcript? `false` ⇒ pure voice, never consoles. |
+| `[AllowTyping]` | `boolean` | `true` | Typing into the session (strip and lean‑sheet Type, hotkey, programmatic open). `false` when `AllowTextReveal` is `false`. |
 | `[ShowCaptionsControl]` | `boolean` | `true` | Captions toggle. |
 | `[ShowDensityPicker]` | `boolean` | `true` | Density picker (in the gear). |
 | `[ShowMinimize]` | `boolean` | `true` | Minimize (collapse call, keep it live). |
@@ -39,7 +40,7 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[ShowSurfacePanel]` | `boolean` | `true` | Right surface panel (whiteboard/browser/channels). Console + earned only. |
 | `[ShowChannels]` | `boolean` | `true` | Channel strip. |
 | `[ShowActivityRail]` | `boolean` | `true` | Activity rail/tab (delegations, artifacts). |
-| `[ShowDevLinks]` | `boolean` | `true` | Developer links/panels (still gated by per‑session dev mode). |
+| `[ShowDevLinks]` | `boolean` | `true` | Developer links and the gear's dev toggle (still gated by per‑session dev mode). |
 | `[AllowResize]` | `boolean` | `true` | Drag‑to‑resize the surface panel. |
 | `[UiConfig]` | `RealtimeUiInputs` | — | Programmatic override bag; merged under the individual inputs. |
 | `[Hidden]` | `boolean` | `false` | Minimized (kept alive, CSS‑hidden). |
@@ -111,8 +112,7 @@ this.voice.EndSession();             // tear down
   [ShowActivityRail]="false"
   [ShowChannels]="false"
   [ShowDevLinks]="false"
-  [ShowDensityPicker]="false"
-  [AutoHideControls]="true">
+  [ShowDensityPicker]="false">
 </mj-realtime-overlay>
 ```
 
@@ -134,6 +134,11 @@ this.voice.EndSession();             // tear down
 ```html
 <mj-realtime-overlay [Chrome]="'orb'" [AllowTextReveal]="false"
   [ShowMinimize]="false" [ShowDensityPicker]="false"></mj-realtime-overlay>
+```
+
+**Assessment — transcript shown, typing off (bizapps-caliber):**
+```html
+<mj-realtime-overlay [AllowTyping]="false"></mj-realtime-overlay>
 ```
 
 **Unexpected use — host owns the End button + reacts to every control:**
