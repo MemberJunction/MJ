@@ -58,7 +58,10 @@ export interface ClickTarget {
   Found: boolean;
   /** The element's ref (`a3`, `f2`); set for a ref or text match so the click can target it exactly. */
   Ref?: string;
-  /** The element's visible label (for a selector, the first destructive match's, else the first match's). */
+  /**
+   * The element's visible label, or the name that makes it destructive when one does (for a selector, the
+   * first destructive match's, else the first match's).
+   */
   Label: string;
   /** `true` when its label says it submits, pays, places an order, deletes or signs in: a person must click it. */
   Destructive: boolean;
@@ -198,15 +201,23 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     (el.tagName === 'INPUT' && typeOf(el) === 'submit') ||
     (el.tagName === 'BUTTON' && (el.getAttribute('type') || 'submit').toLowerCase() === 'submit' && Boolean(el.closest('form')));
 
-  // Every name the control carries, not just the one shown as its label: an aria-label "Continue" on a
-  // "Pay now" button must not hide it. The label alone decides (not "is a submit button"): that rule also
-  // refused Search and Add to cart.
-  const isDestructive = (el: HTMLElement): boolean =>
-    DESTRUCTIVE.test(
-      [el.getAttribute('aria-label'), labelledByText(el), el.tagName === 'INPUT' ? (el as HTMLInputElement).value : '', el.innerText || el.textContent, el.getAttribute('title'), el.getAttribute('name')]
-        .map((v) => clean(v))
-        .join(' | '),
-    );
+  // The name that makes a control destructive, or '' when none does. Every name a person sees counts, not
+  // just the one shown as its label: an aria-label "Continue" on a "Pay now" button must not hide it. A
+  // `name` is a form key and a `title` a tooltip, so neither counts while the control has another name
+  // (they refused a Search button named "submit" or titled "Submit search"). A label clicks the control it
+  // labels, so it is judged as that control. The name alone decides, not "is a submit button": that rule
+  // also refused Search and Add to cart.
+  const destructiveName = (el: HTMLElement): string => {
+    const target = el instanceof HTMLLabelElement && el.control ? (el.control as HTMLElement) : el;
+    const names = [target.getAttribute('aria-label'), labelledByText(target), target.tagName === 'INPUT' ? (target as HTMLInputElement).value : '', target.innerText || target.textContent].map((v) => clean(v));
+    return [...names, names.some(Boolean) ? '' : clean(target.getAttribute('title'))].find((n) => DESTRUCTIVE.test(n)) ?? '';
+  };
+
+  // What a click or key press would activate, labelled by the name that makes it destructive when one does.
+  const judge = (el: HTMLElement): Pick<ClickTarget, 'Label' | 'Destructive'> => {
+    const destructive = destructiveName(el);
+    return { Label: destructive || actionLabel(el) || el.tagName.toLowerCase(), Destructive: Boolean(destructive) };
+  };
 
   // Focus, a hit test and a selector all stop at a shadow host; these follow open shadow roots down to
   // the element itself, as Playwright's CSS and a real key press or click do.
@@ -303,7 +314,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
       }
       const ref = `a${actions.length + 1}`;
       el.setAttribute(REF_ATTR, ref);
-      actions.push({ Ref: ref, Label: label, Role: isSubmit(el) ? 'submit' : el.tagName === 'A' ? 'link' : 'button', Destructive: isDestructive(el) });
+      actions.push({ Ref: ref, Label: label, Role: isSubmit(el) ? 'submit' : el.tagName === 'A' ? 'link' : 'button', Destructive: Boolean(destructiveName(el)) });
       if (actions.length >= 60) {
         break;
       }
@@ -436,7 +447,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
       : req.Key === 'enter'
         ? active.closest('form')?.querySelector<HTMLElement>('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]') ?? null
         : null;
-    return target ? { Found: true, Label: actionLabel(target) || target.tagName.toLowerCase(), Destructive: isDestructive(target) } : { Found: false, Label: '', Destructive: false };
+    return target ? { Found: true, ...judge(target) } : { Found: false, Label: '', Destructive: false };
   }
 
   // resolveClick
@@ -451,8 +462,8 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     } catch {
       return { Found: false, Label: q.Selector, Destructive: false, InvalidSelector: true };
     }
-    const hit = matches.find(isDestructive) ?? matches[0];
-    return hit ? { Found: true, Label: actionLabel(hit) || hit.tagName.toLowerCase(), Destructive: isDestructive(hit) } : { Found: false, Label: q.Selector, Destructive: false };
+    const hit = matches.find((m) => destructiveName(m)) ?? matches[0];
+    return hit ? { Found: true, ...judge(hit) } : { Found: false, Label: q.Selector, Destructive: false };
   }
   let el: HTMLElement | null = null;
   if (q.Ref) {
@@ -482,8 +493,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
   return {
     Found: true,
     ...(q.Ref || q.Text ? { Ref: el.getAttribute(REF_ATTR) ?? undefined } : {}),
-    Label: actionLabel(el) || el.tagName.toLowerCase(),
-    Destructive: isDestructive(el),
+    ...judge(el),
   };
 }
 

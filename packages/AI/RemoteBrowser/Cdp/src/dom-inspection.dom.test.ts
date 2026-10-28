@@ -294,7 +294,7 @@ describe('guards reach into open shadow roots', () => {
     });
 });
 
-describe('round-5 review: labels, ancestors, shadow inspect, credentials, fill read-back, links', () => {
+describe('labels, ancestors, shadow roots, credentials, fill read-back and links', () => {
     let session: CdpRemoteBrowserSession;
     let adapter: FakePlaywrightBrowserAdapter;
     beforeEach(() => ({ session, adapter } = buildSession()));
@@ -315,8 +315,33 @@ describe('round-5 review: labels, ancestors, shadow inspect, credentials, fill r
             ['Continue', true],
             ['Go', true],
         ]);
-        expect((await session.ExecuteAction({ Kind: 'click', Ref: 'a1' })).Success).toBe(false);
+        const byRef = await session.ExecuteAction({ Kind: 'click', Ref: 'a1' });
+        expect(byRef.Detail).toContain('Refusing to activate "Pay now"'); // the name that matched, not the first
         expect((await session.ExecuteAction({ Kind: 'click', Text: 'Continue' })).Success).toBe(false);
+    });
+
+    it('a form key or a tooltip does not make a control destructive while it has a name of its own', async () => {
+        render(`
+          <form><button id="b1" type="submit" name="submit" data-visible>Search</button></form>
+          <form><input id="b2" type="submit" name="submit" value="Go" data-visible></form>
+          <form><button id="b3" type="submit" title="Submit search" data-visible>Search</button></form>
+          <button id="b4" type="button" title="Remove filter" data-visible>x</button>
+          <button id="icon" type="button" title="Delete item" data-visible><i class="fa-trash"></i></button>`);
+        for (const id of ['b1', 'b2', 'b3', 'b4']) {
+            expect([id, (await session.ExecuteAction({ Kind: 'click', Selector: `#${id}` })).Success]).toEqual([id, true]);
+        }
+        // An icon-only button has nothing but its tooltip to go by.
+        expect((await session.ExecuteAction({ Kind: 'click', Selector: '#icon' })).Detail).toContain('Refusing to activate "Delete item"');
+    });
+
+    it('a label is judged as the control it clicks, by selector, text or point', async () => {
+        render(`<label id="l1" for="payBtn" data-visible>Finish</label><button id="payBtn" type="button" data-visible>Pay now</button>`);
+        document.elementFromPoint = () => document.getElementById('l1');
+        for (const target of [{ Selector: '#l1' }, { Text: 'Finish' }, { X: 20, Y: 20 }]) {
+            const result = await session.ExecuteAction({ Kind: 'click', ...target });
+            expect([target, result.Detail]).toEqual([target, expect.stringContaining('Refusing to activate "Pay now"')]);
+        }
+        expect(adapter.ExecutedActions).toEqual([]);
     });
 
     it('inspect, fill and click by ref or text see an open shadow root', async () => {
