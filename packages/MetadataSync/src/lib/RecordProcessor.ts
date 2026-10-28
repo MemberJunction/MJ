@@ -1207,6 +1207,19 @@ export class RecordProcessor {
 
       if (!companion) continue;
 
+      // Pull emits only the collections a repo configures under `collections` in .mj-sync.json.
+      // Without config there is no natural key or declared-row filter, so every loaded row
+      // would be written with its source primaryKey and foreign key: rows the server derives
+      // for itself (a query's inferred parameters, say) would become authored JSON, and
+      // pushing that file to another database would miss them by id and insert duplicates.
+      const colConfig = entityConfig.collections?.[colName];
+      if (!colConfig) {
+        if (verbose) {
+          console.log(`Skipping collection '${colName}' on ${record.EntityInfo.Name}: not configured under 'collections' in .mj-sync.json`);
+        }
+        continue;
+      }
+
       const col = companion as unknown as {
         LoadMode: string;
         IsLoaded: boolean;
@@ -1233,9 +1246,8 @@ export class RecordProcessor {
       // itself (a query's inferred parameters, say). Pull writes back only what was declared,
       // identified by its natural key, so derived rows never become authored JSON and the
       // file stays portable across databases whose generated ids differ.
-      const colConfig = entityConfig.collections?.[colName];
-      const matchOn = colConfig?.matchOn ?? [];
-      const declaredWhere = colConfig?.declaredWhere;
+      const matchOn = colConfig.matchOn ?? [];
+      const declaredWhere = colConfig.declaredWhere;
       const isNaturalKeyed = matchOn.length > 0;
 
       const loadedItems = col.Items ?? [];

@@ -892,6 +892,30 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         expect(lookupCalls).toHaveLength(1);
       });
 
+      it('warns, naming the fields, when an item lacks a matchOn field', async () => {
+        const existing = new MockEntity('QueryParameters', {
+          ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI',
+        });
+        const items = [existing];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+        const onWarn = vi.fn();
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          {
+            primaryKey: { ID: 'ord-1' },
+            fields: { ID: 'ord-1' },
+            collections: { Parameters: [{ fields: { DetectionMethod: 'Manual' } }] },
+          },
+          {},
+          configWithMatchOn(['Name']),
+          { onWarn }
+        );
+
+        expect(onWarn).toHaveBeenCalledWith(expect.stringContaining('missing matchOn field(s) Name'));
+        expect(items).toHaveLength(2);
+      });
+
       it('still duplicates without matchOn — the behaviour that made this necessary', async () => {
         const existing = new MockEntity('QueryParameters', {
           ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI',
@@ -1264,7 +1288,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       }).processCollections(
         mockOwner,
         '/dummy',
-        { entity: 'Orders', filePattern: '*.json' },
+        { entity: 'Orders', filePattern: '*.json', collections: { OrderLines: {} } },
         collections,
         0,
         new Set()
@@ -1277,7 +1301,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
     });
 
     describe('natural-keyed collections (matchOn) on pull', () => {
-      const pullParameters = async (collectionConfig: NonNullable<EntityConfig['collections']>[string]) => {
+      const pullParameters = async (collectionConfig: NonNullable<EntityConfig['collections']>[string] | undefined) => {
         const mockSync = {
           getEntityInfo: vi.fn(),
           calculateChecksum: vi.fn().mockReturnValue('cs-1'),
@@ -1317,7 +1341,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         }).processCollections(
           owner,
           '/dummy',
-          { entity: 'MJ: Queries', filePattern: '*.json', collections: { Parameters: collectionConfig } },
+          { entity: 'MJ: Queries', filePattern: '*.json', ...(collectionConfig ? { collections: { Parameters: collectionConfig } } : {}) },
           collections,
           0,
           new Set()
@@ -1343,6 +1367,11 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
 
       it('emits nothing when no item is declared', async () => {
         const items = await pullParameters({ matchOn: ['Name'], declaredWhere: { DetectionMethod: 'User' } });
+        expect(items).toBeUndefined();
+      });
+
+      it('skips a collection the repo does not configure, so derived rows never reach the file', async () => {
+        const items = await pullParameters(undefined);
         expect(items).toBeUndefined();
       });
 

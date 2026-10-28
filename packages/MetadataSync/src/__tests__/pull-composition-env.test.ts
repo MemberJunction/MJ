@@ -126,7 +126,7 @@ describe('RecordProcessor pull — @env: in composition axes', () => {
     };
     const collections: Record<string, RecordData[]> = {};
 
-    await access.processCollections(owner, '/dummy', { entity: 'Orders' }, collections, 0, new Set(), false, existing);
+    await access.processCollections(owner, '/dummy', { entity: 'Orders', collections: { OrderLines: {} } }, collections, 0, new Set(), false, existing);
 
     expect(collections.OrderLines.map((c) => c.fields.Name)).toEqual([`@env:${VAR}`, 'plain']);
     expect(JSON.stringify(collections)).not.toContain(SECRET);
@@ -141,7 +141,7 @@ describe('RecordProcessor pull — @env: in composition axes', () => {
     };
     const collections: Record<string, RecordData[]> = {};
 
-    await access.processCollections(owner, '/dummy', { entity: 'Orders' }, collections, 0, new Set(), false, existing);
+    await access.processCollections(owner, '/dummy', { entity: 'Orders', collections: { OrderLines: {} } }, collections, 0, new Set(), false, existing);
 
     expect(collections.OrderLines[0].primaryKey).toEqual({ ID: `@env:${VAR}` });
   });
@@ -154,7 +154,7 @@ describe('RecordProcessor pull — @env: in composition axes', () => {
     };
 
     await expect(
-      access.processCollections(owner, '/dummy', { entity: 'Orders' }, {}, 0, new Set(), false, existing)
+      access.processCollections(owner, '/dummy', { entity: 'Orders', collections: { OrderLines: {} } }, {}, 0, new Set(), false, existing)
     ).rejects.toBeInstanceOf(UnsetPrimaryKeyVariableError);
   });
 
@@ -327,7 +327,7 @@ describe('RecordProcessor pull — @env: in composition axes', () => {
       };
       const collections: Record<string, RecordData[]> = {};
 
-      await access.processCollections(owner, tempDir, { entity: 'Orders' }, collections, 0, new Set(), false, existing);
+      await access.processCollections(owner, tempDir, { entity: 'Orders', collections: { OrderLines: {} } }, collections, 0, new Set(), false, existing);
 
       expect(collections.OrderLines.map((c) => [c.primaryKey?.ID, c.fields.Name])).toEqual([
         ['line-a', 'plain-a'],
@@ -353,7 +353,7 @@ describe('RecordProcessor pull — @env: in composition axes', () => {
         owner as unknown as Parameters<RecordProcessor['ProcessRecord']>[0],
         { ID: 'ord-1' },
         tempDir,
-        { entity: 'Orders' },
+        { entity: 'Orders', collections: { OrderLines: {} } },
         true,
         false,
         existing

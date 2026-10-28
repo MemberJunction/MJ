@@ -265,6 +265,9 @@ export interface EntityConfig {
   /**
    * Declarative collection configuration for composition axes.
    * Key is collection property name (e.g. "Lines", "Payments").
+   *
+   * Pull writes a collection only when it has an entry here (an empty `{}` is enough);
+   * an unconfigured collection is skipped on pull.
    */
   collections?: Record<string, {
     /** Membership mode: 'upsert' (default) or 'authoritative' (opt-in) */

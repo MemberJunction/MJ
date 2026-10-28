@@ -738,8 +738,9 @@ Some collections hold rows the server creates for itself next to rows you declar
 }
 ```
 
-- **Push**: an item without a matching `primaryKey` is matched on every `matchOn` field, compared case-insensitively. Reference values (`@lookup:`, `@parent:`, `@owner:` …) are resolved before the comparison. An item missing any `matchOn` field is matched by primary key only.
+- **Push**: an item without a matching `primaryKey` is matched on every `matchOn` field, compared case-insensitively. Reference values (`@lookup:`, `@parent:`, `@owner:` …) are resolved before the comparison. An item missing any `matchOn` field is matched by primary key only, and push warns, naming the missing fields.
 - **Pull**: items are written without `primaryKey` and without the join field, since the collection stamps the owner's foreign key. They are sorted by the `matchOn` fields. With `declaredWhere`, only items whose fields equal every given value are written. The server keeps deriving the rest, so they never become authored JSON.
+- **Pull needs config**: pull writes a collection only when `.mj-sync.json` configures it under `collections`. An unconfigured collection is skipped, so rows the server derives never reach the file with their source ids.
 - **No default**: `matchOn` is opt-in. A collection without it matches by primary key only, and every repo that declares such a collection must set it.
 
 Declared items omit `primaryKey` and the join field:
@@ -760,7 +761,7 @@ Declared items omit `primaryKey` and the join field:
    ```
 2. Remove the directive from the JSON after the push. If you leave it, a later push deletes the row extraction re-creates.
 
-Extraction runs only when a query is created or its SQL changes. The parameter is therefore missing until the query's SQL next changes, and that save restores the inferred (`'AI'`) row. Nothing reverts an un-mentioned `'Manual'` row to `'AI'` automatically.
+Extraction runs only when a query is created, its SQL changes, or a dialect variant for the current platform is saved. The parameter is therefore missing until one of those happens, and that save restores the inferred (`'AI'`) row. Nothing reverts an un-mentioned `'Manual'` row to `'AI'` automatically.
 
 
 ### Primary Key Handling
