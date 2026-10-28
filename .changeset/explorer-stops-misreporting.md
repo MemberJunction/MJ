@@ -14,7 +14,7 @@
 ---
 
 Explorer surfaces stop reporting state the server never sent:
-- A cold cache plus an unreachable endpoint serves the cached metadata instead of "System Error".
+- A cold cache plus an unreachable endpoint serves the cached metadata instead of "System Error". Only a transport failure degrades this way (`IsTransportError` in `@memberjunction/core`); a server that answered — an access denial, a validation rejection — propagates as before.
 - A run the server force-failed no longer keeps spinning, and an alive (Paused / AwaitingFeedback) agent run is no longer painted as a failure.
 - A dashboard no longer reports 0% for a run of successes, and global search no longer drops results silently.
 - An app with more than 1000 entities shows all of them, and an unwarmed template cache no longer crashes the form that fixes it.

@@ -53,6 +53,8 @@ function fakeStorage(entries: Map<string, unknown>): ILocalStorageProvider {
 interface ProbeOptions {
     /** When set, every status query rejects with this message. */
     statusRejectsWith?: string;
+    /** When set, every status query rejects with exactly this value (any shape, not only an Error). */
+    statusRejectsWithError?: unknown;
     /** When set, status queries resolve with this result. */
     statusResolvesWith?: DatasetStatusResultType;
     storage?: ILocalStorageProvider;
@@ -76,6 +78,9 @@ class ProbeProvider extends ProviderBase {
     // ── the two members under test ─────────────────────────────────────────────
     public async GetDatasetStatusByName(): Promise<DatasetStatusResultType> {
         this.statusCalls++;
+        if (this.opts.statusRejectsWithError !== undefined) {
+            throw this.opts.statusRejectsWithError;
+        }
         if (this.opts.statusRejectsWith) {
             throw new Error(this.opts.statusRejectsWith);
         }
@@ -324,5 +329,81 @@ describe('GetAndCacheDatasetByName — a failed freshness check serves the cache
 
         expect(result.DatasetID).toBe('fresh');
         expect(provider.datasetFetches).toBe(1);
+    });
+});
+
+/**
+ * The exact text MJAPI returns when an API key lacks `dataset:read` on `MJ_Metadata`. The
+ * integration tier's FLS fixture builds a reader provider with a key whose scope rule has not
+ * propagated yet, and relies on Config() REJECTING so it can retry until the rule is honored.
+ */
+const SCOPE_DENIAL =
+    "Access denied. This API key requires the 'dataset:read' scope for resource 'MJ_Metadata' to " +
+    "perform this operation. Please update the API key's scopes or use an API key with appropriate " +
+    'permissions. Denial reason: No matching key scope rules';
+
+describe('a server that ANSWERED "no" is not an outage — a denial propagates, it never degrades', () => {
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* silenced */ });
+    });
+
+    afterEach(() => {
+        errorSpy.mockRestore();
+    });
+
+    it('CheckToSeeIfRefreshNeeded rejects with the denial even though a cached snapshot exists', async () => {
+        // Serving the cache here would hand an unauthorised identity a metadata snapshot the
+        // server just refused to give it, and would make the refusal invisible to the caller.
+        const provider = new ProbeProvider({ statusRejectsWith: SCOPE_DENIAL });
+        provider.seedLocalMetadata(612);
+
+        await expect(provider.CheckToSeeIfRefreshNeeded(undefined, true)).rejects.toThrow('dataset:read');
+    });
+
+    it('RefreshRemoteMetadataTimestamps rejects with the denial instead of reporting "could not tell"', async () => {
+        const provider = new ProbeProvider({ statusRejectsWith: SCOPE_DENIAL });
+
+        await expect(provider.callRefreshRemoteTimestamps()).rejects.toThrow('dataset:read');
+    });
+
+    it('a GraphQL-shaped denial (HTTP 200 with response.errors[]) is not read as transport either', async () => {
+        const provider = new ProbeProvider({
+            statusRejectsWithError: Object.assign(new Error(SCOPE_DENIAL), {
+                response: { status: 200, errors: [{ message: SCOPE_DENIAL, extensions: { code: 'FORBIDDEN' } }] },
+            }),
+        });
+        provider.seedLocalMetadata(612);
+
+        await expect(provider.CheckToSeeIfRefreshNeeded(undefined, true)).rejects.toThrow('dataset:read');
+    });
+
+    it('a programming error on the status path propagates too — degrading would hide it', async () => {
+        const provider = new ProbeProvider({ statusRejectsWithError: new TypeError("Cannot read properties of undefined (reading 'EntityUpdateDates')") });
+        provider.seedLocalMetadata(612);
+
+        await expect(provider.CheckToSeeIfRefreshNeeded(undefined, true)).rejects.toThrow(TypeError);
+    });
+
+    it('GetAndCacheDatasetByName propagates the denial and does NOT serve the cache it holds', async () => {
+        const entries = new Map<string, unknown>();
+        const provider = new ProbeProvider({ statusRejectsWith: SCOPE_DENIAL, storage: fakeStorage(entries) });
+        seedCachedDataset(provider, entries, '2026-05-01T00:00:00.000Z');
+
+        await expect(provider.GetAndCacheDatasetByName(DATASET)).rejects.toThrow('dataset:read');
+        expect(provider.datasetFetches).toBe(0);
+    });
+
+    it('still degrades on a real transport failure carried as a status code, not as words', async () => {
+        // Apollo's shape for a dead round trip: no transport vocabulary in the message at all.
+        const provider = new ProbeProvider({
+            statusRejectsWithError: Object.assign(new Error('Response not successful: Received status code 504'), {
+                response: { status: 504 },
+            }),
+        });
+        provider.seedLocalMetadata(612);
+
+        await expect(provider.CheckToSeeIfRefreshNeeded(undefined, true)).resolves.toBe(false);
     });
 });

@@ -38,6 +38,7 @@ export * from "./generic/entityInfo";
 export * from "./generic/alternateBaseViews";
 export * from "./generic/geoFields";
 export * from "./generic/listMembershipFilter";
+export * from "./generic/transportError";
 export * from "./generic/extendedTypeValue";
 export * from "./generic/entityConfiguration";
 export * from "./generic/externalDataSourceTypes";

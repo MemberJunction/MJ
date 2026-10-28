@@ -1,4 +1,5 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
+import { IsTransportError } from './transportError';
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { GetEffectiveAlternateBaseViewName, IsExplicitBaseViewOverride } from "./alternateBaseViews";
 import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
@@ -6881,6 +6882,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 status = await this.GetDatasetStatusByName(datasetName, itemFilters);
             }
             catch (e) {
+                // Only the TRANSPORT failing earns the fallback. A server that answered "no"
+                // (an identity without the scope, a validation rejection) gave a definite
+                // answer that waiting will not change, and the cache would hand the caller
+                // exactly what the server just declined to — so that propagates as it always did.
+                if (!IsTransportError(e)) {
+                    throw e;
+                }
                 // We are HOLDING a complete cached dataset and only asked whether it is still
                 // current. A failed freshness question is not grounds for throwing the answer
                 // away and propagating: the line below re-fetches the whole dataset from the
@@ -7198,8 +7206,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   Degrading here would serve a stale cache forever; the historical behaviour of treating
      *   it as "obsolete" and attempting the real load is correct, because `GetDatasetByName`
      *   may well still work.
+     * - A rejection that is NOT a transport failure — an authorization denial ("this API key
+     *   requires the dataset:read scope"), a validation rejection, a programming error — is
+     *   the server (or our own code) answering, not the wire failing. It propagates exactly
+     *   as it did before this method existed. {@link IsTransportError} draws the line. The
+     *   integration tier's FLS fixture depends on this: it builds a reader whose scope rule
+     *   has not propagated yet and retries `Config()` until the denial stops — a denial
+     *   swallowed into `Reached: false` left that reader with an empty snapshot for good.
      *
-     * Conflating the two is how a broken status endpoint would become permanently invisible.
+     * Conflating these is how a broken status endpoint — or a refused identity — would become
+     * permanently invisible.
      */
     protected async ReadRemoteMetadataTimestamps(
         providerToUse?: IMetadataProvider
@@ -7210,6 +7226,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse)
         }
         catch (e) {
+            if (!IsTransportError(e)) {
+                // The server answered — with a refusal. Not ours to soften.
+                throw e;
+            }
             LogError(
                 `ReadRemoteMetadataTimestamps: the metadata status query failed — ` +
                 `${e instanceof Error ? e.message : String(e)}. Reporting the server as unreachable; ` +

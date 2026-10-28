@@ -33,19 +33,26 @@ const { runViewImpl } = vi.hoisted(() => ({
   runViewImpl: vi.fn(async (_params: unknown): Promise<RunViewStubResult> => ({ Success: true, Results: [] })),
 }));
 
-vi.mock('@memberjunction/core', () => ({
-  LogError: vi.fn(),
-  LogStatus: vi.fn(),
-  LogStatusEx: vi.fn(),
-  Metadata: class {
-    CurrentUser = { ID: 'user-1' };
-  },
-  RunView: class {
-    RunView(params: unknown) {
-      return runViewImpl(params);
-    }
-  },
-}));
+vi.mock('@memberjunction/core', async () => {
+  // The transport classifier is the real one: these tests pin what the service classifies as
+  // retryable, and the definition it delegates to lives in core.
+  const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+  return {
+    LogError: vi.fn(),
+    LogStatus: vi.fn(),
+    LogStatusEx: vi.fn(),
+    IsTransportError: actual.IsTransportError,
+    DescribeTransportError: actual.DescribeTransportError,
+    Metadata: class {
+      CurrentUser = { ID: 'user-1' };
+    },
+    RunView: class {
+      RunView(params: unknown) {
+        return runViewImpl(params);
+      }
+    },
+  };
+});
 
 vi.mock('@memberjunction/graphql-dataprovider', () => ({
   setupGraphQLClient: vi.fn(),
