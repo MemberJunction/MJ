@@ -133,6 +133,10 @@ export type {
     SourceObjectListItem,
     SourceObjectSelectionInput,
     IntegrationBootstrapStartInput,
+    IntegrationArchiveSeedStartInput,
+    IntegrationArchiveSeedTable,
+    IntegrationArchiveSeedSummary,
+    IntegrationArchiveSeedState,
     IntegrationRunSummary,
     IntegrationRunEvent
 } from './graphQLIntegrationClient';
