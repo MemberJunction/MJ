@@ -413,11 +413,21 @@
                                                 }
                                             </div>
                                             <h3 class="cos-priority-card__title">{{ card.Task.Name }}</h3>
-                                            @if (card.Assignees.length > 0) {
-                                                <div class="cos-assignees" title="Assigned to">
-                                                    <i class="fa-solid fa-user-group"></i>
-                                                    @for (who of card.Assignees; track who.PersonID) {
-                                                        <span class="cos-assignee-chip" [class.cos-assignee-chip--me]="card.AssignedToMe && IsCurrentPerson(who.PersonID)">{{ who.Name }}</span>
+                                            @if (card.Owner || card.Assignees.length > 0) {
+                                                <div class="cos-assignees">
+                                                    @if (card.Owner) {
+                                                        <span class="cos-assignees__label" title="The person who created this objective">
+                                                            <i class="fa-solid fa-crown"></i> Owner
+                                                        </span>
+                                                        <span class="cos-assignee-chip cos-assignee-chip--owner" [class.cos-assignee-chip--me]="card.OwnedByMe">{{ card.OwnedByMe ? 'You' : card.Owner.Name }}</span>
+                                                    }
+                                                    @if (card.Assignees.length > 0) {
+                                                        <span class="cos-assignees__label" title="Assigned to this objective">
+                                                            <i class="fa-solid fa-user-group"></i> Assigned
+                                                        </span>
+                                                        @for (who of card.Assignees; track who.PersonID) {
+                                                            <span class="cos-assignee-chip" [class.cos-assignee-chip--me]="IsCurrentPerson(who.PersonID)">{{ IsCurrentPerson(who.PersonID) ? 'You' : who.Name }}</span>
+                                                        }
                                                     }
                                                 </div>
                                             }

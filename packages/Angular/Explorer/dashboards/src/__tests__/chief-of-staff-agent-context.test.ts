@@ -772,3 +772,27 @@ describe('CalculateChiefOfStaffMetrics — the objective is shared context, the 
         expect(card.Milestones.length).toBe(2);
     });
 });
+
+describe('CalculateChiefOfStaffMetrics — the objective names its owner', () => {
+    it('reads the owner off the objective\'s creator, using the view\'s denormalized name', () => {
+        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: 'P1', CreatedByPerson: 'Paul Christmann' });
+        const child = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Step' });
+        const card = CalculateChiefOfStaffMetrics([root, child], [], [], new Date(), { CurrentPersonID: 'P2' }).PriorityCards[0];
+        expect(card.Owner).toEqual({ PersonID: 'P1', Name: 'Paul Christmann' });
+        expect(card.OwnedByMe).toBe(false);
+    });
+
+    it('marks the owner as the current person when they created it, and falls back to the ID when the view carries no name', () => {
+        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: 'p1', CreatedByPerson: null });
+        const card = CalculateChiefOfStaffMetrics([root], [], [], new Date(), { CurrentPersonID: 'P1' }).PriorityCards[0];
+        expect(card.Owner).toEqual({ PersonID: 'p1', Name: 'p1' });
+        expect(card.OwnedByMe).toBe(true);
+    });
+
+    it('has no owner when the objective carries no creator', () => {
+        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: null });
+        const card = CalculateChiefOfStaffMetrics([root], [], []).PriorityCards[0];
+        expect(card.Owner).toBeNull();
+        expect(card.OwnedByMe).toBe(false);
+    });
+});

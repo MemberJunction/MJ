@@ -94,6 +94,8 @@ export interface BizAppsTaskRecordLike {
     TaskType?: string | null;
     /** The person who created the task; with the objective's assignees, decides who owns it. */
     CreatedByPersonID?: string | null;
+    /** The creator's name, denormalized on the Tasks view. */
+    CreatedByPerson?: string | null;
 }
 
 /**
@@ -130,6 +132,10 @@ export interface PriorityObjectiveCardViewModel {
     AssignedToMe: boolean;
     /** True when the signed-in person created the objective or is assigned to it; owners see every milestone. */
     IsOwner: boolean;
+    /** The objective's owner: the person who created it. Null when the task carries no creator. */
+    Owner: TaskAssignee | null;
+    /** True when the signed-in person is the creator. */
+    OwnedByMe: boolean;
     CompletedSubtaskCount: number;
     EffectivePercentComplete: number;
     EffectiveHealth: TaskHealthStatus;
@@ -650,8 +656,11 @@ export function CalculateChiefOfStaffMetrics(
 
         const rootAssignees = assigneesOf(root.ID);
         const assignedToMe = heldByMe(rootAssignees);
-        const isOwner = assignedToMe
-            || (!!options.CurrentPersonID && !!root.CreatedByPersonID && UUIDsEqual(root.CreatedByPersonID, options.CurrentPersonID));
+        const owner: TaskAssignee | null = root.CreatedByPersonID
+            ? { PersonID: root.CreatedByPersonID, Name: root.CreatedByPerson?.trim() || root.CreatedByPersonID }
+            : null;
+        const ownedByMe = !!owner && !!options.CurrentPersonID && UUIDsEqual(owner.PersonID, options.CurrentPersonID);
+        const isOwner = assignedToMe || ownedByMe;
         const milestoneRows: MilestoneRowViewModel[] = children.map((child) => {
             const assignees = assigneesOf(child.ID);
             return { Task: child, Assignees: assignees, AssignedToMe: heldByMe(assignees) };
@@ -666,6 +675,8 @@ export function CalculateChiefOfStaffMetrics(
             Assignees: rootAssignees,
             AssignedToMe: assignedToMe,
             IsOwner: isOwner,
+            Owner: owner,
+            OwnedByMe: ownedByMe,
             CompletedSubtaskCount: completedChildren,
             EffectivePercentComplete: effectivePercent,
             EffectiveHealth: effectiveHealth,
