@@ -154,6 +154,8 @@ export type {
 
 // ─── SqlDocument: the tolerant structural parser, scope, analyses and edits ───
 export { SqlDocument } from './sql/sqlDocument.js';
+export { TemplateSqlViews, ReadWithoutErrors } from './legacy/templateSqlViews.js';
+export type { SqlView } from './legacy/templateSqlViews.js';
 export { SqlDocumentDiagnosticCodes } from './sql/sqlDiagnosticCodes.js';
 export type { SqlDocumentDiagnosticCode } from './sql/sqlDiagnosticCodes.js';
 export { SqlExpression } from './sql/sqlExpression.js';

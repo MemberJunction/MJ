@@ -396,7 +396,8 @@ describe('Merge Priority: Deterministic vs LLM', () => {
             expect(synced?.map(f => [f.name, f.description])).toEqual([['SpeakerName', 'Full name of the speaker']]);
         });
 
-        it.fails('should never take sourceEntity from the LLM when deterministic has none', async () => {
+        // E4: the LLM writes descriptions only (DISCUSSION §6, 2026-10-26).
+        it('should never take sourceEntity from the LLM when deterministic has none', async () => {
             await RunExtractionPipeline(ctx());
             const synced = mockSyncFields.mock.calls[0]?.[1];
             expect(synced).toHaveLength(1);
@@ -404,10 +405,8 @@ describe('Merge Priority: Deterministic vs LLM', () => {
             expect(synced?.[0].sourceFieldName).toBe('Name');
         });
 
-        // Pinned: the LLM writes descriptions only (DISCUSSION §6, 2026-10-26). E4, LLM-only branch: when the
-        // parser yields no columns the LLM's selectClause is synced as-is, sources included.
-        // Observed today: expected [[null, null]], received [['Speakers', 'FullName']].
-        it.fails('should never take sourceEntity / sourceFieldName from LLM-only fields', async () => {
+        // E4, LLM-only branch: when the parser yields no columns, the LLM's fields carry no source.
+        it('should never take sourceEntity / sourceFieldName from LLM-only fields', async () => {
             await RunExtractionPipeline({ ...ctx(), sql: 'EXEC ext.spSpeakerNames' });
             const synced = mockSyncFields.mock.calls[0]?.[1];
             expect(synced?.map(f => [f.sourceEntity ?? null, f.sourceFieldName ?? null])).toEqual([[null, null]]);

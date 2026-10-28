@@ -98,18 +98,16 @@ describe('MJQueryEntityServer Save — duplicate output column names (R10 / S10)
         expect(writes.length).toBeGreaterThan(0);
     });
 
-    // Pinned: saving a query with duplicate output names (case-insensitive) is refused (DISCUSSION §6,
-    // 2026-10-27: spec save rules; side finding "stale-column queries saved silently"). R10 / S10.
-    // Observed today: Save returns true and writes the row (expected false, received true).
-    it.fails('refuses a query whose output repeats a column name in a different case', async () => {
+    // Saving a query with duplicate output names (case-insensitive) is refused (DISCUSSION §6,
+    // 2026-10-27: spec save rules). R10 / S10.
+    it('refuses a query whose output repeats a column name in a different case', async () => {
         const query = createQuery('SELECT a.ID, b.id FROM ext.Accounts a JOIN ext.Balances b ON b.AccountID = a.ID');
         expect(await query.Save()).toBe(false);
         expect(writes).toHaveLength(0);
     });
 
-    // Pinned: as above; an alias that collides with another output column counts as a duplicate. R10 / S10.
-    // Observed today: Save returns true (expected false, received true).
-    it.fails('refuses a query whose alias collides with another output column', async () => {
+    // As above; an alias that collides with another output column counts as a duplicate. R10 / S10.
+    it('refuses a query whose alias collides with another output column', async () => {
         const query = createQuery('SELECT a.Total AS Amount, b.amount FROM ext.Accounts a JOIN ext.Balances b ON b.AccountID = a.ID');
         expect(await query.Save()).toBe(false);
         expect(writes).toHaveLength(0);

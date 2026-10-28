@@ -1,10 +1,15 @@
 import {
     BaseEntity,
+    BaseEntityResult,
+    DatabasePlatform,
+    DatabaseProviderBase,
     EntitySaveOptions,
     IMetadataProvider,
+    IRunViewProvider,
     LogError,
+    PostCommitToken,
     SimpleEmbeddingResult,
-    DatabasePlatform,
+    UserInfo,
 } from "@memberjunction/core";
 import {
     ComputeQueryFingerprintAsync,
@@ -18,9 +23,10 @@ import {
     QueryEngine,
 } from "@memberjunction/core-entities";
 import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { GenericDatabaseProvider, UserCache } from "@memberjunction/generic-database-provider";
+import { CompositionFullPath } from "@memberjunction/sql-parser";
 import { EmbedTextLocalHelper } from "./util";
 import {
-    RunExtractionPipeline,
     CleanupQueryData,
     ConvertTSQLToPostgreSQL,
     CollectDeclaredQueryChildren,
@@ -30,25 +36,71 @@ import {
     QueryChildNameKey,
     QueryEntityKey,
     NO_DECLARED_QUERY_CHILDREN,
+    ComputeQueryExtraction,
+    WriteExtractedChildRows,
+    RunDescriptionPass,
+    SQLUsesTemplate,
 } from "./query-extraction";
-import type { QuerySyncContext, DeclaredQueryChildren } from "./query-extraction";
-import { SQLParser } from "@memberjunction/sql-parser";
-import { GetDialect } from "@memberjunction/sql-dialect";
-import { resolveDbPlatformFromEnv } from "@memberjunction/generic-database-provider";
+import type {
+    QuerySyncContext,
+    DeclaredQueryChildren,
+    KnownQueryParameter,
+    QueryExtractionMode,
+    QueryExtractionOverride,
+    QueryExtractionResult,
+    ChildRowWriteSummary,
+} from "./query-extraction";
 import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
 
+/** The provider shape extraction reads and writes through. */
+type ExtractionProvider = IMetadataProvider & IRunViewProvider;
+
+/** Whether `provider` can read views and create entity objects, which is all extraction's writes need. */
+function IsExtractionProvider(provider: unknown): provider is ExtractionProvider {
+    if (provider === null || typeof provider !== 'object') return false;
+    return typeof Reflect.get(provider, 'RunView') === 'function' && typeof Reflect.get(provider, 'GetEntityObject') === 'function';
+}
+
+/** Whether and how a save extracts. */
+interface ExtractionPlan {
+    readonly Run: boolean;
+    readonly Mode: QueryExtractionMode;
+}
+
 /**
- * Server-side query entity with embedding generation, SQL extraction pipeline,
- * and dialect auto-conversion. Extends `MJQueryEntityExtended` which provides
- * child-relationship getters and business logic available on both client and server.
+ * Server-side query entity with embedding generation, SQL extraction, and dialect auto-conversion.
+ * Extends `MJQueryEntityExtended`, which provides the child-relationship getters and business
+ * logic available on both client and server.
+ *
+ * **Extraction.** A save of a new query, of a query whose SQL changed, or with
+ * {@link ExtractionOverride} `Force`, establishes the query's facts (`ComputeQueryExtraction`):
+ * its parameters, compositions and the entities it reads from MJ's parser, and its output fields
+ * from the database server's description of each render. Save-time rule errors and repeated
+ * output names refuse a new or edited query, with the reasons in the save's result. Once the save
+ * of the query row succeeds, the child rows are brought in line with the facts as the system user,
+ * keeping what people authored (`WriteExtractedChildRows`), and the query's `UsesTemplate`,
+ * `ExtractedSQLHash`, `ExtractionStatus` and `ExtractionMessage` record the run. Empty
+ * descriptions are then filled by an LLM after the save's transaction commits, unless the save
+ * skips AI actions.
  */
 @RegisterClass(BaseEntity, 'MJ: Queries')
 export class MJQueryEntityServer extends MJQueryEntityExtended {
-    /** Optional caller-provided parameter sample values. When set, these override
-     *  LLM-generated sampleValues during the extraction pipeline. Use this to pass
-     *  tested/validated values from the calling system.
-     *  Keys are parameter names, values are the tested sample values. */
+    /** Optional caller-provided parameter sample values. When set, these are used as the sample of a
+     *  parameter extraction adds, and in the renders that are described. Use this to pass tested,
+     *  validated values from the calling system. Keys are parameter names. */
     public ParameterHints?: Map<string, string>;
+
+    /**
+     * What the next save does about extraction: `Auto` (the default) extracts when the query is new
+     * or its SQL changed; `Skip` does not extract, so the save-time rules are not applied and the
+     * child rows, the Extraction columns and `UsesTemplate` stay as they are (for bulk loaders and
+     * fixtures that write those themselves); `Force` extracts even when the SQL did not change.
+     * Reset to `Auto` after each save.
+     */
+    public ExtractionOverride: QueryExtractionOverride = 'Auto';
+
+    /** The SQL a re-extraction reads instead of the cached platform variant (set by {@link RerunExtraction}). */
+    private platformSQLOverride: string | null = null;
 
     // ─── Embedding Methods ───────────────────────────────────────────────────────
 
@@ -68,8 +120,14 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * embedder error — all three columns are cleared, so a query whose text changed never keeps a vector
      * computed from its old text. An embedder error is logged and does not fail the save; the query simply
      * has no semantic match until its next successful embedding.
+     *
+     * Does nothing when {@link SkipEmbeddings} is set (a bulk load computes them later), so the stored
+     * vector is left as it is.
      */
     protected async GenerateCompositeEmbedding(): Promise<void> {
+        if (this.SkipEmbeddings) {
+            return;
+        }
         const parts = [
             this.Name || '',
             this.UserQuestion || '',
@@ -103,6 +161,16 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         this.EmbeddingModelID = null;
     }
 
+    /** Re-embeds when the embedded text changed; clears a stale vector when there is no description. */
+    private async refreshEmbeddingAsync(): Promise<void> {
+        const changed = !this.IsSaved || ['Name', 'Description', 'UserQuestion'].some(f => this.GetFieldByName(f).Dirty);
+        if (changed) {
+            await this.GenerateCompositeEmbedding();
+        } else if ((!this.Description || this.Description.trim().length === 0) && !this.SkipEmbeddings) {
+            this.clearEmbedding();
+        }
+    }
+
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
@@ -115,77 +183,116 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             return false;
         }
         try {
-            const sqlField = this.GetFieldByName('SQL');
-            const nameField = this.GetFieldByName('Name');
-            const descriptionField = this.GetFieldByName('Description');
-            const userQuestionField = this.GetFieldByName('UserQuestion');
-            const shouldExtractData = !this.IsSaved || sqlField.Dirty;
-            const declared = await this.PrepareDeclaredChildrenAsync(options);
-            const shouldGenerateEmbedding = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
-
-            // Generate embedding from composite text for better semantic search
-            if (shouldGenerateEmbedding) {
-                await this.GenerateCompositeEmbedding();
-            } else if (!this.Description || this.Description.trim().length === 0) {
-                this.EmbeddingVector = null;
-                this.EmbeddingVectorBinary = null;
-                this.EmbeddingModelID = null;
-            }
-
-            // Save the query first without AI processing. With declared children this is a graph
-            // save: the query row, then the children, in one transaction.
-            const saveResult = await super.Save(options);
-            if (!saveResult) {
-                return false;
-            }
-
-            // Extract AFTER the save, so the declared children are already written. Inside an
-            // enclosing transaction (an atomic metadata push) these writes join it.
-            if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync(options?.SkipEntityAIActions === true, declared);
-                await this.autoConvertDialectsAsync();
-            } else if (!this.SQL || this.SQL.trim().length === 0) {
-                this.UsesTemplate = false;
-                await this.cleanupEmptyQueryAsync();
-            }
-
-            // The parameter and dialect rows are rewritten after the Query row, so the approved
-            // fingerprint is taken last, from the definition as stored.
-            if (approving) {
-                await this.stampApprovalFingerprintAsync(options);
-            }
-
-            return true;
+            return await this.saveWithExtractionAsync(options, approving);
         } catch (e) {
             LogError('Failed to save query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
+        } finally {
+            this.ExtractionOverride = 'Auto';
+            this.platformSQLOverride = null;
         }
+    }
+
+    /**
+     * The save: facts first (a refusal writes nothing), then the query row (a graph save with any
+     * declared children), then the child rows extraction derives, then the approval fingerprint.
+     */
+    private async saveWithExtractionAsync(options: EntitySaveOptions | undefined, approving: boolean): Promise<boolean> {
+        const declared = await this.PrepareDeclaredChildrenAsync(options);
+        const plan = this.planExtraction(options, HasDeclaredQueryChildren(declared));
+        const extraction = plan.Run ? await this.computeExtractionAsync(plan.Mode) : null;
+        if (extraction?.Refusal) {
+            this.RegisterResultHistoryEntry(this.refusalResult(extraction.Refusal));
+            return false;
+        }
+        this.applyRunColumns(extraction);
+        await this.refreshEmbeddingAsync();
+        const postCommit = this.capturePostCommitToken();
+        if (!await super.Save(options)) {
+            return false;
+        }
+        if (extraction) {
+            await this.writeExtractionAsync(extraction, options, postCommit);
+            await this.autoConvertDialectsAsync();
+        } else if (!this.hasSQL) {
+            await this.cleanupEmptyQueryAsync();
+        }
+        // The child and dialect rows are rewritten after the Query row, so the approved fingerprint is
+        // taken last, from the definition as stored.
+        if (approving) {
+            await this.stampApprovalFingerprintAsync(options);
+        }
+        return true;
+    }
+
+    private get hasSQL(): boolean {
+        return !!this.SQL && this.SQL.trim().length > 0;
+    }
+
+    /**
+     * Whether this save extracts, and under which rules: a new or edited query extracts under the
+     * save-time rules; a save that writes declared child rows, or a `Force` override, re-extracts an
+     * unchanged query under the refresh rules, so the facts of rows it writes are corrected again.
+     */
+    private planExtraction(options: EntitySaveOptions | undefined, writesDeclaredChildren: boolean): ExtractionPlan {
+        const edited = !this.IsSaved || this.GetFieldByName('SQL').Dirty;
+        if (options?.ReplayOnly || !this.hasSQL || this.ExtractionOverride === 'Skip') {
+            return { Run: false, Mode: 'Save' };
+        }
+        return { Run: edited || writesDeclaredChildren || this.ExtractionOverride === 'Force', Mode: edited ? 'Save' : 'Refresh' };
+    }
+
+    /**
+     * Sets the columns a save records about the SQL before the row is written. `UsesTemplate` is a
+     * lexical fact and follows every SQL change; it is never changed by a failed extraction. A save
+     * with {@link ExtractionOverride} `Skip` leaves it as the caller set it, like the other
+     * extraction results.
+     */
+    private applyRunColumns(extraction: QueryExtractionResult | null): void {
+        if (extraction) {
+            this.UsesTemplate = extraction.UsesTemplate;
+            this.ExtractedSQLHash = extraction.Hash;
+            this.ExtractionStatus = extraction.Status;
+            this.ExtractionMessage = extraction.Messages.length > 0 ? extraction.Messages.join('\n') : null;
+        } else if (!this.hasSQL) {
+            this.UsesTemplate = false;
+        } else if (this.ExtractionOverride !== 'Skip' && (!this.IsSaved || this.GetFieldByName('SQL').Dirty)) {
+            this.UsesTemplate = this.lexicalUsesTemplate();
+        }
+    }
+
+    /** Whether the SQL holds a template tag outside comments, read by the lexer. */
+    private lexicalUsesTemplate(): boolean {
+        return SQLUsesTemplate(this.SQL ?? '', this.extractionPlatform);
+    }
+
+    /** The save's result entry for a refused save, carrying the reasons. */
+    private refusalResult(reason: string): BaseEntityResult {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = this.IsSaved ? 'update' : 'create';
+        result.Message = reason;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        return result;
     }
 
     /**
      * The declared-rows-win hook, run before the save writes anything.
      *
      * A caller can save a query together with child rows it declares, through the `Parameters`,
-     * `Fields` and `Entities` collections. Two rules make those declared rows win over what
-     * extraction writes for the same key — a parameter or field name, or a linked entity:
+     * `Fields` and `Entities` collections. When a NEW declared row has the key of a stored row with a
+     * different ID whose `DetectionMethod` is not `Manual` (a row extraction created), the stored row
+     * is deleted inside the same graph save, before the declared row is inserted. The declared row
+     * keeps the ID the caller gave it, which is what makes a metadata file that names its child IDs
+     * converge instead of colliding with rows extraction wrote earlier. A stored `Manual` row is never
+     * deleted here; a declared row that collides with one fails the save on the database's own
+     * uniqueness rule where there is one.
      *
-     * 1. **A stored row extraction created is replaced by the declared one.** When a NEW declared
-     *    row has the key of a stored row with a different ID whose `DetectionMethod` is not `Manual`,
-     *    the stored row is deleted inside the same graph save, before the declared row is inserted.
-     *    The declared row keeps the ID the caller gave it, which is what makes a metadata file that
-     *    names its child IDs converge instead of colliding with rows extraction wrote earlier.
-     * 2. **Extraction leaves declared rows alone.** The returned keys go to extraction, which does not
-     *    add, update or delete a row with a declared key during this save.
-     *
-     * A stored row whose `DetectionMethod` is `Manual` was authored and is never deleted here; a
-     * declared row that collides with one fails the save on the database's own uniqueness rule
-     * where there is one.
-     *
-     * Extraction is the consumer of rule 2: whichever implementation runs after `super.Save()`
-     * receives the declared keys through `QuerySyncContext.DeclaredChildren`, and may report the
-     * facts it computes for a declared row but never write them. Rule 1 runs here, not in
-     * extraction, because it has to happen inside the graph save, before the children's inserts.
+     * Extraction then runs after `super.Save()`, sees the declared rows already written, and treats
+     * them like any stored row: their facts are corrected from the SQL, their authored annotations
+     * kept.
      *
      * @param options - The save's options. A `ReplayOnly` save, or one that skips related
      *   collections, writes no declared rows, so nothing is declared.
@@ -204,9 +311,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     }
 
     /**
-     * Rule 1 of {@link PrepareDeclaredChildrenAsync}: reads the stored child rows from the database
-     * (never a cache, which inside a transaction can miss rows written earlier in it) and queues the
-     * extraction-created rows each new declared row replaces for deletion in the graph save.
+     * Reads the stored child rows from the database (never a cache, which inside a transaction can
+     * miss rows written earlier in it) and queues the extraction-created rows each new declared row
+     * replaces for deletion in the graph save.
      */
     private async queueReplacedRowDeletionsAsync(): Promise<void> {
         const filter = `QueryID='${EscapeSQLString(this.ID)}'`;
@@ -264,11 +371,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     override async Delete(options?: EntitySaveOptions): Promise<boolean> {
         try {
-            const deleteResult = await super.Delete(options);
-            if (!deleteResult) {
-                return false;
-            }
-            return deleteResult;
+            return await super.Delete(options);
         } catch (e) {
             LogError('Failed to delete query:', e);
             this.LatestResult?.Errors.push(e);
@@ -276,147 +379,172 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         }
     }
 
-    // ─── Pipeline Delegation ─────────────────────────────────────────────────────
+    // ─── Extraction ──────────────────────────────────────────────────────────────
 
     /**
-     * Returns the database platform of the connected database.
-     * Uses the DB_PLATFORM env var (same source as MJServer's provider selection).
+     * The platform the query is extracted for: the platform of the provider this entity saves
+     * through, so two providers on different platforms in one process each extract for their own.
      */
-    private get currentPlatform(): DatabasePlatform {
-        return resolveDbPlatformFromEnv() ?? 'sqlserver';
+    private get extractionPlatform(): DatabasePlatform {
+        const provider = this.ProviderToUse;
+        return provider instanceof DatabaseProviderBase ? provider.PlatformKey : 'sqlserver';
+    }
+
+    /** The provider as extraction reads and writes through it; `null` when it cannot read views and create entity objects. */
+    private get extractionProvider(): ExtractionProvider | null {
+        const provider: unknown = this.ProviderToUse;
+        return IsExtractionProvider(provider) ? provider : null;
     }
 
     /**
-     * Resolves the SQL to use for extraction based on the current database platform.
-     *
-     * Resolution order:
-     *   1. MJ: Query SQLs record matching the current platform's dialect → use that SQL
-     *   2. Base Query.SQL field → fall back if no dialect variant exists
-     *
-     * After resolution, validates the SQL is compatible with the current platform's
-     * dialect by attempting a parse. Logs a warning if the SQL appears to be for a
-     * different dialect (e.g., T-SQL bracket identifiers on a PostgreSQL database).
+     * The user derived child rows are read and written as: the system user, once the caller's save
+     * of the query is authorized (the rows mirror SQL the caller was allowed to change, like CodeGen
+     * output). The caller when no system user is loaded.
      */
-    private resolveExtractionSQL(): string {
-        const platform = this.currentPlatform;
-
-        // 1. Check for a dialect-specific QuerySQL record
-        const platformSQL = this.GetPlatformSQL(platform);
-
-        // If GetPlatformSQL returned something different from the base SQL, use it
-        const resolvedSQL = platformSQL || this.SQL;
-
-        if (!resolvedSQL || resolvedSQL.trim().length === 0) {
-            return '';
-        }
-
-        // Validate dialect compatibility
-        this.validateDialectCompatibility(resolvedSQL, platform);
-
-        return resolvedSQL;
+    private get extractionUser(): UserInfo {
+        return UserCache.Instance?.GetSystemUser?.() ?? this.ContextCurrentUser;
     }
 
-    /**
-     * Best-effort dialect validation: attempts to parse the SQL with the current platform's
-     * dialect. If parsing throws, logs a warning — the SQL may be for a different dialect.
-     *
-     * This is a heuristic, not a guarantee: node-sql-parser is permissive on many
-     * dialect-specific functions (ISNULL, GETDATE pass in both dialects), so a passing
-     * parse does not prove the SQL is correct for this dialect. But a failing parse is a
-     * strong signal of incompatibility.
-     */
-    private validateDialectCompatibility(sql: string, platform: DatabasePlatform): void {
+    /** The SQL extraction reads: a re-extraction's override, else the query's SQL for the platform. */
+    private get extractionSQL(): string {
+        return this.platformSQLOverride ?? (this.GetPlatformSQL(this.extractionPlatform) || this.SQL || '');
+    }
+
+    /** Establishes the query's facts (nothing is written). */
+    private async computeExtractionAsync(mode: QueryExtractionMode): Promise<QueryExtractionResult> {
+        const provider = this.ProviderToUse;
+        await this.ensureQueryEngineLoadedAsync();
+        return ComputeQueryExtraction({
+            QueryID: this.IsSaved ? this.ID : null,
+            QueryName: this.Name,
+            QueryPath: CompositionFullPath({ Name: this.Name, CategoryPath: this.CategoryID ? this.BuildCategoryPath(this.CategoryID) : '' }),
+            SQL: this.extractionSQL,
+            Platform: this.extractionPlatform,
+            Mode: mode,
+            IsExternal: !!this.ExternalDataSourceID,
+            KnownParameters: await this.knownParametersAsync(),
+            ParameterHints: this.ParameterHints,
+            ContextUser: this.ContextCurrentUser,
+            Entities: provider instanceof DatabaseProviderBase ? provider.Entities : [],
+            Queries: QueryEngine.Instance.Queries,
+            Describe: provider instanceof GenericDatabaseProvider ? (sql: string) => provider.DescribeStatement(sql, this.ContextCurrentUser) : null,
+        });
+    }
+
+    /** Loads QueryEngine when this process has not yet (a CLI or sync context); compositions resolve against it. */
+    private async ensureQueryEngineLoadedAsync(): Promise<void> {
+        if (QueryEngine.Instance.Loaded) return;
         try {
-            const dialect = GetDialect(platform);
-            // Attempt to parse — will throw on strong dialect markers
-            // (e.g., [bracket] identifiers fail on PG, :: casts fail on T-SQL)
-            SQLParser.ExtractSelectColumns(sql, dialect);
-        } catch {
-            const otherDialect = platform === 'postgresql' ? 'T-SQL (SQL Server)' : 'PostgreSQL';
-            console.warn(
-                `[MJQueryEntityServer] Query "${this.Name}" — SQL may be incompatible with the ` +
-                `current database platform "${platform}". The SQL appears to use ${otherDialect} syntax. ` +
-                `Consider adding a dialect-specific variant via MJ: Query SQLs.`
-            );
-        }
-    }
-
-    /**
-     * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
-     * Resolves the SQL to the appropriate dialect variant for the connected database.
-     */
-    private buildSyncContext(skipAIEnrichment = false, declared?: DeclaredQueryChildren): QuerySyncContext {
-        return {
-            queryID: this.ID,
-            queryName: this.Name,
-            sql: this.resolveExtractionSQL(),
-            isSaved: this.IsSaved,
-            contextUser: this.ContextCurrentUser,
-            metadataProvider: this.ProviderToUse as unknown as IMetadataProvider,
-            runViewProvider: this.RunViewProviderToUse,
-            platform: this.currentPlatform,
-            parameterHints: this.ParameterHints,
-            SkipAIEnrichment: skipAIEnrichment,
-            DeclaredChildren: declared,
-        };
-    }
-
-    /**
-     * Re-runs the extraction pipeline on this query. Called by MJQuerySQLEntityServer
-     * when a dialect variant matching the current platform is saved — this handles
-     * the timing issue where the parent Query is saved before its QuerySQL children
-     * exist in the cache.
-     *
-     * @param skipAIEnrichment Skip the LLM enrichment stage, as `SkipEntityAIActions` does for Save.
-     */
-    public async RerunExtraction(skipAIEnrichment = false): Promise<void> {
-        await this.extractAndSyncDataAsync(skipAIEnrichment);
-    }
-
-    /**
-     * Runs the extraction pipeline and saves the UsesTemplate flag.
-     * On error, sets UsesTemplate=false and attempts to save so the query remains usable.
-     *
-     * @param skipAIEnrichment Skip the LLM enrichment stage (the save asked to skip AI actions).
-     * @param declared Child rows the save declared, which extraction leaves as written.
-     */
-    private async extractAndSyncDataAsync(skipAIEnrichment: boolean, declared?: DeclaredQueryChildren): Promise<void> {
-        try {
-            const ctx = this.buildSyncContext(skipAIEnrichment, declared);
-            const pipelineResult = await RunExtractionPipeline(ctx);
-            this.UsesTemplate = pipelineResult.UsesTemplate;
-
-            // Save the query again to persist UsesTemplate and any changes from AI processing
-            const updateResult = await super.Save();
-            if (!updateResult) {
-                LogError('Failed to save query after AI processing completed');
-            }
+            await QueryEngine.Instance.Config(false, this.ContextCurrentUser);
         } catch (e) {
-            LogError('Error in async AI processing:', e);
-            this.UsesTemplate = false;
-            try {
-                await super.Save();
-            } catch (saveError) {
-                LogError('Failed to save query after AI processing error:', saveError);
-            }
+            LogError(`[MJQueryEntityServer] QueryEngine could not be loaded for extraction of "${this.Name}": ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
     /**
-     * Cleans up all extraction data when SQL is empty, then saves the updated UsesTemplate flag.
+     * The parameter rows extraction knows before it runs: the stored rows, read from the database
+     * (never the cache), overlaid by the rows this save declares.
+     */
+    private async knownParametersAsync(): Promise<KnownQueryParameter[]> {
+        const byName = new Map<string, MJQueryParameterEntity>();
+        for (const row of await this.storedParametersAsync()) byName.set(row.Name.toLowerCase(), row);
+        for (const row of this.DeclaredParameters?.Items ?? []) byName.set(row.Name.toLowerCase(), row);
+        return [...byName.values()].map(row => ({
+            Name: row.Name, Type: row.Type, IsRequired: row.IsRequired === true, IsServerSet: row.IsServerSet === true,
+            SampleValue: row.SampleValue, DefaultValue: row.DefaultValue, ValidationFilters: row.ValidationFilters,
+            IsAuthored: row.DetectionMethod === 'Manual',
+        }));
+    }
+
+    private async storedParametersAsync(): Promise<MJQueryParameterEntity[]> {
+        const provider = this.extractionProvider;
+        if (!this.IsSaved || !provider) return [];
+        const result = await provider.RunView<MJQueryParameterEntity>({
+            EntityName: 'MJ: Query Parameters', ExtraFilter: `QueryID='${EscapeSQLString(this.ID)}'`, ResultType: 'entity_object', BypassCache: true,
+        }, this.extractionUser);
+        if (!result.Success) throw new Error(`could not read the query's stored parameters: ${result.ErrorMessage}`);
+        return result.Results ?? [];
+    }
+
+    /**
+     * Writes the derived child rows as the system user, inside the caller's transaction when there
+     * is one, then queues the description pass. A failed write is recorded on the query
+     * (`ExtractionStatus` `Error`) rather than failing a save whose row is already written.
+     */
+    private async writeExtractionAsync(extraction: QueryExtractionResult, options: EntitySaveOptions | undefined, postCommit: PostCommitToken | undefined): Promise<void> {
+        const provider = this.extractionProvider;
+        try {
+            if (!provider) throw new Error('the query is not saved through a database provider');
+            const summary = await WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.extractionUser }, extraction);
+            this.queueDescriptionPass(summary, options, postCommit);
+        } catch (e) {
+            await this.recordWriteFailureAsync(e);
+        }
+    }
+
+    private async recordWriteFailureAsync(error: unknown): Promise<void> {
+        const reason = `The extracted child rows could not be written: ${error instanceof Error ? error.message : String(error)}`;
+        LogError(`[MJQueryEntityServer] Query "${this.Name}": ${reason}`);
+        this.ExtractionStatus = 'Error';
+        this.ExtractionMessage = this.ExtractionMessage ? `${this.ExtractionMessage}\n${reason}` : reason;
+        if (!await super.Save()) {
+            LogError(`[MJQueryEntityServer] Query "${this.Name}": the extraction failure could not be recorded: ${this.LatestResult?.CompleteMessage}`);
+        }
+    }
+
+    /** The post-commit token of the caller's transaction, captured before the save writes anything. */
+    private capturePostCommitToken(): PostCommitToken | undefined {
+        const provider = this.ProviderToUse;
+        return provider instanceof DatabaseProviderBase ? provider.CapturePostCommitToken() : undefined;
+    }
+
+    /**
+     * Queues the LLM description pass to run after the caller's transaction commits, when some row
+     * has no description and the save does not skip AI actions. No LLM call is made inside the
+     * transaction.
+     */
+    private queueDescriptionPass(summary: ChildRowWriteSummary, options: EntitySaveOptions | undefined, postCommit: PostCommitToken | undefined): void {
+        const provider = this.ProviderToUse;
+        const undescribed = summary.FieldsWithoutDescription.length + summary.ParametersWithoutDescription.length;
+        if (options?.SkipEntityAIActions || undescribed === 0 || !(provider instanceof DatabaseProviderBase)) return;
+        const request = { QueryID: this.ID, QueryName: this.Name, SQL: this.extractionSQL, Provider: provider, User: this.extractionUser };
+        provider.RunAfterCommit(() => RunDescriptionPass(request), `query description pass for "${this.Name}"`, postCommit);
+    }
+
+    /**
+     * Re-extracts this query: a save with {@link ExtractionOverride} `Force`. Called by
+     * `MJQuerySQLEntityServer` when a dialect variant for the current platform is saved.
+     *
+     * @param skipAIEnrichment Skip the description pass, as `SkipEntityAIActions` does for a save.
+     * @param platformSQL The SQL to extract from (the variant just saved), instead of the cached
+     *   platform variant, which inside a transaction may not hold it yet.
+     */
+    public async RerunExtraction(skipAIEnrichment = false, platformSQL?: string): Promise<void> {
+        this.ExtractionOverride = 'Force';
+        this.platformSQLOverride = platformSQL ?? null;
+        if (!await this.Save({ SkipEntityAIActions: skipAIEnrichment })) {
+            LogError(`[MJQueryEntityServer] Re-extraction of query "${this.Name}" failed: ${this.LatestResult?.CompleteMessage}`);
+        }
+    }
+
+    /**
+     * Cleans up all extraction data when SQL is empty.
      */
     private async cleanupEmptyQueryAsync(): Promise<void> {
+        const provider = this.extractionProvider;
+        if (!provider) return;
         try {
-            const ctx = this.buildSyncContext();
+            const ctx: QuerySyncContext = {
+                queryID: this.ID,
+                queryName: this.Name,
+                sql: '',
+                isSaved: this.IsSaved,
+                contextUser: this.extractionUser,
+                metadataProvider: provider,
+                runViewProvider: provider,
+                platform: this.extractionPlatform,
+            };
             await CleanupQueryData(ctx);
-
-            // Also remove dialect records (not managed by the pipeline)
-            await this.removeAllQuerySQLRecordsAsync();
-
-            const updateResult = await super.Save();
-            if (!updateResult) {
-                LogError('Failed to save query after cleanup');
-            }
         } catch (e) {
             LogError('Error in async cleanup:', e);
         }
@@ -499,7 +627,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         targetDialect: MJSQLDialectEntity,
         convertedSQL: string,
     ): Promise<void> {
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        const md = this.extractionProvider;
+        if (!md) return;
 
         // Look up existing record from QueryEngine cache instead of a RunView call
         const existing = QueryEngine.Instance.QuerySQLs.find(
@@ -520,26 +649,6 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         const saved = await record.Save();
         if (!saved) {
             console.warn(`Query "${this.Name}" - Failed to save QuerySQL record for dialect "${targetDialect.Name}"`);
-        }
-    }
-
-    /**
-     * Removes all QuerySQL records for this query. Called during cleanup operations.
-     */
-    private async removeAllQuerySQLRecordsAsync(): Promise<void> {
-        try {
-            if (!this.IsSaved) return;
-
-            const records = QueryEngine.Instance.QuerySQLs.filter(
-                qs => UUIDsEqual(qs.QueryID, this.ID)
-            );
-
-            const deletePromises = records.map(r => r.Delete());
-            if (deletePromises.length > 0) {
-                await Promise.all(deletePromises);
-            }
-        } catch (e) {
-            console.warn(`Query "${this.Name}" - Failed to remove QuerySQL records:`, e);
         }
     }
 }

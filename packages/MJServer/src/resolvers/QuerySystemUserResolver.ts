@@ -6,7 +6,7 @@ import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEnt
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import { MJQueryEntityServer } from '@memberjunction/core-entities-server';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Minimal shape of a query row returned by RunView lookups (plain object, not entity instance).
@@ -269,6 +269,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             }
 
             // Check for existing query with same name in the same category
+            const requestedName = input.Name;
             const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
 
             if (existingQuery) {
@@ -285,76 +286,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 }
             }
 
-            // Use MJQueryEntityServer which handles AI processing
-            const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
-            
-            // Destructure out non-database fields, keep only fields to persist
-            const { Permissions: _permissions, CategoryPath: _categoryPath, ParameterHints: _parameterHints, AutoResolveCollision: _autoResolve, ...fieldsToSet } = {
-                ...input,
-                CategoryID: finalCategoryID || input.CategoryID,
-                Status: input.Status || 'Approved',
-                QualityRank: input.QualityRank || 0,
-                UsesTemplate: input.UsesTemplate || false,
-                AuditQueryRuns: input.AuditQueryRuns || false,
-                CacheEnabled: input.CacheEnabled || false,
-                CacheTTLMinutes: input.CacheTTLMinutes || null,
-                CacheMaxSize: input.CacheMaxSize || null
-            };
-
-            // Field-level security: refuse a key the caller may not read, or that names no field
-            AssertClientInputWritableForUser(record.EntityInfo, fieldsToSet, context.userPayload.userRecord);
-            record.SetMany(fieldsToSet, true);
-
-            // Pass caller-provided parameter sample values to override LLM guesses
-            if (input.ParameterHints && input.ParameterHints.length > 0) {
-                record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
-            }
-
-            this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
-
-            // Attempt to save the query
-            const saveResult = await record.Save();
-
-            if (saveResult) {
-                // Save succeeded - fire the AfterCreate event and return all the data
-                await this.AfterCreate(provider, input); // fire event
-                const queryID = record.ID;
-
-                if (input.Permissions && input.Permissions.length > 0) {
-                    await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
-
-                }
-
-
-                return await this.buildSuccessResult(record, context.userPayload.userRecord, provider);
-            }
-            else {
-                // Save failed - check if another request created the same query (race condition)
-                // Always recheck regardless of error type to handle all duplicate scenarios
-                const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
-
-                if (existingQuery) {
-                    // Found the query that was created by another request — load it as a full entity
-                    // so that related metadata (Fields, Parameters, Entities, Permissions) is populated
-                    LogStatus(`[CreateQuery] Unique constraint detected for query '${input.Name}'. Using existing query (ID: ${existingQuery.ID}) created by concurrent request.`);
-                    const existingEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
-                    if (await existingEntity.Load(existingQuery.ID)) {
-                        return await this.buildSuccessResult(existingEntity, context.userPayload.userRecord, provider);
-                    }
-                    // Entity load failed after confirming the row exists — extremely rare
-                    return {
-                        Success: false,
-                        ErrorMessage: `Found query '${input.Name}' created by concurrent request (ID: ${existingQuery.ID}) but failed to load it as entity`
-                    };
-                }
-
-                // Genuine failure - couldn't find an existing query with the same name
-                const errorMessage = record.LatestResult?.Message || '';
-                return {
-                    Success: false,
-                    ErrorMessage: `Failed to create query: ${errorMessage || 'Unknown error'}`
-                };
-            }
+            return await this.createQueryAsync(provider, input, requestedName, finalCategoryID, context, pubSub);
         } 
         catch (err) {
             LogError(err);
@@ -363,6 +295,102 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 ErrorMessage: `MJQueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
+    }
+
+    /** The most times a create with `AutoResolveCollision` picks a new name after losing a same-name race. */
+    private static readonly maxCollisionRetries = 25;
+
+    /**
+     * Creates the query, handling a same-name race (#6007): when the insert fails and a query with
+     * the name now exists (another request created it in between), `AutoResolveCollision` picks a
+     * new unique name and tries again, a bounded number of times, and never returns the other
+     * request's query. Without it, the query that now exists is returned (create-or-get). Any other
+     * failure, including a save-time refusal of the SQL, returns the save's message.
+     *
+     * @param requestedName - The name the caller asked for; each retry's unique name is built from it.
+     */
+    private async createQueryAsync(
+        provider: DatabaseProviderBase,
+        input: CreateQuerySystemUserInput,
+        requestedName: string,
+        categoryID: string | null | undefined,
+        context: AppContext,
+        pubSub: PubSubEngine
+    ): Promise<QueryMutationResultType> {
+        const user = context.userPayload.userRecord;
+        for (let attempt = 0; ; attempt++) {
+            const record = await this.newQueryRecordAsync(provider, input, categoryID, context, pubSub);
+            if (await record.Save()) {
+                return this.completeCreateAsync(provider, input, record, user);
+            }
+            const existing = await this.findExistingQuery(provider, input.Name, categoryID ?? null, user);
+            if (!existing) {
+                return { Success: false, ErrorMessage: `Failed to create query: ${record.LatestResult?.CompleteMessage || record.LatestResult?.Message || 'the save reported no reason'}` };
+            }
+            if (!input.AutoResolveCollision) {
+                return this.existingQueryResultAsync(provider, existing, input.Name, user);
+            }
+            if (attempt >= MJQueryResolverExtended.maxCollisionRetries) {
+                return { Success: false, ErrorMessage: `Failed to create query '${input.Name}': another request took each unique name tried, ${attempt + 1} times.` };
+            }
+            const lost = input.Name;
+            input.Name = await this.findUniqueName(provider, requestedName, categoryID ?? null, user);
+            LogStatus(`[CreateQuery] Lost a name race for "${lost}"; retrying as "${input.Name}"`);
+        }
+    }
+
+    /** A new, unsaved query record holding the input's values. */
+    private async newQueryRecordAsync(
+        provider: DatabaseProviderBase,
+        input: CreateQuerySystemUserInput,
+        categoryID: string | null | undefined,
+        context: AppContext,
+        pubSub: PubSubEngine
+    ): Promise<MJQueryEntityServer> {
+        const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
+        // Destructure out non-database fields, keep only fields to persist
+        const { Permissions: _permissions, CategoryPath: _categoryPath, ParameterHints: _parameterHints, AutoResolveCollision: _autoResolve, ...fieldsToSet } = {
+            ...input,
+            CategoryID: categoryID || input.CategoryID,
+            Status: input.Status || 'Approved',
+            QualityRank: input.QualityRank || 0,
+            UsesTemplate: input.UsesTemplate || false,
+            AuditQueryRuns: input.AuditQueryRuns || false,
+            CacheEnabled: input.CacheEnabled || false,
+            CacheTTLMinutes: input.CacheTTLMinutes || null,
+            CacheMaxSize: input.CacheMaxSize || null
+        };
+        // Field-level security: refuse a key the caller may not read, or that names no field
+        AssertClientInputWritableForUser(record.EntityInfo, fieldsToSet, context.userPayload.userRecord);
+        record.SetMany(fieldsToSet, true);
+        // Pass caller-provided parameter sample values (used for new parameters and the described renders)
+        if (input.ParameterHints && input.ParameterHints.length > 0) {
+            record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+        }
+        this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
+        return record;
+    }
+
+    /** After a successful create: the AfterCreate event, the permissions, and the result. */
+    private async completeCreateAsync(provider: DatabaseProviderBase, input: CreateQuerySystemUserInput, record: MJQueryEntityServer, user: UserInfo): Promise<QueryMutationResultType> {
+        await this.AfterCreate(provider, input); // fire event
+        if (input.Permissions && input.Permissions.length > 0) {
+            await this.createPermissions(provider, input.Permissions, record.ID, user);
+        }
+        return this.buildSuccessResult(record, user, provider);
+    }
+
+    /** The create-or-get result: the query another request created with this name. */
+    private async existingQueryResultAsync(provider: DatabaseProviderBase, existing: QueryViewRow, name: string, user: UserInfo): Promise<QueryMutationResultType> {
+        LogStatus(`[CreateQuery] Unique constraint detected for query '${name}'. Using existing query (ID: ${existing.ID}) created by concurrent request.`);
+        const existingEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', user);
+        if (await existingEntity.Load(existing.ID)) {
+            return this.buildSuccessResult(existingEntity, user, provider);
+        }
+        return {
+            Success: false,
+            ErrorMessage: `Found query '${name}' created by concurrent request (ID: ${existing.ID}) but failed to load it as entity`
+        };
     }
 
     /**
@@ -498,16 +526,14 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, provider, context.userPayload.userRecord);
             }
 
-            // now make sure there is NO existing query by the same name in the specified category
-            const existingQueryResult = await provider.RunView({
-                EntityName: 'MJ: Queries',
-                ExtraFilter: `Name='${EscapeSQLString(input.Name)}' AND CategoryID='${EscapeSQLString(finalCategoryID)}'`
-            }, context.userPayload.userRecord);
-            if (existingQueryResult.Success && existingQueryResult.Results?.length > 0) {
-                // we have a match! Let's return an error
+            // A rename, or a move to another category, must not collide with another query's name
+            const targetName = input.Name ?? queryEntity.Name;
+            const targetCategoryID = finalCategoryID !== undefined ? finalCategoryID : queryEntity.CategoryID;
+            const sameName = await this.findExistingQuery(provider, targetName, targetCategoryID ?? null, context.userPayload.userRecord);
+            if (sameName && !UUIDsEqual(sameName.ID, queryEntity.ID)) {
                 return {
                     Success: false,
-                    ErrorMessage: `Query with name '${input.Name}' already exists in the specified ${input.CategoryID ? 'category' : 'categoryPath'}`
+                    ErrorMessage: `Query with name '${targetName}' already exists in the specified ${input.CategoryID ? 'category' : 'categoryPath'}`
                 };
             }
 
@@ -545,7 +571,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             if (!saveResult) {
                 return {
                     Success: false,
-                    ErrorMessage: `Failed to update query: ${queryEntity.LatestResult?.Message || 'Unknown error'}`
+                    ErrorMessage: `Failed to update query: ${queryEntity.LatestResult?.CompleteMessage || queryEntity.LatestResult?.Message || 'the save reported no reason'}`
                 };
             }
 
@@ -740,12 +766,13 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     ): Promise<QueryViewRow | null> {
         try {
             // Query database directly to avoid cache staleness issues
-            const categoryFilter = categoryID ? `CategoryID='${categoryID}'` : 'CategoryID IS NULL';
-            const nameFilter = `LOWER(Name) = LOWER('${queryName.replace(/'/g, "''")}')`;
+            const categoryFilter = categoryID ? `CategoryID='${EscapeSQLString(categoryID)}'` : 'CategoryID IS NULL';
+            const nameFilter = `LOWER(Name) = LOWER('${EscapeSQLString(queryName)}')`;
 
             const result = await provider.RunView<QueryViewRow>({
                 EntityName: 'MJ: Queries',
-                ExtraFilter: `${nameFilter} AND ${categoryFilter}`
+                ExtraFilter: `${nameFilter} AND ${categoryFilter}`,
+                BypassCache: true
             }, contextUser);
 
             if (result.Success && result.Results && result.Results.length > 0) {
@@ -797,13 +824,16 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     private async findCategoryByNameAndParent(provider: DatabaseProviderBase, categoryName: string, parentID: string | null, contextUser: UserInfo): Promise<MJQueryCategoryEntity | null> {
         try {
             // Query database directly to avoid cache staleness issues
-            const parentFilter = parentID ? `ParentID='${parentID}'` : 'ParentID IS NULL';
-            const nameFilter = `LOWER(Name) = LOWER('${categoryName.replace(/'/g, "''")}')`; // Escape single quotes
+            const parentFilter = parentID ? `ParentID='${EscapeSQLString(parentID)}'` : 'ParentID IS NULL';
+            const nameFilter = `LOWER(Name) = LOWER('${EscapeSQLString(categoryName)}')`;
 
+            // Uncached: after losing a race to create the category, the re-check must see the row the
+            // other request just wrote.
             const result = await provider.RunView<MJQueryCategoryEntity>({
                 EntityName: 'MJ: Query Categories',
                 ExtraFilter: `${nameFilter} AND ${parentFilter}`,
-                ResultType: 'entity_object'
+                ResultType: 'entity_object',
+                BypassCache: true
             }, contextUser);
 
             if (result.Success && result.Results && result.Results.length > 0) {

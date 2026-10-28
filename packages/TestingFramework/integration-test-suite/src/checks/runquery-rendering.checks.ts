@@ -664,6 +664,7 @@ const COMPOSED_CASES: RenderCase[] = [
     },
     {
         Name: 'RR Comp Token In String Literal',
+        BreaksSaveRules: true,
         SQL: `SELECT b.ID, '{{query:"Nowhere/Nothing"}}' AS Note FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID <= 4 ORDER BY b.ID`,
         Columns: ['ID', 'Note'], Ordered: true,
         Expect: items => items.filter(i => i.ID <= 4).map(i => ({ ID: i.ID, Note: '{{query:"Nowhere/Nothing"}}' }))
@@ -818,10 +819,10 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fixtures = requireFixtures();
             const path = RenderCategoryPath(fixtures);
-            const missing = await CreateRenderQuery(fixtures, { Name: 'RR Comp Missing', SQL: `SELECT ID FROM {{query:"${path}/RR Nonexistent"}}` }, ctx.User);
-            const notReusable = await CreateRenderQuery(fixtures, { Name: 'RR Comp Not Reusable', SQL: `SELECT ID FROM {{query:"${path}/RR Dep Not Reusable"}}` }, ctx.User);
-            const cycleA = await CreateRenderQuery(fixtures, { Name: 'RR Cycle A', Reusable: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle B"}}` }, ctx.User);
-            await CreateRenderQuery(fixtures, { Name: 'RR Cycle B', Reusable: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle A"}}` }, ctx.User);
+            const missing = await CreateRenderQuery(fixtures, { Name: 'RR Comp Missing', BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Nonexistent"}}` }, ctx.User);
+            const notReusable = await CreateRenderQuery(fixtures, { Name: 'RR Comp Not Reusable', BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Dep Not Reusable"}}` }, ctx.User);
+            const cycleA = await CreateRenderQuery(fixtures, { Name: 'RR Cycle A', Reusable: true, BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle B"}}` }, ctx.User);
+            await CreateRenderQuery(fixtures, { Name: 'RR Cycle B', Reusable: true, BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle A"}}` }, ctx.User);
             await RefreshRenderQueries(ctx.User);
             await expectFailure(missing.ID, /not found/i, 'missing dependency', ctx.User);
             await expectFailure(notReusable.ID, /not marked as Reusable/i, 'non-reusable dependency', ctx.User);

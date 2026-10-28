@@ -13,13 +13,14 @@ import {
 import { RunLLMEnrichment, MergeParametersWithLLM } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
 import { NO_DECLARED_QUERY_CHILDREN } from "./declared";
+import { SQLUsesTemplate } from "./templateFacts";
 import { QueryEngine } from "@memberjunction/core-entities";
 import { BaseEntity, LocalCacheManager } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 
 /**
- * Result of running the full extraction pipeline.
- * The caller uses `usesTemplate` to update the entity's UsesTemplate flag.
+ * Result of running the full extraction pipeline. `UsesTemplate` is a lexical fact: whether the
+ * SQL holds any template tag outside SQL comments.
  */
 export interface PipelineResult {
     UsesTemplate: boolean;
@@ -34,6 +35,10 @@ export interface PipelineResult {
  *   5. SYNC — parallel database writes
  *
  * Throws on invalid composition references (non-existent, non-Reusable, circular).
+ *
+ * @deprecated Saves extract with `ComputeQueryExtraction` (the database server describes the
+ * output) and `WriteExtractedChildRows` (facts corrected, authored annotations kept). This
+ * LLM-assisted pipeline is kept for callers of the package API.
  */
 export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<PipelineResult> {
     // ── STAGE 1: PARSE ──
@@ -54,7 +59,7 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     await runInEntityEventBatches(syncBatchOwners(ctx), () => sync(ctx, finalParams, finalFields, resolveResult));
 
     return {
-        UsesTemplate: resolveResult.AllDeterministicParams.length > 0,
+        UsesTemplate: SQLUsesTemplate(ctx.sql, ctx.platform ?? 'sqlserver'),
     };
 }
 
@@ -119,10 +124,11 @@ function merge(
         ? llmResult.selectClause
         : null;
 
-    // When we have deterministic fields, supplement them with LLM descriptions
+    // When we have deterministic fields, supplement them with LLM descriptions. The LLM never
+    // supplies a source: LLM-only fields carry none.
     const rawFields = resolvedFields
         ? supplementDeterministicWithLLM(resolvedFields, llmFields)
-        : llmFields;
+        : llmFields?.map(f => ({ ...f, sourceEntity: null, sourceFieldName: null })) ?? null;
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
@@ -249,8 +255,8 @@ function supplementDeterministicWithLLM(
             // LLM may identify summary/computed nature better
             isSummary: llmMatch.isSummary ?? df.isSummary,
             computationDescription: llmMatch.computationDescription ?? df.computationDescription,
-            // LLM may identify source entity for columns the parser can't resolve
-            sourceEntity: df.sourceEntity ?? llmMatch.sourceEntity,
+            // The source is a fact: it never comes from the LLM.
+            sourceEntity: df.sourceEntity,
         };
     });
 }

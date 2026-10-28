@@ -74443,7 +74443,7 @@ export class MJQueryEntity_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: "Indicates how this entity-query relationship was identified. \"AI\" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). \"Manual\" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve."}) 
+    @Field({nullable: true, description: "Who wrote this entity link. \"Parser\" means MJ's structural analysis of the query found a read of the entity's base view, base table or an alternate base view. \"Manual\" means a user authored the link. \"AI\" marks links written by the earlier LLM-based extraction."}) 
     @MaxLength(50)
     DetectionMethod?: string;
         
@@ -74959,7 +74959,7 @@ export class MJQueryParameter_ {
     @Field({nullable: true, description: "JSON array of Nunjucks filter definitions that validate and transform the parameter value. Each filter is an object with \"name\" and optional \"args\" properties. Filters are applied in order and can include: validation (required, email, min, max), transformation (trim, upper, lower), SQL safety (sqlsafe, sqljoin), and type conversion (number, date). Example: [{\"name\":\"required\"},{\"name\":\"email\"},{\"name\":\"sqlsafe\"}]. The filter chain ensures type safety and prevents SQL injection."}) 
     ValidationFilters?: string;
         
-    @Field({nullable: true, description: "Indicates how this parameter was identified and added to the system. \"AI\" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. \"Manual\" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata."}) 
+    @Field({nullable: true, description: "Who wrote this parameter row. \"Parser\" means MJ's analysis of the query template found the parameter (its name, inferred type, whether it is required and its default). \"Manual\" means a user authored the row; its type, required flag, default, sample, validation filters and description are never overwritten by extraction, and it is kept (and flagged on the query) when the SQL no longer uses it. \"AI\" marks rows written by the earlier LLM-based extraction."}) 
     @MaxLength(50)
     DetectionMethod?: string;
         

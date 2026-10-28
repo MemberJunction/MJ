@@ -1,7 +1,33 @@
 // Query Extraction Pipeline — barrel exports
 // Re-exports the public API for the query extraction subsystem.
 
-// Pipeline orchestrator
+// Extraction (describe-based): facts, child-row writes, the post-commit description pass
+export { ComputeQueryExtraction, ExtractionSQLHash } from "./extractQuery";
+export { WriteExtractedChildRows } from "./childRowWriter";
+export type { ChildRowWriteContext, ChildRowWriteSummary } from "./childRowWriter";
+export { RunDescriptionPass } from "./descriptionPass";
+export type { DescriptionPassRequest } from "./descriptionPass";
+export { AnalyzeQueryTemplate, SQLUsesTemplate, DescribeDiagnostic } from "./templateFacts";
+export type { TemplateAnalysis } from "./templateFacts";
+export { DescribeQueryOutput, SampleValueFor } from "./describeFacts";
+export type { DescribedOutput } from "./describeFacts";
+export { EntityObjectIndex, BindColumnSource, BindTableReferences } from "./sourceBinding";
+export type { BoundColumnSource } from "./sourceBinding";
+export type {
+    QueryExtractionOverride,
+    QueryExtractionStatus,
+    QueryExtractionMode,
+    QueryParameterType,
+    KnownQueryParameter,
+    QueryExtractionInput,
+    QueryFieldFact,
+    QueryParameterFact,
+    QueryEntityFact,
+    QueryDependencyFact,
+    QueryExtractionResult,
+} from "./extractionTypes";
+
+// Legacy pipeline orchestrator (kept as a façade; saves use ComputeQueryExtraction)
 export { RunExtractionPipeline, CleanupQueryData } from "./pipeline";
 export type { PipelineResult } from "./pipeline";
 

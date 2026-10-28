@@ -4,14 +4,13 @@
  * WHAT THIS PROTECTS
  *
  * - **A graph save writes the query, then its declared children, in one transaction**, and the
- *   extraction that runs after `super.Save()` in `MJQueryEntityServer.Save` runs once the children are
- *   written, with their keys as `DeclaredChildren`.
+ *   extraction that runs in `MJQueryEntityServer.Save` writes its rows once the children are written,
+ *   and knows the declared parameters when it computes the facts.
  * - **A declared row replaces the stored row extraction wrote for the same key**: the stored row is
  *   deleted inside the same transaction, before the declared row's insert, and the declared row keeps
  *   its own ID.
- * - **Authored rows are never touched**: a stored `Manual` row with the same key stays.
- * - **Extraction leaves declared rows alone**: the sync stage adds, updates and deletes nothing whose
- *   key the save declared.
+ * - **Authored rows are never touched** by that replacement: a stored `Manual` row with the same key stays.
+ * - The legacy sync stage (`SyncParameters`, kept as a package export) still honours declared names.
  *
  * The entities run on real `BaseEntity` machinery over a minimal metadata fixture and a recording
  * provider; only the extraction pipeline, the embedding helper and the approval rules are stubbed.
@@ -20,18 +19,24 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { BaseEntity, EntityInfo, Metadata, ProviderBase, RunViewResult } from '@memberjunction/core';
 import type { IEntityDataProvider, RunViewParams, UserInfo, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import type { MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
-import type { QuerySyncContext } from '../custom/query-extraction/types';
 
-const { extractions } = vi.hoisted(() => ({
-    extractions: [] as Array<{ ctx: QuerySyncContext; writtenBefore: string[] }>,
+const { extractions, computed } = vi.hoisted(() => ({
+    extractions: [] as Array<{ writtenBefore: string[] }>,
+    computed: [] as Array<{ KnownParameters: ReadonlyArray<{ Name: string; IsAuthored: boolean }>; Mode: string }>,
 }));
 
-vi.mock('../custom/query-extraction/pipeline', () => ({
-    RunExtractionPipeline: vi.fn(async (ctx: QuerySyncContext) => {
-        extractions.push({ ctx, writtenBefore: [...opLog] });
-        return { UsesTemplate: false };
+vi.mock('../custom/query-extraction/extractQuery', () => ({
+    ComputeQueryExtraction: vi.fn(async (input: { KnownParameters: ReadonlyArray<{ Name: string; IsAuthored: boolean }>; Mode: string }) => {
+        computed.push(input);
+        return { UsesTemplate: true, Refusal: null, Status: 'OK', Messages: [], Hash: 'h', Fields: null, Parameters: [], Entities: null, Dependencies: null };
     }),
-    CleanupQueryData: vi.fn().mockResolvedValue(undefined),
+    ExtractionSQLHash: vi.fn(() => 'h'),
+}));
+vi.mock('../custom/query-extraction/childRowWriter', () => ({
+    WriteExtractedChildRows: vi.fn(async () => {
+        extractions.push({ writtenBefore: [...opLog] });
+        return { Added: 0, Updated: 0, Removed: 0, FieldsWithoutDescription: [], ParametersWithoutDescription: [] };
+    }),
 }));
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: {} } }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
@@ -179,6 +184,7 @@ afterAll(() => {
 beforeEach(() => {
     opLog = [];
     extractions.length = 0;
+    computed.length = 0;
     stored = new Map();
 });
 
@@ -253,11 +259,13 @@ describe('MJ: Queries declared collections', () => {
             'commit',
         ]);
         expect(extractions).toHaveLength(1);
-        // Extraction ran after the graph committed, so the declared children were already written.
+        // The extracted rows were written after the graph committed, so the declared children were already written.
         expect(extractions[0].writtenBefore).toEqual(graph);
         expect(query.DeclaredParameters.Items[0].Get('QueryID')).toBe(QUERY_ID);
-        expect([...extractions[0].ctx.DeclaredChildren!.ParameterNames]).toEqual(['region']);
-        expect([...extractions[0].ctx.DeclaredChildren!.FieldNames]).toEqual(['region']);
+        // The facts were computed knowing the declared (authored) parameter.
+        expect(computed).toHaveLength(1);
+        expect(computed[0].Mode).toBe('Save');
+        expect(computed[0].KnownParameters.map(p => [p.Name, p.IsAuthored])).toEqual([['region', true]]);
     });
 
     it('replaces a stored extraction row with the declared row of the same name, inside the graph', async () => {

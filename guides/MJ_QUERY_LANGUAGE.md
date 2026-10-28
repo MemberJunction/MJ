@@ -524,9 +524,18 @@ the output columns. Describing one sample render would miss columns that only so
 A query's metadata may declare its parameters and fields as `MJ: Query Parameters` and `MJ: Query Fields` rows (child
 collections of `MJ: Queries`).
 
-- Declared rows win over extracted facts, matched by (QueryID, Name).
-- An **authored** parameter that is missing from the SQL is kept and flagged on the query.
+- Declared rows keep their IDs, matched to extracted rows by (QueryID, Name).
+- **Facts** are always taken from the SQL and the database server, on every row, declared and `Manual` ones
+  included: a field's name casing, order, types, nullability, source and computed flag; whether a parameter exists;
+  the entities and dependencies.
+- **Annotations** are never overwritten when authored (`DetectionMethod` `Manual`, or a non-empty value): descriptions,
+  `ComputationDescription`, `IsSummary` / `SummaryDescription`, and a parameter's type, required flag, default,
+  sample, validation filters and server-set flag. Doc comments (§9) count as authored.
+- An **authored** parameter that is missing from the SQL is kept and flagged on the query (`ExtractionStatus`
+  `Warning`); a value passed for it is accepted and ignored.
 - An **auto-detected** parameter that is missing from the SQL is deleted.
+- Saving a new or edited query applies §12 in `Save` mode: an error refuses the save, with the diagnostics in the
+  save's result. So does an output that repeats a column name (compared without case).
 
 ---
 

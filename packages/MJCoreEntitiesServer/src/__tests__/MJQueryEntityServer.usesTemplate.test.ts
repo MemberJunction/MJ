@@ -5,8 +5,8 @@
  * entirely when it is false, leaving the tags in the SQL sent to the database.
  *
  * The generated base class is replaced with a stub whose `Save` records the `UsesTemplate` value of each
- * write. The extraction pipeline runs for real; only its database writes and the LLM call are stubbed, and
- * `QueryEngine.Instance.Queries` is set per test to control what composition references resolve to.
+ * write. Extraction runs for real against a provider that cannot describe statements or write child rows,
+ * and `QueryEngine.Instance.Queries` is set per test to control what composition references resolve to.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DatabasePlatform, IMetadataProvider, IRunViewProvider, UserInfo } from '@memberjunction/core';
@@ -43,12 +43,16 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public EmbeddingModelID: string | null = null;
         public SQLDialectID: string | null = null;
         public IsSaved = false;
+        public SQLDirty = true;
+        public ExtractionStatus: string | null = null;
+        public ExtractionMessage: string | null = null;
+        public ExtractedSQLHash: string | null = null;
         public ContextCurrentUser = { ID: 'user-1' };
         public LatestResult = { CompleteMessage: '', Errors: [] as Error[] };
         public RegisterResultHistoryEntry = vi.fn();
         public get ProviderToUse() { return { Entities: [] }; }
         public get RunViewProviderToUse() { return {}; }
-        public GetFieldByName(): { Dirty: boolean } { return { Dirty: true }; }
+        public GetFieldByName(name: string): { Dirty: boolean } { return { Dirty: name === 'SQL' ? this.SQLDirty : true }; }
         public GetPlatformSQL(_platform: DatabasePlatform): string | null { return this.SQL; }
         public async Save(): Promise<boolean> {
             writes.push({ UsesTemplate: this.UsesTemplate });
@@ -90,7 +94,7 @@ function createQuery(): MJQueryEntityServer {
     return query;
 }
 
-type DependencyShape = Pick<MJQueryEntityExtended, 'ID' | 'Name' | 'CategoryPath' | 'Reusable' | 'QueryParameters' | 'QueryFields'>;
+type DependencyShape = Pick<MJQueryEntityExtended, 'ID' | 'Name' | 'CategoryPath' | 'Reusable' | 'QueryParameters' | 'QueryFields' | 'QueryDependencies'>;
 
 /** A reusable dependency query with no parameters and no fields. */
 function dependency(name: string, categoryPath: string): MJQueryEntityExtended {
@@ -101,6 +105,7 @@ function dependency(name: string, categoryPath: string): MJQueryEntityExtended {
         Reusable: true,
         QueryParameters: [],
         QueryFields: [],
+        QueryDependencies: [],
     };
     return shape as MJQueryEntityExtended;
 }
@@ -148,16 +153,29 @@ describe('MJQueryEntityServer Save — UsesTemplate after an extraction failure 
         expect(writes.at(-1)?.UsesTemplate).toBe(true);
     });
 
-    // Pinned: an extraction failure never flips UsesTemplate to false; UsesTemplate is a lexer fact
-    // (DISCUSSION §6, 2026-10-27; DISCUSSION Topic 3a "extractAndSyncDataAsync sets UsesTemplate = false
-    // and saves when extraction throws"). E9 / S12.
-    // Observed today: the pipeline throws on the missing composition reference, the catch in
-    // extractAndSyncDataAsync sets UsesTemplate=false and saves it (expected true, received false).
-    it.fails('keeps UsesTemplate=true when extraction throws on a missing composition reference', async () => {
+    it('refuses a new query whose composition names no query, and writes nothing', async () => {
         useQueries([]);
-        const query = await saveQuery(MISSING_REF_SQL);
+        const query = createQuery();
+        query.SQL = MISSING_REF_SQL;
+        expect(await query.Save()).toBe(false);
+        expect(writes).toHaveLength(0);
+        const refusal = vi.mocked(query.RegisterResultHistoryEntry).mock.calls.at(-1)?.[0];
+        expect(refusal?.Message).toContain('MJQ_COMPOSITION_NOT_FOUND');
+    });
+
+    it('keeps UsesTemplate=true when a forced refresh finds the composition no longer resolves, and records the error', async () => {
+        useQueries([]);
+        const query = createQuery();
+        query.SQL = MISSING_REF_SQL;
+        query.UsesTemplate = true;
+        query.IsSaved = true;
+        query.SQLDirty = false;
+        query.ExtractionOverride = 'Force';
+        expect(await query.Save()).toBe(true);
         expect(writes.at(-1)?.UsesTemplate).toBe(true);
         expect(query.UsesTemplate).toBe(true);
+        expect(query.ExtractionStatus).toBe('Error');
+        expect(query.ExtractionMessage).toContain('MJQ_COMPOSITION_NOT_FOUND');
     });
 });
 
@@ -172,26 +190,21 @@ describe('UsesTemplate is a lexer fact, not "has deterministic parameters" (S12)
         expect(result.UsesTemplate).toBe(false);
     });
 
-    // Pinned: UsesTemplate = any tag present (DISCUSSION §6, 2026-10-27). S12. pipeline.ts derives it
-    // from `AllDeterministicParams.length > 0`, so a composition with no parameters reads as untemplated.
-    // Observed today: expected true, received false.
-    it.fails('a parameterless composition reference makes the pipeline report UsesTemplate=true', async () => {
+    // UsesTemplate = any tag present (DISCUSSION §6, 2026-10-27). S12. The pipeline reads it from the lexer.
+    it('a parameterless composition reference makes the pipeline report UsesTemplate=true', async () => {
         useQueries([dependency('Membership Base', 'Shared')]);
         const result = await RunExtractionPipeline(pipelineCtx(COMPOSITION_ONLY_SQL));
         expect(result.UsesTemplate).toBe(true);
     });
 
-    // Pinned: UsesTemplate = any tag present (DISCUSSION §6, 2026-10-27). S12. A `{% if %}` block whose
-    // condition names no parameter yields no deterministic parameters.
-    // Observed today: expected true, received false.
-    it.fails('an {% if %} block with no parameter makes the pipeline report UsesTemplate=true', async () => {
+    // S12: a `{% if %}` block whose condition names no parameter still makes the SQL a template.
+    it('an {% if %} block with no parameter makes the pipeline report UsesTemplate=true', async () => {
         const result = await RunExtractionPipeline(pipelineCtx(IF_BLOCK_ONLY_SQL));
         expect(result.UsesTemplate).toBe(true);
     });
 
-    // Pinned: UsesTemplate = any tag present, as saved on the query (DISCUSSION §6, 2026-10-27). S12.
-    // Observed today: the save writes UsesTemplate=false (expected true, received false).
-    it.fails('saving a query whose only tag is a parameterless composition stores UsesTemplate=true', async () => {
+    // S12: UsesTemplate = any tag present, as saved on the query (DISCUSSION §6, 2026-10-27).
+    it('saving a query whose only tag is a parameterless composition stores UsesTemplate=true', async () => {
         useQueries([dependency('Membership Base', 'Shared')]);
         const query = await saveQuery(COMPOSITION_ONLY_SQL);
         expect(writes.at(-1)?.UsesTemplate).toBe(true);
