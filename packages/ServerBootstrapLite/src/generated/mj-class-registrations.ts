@@ -2467,11 +2467,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
-    ListStorageAccountsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
