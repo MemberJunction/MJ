@@ -948,6 +948,13 @@ describe('UpgradeApp — config prune ordering', () => {
         await UpgradeApp({ AppName: 'app-x' }, upContext);
         expect(vi.mocked(AddExcludeSchema)).toHaveBeenCalledWith(expect.anything(), 'test_app_x', undefined);
     });
+
+    it('adds the schema to excludeSchemas when the upgrade introduces the app\'s first schema', async () => {
+        // Same as a first install: the app's entities ship in its migrations, so CodeGen must skip the schema.
+        mockInstalledWithSchema(undefined);
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+        expect(vi.mocked(AddExcludeSchema)).toHaveBeenCalledWith(expect.anything(), 'test_app_x', undefined);
+    });
 });
 
 describe('UpgradeApp — repairs a drifted OpenApp.SchemaName', () => {

@@ -948,7 +948,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       //
       // The schema exclusion is written only when the schema was renamed: re-adding it on every
       // upgrade undid an operator's deliberate removal (#5859).
-      const configResult = HandleServerConfig(manifest, context, { ExcludeSchema: IsSchemaRenamed(existingApp, manifest) });
+      const configResult = HandleServerConfig(manifest, context, { ExcludeSchema: IsSchemaNewOrRenamed(existingApp, manifest) });
       if (!configResult.Success) {
         await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
@@ -2175,11 +2175,12 @@ function PruneStaleServerConfig(
 }
 
 /**
- * True when the previously installed version declared a schema and the new manifest declares a
- * different one. False when either declares none, or when the stored manifest cannot be parsed
- * ({@link PruneStaleServerConfig} warns about that case).
+ * True when the new manifest declares a schema that the previously installed version did not
+ * have: either a rename, or the app's first schema (treated like a first install). False when the
+ * new manifest declares none, when the schema is unchanged, or when the stored manifest cannot be
+ * parsed ({@link PruneStaleServerConfig} warns about that case).
  */
-function IsSchemaRenamed(existingApp: InstalledAppInfo, manifest: MJAppManifest): boolean {
+function IsSchemaNewOrRenamed(existingApp: InstalledAppInfo, manifest: MJAppManifest): boolean {
   let previousSchemaName: string | undefined;
   try {
     previousSchemaName = (JSON.parse(existingApp.ManifestJSON) as MJAppManifest).schema?.name;
@@ -2187,14 +2188,14 @@ function IsSchemaRenamed(existingApp: InstalledAppInfo, manifest: MJAppManifest)
     return false;
   }
   const newSchemaName = manifest.schema?.name;
-  return !!previousSchemaName && !!newSchemaName && previousSchemaName !== newSchemaName;
+  return !!newSchemaName && previousSchemaName !== newSchemaName;
 }
 
 /** Options for {@link HandleServerConfig}. */
 interface ServerConfigOptions {
   /**
    * Add the app's schema to the host's excludeSchemas. True on install; on upgrade only when the
-   * schema was renamed, so an operator's deliberate removal is not undone (#5859).
+   * schema is new or renamed, so an operator's deliberate removal is not undone (#5859).
    */
   ExcludeSchema: boolean;
 }
