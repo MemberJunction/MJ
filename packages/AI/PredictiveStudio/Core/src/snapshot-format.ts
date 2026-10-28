@@ -13,7 +13,10 @@ import type { FeatureSchemaEntry, PreprocessingOp } from './sidecar-contract';
 export const SNAPSHOT_MATRIX_FORMAT = 'ps-snapshot-matrix/v1';
 /** The unit's incumbent heuristic evaluated per row, read by the trainer's `heuristic:<name>` baseline. */
 export const INCUMBENT_SCORE_COLUMN = '__ps_incumbent_score';
-/** Reserved for test fixtures that plant a reference score (the leakage audit's implausible-gain rule); the product never writes it. */
+/**
+ * Reserved for test fixtures that plant a reference score (the leakage audit's implausible-gain rule); the product
+ * never writes it.
+ */
 export const REFERENCE_SCORE_COLUMN = '__ps_reference_score';
 /** `__ps_slice:<field>` holds the protocol's slice subgroup values as strings. */
 export const SLICE_COLUMN_PREFIX = '__ps_slice:';

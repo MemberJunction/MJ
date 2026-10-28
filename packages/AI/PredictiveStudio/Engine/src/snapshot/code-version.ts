@@ -17,7 +17,8 @@ export class CodeVersionInfo {
    * `PS_GIT_SHA` both read as `unrecorded`.
    */
   public static AssemblyCodeVersion(): string {
-    return `@memberjunction/predictive-studio@${CodeVersionInfo.readPackageVersion()}+${process.env.PS_GIT_SHA || 'unrecorded'}`;
+    const gitSha = process.env.PS_GIT_SHA || 'unrecorded';
+    return `@memberjunction/predictive-studio@${CodeVersionInfo.readPackageVersion()}+${gitSha}`;
   }
 
   /**

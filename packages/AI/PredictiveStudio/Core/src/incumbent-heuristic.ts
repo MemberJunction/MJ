@@ -33,11 +33,15 @@ const OPS: readonly IncumbentComparison['Op'][] = ['>=', '>', '<=', '<', '==', '
 export class IncumbentExpressions {
   /** Parse a scoreExpression; anything outside the grammar is a failure naming the expression. */
   public static ParseIncumbentExpression(text: string): ParseResult<IncumbentExpression> {
-    const fail = JsonParse.ParseFail<IncumbentExpression>(`IncumbentHeuristic scoreExpression "${text}" must be <column>, or <column> <op> <number> comparisons joined by and/or`);
+    const fail = JsonParse.ParseFail<IncumbentExpression>(
+      `IncumbentHeuristic scoreExpression "${text}" must be <column>, or <column> <op> <number> comparisons joined by and/or`,
+    );
     const tokens = IncumbentExpressions.tokenize(text);
     if (tokens === null || tokens.length === 0) return fail;
     const only = tokens[0];
-    if (tokens.length === 1 && only !== undefined && IncumbentExpressions.isColumn(only)) return JsonParse.ParseOk({ Kind: 'column', Column: only });
+    if (tokens.length === 1 && only !== undefined && IncumbentExpressions.isColumn(only)) {
+      return JsonParse.ParseOk({ Kind: 'column', Column: only });
+    }
     const any = IncumbentExpressions.parseRule(tokens);
     return any === null ? fail : JsonParse.ParseOk({ Kind: 'rule', Any: any });
   }
@@ -47,20 +51,31 @@ export class IncumbentExpressions {
     return e.Kind === 'column' ? [e.Column] : [...new Set(e.Any.flatMap((g) => g.map((c) => c.Column)))];
   }
 
-  /** The row's heuristic score; null when any referenced value is missing (the trainer imputes in-fold, never 0). */
-  public static EvaluateIncumbentExpression(e: IncumbentExpression, value: (column: string) => number | null): number | null {
-    if (e.Kind === 'column') return value(e.Column);
+  /**
+   * The row's heuristic score; null when any referenced value is missing or NaN (the trainer imputes in-fold, never
+   * 0), since a NaN would otherwise fail every comparison and score as a confident 0.
+   */
+  public static EvaluateIncumbentExpression(
+    e: IncumbentExpression,
+    value: (column: string) => number | null,
+  ): number | null {
+    if (e.Kind === 'column') return IncumbentExpressions.present(value(e.Column));
     let score = 0;
     for (const group of e.Any) {
       let all = true;
       for (const c of group) {
-        const v = value(c.Column);
+        const v = IncumbentExpressions.present(value(c.Column));
         if (v === null) return null;
         if (!IncumbentExpressions.holds(v, c.Op, c.Value)) all = false;
       }
       if (all) score = 1;
     }
     return score;
+  }
+
+  /** The value, or null when it is missing or NaN. */
+  private static present(v: number | null): number | null {
+    return v === null || Number.isNaN(v) ? null : v;
   }
 
   /** Comparison tokens `<column> <op> <number>` joined by `and`/`or` → OR of AND-groups; null when malformed. */

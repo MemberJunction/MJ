@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { StoreSchemas } from '../store-schemas';
-import type { JsonValue } from '../json-value';
+import { JsonParse, type JsonValue } from '../json-value';
 import type { SnapshotMatrixHeader } from '../snapshot-format';
 
 const header: SnapshotMatrixHeader = {
@@ -16,9 +16,11 @@ const header: SnapshotMatrixHeader = {
   preprocessing: [],
 };
 
-/** The header as the JSON a stored file line parses to. */
-function asJson(h: SnapshotMatrixHeader): JsonValue {
-  return JSON.parse(JSON.stringify(h));
+/** A value as the JSON a stored file line parses to. */
+function asJson(value: object): JsonValue {
+  const parsed = JsonParse.ParseJsonText(JSON.stringify(value), 'test value');
+  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+  return parsed.Value;
 }
 
 describe('store schemas', () => {
@@ -27,11 +29,18 @@ describe('store schemas', () => {
     expect(r.Ok && r.Value).toEqual(header);
   });
   it('refuses a header with an unknown format tag or a feature kind outside FeatureKind, naming the path', () => {
-    const json = JSON.parse(JSON.stringify({ ...header, format: 'ps-snapshot-matrix/v0', featureSchema: [{ Name: 'Tenure', Kind: 'text' }] }));
+    const json = asJson({ ...header, format: 'ps-snapshot-matrix/v0', featureSchema: [{ Name: 'Tenure', Kind: 'text' }] });
     const r = StoreSchemas.Validate(StoreSchemas.SnapshotMatrixHeader, json);
     expect(r.Ok).toBe(false);
     if (r.Ok) return;
     expect(r.Errors.some((e) => e.startsWith('format:'))).toBe(true);
     expect(r.Errors.some((e) => e.startsWith('featureSchema.0.Kind:'))).toBe(true);
+  });
+  it('refuses an unknown key on a stored line, so a misspelt field fails loudly instead of being dropped', () => {
+    const op = asJson({ op: 'impute', col: 'Tenure', strategy: 'median', indicatr: true });
+    const r = StoreSchemas.Validate(StoreSchemas.PreprocessingOp, op);
+    expect(r.Ok).toBe(false);
+    const inHeader = StoreSchemas.Validate(StoreSchemas.SnapshotMatrixHeader, asJson({ ...header, preprocessing: [{ op: 'impute', extra: 1 }] }));
+    expect(inHeader.Ok).toBe(false);
   });
 });

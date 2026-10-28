@@ -20,6 +20,13 @@ describe('incumbent heuristic expressions', () => {
     const bare = IncumbentExpressions.ParseIncumbentExpression('LastYearScore');
     expect(bare.Ok && bare.Value).toEqual({ Kind: 'column', Column: 'LastYearScore' });
   });
+  it('scores null, not 0, when a referenced value is NaN', () => {
+    const rule = IncumbentExpressions.ParseIncumbentExpression('a >= 1');
+    const bare = IncumbentExpressions.ParseIncumbentExpression('a');
+    if (!rule.Ok || !bare.Ok) throw new Error('both expressions are in the grammar');
+    expect(IncumbentExpressions.EvaluateIncumbentExpression(rule.Value, () => Number.NaN)).toBeNull();
+    expect(IncumbentExpressions.EvaluateIncumbentExpression(bare.Value, () => Number.NaN)).toBeNull();
+  });
   it('refuses anything outside the grammar', () => {
     expect(IncumbentExpressions.ParseIncumbentExpression('DROP TABLE x').Ok).toBe(false);
     expect(IncumbentExpressions.ParseIncumbentExpression('a >= ').Ok).toBe(false);
