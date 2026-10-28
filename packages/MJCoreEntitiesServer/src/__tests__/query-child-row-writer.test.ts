@@ -133,7 +133,6 @@ function result(overrides: Partial<QueryExtractionResult>): QueryExtractionResul
 beforeAll(() => {
     infos = new Map(Object.keys(SPECS).map(name => [name, entityInfo(name)]));
     Metadata.Provider = { Entities: [...infos.values()], CurrentUser: USER } as unknown as ProviderBase;
-    vi.spyOn(BaseEntity.prototype, 'CheckPermissions').mockReturnValue(true);
 });
 
 afterAll(() => {
@@ -142,6 +141,8 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+    // Re-applied per test: the shared vitest config restores mocks after each one.
+    vi.spyOn(BaseEntity.prototype, 'CheckPermissions').mockReturnValue(true);
     ops = [];
     lookups = [];
     stored = new Map();
