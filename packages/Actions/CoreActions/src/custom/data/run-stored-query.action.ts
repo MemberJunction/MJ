@@ -23,7 +23,8 @@ export class RunStoredQueryAction extends BaseAction {
             const queryName = this.getStringParam(params, "queryname");
             const parametersRaw = this.getStringParam(params, "parameters");
             const maxRows = this.getNumericParam(params, "maxrows", 1000);
-            const dataFormat = this.getStringParam(params, "dataformat") || 'csv';
+            // A rendered copy of the rows is produced only when the caller asked for one (see Run Ad-hoc Query).
+            const dataFormat = this.getStringParam(params, "dataformat");
             const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 200);
 
             if (!queryId && !queryName) {
@@ -77,11 +78,13 @@ export class RunStoredQueryAction extends BaseAction {
             const executionTimeMs = result.ExecutionTime || 0;
 
             // Format output
-            const formattedData = this.formatResults(results, dataFormat, columnMaxLength);
+            const formattedData = dataFormat ? this.formatResults(results, dataFormat, columnMaxLength) : undefined;
             const message = this.buildMessage(results, executionTimeMs, maxRows, formattedData, result, columnMaxLength);
 
             this.setOutputParam(params, "Results", results);
-            this.setOutputParam(params, "FormattedResults", formattedData);
+            if (formattedData !== undefined) {
+                this.setOutputParam(params, "FormattedResults", formattedData);
+            }
             this.setOutputParam(params, "RowCount", results.length);
             this.setOutputParam(params, "ExecutionTimeMs", executionTimeMs);
 
@@ -199,7 +202,7 @@ export class RunStoredQueryAction extends BaseAction {
         results: Record<string, unknown>[],
         executionTimeMs: number,
         maxRows: number,
-        formattedData: string,
+        formattedData: string | undefined,
         queryResult: RunQueryResult,
         columnMaxLength: number = 0
     ): string {
@@ -214,7 +217,7 @@ export class RunStoredQueryAction extends BaseAction {
         if (results.length >= maxRows) {
             lines.push(`**Note:** Results may have been truncated at ${maxRows} rows`);
         }
-        if (columnMaxLength > 0 && formattedData.includes('[...truncated]')) {
+        if (columnMaxLength > 0 && formattedData?.includes('[...truncated]')) {
             lines.push(`**Note:** Column values longer than ${columnMaxLength} characters were truncated with \`[...truncated]\`. Pass \`ColumnMaxLength: 0\` for full values.`);
         }
 
@@ -224,17 +227,14 @@ export class RunStoredQueryAction extends BaseAction {
 
         lines.push('\n---\n');
 
+        // The rows go out in the Results and FormattedResults output parameters, which an agent reads
+        // alongside this message; a copy here put every result set into the context a third time.
         if (results.length > 0) {
-            lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
-            lines.push('```');
-            lines.push(formattedData);
-            lines.push('```');
+            const alsoFormatted = formattedData !== undefined ? ' (also rendered in the `FormattedResults` output parameter)' : '';
+            lines.push(`## Data\n${results.length.toLocaleString()} row${results.length !== 1 ? 's' : ''} in the \`Results\` output parameter${alsoFormatted}.`);
         } else {
             lines.push('## Data\n*No rows returned*');
         }
-
-        lines.push('\n---');
-        lines.push('\n**The full result set is available in the Results output parameter.**');
 
         return lines.join('\n');
     }
