@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { promises as fs } from 'node:fs';
+import { promises as fs, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { IntegrationProgressEmitter } from '../IntegrationProgressEmitter.js';
+import { IntegrationProgressReader } from '../IntegrationProgressReader.js';
 import type {
     IntegrationProgressEvent,
     IntegrationRunManifest,
@@ -315,6 +316,65 @@ describe('IntegrationProgressEmitter', () => {
                 await e.flush();
             }
             expect((await listDirs()).length).toBe(3); // nothing pruned
+        });
+    });
+
+    describe('resuming an existing run', () => {
+        it('resumes an existing run: continues seq, keeps the manifest, reports IsResumed', async () => {
+            const manifest = makeManifest('run-resume');
+            const first = new IntegrationProgressEmitter(manifest, { rootDir });
+            expect(first.IsResumed).toBe(false);
+            first.RunStart('a');
+            first.StageStart('S', 'b');
+            await first.Flush(); // seq 1, 2
+
+            const second = new IntegrationProgressEmitter({ ...manifest, startedAt: 'later' }, { rootDir });
+            expect(second.IsResumed).toBe(true);
+            second.StageComplete('S');
+            await second.Flush();
+
+            const events = await new IntegrationProgressReader(rootDir).Tail(manifest.runID, 0);
+            expect(events.map(e => e.seq)).toEqual([1, 2, 3]);
+            const written = JSON.parse(readFileSync(join(rootDir, manifest.runID, 'manifest.json'), 'utf8')) as IntegrationRunManifest;
+            expect(written.startedAt).toBe(manifest.startedAt);
+        });
+
+        it('resumes at seq 1 when the run exists but has no events yet', async () => {
+            const manifest = makeManifest('run-empty');
+            const first = new IntegrationProgressEmitter(manifest, { rootDir });
+            await first.Flush(); // manifest only, no progress.jsonl
+
+            const second = new IntegrationProgressEmitter(manifest, { rootDir });
+            expect(second.IsResumed).toBe(true);
+            second.RunStart('x');
+            await second.Flush();
+
+            expect((await readEvents('run-empty')).map(e => e.seq)).toEqual([1]);
+        });
+
+        it('does not prune when resuming', async () => {
+            const target = new IntegrationProgressEmitter(makeManifest('target'), { rootDir, maxRunDirs: 0 });
+            await target.Flush();
+            for (const id of ['x', 'y']) {
+                await new IntegrationProgressEmitter(makeManifest(id), { rootDir, maxRunDirs: 0 }).Flush();
+            }
+            await fs.utimes(join(rootDir, 'x'), new Date(0), new Date(0));
+
+            const resumed = new IntegrationProgressEmitter(makeManifest('target'), { rootDir, maxRunDirs: 1 });
+            await resumed.Flush();
+
+            const entries = await fs.readdir(rootDir);
+            expect(entries.sort()).toEqual(['target', 'x', 'y']);
+        });
+
+        it('a fresh run is not resumed and RunExists reflects the directory', async () => {
+            expect(IntegrationProgressEmitter.RunExists('run-fresh', rootDir)).toBe(false);
+            const emitter = new IntegrationProgressEmitter(makeManifest('run-fresh'), { rootDir });
+            expect(emitter.IsResumed).toBe(false);
+            emitter.RunStart();
+            await emitter.Flush();
+            expect(IntegrationProgressEmitter.RunExists('run-fresh', rootDir)).toBe(true);
+            expect((await readEvents('run-fresh')).map(e => e.seq)).toEqual([1]);
         });
     });
 });

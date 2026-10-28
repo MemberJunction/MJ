@@ -37,7 +37,10 @@ export class BootstrapProgress {
             startedAt: new Date().toISOString(),
             context: { kind: 'SQLServerBackupBootstrap' },
         });
-        this.emitter.RunStart('SQL Server backup bootstrap started');
+        // A run opened earlier (by a job that invokes this action as one phase) already has its start.
+        if (!this.emitter.IsResumed) {
+            this.emitter.RunStart('SQL Server backup bootstrap started');
+        }
     }
 
     public StageStart(stage: string, message: string): void {
@@ -126,6 +129,26 @@ interface TableLoadBatchSpec {
 }
 
 /**
+ * State shared by the bootstrap's restore and load phases. The restore phase fills in the backup's
+ * identity, the long-running runner and what it created (staging database, storage credential) as it
+ * goes, so the caller's failure cleanup and runner disposal see exactly what exists.
+ */
+export interface BootstrapRunContext {
+    Params: RunActionParams;
+    Progress: BootstrapProgress;
+    Executor: DatabaseProviderBase;
+    Runner?: LongRunningSqlRunner;
+    CompanyIntegrationID: string;
+    StagingDatabaseName: string;
+    /** Storage container whose SQL Server credential was registered; empty when every source is a local path. */
+    ContainerUrl: string;
+    /** True from the moment the restore starts until the staging database is dropped. */
+    StagingDbCreated: boolean;
+    BackupStartDate?: Date;
+    BackupDatabaseName?: string;
+}
+
+/**
  * Action that performs a high-speed initial bootstrap of external SQL Server tables
  * into MemberJunction target tables using a staged Azure Blob backup restore and local in-engine ETL.
  *
@@ -162,11 +185,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const startTime = Date.now();
-        let stagingDbCreated = false;
-        let stagingDbName = '';
-        let containerUrl = '';
-        let sqlExecutor: DatabaseProviderBase | undefined;
-        let runner: LongRunningSqlRunner | undefined;
+        let ctx: BootstrapRunContext | undefined;
         // Opened before any validation so a detached caller sees even a parameter failure on its run.
         const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
 
@@ -187,7 +206,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 return await this.rejectInput(params, progress, 'INVALID_PARAMETER', "Parameter 'BackupUrls' must contain at least one valid URL or file path.");
             }
 
-            stagingDbName = this.getStringParam(params, 'StagingDatabaseName') ??
+            const stagingDbName = this.getStringParam(params, 'StagingDatabaseName') ??
                 `MJ_Staging_${companyIntegrationID.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12)}_${Date.now()}`;
             ValidateIdentifier(stagingDbName, 'database');
 
@@ -196,141 +215,39 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             const batchSize = this.getNumberParam(params, 'BatchSize', 500000);
             const entityMapIDs = this.getStringListParam(params, 'EntityMapIDs');
 
-            // 2. Resolve SQL Execution Provider (MultiProvider compliant)
-            sqlExecutor = this.getDatabaseProvider(params);
-            const recordMaps = this.resolveRecordMapTarget(sqlExecutor);
-
-            // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
-            const hasUrl = backupUrls.some(u => this.IsUrl(u));
-            if (hasUrl) {
-                progress.StageStart('Credential', 'Resolving the storage token and registering the SQL Server credential');
-                const sasToken = await this.resolveSasToken(params);
-                const firstUrl = backupUrls.find(u => this.IsUrl(u))!;
-                containerUrl = this.extractContainerUrl(firstUrl);
-
-                // Create SQL Server Storage Credential
-                LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${containerUrl}'...`);
-                await this.ensureStorageCredential(sqlExecutor, containerUrl, sasToken, params.ContextUser);
-                progress.StageComplete('Credential');
-            }
-
-            // 4. Inspect Backup Header & Filelist across ALL stripes (Msg 3132 prevention)
-            progress.StageStart('Inspect', `Reading the backup header and file list across ${backupUrls.length} stripe(s)`);
-            LogStatus(`[BootstrapSQLServer] Reading backup header from ${backupUrls.length} stripe(s)...`);
-            const headerInfo = await this.inspectBackupHeader(sqlExecutor, backupUrls, params.ContextUser);
-            LogStatus(`[BootstrapSQLServer] Backup Header: SourceDB='${headerInfo.DatabaseName}', BackupStartDate=${headerInfo.BackupStartDate.toISOString()}`);
-
-            const fileList = await this.inspectBackupFileList(sqlExecutor, backupUrls, params.ContextUser);
-            const moveClauses = await this.buildMoveClauses(sqlExecutor, stagingDbName, fileList, params);
-            progress.StageComplete('Inspect');
-
-            // 5. Restore into a staging database that must not already exist: a restore WITH REPLACE over
-            //    a user-typed name could otherwise overwrite a live database.
-            progress.StageStart('Restore', `Restoring '${headerInfo.DatabaseName}' (backup of ${headerInfo.BackupStartDate.toISOString()}) into staging database [${stagingDbName}]`);
-            await this.assertStagingDatabaseAbsent(sqlExecutor, stagingDbName, params.ContextUser);
-            runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
-            LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
-            stagingDbCreated = true;
-            await this.executeDatabaseRestore(runner, stagingDbName, backupUrls, moveClauses);
-            progress.StageComplete('Restore');
-
-            // 6. Load Active Entity Maps for Company Integration
-            const entityMaps = await this.loadEntityMaps(sqlExecutor, companyIntegrationID, entityMapIDs, params.ContextUser);
-            if (entityMaps.length === 0) {
-                LogStatus(`[BootstrapSQLServer] Warning: No active entity maps found for CompanyIntegrationID=${companyIntegrationID}.`);
-            }
-
-            // 7. Execute Local In-Engine Minimally-Logged ETL
-            let totalRowsInserted = 0;
-            const tableResults: TableEtlResult[] = [];
-            const loadedMaps: MJCompanyIntegrationEntityMapEntity[] = [];
-
-            for (const map of entityMaps) {
-                const entityInfo = sqlExecutor.EntityByID(map.EntityID);
-                if (!entityInfo) {
-                    LogError(`[BootstrapSQLServer] Skipping EntityMap ${map.ID}: Target EntityID '${map.EntityID}' not found in metadata.`);
-                    continue;
-                }
-
-                // Direct DML against an entity's base table is sanctioned only by the entity's own opt-in.
-                if (!entityInfo.AllowDirectSQLInsert) {
-                    throw new Error(`Target entity '${entityInfo.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL ETL is prohibited.`);
-                }
-
-                const targetPkCol = this.resolveTargetPrimaryKey(entityInfo);
-
-                const loadStage = `Load ${entityInfo.Name}`;
-                progress.StageStart(loadStage, `Loading ${map.ExternalObjectName} into ${entityInfo.SchemaName}.${entityInfo.BaseTable}`);
-                const result = await this.executeTableEtl(
-                    sqlExecutor,
-                    runner,
-                    companyIntegrationID,
-                    map,
-                    stagingDbName,
-                    map.ExternalObjectName,
-                    entityInfo.SchemaName,
-                    entityInfo.BaseTable,
-                    targetPkCol,
-                    batchSize,
-                    headerInfo.BackupStartDate,
-                    truncateTargetBeforeLoad,
-                    recordMaps,
-                    params.ContextUser
-                );
-
-                // After successful table load and commit, invalidate RunView server cache for the entity (Task 7)
-                await LocalCacheManager.Instance.InvalidateEntityCaches(entityInfo.Name);
-
-                totalRowsInserted += result.RowsTransferred;
-                tableResults.push(result);
-                loadedMaps.push(map);
-                progress.StageComplete(loadStage, result.RowsTransferred);
-            }
-
-            // 8. Seed Watermark via WatermarkService (Zero-Gap Invariant). Only a map whose table was
-            //    actually loaded is seeded: seeding a skipped map would make its next incremental sync
-            //    start after the backup date and lose every pre-backup row for good.
-            LogStatus(`[BootstrapSQLServer] Seeding sync watermarks with BackupStartDate: ${headerInfo.BackupStartDate.toISOString()}...`);
-            progress.StageStart('Watermarks', `Seeding ${loadedMaps.length} sync watermark(s) to ${headerInfo.BackupStartDate.toISOString()}`);
-            const watermarkService = new WatermarkService();
-            for (const map of loadedMaps) {
-                await watermarkService.Update(
-                    map.ID,
-                    headerInfo.BackupStartDate.toISOString(),
-                    params.ContextUser,
-                    'Pull'
-                );
-            }
-            progress.StageComplete('Watermarks');
-
-            // 9. Post-Restore Cleanup
-            if (dropStagingOnComplete) {
-                progress.StageStart('Cleanup', `Dropping staging database [${stagingDbName}] and the storage credential`);
-                LogStatus(`[BootstrapSQLServer] Cleaning up staging database [${stagingDbName}]...`);
-                await this.dropStagingDatabase(sqlExecutor, stagingDbName, params.ContextUser);
-                stagingDbCreated = false;
-
-                if (containerUrl) {
-                    LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${containerUrl}'...`);
-                    await this.dropStorageCredential(sqlExecutor, containerUrl, params.ContextUser);
-                }
-                progress.StageComplete('Cleanup');
-            }
-
-            const durationSec = Math.round((Date.now() - startTime) / 1000);
-            const outputs = {
-                BackupStartDate: headerInfo.BackupStartDate.toISOString(),
+            // 2. Resolve SQL Execution Provider (MultiProvider compliant). The record-map target is
+            //    resolved here as well so a metadata problem fails before an hours-long restore.
+            const sqlExecutor = this.getDatabaseProvider(params);
+            this.resolveRecordMapTarget(sqlExecutor);
+            ctx = {
+                Params: params,
+                Progress: progress,
+                Executor: sqlExecutor,
+                CompanyIntegrationID: companyIntegrationID,
                 StagingDatabaseName: stagingDbName,
-                TablesProcessed: tableResults.length,
-                TotalRowsTransferred: totalRowsInserted,
-                DurationSeconds: durationSec,
-                StagingDatabaseDropped: dropStagingOnComplete ? 1 : 0,
+                ContainerUrl: '',
+                StagingDbCreated: false,
             };
+
+            // 3-5. Credential, Inspect, Restore
+            await this.runRestorePhase(ctx, backupUrls);
+
+            // 6-9. Load, Watermarks, Cleanup
+            const outputs = await this.runLoadPhase(ctx, {
+                BatchSize: batchSize,
+                TruncateTargetBeforeLoad: truncateTargetBeforeLoad,
+                EntityMapIDs: entityMapIDs,
+                DropStagingDbOnComplete: dropStagingOnComplete,
+                BackupStartDate: ctx.BackupStartDate!,
+            });
+            // The load phase times only itself; this run's duration also covers the restore.
+            const durationSec = Math.round((Date.now() - startTime) / 1000);
+            outputs.DurationSeconds = durationSec;
             for (const [name, value] of Object.entries(outputs)) {
                 this.addOutputParam(params, name, value);
             }
 
-            const message = `Successfully bootstrapped ${tableResults.length} table(s) (${totalRowsInserted.toLocaleString()} rows) in ${durationSec}s. Watermark seeded to ${headerInfo.BackupStartDate.toISOString()}.`;
+            const message = `Successfully bootstrapped ${outputs.TablesProcessed} table(s) (${Number(outputs.TotalRowsTransferred).toLocaleString()} rows) in ${durationSec}s. Watermark seeded to ${outputs.BackupStartDate}.`;
             await progress.Complete(message, outputs);
             return {
                 Success: true,
@@ -347,8 +264,8 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             // Automated fail-safe cleanup: the staging database if the restore was started (a restore that
             // failed midway leaves it in RESTORING state), and the storage credential whenever it was
             // created, including a failure before the restore (a bad SAS token fails at HEADERONLY).
-            if (sqlExecutor) {
-                await this.cleanUpAfterFailure(sqlExecutor, stagingDbCreated ? stagingDbName : '', containerUrl, params.ContextUser);
+            if (ctx) {
+                await this.cleanUpAfterFailure(ctx.Executor, ctx.StagingDbCreated ? ctx.StagingDatabaseName : '', ctx.ContainerUrl, params.ContextUser);
             }
 
             return {
@@ -358,10 +275,170 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 Params: params.Params,
             };
         } finally {
-            if (runner) {
-                await runner.Dispose();
+            if (ctx?.Runner) {
+                await ctx.Runner.Dispose();
             }
         }
+    }
+
+    /**
+     * Credential, Inspect and Restore stages: registers the storage credential for URL sources, reads the
+     * backup header and file list across every stripe, and restores into the staging database. Sets
+     * `ContainerUrl`, `BackupStartDate`, `BackupDatabaseName`, `Runner` and `StagingDbCreated` on `ctx`
+     * as each becomes known, so the caller's failure cleanup and disposal see exactly what was created.
+     */
+    protected async runRestorePhase(ctx: BootstrapRunContext, backupUrls: string[]): Promise<void> {
+        const { Params: params, Progress: progress, Executor: sqlExecutor, StagingDatabaseName: stagingDbName } = ctx;
+
+        // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
+        const hasUrl = backupUrls.some(u => this.IsUrl(u));
+        if (hasUrl) {
+            progress.StageStart('Credential', 'Resolving the storage token and registering the SQL Server credential');
+            const sasToken = await this.resolveSasToken(params);
+            const firstUrl = backupUrls.find(u => this.IsUrl(u))!;
+            ctx.ContainerUrl = this.extractContainerUrl(firstUrl);
+
+            // Create SQL Server Storage Credential
+            LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${ctx.ContainerUrl}'...`);
+            await this.ensureStorageCredential(sqlExecutor, ctx.ContainerUrl, sasToken, params.ContextUser);
+            progress.StageComplete('Credential');
+        }
+
+        // 4. Inspect Backup Header & Filelist across ALL stripes (Msg 3132 prevention)
+        progress.StageStart('Inspect', `Reading the backup header and file list across ${backupUrls.length} stripe(s)`);
+        LogStatus(`[BootstrapSQLServer] Reading backup header from ${backupUrls.length} stripe(s)...`);
+        const headerInfo = await this.inspectBackupHeader(sqlExecutor, backupUrls, params.ContextUser);
+        LogStatus(`[BootstrapSQLServer] Backup Header: SourceDB='${headerInfo.DatabaseName}', BackupStartDate=${headerInfo.BackupStartDate.toISOString()}`);
+        ctx.BackupStartDate = headerInfo.BackupStartDate;
+        ctx.BackupDatabaseName = headerInfo.DatabaseName;
+
+        const fileList = await this.inspectBackupFileList(sqlExecutor, backupUrls, params.ContextUser);
+        const moveClauses = await this.buildMoveClauses(sqlExecutor, stagingDbName, fileList, params);
+        progress.StageComplete('Inspect');
+
+        // 5. Restore into a staging database that must not already exist: a restore WITH REPLACE over
+        //    a user-typed name could otherwise overwrite a live database.
+        progress.StageStart('Restore', `Restoring '${headerInfo.DatabaseName}' (backup of ${headerInfo.BackupStartDate.toISOString()}) into staging database [${stagingDbName}]`);
+        await this.assertStagingDatabaseAbsent(sqlExecutor, stagingDbName, params.ContextUser);
+        const runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
+        ctx.Runner = runner;
+        LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
+        ctx.StagingDbCreated = true;
+        await this.executeDatabaseRestore(runner, stagingDbName, backupUrls, moveClauses);
+        progress.StageComplete('Restore');
+    }
+
+    /**
+     * Load, Watermarks and Cleanup stages over an already-restored staging database: loads each active
+     * entity map's table, seeds the loaded maps' watermarks to `options.BackupStartDate`, and optionally
+     * drops the staging database and storage credential (clearing `ctx.StagingDbCreated`). Uses
+     * `ctx.Runner`, opening one onto `ctx` when the restore ran elsewhere. Returns the action's outputs;
+     * their `DurationSeconds` covers this phase only.
+     */
+    protected async runLoadPhase(
+        ctx: BootstrapRunContext,
+        options: { BatchSize: number; TruncateTargetBeforeLoad: boolean; EntityMapIDs?: string[]; DropStagingDbOnComplete: boolean; BackupStartDate: Date }
+    ): Promise<Record<string, string | number | boolean>> {
+        const startTime = Date.now();
+        const { Params: params, Progress: progress, Executor: sqlExecutor, CompanyIntegrationID: companyIntegrationID, StagingDatabaseName: stagingDbName } = ctx;
+        const backupStartDate = options.BackupStartDate;
+        const recordMaps = this.resolveRecordMapTarget(sqlExecutor);
+        if (!ctx.Runner) {
+            ctx.Runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
+        }
+        const runner = ctx.Runner;
+
+        // 6. Load Active Entity Maps for Company Integration
+        const entityMaps = await this.loadEntityMaps(sqlExecutor, companyIntegrationID, options.EntityMapIDs, params.ContextUser);
+        if (entityMaps.length === 0) {
+            LogStatus(`[BootstrapSQLServer] Warning: No active entity maps found for CompanyIntegrationID=${companyIntegrationID}.`);
+        }
+
+        // 7. Execute Local In-Engine Minimally-Logged ETL
+        let totalRowsInserted = 0;
+        const tableResults: TableEtlResult[] = [];
+        const loadedMaps: MJCompanyIntegrationEntityMapEntity[] = [];
+
+        for (const map of entityMaps) {
+            const entityInfo = sqlExecutor.EntityByID(map.EntityID);
+            if (!entityInfo) {
+                LogError(`[BootstrapSQLServer] Skipping EntityMap ${map.ID}: Target EntityID '${map.EntityID}' not found in metadata.`);
+                continue;
+            }
+
+            // Direct DML against an entity's base table is sanctioned only by the entity's own opt-in.
+            if (!entityInfo.AllowDirectSQLInsert) {
+                throw new Error(`Target entity '${entityInfo.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL ETL is prohibited.`);
+            }
+
+            const targetPkCol = this.resolveTargetPrimaryKey(entityInfo);
+
+            const loadStage = `Load ${entityInfo.Name}`;
+            progress.StageStart(loadStage, `Loading ${map.ExternalObjectName} into ${entityInfo.SchemaName}.${entityInfo.BaseTable}`);
+            const result = await this.executeTableEtl(
+                sqlExecutor,
+                runner,
+                companyIntegrationID,
+                map,
+                stagingDbName,
+                map.ExternalObjectName,
+                entityInfo.SchemaName,
+                entityInfo.BaseTable,
+                targetPkCol,
+                options.BatchSize,
+                backupStartDate,
+                options.TruncateTargetBeforeLoad,
+                recordMaps,
+                params.ContextUser
+            );
+
+            // After successful table load and commit, invalidate RunView server cache for the entity (Task 7)
+            await LocalCacheManager.Instance.InvalidateEntityCaches(entityInfo.Name);
+
+            totalRowsInserted += result.RowsTransferred;
+            tableResults.push(result);
+            loadedMaps.push(map);
+            progress.StageComplete(loadStage, result.RowsTransferred);
+        }
+
+        // 8. Seed Watermark via WatermarkService (Zero-Gap Invariant). Only a map whose table was
+        //    actually loaded is seeded: seeding a skipped map would make its next incremental sync
+        //    start after the backup date and lose every pre-backup row for good.
+        LogStatus(`[BootstrapSQLServer] Seeding sync watermarks with BackupStartDate: ${backupStartDate.toISOString()}...`);
+        progress.StageStart('Watermarks', `Seeding ${loadedMaps.length} sync watermark(s) to ${backupStartDate.toISOString()}`);
+        const watermarkService = new WatermarkService();
+        for (const map of loadedMaps) {
+            await watermarkService.Update(
+                map.ID,
+                backupStartDate.toISOString(),
+                params.ContextUser,
+                'Pull'
+            );
+        }
+        progress.StageComplete('Watermarks');
+
+        // 9. Post-Restore Cleanup
+        if (options.DropStagingDbOnComplete) {
+            progress.StageStart('Cleanup', `Dropping staging database [${stagingDbName}] and the storage credential`);
+            LogStatus(`[BootstrapSQLServer] Cleaning up staging database [${stagingDbName}]...`);
+            await this.dropStagingDatabase(sqlExecutor, stagingDbName, params.ContextUser);
+            ctx.StagingDbCreated = false;
+
+            if (ctx.ContainerUrl) {
+                LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${ctx.ContainerUrl}'...`);
+                await this.dropStorageCredential(sqlExecutor, ctx.ContainerUrl, params.ContextUser);
+            }
+            progress.StageComplete('Cleanup');
+        }
+
+        return {
+            BackupStartDate: backupStartDate.toISOString(),
+            StagingDatabaseName: stagingDbName,
+            TablesProcessed: tableResults.length,
+            TotalRowsTransferred: totalRowsInserted,
+            DurationSeconds: Math.round((Date.now() - startTime) / 1000),
+            StagingDatabaseDropped: options.DropStagingDbOnComplete ? 1 : 0,
+        };
     }
 
     /** The result for an input the action cannot run with; a detached run is terminated with the reason. */

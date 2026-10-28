@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CountsContributeToAggregate } from './types.js';
 import type {
@@ -41,11 +41,17 @@ export type IntegrationProgressPublishHook = (manifest: IntegrationRunManifest, 
 
 /**
  * Writes structured progress artifacts to `<rootDir>/<runID>/`:
- * - manifest.json (written once at start)
+ * - manifest.json (written once, by the emitter that opens the run)
  * - progress.jsonl (append-only event stream; checkpoint events carry resumableState)
  * - result.json (written once at terminate)
  *
- * Sequence numbers monotonic per emitter instance. Disk I/O is async and serialized
+ * Sequence numbers are monotonic per run. When the run directory already holds a manifest at
+ * construction, the emitter RESUMES that run: it continues `seq` after the last event on disk,
+ * leaves manifest.json untouched, and skips retention pruning (see {@link IsResumed}). This lets
+ * several writers (a server job, then actions it invokes, then the job again) share one sequence,
+ * provided each writer flushes before the next one is constructed.
+ *
+ * Disk I/O is async and serialized
  * via an internal promise chain — callers don't await; the emitter guarantees ordered
  * writes. A flush() method awaits the queue when needed (test teardown, run completion).
  */
@@ -76,6 +82,7 @@ export class IntegrationProgressEmitter {
 
     private readonly root: string;
     private readonly maxRunDirs: number;
+    private readonly isResumed: boolean;
 
     constructor(
         private readonly manifest: IntegrationRunManifest,
@@ -88,7 +95,27 @@ export class IntegrationProgressEmitter {
         this.resultPath = join(this.runDir, 'result.json');
         this.consoleMirror = opts.consoleMirror ?? false;
         this.maxRunDirs = opts.maxRunDirs ?? DEFAULT_MAX_RUN_DIRS;
+        // Resume detection and the seq base are read synchronously: Emit() assigns seq at call
+        // time, so the base must be known before the first event — not after an async bootstrap.
+        this.isResumed = existsSync(this.manifestPath);
+        if (this.isResumed) {
+            this.seq = IntegrationProgressEmitter.readLastSeq(this.progressPath);
+        }
         this.writeChain = this.bootstrap();
+    }
+
+    /**
+     * True when this emitter continued a run that already existed on disk (its manifest.json was
+     * present at construction) rather than opening a new one.
+     */
+    public get IsResumed(): boolean {
+        return this.isResumed;
+    }
+
+    /** Whether a run with this ID has already been opened under the root (its manifest.json exists). */
+    public static RunExists(runID: string, rootDir?: string): boolean {
+        const root = rootDir ?? join(process.cwd(), 'logs', 'integration-runs');
+        return existsSync(join(root, runID, 'manifest.json'));
     }
 
     /** Emit a generic event. */
@@ -352,6 +379,9 @@ export class IntegrationProgressEmitter {
     // ── Internals ──────────────────────────────────────────────────────
 
     private async bootstrap(): Promise<void> {
+        // A resumed run already has its dir + manifest; it must not rewrite the manifest (the opener's
+        // startedAt/context are authoritative) and must not prune (it is not a new run).
+        if (this.isResumed) return;
         await fs.mkdir(this.runDir, { recursive: true });
         await fs.writeFile(this.manifestPath, JSON.stringify(this.manifest, null, 2), 'utf-8');
         // Retention: prune oldest run dirs so logs/ never grows unbounded across runs. Best-effort —
@@ -384,6 +414,27 @@ export class IntegrationProgressEmitter {
         await Promise.all(toDelete.map(d =>
             fs.rm(d.p, { recursive: true, force: true }).catch(() => { /* best-effort */ })
         ));
+    }
+
+    /** The `seq` of the last event in an existing progress.jsonl; 0 when it is missing or empty. */
+    private static readLastSeq(progressPath: string): number {
+        let raw: string;
+        try {
+            raw = readFileSync(progressPath, 'utf-8');
+        } catch {
+            return 0; // run opened but no events written yet
+        }
+        const lines = raw.split('\n');
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            try {
+                return (JSON.parse(line) as IntegrationProgressEvent).seq;
+            } catch {
+                continue; // a torn final line (writer died mid-append) — fall back to the previous one
+            }
+        }
+        return 0;
     }
 
     private async writeTerminal(partial: { success: boolean; exitReason: IntegrationRunResult['exitReason'] }): Promise<void> {

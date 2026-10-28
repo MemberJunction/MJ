@@ -36,6 +36,7 @@ let progressCalls: Array<{ Method: string; Args: unknown[] }> = [];
 
 vi.mock('@memberjunction/integration-progress-artifacts', () => {
     class FakeEmitter {
+        public IsResumed = false;
         constructor(manifest: unknown) { progressCalls.push({ Method: 'constructor', Args: [manifest] }); }
         public RunStart(...args: unknown[]) { progressCalls.push({ Method: 'RunStart', Args: args }); }
         public StageStart(...args: unknown[]) { progressCalls.push({ Method: 'StageStart', Args: args }); }
