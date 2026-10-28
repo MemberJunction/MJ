@@ -172,6 +172,37 @@ describe('SafeExpressionEvaluator — identifier allowlist', () => {
             expect(evaluator.ValidateSyntax('payload.x > 1', ['payload'])).toEqual({ Valid: true });
             expect(evaluator.ValidateSyntax('other.x > 1', ['payload']).Valid).toBe(false);
         });
+
+        it('parses in strict mode, like the body Evaluate compiles', () => {
+            // A legacy octal literal is legal sloppy-mode syntax and a strict-mode SyntaxError.
+            expect(evaluator.ValidateSyntax('x === 010').Valid).toBe(false);
+        });
+
+        it('answers without the Function constructor (CodeQL #185)', () => {
+            // Under a CSP without unsafe-eval, Function throws. The check must not depend on it.
+            const globalScope = globalThis as unknown as Record<string, unknown>;
+            const original = globalScope.Function;
+            globalScope.Function = function blocked(): never { throw new EvalError('blocked by CSP'); };
+            try {
+                expect(evaluator.ValidateSyntax('payload.x > 1')).toEqual({ Valid: true });
+                expect(evaluator.ValidateSyntax('payload.x >').Valid).toBe(false);
+            } finally {
+                globalScope.Function = original;
+            }
+        });
+    });
+
+    describe('context values', () => {
+        it('drops functions from plain objects, class instances and the top level', () => {
+            class Holder { public hook = (): string => 'bad'; }
+            expect(evaluator.Evaluate("typeof obj.hook === 'undefined'", { obj: { hook: () => 'bad' } }).value).toBe(true);
+            expect(evaluator.Evaluate("typeof inst.hook === 'undefined'", { inst: new Holder() }).value).toBe(true);
+            expect(evaluator.Evaluate("typeof hook === 'undefined'", { hook: () => 'bad' }).value).toBe(true);
+        });
+
+        it('treats an omitted context as empty', () => {
+            expect(evaluator.Evaluate('1 > 0')).toMatchObject({ success: true, value: true });
+        });
     });
 
     describe('ScreenExpression', () => {

@@ -190,6 +190,9 @@ const CALLBACK_METHODS: ReadonlySet<string> = new Set<string>(['some', 'every', 
  * Approved-global methods that would call a function passed at the given argument index
  * (`JSON.parse`'s reviver, `JSON.stringify`'s replacer). The argument there must be a literal or an
  * array literal (`JSON.stringify(x, null, 2)`), never a function value.
+ *
+ * Only that one slot is constrained. Arguments after it (`JSON.stringify`'s `space`) are screened
+ * like any other value, since neither method ever calls them; `JSON.parse` ignores extra arguments.
  */
 const NON_FUNCTION_ARGUMENT_SLOTS: ReadonlyMap<string, number> = new Map<string, number>([
     ['JSON.parse', 1],
@@ -541,14 +544,16 @@ export class SafeExpressionEvaluator {
      * Evaluates a boolean expression against a context object
      *
      * @param {string} expression - The boolean expression to evaluate
-     * @param {Record<string, any>} context - The context object containing variables
+     * @param {Record<string, any>} [context={}] - The context object containing variables. Its keys
+     *        are the only free names the expression may use; a key named like an approved global
+     *        shadows it (see {@link ScreenExpression}).
      * @param {boolean} [enableDiagnostics=false] - Whether to include diagnostic information
      *
      * @returns {ExpressionEvaluationResult} The evaluation result
      */
     public Evaluate(
         expression: string,
-        context: Record<string, any>,
+        context: Record<string, any> = {},
         enableDiagnostics: boolean = false
     ): ExpressionEvaluationResult {
         const startTime = Date.now();
@@ -626,7 +631,7 @@ export class SafeExpressionEvaluator {
     /** @deprecated Use {@link Evaluate}. */
     public evaluate(
         expression: string,
-        context: Record<string, any>,
+        context: Record<string, any> = {},
         enableDiagnostics: boolean = false
     ): ExpressionEvaluationResult {
         return this.Evaluate(expression, context, enableDiagnostics);
@@ -639,6 +644,10 @@ export class SafeExpressionEvaluator {
      * This is the single policy gate for every place MemberJunction compiles a user- or LLM-authored
      * expression: {@link Evaluate}, {@link ValidateSyntax}, and the field-rule / integration formula
      * engine (`FieldTransformEngine`), which passes `['value', 'fields']`.
+     *
+     * A context key or arrow parameter named like an approved global (`Math`, `JSON`, ...) shadows
+     * it and is screened as data, so `Math.abs(x)` with a `Math` context key is refused because
+     * `abs` is not a safe instance method. Do not pass approved-global names as context keys.
      *
      * @param expression the expression to screen
      * @param allowedIdentifiers the names the expression may reference as values — the evaluation
@@ -703,6 +712,10 @@ export class SafeExpressionEvaluator {
      * @private
      */
     private createSafeContext(context: Record<string, any>): Record<string, any> {
+        if (context === null || typeof context !== 'object') {
+            throw new Error('Context must be an object');
+        }
+
         // Deep clone to prevent modifications to original
         const safeContext: Record<string, any> = {};
 
@@ -748,6 +761,11 @@ export class SafeExpressionEvaluator {
     /**
      * Safely clones a value for use in evaluation context
      *
+     * Functions are never carried into the context: a context should hold data, and a function
+     * reachable from an expression is one more thing that could be invoked. A function value
+     * becomes `undefined`, and function-valued properties are dropped from plain objects and
+     * class instances alike.
+     *
      * @param {any} value - The value to clone
      *
      * @returns {any} The cloned value
@@ -760,6 +778,10 @@ export class SafeExpressionEvaluator {
         }
 
         const type = typeof value;
+
+        if (type === 'function') {
+            return undefined;
+        }
 
         // Primitives are safe
         if (type === 'string' || type === 'number' || type === 'boolean') {
@@ -775,7 +797,7 @@ export class SafeExpressionEvaluator {
         if (type === 'object' && value.constructor === Object) {
             const cloned: Record<string, any> = {};
             for (const [key, val] of Object.entries(value)) {
-                if (!this.isDangerousPropertyName(key)) {
+                if (!this.isDangerousPropertyName(key) && typeof val !== 'function') {
                     cloned[key] = this.cloneValue(val);
                 }
             }
@@ -792,8 +814,6 @@ export class SafeExpressionEvaluator {
         if (type === 'object' && typeof value.constructor === 'function') {
             const cloned: Record<string, any> = {};
             for (const [key, val] of Object.entries(value)) {
-                // Function-valued properties are dropped: a context should carry data, and a
-                // function reachable from an expression is one more thing that could be invoked.
                 if (!this.isDangerousPropertyName(key) && typeof val !== 'function') {
                     // Don't recursively clone class instance properties
                     // Just copy them directly for safe shallow access
@@ -822,28 +842,27 @@ export class SafeExpressionEvaluator {
      * is a perfectly good condition that simply has no data yet. A submit-time check built on
      * `evaluate` therefore refuses every legitimate condition.
      *
-     * So this compiles and never runs. The expression goes through the same policy screen
-     * `evaluate` applies (the AST allowlist), then the same function body is BUILT and discarded —
-     * never invoked. Values are never consulted, which is precisely the property wanted: unknown
+     * So this parses and never runs. The expression goes through the same policy screen
+     * `evaluate` applies (the AST allowlist), then the same function body `evaluate` compiles is
+     * parsed in strict mode — never compiled, never invoked. Values are never consulted, which is precisely the property wanted: unknown
      * identifiers, absent properties and undefined chains all PASS, because none of them is a syntax
      * error and whether they resolve is a question about a run that has not happened yet. Pass
      * `contextKeys` when the evaluation context's keys ARE known, and unknown identifiers are refused
      * here exactly as {@link Evaluate} would refuse them.
      *
-     * **Compilation is not evaluation**, and the distinction is load-bearing for safety: `Function`
-     * parses the body and returns; nothing in the expression executes. The policy screen still runs
-     * first, so the constructs `evaluate` refuses are refused here too — those produce a permanent
-     * runtime refusal, and an author is better told now.
+     * **Parsing is not evaluation**, and the distinction is load-bearing for safety: no code is
+     * constructed from the expression here, so nothing in it can execute. The policy screen still
+     * runs first, so the constructs `evaluate` refuses are refused here too — those produce a
+     * permanent runtime refusal, and an author is better told now.
      *
-     * `Undecidable` is the honest third answer. A host that forbids dynamic compilation (a strict
-     * CSP without `unsafe-eval`) cannot answer the question at all, and a validator that read that
-     * as "invalid" would refuse every condition in the browser. Callers should treat it as a pass.
+     * Because nothing is compiled, the answer does not depend on the host allowing dynamic code (a
+     * strict CSP without `unsafe-eval`). `Undecidable` is kept in the result type for callers that
+     * check it, and is no longer returned.
      *
      * @param expression the expression to check
      * @param contextKeys the names the expression may reference, when known; omitted, free
      *        identifiers are left for evaluation time (see {@link ScreenExpression})
-     * @returns `Valid: true` when it parses; `Valid: false` with `Error` when it definitely does
-     *          not; `Valid: true` with `Undecidable: true` when this environment cannot compile
+     * @returns `Valid: true` when it parses; `Valid: false` with `Error` when it does not
      */
     public ValidateSyntax(expression: string, contextKeys?: Iterable<string>): { Valid: boolean; Error?: string; Undecidable?: boolean } {
         const policyError = SafeExpressionEvaluator.ScreenExpression(expression, contextKeys ?? null);
@@ -852,17 +871,12 @@ export class SafeExpressionEvaluator {
         }
 
         try {
-            // Same wrapper `evaluate` compiles, so anything that parses here parses there. Built and
-            // discarded — never invoked.
-            new Function(`"use strict"; return Boolean(${expression});`);
+            // Same body `evaluate` compiles, parsed in strict mode so strict-only syntax errors are
+            // caught too. Parsed, never compiled.
+            parse(`"use strict"; return Boolean(${expression});`, { ecmaVersion: 2022, allowReturnOutsideFunction: true });
             return { Valid: true };
         } catch (e) {
-            if (e instanceof SyntaxError) {
-                return { Valid: false, Error: e.message };
-            }
-            // Anything else — an EvalError from a CSP, a host without `Function` — means this
-            // environment cannot judge, not that the expression is wrong.
-            return { Valid: true, Undecidable: true };
+            return { Valid: false, Error: e instanceof Error ? e.message : String(e) };
         }
     }
 
