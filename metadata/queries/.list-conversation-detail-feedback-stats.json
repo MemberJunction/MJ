@@ -22,6 +22,10 @@
           },
           "primaryKey": {
             "ID": "B3FCE5D8-B973-4E6E-9D69-4BB8302BA219"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.736Z",
+            "checksum": "00b8bcf7a53c8e9185b895ec87bd3fd1b0077833efc3a1262def108a9bb7eb15"
           }
         }
       ]
@@ -180,8 +184,8 @@
       "ID": "F3D2A1B8-9C4E-4E7A-BCDE-1234567ABCDE"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:07:25.938Z",
-      "checksum": "554071148b2a7a11ffcedc7ccd018d5409d57783c8b923eefa61f872541f5723"
+      "lastModified": "2026-10-28T22:14:02.161Z",
+      "checksum": "6aa4e6814d1550a43a2a91ce5b178e312bd273b1469bed0ef69698a15573a6b0"
     }
   }
 ]
