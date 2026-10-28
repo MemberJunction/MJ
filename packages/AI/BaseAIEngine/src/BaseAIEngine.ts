@@ -8,6 +8,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity,
          MJAIAgentPromptEntity,
          MJAIAgentTypeEntity,
+         MJAIAgentRequestTypeEntity,
          MJAIVendorEntity,
          MJAIModelVendorEntity,
          MJAIModelTypeEntity,
@@ -124,6 +125,17 @@ export interface EffectiveAgentPersona {
     SpeakingStyle: string | null;
 }
 
+/**
+ * Compact summary entry for a directly discoverable, user-runnable AI agent.
+ * Cached per user on AIEngineBase so orchestrator prompts and task-graph validators
+ * can access a user's permitted agent directory in O(1) without recomputing permissions.
+ */
+export interface UserRunnableAgentSummary {
+    ID: string;
+    Name: string;
+    Description: string;
+}
+
 // Default fallback values when no metadata is configured
 const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
@@ -181,6 +193,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agents: MJAIAgentEntityExtended[] = [];
     private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
     private _agentTypes: MJAIAgentTypeEntity[] = [];
+    private _agentRequestTypes: MJAIAgentRequestTypeEntity[] = [];
     private _vendorTypeDefinitions: MJAIVendorTypeDefinitionEntity[] = [];
     private _vendors: MJAIVendorEntity[] = [];
     private _modelVendors: MJAIModelVendorEntity[] = [];
@@ -218,6 +231,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Key: configurationId, Value: array of MJAIConfigurationEntity from child to root
      */
     private _configurationChainCache: Map<string, MJAIConfigurationEntity[]> = new Map();
+
+    /**
+     * Per-user cache of directly discoverable, active, user-runnable agent summaries.
+     * Key: normalized user ID. Invalidated whenever agents or agent permissions change.
+     */
+    private _userRunnableAgentDirectoryCache: Map<string, UserRunnableAgentSummary[]> = new Map();
+    private _userRunnableAgentsRef: MJAIAgentEntityExtended[] | null = null;
+    private _userRunnableAgentsLen = -1;
+    private _userRunnablePermissionsRef: MJAIAgentPermissionEntity[] | null = null;
+    private _userRunnablePermissionsLen = -1;
 
     /**
      * Memoized ID of the "Inference Provider" vendor-type definition. `undefined` means
@@ -371,6 +394,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 CacheLocal: true
             },
             {
+                PropertyName: '_agentRequestTypes',
+                EntityName: 'MJ: AI Agent Request Types',
+                CacheLocal: true
+            },
+            {
                 PropertyName: '_vendorTypeDefinitions',
                 EntityName: 'MJ: AI Vendor Type Definitions',
                 CacheLocal: true
@@ -517,13 +545,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         ];
         this.appendRealtimeRegistryConfigs(params, provider);
 
-        // make sure engines we depend on downstream are loaded up before we load
-        await Promise.all([
+        // Load dependent engines in parallel with our own entity configs so AIEngineBase's
+        // 51 entity configs coalesce into the initial startup RunViews batch instead of
+        // waiting for TemplateEngineBase/ArtifactMetadataEngine to finish first.
+        const [, , loadResult] = await Promise.all([
             TemplateEngineBase.Instance.Config(false, contextUser),
-            ArtifactMetadataEngine.Instance.Config(false, contextUser)
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            this.Load(params, provider, forceRefresh, contextUser)
         ]);
-
-        return await this.Load(params, provider, forceRefresh, contextUser);
+        return loadResult;
     }
 
     /**
@@ -601,8 +631,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // Clear the configuration chain cache when data is reloaded
+        // Clear the configuration chain cache and user runnable agent directory cache when data is reloaded
         this._configurationChainCache.clear();
+        this._userRunnableAgentDirectoryCache.clear();
+        this._userRunnableAgentsRef = null;
+        this._userRunnableAgentsLen = -1;
+        this._userRunnablePermissionsRef = null;
+        this._userRunnablePermissionsLen = -1;
 
         // Invalidate memoized vendor-type IDs and lazily-built lookup indexes so they
         // rebuild against the freshly-loaded arrays. (See field declarations above.)
@@ -1082,6 +1117,36 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
     }
 
+    /**
+     * The `MJ: AI Agent Request Types` rows (Approval, Information, ...), cached during Config().
+     * Resolve a type with {@link GetAgentRequestTypeByName} instead of hardcoding its ID.
+     */
+    public get AgentRequestTypes(): MJAIAgentRequestTypeEntity[] {
+        return this.GetConfigData<MJAIAgentRequestTypeEntity>('_agentRequestTypes');
+    }
+
+    /**
+     * Finds an agent request type by name (trimmed, case-insensitive), or `undefined` when no
+     * row matches. The small seeded table is scanned directly; no index is kept.
+     */
+    public GetAgentRequestTypeByName(name: string): MJAIAgentRequestTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this.AgentRequestTypes.find(t => t.Name.trim().toLowerCase() === normalized);
+    }
+
+    /**
+     * Resolves the ID of an agent request type by name, loading the engine first if it has not
+     * been configured yet. Returns `null` when no row matches, so a caller can surface that as a
+     * result code instead of saving a request with an unknown type.
+     */
+    public async ResolveAgentRequestTypeID(typeName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        await this.EnsureLoaded(contextUser, provider);
+        return this.GetAgentRequestTypeByName(typeName)?.ID ?? null;
+    }
+
     /** All agent categories, cached during Config(). Used for hierarchical resolution of
      *  assignment strategies and default storage accounts (category → parent → root). */
     public get AgentCategories(): MJAIAgentCategoryEntity[] {
@@ -1178,6 +1243,115 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         if (!agentId) return undefined!;
         this.ensureAgentsIndex();
         return this._agentsByID!.get(NormalizeUUID(agentId))!;
+    }
+
+    /**
+     * Returns the cached, permission-filtered list of directly discoverable, active agents
+     * that `user` is permitted to run, sorted alphabetically by name with compact 1-line descriptions.
+     *
+     * Computed once per user and cached in memory on `AIEngineBase` until agents or agent permissions change.
+     */
+    public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
+        if (!user) {
+            return [];
+        }
+
+        const agents = this._agents;
+        const permissions = this._agentPermissions;
+        if (
+            agents !== this._userRunnableAgentsRef ||
+            agents.length !== this._userRunnableAgentsLen ||
+            permissions !== this._userRunnablePermissionsRef ||
+            permissions.length !== this._userRunnablePermissionsLen
+        ) {
+            this._userRunnableAgentDirectoryCache.clear();
+            this._userRunnableAgentsRef = agents;
+            this._userRunnableAgentsLen = agents.length;
+            this._userRunnablePermissionsRef = permissions;
+            this._userRunnablePermissionsLen = permissions.length;
+        }
+
+        const cacheKey = user.ID ? NormalizeUUID(user.ID) : '__anonymous__';
+        const cached = this._userRunnableAgentDirectoryCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        // A set, built once: each agent's permission rows are checked against the user's roles.
+        const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+        const summaries: UserRunnableAgentSummary[] = [];
+
+        for (const agent of agents) {
+            if (agent.Status !== 'Active') {
+                continue;
+            }
+            if (!AIAgentPermissionHelper.IsDirectlyDiscoverable(agent)) {
+                continue;
+            }
+            if (!this.canUserRunAgentSync(agent, permissions, user, userRoleIds)) {
+                continue;
+            }
+            summaries.push({
+                ID: agent.ID,
+                Name: (agent.Name ?? '').trim(),
+                Description: this.summarizeAgentDescription(agent.Description),
+            });
+        }
+
+        summaries.sort((a, b) => a.Name.localeCompare(b.Name));
+        this._userRunnableAgentDirectoryCache.set(cacheKey, summaries);
+        return summaries;
+    }
+
+    /**
+     * Clears the cached per-user runnable agent directory (for a specific user ID or all users).
+     */
+    public ClearUserRunnableAgentDirectoryCache(userId?: string): void {
+        if (userId) {
+            this._userRunnableAgentDirectoryCache.delete(NormalizeUUID(userId));
+        } else {
+            this._userRunnableAgentDirectoryCache.clear();
+        }
+    }
+
+    /**
+     * Synchronous permission check using already-loaded `_agentPermissions` metadata.
+     * Mirrors `AIAgentPermissionHelper.GetEffectivePermissions` without async `Config()` overhead.
+     */
+    private canUserRunAgentSync(
+        agent: MJAIAgentEntityExtended,
+        allPermissions: MJAIAgentPermissionEntity[],
+        user: UserInfo,
+        userRoleIds: UUIDSet
+    ): boolean {
+        if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
+            return true;
+        }
+        const agentPerms = allPermissions.filter(p => UUIDsEqual(p.AgentID, agent.ID));
+        if (agentPerms.length === 0) {
+            // Open by default when no permission rows are configured on the agent
+            return true;
+        }
+        const matching = agentPerms.filter(
+            p => UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.Has(p.RoleID))
+        );
+        return matching.some(p => p.CanDelete === true || p.CanEdit === true || p.CanRun === true);
+    }
+
+    private summarizeAgentDescription(rawDescription: string | null | undefined): string {
+        if (!rawDescription) {
+            return 'No description available';
+        }
+        const firstLine = rawDescription.split(/\r?\n/).find(l => l.trim().length > 0) ?? '';
+        const singleLine = firstLine.replace(/\s+/g, ' ').trim();
+        if (!singleLine) {
+            return 'No description available';
+        }
+        const maxLen = 140;
+        if (singleLine.length <= maxLen) {
+            return singleLine;
+        }
+        return `${singleLine.slice(0, maxLen - 3).trimEnd()}...`;
     }
 
     public get AgentActions(): MJAIAgentActionEntity[] {
@@ -1557,9 +1731,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Use instead of `PromptModels.filter(pm => UUIDsEqual(pm.PromptID, id))` in hot paths.
      */
     public get PromptModelsByPromptID(): Map<string, MJAIPromptModelEntity[]> {
+        // Through the getter, not `_promptModels`: a user who cannot read prompt models must get the same
+        // PermissionConstrainedError, not an empty index that reads as "this prompt has no model bindings".
+        const promptModels = this.PromptModels;
         if (!this._promptModelsByPromptID) {
             const map = new Map<string, MJAIPromptModelEntity[]>();
-            for (const pm of this._promptModels) {
+            for (const pm of promptModels) {
                 const key = NormalizeUUID(pm.PromptID);
                 const list = map.get(key);
                 if (list) {

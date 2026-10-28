@@ -1,10 +1,12 @@
 import { Command, Flags } from '@oclif/core';
+import * as fs from 'node:fs';
 import chalk from 'chalk';
 import ora from 'ora-classic';
 import { AgentService } from '../../services/AgentService';
 import { ConversationService } from '../../services/ConversationService';
 import { ValidationService } from '../../services/ValidationService';
 import { OutputFormatter } from '../../lib/output-formatter';
+import { CloseMJProvider } from '../../lib/mj-provider';
 
 export default class AgentsRun extends Command {
   static description = 'Execute AI agents with custom prompts';
@@ -24,7 +26,13 @@ export default class AgentsRun extends Command {
     }),
     prompt: Flags.string({
       char: 'p', 
-      description: 'Prompt text to send to the agent'
+      description: 'Prompt text to send to the agent',
+      exclusive: ['prompt-file']
+    }),
+    'prompt-file': Flags.string({
+      char: 'f',
+      description: 'Path to a file containing the prompt text to send to the agent',
+      exclusive: ['prompt']
     }),
     chat: Flags.boolean({
       char: 'c',
@@ -53,12 +61,16 @@ export default class AgentsRun extends Command {
     const spinner = ora();
 
     try {
+      const resolvedPrompt = flags['prompt-file']
+        ? fs.readFileSync(flags['prompt-file'], 'utf-8').trim()
+        : flags.prompt;
+
       // Validate inputs
       const validator = new ValidationService();
       const outputFormat = validator.validateOutputFormat(flags.output);
       const timeout = validator.validateTimeout(flags.timeout);
       
-      await validator.validateAgentInput(flags.agent, flags.prompt, flags.chat);
+      await validator.validateAgentInput(flags.agent, resolvedPrompt, flags.chat);
 
       // Show available agents if none specified
       if (!flags.agent) {
@@ -91,8 +103,8 @@ export default class AgentsRun extends Command {
         
         this.log(chalk.green('✓ Validation passed - dry run complete'));
         this.log(chalk.dim(`Agent: ${flags.agent}`));
-        if (flags.prompt) {
-          this.log(chalk.dim(`Prompt: ${flags.prompt.substring(0, 100)}${flags.prompt.length > 100 ? '...' : ''}`));
+        if (resolvedPrompt) {
+          this.log(chalk.dim(`Prompt: ${resolvedPrompt.substring(0, 100)}${resolvedPrompt.length > 100 ? '...' : ''}`));
         }
         this.log(chalk.dim(`Mode: ${flags.chat ? 'Interactive chat' : 'Single execution'}`));
         this.log(chalk.dim(`Timeout: ${timeout}ms`));
@@ -102,7 +114,7 @@ export default class AgentsRun extends Command {
       // Execute agent in chat mode
       if (flags.chat) {
         const conversationService = new ConversationService();
-        await conversationService.startChat(flags.agent, flags.prompt, {
+        await conversationService.startChat(flags.agent, resolvedPrompt, {
           verbose: flags.verbose,
           timeout: timeout
         });
@@ -110,8 +122,8 @@ export default class AgentsRun extends Command {
       }
 
       // Execute agent with single prompt
-      if (!flags.prompt) {
-        this.error('Prompt is required for non-interactive mode. Use --chat for interactive mode or provide --prompt.');
+      if (!resolvedPrompt) {
+        this.error('Prompt is required for non-interactive mode. Use --chat for interactive mode or provide --prompt or --prompt-file.');
       }
 
       spinner.start(`Executing agent: ${flags.agent}...`);
@@ -119,7 +131,7 @@ export default class AgentsRun extends Command {
       const agentService = new AgentService();
       await agentService.initialize();
       
-      const result = await agentService.executeAgent(flags.agent, flags.prompt, {
+      const result = await agentService.executeAgent(flags.agent, resolvedPrompt, {
         verbose: flags.verbose,
         timeout: timeout
       });
@@ -141,6 +153,7 @@ export default class AgentsRun extends Command {
       setImmediate(() => process.exit(0));
 
     } catch (error: any) {
+      await this.cleanup();
       if (spinner.isSpinning) {
         spinner.fail('Operation failed');
       }
@@ -161,14 +174,15 @@ export default class AgentsRun extends Command {
           this.error(error.message);
         }
       }
+    } finally {
+      await this.cleanup();
     }
   }
 
   private async cleanup(): Promise<void> {
     try {
-      const { CloseMJProvider } = await import('../../lib/mj-provider');
       await CloseMJProvider();
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors to not interfere with main execution
     }
   }

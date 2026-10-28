@@ -4,6 +4,10 @@ import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ShellComponent } from './shell.component';
+import { ResourceResolver } from '../../app-routing.module';
+import { NavigationError, type ActivatedRouteSnapshot, type RouterStateSnapshot } from '@angular/router';
+import { Subject } from 'rxjs';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
  * A URL SYNC MUST NOT OVERRIDE A NEWER ACTIVATION.
@@ -280,5 +284,199 @@ describe('the navigation stamp is recorded before the readiness guard', () => {
     it('passes that same stamp to the sync, rather than re-reading the clock', () => {
         // Re-reading Date.now() at the call site would time the sync, not the navigation it reacts to.
         expect(block).toContain('this.lastNavigationAt)');
+    });
+});
+
+describe('syncWorkspaceWithUrl when workspace tabs array is empty (deep-link refresh)', () => {
+    it('invokes handleMissingTabForUrl instead of returning early when config.tabs is []', async () => {
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        const handleMissingTabForUrl = vi.fn().mockResolvedValue(undefined);
+        const findTabForUrl = vi.fn().mockResolvedValue(null);
+
+        const open = shell as unknown as Record<string, unknown>;
+        open['workspaceManager'] = {
+            GetConfiguration: () => ({ tabs: [], activeTabId: null }),
+        };
+        open['findTabForUrl'] = findTabForUrl;
+        open['handleMissingTabForUrl'] = handleMissingTabForUrl;
+        open['lastNavigationAt'] = 1_000;
+
+        const run = shell as unknown as {
+            syncWorkspaceWithUrl(url: string, navigatedAt?: number): Promise<void>;
+        };
+        const deepLinkUrl = '/app/data-explorer/record/MJ_BizApps_Common:%20People/ID%7C4FF5A9B0-008A-57E4-9DF6-002290210A26';
+        await run.syncWorkspaceWithUrl(deepLinkUrl);
+
+        expect(handleMissingTabForUrl).toHaveBeenCalledWith(deepLinkUrl);
+    });
+});
+
+describe('ResourceResolver.Resolve on app/:appName/record/:param1/:param2 (route.data.resourceType)', () => {
+    it('opens a record tab when resourceType is supplied via route.data rather than route.params', async () => {
+        const resolver = Object.create(ResourceResolver.prototype) as ResourceResolver;
+        const openTab = vi.fn();
+
+        const open = resolver as unknown as Record<string, unknown>;
+        open['loggedInPromise'] = Promise.resolve();
+        open['processedUrls'] = new Map<string, number>();
+        open['URL_DEBOUNCE_MS'] = 100;
+        open['tabService'] = {
+            ShouldSuppressResolve: () => false,
+            ClearSuppressFlag: vi.fn(),
+            OpenTab: openTab,
+        };
+        open['appManager'] = {
+            CheckAppAccess: () => ({ status: 'accessible' }),
+            GetAppByPath: () => ({ ID: 'app-data-explorer', Name: 'Data Explorer', Path: 'data-explorer' }),
+            GetAppByName: () => null,
+        };
+        open['_provider'] = {
+            Applications: [],
+            EntityByName: (name: string) =>
+                name === 'MJ_BizApps_Common: People'
+                    ? { Name: 'MJ_BizApps_Common: People', DisplayName: 'People', PrimaryKeys: [{ Name: 'ID' }] }
+                    : undefined,
+            GetCachedRecordNameOnlyIfCached: () => 'Quinny Broadcast',
+        };
+
+        const route = {
+            params: {
+                appName: 'data-explorer',
+                param1: 'MJ_BizApps_Common: People',
+                param2: 'ID|4FF5A9B0-008A-57E4-9DF6-002290210A26',
+            },
+            data: { resourceType: 'record' },
+            queryParams: {},
+            url: [],
+        } as unknown as ActivatedRouteSnapshot;
+        const state = {
+            url: '/app/data-explorer/record/MJ_BizApps_Common:%20People/ID%7C4FF5A9B0-008A-57E4-9DF6-002290210A26',
+        } as unknown as RouterStateSnapshot;
+
+        await resolver.Resolve(route, state);
+
+        expect(openTab).toHaveBeenCalledTimes(1);
+        expect(openTab).toHaveBeenCalledWith(
+            expect.objectContaining({
+                ApplicationId: 'app-data-explorer',
+                Title: 'Quinny Broadcast',
+                ResourceRecordId: 'ID|4FF5A9B0-008A-57E4-9DF6-002290210A26',
+                Configuration: expect.objectContaining({
+                    Entity: 'MJ_BizApps_Common: People',
+                    recordId: 'ID|4FF5A9B0-008A-57E4-9DF6-002290210A26',
+                }),
+            })
+        );
+    });
+});
+
+describe('ShellComponent bad URL & NavigationError recovery', () => {
+    it('calls InitializeShell when a bad initial URL emits NavigationError after LoggedIn', async () => {
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        const routerEvents$ = new Subject<unknown>();
+        const loginEvents$ = new Subject<{ event: MJEventType }>();
+        const initializeShell = vi.fn().mockResolvedValue(undefined);
+
+        const open = shell as unknown as Record<string, unknown>;
+        open['subscriptions'] = [];
+        open['initialNavigationComplete'] = false;
+        open['Loading'] = true;
+        open['authBase'] = { initialPath: '/bad/unmatched/url' };
+        open['router'] = { events: routerEvents$.asObservable() };
+        open['InitializeShell'] = initializeShell;
+
+        const spy = vi.spyOn(MJGlobal.Instance, 'GetEventListener').mockReturnValue(loginEvents$.asObservable() as ReturnType<typeof MJGlobal.Instance.GetEventListener>);
+        try {
+            await shell.ngOnInit();
+
+            // 1. LoggedIn fires first (inside workspaceInit)
+            loginEvents$.next({ event: MJEventType.LoggedIn });
+            expect(initializeShell).not.toHaveBeenCalled();
+
+            // 2. Router navigateByUrl(initialPath) fails route matching and emits NavigationError
+            routerEvents$.next(new NavigationError(1, '/bad/unmatched/url', new Error('NG04002')));
+
+            expect(initializeShell).toHaveBeenCalledTimes(1);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('calls InitializeShell when NavigationError or NavigationEnd already fired before LoggedIn', async () => {
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        const routerEvents$ = new Subject<unknown>();
+        const loginEvents$ = new Subject<{ event: MJEventType }>();
+        const initializeShell = vi.fn().mockResolvedValue(undefined);
+
+        const open = shell as unknown as Record<string, unknown>;
+        open['subscriptions'] = [];
+        open['initialNavigationComplete'] = false;
+        open['Loading'] = true;
+        open['authBase'] = { initialPath: '/bad/unmatched/url' };
+        open['router'] = { events: routerEvents$.asObservable() };
+        open['InitializeShell'] = initializeShell;
+
+        const spy = vi.spyOn(MJGlobal.Instance, 'GetEventListener').mockReturnValue(loginEvents$.asObservable() as ReturnType<typeof MJGlobal.Instance.GetEventListener>);
+        try {
+            await shell.ngOnInit();
+
+            // 1. Router settles with NavigationError before LoggedIn arrives
+            routerEvents$.next(new NavigationError(1, '/bad/unmatched/url', new Error('NG04002')));
+            expect(initializeShell).not.toHaveBeenCalled();
+
+            // 2. LoggedIn arrives afterwards — shell must initialize immediately instead of hanging
+            loginEvents$.next({ event: MJEventType.LoggedIn });
+            expect(initializeShell).toHaveBeenCalledTimes(1);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('restoreOrOpenFallbackTab restores the active workspace tab and syncs URL when a deep link fails to resolve', async () => {
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        const syncActiveAppWithTab = vi.fn().mockResolvedValue(undefined);
+        const syncUrlWithWorkspace = vi.fn().mockResolvedValue(undefined);
+        const config = {
+            tabs: [{ id: 'tab-home', title: 'Home', applicationId: 'app-home', configuration: {} }],
+            activeTabId: 'tab-home',
+        };
+
+        const open = shell as unknown as Record<string, unknown>;
+        open['workspaceManager'] = {
+            GetConfiguration: () => config,
+        };
+        open['syncActiveAppWithTab'] = syncActiveAppWithTab;
+        open['syncUrlWithWorkspace'] = syncUrlWithWorkspace;
+
+        const run = shell as unknown as {
+            restoreOrOpenFallbackTab(): Promise<void>;
+        };
+        await run.restoreOrOpenFallbackTab();
+
+        expect(syncActiveAppWithTab).toHaveBeenCalledWith(config);
+        expect(syncUrlWithWorkspace).toHaveBeenCalledWith(config);
+    });
+
+    it('handleMissingTabForUrl returns false when a record URL references a non-existent entity', async () => {
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        const openEntityRecord = vi.fn();
+
+        const open = shell as unknown as Record<string, unknown>;
+        open['urlBasedNavigation'] = false;
+        open['navigationService'] = {
+            OpenEntityRecord: openEntityRecord,
+        };
+        open['getProviderSafe'] = () => ({
+            Entities: [{ Name: 'MJ: Tasks' }],
+            EntityByName: (name: string) => (name === 'MJ: Tasks' ? { Name: 'MJ: Tasks' } : undefined),
+        });
+
+        const run = shell as unknown as {
+            handleMissingTabForUrl(url: string): Promise<boolean>;
+        };
+        const resolved = await run.handleMissingTabForUrl('/resource/record/NonExistentEntity/ID%7C123');
+
+        expect(resolved).toBe(false);
+        expect(openEntityRecord).not.toHaveBeenCalled();
     });
 });

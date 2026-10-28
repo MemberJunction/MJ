@@ -1,6 +1,7 @@
 export * from './generic/search.types';
 export * from './generic/ISearchProvider';
 export * from './generic/SearchFusion';
+export * from './generic/ResultFieldProjection';
 export * from './generic/SearchEnricher';
 export * from './generic/EntitySearchProvider';
 export * from './generic/VectorSearchProvider';

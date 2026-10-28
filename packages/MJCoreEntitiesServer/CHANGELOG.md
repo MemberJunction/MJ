@@ -1,5 +1,358 @@
 # @memberjunction/core-entities-server
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- cc36de5: Add Alternate Base Views (MJ Canon Layer 1): allow entities to register governed SQL views (`MJ: Entity Alternate Base Views`) that maintain 100% column parity with the canonical `BaseView` while returning curated row subsets (such as `Active` members or `Open` orders), with full support across `RunView`, `RunViews`, `BaseEngine`, `LocalCacheManager`, `CodeGen` column-parity validation, `QueryEntity.AlternateBaseViewID` lineage extraction, `QueryGen`, `Lists`, `DataContext`, `GetEntityDetails`, and `MJExplorer` Data Explorer / Entity Viewer.
+- 0ff7523: A duplicate run records the Entity Document it ran with, and the in-memory vector store scores matches as cosine similarity, like every other vector database.
+  - **`MJ: Duplicate Runs` gains a required `EntityDocumentID`.** Before, a run carried only its entity and the server used the entity's newest active Record Duplicate document, so with two documents for one entity the document picked in the Duplicates tab was ignored, and nothing recorded which document produced a run's matches. The migration backfills existing runs from their entity's documents (Record Duplicate first, then Active, then the most recently updated), deletes runs whose entity has no document left, then makes the column NOT NULL.
+  - **The run uses the document it names.** The Duplicates tab sends the selected document; the server fails a run whose document is missing or belongs to another entity. A run created without one on the server (`GetRecordDuplicates`, scripts) gets the entity's Record Duplicate document, as before, and now records it.
+  - **The board shows the selected document's run**, not the newest run of any document for that entity.
+  - **An Entity Document with history can no longer be deleted.** `MJ: Entity Documents` no longer cascades deletes (`metadata/entities/.entity-cascade-deletes-entity-documents.json`), so a document with duplicate runs or synced vectors is refused by its foreign keys before anything is removed, and its history stays as an audit trail. Set a document that is no longer needed to Inactive instead. Before, a delete that a child refused had already deleted the document's vectors.
+  - **`SimpleVectorService` gains a `cosine-similarity` metric, and `SimpleVectorServiceProvider` searches with it.** The existing `cosine` metric reports `(cos + 1) / 2`, and the provider passed that through, while Pinecone, SQL Server and pgvector report the standard cosine. Thresholds that read these scores (an Entity Document's match thresholds, search's `MinScore`) therefore meant a looser similarity on the in-memory store: 0.92 matched at cosine 0.84. `cosine-similarity` is the standard cosine in [-1, 1]; `cosine` and every other metric are unchanged, so the store's other callers keep their scores. Thresholds tuned against the in-memory store before this change need re-tuning: the new value is `2 × old − 1`.
+
+- 96c44bf: `mj sync push` writes SQL that works on any database, and handles deletes and `@file:` changes correctly.
+  - A value that came from an `@lookup`, as a primary key or a foreign key, is captured as a subquery on its natural key instead of this database's ID, so Metadata_Sync migrations update the right row everywhere (#5626, #3619).
+  - `--formatAsMigration` rewrites every schema declared in `schemaPlaceholders`, so Open App migrations call core procedures in the core schema (#3618).
+  - Deletes run in true dependency order regardless of file order, and a row a cascade already removed is skipped with a warning (#4935).
+  - `--incremental` notices when only an `@file:` target changed (#4190). Stored checksums predate this, so the first `--incremental` push after upgrading processes the whole tree once.
+  - New `sqlLogging.escapeFlywaySyntax` escapes `${...}` in string data of a plain (non-migration) log; a migration-formatted log always escapes.
+  - A seed whose primary key misses but whose natural key matches an existing row fails with a message naming that row; the CodeGen-granted permission seeds are now keyed by natural key (#4400).
+  - Template parameter extraction never marks `_`-prefixed system variables as required (#5156).
+
+- 68f5c01: Recording-ledger columns of `MJ: AI Agent Sessions` are no longer updatable through an entity save (#6010).
+  - `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps`, `RecordingAssemblyVersion`, `RecordingFileID` and `RecordingMedia` carry `AllowUpdateAPI=false` (`metadata/entities/.ai-agent-session-recording-ledger-fields.json`). The regenerated `spCreate`/`spUpdateAIAgentSession` leave them out, so a stale session save (from any entity class, an app's own subclass included) can no longer clear a terminal stamp and mislabel a complete recording as `Partial`. The generated `MJAIAgentSessionEntity` drops their setters and the GraphQL create/update inputs drop the fields. `RecordingStartedAt` stays updatable.
+  - New proc `spStampAIAgentSessionRecordingFile` and `IRealtimeRecordingLedger.StampFile(sessionID, { fileID?, media?, startedAt? })` write the recording file, media kind and t0. The end-of-call upload and the recording-start stamp use it.
+  - `MJAIAgentSessionEntityServer` no longer overrides `Save`; it keeps only the protected-`Config`-keys guard.
+
+  Migration: `V202610222240__v6.2.x__Recording_Ledger_Columns_Not_Entity_Updatable.sql`. Run `mj sync push` with the release metadata so the field flags land with the regenerated procs. Apply the migration and the metadata push together: between `mj migrate` and `mj sync push`, every session save fails because the entity still sends parameters the regenerated procs no longer accept.
+
+### Patch Changes
+
+- 709de1a: Anonymous realtime sessions are now isolated per visitor (#4931). Before, every anonymous visitor (a web-widget guest or an anonymous magic-link invitee) authenticated as the one shared Anonymous user, and the realtime session write gates compared only that user id, so a visitor who learned another visitor's session id could relay into it, close it, heartbeat it, drive its remote browser, or restore its state into a new session.
+  - `UserInfo.AnonymousVisitorID` (`@memberjunction/core`) carries the token's `mj_sid`. An anonymous token without `mj_sid` is refused at sign-in.
+  - One scope identity per session (`ResolveSessionScopeIdentity`, `@memberjunction/server`): the token's resource scope (`MagicLinkScope.ResourceID`) when it carries one, else the anonymous visitor's `mj_sid`. `SessionManager` stamps it as the session conversation's `ExternalID`, and `AuthorizeSessionAccess` compares it. A widget guest's resource scope is its `mj_sid`; redemptions of one resource-scoped anonymous invite share that scope by design and keep matching the `{{ScopeResourceID}}` row filters; redemptions of an unscoped multi-use invite are told apart by `mj_sid`.
+  - All five write gates (`LoadOwnedRealtimeSession`, `AgentSessionResolver`, `RemoteBrowserActionResolver`, and the `lastSessionId` restore paths in `RealtimeClientSessionResolver`) go through `AuthorizeSessionAccess`.
+  - `MJ: Conversations` and `MJ: AI Agent Sessions` (`@memberjunction/core-entities-server`) refuse an anonymous visitor changing `ExternalID` / `ConversationID` on an existing row, so the ownership key cannot be rewritten through generic CRUD under a role whose row filter is by user id. That includes a transaction group's `'Use'` variable on the key or on `ID`, which sets its field after validation; the protected-`Config` check on `MJ: AI Agent Sessions` also refuses a `'Use'` variable on `Config` or `ID`.
+  - A named user with a resource-scoped link may also use its own session on a conversation that carries no scope stamp (one started from the Conversations app) when it can read that conversation; a conversation stamped with another scope, or one it cannot read, is still refused. `LoadSessionConversationScope` reports whether the read succeeded.
+  - `SessionManager.CreateSession` refuses an anonymous caller that supplies a conversation it cannot read or whose `ExternalID` is not its own scope identity.
+  - `POST /widget/session/refresh` now requires the current guest token as `Authorization: Bearer <token>` (accepted up to 300 s after it expires) plus a `DPoP` proof signed by the key the widget registered at mint (`proofKey` in the mint body; its RFC 7638 thumbprint is the token's `cnf.jkt`). It keeps the token's `mj_sid`, so a refreshed guest keeps its session, its row filters and its session-events subscription. A guest session ends 12 h after its first mint (`mj_sid_iat`, `MAX_GUEST_SESSION_SECONDS`); no token outlives that, and refresh is refused once less than 120 s remain (`MIN_REFRESHED_TOKEN_SECONDS`), so the widget's last refresh restarts the session instead of looping into the rate limiter. The proof protocol (`CreateProofOfPossessionKey`, `CreateProofOfPossessionJwt`, `VerifyProofOfPossessionJwt`, `ComputeJwkThumbprint`) is in `@memberjunction/global`. `WidgetKeyClient` (`@memberjunction/ng-realtime-widget`) and `WidgetSessionClient` (`@memberjunction/realtime-widget`) register the key and sign each refresh. When the server refuses a refresh (401/403), the web widget mints a new session and tells the visitor; `WidgetSessionError` carries the status. Both clients sign the refresh proof on the server's clock, learned from each issued token's `iat` (the HTTP `Date` header is not readable cross-origin), and the web widget times its refresh on it too, so a visitor whose device clock is minutes off keeps one session instead of restarting it at each refresh. The key needs Web Crypto, which browsers expose only in a secure context, so both widgets now need a host page served over HTTPS (or `localhost`); on a plain `http://` page the web widget shows nothing and logs `[mj-widget] The support widget needs a secure context …` to the console (`StartEmbeddedWidget`, which the embed bundle runs, never rejects).
+  - A web-widget guest's text chat shows the agent's reply again. The agent runs as the system user, but since MJ#4791 only a conversation's owner (or a grantee) may write its messages, so every reply save was refused and the widget waited forever. `AgentRunner.RunAgentInConversation` takes a `ConversationWriter` (`@memberjunction/ai-agents`); `ElevateUserPayload` records the guest as `UserPayload.ElevatedFrom`, and `RunAIAgentResolver` passes it, so the reply is written as the guest and the run's own records as the system user. The run's status events (progress, streaming, completion, the liveness pulse) are stamped with the same guest (`StatusUpdateOwnerID`), so the guest's socket receives them; before, they carried the system user's id and the `statusUpdates` filter dropped every one. For an anonymous visitor the owner key is its user id plus its scope identity (`StatusUpdateOwnerKey`), and the filter rebuilds the same key from the connection, so a visitor who sends another visitor's (client-chosen) `x-session-id` does not receive that visitor's events.
+  - `@memberjunction/realtime-widget`'s `build` now also runs `bundle`, so `dist/embed/mj-widget.js` is rebuilt with the package instead of only when someone remembers the separate step.
+  - When the agent's reply cannot be saved, `RunAgentInConversation` now throws with the reason instead of only logging it. It still runs the artifact and media steps first, so the run's artifacts and `AIAgentRunMedia` are kept; for a caller-supplied `conversationDetailId` (which can never take the reply) it links nothing to that row and keeps only the `AIAgentRunMedia` rows. `RunAIAgentResolver` publishes a failed completion with the reason whenever a run throws, so a fire-and-forget client (the web widget, Explorer) learns of the failure at once instead of waiting out its idle timeout and then reconciling the run as a success.
+
+  **Deploy together:** a widget bundle older than this release cannot refresh and gets 403 at its first refresh; a self-hosted copy of `mj-widget.js` must be replaced with the one this release builds. Guest tokens issued before the deploy carry no `cnf`, so they cannot be refreshed; the updated web widget then starts a new session. An anonymous magic-link session without a resource scope that was started before the deploy is refused after it; the visitor starts a new session.
+
+- 0ff7523: Duplicate detection reports progress, finishes, and finds duplicates past the first 1,000 records; the Vectors tab saves what it shows.
+  - **Progress reaches the Duplicate Detection tab.** The tab subscribed to `PipelineProgress` before saving the new run, with the ID `NewRecord()` generated in the browser. A new record's create request carries no primary key, so the server gives the run a different ID: the subscription and the 15-second status check both watched a run that does not exist, the bar stayed at "Initializing… 0%", the check gave up after two minutes, and results appeared only after a page reload. The tab now subscribes after `Save()` with the saved ID and checks the run's status straight away, which still catches a run that finishes during the save.
+  - **Run-wide, monotonic progress** in `DuplicateRecordDetector`, and a run that fails (missing entity, no records to check, detector error) is marked `Failed` with its message instead of staying `In Progress`. The `PipelineProgress` filter compares IDs case-insensitively.
+  - **The in-memory vector store searches the whole index.** `SimpleVectorServiceProvider` loaded an entity document's vectors without `IgnoreMaxRows`, so the load stopped at `MJ: Entity Record Documents`' `UserViewMaxRows` (1,000): on an entity with more records, every vector past the first 1,000 was invisible to search and duplicate detection.
+  - **Matches carry the matched record's name.** When the vector store returns no metadata (the in-memory store returns only the record ID), the detector fills each match's `RecordMetadata` from the existence check it already runs, so match cards show names instead of record IDs.
+  - **A run prefers the entity's `Record Duplicate` document** over a newer document of another type, such as a `Search` document.
+  - **The Vectors tab saves the model, database and index it shows.** The first index was pre-selected on load, a chosen index stayed chosen when the database or model changed, and Save used that index's database and model in place of the dropdowns'. The index list now offers only indexes matching both the database and model shown, choosing one moves both dropdowns to it, changing either drops a non-matching index back to Auto, and both the suggestion and edit panels save only an index that matches.
+  - **Vector sync no longer reports "Synced" mid-run.** Five seconds without a progress event counted as success, while a remote embedding model can take longer than that per step. Only the server's `complete` or `error` event finishes a sync; two minutes of silence refreshes the row and says the result can't be confirmed.
+  - **A suggested document keeps the suggestion's match thresholds** instead of the defaults.
+  - The Duplicate Detection tab saves its threshold sliders to the selected document before a run, polls run status while idle, and no longer reconnects to finished or stale runs.
+  - **A duplicate-detection document may embed a date of birth.** The Vectors tab's sensitive-field refusal (#4437) refused `DateOfBirth`, `BirthDate` and `DOB` for every document, while a birth date is what tells two records for one person apart from two people who share a name: on More Cheese's People, the 22 strongest matches were all real duplicates with it and only the top 13 without it. Both refusal layers now take the document's purpose: birth-date fields are allowed for a `Record Duplicate` document and still refused for search and classification. Every other refused field is refused for every purpose.
+
+- 914e6ff: Field-level security close-out: a denied value never reaches anyone the rule does not entitle.
+
+  The rule is no longer "API output is the perimeter". A denied value may sit in server memory, but must never reach a principal the rule does not entitle: an API caller, an LLM's context, a message recipient, or a reader of a stored artifact such as an embedding, tag or log. See the rewritten `guides/FIELD_LEVEL_SECURITY_GUIDE.md`, including its new §6 developer checklist, the `.claude/rules/field-security.md` rule and the `mj-field-security` skill.
+
+  **An entity object never holds a value its user is denied.** Every hydration path (`Load`, `LoadFromData`, `Hydrate`, RunView `entity_object`, the IS-A parent merge, `SaveEntityGraph` results and the re-read after `Save()`) leaves a restricted user's denied fields `NotLoaded`. So does `NewRecord()`: a new record holds no default for a field its user may not read, so a browser graph create or a new related row no longer sends one. Setting `ContextCurrentUser` on an object that already holds a record narrows it (and its IS-A parent, embedded records and the children of its loaded related-record collections) to the new user; nothing is widened. A read-only cache collection is deliberately not narrowed: its children are the engine's shared objects, which keep engine width and are never serialized to a client. `LoadFromData` given an entity object reads that object's own `GetAll()`, and `CopyFrom` skips the fields its user may not read instead of stopping at the first one. `GetAll()`, `To()`, `GetDataObject(JSON)`, `Fields[].Value` and `JSON.stringify(entity)` are therefore correct without changes. System-user and unrestricted objects keep the zero-copy fast path; shared cache rows are never modified. New: `ProjectEntityValuesForUser` / `ProjectEntityValueRowsForUser` (the one output projection every transport uses), `AssertClientInputWritableForUser`, and `BaseEntity.IsFieldReadableByActiveUser`.
+
+  **Work on behalf of a user runs as that user.**
+  - Entity communication previews and sends read recipients and related data as the sender (previously the system user, which bypassed row-level security, entity permissions and field security). A merge field the sender cannot read renders empty.
+  - Templates render with the user of each render instead of the first caller's. Callers must pass that user as `ContextUser` (the Entity Document parser, vector sync and duplicate detection now do). A render with no user still runs, but an extension that needs a user (an `{% AIPrompt %}` tag) fails it with an error instead of hanging or falling back to whichever caller first configured the engine. A template error after an `{% AIPrompt %}` tag now fails the render instead of leaving it waiting forever, and a non-string `AIModel` parameter fails it with a clear message.
+  - Entity actions load their record as the caller; `execute-agent` and the agent context injector project engine-cached notes and examples for the run's user.
+  - A2A builds each task's entity and agent handlers as the authenticated caller, refuses to run with no resolvable user (or a caller whose cached user record is inactive) instead of picking the first cached user, and keeps each task private to its caller.
+  - New `UserScopedCacheKey` (`@memberjunction/global`). The agent data-source cache, the Entity Document placeholder cache and the IS-A subtype lookup cache key on the user, so one user's rows are never served to another. The Entity Document placeholder cache is bounded at 10,000 entries, evicted least-recently-used, since its key changes with every record edit. The in-memory vector index is cached per permission class (entity read, effective row filter, denied vector columns), bounded and evicted least-recently-used, and a save reaches a row-filtered class only if that class can read the row.
+
+  **Every transport projects its output and gates its input:** GraphQL CRUD (including the row `DeleteRecord` returns), transaction groups (including the update delta), `SaveEntityGraph`, File, Query and User View resolvers, entity-action results, agent-run and test-run streams, REST, MCP and A2A. Embedded-record request input and `MergeRecords` field maps reject denied and unknown keys with the same message.
+
+  **Behaviour changes to be aware of:**
+  - **Client input naming a field the caller cannot read, or no field at all, is rejected** (`Field 'X' cannot be written on entity 'Y'.`), for callers denied anything on the entity. It was silently dropped before. Well-behaved clients never send such keys.
+  - **REST `runView` / `runViews` always return `simple` rows**, whatever `ResultType` the request asks for.
+  - **CloudEvents and the debug log carry only the primary key and changed field names** for an entity with field security, never values (save events now carry the changed names captured before the save resets dirty state, so the list is no longer empty). Cache-invalidation broadcasts never carry row data for such an entity, and `MJ: Record Changes` rows never ride the record-data broadcast or CloudEvents.
+  - **Entity status messages over the websocket go only to the session whose user owns the object**, and never carry a record payload for a delete, for an entity with field security, or for Record Changes. Previously one subscription per entity relayed every event, deletes included with the whole old row, to whichever session subscribed first.
+  - **A field-security refusal throws a `FieldSecurityError` from the provider's RunView path** instead of returning `Success: false`. One refused view in a `RunViews` batch fails only that view: it comes back `Success: false` with the refusal's message, and the other views run.
+  - **`RunViewsWithCacheCheck` checks entity Read for every item before anything can be answered from the server cache** (an item sent without `cacheStatus` used to be served another user's cached rows unchecked); view-only requests skip the server cache.
+  - **Ad-hoc SQL is restricted for every entity, not only those with field security.** For any caller except the system user, every table the statement reads must be an entity base view the caller can read with no row-level filter and no denied field, because raw SQL applies neither. The system user is exempt only when passed explicitly: ad-hoc SQL with no user is refused instead of running as the process user. The provider checks the rendering it executes on every path, including `ExecuteQueryFromSpec` (`TestQuerySQL` used to check one render and execute another).
+  - **An ordinal `OrderBy` item (`OrderBy: "3"`) is refused for callers denied anything on the entity**, since it sorts by a column of `SELECT *` that may be denied. Named sorts are checked as before.
+  - **Query templates refuse the non-deterministic `random` filter**, since the SQL a caller is checked against and the SQL that runs are rendered separately.
+  - **Saved queries without a role list check entity Read on every entity the SQL reads**, for every caller, with the entities derived from the SQL rather than `QueryEntities`. SQL that cannot be read is refused for a user who cannot read every entity.
+  - **For a user carrying any field denial, a saved query without a role-list grant is refused when it reads a relation that is not a CTE or an entity's base view or base table**: custom views, synonyms, table-valued functions, temp tables, names in another database, and `EXEC`/`CALL`. What those read cannot be checked. A query whose role list includes the user still runs. This can break existing saved queries over custom reporting views for restricted users; grant them through `MJ: Query Permissions` after reviewing their SQL.
+  - **MCP `Run_*_View` and A2A `QueryEntity` run the client clause screen** on caller filters and sorts, as GraphQL and REST do.
+  - **Data Context SQL and query items always re-run**, and entity items whose entity has field security (or for which the reader has a row filter) ignore saved `DataJSON` and re-run for the reader.
+  - Non-canonical Access spellings (`'deny'`, `'ALLOW'`) are normalized on save.
+  - **An `{% AIPrompt %}` tag whose model is missing or whose model call fails now fails the render**, with a user as without one. It used to write "Error: …" into the output, so a communication that used to send with an error in its body now does not send at all.
+  - **An entity communication skips a recipient whose address field the sender cannot read**, reporting `Recipient skipped: the sender cannot read the address field` for that recipient (new `Skipped` / `SkipReason` on each result item) and still sending to the others; the run reports `Success: false` when any recipient was skipped. `RunEntityCommunicationByViewID` refuses a view that does not belong to the requested entity.
+  - **The A2A agent card is minimal when `a2aServerSettings.userEmail` is not set**: no entity or agent lists (it was previously built as the system user). Set `userEmail` to a service user to advertise what that user may see. When `userEmail` is set but matches no user, `/a2a/agent-card` answers **503** instead of building the card as someone else.
+  - **MCP Create/Update entity tool schemas leave out fields the session user may not write or read**, shared per set of denials. For a caller who is denied at least one field on the entity, the MCP Create and Update tools refuse a key that names a field the caller cannot read, or no field at all, with the same message GraphQL and REST use. For a caller denied nothing, unknown keys are ignored, as REST does. A field the caller can read but not create is accepted on Create and left out by the save, so the column takes its default, as at GraphQL and REST; on Update a field the caller can read but not update is rejected by the save.
+  - **External vector index results (`FetchEntityVectors`) are filtered by row-level security**: a match is returned only when the caller can read its record; a match without `RecordID` metadata is dropped.
+  - The MCP client's OAuth token cache is keyed by connection and user.
+  - **`RunAction` output and the action execution log (`Params`, `ResultParams`) are projected** with the new `ProjectActionParamValuesForUser` (`@memberjunction/actions-base`): for the caller on `RunAction`, for the user the action ran for in the log. An entity object in an output parameter is now sent as its projected field values when the user may read its entity (it was dropped from `RunAction` output, and serialized as internal state in the log); one of an entity the user cannot read stays dropped from `RunAction` output and is logged as `null`. A plain object shaped like a row of an entity the user is denied fields on (it carries the primary key and at least 80% of its keys are that entity's fields) loses the denied keys. That heuristic is a backstop. These are not projected: rows without their primary key or with more extra keys, entity objects and rows nested more than 6 levels deep (`ACTION_PARAM_PROJECTION_MAX_DEPTH`), objects with a `toJSON()` method, instances of other classes (dropped from `RunAction` output, but serialized into the log), JSON-string values and `ActionResult.Message`. The log's `UserID` is the user the action ran for, not the engine's configured user.
+
+  **One parse-based gate on every clause a view runs.** New `FieldSecuritySQLGate` resolves identifiers from the dialect-aware SQL scanner, so names in strings and comments are ignored and quoted, bracketed or look-alike spellings are caught. The provider applies it to `ExtraFilter`, `OrderBy`, aggregates, `OverrideExcludeFilter`, search terms spliced into SQL, and a saved view's stored `WhereClause`/`OrderByClause` (including `CustomWhereClause` views and `ViewID`-only requests; the pre-gate reads a saved view's stored sort through its typed `OrderByClause` property). Entities on an external data source get the same gates on the clauses handed to their driver, and their rows are projected for the caller, `ViewID`-only requests included. A saved view's typed properties may not filter a field the caller cannot read (IS-A included), and the refusal throws `FieldSecurityError`. Whole-row constructs (`SELECT *`, `alias.*`, `FOR JSON/XML`, `CHECKSUM(*)`, `NATURAL JOIN`) and unreadable SQL are refused only for callers denied something. For those callers a column that does not exist produces the same error as a denied one, and a name holding a control, format or default-ignorable character is refused (SQL Server still resolves `[Salary]` with a U+2060 word joiner typed after `Sal` to the real column). `SELECT *` inside `EXISTS (…)` stays allowed only without a set operation (`UNION`/`INTERSECT`/`EXCEPT`) or row-picking `ORDER BY`/`OFFSET`/`FETCH`/`LIMIT`. PostgreSQL `U&"…"` identifiers (any case, optional `UESCAPE`) are decoded and checked as the name they spell; a malformed escape makes the text unreadable, so it is refused. This closes the saved-view filter residual.
+
+  **Saved queries enforce field security.** The SQL a run will execute is checked against the caller's denials in every clause, with the entities taken from the SQL rather than `QueryEntities`; `SELECT *` and untraceable columns fail closed. A query's role list (`MJ: Query Permissions`) still authorizes on its own. Agent SQL artifacts and Data Context SQL items go through the ad-hoc SQL authorizer on the read-only connection.
+
+  **Caches.** Server RunView cache slots are segmented by field-security fingerprint, like row-level security, and read-time projection checks every row. Every server path builds the slot key with one method, `ProviderBase.ComputeRunViewCacheFingerprint`. A browser's cached view results are answered "stale" when the user's field-security key has changed.
+
+  **Datasets** keep one full-width shared cache slot per item: a caller denied fields never has them selected, such a narrowed read is not written to the shared slot, rows are projected for the caller on hits and misses, and item filters are gated. **Record Changes** payloads on `ViewID`-only RunViews are projected per row. A restricted user's own saves and deletes now store full-width Record Change payloads: when the saving object is narrower than the entity, the provider reads the stored row once (on the save's connection) and builds `FullRecordJSON` and the old-values side from it, so the audit trail and recycle-bin restores keep the columns the user could not read; `ChangesJSON` still lists only what changed. The snapshot read selects only the columns the saver may not read, runs only when such a column is missing, and inside a transaction group uses the group's own connection; PostgreSQL deletes snapshot old values the same way as SQL Server. A create no longer records a value for a field the user was not allowed to supply.
+
+  **Derived indexes.** Entity Document template data, vector display metadata, Entity Record Document text, duplicate-detection text and reasoning, the record-process inference default mapping and autotagging content leave out any field not readable by every role: one with a `Deny` or `No Access` read rule, no rules at all, or no `Allow` read rule for a role that can read the entity. The rule is `GetIndexRestrictedFieldNames` in `@memberjunction/core`, shared by every consumer; it returns each field under its `Name` and its `CodeName`, since a row selected with an explicit field list is keyed by code name. Related rows an Entity Document pulls in with `Relationship()` leave out the same fields of the related entity and any field the render's user may not read (the join field is kept, under its name and code name). The record-process inference context document (`Context.EntityDocumentID`) renders without the record's own index-restricted fields (unless `Context.Fields` names the fields) and without the run user's denied fields. The Entity Document placeholder cache keys on a hash of the record values (strings JSON-quoted) as well as the user, so a stripped render never gets back a value cached by an unstripped one. Search results, external vector metadata and duplicate candidates are projected per reader. **Admins must re-index** after upgrading: re-vectorize Entity Documents on FLS entities (rebuild external stores such as Pinecone), re-run Entity autotagging, and review tags produced from restricted text.
+
+  **IS-A children inherit their ancestors' field rules.** `EntityInfo.FieldLevelSecurityApplies` (new) is true when the entity's own flag or any ancestor's is on, and every runtime gate uses it, including the Angular form field's read and write checks. Denied sets inherit, but only on the child's mirrors of parent fields. `ParentChain` caches only a complete chain. A subtype selector reaching a denied field gives "no subtype" instead of throwing.
+
+  **Denied-set memo** keys on per-entity generations (self and ancestors) and the user's roles instead of counts; `EntityInfo.InvalidateFieldSecurityCache()` (new) is for in-place rule edits.
+
+  **Configuration guards.** Re-pointing a rule's `RoleID` or `EntityFieldID` is judged against the target it leaves as well as the one it lands on; `MJ: User Roles` updates that move a system-user assignment run the removal guard; the reconciler skips a refused orphan delete instead of aborting. The guards read the system user's roles and the relevant rules from the database instead of caches, the role-assignment guard runs on every save (including `ReplayOnly`), the role-removal guard also judges entities with field security switched off, and a transaction group holding more than one guarded write that concerns the system user is refused (save them one at a time). Parallel guarded saves in one group are refused after the first: the place is reserved when the check passes and given back when the save is refused, returns false or throws. `BaseEngine` logs once when it loads an entity with field security.
+
+  **Source guard.** `check:guards` gains `FieldSecurityEgressCompliance`, which flags `.GetAll(`, `.GetDataObject(`, `.GetDataObjectJSON(`, `.To(`, `JSON.stringify(<entity or rows>)`, `.Fields.map(f => f.Value)` and view results written straight to an HTTP response, in MJServer (resolvers, REST, `generic`, agent sessions, realtime, services, `index.ts`), the MCP and A2A servers, `AI/Agents`, and the Actions, Communication, Templates, SearchEngine and MessagingAdapters packages, unless the `//` comment directly above the line carries `// fls-guard: <reason>` on a line of its own (a marker trailing code does not count).
+
+  **Integration checks can report Skipped mid-run** (`SkipCheck` in `@memberjunction/testing-integration`); an early return used to score as a pass. The new bundles IT133–IT135, and IT92's FC1–FC6, skip instead of passing when a precondition is missing. A new integration-job step (`.github/scripts/check-fls-wire-bundles-ran.mjs`) fails the job when any IT92 or IT134 check skipped or either bundle ran nothing, and their shared fixture reloads metadata before checking the field-security flag and after its teardown, so a stale flag no longer makes it refuse to run.
+
+  **Upgrading.**
+  - **Flush RunView cache keys in a persistent shared cache (Redis) when you deploy.** Before this release a restricted user's cache miss could write narrowed rows into the slot unrestricted users read. Unrestricted users' keys do not change, so those rows would keep being served, missing columns, until a save or eviction cleared them. During a rolling deploy older servers keep writing them, so flush once every server runs this release. Browser (IndexedDB) slots for restricted users re-key on their own; the old ones are simply never read again.
+  - **Upgrade clients with the server.** Older `@memberjunction/graphql-dataprovider` builds send every field, denied ones included at their defaults, when a transaction group creates a record, and this server refuses that input for a restricted user. Open browser tabs need a reload, and pinned consumers need the matching client release.
+
+- 49d0d3c: Server-set query parameters, `Context` in query templates, and fingerprint-bound approvals (#4789 A17). All opt-in: a query with no server-set parameter and no `Context`, run without `RequireApproved`, renders and runs exactly as before.
+  - **Server-set parameters.** `QueryParameterInfo.IsServerSet` mirrors the new column. `RunQueryParams.ServerParameters` carries values only server code sets; a caller value (`Parameters`) for a server-set parameter, for a name that reaches a composed query's server-set parameter, or for `Context` is refused with an error naming it, and logged. A required server-set parameter with no server value refuses the run. Server values are left out of `AppliedParameters`, bound in materialized reads, and never read from a GraphQL request. `SERVER_ONLY_RUN_QUERY_PARAMS` / `StripServerOnlyRunQueryParams` name `TimeZone` and `ServerParameters`.
+  - **`Context` in templates.** `{{ Context.UserID }}`, `UserEmail`, `UserName`, `Now`, `Today`, `StartOfWeek/Month/Quarter/Year`, worked out on the server from the context user, the clock and the run's `TimeZone` (UTC when unset), and only when the template reads them. Query extraction keeps no parameter row for `Context`.
+  - **Approvals.** Queries (`Status`), user views, dashboards and components (`ApprovalStatus`): a save that moves the status to Approved records the context user, the time and a fingerprint of the definition as stored (`ComputeQueryFingerprintAsync` and siblings in `@memberjunction/core-entities`); client values for those columns are ignored. `Get*ApprovalStateAsync` reports `Current`, `Stale` or `NotApproved`. New `MJDashboardEntityServer`. `RunQueryParams.RequireApproved` refuses a run unless the query, and each query it composes, has a current approval.
+  - **Caches.** The RunQuery result-cache fingerprint (the `CacheLocal` layer and the external-source cache) now covers `ServerParameters` and the `Context` values a query reads; a result that reads `Context.Now`, and a `RequireApproved` run, are never cached.
+  - Integration bundle `query-approvals` (IT120).
+
+- ced8414: A new Vector Index record that already has `ExternalID` set now adopts that provider index instead of creating one. Before, `MJVectorIndexEntityServer` always created an index named from `Name` and overwrote `ExternalID` with it, so pushing an app's shipped index row (More Cheese's `morecheese-duplicates`) made an empty provider index and pointed the row at it. The row records `provisionState: "adopted"`, and deleting an adopted row leaves the provider index in place, since MJ never created it.
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [f7a43b2]
+- Updated dependencies [cc41d33]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [e8e6cd6]
+- Updated dependencies [142d524]
+- Updated dependencies [b1295d2]
+- Updated dependencies [420fc02]
+- Updated dependencies [f68e17b]
+- Updated dependencies [6ecb767]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [a1a7e2c]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [96c44bf]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [315e8f7]
+- Updated dependencies [4c97994]
+- Updated dependencies [ff73341]
+- Updated dependencies [8ec184d]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+- Updated dependencies [5ba9ce9]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/actions-base@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/aiengine@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/generic-database-provider@6.2.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.6
+  - @memberjunction/sql-dialect@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/communication-types@6.2.0-edge.6
+  - @memberjunction/communication-engine@6.2.0-edge.6
+  - @memberjunction/ai-engine-base@6.2.0-edge.6
+  - @memberjunction/ai-vectordb@6.2.0-edge.6
+  - @memberjunction/tag-engine@6.2.0-edge.6
+  - @memberjunction/ai-prompts@6.2.0-edge.6
+  - @memberjunction/integration-engine@6.2.0-edge.6
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.6
+  - @memberjunction/sql-converter@6.2.0-edge.6
+  - @memberjunction/scheduling-engine@6.2.0-edge.6
+  - @memberjunction/templates@6.2.0-edge.6
+  - @memberjunction/predictive-studio-core@6.2.0-edge.6
+  - @memberjunction/feature-pipelines@6.2.0-edge.6
+  - @memberjunction/doc-utils@6.2.0-edge.6
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.6
+  - @memberjunction/rubrics-base@6.2.0-edge.6
+  - @memberjunction/sql-parser@6.2.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+- 3cb20c0: Template parameter extraction keeps the AI-written parameter descriptions again. Since the PascalCase rename the pipeline read `Description` from the model's output, which returns `description`, so every save fell back to generic text such as "Template scalar parameter 'x'" and overwrote better descriptions.
+
+### Patch Changes
+
+- 0cc6b08: Storage permissions: close the gaps a review found around `StorageAccessEvaluator`. The rules, in one place:
+  - **Account gate everywhere.** Every path that acts on a storage account for a user asks `StorageAccessEvaluator` first — the GraphQL storage routes, and now the File Storage core actions (Get Download URL, Get Object, Get File Content, Get Metadata, List Objects, Search Storage Files, Object/Directory Exists need `Read`; Get Upload URL, Copy, Move, Delete Object, Create/Delete Directory need `Write`), `List Storage Accounts` (lists only accounts the caller may read) and `BaseFileHandlerAction` (`Write` on the account a save lands in; reads go through the file-ID gate). These actions are reachable by any user through `RunAction` and by any agent. An unknown account name and a refused account return the same `ACCESS_DENIED` result. Zero permission rows on an account still means open (the current product rule, unchanged).
+  - **File-ID routes gate the account the row resolves to.** `FileStorageEngine.ResolveFileObject` (new) resolves an `MJ: Files` row's provider to its account, requires the caller's access on it, and applies the tracked-file rule to the row's object. `DownloadUrl`, `GetFileContents`, `CreateMediaAccessToken`, `DeleteFile` and the `UpdateFile` rename (`Write`), `ArtifactFileDownloadUrl`, the conversation-attachment blob store, the agent file handler and `ReadRealtimeRecordingFile` use it, so a row whose `ProviderKey`/`Name` aliases another row's object is refused.
+  - **Tracked-file rule.** An object backing an `MJ: Files` row may be read, signed, listed, returned by search, overwritten, moved, copied or deleted only when the caller can read that row (the minimum for a write; `CanWrite` is still required). Applied to the Get Object / Get File Content / Get Metadata / Get Download URL / Get Upload URL / Copy / Move / Delete Object actions, `CreatePreAuthDownloadUrl`/`CreatePreAuthUploadUrl`, `DeleteStorageObject`, `MoveStorageObject` and `CopyStorageObject` (source and destination), `CopyObjectBetweenAccounts` (both ends), `UploadFile` (before `PutObject`), and as a filter on `ListStorageObjects`, `SearchAcrossAccounts`, the List Objects / Search Storage Files actions and `SearchEngine`'s storage hits.
+  - **Key canonicalization.** Client and stored keys go through one canonicalizer, `FileStorageBase.NormalizeObjectKey` (default: trim, collapse repeated `/`, strip leading/trailing `/`; S3 overrides it to strip its key prefix the way it addresses keys), and are compared case-insensitively (`LOWER(...)` in SQL). Keys with a `.`/`..` segment, a backslash, a percent-encoded `/`, `\`, `.` or control character, or a raw control character are refused outright.
+  - **One object-key rule.** `StorageObjectKeyOf` (new) resolves an `MJ: Files` row to `ProviderKey`, or `Name` when `ProviderKey` is null or empty; the tracked-file lookup, `ResolveFileObject`, the file resolver and the conversation-attachment blob store all use it, so a row stored with an empty `ProviderKey` is checked under the same key it is served from.
+  - **Cache refresh on a miss runs as the system user.** `FileStorageEngine.RefreshAfterMiss` (new) reloads the account cache as the MJ system user; `ResolveFileObject`, `GetDriver`, `UploadFile`, the file resolver and the realtime recording store use it instead of a forced `Config` as the caller, which emptied the shared cache for everyone when the caller could not read `MJ: File Storage Accounts`. `GetFileContents` reads a row with no `ProviderKey` from its `Name`, as the other file routes do.
+  - **No truncation.** Every evaluator read sets `IgnoreMaxRows`, so the entity row cap can no longer drop an account's rows (which read as "zero rows → open") or a tracked file's row; lookups are batched.
+  - **Azure pre-authenticated URLs** are blob-scoped service SAS tokens (`r` to download, `cw` to upload) instead of account-wide SAS tokens; expiry is unchanged (10 minutes).
+  - **`MJ: Files` storage location is server-owned on existing rows.** `MJFileEntityServer` refuses a save that changes `ProviderID` or `ProviderKey` on an existing row (including `ReplayOnly`) unless trusted server code sets `AllowStorageLocationChange` (registered in both server-bootstrap class manifests). A new row may still carry a client-chosen `ProviderKey` (Explorer's direct-upload path registers its upload that way); the routes' gate above is what makes such a row harmless.
+  - **Search details.** `SearchAcrossAccounts` reports accounts in request order and withholds `totalMatches`/`nextPageToken` once hits are dropped; under an `Audience` storage hits are dropped (re-checked for the caller only; per-reader storage checks are a follow-up). `ListStorageObjects` reads the typed `Configuration` property.
+
+  Also fixed: the `List Storage Providers` action could never run. Its class was registered as `List Storage Accounts`, which no metadata row names; it is now registered under the shipped action's `DriverClass`, `List Storage Providers`.
+
+- a9614be: Saving a query with `SkipEntityAIActions` now skips the LLM enrichment step of query extraction.
+
+  Every save of a new query, or of a query whose SQL changed, runs the extraction pipeline, and with an AI vendor key present that includes an awaited LLM call (the `SQL Query Parameter Extraction` prompt) to describe parameters and fields. Nothing could turn it off. `MJQueryEntityServer.Save()` and the re-extraction a matching `MJ: Query SQLs` dialect save triggers now honour `EntitySaveOptions.SkipEntityAIActions`: the deterministic extraction still runs and writes parameters, fields, entities and dependencies, with heuristic descriptions in place of the LLM's, exactly as when the call fails. Without the option nothing changes. `RerunExtraction()` takes an optional `skipAIEnrichment` argument.
+
+  The integration bundles that create queries (runquery-rendering, runquery-cache, runquery-features, materialized-read, server-cache) now save them with this option through a shared `FixtureQuerySaveOptions()`. They assert only on deterministic extraction, and the deterministic tier is meant to need no credentials, but with keys present IT102 made about 80 paid LLM calls and timed out at 300 s. It now passes 13/13 in 39 s with keys present.
+
+- ba61c0b: Role row-level-security filters that use subqueries, or that are shared across several entities, can be edited again once permission rows reference them. Editing such a filter's `FilterText` (through the entity layer or `mj sync push`) used to be refused by the checks built for API-key row filters, which treat every word of a subquery as a column and require every referrer to be on one entity. A filter referenced only by role permission rows is now screened for dangerous SQL (subqueries and function calls allowed; DDL/DML/EXEC, comments, semicolons and system catalogs still refused) and compiled against the base view of every entity that references it, so a bad column, table or function is still refused with the database's own error. A filter referenced by any API-key or API-application scope rule keeps the strict API-key rules unchanged. New mutation-gated integration checks RF1–RF3 in the `rls-isolation` bundle cover the edit, the read restriction for users whose only role carries the filter, and both negative cases.
+- 8c120db: Cached RunQuery results now carry the definition of the query that produced them, so an edited query's old results are no longer served. A read under another definition misses; a client's cache check is answered stale when its slot came from another definition; on a shared cache a mismatch holds back writes instead of deleting the slot. The server where an edit was saved deletes the query's slots, and those of queries that compose it, once the edit settles. Slots are keyed by the resolved query, so requests by ID, by name or by both share one. Query extraction rewrites the shared cache slots once per save instead of once per row. The SQL Server cache-status check now reads the documented `TotalRows` column. A client talking to a server that predates the definition check (during a rolling deploy) retries its cache check without the definition, and tries it again a few minutes later.
+- 74d44e1: Data Context Items of type `sql` no longer run caller-written SQL unchecked (security C7).
+  - **`GetDataContextData` / `GetDataContextItemData`.** A data context's SQL items now run only for its owner or an administrator (Owner-type user), never for a scope-limited (magic-link) session, and only on the read-only provider. The read-write pool is never used for them. Before it runs, each item's SQL must pass the checks `ExecuteAdhocQuery` applies: a single read statement (`RenderPipeline` with `RequireReadStatement`) whose every table is an entity base view the caller may read in full. Both queries reject an ID that is not a UUID, and items now load for the calling user.
+  - **Per-item results.** A SQL item that may not run is refused on its own. `GetDataContextData` still loads the other items and returns one entry per item, in item order, in `Results` (the data, or null) and `ErrorMessages` (null, or the reason). `Success` is true, and `ErrorMessages` null, only when every item loaded, so a client that treats `Success: false` as an error still sees one.
+  - **`DataContextItemServer.LoadFromSQL`** runs the item's SQL through the data source's `RunQuery({ SQL })` ad-hoc path for the context user. It refuses a raw connection pool, a missing context user, and an item with no SQL. `mssql` is no longer used.
+  - **`MJ: Data Context Items`.** A new server entity class, `MJDataContextItemEntityServer`, lets only an Owner-type user save an item that is a SQL item or holds SQL text: create it, change any of its fields, or move it. It reads the item's values, not which fields changed, and refuses a non-Owner's save of an existing item whose `Type` or `SQL` was not loaded. It applies the same rule to `ReplayOnly` saves, which skip `Validate()`.
+  - **`UpdateMJDataContextItem` always loads the stored row.** `ResolverBase.MustLoadTruthFromDatabase` now includes `MJ: Data Context Items`, as it already includes `MJ: Record Changes`. Client-supplied `OldValues___` can no longer decide the item's starting state, so a client cannot hide a SQL item by repeating its new values as old ones or by leaving `Type` and `SQL` out.
+
+  Upgrade note:
+  - Deployments without a read-only database login (`dbReadOnlyUsername` / `dbReadOnlyPassword`) can no longer run SQL data context items. The other items of a data context still load.
+  - Existing SQL items are refused when a non-owner loads them, when their SQL is not a single read over entity base views, or when the ad-hoc path's keyword check refuses it (for example a `REPLACE(` call, which `ExecuteAdhocQuery` already refuses). `GetDataContextItemData` also no longer returns a refused SQL item's cached data.
+  - Users who are not Owner-type can no longer edit any field of a SQL item, including its cached data. They can still delete it, or turn it into another type by removing its SQL.
+
+- c7d1170: Security: client SQL fragments reach RunView only through the base-view clause screen. The screen moves from MJServer's `ResolverBase` into `@memberjunction/generic-database-provider` as `ClientClauseScreen`, and the provider exposes it as `ScreenClientClause`. It now also guards `RunViewsWithCacheCheck` (which also gets the `view:batch` API-key scope check), every ad-hoc list source by default (client-supplied, from the list and audience actions, or rebuilt from a stored list snapshot), the REST view routes (which also refuse a `ViewEntity` that was not loaded as an entity), and a saved view's stored WhereClause and sort (on save, and again when the view runs). The screen refuses a subquery over an entity the acting user reads under a row filter (role row-level security or an API-key row filter) or with denied fields, the queried entity included, because a subquery reads the base view without them; the ad-hoc SQL screen uses the same rule. Both screens read table references from a walk of the whole parse tree (subqueries in CASE branches, HAVING and window clauses included, and every FROM item even when an alias repeats), refuse SQL whose SELECT keywords the walk does not account for, refuse a table function in FROM unless it is an unqualified built-in that reads only its arguments, and skip only the parse wrapper's own FROM item. `SQLParser.IdentifierAliases` exposes the names a fallback parse renamed, so bracket-quoted CTE names still resolve. The fallback takes those names from a prefix the SQL does not contain and keeps each one a separate token, so every name in that map is one the parser renamed. `SQLParser.IsIdentifierAliasName` reports that name form, and both screens refuse client SQL that uses it. The ad-hoc SQL screen exempts a FROM item as a CTE reference only when it is unqualified (`dbo` counts as a schema), is in the scope of a WITH that declares the name (its own SELECT or an enclosing one; a CTE body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH RECURSIVE list), and matches by the dialect's identifier rules (case-insensitive on SQL Server; on PostgreSQL unquoted names fold to lower case and quoted names match exactly). The parse-tree walk takes time linear in the size of the parse tree, and the fallback renaming and the forbidden-function check take time linear in the size of the SQL. A schema-qualified table reference, `dbo` included, resolves only to an entity in that schema. Client clauses may no longer call the functions the dialect forbids in caller SQL (`CallerSQLForbiddenFunctions`), and that shared list now also covers `pg_sleep*` on PostgreSQL and `OPENXML` on SQL Server. The rubric comparison matrix and the conversations UI (the tasks view, task search and the agent artifact lookup) now read the IDs they filter by with their own RunView instead of a subquery over those views; the conversations Tasks tab rebuilds that filter on every load and refresh. On PostgreSQL the screen reads `[Name]` bracket identifiers as the PostgreSQL provider does. Every RunView caller also gets a bracket- and `E''`-aware check that refuses statement separators and comments in filter, sort and search fragments, and a view ID is spliced into SQL only when it is a GUID. A stacked statement hidden from the keyword denylist by a quote inside a bracket identifier no longer reaches the database on these paths.
+- 8389c99: A vector index created without an explicit `Dimensions` is now provisioned at its embedding model's real width instead of 1536.
+
+  Every index created from the UI (the Config page's Create Index and the Knowledge Hub "Vector Index: Auto" path) leaves `Dimensions` null, and `MJ: AI Models` has no width column to copy from, so `MJVectorIndexEntityServer` created the provider index at a 1536 fallback whatever the model. Models that can reduce their output width (OpenAI `text-embedding-3-*`) coped, because the sync passes the index's `Dimensions` into the embedding call; a model that cannot (a 384-dimension local model) got an index that rejected every write, since Pinecone, Qdrant, SQL Server and pgvector all fix the width at create time.
+
+  Before creating the provider index, the hook now embeds one short string with the index's own model (`AIEmbeddingRunner`, model pinned, no run row written, bounded by `DIMENSION_PROBE_TIMEOUT_MS`) and uses the returned vector's length. An explicit `Dimensions` on the record still wins. When the probe cannot run or fails (no model, no user context, no credentials, provider error), the index is created at `DEFAULT_DIMENSIONS` (1536) and the reason is logged so the width can be set by hand. The width used is written back to `Dimensions` with the rest of the provider metadata, as before. Closes #4988.
+
+- 03c085c: A vector index records whether it was provisioned, vectorizing refuses embeddings the index cannot hold, and the embedding model is chosen deterministically.
+
+  `MJVectorIndexEntityServer` still provisions in the background, so the save that creates the row returns at once. But the outcome of that background call used to reach only the server log, and a row whose provider refused, threw or never answered looked identical to one with an index behind it. The outcome is now written onto the row's `ProviderConfig` as `provisionState`, `provisionMessage` and `provisionCheckedAt`: `provisioned`, `failed` (with the provider's message), `timed-out` (the provider did not answer within `CREATE_INDEX_TIMEOUT_MS` and may still finish, so this is not recorded as a failure), `not-applicable` (the driver owns no index objects) or `unprovisioned` (no driver instance in this process). `Save()` never throws over provisioning. `Dimensions` and `Metric` are written back from the provider's response when it reports them, and `Metric` is requested from the row instead of hardcoded to `cosine`.
+
+  `VectorDBBase.ManagesIndexes` (default `true`, `false` on both Memory drivers) separates "this driver owns no index objects" from `IsReadOnly`, which is about record ingestion. MJ ships a Vector Index row for `SimpleVectorServiceProvider`, whose `CreateIndex` correctly answers `success: false`; that is now recorded as `not-applicable`, not as a failure, and its delete no longer asks the driver to remove an index it never had.
+
+  Vectorizing now refuses an index whose width disagrees with the embeddings it was handed, naming both widths, the index and the model. The width is the index's `Dimensions`, which is set at create time from the embedding-model probe. For rows whose `Dimensions` is still null, such as indexes created before that probe existed, the width is backfilled from `ListIndexes()` (matched on `ExternalID`, then `Name`), and a reported `dimension: 0` is treated as unknown rather than zero.
+
+  Embedding-model selection is no longer whichever row the view happened to return first. `GetAIModel`'s no-id branch orders active models ahead of inactive ones, then by `PowerRank`, then by name, and logs that nobody asked for the model it picked. The model-type comparison is normalised, so a type row spelled `embeddings` no longer hides every embedding model. Vectorizing takes the model from `VectorIndex.EmbeddingModelID`, which is NOT NULL, rather than the nullable `EntityDocument.AIModelID`, and logs a disagreement between the two without failing the run.
+
+  `EntityDocumentCache` no longer needs a process restart to see a new or edited entity document. Its `_loaded` flag was a one-way latch, and every production caller passes `refresh: false`. The cache now has a staleness window (`StaleAfterMs`, default 60s) plus an `Invalidate()` hook, and within the window a vectorize run over many entities still does not re-read metadata per entity.
+
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [9c2a051]
+- Updated dependencies [1d29837]
+- Updated dependencies [006a5e7]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [091e7ea]
+- Updated dependencies [d1b1958]
+- Updated dependencies [e1f2583]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/scheduling-engine@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/templates@6.2.0-edge.5
+  - @memberjunction/feature-pipelines@6.2.0-edge.5
+  - @memberjunction/integration-engine@6.2.0-edge.5
+  - @memberjunction/sql-parser@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/ai-vectordb@6.2.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.5
+  - @memberjunction/tag-engine@6.2.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.5
+  - @memberjunction/communication-engine@6.2.0-edge.5
+  - @memberjunction/doc-utils@6.2.0-edge.5
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.5
+  - @memberjunction/rubrics-base@6.2.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.5
+  - @memberjunction/sql-converter@6.2.0-edge.5
+  - @memberjunction/predictive-studio-core@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

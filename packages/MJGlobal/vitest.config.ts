@@ -6,7 +6,7 @@ export default mergeConfig(
   defineProject({
     test: {
       environment: 'node',
-      // The two repo-wide compliance scanners that live in this folder are NOT unit tests of
+      // The repo-wide compliance scanners that live in this folder are NOT unit tests of
       // MJGlobal — they read `packages/**` off disk (`SCAN_ROOT = .../packages`) and assert about
       // every package in the monorepo. Run as part of this package's `test` task they were
       // effectively disabled: turbo caches `test` on `inputs: src/**` of THIS package, so a
@@ -22,6 +22,7 @@ export default mergeConfig(
         ...(sharedConfig.test?.exclude ?? []),
         'src/__tests__/UUIDCompliance.test.ts',
         'src/__tests__/MultiProviderCompliance.test.ts',
+        'src/__tests__/FieldSecurityEgressCompliance.test.ts',
       ],
     },
   })

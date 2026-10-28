@@ -7,6 +7,7 @@ export type {
     SaveCoercedValue,
     SaveCallBinding,
     SaveSQLFragment,
+    SaveReturnContext,
     RecordChangePayload,
 } from './saveTypes.js';
 export {
@@ -30,8 +31,8 @@ export {
 // Side-effect import: registers the startup sweep that reports a system user which has lost
 // field-level access on an FLS-enabled entity.
 export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
-export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
-export { SqlLoggingSessionImpl } from './SqlLogger.js';
+export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
+export { SqlLoggingSessionImpl, SCHEMA_PLACEHOLDER_LOOKBEHIND } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
 export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';

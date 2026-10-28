@@ -1,0 +1,29 @@
+{
+    "kind": "calendar#events",
+    "etag": "\"p32ofplf4dvcsg0g\"",
+    "summary": "organizer@example.org",
+    "updated": "2026-10-13T09:30:00.123Z",
+    "timeZone": "America/New_York",
+    "accessRole": "owner",
+    "defaultReminders": [{ "method": "popup", "minutes": 10 }],
+    "nextPageToken": "CigKGjdjYmg4cnBjMTBscmMwY2tpaDl0YWZzczk5GAEggICA6NKw8wI=",
+    "items": [
+        {
+            "kind": "calendar#event",
+            "etag": "\"3463299001246000\"",
+            "id": "7cbh8rpc10lrc0ckih9tafss99",
+            "status": "confirmed",
+            "updated": "2026-10-13T09:30:00.123Z",
+            "summary": "Board planning",
+            "organizer": { "email": "organizer@example.org", "self": true },
+            "start": { "dateTime": "2026-10-20T12:00:00-04:00", "timeZone": "America/New_York" },
+            "end": { "dateTime": "2026-10-20T13:00:00-04:00", "timeZone": "America/New_York" },
+            "iCalUID": "7cbh8rpc10lrc0ckih9tafss99@google.com",
+            "sequence": 1,
+            "attendees": [
+                { "email": "organizer@example.org", "organizer": true, "self": true, "responseStatus": "accepted" },
+                { "email": "ada@example.org", "displayName": "Ada Lovelace", "responseStatus": "needsAction" }
+            ]
+        }
+    ]
+}

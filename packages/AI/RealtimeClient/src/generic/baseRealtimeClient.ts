@@ -91,6 +91,12 @@ export interface RealtimeClientTranscript {
      * as audio or chained into spoken narration history.
      */
     IsThought?: boolean;
+    /**
+     * The provider's id for the conversation item a user transcript belongs to, which matches the
+     * id given to {@link BaseRealtimeClient.OnUserSpeechStart} for the same utterance. Absent on
+     * drivers that do not send one.
+     */
+    ItemId?: string;
 }
 
 /**
@@ -294,6 +300,7 @@ export abstract class BaseRealtimeClient {
     private stateChangeHandler?: (state: RealtimeClientState) => void;
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
+    private userSpeechStartHandler?: (itemId?: string) => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
     private remoteVideoHandler?: (video: MediaVideoSource) => void;
     private trackHandler?: (track: RealtimeTrack) => void;
@@ -683,6 +690,20 @@ export abstract class BaseRealtimeClient {
     public abstract RequestSpokenUpdate(instructions: string): void;
 
     /**
+     * Asks the model to speak ONE turn that is part of the conversation — captioned, transcribed and
+     * persisted like any turn the model takes on its own (an interviewer's greeting, a guide's opening).
+     *
+     * The deliberate contrast with {@link RequestSpokenUpdate}: an update is disposable narration a
+     * container throws away; a turn is the record (MJ#4591). Drivers implement it with the same wire
+     * mechanics and collision rule as their spoken update, tagging the reply `Kind: 'normal'`.
+     * Optional: a driver from before this capability existed omits it, and a container falls back to
+     * the spoken update rather than going silent.
+     *
+     * @param instructions What to say, in the host's words; the model speaks in its own persona.
+     */
+    public RequestSpokenTurn?(instructions: string): void;
+
+    /**
      * Feeds an executed tool's result back to the model, correlated by `callID`, and ensures
      * the model SPEAKS the result as soon as possible: immediately when idle, otherwise
      * queued behind the in-flight response (e.g. a progress narration) so the trigger is
@@ -796,6 +817,19 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
+     * Registers the single handler invoked when the provider's voice-activity detection saw
+     * the user start to speak. Fires once per detected onset and may fire again inside one
+     * turn after a pause; it carries no text. When the provider's event names the conversation
+     * item this speech belongs to (OpenAI-protocol `input_audio_buffer.speech_started.item_id`),
+     * `itemId` carries that id so the host can pair the onset with the matching user
+     * transcript (`RealtimeClientTranscript.ItemId`); otherwise `itemId` is `undefined`. Unlike
+     * {@link OnInterruption}, it fires whether or not the model was speaking.
+     */
+    public OnUserSpeechStart(handler: (itemId?: string) => void): void {
+        this.userSpeechStartHandler = handler;
+    }
+
+    /**
      * Registers the (single) usage handler.
      *
      * Emissions carry token **deltas** for the response/turn that just completed (see
@@ -881,6 +915,11 @@ export abstract class BaseRealtimeClient {
     /** Emits a true barge-in interruption to the registered handler (if any). */
     protected emitInterruption(): void {
         this.interruptionHandler?.();
+    }
+
+    /** Emits a user-speech-onset to the registered handler (if any). */
+    protected emitUserSpeechStart(itemId?: string): void {
+        this.userSpeechStartHandler?.(itemId);
     }
 
     /** Emits a usage update (token deltas for a completed response/turn) to the registered handler (if any). */

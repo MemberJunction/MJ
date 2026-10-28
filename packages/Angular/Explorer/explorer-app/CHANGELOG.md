@@ -1,5 +1,218 @@
 # @memberjunction/ng-explorer-app
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- b5955fb: The org brand overlay now survives a cold load. `ApplyBrandOverlay()` persisted only the overlay id, and the overlay stylesheet is a session Blob, so after a reload the pre-paint script restored the `data-theme-overlay` attribute with no CSS behind it: the shell's loading screen and the sign-in page rendered MJ's default tokens until workspace bootstrap re-emitted the overlay at the end of its metadata refresh.
+  - `ApplyBrandOverlay()` persists the emitted overlay CSS beside the id (`mj-theme-overlay-css`, JSON `{ id, css }`). A session-only overlay (`persist: false`, the Theme Studio preview) persists neither.
+  - New `ThemeService.RestorePersistedBrandOverlay()` re-injects that CSS as a `<style>` and sets the attribute from localStorage alone, and records the overlay id so `Initialize()` keeps the attribute until bootstrap registers the brand. Bootstrap's real `<link>` replaces the preloaded `<style>`; a CSS entry whose id no longer matches the persisted overlay is dropped as stale; `ClearBrandOverlay()` removes both. localStorage failures are swallowed as before.
+  - `MJExplorerAppComponent` calls the restore in its constructor, before the sign-in page or the shell's loading screen renders.
+  - `ng-workspace-initializer`: when bootstrap's brand query succeeds and finds no active brand, it calls `ClearBrandOverlay()`, so a brand restored from localStorage cannot outlive its retirement; a failed query leaves the cached brand alone. The service tracks a restored overlay as pending until bootstrap confirms or clears it (not inferred from the preload `<style>`'s presence), the preload lookup is an attribute walk so an id with selector metacharacters cannot throw from the constructor, and a re-apply of the same brand skips the CSS write.
+  - `ng-auth-services`: the logout cache clearing now preserves `mj-theme-overlay-css` alongside `mj-theme` and `mj-theme-overlay`, so a sign-out followed by a sign-in still has the CSS to restore. Without it the sign-in cold load had the attribute and no stylesheet behind it.
+
+  Verified live: on a cold reload the loading screen is branded at the first instant it exists (~400 ms, before any real stylesheet link), and the real overlay link takes over once bootstrap completes.
+
+- db4e210: - `@memberjunction/ng-base-forms`:
+  - Extract declarative `[mjRecordLink]` directive (`MjRecordLinkDirective`), `<mj-record-link>` component (`MjRecordLinkComponent`), and body-mounted singleton `MjRecordPreviewPopoverService` so any custom form header, `BaseFormPanel`, or dashboard widget can attach hover-intent record previews, inline Quick Edit with live propagation to virtual display fields, standard/polymorphic FK resolution, and `FormNavigationEvent` navigation. Refactor `<mj-form-field>` and `<mj-record-links>` to share the same DRY infrastructure.
+  - Upgrade `<mj-record-preview-popover>` (`MjRecordPreviewPopoverComponent`) with an Option A header micro-cluster (Copy ID pill, `[✎]` Quick Edit, `[↗]` New Tab), clickable record title (`Record →`), auto-spanning wide fields (`grid-column: 1 / -1`), contextual `Cancel`/`Save` footer only in edit mode, cancellable `BeforeQuickEditSave` / `AfterQuickEditSaved` events, and 3-tier `@RegisterClass(MjRecordPreviewPopoverComponent, ...)` / `ClassFactory` runtime specialization (`ResolveRecordPreviewPopoverType`).
+  - Add one-click Quick Unlink for nullable outgoing foreign keys inside `<mj-record-links>`.
+  - `@memberjunction/ng-ui-components`:
+    - Add general-purpose, zero-domain-knowledge `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) for irregular time-series event streams with generic `[Items]` or raw `[Data]` + `[FieldMap]` binding, configurable grouping & resolution (`Resolution`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'`, `CoalesceStrategy`: `'adaptive-era' | 'merge-closest'`, `SessionGapHours`, `GroupSameCalendarDay`, `MaxClusters`, `EraZoomThreshold`), semantic Click-to-Zoom on multi-year era cards, rich imperative methods, and cancellable `Before*` / `After*` events.
+  - `@memberjunction/ng-record-changes`:
+    - Consume `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to replace the linear 12-bucket spark-bar chart with a **Burst-Aware Cluster Strip (Time-Gap Compression)** with multi-year adaptive era zoom and click-to-filter session cards.
+    - Add a Cross-Version Diff Comparison workbench (`vA ↔ vB`) to `<mj-record-changes>`, allowing users to compare any two historical snapshots or compare a historical snapshot against the live record state.
+  - `@memberjunction/codegen-lib`: Prevent foreign keys, polymorphic `RecordID` columns (`EntityIDFieldName` set or `*RecordID`/`*RecordPrimaryKey` naming), and columns on tables with an `MJ: Entities` FK from being auto-selected as `IsNameField`.
+  - `@memberjunction/ng-explorer-core` & `@memberjunction/ng-explorer-app`: Fix infinite loading screen hang when navigating to an invalid or unmatched URL by handling `NavigationError` / `NavigationCancel` in `ShellComponent.ngOnInit` and falling back to the active workspace tab or landing app when a deep link fails to resolve.
+- bfa2621: The floating chat overlay now follows the shell's chrome policy. `Shell.ChatOverlay.Enabled` already switched the bubble platform-wide, but a host's `BaseShellChromePolicy` could narrow search, notifications and the app switcher per user and not the overlay, so a host that owns its own AI surface for one audience (a learner portal) had to hide the bubble with route-scoped CSS.
+  - `ShellChromeFlags` gains `chatOverlay`, baselined from `Shell.ChatOverlay.Enabled` and narrow-only like the other booleans: a policy can turn it off, never back on past Instance Config.
+  - `ShellComponent.ChromeFlags` exposes the resolved set. `MJExplorerAppComponent.ShowChatOverlay` reads `chatOverlay` from the shell through a view query, falling back to its own Instance Config read until the shell renders. One policy instance, one `Changed`.
+  - Tests: the narrowing and widen-ceiling cases in the chrome policy spec, the shell getter, and an explorer-app spec for shell-driven vs fallback.
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [5d83ba4]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [3b7c949]
+- Updated dependencies [09c7d57]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [cb1e602]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [663ff80]
+- Updated dependencies [36cdad5]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [bfa2621]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/ng-shared@6.2.0-edge.6
+  - @memberjunction/ng-explorer-core@6.2.0-edge.6
+  - @memberjunction/ng-bootstrap@6.2.0-edge.6
+  - @memberjunction/ng-auth-services@6.2.0-edge.6
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.6
+  - @memberjunction/ng-conversations@6.2.0-edge.6
+  - @memberjunction/theme-engine@6.2.0-edge.6
+  - @memberjunction/ng-notifications@6.2.0-edge.6
+  - @memberjunction/ai-agent-client@6.2.0-edge.6
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.6
+  - @memberjunction/ng-base-application@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+  - @memberjunction/ng-feedback@6.2.0-edge.6
+  - @memberjunction/ng-agent-client@6.2.0-edge.6
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- 95c7682: The chat overlay's top boundary no longer throws NG0100 when the connectivity banner appears
+
+  `MJExplorerAppComponent.ChatOverlayTopBoundaryPx` read the banner height from the
+  `--mj-connectivity-banner-height` custom property with `getComputedStyle`. The banner publishes that
+  height from its `@slideDown.done` listener, which runs inside the animation flush while views are
+  still refreshing. Explorer is zoneless, so that listener only marks the shell view dirty, and a
+  targeted pass never re-reads the shell's binding — but dev-mode check-no-changes does, so every
+  later change-detection pass reported:
+
+      NG0100: ExpressionChangedAfterItHasBeenCheckedError ... Previous value: '60'. Current value: '95'.
+
+  The banner now also exposes its height as a `HeightPx` signal (CSS consumers keep using the
+  property), and the shell reads it through a `viewChild` query of the banner. The write marks the shell
+  view as a stale consumer, so Angular re-refreshes it in the same pass. Dev-mode only — the overlay was
+  positioned correctly either way.
+
+- b1e628e: Removes the legacy pre-`mjButton` button system from the Explorer global stylesheet (`_common.scss`): `.mj-btn-primary`, `.mj-btn-secondary`, `.mj-btn-ghost`, `.mj-btn-icon-only`, `.mj-btn-sm`, `.mj-btn-lg`, and the `.mj-btn-icon` child rule, plus two viewport overrides of `.mj-btn`. Buttons use `mjButton` with `variant`/`size` inputs, or the BEM classes `mj-btn mj-btn--<variant> mj-btn--<size>` where a directive cannot be applied. Class-for-class: `mj-btn-primary` → `mj-btn--primary`; `mj-btn-secondary` (transparent, brand border) → `mj-btn--outline`; `mj-btn-ghost` → `mj-btn--flat`; `mj-btn-icon-only` → `mj-btn--icon`; `mj-btn-sm` → `mj-btn--sm`; `mj-btn-lg` → `mj-btn--lg`. Also removes the dead Kendo-era icon-card and skip-icon rule sets (`.mj-icon-card*`, `.mj-card-icon*`, `.mj-card-actions`, `.skip-icon*`, every `.k-*` selector) and tokenizes the stylesheet's remaining hardcoded colors; the modal backdrop now uses `--mj-bg-overlay`. The Files grid's row action buttons now use `mj-btn--flat mj-btn--sm` instead of the undefined `mj-btn-flat mj-btn-sm`. Apps that consume `@memberjunction/ng-explorer-app/dist/styles.scss` and still write any removed class in a template should migrate to `mjButton`. Follow-ups landed in the same change: the parallel single-dash `.mj-btn-*` selectors in `_shared-patterns.scss` and explorer-settings are gone (explorer-settings' unused `_md3-shared.css` is deleted outright); the consumer-less `.mj-modal-overlay` / `.mj-modal` / `.mj-modal-sm..xl` / `.mj-modal-close` / `.mj-modal-confirm*` / `.mj-modal-loading*` rules are removed while `.mj-modal-header/-body/-footer` stay; the Files grid drops its unreachable `.grid-action-btn` / `.action-buttons` component CSS; and the two leftover Kendo drawer `querySelector` calls in the Explorer shell and `MJInitializationService.NavigateToInitialRoute` are removed (a bare `/` initial path is left to the router's default route, which is what already happened).
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [95c7682]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [b4e2ceb]
+- Updated dependencies [9898079]
+- Updated dependencies [189b702]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [c7418dc]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [542795b]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [1214eca]
+- Updated dependencies [7e72c86]
+- Updated dependencies [130cc7e]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [b1e628e]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/ng-conversations@6.2.0-edge.5
+  - @memberjunction/ng-explorer-core@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/ng-bootstrap@6.2.0-edge.5
+  - @memberjunction/ng-auth-services@6.2.0-edge.5
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.5
+  - @memberjunction/theme-engine@6.2.0-edge.5
+  - @memberjunction/ng-shared@6.2.0-edge.5
+  - @memberjunction/ng-base-application@6.2.0-edge.5
+  - @memberjunction/ng-notifications@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.5
+  - @memberjunction/ai-agent-client@6.2.0-edge.5
+  - @memberjunction/ng-feedback@6.2.0-edge.5
+  - @memberjunction/ng-agent-client@6.2.0-edge.5
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

@@ -246,7 +246,7 @@ vi.mock('../engines/artifacts', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
-import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
+import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure, ShouldReplaceDetailAgentRun } from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
@@ -1114,6 +1114,54 @@ describe('ConversationEngine', () => {
         it('should return undefined when no cache entry exists', () => {
             const result = engine.GetAgentRunForDetail('no-conv', 'no-detail');
             expect(result).toBeUndefined();
+        });
+
+        it('should honor ShouldReplaceDetailAgentRun and not overwrite a root primary run with a continuation or sub-agent run', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+
+            const primaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+            });
+            const continuationRun = createMockAgentRun({
+                ID: 'run-continuation',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 1,
+            });
+            const subAgentRun = createMockAgentRun({
+                ID: 'run-child',
+                ConversationDetailID: 'd1',
+                ParentRunID: 'run-primary',
+                ContinuationDepth: 0,
+            });
+
+            engine.SetAgentRunForDetail('conv-1', 'd1', primaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Continuation synthesis run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', continuationRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Child sub-agent run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', subAgentRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Same primary run ID (in-place update) IS allowed to replace
+            const updatedPrimaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                Status: 'Completed',
+            });
+            engine.SetAgentRunForDetail('conv-1', 'd1', updatedPrimaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['Status']).toBe('Completed');
         });
     });
 
@@ -2816,6 +2864,51 @@ describe('ConversationEngine', () => {
             resolveSave(true);
             await savePromise;
             sub.unsubscribe();
+        });
+    });
+
+    describe('ShouldReplaceDetailAgentRun (primary orchestrating run vs continuation synthesis run)', () => {
+        const primaryRun = {
+            ID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ParentRunID: null,
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:00:00.000Z',
+        };
+        const continuationRun = {
+            ID: '858AB1A5-20AD-425A-896E-58D34494FCF3',
+            ParentRunID: null,
+            ContinuationDepth: 1,
+            __mj_CreatedAt: '2026-10-19T14:06:00.000Z',
+        };
+        const childSubAgentRun = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            ParentRunID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:03:00.000Z',
+        };
+
+        it('keeps the primary orchestrating run (ContinuationDepth=0) over a newer post-workflow continuation synthesis run (ContinuationDepth=1)', () => {
+            expect(ShouldReplaceDetailAgentRun(primaryRun, continuationRun)).toBe(false);
+        });
+
+        it('replaces a continuation synthesis run (ContinuationDepth=1) when the primary orchestrating run (ContinuationDepth=0) is evaluated', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, primaryRun)).toBe(true);
+        });
+
+        it('keeps a root run (ParentRunID=null) over a child sub-agent run (ParentRunID!=null)', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, childSubAgentRun)).toBe(false);
+            expect(ShouldReplaceDetailAgentRun(childSubAgentRun, continuationRun)).toBe(true);
+        });
+
+        it('prefers the newer root primary run when a user retries a message (both ContinuationDepth=0)', () => {
+            const retriedPrimaryRun = {
+                ID: '99999999-8888-7777-6666-555555555555',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                __mj_CreatedAt: '2026-10-19T14:10:00.000Z',
+            };
+            expect(ShouldReplaceDetailAgentRun(primaryRun, retriedPrimaryRun)).toBe(true);
+            expect(ShouldReplaceDetailAgentRun(retriedPrimaryRun, primaryRun)).toBe(false);
         });
     });
 });

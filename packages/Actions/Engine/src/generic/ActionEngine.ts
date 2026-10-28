@@ -13,6 +13,7 @@ import {
     RuntimeActionConfigurationSchema,
     RuntimeActionBridgeBuilder,
     RedactParamsToJSON,
+    ProjectActionParamValuesForUser,
     EntityChangeContext,
     DidFieldChange,
     DidFieldChangeToValue,
@@ -255,7 +256,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue();
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
+   private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
    /**
     * Engine-default wall-clock timeout applied to any action whose
@@ -269,57 +272,61 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
-      // An audience the run cannot honour refuses it before anything else — no validation, no filters, no log
-      // row: the action never runs. Otherwise the audience is normalized for the action (see CheckAudience).
-      const audienceRefusal = this.CheckAudience(params);
-      if (audienceRefusal) {
-         return audienceRefusal;
-      }
-      // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
-      // path (validation failure, filter refusal, timeout, normal run) so all four write the same
-      // as-called values into ActionExecutionLog.Params.
-      const inputSnapshot = this.SnapshotInputParams(params);
-      const validInputs: boolean = await this.ValidateInputs(params);
-      if(!validInputs){
-         const result: ActionResult = {
-            Success: false,
-            Message: "Input validation failed. This is a failure condition.",
-            LogEntry: null,
-            Params: params.Params,
-            RunParams: params
-         };
+      try {
+         // An audience the run cannot honour refuses it before anything else — no validation, no filters, no log
+         // row: the action never runs. Otherwise the audience is normalized for the action (see CheckAudience).
+         const audienceRefusal = this.CheckAudience(params);
+         if (audienceRefusal) {
+            return audienceRefusal;
+         }
+         // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
+         // path (validation failure, filter refusal, timeout, normal run) so all four write the same
+         // as-called values into ActionExecutionLog.Params.
+         const inputSnapshot = this.SnapshotInputParams(params);
+         const validInputs: boolean = await this.ValidateInputs(params);
+         if(!validInputs){
+            const result: ActionResult = {
+               Success: false,
+               Message: "Input validation failed. This is a failure condition.",
+               LogEntry: null,
+               Params: params.Params,
+               RunParams: params
+            };
 
-         if(this.ShouldLogOutcome(params, result)){
-            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            if(this.ShouldLogOutcome(params, result)){
+               result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            }
+
+            return result;
          }
 
-         return result;
-      }
+         const filtersPassed: boolean = await this.RunFilters(params);
+         if(!filtersPassed){
+            // filters indicated we should NOT run this action
+            const result: ActionResult = {
+               Success: true,
+               Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
+               LogEntry: null, // initially null
+               Params: params.Params,
+               RunParams: params
+            };
 
-      const filtersPassed: boolean = await this.RunFilters(params);
-      if(!filtersPassed){
-         // filters indicated we should NOT run this action
-         const result: ActionResult = {
-            Success: true,
-            Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
-            LogEntry: null, // initially null
-            Params: params.Params,
-            RunParams: params
-         };
+            if(this.ShouldLogOutcome(params, result)){
+               result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            }
 
-         if(this.ShouldLogOutcome(params, result)){
-            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            // RETURNING here is the entire point of a filter. Without it this block logged a refusal
+            // and then fell through to run the action anyway — so every filter recorded that it had
+            // prevented something while preventing nothing. The refusal row made it look like the
+            // mechanism worked, which is why it survived: the observable said "prevented" and the side
+            // effect happened regardless.
+            return result;
          }
 
-         // RETURNING here is the entire point of a filter. Without it this block logged a refusal
-         // and then fell through to run the action anyway — so every filter recorded that it had
-         // prevented something while preventing nothing. The refusal row made it look like the
-         // mechanism worked, which is why it survived: the observable said "prevented" and the side
-         // effect happened regardless.
-         return result;
+         return await this.RunActionWithTimeout(params, inputSnapshot);
+      } finally {
+         this._actionInstanceCache.delete(params);
       }
-
-      return await this.RunActionWithTimeout(params, inputSnapshot);
    }
 
    /**
@@ -633,11 +640,24 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the Type dispatch is readable.
     */
    protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
-      const action = this.CreateActionInstance(params);
+      const action = this.GetOrCreateActionInstance(params);
       if (!action) {
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
       }
       return await action.Run(params);
+   }
+
+   /**
+    * Returns the memoized `BaseAction` instance for `params` (or creates it once via `CreateActionInstance`),
+    * avoiding duplicate `ClassFactory.CreateInstance` calls across `CheckAudience`, `ValidateInputs`, and `RunClassBasedAction`.
+    */
+   protected GetOrCreateActionInstance(params: RunActionParams): BaseAction | null {
+      if (this._actionInstanceCache.has(params)) {
+         return this._actionInstanceCache.get(params) ?? null;
+      }
+      const instance = this.CreateActionInstance(params);
+      this._actionInstanceCache.set(params, instance);
+      return instance;
    }
 
    /**
@@ -698,7 +718,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (params.Action.Type === 'Runtime') {
          return 'a runtime-defined action cannot declare that it honours an audience';
       }
-      if (this.CreateActionInstance(params)?.SupportsAudience === true) {
+      if (this.GetOrCreateActionInstance(params)?.SupportsAudience === true) {
          return null;
       }
       return 'it has not declared that it can limit what it returns to what every one of them may see';
@@ -825,13 +845,31 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * of a mutated array masquerading as "what it was called with".
     *
     * Every value passes through {@link RedactParamsToJSON} first: this method is the only producer of
-    * the `Params` column, so redaction here is what makes the column safe by construction.
+    * the `Params` column, so redaction here is what makes the column safe by construction. The values
+    * are projected for the run's user before that (see {@link ProjectParamsForLog}).
     */
    protected SnapshotInputParams(params: RunActionParams): string {
-      if (!params.Params || params.Params.length === 0) {
+      if (params.SkipActionLog || this.ResolveLoggingMode(params) === 'None' || !params.Params || params.Params.length === 0) {
          return '[]';
       }
-      return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
+      return RedactParamsToJSON(this.ProjectParamsForLog(params.Params, params), this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
+   }
+
+   /**
+    * Parameter values as the execution log may store them: projected for the user the action RAN
+    * FOR, with {@link ProjectActionParamValuesForUser}. An entity object becomes its field values
+    * projected against its own entity (or `null` when that user cannot read the entity at all, rather
+    * than its serialized internal state), and a plain object shaped like a row of a field-secured
+    * entity loses the keys that user is denied.
+    *
+    * The log's later readers are not known when it is written, so the projection uses the one
+    * principal the run belongs to: the log then holds no more than that user could read themselves,
+    * however the action loaded its data (an engine cache or a system-user load returns full-width
+    * rows). Without it a row's denied values would be persisted and reach anyone who can read the
+    * log, a reach the field rules on the source entity never granted.
+    */
+   protected ProjectParamsForLog(values: ActionParam[] | null | undefined, params: RunActionParams): ActionParam[] | null | undefined {
+      return ProjectActionParamValuesForUser(values, params.ContextUser ?? this.ContextUser, params.Provider);
    }
 
    /**
@@ -878,7 +916,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
-      logEntity.UserID = this.ContextUser.ID;
+      // The user the action ran for, the same principal ProjectParamsForLog projects the values for.
+      logEntity.UserID = (params.ContextUser ?? this.ContextUser).ID;
       // The as-called inputs. Written once and never overwritten — EndActionLog writes the final
       // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
       // covers callers that reach StartActionLog directly.
@@ -915,12 +954,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // This goes to ResultParams, NOT Params: Params holds the as-called inputs captured at the top of
       // RunAction and is deliberately never overwritten, so a run's inputs stay recoverable even though
       // the action mutated the array they arrived in.
+      // Projected for the run's user first, so a full-width row an action returned is never persisted.
       const finalParams = RedactParamsToJSON(
-         result.Params ?? params.Params,
+         this.ProjectParamsForLog(result.Params ?? params.Params, params),
          this.ParamDefinitionsFor(params),
          params.Provenance?.EntityActionParams
       );
-      const resultCode = result.Result?.ResultCode;
+      // The action's own code when it matches none of its metadata result codes (`Result` is then undefined),
+      // so the execution log keeps a custom code instead of recording none.
+      const resultCode = result.Result?.ResultCode ?? result.ResultCode;
       const message = result.Message;
       // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
       // INSIDE the post-INSERT task (after the 'started' INSERT lands), so it can never be reverted by
@@ -931,6 +973,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          logEntity.ResultCode = resultCode;
          logEntity.Message = message;
       });
+      // The row lands later, but its ID is already out — a caller that inserts a row with a foreign key to
+      // it (a Process Run Detail) waits on this. Set here, not at each return: every path that returns a
+      // LogEntry ends through this method (the normal and catch paths of InternalRunAction, and
+      // StartAndEndActionLog, whose force-persisted UPDATE is the write that creates the row), and the
+      // FailuresOnly-success path that drops the LogEntry never reaches it.
+      result.LogEntryPersisted = this._logQueue.Settled(logEntity);
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {

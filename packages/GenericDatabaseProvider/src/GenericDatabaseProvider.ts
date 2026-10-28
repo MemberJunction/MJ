@@ -24,6 +24,9 @@ import {
     EntityFieldInfo,
     EntityFieldTSType,
     ProjectRowsToFields,
+    ProjectEntityValueRowsForUser,
+    FieldSecurityError,
+    FieldSecuritySQLGate,
     ProviderBase,
     EntitySaveOptions,
     EntityDeleteOptions,
@@ -35,6 +38,12 @@ import {
     RunView,
     RunViewParams,
     IsMaterializedDataSource,
+    GetEffectiveAlternateBaseViewName,
+    GetPinnedAlternateBaseViewFromViewEntity,
+    IsExplicitBaseViewOverride,
+    IsValidSQLIdentifier,
+    NormalizeAlternateBaseViewName,
+    ResolveAlternateBaseView,
     RunViewResult,
     RunViewWithCacheCheckParams,
     RunViewDatabaseStatus,
@@ -78,24 +87,32 @@ import {
     ExternalDataSourceReadRouter,
     resolveQueryResultEnricher,
     QueryInfo,
+    FindQueryContextTokens,
+    ContextToken,
+    UserViewProperty,
+    ViewPropertyValues,
+    ValidateUserViewProperties,
+    ResolveViewPropertyValues,
+    BuildViewPropertyFilter,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
-import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
+    GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
     MJQueryEntityExtended,
     MJQueryParameterEntity,
@@ -114,6 +131,8 @@ import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
+import { IsSystemUser } from './systemUser.js';
+import { CreateSnapshots, FieldsLackingStoredValue, RecordChangeSnapshots, WidenDeleteSnapshot, WidenUpdateSnapshots } from './recordChangeSnapshot.js';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -262,6 +281,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return super.Config(data, providerToUse);
     }
 
+    /**
+     * Bounded freshness window (in milliseconds) for server-side `LocalCacheManager` RunView
+     * and Dataset slots. Within this window after a slot was written or last verified against
+     * SQL, `RunViewsWithCacheCheck` and `GetDatasetByName` can trust the in-memory slot with
+     * zero DB hits. Once this window elapses, the next check performs a lightweight batched
+     * SQL status probe (`COUNT(*)` + `MAX(__mj_UpdatedAt)`) to auto-reconcile any out-of-band
+     * SQL mutations (e.g., migrations, `mj sync push`, external scripts) without requiring a
+     * server restart.
+     */
+    protected ServerCacheVerificationTTLMs: number = 5000;
+
+    /**
+     * Public accessor for {@link ServerCacheVerificationTTLMs}.
+     * Set to `0` to force SQL status verification on every cache check.
+     */
+    public get ServerCacheVerificationTTL(): number {
+        return this.ServerCacheVerificationTTLMs;
+    }
+    public set ServerCacheVerificationTTL(value: number) {
+        this.ServerCacheVerificationTTLMs = Math.max(0, value);
+    }
+
+    /**
+     * Most recent authoritative SQL status result per dataset key (`datasetName + filterKey`),
+     * populated by `GetDatasetStatusByName` and consumed by `GetDatasetByName` to reconcile
+     * cached dataset item slots against live SQL row counts and timestamps.
+     */
+    private _lastDatasetStatusByName = new Map<string, { status: DatasetStatusResultType; timestamp: number }>();
+
     /**************************************************************************/
     // SQL Logging — Session Management & Statement Logging
     /**************************************************************************/
@@ -282,6 +330,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         } else {
             throw new Error('No global object store available for SQL logging session');
         }
+    }
+
+    /**
+     * Fast O(1) check for whether any SQL logging sessions are currently active.
+     */
+    protected get HasActiveSqlLoggingSessions(): boolean {
+        return this._sqlLoggingSessions.size > 0;
     }
 
     /**
@@ -424,7 +479,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         if (hasVerboseSession) {
             console.log('=== SQL LOGGING DEBUG ===');
-            console.log(`Query to log: ${query.substring(0, 100)}...`);
+            console.log(`Query to log: ${ApplyStatementTransforms(query, allSessions).substring(0, 100)}...`);
             console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
             console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
 
@@ -541,6 +596,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        const engine = EntityActionEngineServer.Instance;
+        if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
+            return [];
+        }
         // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
         // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
         // reloads the entity — resetting every field's OldValue to its new value. A change context
@@ -552,8 +611,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // rolled-back save never fires it (see RunAfterCommit).
         const postCommitToken = this.CapturePostCommitToken();
         try {
-            const engine = EntityActionEngineServer.Instance;
-            await engine.Config(false, user);
+            if (!engine.Loaded) {
+                await engine.Config(false, user);
+            }
             const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
@@ -632,11 +692,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
-            await AIEngine.Instance.Config(false, user);
+            const ai = AIEngine.Instance;
+            if (!ai.Loaded) {
+                await ai.Config(false, user);
+            }
 
             const actions = this.GetEntityAIActions(entity.EntityInfo, before);
             if (actions && actions.length > 0) {
-                const ai = AIEngine.Instance;
                 for (let i = 0; i < actions.length; i++) {
                     const a = actions[i];
                     if ((a.TriggerEvent === 'before save' && before) || (a.TriggerEvent === 'after save' && !before)) {
@@ -1357,6 +1419,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): SaveCallBinding;
 
     /**
+     * Builds the dialect-quoted, comma-separated column list for {@link EntityInfo.DatestampReturnFields}
+     * (primary key column(s) followed by `__mj_CreatedAt` and `__mj_UpdatedAt`) using {@link QuoteIdentifier}.
+     *
+     * Examples:
+     * - SQL Server: `[ID], [__mj_CreatedAt], [__mj_UpdatedAt]`
+     * - PostgreSQL: `"ID", "__mj_CreatedAt", "__mj_UpdatedAt"`
+     */
+    protected GetDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
+        const fields = entityInfo.DatestampReturnFields ?? entityInfo.PrimaryKeys ?? [];
+        return fields.map((f) => this.QuoteIdentifier(f.Name)).join(', ');
+    }
+
+    /**
+     * Resolves the compile-time vs. effective runtime {@link SaveReturnContext} for a save operation.
+     *
+     * Centralizes the `SaveReturnMode` decision logic in `GenericDatabaseProvider` so dialect providers
+     * (`SQLServerDataProvider`, `PostgreSQLDataProvider`, and future providers) never duplicate the
+     * rules for:
+     * - `spReturnMode`: the return shape compiled into the stored procedure / function (`EntityInfo.SaveReturnMode`).
+     * - `effectiveReturnMode`: the return shape requested for this call (`options?.SaveReturnMode ?? spReturnMode`).
+     * - `needsDatestampProjection`: `true` when the compiled routine returns the full row (`spReturnMode === 'full'`)
+     *   but the caller requested `'datestamps_only'` at runtime, requiring the provider to project the result down
+     *   to `datestampSelectColumnsSQL` before wire transmission.
+     */
+    protected ResolveSaveReturnContext(
+        entity: BaseEntity,
+        options?: EntitySaveOptions,
+    ): SaveReturnContext {
+        const spReturnMode = entity.EntityInfo.SaveReturnMode ?? 'full';
+        const effectiveReturnMode = options?.SaveReturnMode ?? spReturnMode;
+        const spReturnsDatestampsOnly = spReturnMode === 'datestamps_only';
+        const needsDatestampProjection = !spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only';
+        const datestampSelectColumnsSQL = this.GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        const routineSelectColumnsSQL = needsDatestampProjection ? datestampSelectColumnsSQL : '*';
+        const finalSelectColumnsSQL = effectiveReturnMode === 'datestamps_only' ? datestampSelectColumnsSQL : '*';
+        return {
+            spReturnMode,
+            effectiveReturnMode,
+            spReturnsDatestampsOnly,
+            needsDatestampProjection,
+            datestampSelectColumnsSQL,
+            routineSelectColumnsSQL,
+            finalSelectColumnsSQL,
+        };
+    }
+
+    /**
      * Wraps the bare SP-call binding with the dialect's result-capture
      * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
      * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
@@ -1366,6 +1475,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         entity: BaseEntity,
         spName: string,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
+    ): SaveSQLFragment;
+
+    /**
+     * Projects a save call's result set down to {@link SaveReturnContext.datestampSelectColumnsSQL}
+     * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+     * compiled stored procedure / function returns the full row (`returnContext.needsDatestampProjection === true`).
+     *
+     * - SQL Server captures `EXEC` into `DECLARE @ResultTable TABLE (...)` and emits
+     *   `SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`.
+     * - PostgreSQL emits `SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`.
+     */
+    protected abstract ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1383,6 +1509,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         payload: RecordChangePayload,
         entity: BaseEntity,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1418,10 +1545,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /** The entries of a save's parameter map whose fields this save actually changed. */
-    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+    private changedFieldValues(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        dirtyFields?: ReadonlySet<EntityFieldInfo>,
+    ): Map<EntityFieldInfo, unknown> {
         const changed = new Map<EntityFieldInfo, unknown>();
         for (const [f, value] of fieldValues) {
-            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+            const isDirty = dirtyFields ? dirtyFields.has(f) : !!entity.GetFieldByName(f.Name)?.Dirty;
+            if (isDirty) changed.set(f, value);
         }
         return changed;
     }
@@ -1447,6 +1579,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
         const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        const dirtyFields = isUpdate ? new Set<EntityFieldInfo>() : undefined;
         for (const f of entity.EntityInfo.Fields) {
             if (!f.IsSPParameter(isUpdate)) continue;
 
@@ -1485,6 +1618,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
             fieldValueMap.set(f, coerced.value);
+            if (dirtyFields && theField?.Dirty) {
+                dirtyFields.add(f);
+            }
         }
 
         // 2. Encrypt — between coercion and rendering, mutates the map in place.
@@ -1493,11 +1629,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // 3. Render the provider-specific binding.
         const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
 
-        // 4. Wrap with result capture. This is the "no-record-change" save
-        //    shape; we also keep it as simpleSQL so consumers (e.g.
-        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
-        //    record-change-free form to fall back to.
-        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, options);
+        // 4. Resolve SaveReturnContext and wrap with result capture.
+        //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
+        //    SQL logging / migration replay never gets polluted with runtime datestamp projection wrappers).
+        //    When `returnContext.needsDatestampProjection` is true, `ProjectSaveCallToDatestamps`
+        //    projects the executed result down to `datestampSelectColumnsSQL`.
+        const returnContext = this.ResolveSaveReturnContext(entity, options);
+        const unprojectedSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, undefined, {
+            ...returnContext,
+            effectiveReturnMode: returnContext.spReturnMode,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: returnContext.spReturnsDatestampsOnly ? returnContext.datestampSelectColumnsSQL : '*',
+        });
+        const baseSaveSQL = returnContext.needsDatestampProjection
+            ? this.ProjectSaveCallToDatestamps(binding, entity, spName, returnContext)
+            : unprojectedSaveSQL;
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
@@ -1505,32 +1652,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
         // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
         // without a replay form log the plain save SQL.
-        const replaySQL = isNew
-            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
-            : options?.IgnoreDirtyState
-              ? undefined
-              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
-        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
+        // Computed lazily and memoized so saves with SQL logging off skip replay/literal rendering.
+        let cachedSimpleSQL: string | undefined;
+        const computeSimpleSQL = (): string => {
+            if (cachedSimpleSQL === undefined) {
+                const replaySQL = isNew
+                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    : options?.IgnoreDirtyState
+                      ? undefined
+                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                // A statement that runs with parameters is logged in its literal form, which replays alone.
+                cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
+            }
+            return cachedSimpleSQL;
+        };
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
         // Per-save suppression: a high-volume machine writer (integration sync) opts out of the
         // audit row for ITS writes only — the entity keeps TrackRecordChanges for everyone else.
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
-            const newData = entity.GetAll(false);
-            const oldData = isUpdate ? entity.GetAll(true) : null;
-
-            // ISA propagation hook: capture the diff for SS subtype propagation.
-            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
-            if (isUpdate && oldData) {
-                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-                if (diffChanges && Object.keys(diffChanges).length > 0) {
-                    overlappingChangeData = {
-                        changesJSON: JSON.stringify(diffChanges),
-                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
-                    };
-                }
-            }
+            const { NewData: newData, OldData: oldData } = await this.BuildRecordChangeSnapshots(entity, isUpdate, user);
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -1544,19 +1686,172 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.CloneContext,
             );
             if (payload) {
-                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options);
+                // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
+                // for SS subtype propagation without running DiffObjects + JSON.stringify twice.
+                if (isUpdate && oldData && payload.changesJSON) {
+                    overlappingChangeData = {
+                        changesJSON: payload.changesJSON,
+                        changesDescription: payload.changesDescription,
+                    };
+                }
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options, returnContext);
             }
         }
 
         const result: SaveSQLResult = {
             fullSQL: saveSQL.sql,
-            simpleSQL,
+            get simpleSQL(): string {
+                return computeSimpleSQL();
+            },
             parameters: saveSQL.parameters ?? null,
         };
+        if ('literalSQL' in saveSQL) {
+            Object.defineProperty(result, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return saveSQL.literalSQL;
+                },
+            });
+        }
         if (overlappingChangeData) {
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }
         return result;
+    }
+
+    /**
+     * The old and new snapshots a save's Record Change is built from. The audit trail stores
+     * whole payloads and projects them per reader, so both snapshots describe the whole record
+     * whoever saves it.
+     *
+     * - **A user denied nothing** (unrestricted and system-user saves): the object's own values.
+     *   No query, even when the object was loaded without some columns.
+     * - **A restricted user's update** (their object never holds the fields they cannot read):
+     *   the stored values of those fields are read once and the snapshots are widened with them.
+     *   The diff is unchanged, because a field the object never held has the same stored value
+     *   on both sides.
+     * - **Create**: there is no stored row yet. A field the INSERT omits because the user may
+     *   not supply it is left out rather than recorded with a value the record never got.
+     *
+     * The read runs on the save's connection: inside an open transaction it reads that
+     * transaction's state. A save queued in a transaction group is generated when `Save()` is
+     * called, so its snapshot reflects the row as of then — the same moment the object's own
+     * old values describe.
+     */
+    protected async BuildRecordChangeSnapshots(entity: BaseEntity, isUpdate: boolean, user: UserInfo): Promise<RecordChangeSnapshots> {
+        if (!isUpdate) {
+            return CreateSnapshots(entity);
+        }
+        const narrow: RecordChangeSnapshots = { NewData: entity.GetAll(false), OldData: entity.GetAll(true) };
+        const lacking = FieldsLackingStoredValue(entity, user);
+        if (lacking.size === 0) {
+            return narrow;
+        }
+        const storedRow = await this.ReadStoredRowForRecordChange(entity, user, lacking);
+        return storedRow ? WidenUpdateSnapshots(entity, narrow, storedRow, lacking) : narrow;
+    }
+
+    /**
+     * Connections a save's SQL is being generated for, by entity object: the transaction a
+     * transaction group runs its items on. Set only for the duration of
+     * {@link GenerateSaveSQLReadingOn}.
+     */
+    private readonly _snapshotConnections = new WeakMap<BaseEntity, object>();
+
+    /**
+     * Generates a save's SQL with any stored-row read its Record Change snapshot needs run on
+     * `connectionSource`. A transaction group that regenerates an item's SQL while its own
+     * transaction is open passes that transaction, so the read sees the group's earlier writes and
+     * never waits on the locks the group itself holds.
+     */
+    protected async GenerateSaveSQLReadingOn(entity: BaseEntity, isNew: boolean, user: UserInfo, connectionSource?: object): Promise<SaveSQLResult> {
+        if (!connectionSource) {
+            return this.GenerateSaveSQL(entity, isNew, user);
+        }
+        this._snapshotConnections.set(entity, connectionSource);
+        try {
+            return await this.GenerateSaveSQL(entity, isNew, user);
+        } finally {
+            this._snapshotConnections.delete(entity);
+        }
+    }
+
+    /** Full-width delete snapshots captured by {@link Delete}, consumed by `GenerateDeleteSQL`. */
+    private readonly _deleteSnapshots = new WeakMap<BaseEntity, Record<string, unknown>>();
+
+    /**
+     * Deletes a record. Before the shared orchestration runs, a restricted user's delete reads the
+     * stored values of the fields their object never held, so the delete's `FullRecordJSON` — the
+     * snapshot a deleted record is restored from — is full width. `GenerateDeleteSQL` is
+     * synchronous, so the snapshot is captured here and handed to it through
+     * {@link RecordChangeDeleteSnapshot}. A user denied nothing costs no extra query.
+     */
+    public override async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
+        const captured = await this.captureDeleteSnapshot(entity, options, user);
+        try {
+            return await super.Delete(entity, options, user);
+        } finally {
+            if (captured) this._deleteSnapshots.delete(entity);
+        }
+    }
+
+    /** Reads and stores the full-width delete snapshot when one is needed; true when it stored one. */
+    private async captureDeleteSnapshot(entity: BaseEntity, options: EntityDeleteOptions | undefined, user: UserInfo): Promise<boolean> {
+        if (!this.ShouldTrackRecordChanges(entity.EntityInfo) || options?.SkipRecordChanges === true || options?.ReplayOnly === true) {
+            return false;
+        }
+        if (!entity.IsSaved || entity.EntityInfo.ExternalDataSourceID) {
+            return false; // the orchestration refuses these; nothing to snapshot
+        }
+        const lacking = FieldsLackingStoredValue(entity, user);
+        if (lacking.size === 0) {
+            return false;
+        }
+        const storedRow = await this.ReadStoredRowForRecordChange(entity, user, lacking);
+        if (!storedRow) {
+            return false;
+        }
+        this._deleteSnapshots.set(entity, WidenDeleteSnapshot(entity, entity.GetAll(true), storedRow, lacking));
+        return true;
+    }
+
+    /**
+     * The record snapshot a delete's Record Change carries: the full-width snapshot {@link Delete}
+     * captured, else `narrow` (the object's own values, which are already full width whenever no
+     * snapshot was needed).
+     */
+    protected RecordChangeDeleteSnapshot(entity: BaseEntity, narrow: Record<string, unknown>): Record<string, unknown> {
+        // Optional chaining: a provider built without running its constructor (a test host made
+        // with Object.create) has no snapshot map, and then there is nothing captured.
+        return this._deleteSnapshots?.get(entity) ?? narrow;
+    }
+
+    /**
+     * Reads the stored values of `columns` — the fields a snapshot lacks — for a Record Change
+     * snapshot. Provider-internal: no row-level filter and no field-security check, because the
+     * payload is stored unprojected and projected for each reader. The row gets the same
+     * post-processing as a `Load` (binary to base64, datetime adjustment, decryption,
+     * fixed-width trimming). Runs on the connection the save is generated for when one was named
+     * ({@link GenerateSaveSQLReadingOn}), else on the save's usual connection. Kept out of the SQL
+     * log, which records the save itself.
+     */
+    protected async ReadStoredRowForRecordChange(entity: BaseEntity, user: UserInfo, columns: ReadonlySet<string>): Promise<Record<string, unknown> | null> {
+        const entityInfo = entity.EntityInfo;
+        const where = this.BuildPrimaryKeyWhereClause(entityInfo, entity.PrimaryKey);
+        const selectList = [...columns].map(name => this.QuoteIdentifier(name)).join(', ');
+        const sql = `SELECT ${selectList} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${where}`;
+        const options: ExecuteSQLOptions = {
+            description: `Record Change snapshot of ${entityInfo.Name}`,
+            ignoreLogging: true,
+            connectionSource: this._snapshotConnections?.get(entity),
+        };
+        const rawRows = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, options, user);
+        const rows = await this.PostProcessRows(rawRows, entityInfo, user);
+        if (!rows || rows.length === 0) {
+            return null;
+        }
+        return this.TrimFixedWidthValues(entityInfo, rows[0]);
     }
 
     /**
@@ -1612,31 +1907,52 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         entityInfo: EntityInfo,
         usingPagination: boolean,
         maxRowsForQuery: number,
-        baseViewOverride?: string
+        baseViewOverride?: string,
+        schemaNameOverride?: string
     ): string | null {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
-        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(schemaNameOverride ?? entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
     }
 
     /**
-     * Resolves the view a RunView reads from: the entity's live base view by default, or its materialized
-     * wrapper view when the caller opts into the snapshot via `DataSource: 'Materialized'` (plan §7). The
-     * choice is explicit (never silent), so the same RLS/paging/field-selection apply against the identical shape.
-     *
-     * Two materialization shapes:
-     *  - **Base-view materialization** reuses the SOURCE entity, whose `BaseView` stays the LIVE view; the
-     *    snapshot lives beside it as `materialized_vw<CodeName>` (the name CodeGen's base-view path emits).
-     *    `'Materialized'` swaps the live view for that snapshot.
-     *  - **Query materialization** mints a NEW entity whose `BaseView` ALREADY IS the materialized wrapper
-     *    view (`materialized_vw<...>`), so there is no separate live source to swap — `'Materialized'` is a
-     *    no-op and we return the entity's own base view. (Deriving `materialized_vw<CodeName>` here would be
-     *    wrong: the minted entity's CodeName need not match the query-derived view name.)
-     *
-     * Convention-based for the base-view case: if the entity has no such materialization the wrapper view
-     * won't exist and the read will error — opting into `'Materialized'` asserts the snapshot exists.
+     * Resolves the effective semantic `AlternateBaseView` name for a `RunViewParams` object and
+     * optional loaded `MJUserViewEntityExtended`. An explicit empty string (`""`) on
+     * `params.AlternateBaseView` overrides any saved view pin back to `BaseView` (`undefined`).
      */
-    protected GetEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams): string {
+    protected resolveEffectiveAbvNameFromParams(
+        params: RunViewParams | undefined,
+        viewEntity?: MJUserViewEntityExtended | null,
+    ): string | undefined {
+        return GetEffectiveAlternateBaseViewName(params, viewEntity);
+    }
+
+    /**
+     * Resolves the view a RunView reads from: an explicit or pinned `AlternateBaseView` when present,
+     * the entity's materialized wrapper view when `DataSource: 'Materialized'`, or the entity's live
+     * `BaseView` by default.
+     */
+    protected GetEffectiveBaseView(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        viewEntity?: MJUserViewEntityExtended | null,
+        suppressDeprecationWarning = false,
+    ): string {
+        const effectiveAbvName = this.resolveEffectiveAbvNameFromParams(params, viewEntity);
+        if (effectiveAbvName) {
+            if (IsMaterializedDataSource(params?.DataSource)) {
+                throw new Error(
+                    `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
+                );
+            }
+            const resolution = ResolveAlternateBaseView({
+                entity: entityInfo,
+                alternateBaseViewName: effectiveAbvName,
+                suppressDeprecationWarning,
+                callerName: 'GetEffectiveBaseView',
+            });
+            return resolution.effectiveViewName;
+        }
         // Case-INSENSITIVE prefix test (matches the sibling guard in providerBase.IsServerCacheAllowedForEntity):
         // a BaseView returned with non-lowercase casing (e.g. 'Materialized_vwFoo' from a case-insensitive SQL
         // Server, or a hand-authored entity) is still an already-materialized view — a case-sensitive check
@@ -1649,18 +1965,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Async status-aware wrapper around {@link GetEffectiveBaseView} for the BASE-VIEW materialization case.
-     * `GetEffectiveBaseView` name-swaps unconditionally, which (a) serves a `Building`/`DriftHold`/`Disabled`
-     * snapshot — defeating "flag and hold" (§13/§17.2), since a base-view materialization reuses the source
-     * entity and thus has no read-permission revoke to fall back on the way a minted query entity does — and
-     * (b) hard-errors on a `Materialized` read of a non-materialized entity (missing view). This gates the swap
-     * on an ACTIVE `MaterializedResult` and otherwise returns the LIVE base view (graceful fallback). The status
-     * read uses `BypassCache` because DriftHold/Disabled are written by CodeGen via direct SQL (no BaseEntity
-     * cache-invalidation event), so a cached status could otherwise be stale. Non-materialized reads and minted
-     * query virtual entities (BaseView already `materialized_vw…`) skip the lookup entirely (no extra query).
      */
-    protected async resolveEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams, contextUser?: UserInfo): Promise<string> {
+    protected async resolveEffectiveBaseView(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): Promise<string> {
+        const effectiveAbvName = this.resolveEffectiveAbvNameFromParams(params, viewEntity);
+        if (effectiveAbvName) {
+            return this.GetEffectiveBaseView(entityInfo, params, viewEntity);
+        }
         if (!IsMaterializedDataSource(params.DataSource) || entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
-            return this.GetEffectiveBaseView(entityInfo, params);
+            return this.GetEffectiveBaseView(entityInfo, params, viewEntity);
         }
         const rv = new RunView(this);
         const res = await rv.RunView<{ Status: string; ViewName: string | null }>(
@@ -1689,6 +2006,56 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Fall back to the convention only if the row somehow lacks a ViewName. (SchemaName stays the entity's —
         // base-view materialization always mints into the source entity's own schema.)
         return row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
+    }
+
+    /**
+     * Resolves both the effective `{ schemaName, viewName }` for a RunView call, honoring:
+     * 1. Explicit `params.AlternateBaseView` (including `""` to force `BaseView` over a saved view pin)
+     * 2. Saved `UserView.DisplayState.alternateBaseView` (from `viewEntity`, `params.ViewEntity`, or loaded by `ViewID`/`ViewName`)
+     * 3. `DataSource: 'Materialized'`
+     * 4. `entityInfo.BaseView`
+     */
+    protected async resolveEffectiveBaseViewTarget(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): Promise<{ schemaName: string; viewName: string }> {
+        let resolvedViewEntity = viewEntity ?? (params?.ViewEntity as MJUserViewEntityExtended | null | undefined) ?? null;
+        if (!resolvedViewEntity && typeof params?.AlternateBaseView !== 'string') {
+            try {
+                if (params?.ViewID && params.ViewID.length > 0) {
+                    resolvedViewEntity = (await ViewInfo.GetViewEntity(params.ViewID, contextUser)) ?? null;
+                } else if (params?.ViewName && params.ViewName.length > 0) {
+                    resolvedViewEntity = (await ViewInfo.GetViewEntityByName(params.ViewName, contextUser)) ?? null;
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(
+                    `GenericDatabaseProvider.resolveEffectiveBaseViewTarget: failed to load User View (${params?.ViewID || params?.ViewName}) on entity "${entityInfo.Name}": ${msg}`,
+                );
+                throw e;
+            }
+        }
+
+        const effectiveAbvName = this.resolveEffectiveAbvNameFromParams(params, resolvedViewEntity);
+        if (effectiveAbvName) {
+            if (IsMaterializedDataSource(params?.DataSource)) {
+                throw new Error(
+                    `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
+                );
+            }
+            const resolution = ResolveAlternateBaseView({
+                entity: entityInfo,
+                alternateBaseViewName: effectiveAbvName,
+                contextUser,
+                callerName: 'resolveEffectiveBaseViewTarget',
+            });
+            return { schemaName: resolution.effectiveSchemaName, viewName: resolution.effectiveViewName };
+        }
+
+        const viewName = await this.resolveEffectiveBaseView(entityInfo, params, contextUser, resolvedViewEntity);
+        return { schemaName: entityInfo.SchemaName, viewName };
     }
 
     /**
@@ -1971,8 +2338,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         _whereSQL: string,
         _orderBySQL: string,
         _user: UserInfo,
+        _schemaNameOverride?: string,
     ): Promise<{ executeViewSQL: string; runID: string } | null> {
         return null;
+    }
+
+    /**
+     * Maximum number of concurrent database view executions allowed within a single
+     * {@link InternalRunViews} batch. Prevents large `RunViews` batches from exhausting
+     * the connection pool in a single tick. Set to 0 or Infinity to disable the cap.
+     * Default: 8.
+     */
+    public static MaxConcurrentViewsPerBatch: number = 8;
+
+    /**
+     * Process-wide single-flight coalescing registry for in-flight read-only RunView executions.
+     * When multiple concurrent requests (across any per-request provider instance on the same
+     * server process) execute an identical non-transactional RunView simultaneously, only the
+     * first caller queries the database; joiners await the same promise and receive a shallow-cloned
+     * result object and Results array.
+     */
+    private static readonly _inFlightRunViews = new Map<string, {
+        promise: Promise<RunViewResult<unknown>>;
+        hasJoiners: boolean;
+    }>();
+
+    /**
+     * Number of currently in-flight coalesced RunView executions across this process.
+     */
+    public static get InFlightRunViewCount(): number {
+        return GenericDatabaseProvider._inFlightRunViews.size;
     }
 
     /**
@@ -1986,6 +2381,126 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Determines whether a RunView invocation is eligible for process-wide single-flight
+     * coalescing across concurrent requests.
+     */
+    protected canCoalesceRunViewInFlight(
+        params: RunViewParams | null | undefined,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): boolean {
+        if (!params || countExecutor) {
+            return false;
+        }
+        if (params.ResultType && params.ResultType !== 'simple' && params.ResultType !== 'count_only') {
+            return false;
+        }
+        if (params.SaveViewResults || params.ForceAuditLog) {
+            return false;
+        }
+        if (this.IsCallerInAmbientTransaction() || this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Builds the deterministic single-flight key for an in-flight RunView execution.
+     * Includes connection string, entity/view identity, filter, orderBy, fields, resultType,
+     * pagination/keyset cursor, aggregates, and effective user role/row-filter security context.
+     */
+    protected buildSingleFlightRunViewKey(params: RunViewParams, contextUser?: UserInfo): string | null {
+        try {
+            const user = contextUser ?? this.CurrentUser;
+            if (!user) {
+                return null;
+            }
+            const entityInfo = params.EntityName ? this.EntityByName(params.EntityName) : undefined;
+            if (entityInfo?.AuditViewRuns && (params.ViewID || params.ViewName || params.ViewEntity)) {
+                return null;
+            }
+            const baseFingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                params,
+                this.InstanceConnectionString,
+            );
+            const fieldsKey = params.Fields && params.Fields.length > 0
+                ? [...params.Fields].map(f => f.trim().toLowerCase()).sort().join(',')
+                : '*';
+            const rlsClause = entityInfo && typeof entityInfo.GetEffectiveRowFilterWhereClause === 'function'
+                ? entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '')
+                : `user:${user.ID ?? ''}`;
+            const roleKey = user.UserRoles && user.UserRoles.length > 0
+                ? user.UserRoles.map(r => (r.RoleID ?? '').trim().toLowerCase()).sort().join(',')
+                : `user:${user.ID ?? ''}`;
+            const aggregatesKey = params.Aggregates && params.Aggregates.length > 0
+                ? JSON.stringify(params.Aggregates)
+                : '';
+            const afterKey = params.AfterKey ? params.AfterKey.ToConcatenatedString() : '';
+            const ve = params.ViewEntity as MJUserViewEntityExtended | undefined;
+            const viewEntityKey = ve
+                ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}:${ve.AlternateBaseView ?? ''}`
+                : '';
+            const abvKey = IsExplicitBaseViewOverride(params)
+                ? '__base_override__'
+                : (NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params)) ?? '');
+            return [
+                baseFingerprint,
+                `f:${fieldsKey}`,
+                `rt:${params.ResultType || 'simple'}`,
+                `uss:${params.UserSearchString ?? ''}`,
+                `vid:${params.ViewID ?? ''}`,
+                `vn:${params.ViewName ?? ''}`,
+                `ve:${viewEntityKey}`,
+                `exRun:${params.ExcludeUserViewRunID ?? ''}`,
+                `exAll:${params.ExcludeDataFromAllPriorViewRuns ? '1' : '0'}`,
+                `ovEx:${params.OverrideExcludeFilter ?? ''}`,
+                `igMax:${params.IgnoreMaxRows ? '1' : '0'}`,
+                `max:${params.MaxRows ?? ''}`,
+                `start:${params.StartRow ?? ''}`,
+                `after:${afterKey}`,
+                `ds:${params.DataSource ?? ''}`,
+                `abv:${abvKey}`,
+                `agg:${aggregatesKey}`,
+                `roles:${roleKey}`,
+                `rls:${rlsClause}`,
+            ].join('|');
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Shallow-clones a shared single-flight RunViewResult and its row objects so concurrent
+     * callers cannot mutate each other's result arrays or row properties in place.
+     */
+    protected cloneSingleFlightRunViewResult<T>(result: RunViewResult<unknown>): RunViewResult<T> {
+        if (!result) {
+            return result as RunViewResult<T>;
+        }
+        return {
+            ...result,
+            Results: Array.isArray(result.Results)
+                ? result.Results.map(row => (row && typeof row === 'object' ? ({ ...(row as Record<string, unknown>) } as T) : (row as T)))
+                : [],
+            AggregateResults: result.AggregateResults
+                ? result.AggregateResults.map(a => ({ ...a }))
+                : undefined,
+        };
+    }
+
+    /**
+     * Returns true when an identical read-only RunView is already in flight in the process-wide
+     * single-flight registry. Used by {@link InternalRunViews} so duplicate views in a batch can
+     * join an active query immediately without consuming a concurrency slot.
+     */
+    protected hasInFlightSingleFlightView(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (!this.canCoalesceRunViewInFlight(params)) {
+            return false;
+        }
+        const key = this.buildSingleFlightRunViewKey(params, contextUser);
+        return !!key && GenericDatabaseProvider._inFlightRunViews.has(key);
+    }
+
+    /**
      * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
      * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
      * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
@@ -1996,11 +2511,57 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
         countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
     ): Promise<RunViewResult<T>> {
+        const singleFlightKey = this.canCoalesceRunViewInFlight(params, countExecutor)
+            ? this.buildSingleFlightRunViewKey(params, contextUser)
+            : null;
+
+        if (singleFlightKey) {
+            const existing = GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey);
+            if (existing) {
+                existing.hasJoiners = true;
+                const shared = await existing.promise;
+                return this.cloneSingleFlightRunViewResult<T>(shared);
+            }
+
+            const entry: {
+                promise: Promise<RunViewResult<unknown>>;
+                hasJoiners: boolean;
+            } = {
+                promise: null as unknown as Promise<RunViewResult<unknown>>,
+                hasJoiners: false,
+            };
+
+            const executionPromise = this.executeRunViewCore<unknown>(params, contextUser, countExecutor)
+                .finally(() => {
+                    if (GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey) === entry) {
+                        GenericDatabaseProvider._inFlightRunViews.delete(singleFlightKey);
+                    }
+                });
+            entry.promise = executionPromise;
+            GenericDatabaseProvider._inFlightRunViews.set(singleFlightKey, entry);
+
+            const result = await executionPromise;
+            return entry.hasJoiners
+                ? this.cloneSingleFlightRunViewResult<T>(result)
+                : (result as RunViewResult<T>);
+        }
+
+        return this.executeRunViewCore<T>(params, contextUser, countExecutor);
+    }
+
+    private async executeRunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
         if (params?.Aggregates?.length) {
             LogStatus(`[GenericDatabaseProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}`);
         }
 
         const startTime = new Date();
+        // The entity the view reads, once resolved — the catch below needs it to tell a restricted
+        // caller's "no such column" apart from any other failure.
+        let resolvedEntity: EntityInfo | null = null;
         try {
             if (!params) return null as unknown as RunViewResult<T>;
 
@@ -2011,9 +2572,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             let viewEntity: MJUserViewEntityExtended | null = null;
             let entityInfo: EntityInfo | null = null;
 
-            if (params.ViewEntity) viewEntity = params.ViewEntity as MJUserViewEntityExtended;
-            else if (params.ViewID && params.ViewID.length > 0) viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser) ?? null;
-            else if (params.ViewName && params.ViewName.length > 0) viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser) ?? null;
+            viewEntity = await this.LoadRunViewEntity(params, contextUser);
 
             if (!viewEntity) {
                 if (!params.EntityName || params.EntityName.length === 0) throw new Error('EntityName is required when ViewID or ViewName is not provided');
@@ -2025,6 +2584,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
+            resolvedEntity = entityInfo;
+
+            // A stored view's properties: refused here (Success:false, naming the property) before any SQL runs.
+            const propertyFilter = this.BuildViewPropertyFilter(viewEntity, entityInfo, params, user);
 
             // ── External data source dispatch ──
             // Entities backed by an external data source are proxied live through a
@@ -2036,11 +2599,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 this.assertExternalReadAllowedUnderRLS(entityInfo, user);
                 // Refuse params we can't honor remotely rather than silently dropping them — most
                 // importantly AfterKey, which would otherwise return the same page on every call.
-                this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
+                this.assertExternalRunViewParamsSupported(params, entityInfo.Name, viewEntity);
+                if (propertyFilter) {
+                    throw new Error(`View properties are not supported for external-data-source entity '${entityInfo.Name}'.`);
+                }
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
                 const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                this.assertExternalClausesRespectFieldSecurity(entityInfo, externalParams, user);
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
                 const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
                 // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
@@ -2049,7 +2616,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     // Generic-erasure boundary: PostProcessRows operates on Record<string,unknown>[]
                     // but Results is typed T[]; the double-cast bridges that erasure (not a lazy `any`).
                     const rows = externalResult.Results as unknown as Record<string, unknown>[];
-                    externalResult.Results = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                    const processed = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                    externalResult.Results = this.projectExternalRowsForCaller(processed, entityInfo, externalParams, user);
                 }
                 return externalResult;
             }
@@ -2062,6 +2630,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const saveViewResults: boolean = params.SaveViewResults ?? false;
             this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
             this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
+            // Field-level security on the clauses as this provider runs them, now that a ViewID- or
+            // ViewName-only request has an entity. Before any SQL, like every other screen here.
+            this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [
+                extraFilter,
+                overrideExcludeFilter,
+                ...(params.Aggregates ?? []).map(a => a?.expression),
+            ], user);
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -2106,16 +2681,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // ── Build SELECT and COUNT SQL ──
             // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
-            // (same shape, so RLS/paging/fields all apply identically); default stays the live base view.
-            const effectiveBaseView = await this.resolveEffectiveBaseView(entityInfo, params, contextUser);
+            // (same shape, so RLS/paging/fields all apply identically); AlternateBaseView routes to
+            // a registered alternate base view (which may also live in a custom schema); default stays the live base view.
+            const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, params, contextUser, viewEntity);
+            const effectiveBaseView = effectiveTarget.viewName;
+            const effectiveSchemaName = effectiveTarget.schemaName;
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView)}`;
             // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
             // it when rows are limited (its pagination purpose), which previously left
             // count_only with no COUNT at all (silently returned TotalRowCount 0).
             let countSQL: string | null = params.ResultType === 'count_only'
-                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`
-                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView);
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView, effectiveSchemaName);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -2133,6 +2711,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // {%UserView%} templates) are written against entity base views, which the screens
                 // permit when the running user reads each of those entities unscoped.
                 this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
+                // Field-level security covers CustomWhereClause views too: their clause is
+                // admin-written, but it still runs as the acting user and could read a column
+                // that user is denied.
+                this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [renderedWhere], user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
@@ -2155,6 +2737,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 bHasWhere = true;
             }
 
+            // 2b. View properties: one typed predicate per property with a value, after the view's
+            //     own clause and ExtraFilter. Row-level security is still ANDed on below.
+            if (propertyFilter.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${propertyFilter})` : `(${propertyFilter})`;
+                bHasWhere = true;
+            }
+
             // 3. User search string
             //
             // 🚨 NOT screened by ValidateUserProvidedSQLClause (#4392). That denylist exists for
@@ -2174,7 +2763,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // in a literal: it is what keeps the text inside the quotes, where no keyword it
             // contains can mean anything to the parser.
             if (userSearchString.length > 0) {
-                const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString, user);
+                const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString, user, this.ResolveRequestDeniedReadFields(params, entityInfo, user));
                 if (sUserSearchSQL.length > 0) {
                     whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
                     bHasWhere = true;
@@ -2279,6 +2868,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 : '';
             if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
                 this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                this.AssertSortRespectsFieldSecurityForEntity(entityInfo, [orderBy], user);
                 // No caller OrderBy means the sort came from the saved view's stored sort state.
                 if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
             }
@@ -2290,7 +2880,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // (reads the snapshot). effectiveBaseView === entityInfo.BaseView on the default live path,
                 // so non-materialized reads are unchanged.
                 const logResult = await this.executeSQLForUserViewRunLogging(
-                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user,
+                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user, effectiveSchemaName,
                 );
                 if (logResult) {
                     viewSQL = logResult.executeViewSQL;
@@ -2329,39 +2919,61 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // Aggregate over the SAME source the rows/count came from — effectiveBaseView, so a caller
                 // asking for DataSource:'Materialized' gets aggregates over the snapshot, not the live view.
                 const aggregateBuild = this.BuildAggregateSQL(
-                    params.Aggregates, entityInfo, entityInfo.SchemaName, effectiveBaseView, whereSQL,
+                    params.Aggregates, entityInfo, effectiveSchemaName, effectiveBaseView, whereSQL,
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;
+                this.assertAggregateRefusalsAreNotColumnProbes(aggregateValidationErrors, entityInfo, user);
             }
 
-            // ── Execute queries in parallel ──
-            const queries: Promise<unknown>[] = [];
-            const queryKeys: string[] = [];
+            // ── Execute queries (single TDS batch via ExecuteSQLBatch when multiple SQL statements are needed) ──
+            const sqlQueries: string[] = [];
+            const sqlQueryKeys: string[] = [];
+            let countExecutorPromise: Promise<unknown> | null = null;
 
             if (params.ResultType !== 'count_only') {
-                queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
-                queryKeys.push('data');
+                sqlQueries.push(viewSQL);
+                sqlQueryKeys.push('data');
             }
 
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-            const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+            // SkipTotalRowCount is an explicit caller opt-out of the count (see RunViewParams);
+            // count_only still counts — that result IS the count, the flag cannot mean anything there.
+            const skipCount = params.SkipTotalRowCount === true && params.ResultType !== 'count_only';
+            const willNeedCount = countSQL && ((usingPagination && !skipCount) || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(countExecutor && params.ResultType === 'count_only'
-                    ? countExecutor(countSQL!)
-                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
-                queryKeys.push('count');
+                if (countExecutor && params.ResultType === 'count_only') {
+                    countExecutorPromise = countExecutor(countSQL!);
+                } else {
+                    sqlQueries.push(countSQL!);
+                    sqlQueryKeys.push('count');
+                }
             }
 
             const aggregateStartTime = Date.now();
             if (aggregateSQL) {
-                queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
-                queryKeys.push('aggregate');
+                sqlQueries.push(aggregateSQL);
+                sqlQueryKeys.push('aggregate');
             }
 
-            const results = await Promise.all(queries);
             const resultMap: Record<string, unknown> = {};
-            queryKeys.forEach((key, index) => { resultMap[key] = results[index]; });
+            if (sqlQueries.length === 1 && !countExecutorPromise) {
+                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser);
+            } else if (sqlQueries.length > 0 && countExecutorPromise) {
+                const [batchResults, countRes] = await Promise.all([
+                    sqlQueries.length === 1
+                        ? this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser).then(r => [r])
+                        : this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser),
+                    countExecutorPromise,
+                ]);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+                resultMap['count'] = countRes;
+            } else if (sqlQueries.length > 1) {
+                const batchResults = await this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+            } else if (countExecutorPromise) {
+                resultMap['count'] = await countExecutorPromise;
+            }
 
             // ── Process data rows ──
             let retData = (resultMap['data'] as Record<string, unknown>[]) || [];
@@ -2374,7 +2986,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed && !skipCount) {
+                // A row-limited read that came back FULL may have been truncated, so the total is
+                // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
+                // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
+                // probe. Those callers ask "does a row exist / give me the one row" — a
+                // record-map lookup, a single-key resolve — and never read TotalRowCount. The
+                // count they triggered was pure cost, and SEQUENTIAL cost: it runs after the data
+                // query has already resolved, so it is a full extra round trip on the critical
+                // path, not a parallel one.
+                //
+                // Measured on a live tenant over a 120-second census: 1,000 record-map lookups
+                // fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round
+                // trips totalling 9,760 ms, 11.4% of ALL SQL time in the window. Nothing read a
+                // single one of the results.
+                //
+                // Everything with `maxRowsUsed > 1` is untouched, so the "100 of 299" behaviour
+                // is preserved exactly; only the degenerate single-row probe changes.
+                //
+                // What DOES change for `MaxRows:1`, stated plainly: with no `rowCount`, the return
+                // below falls back to `rowCount ?? retData.length`, so a hit now reports
+                // `TotalRowCount: 1` instead of the whole view's row count. That is the entire
+                // observable difference, and it is confined to a limit of exactly one row — a shape
+                // no caller asks for in order to learn a total, because a total is the one thing a
+                // single-row limit cannot tell it anything about.
+                //
+                // `!skipCount`: a caller that never reads TotalRowCount can also opt out of this count
+                // on a full multi-row page (RunViewParams.SkipTotalRowCount); the pagination count
+                // above honours the same flag.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
@@ -2436,6 +3075,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (this.isConnectionError(e)) {
                 throw e;
             }
+            // A field-security refusal throws, as the provider's pre-cache gate does, and a
+            // restricted caller's "no such column" becomes the same refusal — so a denied column
+            // and a missing one look identical however the request reached this point.
+            const fieldSecurityError = this.fieldSecurityErrorFor(e, resolvedEntity, contextUser ?? this.CurrentUser);
+            if (fieldSecurityError) {
+                throw fieldSecurityError;
+            }
 
             const exceptionStopTime = new Date();
             LogError(e);
@@ -2451,12 +3097,165 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
     }
 
+    /** The stored view a run names (ViewEntity, else ViewID, else ViewName), or null for an entity run. */
+    protected async LoadRunViewEntity(params: RunViewParams, contextUser?: UserInfo): Promise<MJUserViewEntityExtended | null> {
+        if (params.ViewEntity) return params.ViewEntity as MJUserViewEntityExtended;
+        if (params.ViewID && params.ViewID.length > 0) return await ViewInfo.GetViewEntity(params.ViewID, contextUser) ?? null;
+        if (params.ViewName && params.ViewName.length > 0) return await ViewInfo.GetViewEntityByName(params.ViewName, contextUser) ?? null;
+        return null;
+    }
+
+    /**
+     * Works out a stored view's property values before the cache lookup (see
+     * {@link ProviderBase.PrepareRunViewProperties}). The resolved values, token defaults included,
+     * replace `Properties` and `ServerProperties`, so the fingerprint keys on what the run will use,
+     * and RunViewCore resolving them again yields the same predicates. A run that would be refused
+     * is left as it is and kept out of the cache; RunViewCore refuses it with its message. A view
+     * that cannot be loaded is left to RunViewCore too, which reports it as it always has.
+     */
+    protected override async PrepareRunViewProperties(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        if (!params.ViewEntity && !params.ViewID && !params.ViewName) {
+            return; // an entity run: RunViewCore refuses any properties it carries
+        }
+        let viewEntity: MJUserViewEntityExtended | null;
+        try {
+            viewEntity = await this.LoadRunViewEntity(params, contextUser);
+        } catch {
+            return;
+        }
+        const entityInfo = viewEntity ? this.EntityByID(viewEntity.EntityID) : undefined;
+        const user = contextUser ?? this.CurrentUser;
+        if (!viewEntity || !entityInfo || !user) {
+            return;
+        }
+        try {
+            const resolved = this.ResolveRunViewPropertyValues(viewEntity, entityInfo, params, user);
+            if (resolved) {
+                params.ServerProperties = resolved.Values;
+                delete params.Properties;
+            }
+        } catch {
+            params.BypassCache = true;
+        }
+    }
+
+    /**
+     * Checks a stored view's declared properties and works out each one's value for this run.
+     * @returns null when the view declares none and the run sends none
+     * @throws on a malformed definition, any refusal {@link ResolveViewPropertyValues} makes, or a
+     *   property with a value whose target field the user cannot read
+     */
+    protected ResolveRunViewPropertyValues(
+        viewEntity: MJUserViewEntityExtended | null,
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        user: UserInfo,
+    ): { Declared: UserViewProperty[]; Values: ViewPropertyValues } | null {
+        const declared: UserViewProperty[] = viewEntity?.PropertiesObject ?? [];
+        const sent = params.Properties !== undefined || params.ServerProperties !== undefined;
+        if (!viewEntity) {
+            if (sent) throw new Error('Properties apply only to a stored view: run it by ViewID, ViewName or ViewEntity.');
+            return null;
+        }
+        if (declared.length === 0 && !sent) {
+            return null;
+        }
+        const definitionErrors = ValidateUserViewProperties(declared, entityInfo.Fields.map(f => f.Name));
+        if (definitionErrors.length > 0) {
+            throw new Error(`View '${viewEntity.Name ?? viewEntity.ID}' has invalid properties: ${definitionErrors.join(' ')}`);
+        }
+        const values = ResolveViewPropertyValues(declared, params.Properties, params.ServerProperties, { User: user, TimeZone: params.TimeZone });
+        this.assertViewPropertyFieldsReadable(declared, values, entityInfo, user);
+        return { Declared: declared, Values: values };
+    }
+
+    /**
+     * The WHERE clause a stored view's properties add to this run: '' when there are none.
+     * Screened like any caller clause, though it is built only from typed literals.
+     */
+    protected BuildViewPropertyFilter(viewEntity: MJUserViewEntityExtended | null, entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): string {
+        const resolved = this.ResolveRunViewPropertyValues(viewEntity, entityInfo, params, user);
+        if (!resolved) {
+            return '';
+        }
+        const filter = BuildViewPropertyFilter(resolved.Declared, resolved.Values, entityInfo.Fields.map(f => f.Name), this.Dialect);
+        if (filter.length > 0 && !this.ValidateUserProvidedSQLClause(filter)) {
+            throw new Error(`Invalid view property filter: contains one or more forbidden keywords`);
+        }
+        return filter;
+    }
+
+    /** The field-security check other predicates get: a property with a value may not filter a field the user cannot read. */
+    private assertViewPropertyFieldsReadable(declared: UserViewProperty[], values: ViewPropertyValues, entityInfo: EntityInfo, user: UserInfo): void {
+        if (!entityInfo.FieldLevelSecurityApplies) {
+            return;
+        }
+        const denied = entityInfo.GetDeniedReadFields(user);
+        for (const property of declared) {
+            if (values[property.Name] !== null && denied.has(property.Target.Field.trim().toLowerCase())) {
+                throw new FieldSecurityError(property.Target.Field, entityInfo.Name);
+            }
+        }
+    }
+
     protected override async InternalRunViews<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         if (IsCoalescibleCountBatch(params)) {
             return this.RunCoalescedCountBatch<T>(params, contextUser);
         }
-        const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
-        return Promise.all(promises);
+        if (params.length === 0) {
+            return [];
+        }
+        const limit = GenericDatabaseProvider.MaxConcurrentViewsPerBatch;
+        if (!limit || !Number.isFinite(limit) || limit <= 0 || params.length <= limit) {
+            const promises = params.map((p) => this.runBatchedView<T>(p, contextUser));
+            return Promise.all(promises);
+        }
+
+        const results = new Array<RunViewResult<T>>(params.length);
+        const started = new Array<boolean>(params.length).fill(false);
+        const joinerPromises: Promise<void>[] = [];
+        let cursor = 0;
+
+        const attachInFlightDuplicates = (fromIndex: number): void => {
+            if (typeof this.hasInFlightSingleFlightView !== 'function') {
+                return;
+            }
+            for (let j = fromIndex; j < params.length; j++) {
+                if (!started[j] && this.hasInFlightSingleFlightView(params[j], contextUser)) {
+                    started[j] = true;
+                    const joinIdx = j;
+                    joinerPromises.push(
+                        this.runBatchedView<T>(params[joinIdx], contextUser).then((res) => {
+                            results[joinIdx] = res;
+                        }),
+                    );
+                }
+            }
+        };
+
+        const runWorker = async (): Promise<void> => {
+            while (cursor < params.length) {
+                const idx = cursor++;
+                if (started[idx]) {
+                    continue;
+                }
+                started[idx] = true;
+                const viewPromise = this.runBatchedView<T>(params[idx], contextUser);
+                attachInFlightDuplicates(idx + 1);
+                results[idx] = await viewPromise;
+            }
+        };
+
+        const workerCount = Math.min(limit, params.length);
+        const workers: Promise<void>[] = [];
+        for (let w = 0; w < workerCount; w++) {
+            workers.push(runWorker());
+        }
+        await Promise.all(workers);
+        if (joinerPromises.length > 0) {
+            await Promise.all(joinerPromises);
+        }
+        return results;
     }
 
     /**
@@ -2475,8 +3274,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         );
         return Promise.all(params.map((p, index) =>
             this.RunViewCore<T>(p, contextUser, (countSQL) => batch.Execute(index, countSQL))
+                .catch((error: unknown) => GenericDatabaseProvider.fieldSecurityRefusalAsResult<T>(error))
                 .finally(() => batch.MarkSettled(index)),
         ));
+    }
+
+    /**
+     * One view of a `RunViews` batch. A field-security refusal of this view becomes this view's
+     * `Success: false` result, carrying the refusal's message, so it does not fail the views
+     * batched with it. Any other error is thrown, as a single RunView throws it.
+     */
+    protected async runBatchedView<T = unknown>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        try {
+            return await this.InternalRunView<T>(params, contextUser);
+        } catch (error: unknown) {
+            return GenericDatabaseProvider.fieldSecurityRefusalAsResult<T>(error);
+        }
     }
 
     /**************************************************************************/
@@ -2533,7 +3346,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * column list here buys the same protection without touching either.
      */
     protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
-        if (!user || !entityInfo.EnableFieldLevelSecurity) {
+        if (!user || !entityInfo.FieldLevelSecurityApplies) {
             return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
         }
         const denied = entityInfo.GetDeniedReadFields(user);
@@ -2591,9 +3404,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // Binary columns are omitted from every implicit field list (saved-view columns and
             // the no-Fields wildcard) unless requested; an explicit params.Fields entry is honoured.
             const includeBinary = params.IncludeBinaryFields === true;
+            // The request's own denied set, shared with its cache key (ResolveRequestDeniedReadFields),
+            // so the slot this fill lands in is keyed for the columns it actually selects.
             const flsUser = contextUser ?? this.CurrentUser;
-            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.EnableFieldLevelSecurity
-                ? entityInfo.GetDeniedReadFields(flsUser)
+            const denied: Set<string> = params.ResultType !== 'entity_object'
+                ? this.ResolveRequestDeniedReadFields(params, entityInfo, flsUser)
                 : new Set<string>();
 
             if (params.Fields) {
@@ -2648,8 +3463,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   - escapes LIKE metacharacters (%, _, [, ]) in user input with ESCAPE '\\',
      *   - skips fields that are not sensible text-search targets (non-text types,
      *     unbounded text columns when FTX is off).
+     *
+     * @param deniedFields - The request's denied set (see ResolveRequestDeniedReadFields), so the
+     *   searched columns match the ones its cache key and SELECT list were built from. Read from
+     *   the entity for `contextUser` when omitted.
      */
-    protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo): string {
+    protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo, deniedFields?: Set<string>): string {
         let sUserSearchSQL = '';
         const safeUserSearchString = userSearchString.replace(/'/g, "''");
 
@@ -2660,9 +3479,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // fields are simply excluded from the searched set. Computed once per call, never per
         // field (the per-request precompute contract).
         const user = contextUser ?? this.CurrentUser;
-        const deniedSearchFields: Set<string> = entityInfo.EnableFieldLevelSecurity && user
-            ? entityInfo.GetDeniedReadFields(user)
-            : new Set<string>();
+        const deniedSearchFields: Set<string> = deniedFields
+            ?? (entityInfo.FieldLevelSecurityApplies && user ? entityInfo.GetDeniedReadFields(user) : new Set<string>());
 
         // The full-text index spans its indexed columns as one unit — a denied FTS-indexed
         // column cannot be excluded from the index function. When (and only when) a denied
@@ -2670,7 +3488,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const ftsCoversDeniedField = deniedSearchFields.size > 0 &&
             entityInfo.Fields.some(f => f.FullTextSearchEnabled && deniedSearchFields.has(f.Name.trim().toLowerCase()));
 
-        if (entityInfo.FullTextSearchEnabled && !ftsCoversDeniedField) {
+        // `FullTextSearchEnabled` alone is NOT enough to take this branch: the branch names
+        // `FullTextSearchFunction` and, when that is null or blank, the `?? ''` below emitted
+        // `... FROM "schema".""('term')` — a syntax error, thrown on EVERY user search of such an
+        // entity, with no fallback. The two columns are independent (the flag can be set by hand
+        // or by a metadata sync before CodeGen has minted the function), so the name has to be
+        // checked, not assumed. A blank name now falls through to the per-field LIKE path, which
+        // needs no database object and returns results.
+        //
+        // Composed with, not substituted for, the field-security condition above — both have to
+        // hold to search through the index.
+        const ftsFunctionName = entityInfo.FullTextSearchFunction;
+        const hasFTSFunction = typeof ftsFunctionName === 'string' && ftsFunctionName.trim().length > 0;
+
+        if (entityInfo.FullTextSearchEnabled && hasFTSFunction && !ftsCoversDeniedField) {
             let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             // WORD-boundary tests, not substring tests (#4392). As substrings, `OR` matches
@@ -2711,7 +3542,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // forbidden keyword). Quoting `{0}` in the format is what actually closes that.
             //
             // The screen reads the quote-doubled term, because that is the text `{0}` becomes.
-            if (this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields) && !this.ValidateUserProvidedSQLClause(safeUserSearchString)) {
+            const termIsSQL = this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields);
+            if (termIsSQL && user) {
+                // Spliced in unquoted, the term is a predicate the caller wrote, so it gets the
+                // field-security gate every other caller predicate gets.
+                this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [safeUserSearchString], user);
+            }
+            if (termIsSQL && !this.ValidateUserProvidedSQLClause(safeUserSearchString)) {
                 throw new Error(
                     `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
                     `which splices the term directly into SQL, and the term is not allowed there: it contains ` +
@@ -2880,6 +3717,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * The field-security error a failed RunView must raise, or null to report the failure as
+     * usual: a {@link FieldSecurityError} raised along the way, or — for a caller denied fields on
+     * `entity` — a database "no such column" rejection, rewritten into the error a denied column
+     * gets ({@link FieldSecuritySQLGate.ErrorForInvalidColumn}).
+     */
+    protected fieldSecurityErrorFor(error: unknown, entity: EntityInfo | null, user: UserInfo | undefined): Error | null {
+        if (error instanceof Error && (error instanceof FieldSecurityError || error.name === FieldSecurityError.ErrorName)) {
+            return error;
+        }
+        return FieldSecuritySQLGate.ErrorForInvalidColumn(error, entity, user);
+    }
+
+    /**
+     * For a caller denied fields on `entity`, throws the field-security error when an aggregate was
+     * refused because it names a column the entity does not have. A denied column in an aggregate is
+     * refused by the gate with that error, so an unknown one must not answer differently.
+     */
+    protected assertAggregateRefusalsAreNotColumnProbes(errors: AggregateResult[], entity: EntityInfo, user: UserInfo): void {
+        if (errors.length === 0 || !FieldSecuritySQLGate.UserCarriesDenials([entity], user)) {
+            return;
+        }
+        for (const refused of errors) {
+            const match = /references "((?:[^"]|"")*)", which (?:is not a column|matches more than one column) of this entity/.exec(refused.error ?? '');
+            if (match) {
+                // Named the way the gate names a denied column in the same expression, so the two
+                // refusals read the same whatever case the caller typed.
+                const column = FieldSecuritySQLGate.ReportedColumnName(refused.expression, match[1].replace(/""/g, '"'), this.PlatformKey);
+                throw new FieldSecurityError(column, entity.Name);
+            }
+        }
+    }
+
+    /**
      * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
      * Any user who can save a view can write its WhereClause, directly or through FilterState or a
      * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
@@ -2942,7 +3812,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                                 // takes a one-column subquery — an entity with a composite key has no single column to return.
                                 const innerEntityInfo = innerViewEntity.ViewEntityInfo;
                                 this.assertSingleColumnPrimaryKey(innerEntityInfo, `The {%UserView%} template variable ${match}`);
-                                const innerSQL = `SELECT ${this.QuoteIdentifier(innerEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerEntityInfo.SchemaName, innerEntityInfo.BaseView)} WHERE (${innerWhere})`; // first-pk-ok: guarded above — IN (subquery) takes one column, PrimaryKeys.length === 1 enforced
+                                const innerTarget = await this.resolveEffectiveBaseViewTarget(
+                                    innerEntityInfo,
+                                    { EntityName: innerEntityInfo.Name, ViewEntity: innerViewEntity } as RunViewParams,
+                                    user,
+                                    innerViewEntity,
+                                );
+                                const innerSQL = `SELECT ${this.QuoteIdentifier(innerEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerTarget.schemaName, innerTarget.viewName)} WHERE (${innerWhere})`; // first-pk-ok: guarded above — IN (subquery) takes one column, PrimaryKeys.length === 1 enforced
                                 // Function replacement — `innerSQL` is generated SQL that can
                                 // legitimately contain `$`. See issue #3171.
                                 sWhere = sWhere.replace(match, () => innerSQL);
@@ -3063,6 +3939,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * The field-security key of one request, built once per request (`params` object) and user.
+     * A smart-cache-check item asks for it from each leg — its browser freshness check, the
+     * server-cache lookup and the cache write — and the answer cannot change within the request:
+     * the denied set it is built from is already resolved once per request.
+     */
+    protected override ComputeRunViewFLSFingerprintKey(params: RunViewParams, contextUser?: UserInfo): string {
+        const user = contextUser ?? this.CurrentUser;
+        const memo = this._requestFLSKeys?.get(params);
+        if (memo && memo.User === user && memo.Target === GenericDatabaseProvider.flsKeyTarget(params)) {
+            return memo.Key;
+        }
+        const key = super.ComputeRunViewFLSFingerprintKey(params, user);
+        this._requestFLSKeys?.set(params, { User: user, Target: GenericDatabaseProvider.flsKeyTarget(params), Key: key });
+        return key;
+    }
+    private readonly _requestFLSKeys = new WeakMap<RunViewParams, { User: UserInfo | undefined; Target: string; Key: string }>();
+
+    /** What a request's field-security key is about: its entity, or the saved view it names. */
+    private static flsKeyTarget(params: RunViewParams): string {
+        return `${params.EntityName ?? ''}|${params.ViewID ?? ''}|${params.ViewName ?? ''}|${params.ViewEntity ? 'loaded' : ''}`;
+    }
+
+    /** The message refusing `user` Read on `entityInfo`, or null when the user may read it. */
+    private readPermissionError(entityInfo: EntityInfo, user: UserInfo): string | null {
+        try {
+            this.CheckUserReadPermissions(entityInfo.Name, user);
+            return null;
+        } catch (e) {
+            return e instanceof Error ? e.message : String(e);
+        }
+    }
+
+    /**
      * Smart cache validation for batch RunViews.
      * For each view request, if cacheStatus is provided, checks if the cache is current
      * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
@@ -3081,9 +3990,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // ── Superset/projection contract (same as the ProviderBase pipeline) ──
             // For every cache-eligible item: widen Fields to ALL entity fields so any
-            // cache write stores the universal superset, and remember the caller's
-            // requested shape (∪ primary keys — platform contract) so every serve leg
-            // projects back down before returning rows to the client. This path
+            // cache write stores every column the user's permission class may read (the
+            // slot is keyed by that class), and remember the caller's requested shape
+            // (∪ primary keys — platform contract) so every serve leg projects back down
+            // before returning rows to the client. This path
             // previously cached narrow rows under the Fields-agnostic fingerprint and
             // served cached rows unprojected — one client's shape poisoned the slot
             // for every subsequent caller.
@@ -3126,14 +4036,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     const requested = p.Fields && p.Fields.length > 0
                         ? p.Fields.map(f => f.trim().toLowerCase())
                         : null;
-                    // ALL fields, for every user: server slots are full-width and shared, and
-                    // field security narrows per request at read time via
-                    // ApplyFieldSecurityProjection rather than at fetch time.
+                    // ALL fields requested, for every user: the SELECT built from this list leaves
+                    // out the columns this user may not read, and the slot is keyed by the user's
+                    // permission class, so a slot holds only what its class may read.
+                    // ApplyFieldSecurityProjection still runs on every serve as a backstop.
                     this.ResolveIncludeBinaryFields(p, widenEntity);
                     p.Fields = this.ComputeRunViewFetchFields(widenEntity, p);
                     if (requested) {
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
+                }
+                // A status the browser computed for other columns than this user may read now
+                // describes a slot with the wrong columns, even if no row changed. Dropping it sends
+                // the item down the "nothing cached" path, which answers with fresh rows.
+                if (this.cacheStatusFieldSecurityDiffers(params[i].cacheStatus, p, user)) {
+                    params[i].cacheStatus = undefined;
                 }
             }
             /** Projects rows down to the caller's requested shape for a given item index. */
@@ -3158,6 +4075,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: gateRejection });
                     continue;
                 }
+                const entityInfo = item.params.EntityName ? this.EntityByName(item.params.EntityName) : undefined;
+                // Read-permission gate for EVERY item whose entity is known, before any leg can answer:
+                // an item with no cache status, and an external entity, are served from the server cache
+                // on a hit WITHOUT re-entering InternalRunView, so a CanRead check that lived only on the
+                // cache-miss path would let a user lacking permission receive rows another user warmed.
+                if (entityInfo) {
+                    const permissionError = this.readPermissionError(entityInfo, user);
+                    if (permissionError !== null) {
+                        errorResults.push({ viewIndex: i, status: 'error', errorMessage: permissionError });
+                        continue;
+                    }
+                }
+
                 // Keyset queries bypass the cache entirely (per the AfterKey API contract):
                 // each call uses a different seek key, so cached entries would never be
                 // reusable. Route directly to standard execution path.
@@ -3166,20 +4096,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
-                const entityInfo = item.params.EntityName ? this.EntityByName(item.params.EntityName) : undefined;
                 if (!entityInfo) {
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: `Entity ${item.params.EntityName} not found in metadata` });
-                    continue;
-                }
-
-                // Read-permission gate for EVERY entity (external + local) up front. This must run before
-                // the external routing below: external entities are served from the server cache on a hit
-                // WITHOUT re-entering InternalRunView, so if the CanRead check only lived on the cache-miss
-                // path a user lacking permission could receive rows another user warmed into the cache.
-                try {
-                    this.CheckUserReadPermissions(entityInfo.Name, user);
-                } catch (e) {
-                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
                     continue;
                 }
 
@@ -3195,10 +4113,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
-            // Phase 1: Check server's LocalCacheManager first (zero DB hits)
+            // Phase 1: Check server's LocalCacheManager first (zero DB hits when within freshness window)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
             const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
-            const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
+            const serverCacheMissItems: Array<{
+                index: number;
+                item: RunViewWithCacheCheckParams;
+                entityInfo: EntityInfo;
+                serverCached?: CachedRunViewResult;
+                fingerprint?: string;
+            }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
                 const entityLabel = item.params.EntityName || 'unknown';
@@ -3206,6 +4130,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (resolved) {
                     if (resolved.status === 'current') {
                         currentResults.push(resolved.result);
+                    } else if (resolved.status === 'needs_verification') {
+                        serverCacheMissItems.push({
+                            index,
+                            item,
+                            entityInfo,
+                            serverCached: resolved.serverCached,
+                            fingerprint: resolved.fingerprint,
+                        });
                     } else {
                         serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
                     }
@@ -3214,7 +4146,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 }
             }
 
-            // Phase 2: For server cache misses, fall back to DB validation
+            // Phase 2: For server cache misses and TTL-expired server slots, validate against DB
             const differentialItems: Array<{
                 index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
                 clientMaxUpdatedAt: string; clientRowCount: number;
@@ -3223,12 +4155,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
 
             if (serverCacheMissItems.length > 0) {
-                // Build WHERE clauses and run batched DB status check only for cache misses
-                const itemsForDBCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
-                for (const { index, item, entityInfo } of serverCacheMissItems) {
+                // Build WHERE clauses and run batched DB status check only for cache misses / TTL-expired slots
+                const itemsForDBCheck: Array<{
+                    index: number;
+                    item: RunViewWithCacheCheckParams;
+                    entityInfo: EntityInfo;
+                    whereSQL: string;
+                    serverCached?: CachedRunViewResult;
+                    fingerprint?: string;
+                }> = [];
+                for (const { index, item, entityInfo, serverCached, fingerprint } of serverCacheMissItems) {
                     try {
                         const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
-                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL });
+                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL, serverCached, fingerprint });
                     } catch (e) {
                         errorResults.push({ viewIndex: index, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
                     }
@@ -3236,14 +4175,46 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                 const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsForDBCheck, contextUser);
 
-                for (const { index, item, entityInfo, whereSQL } of itemsForDBCheck) {
+                for (const { index, item, entityInfo, whereSQL, serverCached, fingerprint } of itemsForDBCheck) {
                     const serverStatus = cacheStatusResults.get(index);
                     if (!serverStatus || !serverStatus.success) {
-                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                        const statusError = serverStatus?.errorMessage || 'Failed to get cache status';
+                        const fieldSecurityError = FieldSecuritySQLGate.ErrorForInvalidColumn(statusError, entityInfo, user);
+                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: fieldSecurityError?.message ?? statusError });
                         continue;
                     }
 
                     const entityLabel = item.params.EntityName || 'unknown';
+                    if (serverCached && fingerprint) {
+                        const cachedSlotStatus = {
+                            maxUpdatedAt: serverCached.maxUpdatedAt,
+                            rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
+                        };
+                        if (this.isCacheCurrent(cachedSlotStatus, serverStatus)) {
+                            // Server cache slot is confirmed current against SQL — refresh its verification timestamp in O(1)
+                            LocalCacheManager.Instance.TouchRunViewResultVerifiedAt(fingerprint);
+                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                                LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
+                                currentResults.push({ viewIndex: index, status: 'current' });
+                            } else {
+                                LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-VERIFIED-CACHE] "${entityLabel}" — server cache verified against DB, serving ${serverCached.rowCount} rows without full SQL query`, verboseOnly: true });
+                                serverCacheStaleItems.push({ index, item, entityInfo, serverCached });
+                            }
+                            continue;
+                        } else {
+                            // Out-of-band SQL mutation or missed invalidation occurred!
+                            // Evict the stale server slot and refresh from DB so LocalCacheManager and the client self-heal.
+                            LogStatusEx({ message: `    ♻️ [SmartCache RECONCILE-EVICT] "${entityLabel}" — server cache slot disagreed with DB status; invalidating and refreshing from DB`, verboseOnly: true });
+                            await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                                currentResults.push({ viewIndex: index, status: 'current' });
+                            } else {
+                                staleItemsNoTracking.push({ index, params: item.params });
+                            }
+                            continue;
+                        }
+                    }
+
                     if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
@@ -3267,22 +4238,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
-                // A param carrying BypassCache lands here because it is ineligible for a cache status,
+                // A param carrying BypassCache (or any cache-ineligible request such as an AlternateBaseView
+                // with CachePolicy === 'Bypass', an unknown/disabled AlternateBaseView, or a view-only request
+                // denied by the read-permission gate) lands here because it is ineligible for a cache status,
                 // NOT because the caller has nothing cached — and those two must not be treated alike.
-                // Serving it from the server cache is precisely what it asked not to happen: its
-                // documented contract is "the query always hits the database", and it is the only way a
-                // client can escape a server slot that a missed invalidation left stale. The write side
-                // already refuses to store such a result (runViewCacheEligible starts with
-                // !param.BypassCache); this is the matching read-side gate.
-                if (entry.item.params.BypassCache) {
-                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — BypassCache requested, going to the database`, verboseOnly: true });
+                if (
+                    entry.item.params.BypassCache ||
+                    !this.runViewCacheEligible(entry.item.params) ||
+                    this.cacheDeniedForViewOnlyRequest(entry.item.params, contextUser)
+                ) {
+                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — cache ineligible or BypassCache requested, going to the database`, verboseOnly: true });
                     noCacheStatusNeedsDB.push(entry);
                     continue;
                 }
-                if (LocalCacheManager.Instance.IsInitialized) {
-                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
-                    const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+                // A saved-view request without an entity name had no Read check above; only the
+                // database leg resolves its entity and checks it, so it never reads the cache here.
+                if (LocalCacheManager.Instance.IsInitialized && !this.cacheDeniedForViewOnlyRequest(entry.item.params, user)) {
+                    const fingerprint = this.ComputeRunViewCacheFingerprint(entry.item.params, user);
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
@@ -3296,7 +4268,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // Phase 4: Run queries in parallel for items needing data.
             // Every leg that returns rows projects them down to the caller's requested
-            // shape (callerFieldsByIndex) — the cache always holds the wide superset.
+            // shape (callerFieldsByIndex) — the cache holds every field the slot's
+            // permission class may read.
             const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
                 // Items without cache check — served from server cache
                 ...noCacheStatusServedFromCache.map(({ index, serverCached }) =>
@@ -3347,8 +4320,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // BOTH projections, in this order — they are siblings, not alternatives, and
             // `PostRunView` calls them as a pair at all four of its projection points. Applying
             // only the first leaves the audit trail leaking: `ApplyFieldSecurityProjection`
-            // short-circuits on the RunView entity's own `EnableFieldLevelSecurity`, and
-            // `MJ: Record Changes` has that flag OFF by design, so it is a no-op on exactly the
+            // short-circuits when field security does not apply to the RunView entity, and
+            // `MJ: Record Changes` has field security OFF by design, so it is a no-op on exactly the
             // rows that matter. The denied values there are INSIDE the `ChangesJSON` /
             // `FullRecordJSON` payload columns, which no amount of column stripping reaches —
             // `ApplyRecordChangeFieldSecurityProjection` is what projects them against the entity
@@ -3437,7 +4410,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Free text, not a SQL fragment — deliberately NOT run through
         // ValidateUserProvidedSQLClause. See the equivalent note on the view path above (#4392).
         if (params.UserSearchString && params.UserSearchString.length > 0) {
-            const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString, user);
+            const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString, user, this.ResolveRequestDeniedReadFields(params, entityInfo, user));
             if (sUserSearchSQL.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
                 bHasWhere = true;
@@ -3458,8 +4431,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * entity whose view does not carry it, instead of comparing by count alone the way
      * `BaseEngine.SweepAgainstDatabase` documents.
      */
-    protected BuildCacheStatusSQL(entityInfo: EntityInfo, effectiveView: string, whereSQL: string): string {
-        const from = `FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+    protected BuildCacheStatusSQL(
+        entityInfo: EntityInfo,
+        effectiveView: string,
+        whereSQL: string,
+        schemaNameOverride?: string
+    ): string {
+        const from = `FROM ${this.QuoteSchemaAndView(schemaNameOverride ?? entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
         const count = `COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}`;
         // `Fields` absent (a partial EntityInfo) degrades to the count-only probe rather than
         // throwing: a freshness check must not be the thing that breaks a sweep.
@@ -3489,8 +4467,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // snapshot cache against an unrelated source, yielding a meaningless current/stale verdict.
                 // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
-                const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL);
+                const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName);
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
@@ -3519,7 +4497,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         viewIndex: number,
         contextUser?: UserInfo,
     ): Promise<RunViewWithCacheCheckResult<T>> {
-        const result = await this.InternalRunView<T>(params, contextUser);
+        let result: RunViewResult<T>;
+        try {
+            result = await this.InternalRunView<T>(params, contextUser);
+        } catch (e: unknown) {
+            // A field-security refusal fails this item only, as the up-front gate does on this path.
+            if (e instanceof Error && e.name === FieldSecurityError.ErrorName) {
+                return { viewIndex, status: 'error', errorMessage: e.message };
+            }
+            throw e;
+        }
         if (!result.Success) {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
@@ -3554,9 +4541,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // external source has caching disabled — skip the write to avoid stale data.
                 const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
                 if (ttlMs !== 0) {
-                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                    const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(params);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+                    const fingerprint = this.ComputeRunViewCacheFingerprint(params, contextUser);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
                     // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
                     // InternalRunView's normal PostRunView path WITH aggregates — two writers,
@@ -3635,7 +4620,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * infinite loop / duplicate processing in deep-pagination jobs. Aggregates and a non-empty
      * UserSearchString likewise can't be evaluated remotely. Throws a clear error naming the param.
      */
-    protected assertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+    protected assertExternalRunViewParamsSupported(
+        params: RunViewParams,
+        entityName: string,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): void {
+        if (this.resolveEffectiveAbvNameFromParams(params, viewEntity)) {
+            throw new Error(`AlternateBaseView is not supported for external-data-source entity '${entityName}'.`);
+        }
         if (params.AfterKey) {
             throw new Error(`Keyset pagination (AfterKey) is not supported for external-data-source entity '${entityName}'. Use StartRow/MaxRows offset paging instead.`);
         }
@@ -3660,6 +4652,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (orderBy && !this.ValidateUserProvidedSQLClause(orderBy)) {
             throw new Error(`Invalid OrderBy clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
         }
+    }
+
+    /**
+     * Field-level security on the clauses an external-data-source read hands its driver: the
+     * caller's own, merged with a saved view's stored ones. The same gates the SQL path applies to
+     * the clauses it runs; the external dispatch returns before that path, and the driver runs
+     * the clauses remotely, where nothing else checks them.
+     */
+    protected assertExternalClausesRespectFieldSecurity(entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): void {
+        this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [params.ExtraFilter, params.OverrideExcludeFilter], user);
+        this.AssertSortRespectsFieldSecurityForEntity(entityInfo, [params.OrderBy], user);
+    }
+
+    /**
+     * An external driver's rows without the columns `user` may not read. The driver returns the
+     * entity's columns at full width, and the result-path projection resolves the entity only from
+     * an `EntityName` or a loaded `ViewEntity`, so a request naming only a `ViewID` would keep
+     * them: the entity resolved here is named explicitly.
+     */
+    protected projectExternalRowsForCaller<T>(rows: T[], entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): T[] {
+        return this.ApplyFieldSecurityProjection(rows, { ...params, EntityName: entityInfo.Name }, user);
     }
 
     /**
@@ -3702,25 +4715,83 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * True when a browser's cache status carries a field-security key (see
+     * `ProviderBase.ComputeFieldSecurityCacheStatusKey`) other than the one this server computes
+     * for `user` and `params`: the browser's slot was filled for a different set of columns, so
+     * its row count and newest timestamp say nothing about whether it is current. False when the
+     * status carries no key.
+     */
+    private cacheStatusFieldSecurityDiffers(status: RunViewWithCacheCheckParams['cacheStatus'], params: RunViewParams, user: UserInfo): boolean {
+        if (status?.fieldSecurityKey == null) {
+            return false; // an older client: no key, no check
+        }
+        return status.fieldSecurityKey !== this.ComputeFieldSecurityCacheStatusKey(params, user);
+    }
+
+    /**
      * Checks the server's LocalCacheManager for cached data matching the client's request.
-     * Returns the resolution if found (either 'current' or server-cached data to serve),
-     * or null if the server cache doesn't have this data.
+     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
+     * 'needs_verification' when the server slot's freshness window has elapsed),
+     * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
      */
     private async resolveFromServerCache(
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
         contextUser?: UserInfo,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: CachedRunViewResult } | null> {
+    ): Promise<
+        | { status: 'current'; result: RunViewWithCacheCheckResult<never> }
+        | { status: 'stale'; serverCached: CachedRunViewResult }
+        | { status: 'needs_verification'; serverCached: CachedRunViewResult; fingerprint: string }
+        | null
+    > {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
+        if (!this.runViewCacheEligible(item.params) || this.cacheDeniedForViewOnlyRequest(item.params, contextUser)) {
+            return null;
+        }
 
-        const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
-        const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(item.params);
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+        const fingerprint = this.ComputeRunViewCacheFingerprint(item.params, contextUser);
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 
-        const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount };
+        // 1. Client Monotonicity Guard:
+        // If the client's cacheStatus has a timestamp newer than the server's cached slot,
+        // the server slot is provably stale (e.g., client received a newer write from another
+        // replica or after an out-of-band update). Never serve stale rows backward in time:
+        // evict the server slot immediately and route to Phase 2 DB validation.
+        const clientDate = this.parseClientTimestamp(item.cacheStatus!.maxUpdatedAt);
+        const serverCachedDate = this.parseClientTimestamp(cached.maxUpdatedAt);
+        const serverCachedRowCount = cached.totalRowCount ?? cached.rowCount;
+        if (
+            clientDate &&
+            serverCachedDate &&
+            ((clientDate.getTime() - serverCachedDate.getTime()) >= 1000 ||
+                (clientDate.getTime() > serverCachedDate.getTime() && item.cacheStatus!.rowCount !== serverCachedRowCount))
+        ) {
+            LogStatusEx({
+                message: `    ⚠️ [SmartCache MONOTONICITY-EVICT] "${entityLabel}" — client timestamp (${item.cacheStatus!.maxUpdatedAt}) is newer than server cache (${cached.maxUpdatedAt}); evicting stale server slot`,
+                verboseOnly: true,
+            });
+            await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+            return null;
+        }
+
+        // 2. Bounded Server-Slot Freshness Window:
+        // If the server slot has not been verified against SQL within ServerCacheVerificationTTLMs,
+        // route to Phase 2's batched SQL status check before trusting it.
+        const verifiedAt = cached.lastVerifiedAt ?? cached.cachedAt;
+        const needsVerification =
+            this.ServerCacheVerificationTTLMs <= 0 ||
+            (verifiedAt !== undefined && (Date.now() - verifiedAt) > this.ServerCacheVerificationTTLMs);
+        if (needsVerification) {
+            LogStatusEx({
+                message: `    ⏱️ [SmartCache VERIFY-TTL] "${entityLabel}" — server cache slot verification TTL expired, routing to batched DB status check`,
+                verboseOnly: true,
+            });
+            return { status: 'needs_verification', serverCached: cached, fingerprint };
+        }
+
+        const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: serverCachedRowCount };
         if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
             LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches server cache, no DB hit`, verboseOnly: true });
             return { status: 'current', result: { viewIndex: index, status: 'current' } };
@@ -3739,8 +4810,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         serverCached: CachedRunViewResult,
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
-        // The server cache stores the full-width superset — project down to the
-        // caller's requested fields (∪ PK) before returning, exactly like the
+        // The server cache stores every field the slot's permission class may read —
+        // project down to the caller's requested fields (∪ PK) before returning, exactly like the
         // ProviderBase hit path. Serving unprojected rows here previously leaked
         // whatever shape happened to be cached to every subsequent caller.
         //
@@ -3901,7 +4972,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ? params.Fields.map(f => this.QuoteIdentifier(f)).join(', ')
                 : '*';
 
-            let sql = `SELECT ${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${combinedWhere}`;
+            const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, params, contextUser);
+            let sql = `SELECT ${fields} FROM ${this.QuoteSchemaAndView(effectiveTarget.schemaName, effectiveTarget.viewName)} WHERE ${combinedWhere}`;
 
             const orderBy = this.TransformExternalSQLClause((params.OrderBy as string) || '', entityInfo);
             if (orderBy.length > 0) {
@@ -3953,16 +5025,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
-                const runCheck = query.UserCanRun(user);
+                const definition = this.QueryDefinitionSignatureFor(query);
+                const runCheck = this.authorizeCacheCheckedQuery(query, item, definition, user);
                 if (!runCheck.canRun) {
                     const deniedMsg = runCheck.deniedEntities.length > 0
                         ? ` Denied entities: ${runCheck.deniedEntities.join(', ')}.`
                         : '';
-                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}.${deniedMsg}` });
+                    const errorMessage = runCheck.renderError ?? `User does not have permission to run query: ${query.Name}.${deniedMsg}`;
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage });
                     continue;
                 }
 
-                const definition = this.QueryDefinitionSignatureFor(query);
                 if (definition) {
                     definitionHashes.set(i, definition.Hash);
                 }
@@ -4044,6 +5117,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * The authorization of one {@link RunQueriesWithCacheCheck} item before it is routed. An item
+     * that may be answered "current" without running — it carries a cache status for this
+     * definition and the query has validation SQL — is checked in full on its rendering here. Every
+     * other item runs, and the run checks the rendering it executes, so only the render-free part
+     * is checked here rather than rendering the query twice.
+     */
+    private authorizeCacheCheckedQuery(
+        query: MJQueryEntityExtended,
+        item: RunQueryWithCacheCheckParams,
+        definition: QueryDefinitionSignature | undefined,
+        user: UserInfo,
+    ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
+        const mayAnswerWithoutRunning = !!item.cacheStatus
+            && !this.clientSlotDefinitionDiffers(item.cacheStatus, definition)
+            && !!query.CacheValidationSQL;
+        return mayAnswerWithoutRunning ? this.authorizeQueryRun(query, item.params.Parameters, user) : query.UserCanRun(user);
+    }
+
+    /**
      * B45 override of the RunQuery cache-serve seam — enforce the SAME authorization on a
      * cache HIT that the miss path enforces. Resolution uses `resolveQuery()` (QueryEngine as
      * the single source of truth, with CategoryPath disambiguation of same-named queries — the
@@ -4051,6 +5143,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * entity CanRead + recursive composition) — exactly the check `ValidateQueryForExecution`
      * applies before a real execution. The base's roles-only check would let a user read cached
      * rows of a query whose underlying entities they cannot read.
+     *
+     * The run-time checks (`UserCanRunRenderedSQL`: entities read by the SQL itself, and field-level
+     * security) run against the query rendered with the request's own parameters: the SQL the miss
+     * path would check and execute for this slot, since the slot's fingerprint carries those
+     * parameters and its definition hash the query's SQL. A user the miss path would refuse is never
+     * served the slot; a rendering that fails is treated as not authorized, so the request falls
+     * through to execution and gets that path's error.
      *
      * Non-throwing by contract: any resolution error degrades to `resolvable: false`, which the
      * gate treats as "fall through to authorized execution" — one extra query run, never an
@@ -4064,9 +5163,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
             return {
                 resolvable: true,
-                authorized: !user || query.UserCanRun(user).canRun,
+                authorized: !user || this.authorizeQueryRun(query, params.Parameters, user).canRun,
                 categoryPath: query.CategoryPath,
                 queryName: query.Name,
+                contextTokens: this.queryContextTokens(query),
                 queryId: query.ID,
                 definition: this.QueryDefinitionSignatureFor(query)
             };
@@ -4159,18 +5259,142 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (user) {
             const result = query.UserCanRun(user);
             if (!result.canRun) {
-                const deniedMsg = result.deniedEntities.length > 0
-                    ? ` Denied entities: ${result.deniedEntities.join(', ')}.`
-                    : '';
-                throw new Error(
-                    `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`
-                );
+                throw new Error(this.queryRunRefusalMessage(query, result.deniedEntities));
             }
         }
 
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
         }
+    }
+
+    /**
+     * For a `RequireApproved` run: refuses unless the query, and every query it composes, has a
+     * current approval — status Approved and a stored fingerprint equal to the fingerprint of the
+     * definition this run executes. The fingerprint is worked out here, from the same
+     * `QueryEngine` metadata the run renders, never from a caller's value.
+     *
+     * @throws Error naming the first query whose approval is not current
+     */
+    protected async ValidateQueryApprovalAsync(query: MJQueryEntityExtended, render: RenderResult): Promise<void> {
+        if (RenderPipeline.HasCompositionTokens(query.GetPlatformSQL(this.PlatformKey)) && !render.HasCompositions) {
+            throw new Error(`Query '${query.Name}' (ID: ${query.ID}) composes other queries, which requires a context user so every composed query's approval can be verified.`);
+        }
+        const engine = QueryEngine.Instance;
+        const depsByQueryID = GroupByUUID(engine.Dependencies, d => d.QueryID);
+        const queriesByID = IndexByUUID(engine.Queries);
+        const composedIDs = new UUIDSet(render.CTEs.map(c => c.QueryID));
+        const queue = [query.ID, ...render.CTEs.map(c => c.QueryID)];
+        while (queue.length > 0) {
+            const currentID = queue.shift()!;
+            for (const dep of depsByQueryID.Get(currentID) ?? []) {
+                if (dep.DependsOnQueryID && !composedIDs.Has(dep.DependsOnQueryID) && !UUIDsEqual(dep.DependsOnQueryID, query.ID)) {
+                    composedIDs.Add(dep.DependsOnQueryID);
+                    queue.push(dep.DependsOnQueryID);
+                }
+            }
+        }
+        const toVerify: MJQueryEntityExtended[] = [query];
+        for (const cte of render.CTEs) {
+            const found = queriesByID.Get(cte.QueryID);
+            if (!found) {
+                throw new Error(`Query '${cte.QueryName || cte.QueryID}' composed by '${query.Name}' is not a saved query in QueryEngine, so its approval cannot be verified.`);
+            }
+        }
+        for (const depID of composedIDs) {
+            const found = queriesByID.Get(depID);
+            if (!found) {
+                throw new Error(`Query dependency (ID: ${depID}) composed by '${query.Name}' is not found in QueryEngine, so its approval cannot be verified.`);
+            }
+            toVerify.push(found);
+        }
+        for (const q of toVerify) {
+            const state = await GetQueryApprovalStateAsync(q);
+            if (state !== 'Current') {
+                const reason = state === 'NotApproved'
+                    ? `its status is '${q.Status}'`
+                    : 'its definition changed after it was approved (or it was approved before approvals were fingerprinted)';
+                throw new Error(`Query '${q.Name}' (ID: ${q.ID}) is not approved in its current form: ${reason}. The run requires an approved query.`);
+            }
+        }
+    }
+
+    /** The context tokens a query reads, with every query it composes, as the `QueryEngine` holds them. */
+    private queryContextTokens(query: MJQueryEntityExtended): ContextToken[] {
+        const engine = QueryEngine.Instance;
+        return FindQueryContextTokens(
+            query.ID,
+            id => [engine.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...engine.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
+            id => engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
+        );
+    }
+
+    /**
+     * SECURITY — authorizes a saved query against the SQL the run will execute (fully composed and
+     * rendered), after {@link ValidateQueryForExecution} has passed: the entities that SQL reads,
+     * and field-level security on every column it references. A template that injects an
+     * identifier, a `{% if %}` branch and a `{{query:"..."}}` composition are all checked as they
+     * render. A query carrying `MJ: Query Permissions` rows is authorized by its role list alone.
+     * The refusal does not say which field or clause caused it.
+     *
+     * @throws Error when the user may not run this rendering of the query
+     */
+    protected ValidateRenderedQueryForExecution(query: MJQueryEntityExtended, renderedSQL: string, contextUser?: UserInfo): void {
+        const user = contextUser || this.CurrentUser;
+        if (!user) {
+            return;
+        }
+        const result = this.checkRenderedQuery(query, renderedSQL, user);
+        if (!result.canRun) {
+            throw new Error(this.queryRunRefusalMessage(query, result.deniedEntities));
+        }
+    }
+
+    /** The refusal for a user who may not run `query`; names entities the user cannot read, never a field. */
+    private queryRunRefusalMessage(query: MJQueryEntityExtended, deniedEntities: string[]): string {
+        const deniedMsg = deniedEntities.length > 0 ? ` Denied entities: ${deniedEntities.join(', ')}.` : '';
+        return `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`;
+    }
+
+    /** The run-time checks of `query` for `user` on this provider's entities and dialect; logs a field-security refusal. */
+    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo): { canRun: boolean; deniedEntities: string[] } {
+        const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey);
+        if (result.fieldSecurityViolation) {
+            const v = result.fieldSecurityViolation;
+            LogStatusEx({ message: `RunQuery: query '${query.Name}' refused for user '${user.Email}' by field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''}).`, verboseOnly: true });
+        }
+        return result;
+    }
+
+    /**
+     * The full authorization of a saved query for one request: {@link MJQueryEntityExtended.UserCanRun}
+     * and the run-time checks on the query rendered with `parameters`. A rendering that fails
+     * refuses, carrying the rendering's error.
+     */
+    private authorizeQueryRun(
+        query: MJQueryEntityExtended,
+        parameters: Record<string, string> | undefined,
+        user: UserInfo,
+    ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
+        const base = query.UserCanRun(user);
+        if (!base.canRun || GenericDatabaseProvider.roleListGrants(query)) {
+            // A role list authorizes on its own, whatever the SQL reads, and UserCanRun has
+            // already confirmed the user holds one of its roles: nothing to render.
+            return base;
+        }
+        let renderedSQL: string;
+        try {
+            renderedSQL = this.processQueryParameters(query, parameters, user).finalSQL;
+        } catch (e) {
+            return { canRun: false, deniedEntities: [], renderError: e instanceof Error ? e.message : String(e) };
+        }
+        return this.checkRenderedQuery(query, renderedSQL, user);
+    }
+
+    /** True when the query carries a role list (`MJ: Query Permissions` rows), which authorizes a run by itself. */
+    private static roleListGrants(query: MJQueryEntityExtended): boolean {
+        const permissions = query.QueryPermissions;
+        return !!permissions && permissions.length > 0;
     }
 
     /**
@@ -4475,8 +5699,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         query: MJQueryEntityExtended,
         params: RunQueryParams,
         contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
+        // A snapshot is shared by every caller and was built without this caller's Context (user, date), so a
+        // run whose template read Context is served live: its rows depend on who runs it and when.
+        if (contextValues && Object.keys(contextValues).length > 0) return null;
         if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
         // The query<->materialization link lives in the MaterializedResultQuery join table — there is no
         // Query.MaterializedResultID column (that direct FK, paired with MaterializedResult.SourceQueryID,
@@ -4567,7 +5795,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             schemaName: mat.SchemaName,
             viewName: mat.ViewName,
             spec,
-            paramValues: params.Parameters,
+            // Server-set parameters take their values from ServerParameters (a caller value for one was
+            // already refused when the template rendered), so the row filter sees both.
+            paramValues: params.ServerParameters ? { ...params.Parameters, ...params.ServerParameters } : params.Parameters,
             paramTypes,
             isPostgres: this.PlatformKey === 'postgresql',
         });
@@ -4576,6 +5806,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Route ad-hoc SQL queries to dedicated handler
         if (params.SQL) {
+            if (params.RequireApproved) {
+                return {
+                    Success: false,
+                    QueryID: '',
+                    QueryName: 'Ad-Hoc Query',
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'Ad-hoc SQL has no approved query definition and cannot run when RequireApproved is set.',
+                };
+            }
             return this.ExecuteAdhocQuery(params, contextUser);
         }
 
@@ -4585,16 +5827,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const query = this.findAndValidateQuery(params, contextUser);
 
             // Process parameters (composition + Nunjucks templates)
-            const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
+            const resolved = this.processQueryParameters(query, params.Parameters, contextUser, params);
             finalSQL = resolved.finalSQL;
             const appliedParameters = resolved.appliedParameters;
+
+            // Opt-in: the approval must be current for the definition about to run
+            if (params.RequireApproved) {
+                await this.ValidateQueryApprovalAsync(query, resolved.renderResult);
+            }
+            // Authorize what will actually run, before any cache, materialized or external read.
+            this.ValidateRenderedQueryForExecution(query, finalSQL, contextUser);
 
             // ── Phase 2: materialized read redirect (plan §5) ──
             // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
             // RowFilterBroad materialization, serve from the materialized table with the row-filter params
             // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
             // we fall through to the live execution below — a materialized read can never diverge from live.
-            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser);
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues);
             if (matPlan) {
                 // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
                 // live-rendered SQL), so a fallback below runs the live path unchanged.
@@ -4679,7 +5928,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // credential should be least-privilege). Do not assume EDS RLS covers the Query path.
             if (query.ExternalDataSourceID) {
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Query '${query.Name}'`);
-                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
+                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser, resolved.renderResult.ContextValues);
             }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
@@ -4866,6 +6115,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             RequireReadStatement: true,
             ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: params.MaxRows! } } : {}),
         });
+        this.AssertAdhocReadAllowed(rendered.Trace.AfterTemplates, contextUser);
         const options = this.adhocSQLOptions(params);
         if (!usePaging) {
             const { result, executionTime } = await this.executeQueryWithTiming(rendered.FinalSQL, contextUser, undefined, options);
@@ -4879,6 +6129,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         ]);
         const rows = dataResult ?? [];
         return { rows, totalRowCount: total ?? startRow + rows.length, executionTime: Date.now() - start };
+    }
+
+    /**
+     * SECURITY — what ad-hoc SQL may read, checked in the provider so that every in-process caller
+     * (agents, data contexts, actions) is covered, not only the API's resolvers. `sql` is the
+     * rendered statement, before the server's own paging wrap. Every table it reads must be an
+     * entity base view the caller can read unscoped: CanRead with no row-level filter and no denied
+     * field, because raw SQL applies neither ({@link ClientClauseScreen.AssertStatementReadsUnscopedEntityViews}).
+     * The system user runs the server's own SQL and is not checked, but only when passed
+     * explicitly: no user at all refuses, rather than falling back to the provider's own user,
+     * which on a server is the system user.
+     *
+     * @throws Error when the caller may not run `sql`
+     */
+    protected AssertAdhocReadAllowed(sql: string, contextUser?: UserInfo): void {
+        if (!contextUser) {
+            throw new Error('Invalid ad-hoc SQL: no acting user was passed — refusing');
+        }
+        if (IsSystemUser(contextUser)) {
+            return;
+        }
+        ClientClauseScreen.AssertStatementReadsUnscopedEntityViews(sql, this.Entities, ClientClauseScreen.DialectFor(this), contextUser, 'ad-hoc SQL');
     }
 
     /**
@@ -4951,13 +6223,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
+        serverSet?: Pick<RunQueryParams, 'ServerParameters' | 'TimeZone'>,
     ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         const result = RenderPipeline.Run(
             query.GetPlatformSQL(this.PlatformKey),
             {
                 Platform: this.PlatformKey as DatabasePlatform,
-                ContextUser: contextUser,
+                ContextUser: contextUser ?? this.CurrentUser,
                 Parameters: parameters,
+                ServerParameters: serverSet?.ServerParameters,
+                TimeZone: serverSet?.TimeZone,
                 UsesTemplate: query.UsesTemplate ?? false,
                 QueryInfo: {
                     SQL: query.SQL ?? '',
@@ -5002,10 +6277,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunQueryParams,
         router: ExternalDataSourceReadRouter,
         contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
     ): Promise<RunQueryResult> {
         const externalDataSourceID = query.ExternalDataSourceID!;
         const ttlSeconds = await router.GetCacheTTLSeconds(externalDataSourceID, contextUser, this);
-        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
+        // A result that read Context.Now depends on the instant it ran and is never reused.
+        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized && !(contextValues && 'Now' in contextValues);
 
         let fingerprint: string | undefined;
         let definition: QueryDefinitionSignature | undefined;
@@ -5016,6 +6293,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 __maxRows: params.MaxRows ?? -1,
                 __startRow: params.StartRow ?? 0,
                 __eds: externalDataSourceID,
+                // What the server set shapes the result too, so one user's slot never answers another's.
+                ...this.serverSetFingerprintSegment(params, contextValues),
             };
             fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
             definition = this.QueryDefinitionSignatureFor(query);
@@ -5062,6 +6341,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };
     }
 
+    /**
+     * The result-cache fingerprint segment for what the server set on a run: its `ServerParameters`
+     * and the `Context` values the template read. Empty when there are neither, so the fingerprint
+     * is exactly what it was before either existed.
+     */
+    private serverSetFingerprintSegment(params: RunQueryParams, contextValues?: Record<string, string>): Record<string, unknown> {
+        const segment: Record<string, unknown> = {};
+        if (params.ServerParameters && Object.keys(params.ServerParameters).length > 0) {
+            segment.__serverParameters = params.ServerParameters;
+        }
+        if (contextValues && Object.keys(contextValues).length > 0) {
+            segment.__context = contextValues;
+        }
+        return segment;
+    }
+
     protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
         if (!result.Success || !result.Results || result.Results.length === 0) {
             return result;
@@ -5105,6 +6400,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             const resolved = this.resolveSpecParameters(spec, contextUser);
             finalSQL = resolved.finalSQL;
+            // Checked on this rendering, the one that runs: a check a caller made on its own
+            // rendering of the same input is not proof of what this one reads.
+            this.AssertAdhocReadAllowed(resolved.renderResult.Trace.AfterTemplates, contextUser);
 
             // Execute
             const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser, undefined, CALLER_SQL_OPTIONS);
@@ -5359,6 +6657,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     /**
+     * The `WHERE` predicate that selects one record by its composite key, using dialect-neutral
+     * quoting. Quoted key values have embedded single quotes escaped: a key value can contain
+     * apostrophes (an object-valued soft key whose JSON carries free text), and an unescaped quote
+     * both breaks the statement and is an injection vector.
+     */
+    protected BuildPrimaryKeyWhereClause(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return compositeKey.KeyValuePairs.map(val => {
+            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
+            const quotes = pk.NeedsQuotes ? "'" : '';
+            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
+        }).join(' AND ');
+    }
+
+    /**
+     * Trims the trailing pad from fixed-width char fields (char/nchar pad with spaces on both SQL
+     * Server and PostgreSQL), in place, and returns the row.
+     */
+    protected TrimFixedWidthValues(entityInfo: EntityInfo, row: Record<string, unknown>): Record<string, unknown> {
+        for (const field of entityInfo.Fields) {
+            const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
+            if (isFixedWidth) {
+                const val = row[field.Name];
+                if (typeof val === 'string') row[field.Name] = val.trimEnd();
+            }
+        }
+        return row;
+    }
+
+    /**
      * Loads a single entity record by composite key, with optional relationship loading.
      * Uses dialect-neutral quoting for all SQL construction.
      */
@@ -5400,16 +6729,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         // Build WHERE from composite key
-        const where = compositeKey.KeyValuePairs.map(val => {
-            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
-            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            const quotes = pk.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes when the value is wrapped in quotes. A PK value can
-            // legitimately contain apostrophes (e.g. an object-valued soft key whose JSON carries
-            // free-text), and an unescaped quote both breaks the SQL string and is an injection vector.
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
-        }).join(' AND ');
+        const where = this.BuildPrimaryKeyWhereClause(entityInfo, compositeKey);
 
         // Append Read row filters — role RLS AND API-key filters (GetEffectiveRowFilterWhereClause)
         let fullWhere = where;
@@ -5435,16 +6755,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const d = await this.PostProcessRows(rawData, entityInfo, user);
 
         if (d && d.length > 0) {
-            const ret = d[0];
-
-            // Trim trailing spaces for fixed-width char fields (char/nchar pad with spaces on both SQL Server and PG)
-            for (const field of entityInfo.Fields) {
-                const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
-                if (isFixedWidth) {
-                    const val = ret[field.Name];
-                    if (typeof val === 'string') ret[field.Name] = val.trimEnd();
-                }
-            }
+            const ret = this.TrimFixedWidthValues(entityInfo, d[0]);
 
             // Load entity relationships if requested
             if (entityRelationshipsToLoad && entityRelationshipsToLoad.length > 0) {
@@ -5678,8 +6989,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // the CAST becomes illegal and the RLS post-image gate throws on SQL SERVER: the exact
             // failure this change set out to remove from PostgreSQL, relocated to the primary
             // platform. `MaxLength` does the halving, but flattens the `-1` MAX sentinel to 0, so
-            // the sentinel is passed through explicitly.
-            const charLength = field.Length === -1 ? -1 : field.MaxLength;
+            // the sentinel is passed through explicitly. `MaxLength` is also 0 for `binary`/`varbinary`,
+            // whose length is a byte count, and SQL Server rejects `VARBINARY(0)`, so those keep
+            // `field.Length`.
+            const isBinary = /^(var)?binary$/i.test(baseType.trim());
+            const charLength = field.Length === -1 || isBinary ? field.Length : field.MaxLength;
             // `getDialect()` is nullable on this base. Falling back to `SQLFullType` — the exact
             // string this used to emit — keeps SQL Server, whose vocabulary that already is,
             // byte-identical to its previous behaviour.
@@ -5764,7 +7078,78 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!entity.GetUserPermisions(contextUser)?.CanRead) {
             return { Filter: filter, RowFilter: '', Refusal: `User ${contextUser.Email} does not have read permissions on ${entity.Name}` };
         }
+        const fieldSecurityRefusal = this.datasetItemFilterFieldSecurityRefusal(entity, clientFilter, contextUser);
+        if (fieldSecurityRefusal) {
+            return { Filter: filter, RowFilter: '', Refusal: fieldSecurityRefusal };
+        }
         return { Filter: filter, RowFilter: entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, ''), Refusal: null };
+    }
+
+    /**
+     * Why a caller's ItemFilter is refused by the field-level security gate — the same gate every
+     * RunView filter passes — or null when it may run. The item's stored WhereClause is
+     * administrator-defined dataset metadata, not a predicate the caller chose, so it is not checked.
+     */
+    private datasetItemFilterFieldSecurityRefusal(entity: EntityInfo, clientFilter: string, contextUser: UserInfo): string | null {
+        try {
+            this.AssertClausesRespectFieldSecurityForEntity(entity, [clientFilter], contextUser);
+            return null;
+        } catch (e: unknown) {
+            if (e instanceof Error && e.name === FieldSecurityError.ErrorName) {
+                return e.message;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * The fields of a dataset item's entity the caller may not read, lowercased; empty when none,
+     * when there is no caller, or for MJ_Metadata, which every principal loads to learn the schema.
+     */
+    private datasetItemDeniedFields(datasetName: string, entity: EntityInfo | undefined, contextUser: UserInfo | undefined): Set<string> {
+        if (!entity || !contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName || !entity.FieldLevelSecurityApplies) {
+            return new Set<string>();
+        }
+        return entity.GetDeniedReadFields(contextUser);
+    }
+
+    /**
+     * The error a failed dataset batch reports to the caller. When the caller is denied fields on
+     * an item's entity and the database rejected a column that does not exist, every item reports
+     * the field-security error a denied column gets instead, so the two cannot be told apart.
+     */
+    private datasetBatchErrorForCaller(
+        batchError: string,
+        items: Record<string, unknown>[],
+        datasetName: string,
+        contextUser: UserInfo | undefined,
+    ): string {
+        if (!contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return batchError;
+        }
+        for (const item of items) {
+            const converted = FieldSecuritySQLGate.ErrorForInvalidColumn(batchError, this.EntityByName(String(item['Entity'])), contextUser);
+            if (converted) return converted.message;
+        }
+        return batchError;
+    }
+
+    /**
+     * Dataset item rows as the caller may see them: denied columns removed, and Record Changes
+     * payloads narrowed. Cached rows are shared and full width, so this always builds new rows
+     * rather than narrowing the cached ones. MJ_Metadata is exempt for the reason given on
+     * {@link datasetItemDeniedFields}.
+     */
+    private projectDatasetRowsForCaller(
+        datasetName: string,
+        entity: EntityInfo | undefined,
+        rows: Record<string, unknown>[],
+        contextUser: UserInfo | undefined,
+    ): Record<string, unknown>[] {
+        if (!entity || !contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return rows;
+        }
+        return ProjectEntityValueRowsForUser(this, entity, rows, contextUser) ?? rows;
     }
 
     /**
@@ -5841,6 +7226,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         let cacheHitCount = 0;
         let cacheMissCount = 0;
 
+        interface PreparedDatasetItem {
+            item: Record<string, unknown>;
+            entitySchemaName: string;
+            entityBaseView: string;
+            code: string;
+            entityName: string;
+            entityID: string;
+            /** The item's entity, used to project rows for the caller. */
+            itemEntity: EntityInfo | undefined;
+            scope: DatasetItemScope;
+            rowFilterKey: string | undefined;
+            fingerprint: string;
+            cached: CachedRunViewResult | null;
+        }
+        const preparedItems: PreparedDatasetItem[] = [];
+
         for (const item of items) {
             const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
             const entityBaseView = String(item['EntityBaseView']);
@@ -5882,25 +7283,126 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
             // The row filter keys the slot, so one user's filtered rows are never served to another.
             const rowFilterKey = scope.RowFilter || undefined;
-
-            // Try cache first
-            if (cacheAvailable) {
-                const fingerprint = cache.GenerateRunViewFingerprint(
+            const fingerprint = cacheAvailable
+                ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
                     rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
+                )
+                : '';
+            const cached = cacheAvailable && fingerprint
+                ? await cache.GetRunViewResult(fingerprint)
+                : null;
+
+            preparedItems.push({
+                item,
+                entitySchemaName,
+                entityBaseView,
+                code,
+                entityName,
+                entityID,
+                itemEntity,
+                scope,
+                rowFilterKey,
+                fingerprint,
+                cached,
+            });
+        }
+
+        // Reconcile cached dataset slots against live SQL status (GetDatasetStatusByName)
+        // when status was recently fetched, when GetDatasetStatusByName is overridden/spied,
+        // or when any cached item's verification TTL (ServerCacheVerificationTTLMs) has elapsed.
+        let liveStatus: DatasetStatusResultType | undefined;
+        if (cacheAvailable && preparedItems.some(p => p.cached !== null)) {
+            const statusKey = this.buildDatasetStatusCacheKey(datasetName, itemFilters);
+            const recorded = provider._lastDatasetStatusByName.get(statusKey) ?? this._lastDatasetStatusByName.get(statusKey);
+            const isStatusMethodOverridden =
+                this.GetDatasetStatusByName !== GenericDatabaseProvider.prototype.GetDatasetStatusByName ||
+                provider.GetDatasetStatusByName !== GenericDatabaseProvider.prototype.GetDatasetStatusByName;
+            const anyCachedExpired = preparedItems.some(p => {
+                if (!p.cached) return false;
+                const verifiedAt = p.cached.lastVerifiedAt ?? p.cached.cachedAt;
+                return (
+                    this.ServerCacheVerificationTTLMs <= 0 ||
+                    (verifiedAt !== undefined && (Date.now() - verifiedAt) > this.ServerCacheVerificationTTLMs)
                 );
-                const cached = await cache.GetRunViewResult(fingerprint);
+            });
+
+            if (
+                isStatusMethodOverridden ||
+                (anyCachedExpired && (!recorded || (Date.now() - recorded.timestamp) > this.ServerCacheVerificationTTLMs))
+            ) {
+                try {
+                    const fetched = await provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser, providerToUse);
+                    if (fetched?.Success) {
+                        liveStatus = fetched;
+                    }
+                } catch (statusErr) {
+                    LogError(`GetDatasetByName("${datasetName}"): status verification failed: ${statusErr instanceof Error ? statusErr.message : String(statusErr)}`);
+                }
+            } else if (recorded?.status?.Success) {
+                liveStatus = recorded.status;
+            }
+        }
+
+        const statusByEntityID = liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)
+            ? IndexByUUID(liveStatus.EntityUpdateDates.filter(e => Boolean(e.EntityID)), e => e.EntityID)
+            : null;
+        const statusByEntityName = new Map<string, DatasetStatusResultType['EntityUpdateDates'][number]>();
+        if (liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)) {
+            for (const e of liveStatus.EntityUpdateDates) {
+                if (e.EntityName) {
+                    statusByEntityName.set(e.EntityName.trim().toLowerCase(), e);
+                }
+            }
+        }
+
+        for (const prepared of preparedItems) {
+            const { item, entitySchemaName, entityBaseView, code, entityName, entityID, itemEntity, scope, fingerprint } = prepared;
+            let cached = prepared.cached;
+
+            if (cached) {
+                const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+                const latestUpdateDate = this.computeLatestUpdateDate(cached.results, dateFieldToCheck, item);
+
+                if (liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)) {
+                    const statusEntry = (entityID ? statusByEntityID?.Get(entityID) : undefined)
+                        ?? statusByEntityName.get(entityName.trim().toLowerCase());
+                    if (statusEntry) {
+                        const rowCountMatches = cached.results.length === statusEntry.RowCount;
+                        const cachedMaxDate = this.parseClientTimestamp(cached.maxUpdatedAt);
+                        const effectiveCachedTime = Math.max(
+                            latestUpdateDate ? new Date(latestUpdateDate).getTime() : 0,
+                            cachedMaxDate ? cachedMaxDate.getTime() : 0
+                        );
+                        const statusTime = statusEntry.UpdateDate ? new Date(statusEntry.UpdateDate).getTime() : 0;
+                        const timestampMatches =
+                            isNaN(statusTime) ||
+                            statusTime <= 0 ||
+                            effectiveCachedTime <= 0 ||
+                            Math.abs(statusTime - effectiveCachedTime) < 1000;
+
+                        if (!rowCountMatches || !timestampMatches) {
+                            LogStatusEx({
+                                message: `    ♻️ [Dataset RECONCILE-EVICT] "${datasetName}/${code}" (${entityName}) — cached slot (rows=${cached.results.length}) disagreed with SQL status (rows=${statusEntry.RowCount}); invalidating and re-fetching from SQL`,
+                                verboseOnly: true,
+                            });
+                            await cache.InvalidateRunViewResult(fingerprint);
+                            cached = null;
+                        } else {
+                            cache.TouchRunViewResultVerifiedAt(fingerprint);
+                        }
+                    }
+                }
+
                 if (cached) {
                     cacheHitCount++;
-                    const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-                    const latestUpdateDate = this.computeLatestUpdateDate(cached.results, dateFieldToCheck, item);
                     cachedResults.push({
                         EntityID: entityID,
                         EntityName: entityName,
                         Code: code,
-                        Results: cached.results as Record<string, unknown>[],
+                        Results: this.projectDatasetRowsForCaller(datasetName, itemEntity, cached.results as Record<string, unknown>[], contextUser),
                         LatestUpdateDate: latestUpdateDate,
                         Success: true,
                     });
@@ -5908,9 +7410,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 }
             }
 
-            // Cache miss — validate columns and build SQL
+            // Cache miss (or invalidated stale slot) — validate columns and build SQL
             cacheMissCount++;
-            const columns = provider.getColumnsForDatasetItem(item, datasetName);
+            // A caller denied fields never has them selected; such a narrowed read is not written to
+            // the shared slot, which holds full-width rows for every caller.
+            const deniedFields = this.datasetItemDeniedFields(datasetName, itemEntity, contextUser);
+            const columns = provider.getColumnsForDatasetItem(item, datasetName, deniedFields);
             if (!columns) {
                 errorResults.push({
                     EntityID: entityID,
@@ -5928,16 +7433,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const filterSQL = whereSQL ? 'WHERE ' + whereSQL : '';
             uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
             uncachedItems.push(item);
-            // Store fingerprint for write-through caching after SQL
-            const fp = cacheAvailable
-                ? cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
-                    this.InstanceConnectionString,
-                    rowFilterKey,
-                    this.datasetCacheSegment(datasetName, code)
-                )
-                : '';
-            uncachedFingerprints.push(fp);
+            // A narrowed read (the caller is denied fields) is never written to the shared slot.
+            uncachedFingerprints.push(deniedFields.size === 0 ? fingerprint : '');
         }
 
         // Phase 2: Execute SQL only for cache misses
@@ -5958,6 +7455,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             } catch (err) {
                 batchError = err instanceof Error ? err.message : String(err);
                 LogError(`GetDatasetByName("${datasetName}"): Batch execution failed: ${batchError}`);
+                batchError = this.datasetBatchErrorForCaller(batchError, uncachedItems, datasetName, contextUser);
             }
         }
 
@@ -6030,7 +7528,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 EntityID: entityID,
                 EntityName: entityName,
                 Code: code,
-                Results: itemData,
+                Results: this.projectDatasetRowsForCaller(datasetName, provider.EntityByName(entityName), itemData, contextUser),
                 LatestUpdateDate: latestUpdateDate,
                 Success: itemData !== null && itemData !== undefined,
             });
@@ -6223,7 +7721,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             };
         }
 
-        return {
+        const statusResult: DatasetStatusResultType = {
             DatasetID: String(items[0]['DatasetID']),
             DatasetName: datasetName,
             Success: true,
@@ -6231,6 +7729,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             LatestUpdateDate: overallLatestDate,
             EntityUpdateDates: updateDates,
         };
+        const statusKey = this.buildDatasetStatusCacheKey(datasetName, itemFilters);
+        const now = Date.now();
+        this._lastDatasetStatusByName.set(statusKey, { status: statusResult, timestamp: now });
+        provider._lastDatasetStatusByName.set(statusKey, { status: statusResult, timestamp: now });
+        return statusResult;
+    }
+
+    /**
+     * Builds the lookup key for {@link _lastDatasetStatusByName} from dataset name and item filters.
+     */
+    private buildDatasetStatusCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
+        return `${datasetName}::${this.ConvertItemFiltersToUniqueKey(itemFilters ?? [])}`;
     }
 
     /**************************************************************************/
@@ -6246,41 +7756,54 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * binary column can still be named explicitly. When the entity's metadata is not loaded yet —
      * the first `MJ_Metadata` read at boot — the item falls back to `*`, and the rows' byte arrays
      * are converted to base64 by the caller.
+     *
+     * `deniedFields` (lowercased) are the columns the caller may not read. They are never
+     * selected: a named one is dropped, and an item that names none selects every readable column.
      */
-    protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
+    protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string, deniedFields?: Set<string>): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
+        const entity = this.EntityByID(item['EntityID'] as string);
+        const denied = deniedFields ?? new Set<string>();
         if (specifiedColumns.length === 0) {
-            const entity = this.EntityByID(item['EntityID'] as string);
+            if (entity && denied.size > 0) {
+                return this.readableDatasetColumns(entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => f.Name), entity, denied);
+            }
             if (entity?.HasBinaryFields) {
                 return entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => this.QuoteIdentifier(f.Name)).join(',');
             }
+            return '*';
         }
-        if (specifiedColumns.length > 0) {
-            const entity = this.EntityByID(item['EntityID'] as string);
-            if (!entity && this.Entities.length > 0) {
-                LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
+        if (!entity && this.Entities.length > 0) {
+            LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
+            return null;
+        }
+        if (entity) {
+            const invalidColumns = specifiedColumns.filter(col => !entity.FieldByName(col));
+            if (invalidColumns.length > 0) {
+                LogError(`Invalid columns specified for dataset item ${item['Code']} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
                 return null;
             }
-            if (entity) {
-                const invalidColumns: string[] = [];
-                specifiedColumns.forEach(col => {
-                    if (!entity.FieldByName(col)) {
-                        invalidColumns.push(col);
-                    }
-                });
-                if (invalidColumns.length > 0) {
-                    LogError(`Invalid columns specified for dataset item ${item['Code']} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
-                    return null;
-                }
-            }
-            // Ensure DateFieldToCheck is included
-            const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
-            if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
-                if (!entity || entity.FieldByName(dateField))
-                    specifiedColumns.push(dateField);
-            }
         }
-        return specifiedColumns.length > 0 ? specifiedColumns.map(col => this.QuoteIdentifier(col.trim())).join(',') : '*';
+        // Ensure DateFieldToCheck is included
+        const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
+        if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
+            if (!entity || entity.FieldByName(dateField))
+                specifiedColumns.push(dateField);
+        }
+        if (entity && denied.size > 0) {
+            return this.readableDatasetColumns(specifiedColumns, entity, denied);
+        }
+        return specifiedColumns.map(col => this.QuoteIdentifier(col.trim())).join(',');
+    }
+
+    /**
+     * `columns` without the denied ones, quoted and joined. When every one is denied, the primary
+     * key columns are selected instead, which are never denied, so the read still has a shape.
+     */
+    private readableDatasetColumns(columns: string[], entity: EntityInfo, denied: Set<string>): string {
+        const readable = columns.filter(col => !denied.has(col.trim().toLowerCase()));
+        const selected = readable.length > 0 ? readable : entity.PrimaryKeys.map(pk => pk.Name);
+        return selected.map(col => this.QuoteIdentifier(col.trim())).join(',');
     }
 
     /**************************************************************************/
@@ -6431,9 +7954,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const matches = data?.matches ?? [];
 
         const out: ScoredCandidate[] = [];
+        const seenRecordIds = new Set<string>();
         for (const m of matches) {
             const recordId = String(m.metadata?.['RecordID'] ?? '');
             if (!recordId) continue;
+            const normalizedKey = recordId.toLowerCase();
+            if (seenRecordIds.has(normalizedKey)) continue;
+            seenRecordIds.add(normalizedKey);
             out.push({
                 ID: recordId,
                 Score: m.score,

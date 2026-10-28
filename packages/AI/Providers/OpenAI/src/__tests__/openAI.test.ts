@@ -133,6 +133,8 @@ vi.mock('@memberjunction/ai', () => {
         buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
         buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
+        ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
+        CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
         BaseLLM,
         ModelUsage,
         ChatResult,
@@ -507,6 +509,17 @@ describe('OpenAILLM', () => {
             expect(mockCreate).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
         });
 
+        it('asks for the trailing usage chunk on the streaming path, so streamed calls record tokens and cache reads', async () => {
+            mockCreate.mockResolvedValueOnce({});
+
+            await internals.createStreamingRequest(buildChatParams());
+
+            expect(mockCreate).toHaveBeenCalledWith(
+                expect.objectContaining({ stream: true, stream_options: { include_usage: true } }),
+                expect.anything()
+            );
+        });
+
         it('returns a Cancelled, non-failover-able result when the non-streaming request is aborted', async () => {
             const controller = new AbortController();
             const abortError = new MockAPIUserAbortError();
@@ -715,7 +728,7 @@ describe('OpenAILLM — native tool calling', () => {
             expect(result.data.choices[0].finish_reason).toBe('tool_calls');
         });
 
-        it('surfaces a call with malformed arguments rather than dropping it', async () => {
+        it('reports a call with malformed arguments as a malformed tool call rather than dropping it or running it with {}', async () => {
             stubResponse({
                 message: {
                     role: 'assistant',
@@ -727,9 +740,9 @@ describe('OpenAILLM — native tool calling', () => {
 
             const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL] });
 
-            expect(result.data.choices[0].message.toolCalls).toEqual([
-                { id: 'call_1', name: 'get_weather', arguments: {} }
-            ]);
+            expect(result.data.choices[0].message.toolCalls).toBeUndefined();
+            expect(result.data.choices[0].finish_reason).toBe('malformed_tool_call');
+            expect(result.data.choices[0].finishMessage).toContain('get_weather');
         });
 
         it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {

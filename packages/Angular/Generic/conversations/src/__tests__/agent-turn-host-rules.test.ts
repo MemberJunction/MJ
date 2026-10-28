@@ -50,6 +50,9 @@ class FakeDetail {
     public __mj_CreatedAt: Date;
     public LatestResult = null;
     public Saves = 0;
+    public Loads = 0;
+    /** A row from the database (or one the server named); false for a new, unsaved placeholder. */
+    public IsSaved = true;
 
     constructor(id: string, role: string, createdAt: Date = new Date()) {
         this.ID = id;
@@ -63,8 +66,33 @@ class FakeDetail {
     }
 
     public async Load(): Promise<boolean> {
+        this.Loads++;
         return true;
     }
+
+    public GetAll(): Record<string, unknown> {
+        return { ID: this.ID, Role: this.Role, Message: this.Message, Status: this.Status, __mj_CreatedAt: this.__mj_CreatedAt };
+    }
+
+    public async LoadFromData(data: { ID: string; __mj_CreatedAt: Date }): Promise<boolean> {
+        this.ID = data.ID;
+        this.__mj_CreatedAt = data.__mj_CreatedAt;
+        this.IsSaved = true;
+        return true;
+    }
+}
+
+/** When the server created each acknowledged reply row. */
+const ACK_CREATED_AT = new Date('2026-10-12T10:00:00.000Z');
+
+/** An agent-service mock that acknowledges the run (naming the reply row the server created) before it returns. */
+function acknowledging(ackArgIndex: number, result: () => unknown): Fn {
+    let replies = 0;
+    return vi.fn(async (...args: unknown[]) => {
+        const onAccepted = args[ackArgIndex] as ((reply: { ConversationDetailId: string; CreatedAt: Date }) => void) | undefined;
+        onAccepted?.({ ConversationDetailId: `server-reply-${++replies}`, CreatedAt: ACK_CREATED_AT });
+        return result();
+    });
 }
 
 /** A successful agent result whose reply is plain chat. */
@@ -110,8 +138,8 @@ function buildHarness(): Harness {
     afterEmitter.subscribe(e => after.push(e));
     sentEmitter.subscribe(d => sent.push(d));
 
-    const processMessage = vi.fn(async () => chatResult('run-manager'));
-    const invokeSubAgent = vi.fn(async () => chatResult('run-agent'));
+    const processMessage = acknowledging(3, () => chatResult('run-manager'));
+    const invokeSubAgent = acknowledging(5, () => chatResult('run-agent'));
     const findLatestOutput = vi.fn(async () => null);
     const addTask = vi.fn(() => 'task-1');
 
@@ -150,6 +178,7 @@ function buildHarness(): Harness {
         dataCache: {
             createConversationDetail: vi.fn(async () => {
                 const row = new FakeDetail(`row-${++nextId}`, 'AI');
+                row.IsSaved = false; // a new, unsaved entity, as GetEntityObject gives one
                 created.push(row);
                 return row;
             }),
@@ -323,11 +352,11 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
 
         it("refuses the manager's delegation to a disallowed agent before any row is written for it", async () => {
             h.set({ AllowedAgentIDs: [MANAGER.ID, RESEARCH.ID] });
-            h.processMessage.mockResolvedValueOnce({
+            h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
                 success: true,
                 agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
                 payload: { invokeAgent: 'Writer', reasoning: 'writing task' },
-            });
+            })));
 
             await h.route(userMessage());
 
@@ -339,11 +368,11 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
 
         it("lets the manager's delegation to an allowed agent run", async () => {
             h.set({ AllowedAgentIDs: [MANAGER.ID, RESEARCH.ID] });
-            h.processMessage.mockResolvedValueOnce({
+            h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
                 success: true,
                 agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
                 payload: { invokeAgent: 'Research', reasoning: 'research task' },
-            });
+            })));
 
             await h.route(userMessage());
 
@@ -354,7 +383,7 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
         it('does not submit a workflow with an agent step the chat does not allow', async () => {
             const submit = vi.spyOn(TaskGraphSubmitOperation.prototype, 'Execute');
             h.set({ AllowedAgentIDs: [MANAGER.ID, RESEARCH.ID] });
-            h.processMessage.mockResolvedValueOnce({
+            h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
                 success: true,
                 agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Planning' },
                 payload: {
@@ -366,7 +395,7 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
                         ],
                     },
                 },
-            });
+            })));
 
             await h.route(userMessage());
 
@@ -589,5 +618,169 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
         expect(h.before).toHaveLength(0);
         expect(h.created).toHaveLength(0);
         expect(notify).toHaveBeenCalledOnce();
+    });
+});
+
+describe('MessageInputComponent — only the server writes agent replies (A19)', () => {
+    let h: Harness;
+
+    beforeEach(() => {
+        vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue(AGENTS as never);
+        vi.spyOn(PlanModePreference, 'IsEnabled').mockReturnValue(false);
+        vi.spyOn(PlanModePreference, 'ClaimPendingNew').mockImplementation(() => undefined);
+        vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({ CreateSimpleNotification: vi.fn() } as unknown as MJNotificationService);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        h = buildHarness();
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it.each(ROUTES)('never saves a reply row on route $route', async ({ setup }) => {
+        await h.route(userMessage(), setup(h));
+
+        expect(h.created.length).toBeGreaterThan(0);
+        for (const reply of h.created) {
+            expect(reply.Saves).toBe(0);
+        }
+    });
+
+    it("shows an unsaved 'Starting…' placeholder before the run is acknowledged", async () => {
+        let atCall: { sent: boolean; saved: boolean; status: string } | null = null;
+        h.invokeSubAgent.mockImplementationOnce(async (...args: unknown[]) => {
+            const placeholder = h.created[0];
+            atCall = { sent: h.sent.includes(placeholder), saved: placeholder.IsSaved, status: placeholder.Status };
+            (args[5] as (r: { ConversationDetailId: string; CreatedAt: Date }) => void)({ ConversationDetailId: 'server-reply-9', CreatedAt: ACK_CREATED_AT });
+            return chatResult('run-agent');
+        });
+
+        await h.route(userMessage(), mentionsOf(RESEARCH));
+
+        expect(atCall).toEqual({ sent: true, saved: false, status: 'In-Progress' });
+        expect(h.created[0].Message).toBe('⏳ Starting...');
+    });
+
+    it("becomes the server's row on the ack: its ID, and its creation time for the timer", async () => {
+        await h.route(userMessage(), mentionsOf(RESEARCH));
+
+        const reply = h.created[0];
+        expect(reply.ID).toBe('server-reply-1');
+        expect(reply.__mj_CreatedAt).toBe(ACK_CREATED_AT);
+        expect(reply.IsSaved).toBe(true);
+    });
+
+    it('keys the active task by the reply row the ack names, and adds it only then', async () => {
+        await h.route(userMessage(), mentionsOf(RESEARCH));
+
+        expect(h.addTask).toHaveBeenCalledOnce();
+        expect(h.addTask.mock.calls[0][0]).toMatchObject({ conversationDetailId: 'server-reply-1', relatedMessageId: 'user-msg-1' });
+    });
+
+    it('shows the reply as the server wrote it once the run returns, by reloading it', async () => {
+        await h.route(userMessage(), mentionsOf(RESEARCH));
+
+        expect(h.created[0].Loads).toBeGreaterThan(0);
+        expect(h.created[0].Saves).toBe(0);
+    });
+
+    it('marks a run the server never acknowledged as failed on screen only, never saving it', async () => {
+        h.invokeSubAgent.mockImplementationOnce(async () => ({ success: false, errorMessage: 'MJAPI unreachable' }));
+
+        await h.route(userMessage(), mentionsOf(RESEARCH));
+
+        const reply = h.created[0];
+        expect(reply.Saves).toBe(0);
+        expect(reply.IsSaved).toBe(false);
+        expect(reply.Status).toBe('Error');
+        expect(reply.Message).toContain('MJAPI unreachable');
+        expect(h.addTask).not.toHaveBeenCalled();
+    });
+
+    it("hides the manager's silent reply (bookkeeping a person may write), and its words stay the server's", async () => {
+        h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
+            success: true,
+            agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: '' },
+            payload: {},
+        })));
+
+        await h.route(userMessage());
+
+        const managerReply = h.created[0];
+        expect(managerReply.HiddenToUser).toBe(true);
+        expect(managerReply.Saves).toBe(1);
+        expect(managerReply.Message).toBe('⏳ Starting...'); // never rewritten by the chat
+    });
+
+    it("asks the server for the workflow's status bubble under the planning reply, and shows the one it wrote", async () => {
+        const bubble = new FakeDetail('server-status-1', 'AI');
+        bubble.Status = 'In-Progress';
+        bubble.Message = '▶️ Workflow started — 2 task(s) running.';
+        h.hostRows.set(bubble.ID, bubble);
+        const submit = vi.spyOn(TaskGraphSubmitOperation.prototype, 'Execute').mockResolvedValue({
+            Success: true,
+            Output: { success: true, statusConversationDetailID: 'server-status-1' },
+        } as never);
+        h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
+            success: true,
+            agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Planning' },
+            payload: { taskGraph: { workflowName: 'Report', tasks: [] } },
+        })));
+
+        await h.route(userMessage());
+
+        expect(submit).toHaveBeenCalledOnce();
+        expect(submit.mock.calls[0][0]).toMatchObject({ conversationDetailID: 'server-reply-1', postStatusMessage: true });
+        expect(h.created).toHaveLength(1); // the chat writes no row of its own: only the manager's placeholder
+        expect(h.sent).toContain(bubble);
+        expect(bubble.Saves).toBe(0);
+        const registered = (h.component as unknown as { streamingService: { registerMessageCallback: Fn } }).streamingService.registerMessageCallback;
+        expect(registered.mock.calls.map((c) => c[0])).toContain('server-status-1');
+    });
+
+    it("threads a delegate's reply under the manager's reply, as before, by asking the server to", async () => {
+        h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
+            success: true,
+            agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
+            payload: { invokeAgent: 'Research', reasoning: 'research task' },
+        })));
+
+        await h.route(userMessage());
+
+        const [managerReply, delegateReply] = h.created;
+        expect(managerReply.ID).toBe('server-reply-1');
+        expect(h.invokeSubAgent.mock.calls[0][15]).toEqual({ ReplyParentId: 'server-reply-1' });
+        expect(delegateReply.ParentID).toBe('server-reply-1');
+        expect(delegateReply.Saves).toBe(0);
+    });
+
+    it("shows the manager's 'Continuing with X' line when it hands the turn back, written by the server", async () => {
+        h.set({ ConversationHistory: [aiReply(WRITER.ID)] });
+        h.component.BeforeAgentTurn.subscribe(e => { e.RedirectAgentId = MANAGER.ID; });
+        h.processMessage.mockImplementationOnce(acknowledging(3, () => ({
+            success: true,
+            agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: '' },
+            payload: {},
+        })));
+        let lineAtCall: { message: string; status: string; agent: string | null; saved: boolean } | null = null;
+        h.invokeSubAgent.mockImplementationOnce(async (...args: unknown[]) => {
+            const line = h.created[1];
+            lineAtCall = { message: line.Message, status: line.Status, agent: line.AgentID, saved: line.IsSaved };
+            (args[5] as (r: { ConversationDetailId: string; CreatedAt: Date; AnnouncementDetailId?: string }) => void)({
+                ConversationDetailId: 'server-reply-7', CreatedAt: ACK_CREATED_AT, AnnouncementDetailId: 'server-line-7',
+            });
+            return chatResult('run-writer');
+        });
+
+        await h.route(userMessage());
+
+        const [, line, reply] = h.created;
+        expect(lineAtCall).toEqual({ message: 'Continuing with **Writer** for refinement...', status: 'Complete', agent: MANAGER.ID, saved: false });
+        expect(h.invokeSubAgent.mock.calls[0][15]).toEqual({ AnnouncedByAgentId: MANAGER.ID });
+        expect(line.ID).toBe('server-line-7');
+        expect(line.Saves).toBe(0);
+        expect(reply.ID).toBe('server-reply-7');
+        expect(reply.ParentID).toBe('row-2'); // the line's placeholder: the server threads the reply under the line it writes
+        expect(reply.Saves).toBe(0);
     });
 });

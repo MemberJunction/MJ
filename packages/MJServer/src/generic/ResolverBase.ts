@@ -1,5 +1,6 @@
 import {
   AggregateExpression,
+  AssertClientInputWritableForUser,
   BaseEntity,
   BaseEntityEvent,
   CompositeKey,
@@ -14,8 +15,10 @@ import {
   KeyValuePair,
   LogDebug,
   LogError,
+  LogErrorEx,
   LogStatus,
   Metadata,
+  ProjectEntityValuesForUser,
   ReadableFieldsTransportKey,
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
@@ -23,8 +26,17 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
+  ViewPropertyValues,
 } from '@memberjunction/core';
-import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
+
+/**
+ * Extended RunViewResult carrying a non-enumerable reference to the resolved view entity
+ * so downstream resolvers (e.g. RunViewResolver) do not re-query `MJ: User Views` a third time.
+ */
+export type RunViewResultWithResolvedView<T = unknown> = RunViewResult<T> & {
+  _resolvedViewEntity?: MJUserViewEntityExtended;
+};
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ClientClauseScreen, UserCache, type EntityBaseViewAllowList } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
@@ -37,11 +49,11 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate, StatusUpdateOwnerID } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -51,11 +63,18 @@ import { Subscription } from 'rxjs';
  * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
  * do not track record changes: their server-side write rules compare against the prior state, which a client could
  * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ *
+ * `mj: conversations` and `mj: ai agent sessions` carry the anonymous realtime-session ownership key
+ * (`ExternalID` / `ConversationID`), which their server entities refuse an anonymous visitor to change — a rule
+ * that decides on `Dirty`, so the baseline must be the stored row, not a client-supplied one (#4931).
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
   'mj: conversation details',
   'mj: data context items',
+  'mj: conversations',
+  'mj: ai agent sessions',
+  'mj: ai agent runs',
 ]);
 
 export class ResolverBase {
@@ -97,6 +116,141 @@ export class ResolverBase {
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
    * @returns A new object in transport shape, or null when there is nothing to map
    */
+  /**
+   * Precomputed per-entity / per-request field-mapping plan shared across rows in
+   * {@link MapFieldNamesToCodeNames} and {@link ArrayMapFieldNamesToCodeNames}.
+   */
+  private buildFieldMappingPlan(
+    entityName: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+    deniedReadFields?: Set<string>,
+    recordChangeProjector?: RecordChangeFieldSecurityProjector
+  ): {
+    entityInfo: EntityInfo;
+    fieldsToProcess: Array<{ name: string; mappedFieldName: string; isDenied: boolean }>;
+    readableFields: string[] | null;
+    projector: RecordChangeFieldSecurityProjector | undefined;
+    encryptedFields: EntityFieldInfo[];
+    checkBinary: boolean;
+  } {
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
+    if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
+
+    const denied = deniedReadFields ?? (
+      entityInfo.FieldLevelSecurityApplies && contextUser
+        ? entityInfo.GetDeniedReadFields(contextUser)
+        : null
+    );
+
+    const mapper = new FieldMapper();
+    const fieldsToProcess: Array<{ name: string; mappedFieldName: string; isDenied: boolean }> = [];
+    for (const f of entityInfo.Fields) {
+      const mappedFieldName = mapper.MapFieldName(f.CodeName);
+      const isDenied = Boolean(denied?.has(f.Name.trim().toLowerCase()));
+      if (isDenied || mappedFieldName !== f.Name) {
+        fieldsToProcess.push({ name: f.Name, mappedFieldName, isDenied });
+      }
+    }
+
+    const readableFields = this.BuildReadableFieldsTransportValue(entityInfo, denied);
+    const projector = contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)
+      ? (recordChangeProjector ?? new RecordChangeFieldSecurityProjector(md, contextUser))
+      : undefined;
+    const encryptedFields = entityInfo.EncryptedFields ?? [];
+    const checkBinary = entityInfo.HasBinaryFields !== false;
+
+    return {
+      entityInfo,
+      fieldsToProcess,
+      readableFields,
+      projector,
+      encryptedFields,
+      checkBinary,
+    };
+  }
+
+  /**
+   * Applies synchronous field renaming, FLS stripping, readable-fields transport stamping, and
+   * Record Changes payload projection for a single row using a precomputed mapping plan.
+   */
+  private mapRowSynchronously(
+    dataObject: Record<string, unknown> | null | undefined,
+    plan: ReturnType<ResolverBase['buildFieldMappingPlan']>
+  ): Record<string, unknown> | null {
+    if (!dataObject || Object.keys(dataObject).length === 0) {
+      return null;
+    }
+    let row: Record<string, unknown> = plan.checkBinary
+      ? ReplaceByteArraysWithBase64({ ...dataObject })
+      : { ...dataObject };
+
+    for (let i = 0; i < plan.fieldsToProcess.length; i++) {
+      const fp = plan.fieldsToProcess[i];
+      if (Object.prototype.hasOwnProperty.call(row, fp.name)) {
+        if (fp.isDenied) {
+          delete row[fp.name];
+          delete row[fp.mappedFieldName];
+        } else {
+          row[fp.mappedFieldName] = row[fp.name];
+          delete row[fp.name];
+        }
+      }
+    }
+
+    if (plan.readableFields) {
+      row[ReadableFieldsTransportKey] = plan.readableFields;
+    }
+
+    if (plan.projector) {
+      row = plan.projector.ProjectRow(row);
+    }
+
+    return row;
+  }
+
+  /**
+   * Decrypts or masks encrypted fields on a mapped row when `plan.encryptedFields.length > 0`.
+   */
+  private async decryptRowEncryptedFields(
+    row: Record<string, unknown>,
+    encryptedFields: EntityFieldInfo[],
+    contextUser?: UserInfo
+  ): Promise<void> {
+    for (const field of encryptedFields) {
+      const fieldName = field.CodeName;
+      const value = row[fieldName];
+
+      if (value === null || value === undefined) continue;
+
+      const engine = EncryptionEngine.Instance;
+      await engine.Config(false, contextUser);
+      const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
+      if (typeof value === 'string' && IsValueEncrypted(value, keyMarker)) {
+        if (field.AllowDecryptInAPI) {
+          if (contextUser) {
+            try {
+              const decryptedValue = await engine.Decrypt(value, contextUser);
+              row[fieldName] = decryptedValue;
+            } catch (err) {
+              if (IsEncryptionKeyUnavailable(err)) {
+                ReportEncryptionKeyUnavailable(err);
+              } else {
+                LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+              }
+              row[fieldName] = ENCRYPTED_SENTINEL;
+            }
+          } else {
+            row[fieldName] = ENCRYPTED_SENTINEL;
+          }
+        } else if (!field.SendEncryptedValue) {
+          row[fieldName] = ENCRYPTED_SENTINEL;
+        }
+      }
+    }
+  }
+
   protected async MapFieldNamesToCodeNames(
     entityName: string,
     dataObject: any,
@@ -105,133 +259,15 @@ export class ResolverBase {
     deniedReadFields?: Set<string>,
     recordChangeProjector?: RecordChangeFieldSecurityProjector
   ): Promise<any> {
-    // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
     }
-    // Shallow copy up front so every write below lands on our object, never the caller's.
-    // Binary values are base64 strings everywhere above the providers; any byte array that still
-    // reaches a resolver (custom code, an external driver) is converted here, because GraphQL's
-    // String scalar cannot serialize a Buffer and would fail the whole response.
-    dataObject = ReplaceByteArraysWithBase64({ ...dataObject });
-
-    // for the given entity name provided, check to see if there are any fields
-    // where the code name is different from the field name, and for just those
-    // fields, iterate through the dataObject and REPLACE the property that has the field name
-    // with the CodeName, because we can't transfer those via GraphQL as they are not
-    // valid property names in GraphQL
-    {
-      const md = provider ?? new Metadata();
-      const entityInfo = md.EntityByName(entityName);
-      if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
-      // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
-      // FIELD-LEVEL SECURITY — this is the authoritative read boundary for every GraphQL
-      // return path (single-record resolvers, external-data-source loads, and anything else
-      // routed through here), sitting exactly where encryption masking already lives.
-      //
-      // The denied set is normally computed ONCE per (entity, user) by the caller and passed
-      // in: this method runs once per ROW, so resolving it here would cost fields x rows
-      // aggregations. We fall back to computing it when a caller doesn't supply it (the
-      // single-record resolvers, where "once per row" and "once per request" are the same
-      // thing) rather than failing open — a missing argument must never mean missing security.
-      const denied = deniedReadFields ?? (
-        entityInfo.EnableFieldLevelSecurity && contextUser
-          ? entityInfo.GetDeniedReadFields(contextUser)
-          : null
-      );
-
-      const mapper = new FieldMapper();
-      entityInfo.Fields.forEach((f) => {
-        if (dataObject.hasOwnProperty(f.Name)) {
-          // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
-          const mappedFieldName = mapper.MapFieldName(f.CodeName);
-          if (denied?.has(f.Name.trim().toLowerCase())) {
-            // Omit entirely rather than nulling — a null is indistinguishable from a real
-            // null value, and the client should see the field as absent, not as empty.
-            // Both key shapes are removed because callers reach this method with rows keyed
-            // either way depending on whether mapping has already run.
-            delete dataObject[f.Name];
-            delete dataObject[mappedFieldName];
-            return;
-          }
-          if (mappedFieldName !== f.Name) {
-            dataObject[mappedFieldName] = dataObject[f.Name];
-            delete dataObject[f.Name];
-          }
-        }
-      });
-
-      // Field security, second half: say IN-BAND which fields this caller may read. Deleting the
-      // key above is not enough on its own — GraphQL emits every SELECTED field regardless, so a
-      // denied field the client asked for arrives as an explicit null it cannot tell apart from a
-      // genuine one. The client must not settle that from its own metadata: during the window
-      // after a permission change its copy disagrees with ours, and once metadata filtering lands
-      // (issue #3485) it may not hold the permission rows at all. Null for unrestricted callers,
-      // which is nearly every request.
-      const readableFields = this.BuildReadableFieldsTransportValue(entityInfo, denied);
-      if (readableFields) {
-        dataObject[ReadableFieldsTransportKey] = readableFields;
-      }
-
-      // Field security, third part — the audit trail. A 'MJ: Record Changes' row carries the old
-      // and new values of ANOTHER entity's fields, and its own EnableFieldLevelSecurity flag is
-      // off, so everything above is a no-op for it and the payload would flow out untouched. The
-      // projector recomputes the denied set against the entity each row is about; see
-      // RecordChangeFieldSecurityProjector for what each payload column gets.
-      //
-      // Same "a missing argument must never mean missing security" rule as the denied set above:
-      // the projector is normally built ONCE per request by the array caller and passed in, and
-      // we build one here when it wasn't — the single-record resolvers, where once-per-row and
-      // once-per-request are the same thing.
-      if (contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
-        const projector = recordChangeProjector ?? new RecordChangeFieldSecurityProjector(md, contextUser);
-        dataObject = projector.ProjectRow(dataObject);
-      }
-
-      // Handle encrypted fields - data from raw SQL queries is still encrypted
-      const encryptedFields = entityInfo.EncryptedFields;
-      if (encryptedFields.length > 0) {
-        for (const field of encryptedFields) {
-          const fieldName = field.CodeName;
-          const value = dataObject[fieldName];
-
-          // Skip null/undefined values
-          if (value === null || value === undefined) continue;
-
-          // Check if value is encrypted (raw SQL returns encrypted values)
-          const engine = EncryptionEngine.Instance;
-          await engine.Config(false, contextUser);
-          const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
-          if (typeof value === 'string' && IsValueEncrypted(value, keyMarker)) {
-            if (field.AllowDecryptInAPI) {
-              // Decrypt the value for the client
-              if (contextUser) {
-                try {
-                  const decryptedValue = await engine.Decrypt(value, contextUser);
-                  dataObject[fieldName] = decryptedValue;
-                } catch (err) {
-                  if (IsEncryptionKeyUnavailable(err)) {
-                    ReportEncryptionKeyUnavailable(err);
-                  } else {
-                    LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
-                  }
-                  // On decryption failure, use sentinel for safety
-                  dataObject[fieldName] = ENCRYPTED_SENTINEL;
-                }
-              } else {
-                // No context user, can't decrypt - use sentinel
-                dataObject[fieldName] = ENCRYPTED_SENTINEL;
-              }
-            } else if (!field.SendEncryptedValue) {
-              // AllowDecryptInAPI=false and SendEncryptedValue=false - use sentinel
-              dataObject[fieldName] = ENCRYPTED_SENTINEL;
-            }
-            // else: AllowDecryptInAPI=false and SendEncryptedValue=true - keep encrypted value as-is
-          }
-        }
-      }
+    const plan = this.buildFieldMappingPlan(entityName, contextUser, provider, deniedReadFields, recordChangeProjector);
+    const mapped = this.mapRowSynchronously(dataObject as Record<string, unknown>, plan);
+    if (mapped && plan.encryptedFields.length > 0) {
+      await this.decryptRowEncryptedFields(mapped, plan.encryptedFields, contextUser);
     }
-    return dataObject;
+    return mapped;
   }
 
   /**
@@ -291,26 +327,17 @@ export class ResolverBase {
     if (!dataObjectArray || dataObjectArray.length === 0) {
       return dataObjectArray;
     }
-    // Resolve the field-security denied set ONCE for the whole array and pass it into the
-    // per-row mapper. MapFieldNamesToCodeNames runs once per row, so computing this inside
-    // the loop would be fields x rows aggregations — 40,000 for a 1,000-row x 40-column
-    // result, each re-scanning the user's roles and allocating. Gated on the entity-level
-    // flag so non-FLS entities (nearly all of them) don't even resolve the entity twice.
-    const md = provider ?? new Metadata();
-    const entityInfo = md.EntityByName(entityName);
-    const deniedReadFields = entityInfo?.EnableFieldLevelSecurity && contextUser
-      ? entityInfo.GetDeniedReadFields(contextUser)
-      : undefined;
-    // Record Changes payload security is resolved per DISTINCT target entity, and one array can
-    // span many — so the projector, which owns that memo, must outlive the row loop. Built once
-    // here for the same reason the denied set above is: GetDeniedReadFields walks every field on
-    // an entity and must never be called per row.
-    const recordChangeProjector = contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)
-      ? new RecordChangeFieldSecurityProjector(md, contextUser)
-      : undefined;
-    const mapped: any[] = [];
-    for (const element of dataObjectArray) {
-      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields, recordChangeProjector));
+    // Precompute the entity lookup, FieldMapper plan, denied-fields set, readable-fields list,
+    // and Record Changes projector ONCE for the whole array rather than per row.
+    const plan = this.buildFieldMappingPlan(entityName, contextUser, provider);
+    const hasEncryptedFields = plan.encryptedFields.length > 0;
+    const mapped: Array<Record<string, unknown> | null> = new Array(dataObjectArray.length);
+    for (let i = 0; i < dataObjectArray.length; i++) {
+      const row = this.mapRowSynchronously(dataObjectArray[i] as Record<string, unknown>, plan);
+      if (row && hasEncryptedFields) {
+        await this.decryptRowEncryptedFields(row, plan.encryptedFields, contextUser);
+      }
+      mapped[i] = row;
     }
     return mapped;
   }
@@ -361,6 +388,7 @@ export class ResolverBase {
     if (!loaded) {
       return null;
     }
+    // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
     const mapped = await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
     return mapped as T;
   }
@@ -551,6 +579,53 @@ export class ResolverBase {
     }
   }
 
+  /**
+   * Resolves a User View by name, consulting the in-memory {@link UserViewEngine} cache first
+   * and falling back to a database `RunView` only on a cache miss.
+   */
+  protected async resolveUserViewByName(
+    viewName: string,
+    provider: DatabaseProviderBase,
+    contextUser?: UserInfo,
+  ): Promise<MJUserViewEntityExtended | null> {
+    if (UserViewEngine.Instance.Loaded) {
+      const cached = UserViewEngine.Instance.GetViewByName(viewName);
+      if (cached) {
+        return cached;
+      }
+    }
+    const rv = provider as unknown as IRunViewProvider;
+    const result = await rv.RunView<MJUserViewEntityExtended>({
+      EntityName: 'MJ: User Views',
+      // SECURITY: the view name is client-supplied and lands inside a SQL literal.
+      ExtraFilter: "Name='" + EscapeSQLString(viewName) + "'",
+    }, contextUser);
+    if (result && result.Success && result.Results.length > 0) {
+      return result.Results[0];
+    }
+    return null;
+  }
+
+  /**
+   * Resolves a User View by ID, consulting the in-memory {@link UserViewEngine} cache first
+   * and falling back to an entity `Load()` only on a cache miss.
+   */
+  protected async resolveUserViewByID(
+    viewID: string,
+    provider: DatabaseProviderBase,
+    contextUser?: UserInfo,
+  ): Promise<MJUserViewEntityExtended | null> {
+    if (UserViewEngine.Instance.Loaded) {
+      const cached = UserViewEngine.Instance.GetViewById(viewID);
+      if (cached) {
+        return cached;
+      }
+    }
+    const viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
+    await viewInfo.Load(viewID);
+    return viewInfo;
+  }
+
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       // Log aggregate input for debugging
@@ -558,14 +633,8 @@ export class ResolverBase {
         LogStatus(`[ResolverBase] RunViewByNameGeneric received aggregates: viewName=${viewInput.ViewName}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
       }
 
-      const rv = provider as any as IRunViewProvider;
-      const result = await rv.RunView<MJUserViewEntityExtended>({
-        EntityName: 'MJ: User Views',
-        // SECURITY: the view name is client-supplied and lands inside a SQL literal.
-        ExtraFilter: "Name='" + EscapeSQLString(viewInput.ViewName) + "'",
-      }, userPayload.userRecord);
-      if (result && result.Success && result.Results.length > 0) {
-        const viewInfo = result.Results[0];
+      const viewInfo = await this.resolveUserViewByName(viewInput.ViewName, provider, userPayload.userRecord);
+      if (viewInfo) {
         return this.RunViewGenericInternal(
           provider,
           viewInfo,
@@ -590,7 +659,9 @@ export class ResolverBase {
             : undefined,
           viewInput.BypassCache,
           viewInput.DataSource,
-          viewInput.IncludeBinaryFields
+          viewInput.IncludeBinaryFields,
+          viewInput.AlternateBaseView,
+          viewInput.Properties
         );
       }
       else {
@@ -611,8 +682,10 @@ export class ResolverBase {
       }
 
       const contextUser = this.GetUserFromPayload(userPayload);
-      const viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
-      await viewInfo.Load(viewInput.ViewID);
+      const viewInfo = await this.resolveUserViewByID(viewInput.ViewID, provider, contextUser);
+      if (!viewInfo) {
+        return null;
+      }
       return this.RunViewGenericInternal(
         provider,
         viewInfo,
@@ -635,7 +708,9 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView,
+        viewInput.Properties
       );
     } catch (err) {
       console.log(err);
@@ -683,7 +758,8 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView
       );
     } catch (err) {
       console.log(err);
@@ -704,15 +780,14 @@ export class ResolverBase {
         let viewInfo: MJUserViewEntityExtended | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'MJ: User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
+          viewInfo = await this.resolveUserViewByName(viewInput.ViewName, provider, userPayload.userRecord);
           // Populate EntityName on the input so callers (e.g. RunViews resolver) can
           // look up the entity without re-querying the view
           if (viewInfo && !viewInput.EntityName) {
             viewInput.EntityName = viewInfo.Entity;
           }
         } else if (viewInput.ViewID) {
-          viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
-          await viewInfo.Load(viewInput.ViewID);
+          viewInfo = await this.resolveUserViewByID(viewInput.ViewID, provider, contextUser);
           // Populate EntityName on the input so callers can look up the entity
           if (viewInfo && !viewInput.EntityName) {
             viewInput.EntityName = viewInfo.Entity;
@@ -759,6 +834,8 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          alternateBaseView: viewInput.AlternateBaseView,
+          properties: viewInput.Properties,
         });
       } catch (err) {
         LogError(err);
@@ -770,6 +847,31 @@ export class ResolverBase {
     return results;
   }
 
+  /**
+   * What an entity event may carry to a CloudEvents sink or a log line.
+   *
+   * The whole row for an entity without field security. For one where it applies (its own flag
+   * or an IS-A ancestor's), and for `MJ: Record Changes` (whose payload columns hold other
+   * entities' values), only the primary key and the names of the fields that changed: the sink
+   * is outside MemberJunction with no reader to project the row for, and these events fire for
+   * server-internal saves too, whose objects hold every column.
+   */
+  protected EntityEventPayload(baseEntity: BaseEntity, changedFieldNames?: string[]): Record<string, unknown> {
+    const entityInfo = baseEntity.EntityInfo;
+    if (!entityInfo?.FieldLevelSecurityApplies && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
+      // fls-guard: entity without field security and not the audit trail; whole row is the documented payload
+      return baseEntity.GetAll();
+    }
+    return {
+      // Read through Get() rather than PrimaryKey, which builds every field object of a raw-mode record.
+      PrimaryKey: (entityInfo.PrimaryKeys ?? []).map((pk) => ({ FieldName: pk.Name, Value: baseEntity.Get(pk.Name) })),
+      // A completed save has already rebased the object, so nothing on it is dirty: the event
+      // carries the names the save wrote. Other events (save_started) still read them off the object.
+      // GetDirtyFieldNames answers without building field objects for a record still in raw mode.
+      ChangedFields: changedFieldNames ?? baseEntity.GetDirtyFieldNames(),
+    };
+  }
+
   private static _priorEmittedData: {Entity: string, PKey: CompositeKey}[] = [];
   protected async EmitCloudEvent({ component, event, eventCode, args }: MJEvent) {
     if (ResolverBase._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
@@ -777,7 +879,7 @@ export class ResolverBase {
       const type = `MemberJunction.${event}${extendedType}`;
       const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
       const subject = args instanceof BaseEntityEvent ? args.baseEntity.EntityInfo.CodeName : undefined;
-      const data = args?.baseEntity?.GetAll() ?? {};
+      const data = args?.baseEntity ? this.EntityEventPayload(args.baseEntity, args.ChangedFieldNames) : {};
 
       const cloudEvent = new CloudEvent({ type, source, subject, data });
 
@@ -1137,7 +1239,9 @@ export class ResolverBase {
     afterKey?: CompositeKey,
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
-    includeBinaryFields?: boolean
+    includeBinaryFields?: boolean,
+    alternateBaseView?: string,
+    properties?: ViewPropertyValues
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1199,6 +1303,7 @@ export class ResolverBase {
         {
           ViewID: viewInfo.ID,
           ViewName: viewInfo.Name,
+          ViewEntity: viewInfo.ID ? viewInfo : undefined,
           EntityName: viewInfo.Entity,
           ExtraFilter: extraFilter,
           OrderBy: orderBy,
@@ -1219,9 +1324,21 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          AlternateBaseView: alternateBaseView,
+          Properties: properties,
+          TimeZone: userPayload?.TimeZone,
         },
         user
       );
+
+      if (result && typeof result === 'object') {
+        Object.defineProperty(result, '_resolvedViewEntity', {
+          value: viewInfo,
+          enumerable: false,
+          configurable: true,
+          writable: true,
+        });
+      }
 
       // Log aggregate results for debugging
       if (aggregates?.length) {
@@ -1253,7 +1370,8 @@ export class ResolverBase {
         await this.ArrayFilterEncryptedFieldsForAPI(
           viewInfo.Entity,
           result.Results as Record<string, unknown>[],
-          user
+          user,
+          md
         );
       }
 
@@ -1349,6 +1467,7 @@ export class ResolverBase {
         runViewParams.push({
           ViewID: param.viewInfo.ID,
           ViewName: param.viewInfo.Name,
+          ViewEntity: param.viewInfo.ID ? param.viewInfo : undefined,
           EntityName: param.viewInfo.Entity,
           ExtraFilter: param.extraFilter,
           OrderBy: param.orderBy,
@@ -1369,6 +1488,9 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          AlternateBaseView: param.alternateBaseView,
+          Properties: param.properties,
+          TimeZone: param.userPayload?.TimeZone,
         });
       }
 
@@ -1390,7 +1512,8 @@ export class ResolverBase {
             await this.ArrayFilterEncryptedFieldsForAPI(
               entityName,
               runViewResult.Results as Record<string, unknown>[],
-              contextUser
+              contextUser,
+              md
             );
           }
         }
@@ -1529,8 +1652,9 @@ export class ResolverBase {
    * skip redundant re-fetches (it already handled the event locally).
    *
    * The row itself rides along ONLY for entities opted in via
-   * `cacheSettings.recordDataBroadcastEntities` — this event reaches every connected client
-   * unfiltered, so the row would otherwise be readable by sessions that could not read the record.
+   * `cacheSettings.recordDataBroadcastEntities`, and never for one under field-level security —
+   * this event reaches every connected client unprojected, so the row would otherwise be readable
+   * by sessions that could not read the record or its restricted fields.
    */
   protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
     const entityName = entityObject.EntityInfo.Name;
@@ -1542,7 +1666,8 @@ export class ResolverBase {
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
       recordData:
-        action === 'save' && MayBroadcastRecordData(entityName)
+        action === 'save' && MayBroadcastRecordData(entityName, entityObject.EntityInfo)
+          // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
           ? JSON.stringify(entityObject.GetAll())
           : undefined,
     });
@@ -1550,16 +1675,17 @@ export class ResolverBase {
 
   /**
    * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
-   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
-   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
-   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
-   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
-   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   * owner key of `userPayload` (`StatusUpdateOwnerID`: the request's user, or the widget guest an
+   * elevated payload stands in for) so the subscription filter can bind delivery to identity (see B49 /
+   * `StatusUpdatesFilter`). The ergonomic wrapper every resolver should use instead of calling
+   * `pubSub.publish` on the topic directly — it makes omitting identity impossible. Non-resolver
+   * publishers (services, the liveness heartbeat) call the shared `PublishStatusUpdate()` function
+   * directly with an explicit `ownerUserId`.
    */
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
     PublishStatusUpdate(pubSub, {
       sessionId,
-      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      ownerUserId: StatusUpdateOwnerID(userPayload),
       message,
     });
   }
@@ -1583,28 +1709,52 @@ export class ResolverBase {
             return;
           }
 
-          const baseEntityValues = baseEntity ? baseEntity.GetAll() : null;
+          const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity, event.args instanceof BaseEntityEvent ? event.args.ChangedFieldNames : undefined) : null;
           const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
           LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
           await this.EmitCloudEvent(event);
           LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);  
 
-          if (event.args && event.args instanceof BaseEntityEvent) {
-            const baseEntityEvent = event.args as BaseEntityEvent;
-            // message from our entity object, relay it to the client
+          if (event.args && event.args instanceof BaseEntityEvent && this.EntityEventBelongsToSession(event.args, userPayload)) {
+            // message from an entity object of this session's user, relay it to the client
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
-              status: 'OK',
-              type: 'EntityObjectStatusMessage',
-              entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-              primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-              message: event.args.payload,
-            }), userPayload);
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, this.EntityStatusMessage(event.args), userPayload);
           }
         }
       });
       this.eventSubscriptions.set(uniqueKey, theSub);
     }
+  }
+
+  /**
+   * Whether an entity event may be relayed to the session whose call created the listener. The
+   * listener is shared by every caller in the process for that entity, so an event raised by an
+   * object loaded for another user (or for the system user) is never relayed to this session.
+   */
+  protected EntityEventBelongsToSession(event: BaseEntityEvent, userPayload: UserPayload): boolean {
+    const sessionUserId = userPayload?.userRecord?.ID;
+    const objectUserId = event.baseEntity?.ContextCurrentUser?.ID;
+    return Boolean(sessionUserId && objectUserId && UUIDsEqual(sessionUserId, objectUserId));
+  }
+
+  /**
+   * The status message relayed for an entity event: the entity, key and event type. The event's
+   * payload is included only when it cannot carry record values: never for a delete (its payload
+   * is the whole deleted row), an entity under field-level security, or `MJ: Record Changes`.
+   */
+  protected EntityStatusMessage(event: BaseEntityEvent): string {
+    const entityInfo = event.baseEntity.EntityInfo;
+    const mayCarryPayload = event.type !== 'delete'
+      && !entityInfo.FieldLevelSecurityApplies
+      && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo);
+    return JSON.stringify({
+      status: 'OK',
+      type: 'EntityObjectStatusMessage',
+      entityName: entityInfo.Name,
+      primaryKey: event.baseEntity.PrimaryKey,
+      eventType: event.type,
+      message: mayCarryPayload ? event.payload : undefined,
+    });
   }
 
   /**
@@ -1683,6 +1833,9 @@ export class ResolverBase {
       // IS-A promotion: bind the new child to its EXISTING parent row BEFORE the field
       // assignments, so values the client sent for parent fields land on the loaded parent
       // (as an update) instead of being wiped by the load.
+      // Field-level security: refuse a key the caller may not read, or that names no field, before
+      // anything is applied (the same gate as the update path).
+      AssertClientInputWritableForUser(entityObject.EntityInfo, fieldsForSet, this.GetUserFromPayload(userPayload));
       await this.attachToExistingParentIfPromotion(entityObject, fieldsForSet);
       entityObject.SetMany(fieldsForSet);
 
@@ -1699,6 +1852,7 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         const contextUser = this.GetUserFromPayload(userPayload);
         // MapFieldNamesToCodeNames now handles encryption filtering as well
+        // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
       }
       // save failed, throw error with message
@@ -1739,12 +1893,11 @@ export class ResolverBase {
       });
 
       // Field-level security: any value the client sends for a field it cannot READ is
-      // fabricated by construction (the field was stripped from every payload the client ever
-      // received), so strip such values before anything applies them. When any field is
-      // denied we also force the truth-load branch below — client OldValues for denied fields
-      // are equally fabricated, so hydrating from them (the no-DB-load path) would write
-      // fabricated state into the denied columns on save.
-      const hasDeniedReadFields = this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+      // fabricated by construction (the field was absent from every payload the client ever
+      // received), so the input is refused before anything applies it. When any field is
+      // denied we also force the truth-load branch below, so the denied columns keep what the
+      // database holds rather than anything derived from the client's OldValues.
+      const hasDeniedReadFields = this.AssertClientInputFieldSecurity(entityInfo, userInfo, input, clientNewValues);
       // The audit-trail equivalent. Its `true` matters most on THIS entity: 'MJ: Record Changes'
       // has TrackRecordChanges off, so without it a client sending OldValues takes the branch below
       // that hydrates from those values — never loading what the database actually holds.
@@ -1807,6 +1960,7 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
 
         // MapFieldNamesToCodeNames now handles encryption filtering as well
+        // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
         // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
@@ -1863,7 +2017,7 @@ export class ResolverBase {
    * writable fields in `OldValues___`, so {@link hasCompleteOldValues} returns `false` and forces the
    * database load (`InnerLoad`) so untouched columns retain their stored values.
    *
-   * `EnableFieldLevelSecurity` is the security-critical one, and it is NOT redundant with
+   * `FieldLevelSecurityApplies` (own flag or an IS-A ancestor's) is the security-critical one, and it is NOT redundant with
    * `hasDeniedReadFields`. That flag reports READ denials, and the canonical FLS configuration is
    * Read Allow + Update Deny — which leaves it false. Such a caller would be hydrated from its own
    * `OldValues___`, and a value it supplies there for an update-denied field arrives through
@@ -1918,73 +2072,50 @@ export class ResolverBase {
       !this.hasCompleteOldValues(entityInfo, input.OldValues___) ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
-      entityInfo.EnableFieldLevelSecurity ||
+      entityInfo.FieldLevelSecurityApplies ||
       !user ||
       entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
   }
 
   /**
-   * Field-level security guard for the update path.
+   * Field-level security gate on the update path's client input.
    *
-   * Every denied-read field is stripped — new values AND OldValues. A field the user cannot
-   * read was absent from every payload that client ever received, so any value coming back for
-   * it is the transport's invention rather than user intent, and applying it would silently
-   * overwrite the real column. Stripping is what makes "load a record, edit an unrelated field,
-   * save" safe for a restricted user.
+   * For a caller denied at least one field on the entity, refuses (with a `FieldSecurityError`)
+   * any key in the new values or in `OldValues___` that names a field the caller cannot READ, or
+   * that names no field at all, with the same message for both (see
+   * `AssertClientInputWritableForUser`), so the refusal does not reveal which columns exist.
    *
-   * There is no split by update permission: Read is required for Update, so a user denied read
-   * is denied update too and denied-read ∩ denied-update is just denied-read.
+   * Refused rather than dropped: a field the caller cannot read was absent from every payload the
+   * client received, so a value for it can only be fabricated. A well-behaved client never sends
+   * one (it omits fields it did not load), so ordinary traffic is unaffected.
    *
-   * Silent narrowing, not rejection — consistent with the output projection the client already
-   * experiences, and with the ambiguous-error rule (naming the field would confirm it exists
-   * and is restricted).
+   * There is no split by update permission: Read is required for Update, so a user denied read is
+   * denied update too.
    *
-   * Returns true when the user has a non-empty denied-read set on this entity. The caller
-   * must then hydrate the entity from the DATABASE (never from client OldValues), so denied
-   * fields hold true values that an omitted key leaves untouched.
+   * Returns true when the user has a non-empty denied-read set on this entity. The caller must
+   * then hydrate the entity from the DATABASE (never from client OldValues), so denied fields hold
+   * true values the client input never touches.
    */
-  protected StripDeniedReadFieldsFromClientInput(
+  protected AssertClientInputFieldSecurity(
     entityInfo: EntityInfo,
     userInfo: UserInfo,
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
     clientNewValues: Record<string, unknown>
   ): boolean {
-    if (!entityInfo.EnableFieldLevelSecurity || !userInfo) {
+    if (!entityInfo.FieldLevelSecurityApplies || !userInfo) {
       return false;
     }
-    const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);
-    if (deniedReadNames.size === 0) {
+    if (entityInfo.GetDeniedReadFields(userInfo).size === 0) {
       return false;
     }
-
-    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied set holds
-    // lowercased field Names — bridge via the field metadata once.
-    const deniedReadCodeNames = new Set<string>();
-    for (const field of entityInfo.Fields) {
-      if (deniedReadNames.has(field.Name.trim().toLowerCase())) {
-        deniedReadCodeNames.add(field.CodeName.trim().toLowerCase());
-      }
-    }
-
-    const stripped: string[] = [];
-    for (const key of Object.keys(clientNewValues)) {
-      if (deniedReadCodeNames.has(key.trim().toLowerCase())) {
-        delete clientNewValues[key];
-        delete input[key];
-        stripped.push(key);
-      }
-    }
+    AssertClientInputWritableForUser(entityInfo, clientNewValues, userInfo);
     if (Array.isArray(input.OldValues___)) {
-      input.OldValues___ = input.OldValues___.filter(
-        (item) => !deniedReadCodeNames.has(String(item.Key).trim().toLowerCase())
-      );
-    }
-    if (stripped.length > 0) {
-      LogDebug(
-        `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
-          `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
-      );
+      const oldValueKeys: Record<string, unknown> = {};
+      for (const item of input.OldValues___) {
+        oldValueKeys[String(item.Key)] = null;
+      }
+      AssertClientInputWritableForUser(entityInfo, oldValueKeys, userInfo);
     }
     return true;
   }
@@ -2101,25 +2232,37 @@ export class ResolverBase {
    * ASSUMES: `input` has an `OldValues___` property that is an array of Key/Value pairs representing
    * the pre-mutation values of the fields the client is updating.
    */
+  /**
+   * Resolves a field on `entityInfo` by `CodeName` or `Name` in $O(1)$ via `FieldByCodeName` /
+   * `FieldByName` when available on `EntityInfo`, falling back to `.Fields.find()` for test stubs.
+   */
+  private findEntityFieldByCodeNameOrName(entityInfo: EntityInfo, key: string): EntityFieldInfo | undefined {
+    if (typeof entityInfo.FieldByCodeName === 'function') {
+      return entityInfo.FieldByCodeName(key) ?? entityInfo.FieldByName(key);
+    }
+    return entityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+  }
+
   protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
     const clientOldValues = {};
     // for each item in the oldValues array, add it to the clientOldValues object
     input.OldValues___.forEach((item) => {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
-      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key || f.Name === item.Key);
+      const field = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, item.Key);
       const val = this.ClientOldValueToFieldValue(field, item.Value);
       clientOldValues[item.Key] = val;
     });
 
     // clientOldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
     // with the DB values
+    // fls-guard: compared on the server only, never returned
     const dbValues = entityObject.GetAll();
 
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];
     Object.keys(clientOldValues).forEach((key) => {
-      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+      const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
       const dbVal = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
       let different = false;
       switch (typeof clientOldValues[key]) {
@@ -2172,7 +2315,7 @@ export class ResolverBase {
       // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
       const clientDifferences = [];
       Object.keys(clientOldValues).forEach((key) => {
-        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+        const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
         if (key in clientNewValues && clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
           // only include updateable fields
           clientDifferences.push({
@@ -2185,7 +2328,8 @@ export class ResolverBase {
 
       // now we have clientDifferences which shows what the client thinks they are changing. And, we have the dbDifferences array that shows changes between the clientOldValues and the dbValues
       // if there is ANY overlap in the FIELDS that appear in both arrays, we need to log a warning but allow the save to continue
-      const overlap = clientDifferences.filter((cd) => dbDifferences.find((dd) => dd.FieldName === cd.FieldName));
+      const dbDiffFieldNames = new Set(dbDifferences.map((dd) => dd.FieldName));
+      const overlap = clientDifferences.filter((cd) => dbDiffFieldNames.has(cd.FieldName));
       if (overlap.length > 0) {
         const msg = {
           Message:
@@ -2197,16 +2341,16 @@ export class ResolverBase {
         
         // Log as warning to console and ErrorLog table instead of throwing error
         console.warn('Entity save inconsistency detected but allowing save to continue:', JSON.stringify(msg));
-        LogError({
-          service: 'ResolverBase',
-          operation: 'TestAndSetClientOldValuesToDBValues',
-          error: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
-          details: {
+        LogErrorEx({
+          message: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
+          severity: 'warning',
+          category: 'ResolverBase.TestAndSetClientOldValuesToDBValues',
+          metadata: {
             entityName: entityObject.EntityInfo.Name,
             clientDifferences: clientDifferences,
             dbDifferences: dbDifferences,
-            overlap: overlap
-          }
+            overlap: overlap,
+          },
         });
 
         // Create ErrorLog record in the database — use the entity's bound provider so the
@@ -2214,7 +2358,8 @@ export class ResolverBase {
         try {
           const md = entityObject.ProviderToUse as unknown as IMetadataProvider;
           const errorLogEntity = await md.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
-          errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
+          // Code is NCHAR(20); a longer value is rejected at the database
+          errorLogEntity.Code = 'SAVE_INCONSISTENCY';
           errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
           errorLogEntity.Status = 'Warning';
           errorLogEntity.Category = 'Entity Save';
@@ -2222,7 +2367,9 @@ export class ResolverBase {
           
           const saveResult = await errorLogEntity.Save();
           if (!saveResult) {
-            console.error('Failed to save ErrorLog record');
+            console.error(
+              `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
+            );
           }
         } catch (errorLogError) {
           console.error('Error creating ErrorLog record:', errorLogError);
@@ -2261,7 +2408,10 @@ export class ResolverBase {
           extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
         });
       }
-      const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+      // Grab the values before we delete so we can return the last state if the delete succeeds,
+      // projected for the caller in case the object holds a column they may not read.
+      // fls-guard: projected by ProjectEntityValuesForUser
+      const returnValue = ProjectEntityValuesForUser(provider, entityObject.EntityInfo, entityObject.GetAll(), this.GetUserFromPayload(userPayload));
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
       

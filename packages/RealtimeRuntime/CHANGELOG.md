@@ -1,5 +1,134 @@
 # @memberjunction/realtime-runtime
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- b5c11d3: Adds ElevenLabs' **Eleven Realtime** speech-to-speech models, `eleven_realtime_v1_mini` and `eleven_realtime_v1_max`, as realtime models for voice co-agents, on both the server-bridged and the browser-direct topology.
+  - **Server driver `ElevenRealtime`** (`@memberjunction/ai-elevenlabs`). Eleven Realtime follows the OpenAI Realtime spec over a WebSocket, so the driver subclasses the shared `OpenAIRealtime` implementation the way the Grok Voice driver does, with its own provider profile. It differs from OpenAI in two places. ElevenLabs takes its API key as `xi-api-key`, not as a bearer token, so client secrets are minted from `/v1/convai/realtime/client_secrets` with that header, and the server-bridged session mints a secret before opening its socket instead of sending the API key on it. And ElevenLabs' turn eagerness is `low` / `medium` / `high`, so MJ's `auto` is sent as `medium`.
+  - **What the profile turns on**, read from the session ElevenLabs echoes back: MCP tools and an output voice (ElevenLabs voice ids) are on. Reasoning effort and parallel tool calls are off: ElevenLabs accepts both fields but does not keep them, and Max's reasoning is not a session setting. No input-transcription model is sent, because the cascade transcribes the user itself.
+  - **Browser client `ElevenRealtimeClient`** (`@memberjunction/ai-realtime-client`, provider key `eleven-realtime`): a WebSocket client that authenticates with the minted secret in the `openai-insecure-api-key.` subprotocol, as the `openai` SDK does. It is loaded wherever the other realtime clients are.
+  - **Catalog** (metadata): **Eleven Realtime v1 Max** and **Eleven Realtime v1 Mini**, each with Eleven Labs as model developer and as inference provider through `ElevenRealtime`. No cost rows: ElevenLabs published no API pricing at launch.
+  - This is a separate product from the ElevenLabs Agents Platform model (`ElevenLabsRealtime`), which is unchanged; its premade voice list now comes from a shared `ElevenLabsPremadeVoices()`.
+
+### Patch Changes
+
+- c4645bc: A realtime session whose start fails after the mint is now closed on the server at once, as `CloseReason = Error`, instead of staying `Active` until the janitor's 15-minute staleness sweep (MJ#6013). The runtime's teardown used to take one boolean that meant both "the user ended it" and "close the server row", so a start that failed (a provider refusing the websocket, for example) reported an error to the host and left its row open. Teardown now takes the end reason and always closes a minted session, stamping `Explicit` when the host or user ended the call and `Error` when the runtime ended it over a failure; `SessionEnded$` carries the same reason. The `CloseAgentSession` mutation gains an optional `closeReason` argument (`Explicit` or `Error`; the server's own `Janitor` and `Shutdown` are refused from a client), defaulting to `Explicit` for clients that do not send it. The runtime now sends that argument, so it needs a server from this release or later.
+- a610c6e: Pair user speech onset (`input_audio_buffer.speech_started`) with the completed user transcript (`conversation.item.input_audio_transcription.completed`) by the OpenAI-protocol `item_id` so late user transcripts keep their own utterance start offset in recorded calls. The xAI client also stops flagging the next item's first user transcript as `ReplacesPrevious` when an earlier item's transcript arrived late, so it no longer overwrites the earlier turn.
+- cb1e602: Follow-ups to the realtime runtime's new failure teardown. A call that ends over a failure now keeps its end reason when the host reacts to it: the runtime claims its `Error` teardown before it reports the `'error'` state, so a host that ends the call the moment it sees that state (MobileApp's voice screen does) joins that teardown instead of closing the row as `Explicit`. Explorer's chat area now tells the user when a voice call ends over a failure — a dropped connection, a start that failed, or a call that reached its time limit — where the call surface used to vanish without a word. On Gemini Live Extended Thinking, a reply requested as narration stays narration when the server ends the turn and the interaction in one frame (it used to be captioned and saved as a normal turn), and a context note the finished turn already consumed is no longer committed at the end of the interaction, which made the model speak a second, unprompted time; the commit is kept for the non-blocking tool response it exists for.
+- c4645bc: The realtime runtime's one driver slot can no longer be raced or orphaned (MJ#4629). A start issued while the previous call's teardown is still running now waits for that teardown and then goes live, instead of being dropped with a bare `undefined` that hosts had to guess at; a start issued while a call is genuinely live throws `RealtimeSessionAlreadyActiveError` (exported) rather than returning silently, and never replaces the live driver. A fatal error from the current client (the provider's socket dying mid-call) now ends the call the way a failed start does: the connection state goes to `error`, the microphone is released, the server row is closed as `Error`, and `SessionEnded$` reports `error`; a host's own End afterwards is a no-op. Teardown's work runs under a try/finally, so the slot is released even if a step throws, where before `IsActive` could stay set for good and refuse every later start.
+- c159f99: The recording shard queue is now told why an upload failed, not only that it did. Before, every failed shard upload was logged as `server refused the shard`, including a dropped network where the request never reached the server, so support chasing lost audio looked for a server rejection that never happened. The queue's upload now resolves the transport's `Acked`/`Refused`/`Retry` outcome: a network failure, 5xx or expired token is retried up to the attempts cap with a reason that does not read as a refusal, and a `Refused` shard (400, 403, 409, 410 or 413) is given up on after one attempt instead of three, since the transport documents a re-send as pointless. A refused shard still leaves the local store through the during-call store drain, which already deletes refused shards.
+- c4645bc: A host's spoken opening is now part of the conversation record (MJ#4591). `RequestSpokenOpening` used to ride the delegation-narration channel (`RequestSpokenUpdate`), whose replies are disposable by contract: never captioned, never relayed, never saved, so the greeting a participant heard was missing from the transcript. The realtime contract gains an optional `RequestSpokenTurn(instructions)` beside `RequestSpokenUpdate`: the same wire mechanics and collision rule in each driver, with the reply tagged `normal`. The Gemini (and Gemini Enterprise), ElevenLabs, AssemblyAI, OpenAI Live and OpenAI Realtime protocol drivers (`OpenAIRealtimeClient` and its WebSocket variant) implement it through the one send helper their spoken update already uses, so the two cannot drift; the runtime's `RequestSpokenOpening` prefers it and falls back to the spoken update on a driver that has not implemented it. Separately, the ElevenLabs driver now resets its response kind when a user turn arrives (MJ#6025): the platform does not always send `agent_response_complete` after a narration response, and without the reset every later agent turn in the call was tagged narration and dropped from the transcript.
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [cc41d33]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [142d524]
+- Updated dependencies [0ff7523]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [a610c6e]
+- Updated dependencies [4c97994]
+- Updated dependencies [cb1e602]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-engine-base@6.2.0-edge.6
+  - @memberjunction/ai-realtime-client@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+### Patch Changes
+
+- 7fb8598: Recorded realtime sessions on drivers that send the user's speech only as one final transcript (OpenAI Realtime, HuggingFace, xAI, ElevenLabs) no longer store `UtteranceStartMs = 0` as a placeholder. `BaseRealtimeClient` gains `OnUserSpeechStart`, raised on every OpenAI-protocol `input_audio_buffer.speech_started` frame, and the realtime runtime relays that onset as the user turn's start. A turn whose start was not measured (for example every ElevenLabs turn after the first) is now stored as NULL instead of 0, and readers fall back to the turn's creation time.
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [e1f2583]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

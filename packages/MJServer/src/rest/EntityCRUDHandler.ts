@@ -1,7 +1,8 @@
 import { 
-    BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
+    AssertClientInputWritableForUser, BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
     EntitySaveOptions, LogError, Metadata, UserInfo 
 } from '@memberjunction/core';
+import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
 /**
  * Entity CRUD Implementation Functions for REST endpoints
@@ -42,6 +43,9 @@ export class EntityCRUDHandler {
                 delete data.options;
             }
             
+            // Field-level security: refuse a key the caller may not read, or that names no field
+            AssertClientInputWritableForUser(entity.EntityInfo, data, user);
+
             // Set values on the entity
             for (const key in data) {
                 entity.Set(key, data[key]);
@@ -70,7 +74,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await entity.GetDataObject();
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -114,7 +118,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await entity.GetDataObject();
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -171,6 +175,9 @@ export class EntityCRUDHandler {
                 delete data.options;
             }
             
+            // Field-level security: refuse a key the caller may not read, or that names no field
+            AssertClientInputWritableForUser(entity.EntityInfo, data, user);
+
             // Update entity with new values
             for (const key in data) {
                 entity.Set(key, data[key]);
@@ -179,7 +186,7 @@ export class EntityCRUDHandler {
             // Check if entity is dirty
             if (!entity.Dirty && !options.IgnoreDirtyState) {
                 // Nothing changed, return success
-                const entityData = await entity.GetDataObject();
+                const entityData = await this.responseData(entity, user, md);
                 return { success: true, entity: entityData };
             }
             
@@ -206,7 +213,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await entity.GetDataObject();
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -273,6 +280,16 @@ export class EntityCRUDHandler {
         return this.DeleteEntity(entityName, id, options, user);
     }
     
+    /**
+     * The record's field values for the response, reduced to what `user` may READ. An entity
+     * object built for a restricted user holds no denied value already; this is the backstop for
+     * one that does.
+     */
+    private static async responseData(entity: BaseEntity, user: UserInfo, md: Metadata): Promise<Record<string, unknown>> {
+        // fls-guard: projected by ProjectValuesForCaller
+        return ProjectValuesForCaller(entity.EntityInfo, await entity.GetDataObject() as Record<string, unknown>, user, md);
+    }
+
     /**
      * Build the record key from the `:id` path segment. A single-column key (any column name) is
      * the bare value; a composite key is the URL-encoded `Field1|Value1||Field2|Value2` segment.

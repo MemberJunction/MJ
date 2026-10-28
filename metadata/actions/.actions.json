@@ -435,14 +435,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Latitude coordinate for weather lookup. Must be used with Longitude parameter",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "97291346-9DA1-46B9-9970-ACCAF7731800"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.845Z",
-            "checksum": "2857ceb4ea2667b138e18ef394db8ebd59d30335e1efed8c33814874e184e773"
+            "lastModified": "2026-10-20T23:18:46.214Z",
+            "checksum": "1be440f2c273c0148aadb37754d0a09377e943bc53f01744ea6fa458bdda9858"
           }
         },
         {
@@ -453,14 +456,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Longitude coordinate for weather lookup. Must be used with Latitude parameter",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "499AD8DE-7AFB-4295-B6AD-584C0EAF4535"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.847Z",
-            "checksum": "304406d5e3b9d14741debd1d452dd62bb12564296a9d65f69c97797daf23fb52"
+            "lastModified": "2026-10-20T23:18:46.220Z",
+            "checksum": "5d2c8d4b31e611fe31f960026a5a44f8331f633440a9ddbb997d846645a48d2e"
           }
         },
         {
@@ -947,14 +953,17 @@
             "IsArray": false,
             "Description": "Boolean flag to include word frequency analysis in results",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "C83B1A2C-3F19-419A-AD09-42DDD77A2E5C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.123Z",
-            "checksum": "7798b7f0a35ba5516794020f9c8ee015e52b602442d6d25834ca7bcb416ca48b"
+            "lastModified": "2026-10-20T23:18:46.230Z",
+            "checksum": "6d41163772b2ecc8aed9f2a9718055ab133d7308f5b79ad172d6602aafdd4f34"
           }
         }
       ],
@@ -1732,14 +1741,17 @@
             "IsArray": false,
             "Description": "Desired number of results. Clamped to the serving provider's own cap, not rejected. Default: 10.",
             "IsRequired": false,
-            "DefaultValue": "10"
+            "DefaultValue": "10",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "DC71F183-DE01-4187-8735-7A5DF3898B61"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:25.501Z",
-            "checksum": "2bc74f42f87492e128ef458c3aaff9d2d9d34ace556cb2b0813a7735e219bf8a"
+            "lastModified": "2026-10-20T23:18:46.246Z",
+            "checksum": "7cff7e66d05aeb00056d0b9535aeef8ec25a16dd54f317f9820fbd6a8653c0c0"
           }
         },
         {
@@ -1751,14 +1763,22 @@
             "IsArray": false,
             "Description": "Adult-content filter: 'off', 'moderate' or 'strict'. Default: moderate.",
             "IsRequired": false,
-            "DefaultValue": "moderate"
+            "DefaultValue": "moderate",
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "moderate",
+                "strict"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "9015D7B9-14C4-466D-BB77-B0A96E2187C9"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:25.522Z",
-            "checksum": "3662ffc72e63c397b03936280ed1f8761e20e1c2c4e0dbbc30953dc4968484bf"
+            "lastModified": "2026-10-20T23:18:46.252Z",
+            "checksum": "19b2ac1dff8d4de3e260d2f36b8266a05a8f800dfe16020694c400a91ca90c5b"
           }
         },
         {
@@ -1822,14 +1842,17 @@
             "ValueType": "Scalar",
             "IsArray": true,
             "Description": "Restrict results to these domains, where the serving provider supports it. Array or comma-separated.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string"
+            }
           },
           "primaryKey": {
             "ID": "F8D31EEA-5AC9-468D-A9AC-E1AD54A3341C"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:25.611Z",
-            "checksum": "3dd4b0cc488fc65cdd13bc329247f1c428b0316ddf6a2df3da179587fcc538ef"
+            "lastModified": "2026-10-20T23:18:46.257Z",
+            "checksum": "d03cf3af7ac78de76ce0a54066a02a43b27675c5dd6f13ab9e66ee945c1e5c6f"
           }
         },
         {
@@ -1840,14 +1863,17 @@
             "ValueType": "Scalar",
             "IsArray": true,
             "Description": "Exclude these domains, where the serving provider supports it. Array or comma-separated.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string"
+            }
           },
           "primaryKey": {
             "ID": "05712275-D554-4640-9EE1-37F7DBADD7BD"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:25.633Z",
-            "checksum": "9f5bae23067ff20b9ddd23288fcb58a1bafd54ac5bcc2a5149ed76ab89e8a744"
+            "lastModified": "2026-10-20T23:18:46.262Z",
+            "checksum": "d81c3fdb3966cd89a9370d2590f2e74d480f35923cbf34850876d39ba72a9bec"
           }
         },
         {
@@ -1858,14 +1884,23 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Restrict by recency: 'day', 'week', 'month' or 'year'. Omit for no recency constraint.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "D3973928-157C-40A4-AC5A-0D585D68ED30"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:25.654Z",
-            "checksum": "492660901b1059a17a6504aa225d0ac4b78d66117bb1f124301e24d15f1c5909"
+            "lastModified": "2026-10-20T23:18:46.267Z",
+            "checksum": "71320efb2bb6b41c05c1665cc8306fb6066d5e6c7e147c878da9b479fd86cd79"
           }
         },
         {
@@ -1913,14 +1948,17 @@
             "IsArray": false,
             "Description": "Also return a synthesized answer. This restricts selection to providers that can produce one, so it changes which provider serves the request. Default: false.",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "42F35BCA-4E9F-4A18-802B-4D8DF918E1CC"
           },
           "sync": {
-            "lastModified": "2026-09-21T02:45:25.719Z",
-            "checksum": "de9377730aa11c25b90ee7730106cbee08dbdbe2dd080b935d7275475b8f213d"
+            "lastModified": "2026-10-20T23:18:46.273Z",
+            "checksum": "9a659c2575405440a93787e6f20ba53ab2a1022d41c09985ee67d7edde5447bd"
           }
         },
         {
@@ -2257,14 +2295,24 @@
             "IsArray": false,
             "Description": "Output format - 'auto' (intelligent detection), 'text', 'html', 'markdown', 'json'. Auto-detects and processes JSON, PDF, DOCX, XML, CSV, HTML, images and more (default: 'auto')",
             "IsRequired": false,
-            "DefaultValue": "auto"
+            "DefaultValue": "auto",
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "text",
+                "html",
+                "markdown",
+                "json"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "E013D3BF-E9B1-4B65-BB46-B2F293651FB0"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.983Z",
-            "checksum": "b2cc6fcb320c05c8001098f8cc3a272aa4f9f69947e7edf8dd31bff008853678"
+            "lastModified": "2026-10-20T23:18:46.281Z",
+            "checksum": "59bc1a76aaed5c5eb9c97bbf222f38398eba0d5041315bfd82e5e06a302f1acb"
           }
         },
         {
@@ -2276,14 +2324,17 @@
             "IsArray": false,
             "Description": "Extract only main content vs full page (default: false)",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "14672B44-03C2-4D1A-A977-6D9F852F7BED"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.985Z",
-            "checksum": "a36a77931d531f7796212aa930e305027d276cd94b2698e7df8d9f0c5cfc4a17"
+            "lastModified": "2026-10-20T23:18:46.288Z",
+            "checksum": "396b0f2cef6cb505501cc97d3077240f52e4047e87b1161544455481a330f71f"
           }
         },
         {
@@ -2295,14 +2346,17 @@
             "IsArray": false,
             "Description": "Include page metadata in response (default: true)",
             "IsRequired": false,
-            "DefaultValue": "true"
+            "DefaultValue": "true",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "3FC11C9A-B034-4684-81CA-F443003363CC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.987Z",
-            "checksum": "a26b2f0f6640e06cbccbe09a8803a012b69d6bf6546023be4794f90af2b9271a"
+            "lastModified": "2026-10-20T23:18:46.293Z",
+            "checksum": "b9b89f2179dbd3d374875aec524f66ef0ee0c1e96793464bb24d4c71a04a9dee"
           }
         },
         {
@@ -2314,14 +2368,17 @@
             "IsArray": false,
             "Description": "Maximum content length to return (default: 100000 chars)",
             "IsRequired": false,
-            "DefaultValue": "100000"
+            "DefaultValue": "100000",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "2749E985-DC09-4DD3-902B-BDB7C7E6B036"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.988Z",
-            "checksum": "8e538e86d8b1f175097c8cdc14328add488065ad1978540f1177cd4777ff8707"
+            "lastModified": "2026-10-20T23:18:46.299Z",
+            "checksum": "04a603fe6c0e9482dc0405206c9bedbb74189814fe2ebbb8d3621bfdc058bc90"
           }
         }
       ],

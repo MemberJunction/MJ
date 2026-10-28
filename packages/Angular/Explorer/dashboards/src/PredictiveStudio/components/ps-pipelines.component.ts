@@ -744,9 +744,11 @@ const PS_PIPELINES_STARTER_PROMPT =
                   <div class="ps-card">
                     <div class="ps-card-head"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i><h3>As-of strategy</h3></div>
                     <div class="ps-card-body">
-                      <div class="ps-field"><label>Mode</label><select class="mj-input" [value]="editAsOf.Mode" (change)="setAsOfMode(inputVal($event))"><option value="none">none</option><option value="column">column</option><option value="offset">offset</option></select></div>
-                      @if (editAsOf.Mode === 'column') { <div class="ps-field"><label>Decision-date column</label><input class="mj-input" type="text" [value]="editAsOf.Column || ''" (input)="setAsOfColumn(inputVal($event))" /></div> }
-                      @if (editAsOf.Mode === 'offset') { <div class="ps-field"><label>Offset days before label</label><input class="mj-input" type="number" [value]="editAsOf.OffsetDays ?? 0" (input)="setAsOfOffset(inputVal($event))" /></div> }
+                      <div class="ps-field"><label>Mode</label><span data-testid="ps-pipelines-asof-mode">{{ editAsOf.Mode }}</span></div>
+                      @if (EditAsOf.Mode !== 'none') {
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-asof-reset" [disabled]="Busy" (click)="ResetAsOfToNone()">Reset to none</button>
+                        <p class="ps-muted">Training refuses this setting: it reads every feature as it stands today, so a cutoff has no effect. Reset to none, then save, to train this pipeline.</p>
+                      }
                     </div>
                   </div>
 
@@ -2183,23 +2185,13 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   public setThreshold(v: string): void {
     return this.SetThreshold(v);
   }
-  public SetAsOfMode(v: string): void { this.EditAsOf = { ...this.EditAsOf, Mode: v as AsOfStrategy['Mode'] }; this.Dirty = true; }
-
-  /** @deprecated Use {@link SetAsOfMode}. */
-  public setAsOfMode(v: string): void {
-    return this.SetAsOfMode(v);
-  }
-  public SetAsOfColumn(v: string): void { this.EditAsOf.Column = v; this.Dirty = true; }
-
-  /** @deprecated Use {@link SetAsOfColumn}. */
-  public setAsOfColumn(v: string): void {
-    return this.SetAsOfColumn(v);
-  }
-  public SetAsOfOffset(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditAsOf.OffsetDays = n; this.Dirty = true; } }
-
-  /** @deprecated Use {@link SetAsOfOffset}. */
-  public setAsOfOffset(v: string): void {
-    return this.SetAsOfOffset(v);
+  /**
+   * Resets a stored as-of cutoff to `none` (training refuses any other mode) as an unsaved edit. It does not save: the
+   * user saves with the pipeline's other edits, so a reset never commits half-finished changes.
+   */
+  public ResetAsOfToNone(): void {
+    this.EditAsOf = { Mode: 'none' };
+    this.markDirty();
   }
   public SetValStrategy(v: string): void { this.EditValidation = { ...this.EditValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.Dirty = true; }
 
