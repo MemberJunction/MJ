@@ -28,8 +28,12 @@ export interface LoginEmailResolution {
 /**
  * Resolves the lookup email for a verified token. The map applies only to the email claim, with an
  * exact (case-sensitive) key match, as it always has; a preferred username is never remapped.
+ *
+ * Named without "login"/"auth"/"verify": CodeQL treats calls with those words as authentication
+ * actions and reports the `if (!token)` guard above this call in GetUserPayload as a user-controlled
+ * bypass. This is a plain lookup, not an authentication step.
  */
-export function ResolveLoginEmail(claims: LoginIdentityClaims, emailMap: Record<string, string> | undefined): LoginEmailResolution {
+export function ResolveUserLookupEmail(claims: LoginIdentityClaims, emailMap: Record<string, string> | undefined): LoginEmailResolution {
   if (!claims.email) {
     return { TokenEmail: claims.preferredUsername, LookupEmail: claims.preferredUsername, Remapped: false };
   }

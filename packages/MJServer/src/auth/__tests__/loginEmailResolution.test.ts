@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { DescribeUserEmailMap, EmailsMatch, ResolveLoginEmail } from '../loginEmailResolution.js';
+import { DescribeUserEmailMap, EmailsMatch, ResolveUserLookupEmail } from '../loginEmailResolution.js';
 
-describe('ResolveLoginEmail', () => {
+describe('ResolveUserLookupEmail', () => {
   it('looks a login up by its email claim when no map is set', () => {
-    expect(ResolveLoginEmail({ email: 'b@two.example', preferredUsername: 'b@two.example' }, undefined)).toEqual({
+    expect(ResolveUserLookupEmail({ email: 'b@two.example', preferredUsername: 'b@two.example' }, undefined)).toEqual({
       TokenEmail: 'b@two.example',
       LookupEmail: 'b@two.example',
       Remapped: false,
@@ -11,29 +11,29 @@ describe('ResolveLoginEmail', () => {
   });
 
   it('applies a USER_EMAIL_MAP entry and reports the rewrite', () => {
-    const result = ResolveLoginEmail({ email: 'b@two.example' }, { 'b@two.example': 'a@one.example' });
+    const result = ResolveUserLookupEmail({ email: 'b@two.example' }, { 'b@two.example': 'a@one.example' });
     expect(result).toEqual({ TokenEmail: 'b@two.example', LookupEmail: 'a@one.example', Remapped: true });
   });
 
   it('keeps the map key match exact (case-sensitive), as before', () => {
-    const result = ResolveLoginEmail({ email: 'B@two.example' }, { 'b@two.example': 'a@one.example' });
+    const result = ResolveUserLookupEmail({ email: 'B@two.example' }, { 'b@two.example': 'a@one.example' });
     expect(result.LookupEmail).toBe('B@two.example');
     expect(result.Remapped).toBe(false);
   });
 
   it('does not count an entry that only changes case as a remap', () => {
-    const result = ResolveLoginEmail({ email: 'b@two.example' }, { 'b@two.example': 'B@Two.example' });
+    const result = ResolveUserLookupEmail({ email: 'b@two.example' }, { 'b@two.example': 'B@Two.example' });
     expect(result.LookupEmail).toBe('B@Two.example');
     expect(result.Remapped).toBe(false);
   });
 
   it('falls back to the preferred username and never remaps it', () => {
-    const result = ResolveLoginEmail({ preferredUsername: 'b@two.example' }, { 'b@two.example': 'a@one.example' });
+    const result = ResolveUserLookupEmail({ preferredUsername: 'b@two.example' }, { 'b@two.example': 'a@one.example' });
     expect(result).toEqual({ TokenEmail: 'b@two.example', LookupEmail: 'b@two.example', Remapped: false });
   });
 
   it('returns no identity when the token has neither claim', () => {
-    expect(ResolveLoginEmail({}, undefined)).toEqual({ TokenEmail: undefined, LookupEmail: undefined, Remapped: false });
+    expect(ResolveUserLookupEmail({}, undefined)).toEqual({ TokenEmail: undefined, LookupEmail: undefined, Remapped: false });
   });
 });
 

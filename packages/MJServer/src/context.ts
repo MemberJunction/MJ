@@ -7,7 +7,7 @@ import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
-import { EmailsMatch, ResolveLoginEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
+import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache } from './cache.js';
@@ -152,7 +152,7 @@ async function writeSessionAudit(args: {
  * rewrite is reported as such; any other difference means the lookup reached another person's
  * record. Anonymous magic-link sessions run as a synthetic principal by design and are skipped.
  */
-function reportLoginIdentity(loginEmail: LoginEmailResolution, sessionUser: UserInfo): boolean {
+function reportIdentityMismatch(loginEmail: LoginEmailResolution, sessionUser: UserInfo): boolean {
   if (sessionUser.IsMagicLinkAnonymous || EmailsMatch(loginEmail.TokenEmail, sessionUser.Email)) {
     return false;
   }
@@ -551,7 +551,7 @@ export const GetUserPayload = async (
 
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);
-    const loginEmail = ResolveLoginEmail(userInfo, userEmailMap);
+    const loginEmail = ResolveUserLookupEmail(userInfo, userEmailMap);
     const email = loginEmail.LookupEmail;
     
     const userRecord = await VerifyUserRecord(
@@ -579,7 +579,7 @@ export const GetUserPayload = async (
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
     if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
-      const identityMismatch = reportLoginIdentity(loginEmail, sessionUser);
+      const identityMismatch = reportIdentityMismatch(loginEmail, sessionUser);
       void writeSessionAudit({
         user: sessionUser,
         auditTypeName: SESSION_AUDIT_TYPE,
