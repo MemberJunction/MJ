@@ -21,10 +21,11 @@ import {
  * Parameters (Output):
  *   - StagingDatabaseDropped: 1
  *
- * The progress run is never completed here (the calling job owns it); a failure fails it.
+ * The progress run is never terminated here (the calling job owns it); a failure is a stage error.
  */
 @RegisterClass(BaseAction, 'Drop SQL Server Staging Database')
 export class DropSQLServerStagingDatabaseAction extends BootstrapSQLServerIntegrationFromBackupAction {
+    protected override readonly TerminatesProgressRun = false;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
@@ -42,7 +43,7 @@ export class DropSQLServerStagingDatabaseAction extends BootstrapSQLServerIntegr
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`[DropSQLServerStagingDatabaseAction] Failure: ${message}`);
-            await progress.Fail(message);
+            await this.ReportFailure(progress, message, 'DROP_FAILED');
             return { Success: false, ResultCode: 'DROP_FAILED', Message: message, Params: params.Params };
         } finally {
             await progress.Flush();

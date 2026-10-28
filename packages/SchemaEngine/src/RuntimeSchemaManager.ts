@@ -445,6 +445,8 @@ export interface ArchiveSeedWork {
   DeferredDataSourceID?: string;
   ArchiveDataSourceID?: string;
   CurrentRunID?: string;
+  /** The current progress run has been terminated by the job; nothing more may be emitted on it. */
+  RunClosed?: boolean;
   Tables?: ArchiveSeedDiscoveredTable[];
   SelectedTables?: string[];
   Summary?: ArchiveSeedSummary;

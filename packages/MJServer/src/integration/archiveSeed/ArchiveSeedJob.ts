@@ -48,8 +48,6 @@ interface ArchiveSeedContext {
   CompanyIntegrationID: string;
   Work: ArchiveSeedWork;
   Emitter?: IntegrationProgressEmitter;
-  /** The current run was terminated (completed at handoff); nothing more is emitted on it. */
-  RunClosed?: boolean;
   /** A restore in this operation succeeded, so a staging database exists even if its outputs were incomplete. */
   StagingRestored?: boolean;
   User: UserInfo;
@@ -119,11 +117,11 @@ export class ArchiveSeedJob {
     if (invalid) {
       throw new Error(invalid);
     }
-    await this.advance(ctx, 'Building', { SelectedTables: CanonicalizeTableSelection(ctx.Work, tableNames) });
+    // RunClosed is persisted before run A is completed, so a later failure never emits after run.complete.
+    await this.advance(ctx, 'Building', { SelectedTables: CanonicalizeTableSelection(ctx.Work, tableNames), RunClosed: true });
     const emitter = this.emitterFor(ctx);
     emitter.StageComplete('Handoff');
     await emitter.Complete(HANDOFF_MESSAGE);
-    ctx.RunClosed = true;
     await this.applySelection(ctx);
   }
 
@@ -211,7 +209,8 @@ export class ArchiveSeedJob {
     const result = await this.runAction(ctx, ARCHIVE_SEED_RESTORE_ACTION, params, 'Restore');
     if (!result.Success) {
       const code = result.ResultCode ? ` (${result.ResultCode})` : '';
-      await this.fail(ctx, `Restore failed${code}: ${result.Message ?? 'no message'}`);
+      // The action already reported the stage error on the run.
+      await this.fail(ctx, `Restore failed${code}: ${result.Message ?? 'no message'}`, { StageErrorReported: true });
       return false;
     }
     ctx.StagingRestored = true;
@@ -298,7 +297,7 @@ export class ArchiveSeedJob {
    * the emitter afterwards so its sequence continues after the action's events.
    */
   private async runAction(ctx: ArchiveSeedContext, actionName: string, params: ActionParam[], stage: string): Promise<ActionResult> {
-    if (ctx.RunClosed) {
+    if (ctx.Work.RunClosed) {
       return this.deps.Actions.Run(actionName, params, ctx.User, ctx.Provider);
     }
     const before = this.emitterFor(ctx);
@@ -312,23 +311,24 @@ export class ArchiveSeedJob {
   }
 
   /**
-   * Fails the job: persists `Failed`, reports it on the current run, removes the archive data source,
-   * drops the staging database when one was restored, and marks the store row failed. Cleanup errors
-   * are appended to the recorded failure rather than masking it.
+   * Fails the job: persists `Failed`, reports it on the current run (only while that run is open —
+   * the job alone terminates runs), removes the archive data source, drops the staging database when
+   * one was restored, and marks the store row failed. Cleanup errors are appended to the recorded
+   * failure rather than masking it. `StageErrorReported` skips the stage error an action already emitted.
    */
-  private async fail(ctx: ArchiveSeedContext, message: string): Promise<void> {
+  private async fail(ctx: ArchiveSeedContext, message: string, options: { StageErrorReported?: boolean } = {}): Promise<void> {
     if (ctx.Work.State === 'Failed' || ctx.Work.State === 'Done') {
       LogError(`Archive seed job ${ctx.JobID} is already ${ctx.Work.State}; not failing again: ${message}`);
       return;
     }
     const stage = STAGE_FOR_STATE[ctx.Work.State] ?? ctx.Work.State;
     await this.advance(ctx, 'Failed', { Error: message });
-    if (!ctx.RunClosed) {
+    if (!ctx.Work.RunClosed && !options.StageErrorReported) {
       this.emitterFor(ctx).StageError(stage, message);
     }
     const cleanupErrors = [...(await this.removeArchiveSource(ctx)), ...(await this.dropStaging(ctx))];
     const recorded = cleanupErrors.length > 0 ? `${message} (cleanup: ${cleanupErrors.join('; ')})` : message;
-    if (!ctx.RunClosed) {
+    if (!ctx.Work.RunClosed) {
       await this.emitterFor(ctx).Fail(recorded);
     }
     await this.deps.Store.Fail(ctx.JobID, recorded, ctx.User, ctx.Provider);
@@ -356,7 +356,8 @@ export class ArchiveSeedJob {
       return [];
     }
     try {
-      const params = BuildDropActionParams(ctx.Work, ctx.CompanyIntegrationID, this.runID(ctx.Work));
+      const runID = ctx.Work.RunClosed ? undefined : this.runID(ctx.Work);
+      const params = BuildDropActionParams(ctx.Work, ctx.CompanyIntegrationID, runID);
       const result = await this.runAction(ctx, ARCHIVE_SEED_DROP_ACTION, params, 'Cleanup');
       return result.Success ? [] : [`dropping staging database '${ctx.Work.StagingDatabaseName}' failed: ${result.Message ?? 'no message'}`];
     } catch (err) {

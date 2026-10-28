@@ -126,17 +126,52 @@ class FakeStore implements ArchiveSeedStore {
   }
 }
 
+/**
+ * Behaves like the real phase actions on the progress run: when given a `ProgressRunID` it resumes
+ * that run through a real emitter, reports a stage start and (on failure) a stage error, flushes,
+ * and never terminates the run.
+ */
 class FakeActions implements ArchiveSeedActions {
   public Calls: { Name: string; Params: ActionParam[] }[] = [];
   public RestoreSucceeds = true;
+  public DropSucceeds = true;
+
+  constructor(private readonly root: string) {}
 
   public async Run(actionName: string, params: ActionParam[]): Promise<ActionResult> {
     this.Calls.push({ Name: actionName, Params: params });
+    const stage = actionName === RESTORE ? 'Restore' : 'Cleanup';
+    const emitter = this.resumeRun(params);
+    emitter?.StageStart(stage, `${actionName} started`);
+    const result = this.resultFor(actionName);
+    if (!result.Success) {
+      emitter?.StageError(stage, result.Message ?? '', { code: result.ResultCode });
+    }
+    await emitter?.Flush();
+    return result;
+  }
+
+  private resumeRun(params: ActionParam[]): IntegrationProgressEmitter | undefined {
+    const runID = params.find(p => p.Name === 'ProgressRunID')?.Value;
+    if (typeof runID !== 'string') {
+      return undefined;
+    }
+    const manifest = { runID, runKind: 'Other' as const, startedAt: new Date().toISOString(), context: { kind: 'FakeAction' } };
+    return new IntegrationProgressEmitter(manifest, { rootDir: this.root, maxRunDirs: 0 });
+  }
+
+  private resultFor(actionName: string): ActionResult {
     const result = new ActionResult();
     if (actionName === RESTORE && !this.RestoreSucceeds) {
       result.Success = false;
       result.ResultCode = 'RESTORE_FAILED';
       result.Message = 'RESTORE DATABASE terminated abnormally';
+      return result;
+    }
+    if (actionName === DROP && !this.DropSucceeds) {
+      result.Success = false;
+      result.ResultCode = 'DROP_FAILED';
+      result.Message = 'DROP DATABASE failed';
       return result;
     }
     result.Success = true;
@@ -164,7 +199,9 @@ function Output(name: string, value: string): ActionParam {
 }
 
 class FakeDiscovery implements ArchiveSeedDiscovery {
+  public Error: Error | undefined;
   public async IntrospectArchive(): Promise<ArchiveSeedDiscoveredTable[]> {
+    if (this.Error) throw this.Error;
     return TABLES;
   }
 }
@@ -184,17 +221,19 @@ describe('ArchiveSeedJob', () => {
   let store: FakeStore;
   let actions: FakeActions;
   let apply: FakeApply;
+  let discovery: FakeDiscovery;
   let job: ArchiveSeedJob;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'archive-seed-job-'));
     records = new FakeRecords();
     store = new FakeStore();
-    actions = new FakeActions();
+    actions = new FakeActions(root);
     apply = new FakeApply();
+    discovery = new FakeDiscovery();
     const deps: ArchiveSeedDeps = {
       Records: records,
-      Discovery: new FakeDiscovery(),
+      Discovery: discovery,
       Apply: apply,
       Actions: actions,
       Store: store,
@@ -310,7 +349,28 @@ describe('ArchiveSeedJob', () => {
     expect(store.Failed[0].Message).toContain('RESTORE DATABASE terminated abnormally');
 
     const events = Events(RunID);
-    expect(events.some(e => e.eventType === 'stage.error' && e.stage === 'Restore')).toBe(true);
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.filter(e => e.eventType === 'stage.error' && e.stage === 'Restore')).toHaveLength(1);
+    expect(events.filter(e => e.eventType === 'run.fail')).toHaveLength(1);
+    expect(events[events.length - 1].eventType).toBe('run.fail');
+  });
+
+  it('a discovery failure drops staging on the open run and the job alone terminates it, once', async () => {
+    actions.DropSucceeds = false;
+    discovery.Error = new Error('introspection timed out');
+    const { JobID, RunID } = await StartToSelection();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('introspection timed out');
+    expect(store.Failed[0].Message).toContain('DROP DATABASE failed');
+    expect(actions.Names()).toEqual([RESTORE, DROP]);
+    expect(records.DeletedDataSources).toEqual([state?.ArchiveDataSourceID]);
+
+    const events = Events(RunID);
+    expect(events.map(e => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(events.filter(e => e.eventType === 'stage.error').map(e => e.stage)).toEqual(['Discover', 'Cleanup']);
+    expect(events.filter(e => e.eventType === 'run.fail')).toHaveLength(1);
     expect(events[events.length - 1].eventType).toBe('run.fail');
   });
 
@@ -364,7 +424,9 @@ describe('ArchiveSeedJob', () => {
     const dropParams = Object.fromEntries(actions.Calls[1].Params.map(p => [p.Name, p.Value]));
     expect(dropParams).toMatchObject({ StagingDatabaseName: 'MJ_Staging_ERP' });
     expect(store.Failed).toHaveLength(1);
+    expect(dropParams.ProgressRunID).toBeUndefined();
     // Run A was already completed at handoff; the failure is recorded on the job, not appended after run.complete.
     expect(Events(RunID).at(-1)?.eventType).toBe('run.complete');
+    expect(state?.RunClosed).toBe(true);
   });
 });

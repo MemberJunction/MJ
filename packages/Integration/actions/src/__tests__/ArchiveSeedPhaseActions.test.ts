@@ -278,12 +278,23 @@ describe('RestoreSQLServerBackupToStagingAction', () => {
         expect(progressMethods().at(-1)).toBe('Flush');
     });
 
-    it('Restore action fails the run and flushes the stream when the restore fails', async () => {
+    it('Restore action reports a stage error, never terminates the run, and flushes when the restore fails', async () => {
         restore.CustomDatabaseProvider = createMockSqlExecutor({ failOnRestore: true });
         await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', StagingDatabaseName: 'MJ_Staging_X', ProgressRunID: 'run-A' }));
 
-        expect(progressMethods()).toContain('Fail');
+        const stageError = progressCalls.find(c => c.Method === 'StageError');
+        expect(stageError?.Args[0]).toBe('Restore');
+        expect(stageError?.Args[2]).toEqual({ code: 'RESTORE_FAILED' });
+        expect(progressMethods()).not.toContain('Fail');
+        expect(progressMethods()).not.toContain('Complete');
         expect(progressMethods().at(-1)).toBe('Flush');
+    });
+
+    it('Restore action reports a refused input as a stage error with its result code', async () => {
+        await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', ProgressRunID: 'run-A' }));
+
+        expect(progressCalls.find(c => c.Method === 'StageError')?.Args[2]).toEqual({ code: 'MISSING_PARAMETER' });
+        expect(progressMethods()).not.toContain('Fail');
     });
 });
 
@@ -346,6 +357,15 @@ describe('LoadSQLServerIntegrationFromStagingAction', () => {
         expect(outputs(dropped).StagingDatabaseDropped).toBe(1);
     });
 
+    it('Load action reports STAGING_NOT_FOUND as a stage error and never terminates the run', async () => {
+        load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: false });
+        await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z', ProgressRunID: 'run-A' }));
+
+        expect(progressCalls.find(c => c.Method === 'StageError')?.Args[2]).toEqual({ code: 'STAGING_NOT_FOUND' });
+        expect(progressMethods()).not.toContain('Fail');
+        expect(progressMethods()).not.toContain('Complete');
+    });
+
     it('Load action never completes the run and flushes the stream', async () => {
         const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z', ProgressRunID: 'run-A' }));
 
@@ -394,5 +414,13 @@ describe('DropSQLServerStagingDatabaseAction', () => {
         await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', ProgressRunID: 'run-A', CompanyIntegrationID: 'ci-001' }));
 
         expect(progressMethods().at(-1)).toBe('Flush');
+    });
+
+    it('Drop action reports a refused input as a stage error and never terminates the run', async () => {
+        await drop.Run(makeParams({ ProgressRunID: 'run-A', CompanyIntegrationID: 'ci-001' }));
+
+        expect(progressCalls.find(c => c.Method === 'StageError')?.Args[2]).toEqual({ code: 'MISSING_PARAMETER' });
+        expect(progressMethods()).not.toContain('Fail');
+        expect(progressMethods()).not.toContain('Complete');
     });
 });

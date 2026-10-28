@@ -56,6 +56,16 @@ export class BootstrapProgress {
         this.emitter?.Heartbeat(this.currentStage, message);
     }
 
+    /** The stage most recently started ('Prepare' before any). */
+    public get CurrentStage(): string {
+        return this.currentStage;
+    }
+
+    /** Reports a stage failure without terminating the run (for a phase whose job owns the run). */
+    public StageError(stage: string, message: string, data?: Record<string, unknown>): void {
+        this.emitter?.StageError(stage, message, data);
+    }
+
     /** Terminate as success; the outputs ride on a final `Summary` stage event for the client. */
     public async Complete(message: string, outputs: Record<string, string | number | boolean>): Promise<void> {
         if (!this.emitter) {
@@ -449,10 +459,29 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         };
     }
 
-    /** The result for an input the action cannot run with; a detached run is terminated with the reason. */
+    /**
+     * Whether this action owns its progress run and terminates it. The standalone bootstrap does; a
+     * phase action invoked by a job reports failures as a stage error and leaves terminating to the job.
+     */
+    protected readonly TerminatesProgressRun: boolean = true;
+
+    /** The result for an input the action cannot run with; the reason is reported on the run. */
     protected async rejectInput(params: RunActionParams, progress: BootstrapProgress, resultCode: string, message: string): Promise<ActionResultSimple> {
-        await progress.Fail(message);
+        await this.ReportFailure(progress, message, resultCode);
         return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
+    }
+
+    /**
+     * Reports a failure on the progress run: terminates it when this action owns the run, otherwise
+     * emits a stage error carrying the result code and flushes, leaving the run open for its job.
+     */
+    protected async ReportFailure(progress: BootstrapProgress, message: string, resultCode: string): Promise<void> {
+        if (this.TerminatesProgressRun) {
+            await progress.Fail(message);
+            return;
+        }
+        progress.StageError(progress.CurrentStage, message, { code: resultCode });
+        await progress.Flush();
     }
 
     /** Best-effort teardown after a failure; each step is attempted even if the previous one failed. */

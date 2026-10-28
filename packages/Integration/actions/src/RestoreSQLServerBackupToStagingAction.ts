@@ -33,10 +33,11 @@ type RestoreInput =
  *   - StagingDatabaseName: the restored staging database
  *   - ContainerUrl: the storage container whose SQL Server credential was registered ('' for local paths)
  *
- * The progress run is never completed here (the calling job owns it); a failure fails it.
+ * The progress run is never terminated here (the calling job owns it); a failure is a stage error.
  */
 @RegisterClass(BaseAction, 'Restore SQL Server Backup To Staging')
 export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerIntegrationFromBackupAction {
+    protected override readonly TerminatesProgressRun = false;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
@@ -109,7 +110,7 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
     ): Promise<ActionResultSimple> {
         const message = error instanceof Error ? error.message : String(error);
         LogError(`[RestoreSQLServerBackupToStagingAction] Failure: ${message}`);
-        await progress.Fail(message);
+        await this.ReportFailure(progress, message, 'RESTORE_FAILED');
         if (ctx) {
             await this.cleanUpAfterFailure(ctx.Executor, ctx.StagingDbCreated ? ctx.StagingDatabaseName : '', ctx.ContainerUrl, params.ContextUser);
         }

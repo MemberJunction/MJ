@@ -33,11 +33,12 @@ type LoadInput =
  * Parameters (Output): BackupStartDate, StagingDatabaseName, TablesProcessed, TotalRowsTransferred,
  * DurationSeconds, StagingDatabaseDropped — as `Bootstrap SQL Server Integration From Backup` reports them.
  *
- * The progress run is never completed here (the calling job owns it); a failure fails it. A failed load
+ * The progress run is never terminated here (the calling job owns it); a failure is a stage error. A failed load
  * keeps the staging database so the load can be retried without restoring again.
  */
 @RegisterClass(BaseAction, 'Load SQL Server Integration From Staging')
 export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServerIntegrationFromBackupAction {
+    protected override readonly TerminatesProgressRun = false;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
@@ -137,7 +138,7 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
     private async loadFailed(params: RunActionParams, progress: BootstrapProgress, error: unknown): Promise<ActionResultSimple> {
         const message = error instanceof Error ? error.message : String(error);
         LogError(`[LoadSQLServerIntegrationFromStagingAction] Failure: ${message}`);
-        await progress.Fail(message);
+        await this.ReportFailure(progress, message, 'LOAD_FAILED');
         return { Success: false, ResultCode: 'LOAD_FAILED', Message: message, Params: params.Params };
     }
 }

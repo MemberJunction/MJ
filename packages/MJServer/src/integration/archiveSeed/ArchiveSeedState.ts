@@ -170,8 +170,11 @@ export function BuildLoadActionParams(work: ArchiveSeedWork, companyIntegrationI
   });
 }
 
-/** Params for 'Drop SQL Server Staging Database'. */
-export function BuildDropActionParams(work: ArchiveSeedWork, companyIntegrationID: string, runID: string): ActionParam[] {
+/**
+ * Params for 'Drop SQL Server Staging Database'. Omit `runID` when the job's run is already closed,
+ * so the action reports nothing after the run's terminal event.
+ */
+export function BuildDropActionParams(work: ArchiveSeedWork, companyIntegrationID: string, runID?: string): ActionParam[] {
   return toActionParams({
     StagingDatabaseName: work.StagingDatabaseName,
     ContainerUrl: work.ContainerUrl,
