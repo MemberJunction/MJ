@@ -4,26 +4,30 @@
  * assembly and the scoring assembly run in-process through the product's own paths on the harness's client provider.
  * Each returns a GateMeasurement and throws only when it cannot measure.
  */
+import { RunView } from '@memberjunction/core';
+import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import type { FeatureColumnSpec, ValueProvenance } from '@memberjunction/predictive-studio-core';
+import type { FeatureColumnSpec, PredictionUnitSpec, ValueProvenance } from '@memberjunction/predictive-studio-core';
 import {
-  BuildProductionMLInferenceDeps, MLModelInferenceProcessor, RunViewTrainingSnapshotStore, SnapshotFiles, SnapshotHash, SnapshotIntegrityError,
+  BuildProductionMLInferenceDeps, MLModelInferenceProcessor, PredictionUnitRowReader, RunViewTrainingSnapshotStore, SnapshotFiles, SnapshotHash, SnapshotIntegrityError,
   StorageProviderSnapshotFileStore, TrainingDelegation, TrainingEngine, UtcDay,
-  type AsOfAssembledMatrix, type AssembledRow, type MatrixCell, type RetrainResult, type SourceRow,
+  type AsOfAssembledMatrix, type AssembledRow, type MatrixCell, type RetrainResult, type SourceRow, type UnitTrainingAssembly,
 } from '@memberjunction/predictive-studio';
-import { HarnessSidecar, ProvenanceResolver, UnitFixtures, type GateMeasurement, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { HarnessSidecar, ProvenanceResolver, UnitFixtures, type GateMeasurement, type ScoredRowBinding, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 
 /** The W1-signal s42 unit rows: every membership year resolves, so the manifest holds all of them. */
 const W1_MANIFEST_ROWS = 16776;
 /** How many scored rows the provenance gate samples, and the sampler's seed. */
 const PROVENANCE_SAMPLE = 20;
 const PROVENANCE_SEED = 20261012;
+/** The provenance pipeline's features: four year columns and one windowed aggregate, one provenance entry each per row. */
+const W1_PROVENANCE_FEATURES = 5;
 
 /** What the gate recomputed from the stored files: the manifest's row count and whether the content hash matches the row's. */
 interface StoredSnapshotCheck { readonly ManifestRows: number; readonly ContentHashRecomputed: boolean; readonly DataCutoffDay: string }
 
-/** One scored row's provenance outcome: how many values it carried and how many resolved. */
-interface RowResolution { readonly Values: number; readonly Resolved: number }
+/** One scored row's provenance outcome: the entries it carried, the expected values that resolved, the matrix columns no entry covers. */
+interface RowResolution { readonly Seen: number; readonly Resolved: number; readonly Uncovered: number }
 
 /** The Training Snapshot and provenance gate bodies (G1.10, G1.11), as static members on one owner class. */
 export class TrainingSnapshotGates {
@@ -97,20 +101,67 @@ export class TrainingSnapshotGates {
     return matrix.Columns.flatMap((c, k) => (c.FeatureName === p.column ? [row.Values[k]] : []));
   }
 
-  /** Resolves every provenance entry of one scored row against its source through the harness. */
-  private static async resolveRow(h: TruthHarness, matrix: AsOfAssembledMatrix, row: AssembledRow, specs: ReadonlyMap<string, FeatureColumnSpec>, folds: ReadonlyMap<string, readonly string[]>): Promise<RowResolution> {
-    const outcomes = await Promise.all(row.Provenance.map((p) => {
-      const spec = specs.get(p.column);
-      const cells = TrainingSnapshotGates.cellsOf(matrix, row, p);
-      if (!spec || cells.length === 0) return Promise.resolve(false);
-      return h.ResolveProvenance(p, cells, spec, folds.get(p.column) || []);
-    }));
-    return { Values: outcomes.length, Resolved: outcomes.filter(Boolean).length };
+  /** The row-entity fields the binding reads: the key, the unit's dating columns and every feature's join key field. */
+  private static bindingFields(unit: PredictionUnitSpec, features: readonly FeatureColumnSpec[], primaryKey: string): string[] {
+    const fields: string[] = [primaryKey];
+    if (unit.rows.kind === 'grain-x-periods') fields.push(unit.rows.periodDate);
+    else if (unit.rows.decisionDate.kind !== 'fixed') fields.push(unit.rows.decisionDate.column);
+    for (const f of features) {
+      const src = f.source;
+      if ((src.kind === 'immutable-field' || src.kind === 'record-changes') && src.keyField) fields.push(src.keyField);
+      if (src.kind === 'windowed-aggregate' && src.ownerKeyField) fields.push(src.ownerKeyField);
+    }
+    return [...new Set(fields)];
   }
 
-  /** G1.11 W1 → S3.2. The model is promoted to Validated before the scoring path loads it (scoring refuses Draft models). */
-  public static async MeasureW1Provenance(h: TruthHarness): Promise<GateMeasurement> {
-    const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
+  /**
+   * Each sampled row as read from the row entity, independently of the assembly: its stored join fields and its
+   * decision date by the unit's own rule (`PredictionUnitRowReader.UnitDecisionDate`). A row whose decision date the
+   * rule cannot compute is absent, so none of its values resolves.
+   */
+  private static async rowBindings(h: TruthHarness, training: UnitTrainingAssembly, ids: readonly string[]): Promise<UUIDMap<ScoredRowBinding>> {
+    const rowEntity = training.UnitRead.RowEntity;
+    const keyList = ids.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<SourceRow>({
+      EntityName: rowEntity.Name, ExtraFilter: `[${rowEntity.PrimaryKey}] IN (${keyList})`, Fields: TrainingSnapshotGates.bindingFields(training.Unit, training.Features, rowEntity.PrimaryKey), ResultType: 'simple',
+    }, h.User);
+    if (!r.Success) throw new Error(`Reading the sampled ${rowEntity.Name} rows failed: ${r.ErrorMessage || 'unknown error'}`);
+    const out = new UUIDMap<ScoredRowBinding>();
+    for (const row of r.Results) {
+      const decision = PredictionUnitRowReader.UnitDecisionDate(training.Unit, row);
+      const id = String(row[rowEntity.PrimaryKey]);
+      if (decision !== null) out.Set(id, { Entity: rowEntity.Name, RowId: id, DecisionDate: decision, Fields: row });
+    }
+    return out;
+  }
+
+  /** Whether the scored rows are exactly the sampled rows: as many, each one sampled, none twice. */
+  private static rowsAligned(ids: readonly string[], rows: readonly AssembledRow[]): boolean {
+    const sampled = new UUIDSet(ids);
+    const scored = new UUIDSet(rows.map((r) => r.RowId));
+    return rows.length === ids.length && scored.Size === rows.length && rows.every((r) => sampled.Has(r.RowId));
+  }
+
+  /**
+   * Resolves one scored row: every expected feature must have exactly one provenance entry, each resolved against its
+   * source and bound to this row; a matrix column no entry stands for is uncovered.
+   */
+  private static async resolveRow(h: TruthHarness, matrix: AsOfAssembledMatrix, row: AssembledRow, expected: readonly FeatureColumnSpec[], folds: ReadonlyMap<string, readonly string[]>, binding: ScoredRowBinding | undefined): Promise<RowResolution> {
+    const named = new Set(row.Provenance.map((p) => p.column));
+    const uncovered = matrix.Columns.filter((c) => !named.has(c.FeatureName)).length;
+    const outcomes = await Promise.all(expected.map((spec) => {
+      const entries = row.Provenance.filter((p) => p.column === spec.name);
+      const p = entries[0];
+      if (!binding || entries.length !== 1 || !p) return Promise.resolve(false);
+      const cells = TrainingSnapshotGates.cellsOf(matrix, row, p);
+      if (cells.length === 0) return Promise.resolve(false);
+      return h.ResolveProvenance({ Provenance: p, Cells: cells, Spec: spec, Folded: folds.get(spec.name) || [], Row: binding });
+    }));
+    return { Seen: row.Provenance.length, Resolved: outcomes.filter(Boolean).length, Uncovered: uncovered };
+  }
+
+  /** Trains the provenance pipeline, promotes its model for scoring and returns what the gate reads, or why it cannot. */
+  private static async trainedForScoring(h: TruthHarness): Promise<{ readonly PipelineID: string; readonly ModelID: string; readonly Snapshot: MJTrainingSnapshotEntity } | GateMeasurement> {
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionW1ProvenancePipeline(h);
     await h.Train(pipeline);
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);
@@ -119,28 +170,46 @@ export class TrainingSnapshotGates {
     if (!s) return { Passed: false, Measured: {}, Detail: `run ${run.ID} has no Training Snapshot` };
     const promoted = await h.Promote(run.ResultingModelID, 'Validated', 'G1.11: scoring-path provenance');
     if (!promoted.Promoted) return { Passed: false, Measured: { modelStatus: promoted.Status }, Detail: `model ${run.ResultingModelID} could not be validated for scoring` };
-    const training = await new TrainingEngine().AssembleForTraining(pipeline.ID, await TrainingDelegation.BuildTrainingDeps(h.Provider, h.User));
-    const specs = new Map(training.Features.map((f) => [f.name, f] as const));
+    return { PipelineID: pipeline.ID, ModelID: run.ResultingModelID, Snapshot: s };
+  }
+
+  /**
+   * G1.11 W1 → S3.2. The model is promoted to Validated before the scoring path loads it (scoring refuses Draft models).
+   * Every value must name its own scored row (the row's key, its stored owner key, its decision day computed by the
+   * unit's rule), every sampled row must carry one provenance entry per feature, and every matrix column must be
+   * covered by one.
+   */
+  public static async MeasureW1Provenance(h: TruthHarness): Promise<GateMeasurement> {
+    const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
+    const trained = await TrainingSnapshotGates.trainedForScoring(h);
+    if ('Passed' in trained) return trained;
+    const training = await new TrainingEngine().AssembleForTraining(trained.PipelineID, await TrainingDelegation.BuildTrainingDeps(h.Provider, h.User));
+    const expected = training.Features.filter((f) => f.encoding.kind !== 'identifier');
     const ids = await h.SampleRowIds(w1, PROVENANCE_SAMPLE, PROVENANCE_SEED);
     const keyField = training.UnitRead.RowEntity.PrimaryKey;
-    const records: SourceRow[] = ids.map((id) => ({ [keyField]: id }));
-    const scoring = new MLModelInferenceProcessor({ modelId: run.ResultingModelID, deps: BuildProductionMLInferenceDeps() });
-    const scored = await scoring.AssembleForScoring(records, { ContextUser: h.User, Provider: h.Provider }, 'unit-rule');
+    const scoring = new MLModelInferenceProcessor({ modelId: trained.ModelID, deps: BuildProductionMLInferenceDeps() });
+    const scored = await scoring.AssembleForScoring(ids.map((id): SourceRow => ({ [keyField]: id })), { ContextUser: h.User, Provider: h.Provider }, 'unit-rule');
     if (scored.Status !== 'assembled') return { Passed: false, Measured: { sampled: ids.length }, Detail: `scoring assembly refused: ${JSON.stringify(scored.Refusal)}` };
-    const folds = ProvenanceResolver.FoldedLevels(s.ColumnProvenance);
+    const folds = ProvenanceResolver.FoldedLevels(trained.Snapshot.ColumnProvenance);
+    const bindings = await TrainingSnapshotGates.rowBindings(h, training, ids);
+    const rowsAligned = TrainingSnapshotGates.rowsAligned(ids, scored.Rows);
     let resolved = 0;
-    let values = 0;
+    let valuesSeen = 0;
     let valuesResolved = 0;
+    let columnsUncovered = 0;
     for (const row of scored.Rows) {
-      const r = await TrainingSnapshotGates.resolveRow(h, scored, row, specs, folds);
-      values += r.Values;
+      const r = await TrainingSnapshotGates.resolveRow(h, scored, row, expected, folds, bindings.Get(row.RowId));
+      valuesSeen += r.Seen;
       valuesResolved += r.Resolved;
-      if (r.Values > 0 && r.Resolved === r.Values) resolved++;
+      columnsUncovered += r.Uncovered;
+      if (r.Resolved === expected.length && r.Seen === expected.length && r.Uncovered === 0) resolved++;
     }
+    const valuesExpected = W1_PROVENANCE_FEATURES * PROVENANCE_SAMPLE;
+    const complete = expected.length === W1_PROVENANCE_FEATURES && valuesSeen === valuesExpected && valuesResolved === valuesExpected && columnsUncovered === 0;
     return {
-      Passed: resolved === PROVENANCE_SAMPLE && scored.Rows.length === PROVENANCE_SAMPLE,
-      Measured: { resolved, sampled: scored.Rows.length, values, valuesResolved },
-      Detail: `${resolved} of ${PROVENANCE_SAMPLE} sampled rows resolve every value (${valuesResolved} of ${values} values)`,
+      Passed: rowsAligned && resolved === PROVENANCE_SAMPLE && scored.Rows.length === PROVENANCE_SAMPLE && complete,
+      Measured: { resolved, sampled: scored.Rows.length, rowsAligned, valuesExpected, valuesSeen, valuesResolved, columnsUncovered },
+      Detail: `${resolved} of ${PROVENANCE_SAMPLE} sampled rows resolve every value bound to the row (${valuesResolved} of ${valuesExpected} expected values, ${valuesSeen} seen, ${columnsUncovered} uncovered columns)${rowsAligned ? '' : '; the scored rows are not the sampled rows'}`,
     };
   }
 }

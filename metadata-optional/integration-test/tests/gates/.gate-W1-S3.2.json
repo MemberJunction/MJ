@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W1 -> S3.2",
-    "Description": "Gate G1.11 (phase 1, dataset W1, criterion S3.2): for 20 sampled scored W1-signal s42 rows, every feature value resolves to its source, source version and computed-at, 20 of 20. It fails when the provenance's computed-at is not checked against its source, so resolved < 20 of 20.",
+    "Description": "Gate G1.11 (phase 1, dataset W1, criterion S3.2): for 20 sampled scored W1-signal s42 rows, every feature value resolves to its source, source version and computed-at, 20 of 20. The scored rows must be the sampled rows, each row must carry one provenance entry per feature (5 x 20 = 100 values) covering every matrix column, and each entry must name its own row: the row's key, its stored PersonID as the aggregate owner and its decision day computed by the unit's rule. It fails when a provenance entry lacks a usable computedAt (the recorded mutation has the assembler write an empty computedAt), when a value does not re-derive from its source, or when a row's provenance does not name that row.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G1.11\",\"owner:PR3\",\"phase:1\",\"dataset:W1\",\"criterion:S3.2\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "20 of 20 sampled scored W1 rows resolve every feature value to its source, source version and computed-at."
+      "summary": "20 of 20 sampled scored W1 rows resolve all 100 feature values to their source, source version and computed-at, each bound to its own row, with every matrix column covered."
     },
     "Configuration": {
       "tier": "mutation",

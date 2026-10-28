@@ -202,7 +202,7 @@ export class RunFixtures {
       WriteArtifact: (name, data) => HarnessArtifacts.WriteArtifact(name, data),
       ReadWorldTruth: (dataset) => HarnessWorldTruth.ReadWorldTruth(dataset),
       SampleRowIds: (dataset, n, seed) => HarnessProvenance.SampleRowIds(ctx, dataset, n, seed),
-      ResolveProvenance: (p, cells, spec, folded) => HarnessProvenance.ResolveProvenance(ctx, p, cells, spec, folded),
+      ResolveProvenance: (check) => HarnessProvenance.ResolveProvenance(ctx, check),
       UseSuiteSidecar: () => HarnessSidecar.UseSuiteSidecar(),
     });
   }

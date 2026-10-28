@@ -1,10 +1,9 @@
 /** The seeded row sampler and the provenance resolver behind two TruthHarness members (lines in RunFixtures.harnessFrom). */
 import { RunView } from '@memberjunction/core';
-import type { FeatureColumnSpec, ValueProvenance } from '@memberjunction/predictive-studio-core';
-import { LockedHoldoutSplitter, type MatrixCell } from '@memberjunction/predictive-studio';
+import { LockedHoldoutSplitter } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
 import type { LoadedDataset } from './types';
-import { ProvenanceResolver } from '../fixtures/provenance-resolver';
+import { ProvenanceResolver, type ProvenanceCheck } from '../fixtures/provenance-resolver';
 
 /** `TruthHarness.SampleRowIds` and `TruthHarness.ResolveProvenance`. */
 export class HarnessProvenance {
@@ -28,8 +27,11 @@ export class HarnessProvenance {
     return ids.slice(0, n);
   }
 
-  /** Whether one assembled value resolves to its source, source version and computed-at (see {@link ProvenanceResolver}). */
-  public static ResolveProvenance(ctx: RunContext, p: ValueProvenance, cells: readonly MatrixCell[], spec: FeatureColumnSpec, folded: readonly string[]): Promise<boolean> {
-    return ProvenanceResolver.ResolveValueProvenance(ctx.Provider, ctx.User, p, cells, spec, folded);
+  /**
+   * Whether one assembled value names its scored row and resolves to its source, source version and computed-at,
+   * read through the production seams on the harness's provider (see {@link ProvenanceResolver}).
+   */
+  public static ResolveProvenance(ctx: RunContext, check: ProvenanceCheck): Promise<boolean> {
+    return ProvenanceResolver.ResolveValueProvenance(ProvenanceResolver.Sources(ctx.Provider, ctx.User), check);
   }
 }

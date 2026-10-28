@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W1 -> S5.5",
-    "Description": "Gate G1.10 (phase 1, dataset W1, criterion S5.5): the W1-signal s42 snapshot's row manifest holds 16,776 rows, the content hash recomputed from the stored matrix matches (1 of 1), and a retrain from the snapshot and logged configuration reproduces the holdout metric within 1e-9. It fails when the retrain request's logged seed is changed (random_state 42 to 43), so the retrained holdout metric differs by more than 1e-9, or when the content hash is not verified.",
+    "Description": "Gate G1.10 (phase 1, dataset W1, criterion S5.5): the W1-signal s42 snapshot's row manifest holds 16,776 rows, the content hash recomputed from the stored matrix matches (1 of 1), and a retrain from the snapshot and logged configuration reproduces the holdout metric within 1e-9. It fails when the retrain request's logged hyperparameters change (the recorded mutation sets C to 0.001), so the retrained holdout metrics differ by more than 1e-9, or when the retrainer cannot verify the content hash. The logged seed is not a mutation target: the sidecar's random_state drives only its internal validation split, never the model that scores the locked holdout.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G1.10\",\"owner:PR3\",\"phase:1\",\"dataset:W1\",\"criterion:S5.5\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "The W1 snapshot manifest holds 16,776 rows, its content hash recomputes from the stored files, and a retrain from the snapshot reproduces the holdout metrics within 1e-9."
+      "summary": "The W1 snapshot manifest holds 16,776 rows, its content hash recomputes from the stored files and the retrainer verifies it, and a retrain from the snapshot with the logged configuration reproduces the holdout metrics within 1e-9."
     },
     "Configuration": {
       "tier": "mutation",
