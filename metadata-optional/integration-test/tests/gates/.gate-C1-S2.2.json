@@ -2,7 +2,7 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "C1 -> S2.2",
-    "Description": "Gate G1.2 (phase 1, dataset C1, criterion S2.2): training the C1 renewal pipeline through its Prediction Unit excludes the 1,756 person-years whose outcome window ends after the corpus end, and the training run stores censoredRowsExcluded = 1,756 with resolvedRows = 4,873. It fails when the unit row reader skips the exclude-unresolved censoring step, so the stored excluded count is 0, not 1,756.",
+    "Description": "Gate G1.2 (phase 1, dataset C1, criterion S2.2): training the C1 renewal pipeline through its Prediction Unit excludes the 1,756 person-years whose outcome window ends after the corpus end, and the training run stores censoredRowsExcluded = 1,756 with resolvedRows = 4,873. It fails when the unit row reader skips the exclude-unresolved censoring step, so the stored excluded count is 0, not 1,756. The run's Training Snapshot records CensoredRowsExcluded = 1,756, LabelKnownRowsExcluded = 44 and ManifestRowCount = 4,873, and its manifest rows mapped through their dues periods give the reference's 4,873 keys with 0 extra; this manifest check lives here rather than in G1.1, which reads the unit in-process and never trains.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G1.2\",\"owner:PR3\",\"phase:1\",\"dataset:C1\",\"criterion:S2.2\"]",
     "InputDefinition": {},

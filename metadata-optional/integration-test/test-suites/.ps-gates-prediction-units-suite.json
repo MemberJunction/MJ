@@ -116,6 +116,28 @@
           "primaryKey": {
             "ID": "5462D9FB-F064-40B0-BC95-F0B7214275DA"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S5.5",
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C2D32C8-72A5-4715-A710-98BB6B3AB7DF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S3.2",
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "28CBE29C-0AE8-4433-ACAB-0654FD2A3CDA"
+          }
         }
       ]
     },

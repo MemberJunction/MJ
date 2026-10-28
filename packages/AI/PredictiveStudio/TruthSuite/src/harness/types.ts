@@ -4,7 +4,8 @@ import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
   PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
-  PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+  PredictiveStudioRefusalCode, FeatureColumnSpec, ValueProvenance } from '@memberjunction/predictive-studio-core';
+import type { MatrixCell } from '@memberjunction/predictive-studio';
 import type { RunRecords } from './cleanup';
 
 export type WorldID = 'W1-signal' | 'W2-noise' | 'W3-leak-row' | 'W4-pit' | 'W5-censor' | 'W6-drift'
@@ -112,4 +113,13 @@ export interface TruthHarness {
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
   /** The planted truth of a loaded W1–W8 seed, keyed by lower-cased MembershipYearID. */
   ReadWorldTruth(dataset: LoadedDataset): Promise<ReadonlyMap<string, WorldTruthRow>>;
+  /** A seeded sample of n primary keys of the dataset's row table. */
+  SampleRowIds(dataset: LoadedDataset, n: number, seed: number): Promise<string[]>;
+  /**
+   * Whether one assembled value resolves to its source, source version and computed-at: `cells` are the matrix cells of
+   * the provenance entry's feature, `spec` its column spec, `folded` the levels its category fold folded into `__other`.
+   */
+  ResolveProvenance(p: ValueProvenance, cells: readonly MatrixCell[], spec: FeatureColumnSpec, folded: readonly string[]): Promise<boolean>;
+  /** Route this process's in-process engine calls to the suite sidecar; returns its URL. */
+  UseSuiteSidecar(): string;
 }

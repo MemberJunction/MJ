@@ -71,7 +71,7 @@ export class LockedHoldoutSplitter {
     const total = matrix.rows.length;
     const holdoutCount = LockedHoldoutSplitter.HoldoutCount(total, fraction);
     const targetIdx = matrix.columns.indexOf(targetColumn);
-    const random = LockedHoldoutSplitter.mulberry32(seed);
+    const random = LockedHoldoutSplitter.Mulberry32(seed);
     const holdoutIndices =
       problemType === 'classification' && targetIdx >= 0
         ? LockedHoldoutSplitter.stratifiedPick(matrix, targetIdx, holdoutCount, random)
@@ -200,10 +200,10 @@ export class LockedHoldoutSplitter {
   }
 
   /**
-   * mulberry32: a small, fast 32-bit seeded generator returning floats in [0, 1). Local so the carve has no dependency
+   * Mulberry32: a small, fast 32-bit seeded generator returning floats in [0, 1). Local so the carve has no dependency
    * whose algorithm could change under it — the same seed must give the same holdout across releases.
    */
-  private static mulberry32(seed: number): () => number {
+  public static Mulberry32(seed: number): () => number {
     let state = seed >>> 0;
     return () => {
       state = (state + 0x6d2b79f5) >>> 0;

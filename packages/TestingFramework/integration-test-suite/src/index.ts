@@ -118,6 +118,8 @@ export * from './checks/ps-gate-w4-s2-1-2.checks';
 export * from './checks/ps-gate-t3-s-t-1.checks';
 export * from './checks/ps-gate-w1-s7-5-2.checks';
 export * from './checks/ps-gate-c1-s3-1.checks';
+export * from './checks/ps-gate-w1-s5-5.checks';
+export * from './checks/ps-gate-w1-s3-2.checks';
 export * from './checks/ps-truth-datasets.checks';
 export * from './checks/ai-permissions.checks';
 export * from './checks/ai-embeddings.checks';

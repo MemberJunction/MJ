@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S3.2",
+    "Description": "Gate G1.11 (phase 1, dataset W1, criterion S3.2): for 20 sampled scored W1-signal s42 rows, every feature value resolves to its source, source version and computed-at, 20 of 20. It fails when the provenance's computed-at is not checked against its source, so resolved < 20 of 20.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.11\",\"owner:PR3\",\"phase:1\",\"dataset:W1\",\"criterion:S3.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "20 of 20 sampled scored W1 rows resolve every feature value to its source, source version and computed-at."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s3-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "95335581-4EB8-430D-BDDA-FFDA772E86FC"
+  }
+}

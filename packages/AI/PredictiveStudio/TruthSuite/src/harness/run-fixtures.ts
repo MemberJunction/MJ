@@ -12,6 +12,8 @@ import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
 import { HarnessCleanup, RunRecords } from './cleanup';
 import { HarnessWorldTruth } from './world-truth';
+import { HarnessProvenance } from './provenance';
+import { HarnessSidecar } from './sidecar';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
 import type { CandidateModel, LoadedDataset, TruthHarness } from './types';
 
@@ -199,6 +201,9 @@ export class RunFixtures {
       Judge: (module, args) => JudgeBridge.Judge(module, args),
       WriteArtifact: (name, data) => HarnessArtifacts.WriteArtifact(name, data),
       ReadWorldTruth: (dataset) => HarnessWorldTruth.ReadWorldTruth(dataset),
+      SampleRowIds: (dataset, n, seed) => HarnessProvenance.SampleRowIds(ctx, dataset, n, seed),
+      ResolveProvenance: (p, cells, spec, folded) => HarnessProvenance.ResolveProvenance(ctx, p, cells, spec, folded),
+      UseSuiteSidecar: () => HarnessSidecar.UseSuiteSidecar(),
     });
   }
 }

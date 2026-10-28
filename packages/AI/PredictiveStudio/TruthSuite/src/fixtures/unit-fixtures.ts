@@ -185,6 +185,22 @@ export class UnitFixtures {
     return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.LeakageGuard, UnitFixtures.worldRenewalSteps(h, world, o));
   }
 
+  /**
+   * The W1 renewal unit with the four year columns and a two-year windowed sum of the person's earlier events, on a
+   * deterministic algorithm (the provenance and snapshot-retrain fixture).
+   */
+  public static ProvisionW1ProvenancePipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
+    const features = ['EventsAttended', 'Plan', 'AutoRenew', 'IncomeK'];
+    const steps: FeatureStepGraph = { Steps: [
+      { Id: 'select', Kind: 'select', Columns: [...features] },
+      {
+        Id: 'events-prior', Kind: 'windowed-aggregate', FeatureName: 'events_prior_730d', ChildEntity: UnitFixtures.TruthEntityName(h, 'W1_MembershipYear'),
+        ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', DateField: 'StartDate', Aggregate: 'sum', ValueField: 'EventsAttended', WindowDays: 730,
+      },
+    ] };
+    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), features, 'Logistic Regression', undefined, steps);
+  }
+
   /** The T3 forecast unit with one select step over the given series columns and their period offsets. */
   public static ProvisionT3Pipeline(h: TruthHarness, o: T3PipelineOptions): Promise<ProvisionedUnitPipeline> {
     const steps: FeatureStepGraph = { Steps: [{ Id: 'select', Kind: 'select', Columns: [...o.Columns], PeriodOffsets: { ...o.PeriodOffsets } }] };

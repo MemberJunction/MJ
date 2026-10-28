@@ -730,7 +730,7 @@ export class AsOfFeatureAssembler {
   ): RawValue {
     const sourceRef = owner === null ? 'none'
       : `${source.childEntity}?${source.foreignKey}=${owner.toLowerCase()}&as-of=${UtcDay.UtcDayIso(AsOfFeatureAssembler.decisionDay(row.DecisionDate))}&aggregate=${source.aggregate}`;
-    return { Value: value, Provenance: { column: spec.name, source: 'windowed-aggregate', sourceRef, sourceVersion: AsOfFeatureAssembler.contributorsVersion(contributors), computedAt: input.AssembledAt.toISOString() } };
+    return { Value: value, Provenance: { column: spec.name, source: 'windowed-aggregate', sourceRef, sourceVersion: AsOfFeatureAssembler.ContributorsVersion(contributors), computedAt: input.AssembledAt.toISOString() } };
   }
 
   /** The child fields whose stored values decide what an aggregate reads: the owner key, the date, the value and every filter. */
@@ -890,8 +890,12 @@ export class AsOfFeatureAssembler {
     };
   }
 
-  /** The sha-256 of the contributing rows: `ID:updatedAt` per row, or the ID alone when the row has no update time. */
-  private static contributorsVersion(contributors: readonly ChildRow[]): string {
+  /**
+   * A windowed aggregate's source version: the sha-256 of the contributing rows, `ID:updatedAt` per row (or the ID
+   * alone when the row has no update time), sorted, one per line. The one rule for the version, so a reader that
+   * rebuilds the contributor set can check a stored version against it.
+   */
+  public static ContributorsVersion(contributors: readonly ChildRow[]): string {
     const lines = contributors.map((c) => (c.UpdatedAt ? `${c.Id}:${c.UpdatedAt}` : c.Id)).sort();
     return createHash('sha256').update(lines.join('\n')).digest('hex');
   }
