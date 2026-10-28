@@ -19,8 +19,9 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 // FeatureAssembly executor + as-of / leakage-guard correctness primitives (§5/§6).
 export * from './feature-assembly';
 
-// Training Snapshot file format — the matrix (with the header the trainer reads), row manifest and per-value
-// provenance files, their hashes and the snapshot content hash, and the assembly code-version stamp.
+// Training Snapshot — the matrix (with the header the trainer reads), row manifest and per-value provenance files,
+// their hashes and the snapshot content hash, the assembly code-version stamp, the write-once file stores, the
+// holdout carver and the snapshot builder.
 export * from './snapshot/index';
 
 // Prediction Unit rows — PredictionUnitRowReader: one row per grain record (or grain record x period) with its
