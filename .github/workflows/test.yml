@@ -945,14 +945,43 @@ jobs:
 
       - name: Native-ESM import guard
         env:
-          TURBO_FILTER: ${{ needs.build.outputs.turbo_filter }}
+          # TURBO_FILTER is deliberately NOT passed here any more: this step no longer decides
+          # its scope from the build job's filter, and leaving it would imply a dependency the
+          # logic below does not have. The `Materialize dist/` step above still uses it.
           PR_BASE_REF: ${{ github.base_ref }}
         run: |
-          # Scope to changed packages only when this is a PR whose scope was itself narrowed.
-          # An empty TURBO_FILTER means a root/global change (or a backstop run) — sweep all.
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$TURBO_FILTER" ]; then
+          # Every PR scans only what it changed; the unscoped sweep is the backstop's job.
+          #
+          # This used to also require a non-empty TURBO_FILTER, which meant any PR touching a
+          # root/global path — `package.json`, `turbo.json`, a root tsconfig, or this workflow
+          # file — fell through to sweeping all ~220 type:module packages at ~3s each. That is
+          # ~11 minutes, and it is why a workflow-only PR took 20+ minutes on a job that is
+          # otherwise 2.5-3 minutes (observed on #6123, which edits nothing but a cleanup step).
+          #
+          # Widening on a root change is more caution than this guard was built to need, by its
+          # own design notes: the failure signature lives in a package's OWN emitted dist/, "an
+          # untouched source recompiles identically even when a dependency change forces a
+          # rebuild", and "the push/nightly backstop runs UNSCOPED and covers the residue (a
+          # build-tool or tsconfig change that shifts emit repo-wide)". That backstop runs on
+          # every merge to next, so the residue is never unguarded for more than one merge.
+          #
+          # Narrowing to nothing is not a risk either: the script widens back to the FULL sweep
+          # by itself when the diff cannot be computed (unknown ref, shallow clone, no git),
+          # because "a guard that silently checks zero packages and prints a pass is worse than
+          # one that costs eleven minutes".
+          #
+          # EXCEPTION: a PR that edits the guard itself gets the full sweep. That is the one
+          # change that most needs the real thing rather than a narrowed subset — the same
+          # reasoning the `changes` job applies when it lists gate scripts in its paths filter.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "$PR_BASE_REF"
-            node .github/scripts/check-esm-imports.mjs packages --changed-since "origin/$PR_BASE_REF"
+            if git diff --name-only "origin/$PR_BASE_REF...HEAD" \
+                 | grep -qx '.github/scripts/check-esm-imports.mjs'; then
+              echo "The guard script itself changed — running the full sweep to exercise it."
+              node .github/scripts/check-esm-imports.mjs packages
+            else
+              node .github/scripts/check-esm-imports.mjs packages --changed-since "origin/$PR_BASE_REF"
+            fi
           else
             node .github/scripts/check-esm-imports.mjs packages
           fi
