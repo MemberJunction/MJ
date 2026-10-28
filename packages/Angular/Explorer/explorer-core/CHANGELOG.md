@@ -1,5 +1,185 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- cc36de5: Add Alternate Base Views (MJ Canon Layer 1): allow entities to register governed SQL views (`MJ: Entity Alternate Base Views`) that maintain 100% column parity with the canonical `BaseView` while returning curated row subsets (such as `Active` members or `Open` orders), with full support across `RunView`, `RunViews`, `BaseEngine`, `LocalCacheManager`, `CodeGen` column-parity validation, `QueryEntity.AlternateBaseViewID` lineage extraction, `QueryGen`, `Lists`, `DataContext`, `GetEntityDetails`, and `MJExplorer` Data Explorer / Entity Viewer.
+- 7d9b179: Add 5 record form, grid, version history, and AI overlay capabilities plus human-friendly record tab/browser titles:
+  1. **Bidirectional `<mj-record-links>` & Universal `<mj-record-preview-popover>` (`@memberjunction/ng-base-forms`)**:
+     - Extend `<mj-record-links>` to surface both **Outgoing ("On This Record")** links from populated hard FK and polymorphic FK fields (`EntityField.EntityIDFieldName`) on the open record and **Incoming ("Linked To This")** dependent records from `GetRecordDependencies`, with direction filter tabs (`All` / `On This Record` / `Linked To This`), search, and expandable entity cards.
+     - Add `<mj-record-preview-popover>` hover preview card for FK and polymorphic FK links in `<mj-form-field>` and link items in `<mj-record-links>`, displaying the target record's entity badge, display name, copyable abbreviated primary key pill, top summary fields, last-updated timestamp, and quick navigation.
+  2. **Pluggable Form Toolbar Button Registry & Pre-Warmed Link Count Badge (`@memberjunction/ng-base-forms`)**:
+     - Introduce `BaseFormToolbarButton` and `FormToolbarButtonRegistry` (`@RegisterClass(BaseFormToolbarButton, buttonKey)`) supporting entity-scoped, pattern-scoped, and global custom toolbar buttons with `Prewarm` / `RefreshState` / `Execute` lifecycles and priority-aware subclass overrides.
+     - Pre-warm `LinkCount` and `LinksSummary` when the Links button is pinned for the current user, backed by a 30s TTL dependency cache shared with `<mj-record-links>`.
+  3. **World-Class `<mj-record-changes>` Drawer & In-Form "Time Travel" Historical Version Preview (`@memberjunction/ng-record-changes` & `@memberjunction/ng-base-forms`)**:
+     - Redesign `<mj-record-changes>` header to show `EntityInfo.DisplayNameOrName`, a compact copyable ID pill, a collapsible Version Labels accordion, and an interactive SVG **Activity Over Time** sparkline bar chart.
+     - Add `"Preview in Form"` toggle on version cards in `<mj-record-changes>`, closing the drawer so the form is unobstructed, rehydrating all stored snapshot fields from `FullRecordJSON` onto the entity record (so calculated and dependent fields update live), and rendering a floating glassmorphic **Time-Travel Dock** in `<mj-record-form-container>`.
+  4. **Live `<mj-entity-data-grid>` Row Patching & Non-Disruptive Update Pill (`@memberjunction/ng-entity-viewer`)**:
+     - Subscribe `<mj-entity-data-grid>` to `MJGlobal` `BaseEntity.BaseEventCode` (`save`, `delete`, `remote-invalidate`) events matching the grid's entity.
+     - Patch updated visible rows in place via `gridApi.applyTransaction({ update })` without resetting scroll, sort, or selection, and surface a non-disruptive floating pill when records are created or deleted.
+  5. **Active-Record + Links Context in `<mj-chat-agents-overlay>` (`@memberjunction/ng-conversations`, `@memberjunction/ng-base-forms`, `@memberjunction/ng-explorer-core`)**:
+     - Enrich `FormCompositionSnapshot` / `FormAgentContext` with `RecordState` (edit mode, dirty fields, conflict state, active time-travel preview) and `Links` (total, outgoing, incoming, top entity groups).
+     - Add an `"Ask AI"` button in `<mj-form-toolbar>` that expands the `<mj-chat-agents-overlay>` workspace via `ConversationsRuntime.Instance.Bridge.RequestExpandOverlay()` and displays an **Active Record Context** pill bar in the chat overlay.
+  6. **Entity Display Name + Abbreviated UUID for Record Tab Headers & Browser Titles (`@memberjunction/ng-shared`, `@memberjunction/ng-explorer-core`, `@memberjunction/ng-base-forms`)**:
+     - Add `FormatEntityRecordDisplayTitle` and `ResolveRecordTabDisplayTitle` so records without a human-readable `NameField` (or whose `NameField` resolves to a raw UUID, such as `MJ: Process Run Details`) display `<Entity Display Name> · <Abbreviated UUID>` (e.g., `Process Run Details · 9FAF60…C577`) across workspace tabs, browser window titles, origin breadcrumbs, and record link/preview cards.
+
+### Patch Changes
+
+- 5d83ba4: Explorer: a record shown in a custom form can now be opened in the standard (CodeGen) form, and an entity view can create a record directly in the standard form (MJ#4755).
+  - `<mj-entity-form-host>` shows a slim "Open standard form" / "Back to custom view" strip whenever a custom class form or an interactive override hides the generated form. New `FormMode` input, `FormModeChange` output, `ShowFormModeSwitch` opt-out. Refuses to switch a saved record that has unsaved changes, or a form in edit mode that holds pending related-record changes (for example a removed action on the AI Agent form); a new, unsaved record switches and keeps the values already entered.
+  - `FormResolverService.ResolveStandardForm()` + `HasStandardFormAlternative()`; `FormResolution` carries `standard`.
+  - Explorer: `NavigationOptions.formMode: 'standard'` and the `?form=standard` record deep link. The mode is the record tab's `form` query param, which round-trips through the URL, back/forward and tab re-focus, including switches made with the in-form strip (applied to an already-open tab too, through the host's unsaved-work guard). Entity views offer "New in standard form" when a custom form exists and the user can create.
+  - Fix (`ng-shared`): the tab identity guard no longer drops query-param writes (`UpdateQueryParams`) from a resource whose tab does not persist a driver class, and it compares record ids case-insensitively. Record tabs are the visible case: their query-param writes were always dropped before.
+  - Fix (`ng-shared`): opening a record that is already open from a URL (bare id) now focuses that tab instead of opening a second tab for the same record. Record-tab dedup matches ids the same way `RecordTabShowsRecord` does (`Field|value` and case insensitive).
+  - Fix (`ng-base-forms`): when `<mj-entity-form-host>` reloads while an earlier load is still in flight (a form switch, an input change, or destroy), only the newest load mounts. A superseded load no longer mounts a second form, registers a second save handler (which emitted `Saved` twice per save), shows its failure over the newer form, ends the newer load's loading state, or mounts after the host is destroyed.
+
+- dae1d31: Omnibus Core, AI/MCP/Agent & Angular Performance & Resource Optimization (Waves 1–3):
+  - **Wave 1 (Core Data Access, Server Resolvers & Caching)**:
+    - `MJ-CORE-6`: Collapse multi-query `RunView` execution (`viewSQL`, `countSQL`, `aggregateSQL`) into a single `ExecuteSQLBatch` call in `GenericDatabaseProvider`.
+    - `MJ-CORE-9`: Resolve `UserView` metadata through `UserViewEngine.Instance` in `ResolverBase` / `RunViewResolver`, pass pre-resolved `ViewEntity` into `RunViewParams`, and reuse a single `Metadata` instance across `ArrayFilterEncryptedFieldsForAPI`.
+    - `MJ-CORE-5`: Parallelize `BaseEngine` dataset item entity hydration (`Promise.all`), maintain `_datasetItemMappings` for in-place `AutoRefresh` on dataset-loaded configs, enable `AutoRefresh: true` on `TemplateEngineBase`, and validate Nunjucks compiled template cache against `sourceText`.
+  - **Wave 2 (AI, Agents, Prompts, Vectors, MCP & A2A)**:
+    - `MJ-AI-5` / `MJ-AI-6`: Replace dynamic `await import('stream')` with static `Readable` import in `MCPServer`, cache compiled `ToolConfig` entries and Zod schemas across sessions (`GetOrBuildCompiledToolConfigs` / `ClearCompiledToolCache`), and route tool handlers through the active request's `SessionContext`.
+    - `MJ-AI-7`: Default `EntityVectorSyncer` `delayTimeMS` to `0`, parallelize `saveEntityRecordDocument` with bounded concurrency (`10`), and use `SaveReturnMode: 'datestamps_only'`.
+    - `MJ-AI-8`: Thread `provider?: IMetadataProvider` through `RerankObservabilityOptions` and save observability PromptRuns with `SaveReturnMode: 'datestamps_only'`.
+    - `MJ-AI-9`: Support single-INSERT pre-completed `AIPromptRun` steps (`completed` option on `createStepEntity`) and coalesce streaming progress chunks at 35ms intervals.
+    - `MJ-AI-10` / `MJ-AI-11`: Parallelize `AgentPreExecutionRAG` scope searches (`Promise.all`), isolate `AgentRunWatchdog` sweeps per run (`{ provider, contextUser }`), and pause the watchdog interval when zero runs are active.
+    - `MJ-AI-12` / `MJ-AI-13`: Replace 500ms SSE polling in `A2AServer` with event-driven `TaskStore.Subscribe` / `Notify`, cache the discovery `AgentCard`, and wire `TaskStore.CancelTask` (`AbortController`) to `AgentOperations.executeAgent()`.
+    - `MJ-AI-14`: Short-circuit `ActionEngineServer.SnapshotInputParams` in $O(1)$ when execution logging is disabled and reuse a single `ClassFactory` action instance per `RunAction` lifecycle.
+  - **Wave 3 (Angular Change Detection, Leaks & Algorithmic Hotspots)**:
+    - `MJ-NG-4`: Add `ChangeDetectionStrategy.OnPush` and explicit `ChangeDetectorRef.markForCheck()` across `JoinGridComponent`, `SearchSuggestComponent`, `ArtifactTypePluginViewerComponent`, `ActionFormComponent`, `AIPromptFormComponent`, and Explorer AI/Communication dashboards (`AutotaggingPipelineResourceComponent`, `ExecutionMonitoringComponent`, `ModelPromptPriorityMatrixComponent`, `TagsResourceComponent`, `CommunicationMonitorResourceComponent`, `CommunicationLogsResourceComponent`, `CommunicationRunsResourceComponent`).
+    - `MJ-NG-5`: Fix timer/listener/subject leaks across `MJNotificationsService`, `MessageListComponent`, `UserNotificationsComponent`, `ActionFormComponent`, `AIPromptFormComponent`, `AutotaggingPipelineResourceComponent`, and `ExecutionMonitoringComponent`.
+    - `MJ-NG-6`: Pre-index and memoize hot template/filter/render paths in `ConversationChatAreaComponent`, `WhiteboardBoardComponent`, `EntityDataGridComponent`, `DataExplorerDashboardComponent`, and `MCPDashboardComponent`.
+
+- db4e210: - `@memberjunction/ng-base-forms`:
+  - Extract declarative `[mjRecordLink]` directive (`MjRecordLinkDirective`), `<mj-record-link>` component (`MjRecordLinkComponent`), and body-mounted singleton `MjRecordPreviewPopoverService` so any custom form header, `BaseFormPanel`, or dashboard widget can attach hover-intent record previews, inline Quick Edit with live propagation to virtual display fields, standard/polymorphic FK resolution, and `FormNavigationEvent` navigation. Refactor `<mj-form-field>` and `<mj-record-links>` to share the same DRY infrastructure.
+  - Upgrade `<mj-record-preview-popover>` (`MjRecordPreviewPopoverComponent`) with an Option A header micro-cluster (Copy ID pill, `[✎]` Quick Edit, `[↗]` New Tab), clickable record title (`Record →`), auto-spanning wide fields (`grid-column: 1 / -1`), contextual `Cancel`/`Save` footer only in edit mode, cancellable `BeforeQuickEditSave` / `AfterQuickEditSaved` events, and 3-tier `@RegisterClass(MjRecordPreviewPopoverComponent, ...)` / `ClassFactory` runtime specialization (`ResolveRecordPreviewPopoverType`).
+  - Add one-click Quick Unlink for nullable outgoing foreign keys inside `<mj-record-links>`.
+  - `@memberjunction/ng-ui-components`:
+    - Add general-purpose, zero-domain-knowledge `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) for irregular time-series event streams with generic `[Items]` or raw `[Data]` + `[FieldMap]` binding, configurable grouping & resolution (`Resolution`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'`, `CoalesceStrategy`: `'adaptive-era' | 'merge-closest'`, `SessionGapHours`, `GroupSameCalendarDay`, `MaxClusters`, `EraZoomThreshold`), semantic Click-to-Zoom on multi-year era cards, rich imperative methods, and cancellable `Before*` / `After*` events.
+  - `@memberjunction/ng-record-changes`:
+    - Consume `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to replace the linear 12-bucket spark-bar chart with a **Burst-Aware Cluster Strip (Time-Gap Compression)** with multi-year adaptive era zoom and click-to-filter session cards.
+    - Add a Cross-Version Diff Comparison workbench (`vA ↔ vB`) to `<mj-record-changes>`, allowing users to compare any two historical snapshots or compare a historical snapshot against the live record state.
+  - `@memberjunction/codegen-lib`: Prevent foreign keys, polymorphic `RecordID` columns (`EntityIDFieldName` set or `*RecordID`/`*RecordPrimaryKey` naming), and columns on tables with an `MJ: Entities` FK from being auto-selected as `IsNameField`.
+  - `@memberjunction/ng-explorer-core` & `@memberjunction/ng-explorer-app`: Fix infinite loading screen hang when navigating to an invalid or unmatched URL by handling `NavigationError` / `NavigationCancel` in `ShellComponent.ngOnInit` and falling back to the active workspace tab or landing app when a deep link fails to resolve.
+- 36cdad5: Restore work that the record-tab title change in #5999 unintentionally removed, and get `next` building again:
+  - **Open in the standard form (#4766):** opening a record or a new record with the standard-form option lands on the standard form again, including when the open reaches an existing tab, and browser back/forward keeps it. Tab query-param writes match record ids case-insensitively and no longer require a driver class the tab never records. A record already open from a bare-id URL is found instead of opening a second tab.
+  - **Chat overlay follows the shell chrome policy (#5904):** the shell resolves `chatOverlay` again and exposes the resolved flags through `ChromeFlags`, which `explorer-app` reads. `ng-explorer-core` compiles again.
+
+  The record-tab title formatting from #5999 is unchanged.
+
+  The record preview popover resolves a bare record id through `CompositeKey.FromURLSegment`, with the same keys as before, and the two foreign-key hover lookups are annotated as single-column, so MJCore's primary-key compliance gate passes.
+
+- bfa2621: The floating chat overlay now follows the shell's chrome policy. `Shell.ChatOverlay.Enabled` already switched the bubble platform-wide, but a host's `BaseShellChromePolicy` could narrow search, notifications and the app switcher per user and not the overlay, so a host that owns its own AI surface for one audience (a learner portal) had to hide the bubble with route-scoped CSS.
+  - `ShellChromeFlags` gains `chatOverlay`, baselined from `Shell.ChatOverlay.Enabled` and narrow-only like the other booleans: a policy can turn it off, never back on past Instance Config.
+  - `ShellComponent.ChromeFlags` exposes the resolved set. `MJExplorerAppComponent.ShowChatOverlay` reads `chatOverlay` from the shell through a view query, falling back to its own Instance Config read until the shell renders. One policy instance, one `Changed`.
+  - Tests: the narrowing and widen-ceiling cases in the chrome policy spec, the shell getter, and an explorer-app spec for shell-driven vs fallback.
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [d538c14]
+- Updated dependencies [f7a43b2]
+- Updated dependencies [0581392]
+- Updated dependencies [cc41d33]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [142d524]
+- Updated dependencies [a4246f5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [6c92b0d]
+- Updated dependencies [5d83ba4]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [b51a540]
+- Updated dependencies [3b7c949]
+- Updated dependencies [09c7d57]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [ff73341]
+- Updated dependencies [cb1e602]
+- Updated dependencies [536991a]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [36cdad5]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [291485d]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.6
+  - @memberjunction/lists-base@6.2.0-edge.6
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.6
+  - @memberjunction/ng-shared@6.2.0-edge.6
+  - @memberjunction/ng-dashboards@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-shared-generic@6.2.0-edge.6
+  - @memberjunction/ng-auth-services@6.2.0-edge.6
+  - @memberjunction/communication-types@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ai-engine-base@6.2.0-edge.6
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.6
+  - @memberjunction/ng-query-viewer@6.2.0-edge.6
+  - @memberjunction/ng-conversations@6.2.0-edge.6
+  - @memberjunction/ng-base-forms@6.2.0-edge.6
+  - @memberjunction/templates-base-types@6.2.0-edge.6
+  - @memberjunction/theme-engine@6.2.0-edge.6
+  - @memberjunction/ng-markdown@6.2.0-edge.6
+  - @memberjunction/ng-search@6.2.0-edge.6
+  - @memberjunction/ng-notifications@6.2.0-edge.6
+  - @memberjunction/ng-artifacts@6.2.0-edge.6
+  - @memberjunction/ng-record-changes@6.2.0-edge.6
+  - @memberjunction/conversations-runtime@6.2.0-edge.6
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.6
+  - @memberjunction/ng-realtime-media@6.2.0-edge.6
+  - @memberjunction/ng-base-application@6.2.0-edge.6
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.6
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.6
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.6
+  - @memberjunction/ng-list-detail-grid@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+  - @memberjunction/ng-file-storage@6.2.0-edge.6
+  - @memberjunction/ng-list-management@6.2.0-edge.6
+  - @memberjunction/ng-mj-livekit-room@6.2.0-edge.6
+  - @memberjunction/ng-react@6.2.0-edge.6
+  - @memberjunction/ng-record-selector@6.2.0-edge.6
+  - @memberjunction/ng-record-tags@6.2.0-edge.6
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.6
+  - @memberjunction/ng-user-avatar@6.2.0-edge.6
+  - @memberjunction/entity-communications-client@6.2.0-edge.6
+  - @memberjunction/ng-composer@6.2.0-edge.6
+  - @memberjunction/ng-container-directives@6.2.0-edge.6
+  - @memberjunction/ng-conversation-offers@6.2.0-edge.6
+  - @memberjunction/ng-feedback@6.2.0-edge.6
+  - @memberjunction/interactive-component-types@6.2.0-edge.6
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.6
+  - @memberjunction/ng-export-service@6.2.0-edge.6
+  - @memberjunction/ng-word-cloud@6.2.0-edge.6
+  - @memberjunction/ng-pagination@6.2.0-edge.6
+  - @memberjunction/export-engine@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes
