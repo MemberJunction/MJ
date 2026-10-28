@@ -1,8 +1,9 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RunActionParams } from "@memberjunction/actions-base";
-import { RunView } from "@memberjunction/core";
-import { MJFileEntity, MJFileStorageAccountEntity } from "@memberjunction/core-entities";
-import { FileStorageEngine } from "@memberjunction/storage";
+import { RunView, UserInfo } from "@memberjunction/core";
+import { EscapeSQLString, IsValidUUID } from "@memberjunction/global";
+import { MJFileEntity } from "@memberjunction/core-entities";
+import { FileStorageEngine, StorageAccessEvaluator, StorageAccountAccessDeniedError } from "@memberjunction/storage";
 import { DrainResponseBody, SafeFetch } from "@memberjunction/network-utils";
 
 /**
@@ -11,6 +12,12 @@ import { DrainResponseBody, SafeFetch } from "@memberjunction/network-utils";
  * - MJ Storage (Document Libraries)
  * - URLs
  * - Direct data
+ *
+ * **Storage access is gated for the caller.** A file loaded by `FileID` is read as the caller (the `MJ: Files` row
+ * must be readable), then resolved through `FileStorageEngine.ResolveFileObject`, which refuses unless the caller may
+ * read the storage account the row's provider resolves to and every `MJ: Files` row tracking the object. A save asks
+ * `StorageAccessEvaluator` for `Write` on the account it lands in — named, agent-resolved or the default — and an
+ * unknown account name is refused exactly like a restricted one.
  */
 export abstract class BaseFileHandlerAction extends BaseAction {
     /**
@@ -68,10 +75,13 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         source: 'storage';
     }> {
         try {
+            if (!IsValidUUID(fileId)) {
+                throw new Error(`File not found in MJ: Files: ${fileId}`);
+            }
             const rv = new RunView();
             const fileResult = await rv.RunView<MJFileEntity>({
                 EntityName: 'MJ: Files',
-                ExtraFilter: `ID = '${fileId}'`,
+                ExtraFilter: `ID = '${EscapeSQLString(fileId)}'`,
                 ResultType: 'entity_object'
             }, params.ContextUser);
 
@@ -80,9 +90,11 @@ export abstract class BaseFileHandlerAction extends BaseAction {
             }
 
             const file = fileResult.Results[0];
-            const driver = await this.initializeDriverForFile(file, params);
-            const objectName = file.ProviderKey ?? file.Name;
-            const content = await driver.GetObject({ fullPath: objectName });
+            const resolved = await FileStorageEngine.Instance.ResolveFileObject(file, params.ContextUser, 'Read');
+            if (!resolved) {
+                throw new Error(`No FileStorageAccount found for ProviderID ${file.ProviderID}`);
+            }
+            const content = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
 
             return {
                 content,
@@ -172,14 +184,11 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         try {
             await FileStorageEngine.Instance.Config(false, params.ContextUser);
 
-            // Resolve storage account ID
-            let storageAccountId: string | undefined;
-            if (storageAccountName) {
-                const account = this.loadStorageAccountByName(storageAccountName);
-                storageAccountId = account.ID;
-            } else {
-                storageAccountId = await this.resolveStorageAccountId(params);
-            }
+            // Resolve the account the upload lands in, then gate it for Write before anything is uploaded
+            const storageAccountId = storageAccountName
+                ? this.storageAccountIdByName(storageAccountName)
+                : await this.resolveStorageAccountId(params);
+            await this.assertCanWrite(storageAccountId, params.ContextUser);
 
             const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
             const pathPrefix = storagePath
@@ -202,14 +211,25 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Finds a FileStorageAccount by name using the engine's cached metadata.
+     * The ID of the FileStorageAccount named `accountName`, from the engine's cached metadata. An unknown name is refused
+     * with the same error as an account the caller may not use, so the refusal never reveals which names exist.
      */
-    private loadStorageAccountByName(accountName: string): MJFileStorageAccountEntity {
+    private storageAccountIdByName(accountName: string): string {
         const account = FileStorageEngine.Instance.GetAccountByName(accountName);
         if (!account) {
-            throw new Error(`FileStorageAccount "${accountName}" not found. Check account name or use default.`);
+            throw new StorageAccountAccessDeniedError();
         }
-        return account;
+        return account.ID;
+    }
+
+    /**
+     * The account gate for a save: `contextUser` must hold `Write` on the account the upload lands in. With no account
+     * at all there is nothing to gate — `UploadFile` then refuses with its documented "no file storage accounts" error.
+     */
+    private async assertCanWrite(storageAccountId: string | undefined, contextUser: UserInfo): Promise<void> {
+        if (storageAccountId) {
+            await StorageAccessEvaluator.Instance.AssertAccountAccess(storageAccountId, contextUser, 'Write');
+        }
     }
 
     /**
@@ -227,18 +247,6 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         // Fallback: pick first active via engine
         const resolved = FileStorageEngine.Instance.ResolveStorageAccount();
         return resolved?.account.ID;
-    }
-
-    /**
-     * Initializes a storage driver for the given file using the engine's cached metadata.
-     */
-    private async initializeDriverForFile(file: MJFileEntity, params: RunActionParams) {
-        const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-        if (accounts.length === 0) {
-            throw new Error(`No FileStorageAccount found for ProviderID ${file.ProviderID}`);
-        }
-
-        return FileStorageEngine.Instance.GetDriver(accounts[0].ID, params.ContextUser);
     }
 
     /**

@@ -207,6 +207,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * format. Reports `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
         this.setState('connecting');
@@ -385,6 +386,14 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.enqueueOrRun(() => this.sendReplyCreate(instructions, 'narration', false));
     }
 
+    /** A spoken TURN: the same reply trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.socket) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendReplyCreate(instructions, 'normal', false));
+    }
+
     /**
      * Feeds an executed tool's result back via `tool.result`, correlated by the provider's
      * `call_id`. EXACTLY-ONCE: the pending id is consumed when the result is accepted, and a
@@ -419,6 +428,16 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         for (const track of tracks) {
             track.enabled = !muted;
         }
+    }
+
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     /** @inheritdoc */

@@ -17,15 +17,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 
+import mssql from 'mssql';
 import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { EntitySaveOptions, EntityDeleteOptions, Metadata } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { EntityActionEngineServer } from '@memberjunction/actions';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup';
-import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
+import { mssqlState, MockConnectionPool, RecordedInput, RecordedQuery } from './helpers/mock-mssql';
+import type { ExecuteSQLOptions } from '../types';
 import {
   TEST_USER,
+  TestEntity,
   makeWidgetEntityInfo,
   makeRecordChangesEntityInfo,
   makeSavedWidgetEntity,
@@ -80,6 +84,19 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
     // no-op — AI engine not under test
   }
 
+  /**
+   * The literal form of each statement run (ExecuteSQLOptions.literalSQL): the statement with its
+   * values written in, as the SQL log, migration captures and error messages see it.
+   */
+  public LiteralSQL: string[] = [];
+
+  public override async ExecuteSQL(query: string, parameters: unknown = null, options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<unknown> {
+    if (options?.literalSQL) {
+      this.LiteralSQL.push(options.literalSQL);
+    }
+    return super.ExecuteSQL(query, parameters, options, contextUser);
+  }
+
   /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
   public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo, options = new EntitySaveOptions()) {
     return this.GenerateSaveSQL(entity, isNew, user, options);
@@ -90,6 +107,13 @@ function makeProvider(): SaveDeleteTestProvider {
   const provider = new SaveDeleteTestProvider();
   provider.AttachPool(new MockConnectionPool());
   return provider;
+}
+
+/** The input bound with `value`, so a test can assert its driver type. */
+function inputWithValue(query: RecordedQuery, value: unknown): RecordedInput {
+  const input = query.inputs.find((i) => (i.value instanceof Date && value instanceof Date ? i.value.getTime() === value.getTime() : i.value === value));
+  expect(input, `expected an input bound to ${String(value)} in ${JSON.stringify(query.inputs.map((i) => i.name))}`).toBeDefined();
+  return input as RecordedInput;
 }
 
 /** Extracts the PK-hash variable suffix RenderSaveCallBinding appended (e.g. '_a1b2c3d4e5f6' or '_a1b2c3d4e5f6_2'). */
@@ -120,7 +144,18 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(1);
-    const sql = mssqlState.Queries[0].sql;
+    // What runs: the same statement with a constant `$` suffix and a typed input per value, so the
+    // text repeats for every Widget create with this field set.
+    const executed = mssqlState.Queries[0];
+    expect(executed.sql).toContain('SET @Name$ = @p$');
+    expect(executed.sql).toContain('@Name=@Name$');
+    expect(executed.sql).not.toContain("Widget''s One");
+    expect(inputWithValue(executed, "Widget's One").type).toEqual(mssql.NVarChar(100));
+    expect(inputWithValue(executed, true).type).toEqual(mssql.Bit());
+    expect(inputWithValue(executed, '2025-04-05T12:00:00.000Z').type).toEqual(mssql.VarChar(34));
+
+    // What is logged: the literal form, the text the batch has always had.
+    const sql = provider.LiteralSQL[0];
     const sfx = extractSuffix(sql, 'Name');
 
     // Proc name derived from BaseTableCodeName (spCreate is null in metadata)
@@ -172,7 +207,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
 
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
-    const sql = mssqlState.Queries[0].sql;
+    const sql = provider.LiteralSQL[0];
     const sfx = extractSuffix(sql, 'ID');
     expect(sql).toContain(`@ID${sfx} UNIQUEIDENTIFIER`);
     expect(sql).toContain(`SET @ID${sfx} = 'w-9999'`);
@@ -192,7 +227,8 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(1);
-    const sql = mssqlState.Queries[0].sql;
+    expect(inputWithValue(mssqlState.Queries[0], 'w-0001').type).toEqual(mssql.UniqueIdentifier());
+    const sql = provider.LiteralSQL[0];
     const sfx = extractSuffix(sql, 'Name');
 
     expect(sql).toContain('EXEC [dbo].spUpdateWidget ');
@@ -225,7 +261,16 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(1);
-    const sql = mssqlState.Queries[0].sql;
+    // The Record Change values are typed inputs too, from the Record Changes columns.
+    const executed = mssqlState.Queries[0];
+    expect(executed.sql).toContain('@UserID=@p$');
+    expect(executed.sql).toContain('@ChangesJSON=@p$');
+    expect(executed.sql).toContain('@FullRecordJSON=@p$');
+    expect(inputWithValue(executed, TEST_USER.ID).type).toEqual(mssql.UniqueIdentifier());
+    const fullRecord = executed.inputs.find((i) => typeof i.value === 'string' && i.value.includes('"Tracked Widget"'));
+    expect(fullRecord?.type).toEqual(mssql.NVarChar(mssql.MAX));
+
+    const sql = provider.LiteralSQL[0];
 
     // Result-capture table declared from the entity's real field metadata
     expect(sql).toContain('DECLARE @ResultTable TABLE');
@@ -242,7 +287,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain('DECLARE @ResultChangesTable TABLE');
     expect(sql).toContain('[RecordID] nvarchar(750) NOT NULL'); // record-changes entity columns
     expect(sql).toContain('spCreateRecordChange_Internal');
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain(`@UserID='${TEST_USER.ID}'`);
     expect(sql).toContain(`@Type='Create'`);
 
@@ -250,16 +295,73 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain('SELECT * FROM @ResultTable');
   });
 
-  it('CREATE: throws when the proc returns no rows (create must produce a record)', async () => {
+  it('UPDATE with a restore: the lineage values are typed inputs, and the literal form escapes the reason as before', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    const sourceChangeID = 'A1B2C3D4-0000-4000-8000-000000000001';
+    entity.SetRestoreContext(sourceChangeID, "Undo O'Neil's edit 😀");
+    entity.Set('Name', 'Restored');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Restored' }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const executed = mssqlState.Queries[0];
+    expect(executed.sql).toContain('@RestoredFromID=@p$');
+    expect(executed.sql).toContain('@RestoreReason=@p$');
+    expect(inputWithValue(executed, sourceChangeID).type).toEqual(mssql.UniqueIdentifier());
+    expect(inputWithValue(executed, "Undo O'Neil's edit 😀").type).toEqual(mssql.NVarChar(mssql.MAX));
+    expect(provider.LiteralSQL[0]).toContain(`@RestoredFromID='${sourceChangeID}'`);
+    expect(provider.LiteralSQL[0]).toContain("@RestoreReason=N'Undo O''Neil''s edit 😀'");
+  });
+
+  it('a failed save reports the literal statement, not parameter references and a parameter dump', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Doomed');
+    mssqlState.QueueResult({ error: new Error('Violation of UNIQUE KEY constraint') });
+
+    const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+      () => null,
+      (e: Error) => e,
+    );
+
+    const message = error?.message ?? '';
+    expect(message).toContain('Violation of UNIQUE KEY constraint');
+    expect(message).toMatch(/SET @Name_[0-9a-f]{12} = N'Doomed'/);
+    expect(message).not.toContain('@p$');
+    expect(message).toContain('Parameters: None');
+  });
+
+  it('CREATE: throws when the proc returns no rows, including literal SQL instead of @p$ placeholders', async () => {
     const provider = makeProvider();
     const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Ghost');
     entity.Set('IsActive', true);
     mssqlState.QueueResult({ rows: [] });
 
-    await expect(provider.Save(entity, TEST_USER, new EntitySaveOptions())).rejects.toThrow(
-      /Error creating new record, no rows returned/,
+    const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+      () => null,
+      (e: Error) => e,
     );
+    expect(error?.message).toMatch(/Error creating new record, no rows returned/);
+    expect(error?.message).toContain("N'Ghost'");
+    expect(error?.message).not.toContain('@p$');
+  });
+
+  it('UPDATE: throws when the proc returns no rows, including literal SQL instead of @p$ placeholders', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Vanished');
+    mssqlState.QueueResult({ rows: [] });
+
+    const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(error?.message).toMatch(/Error updating record, no MATCHING rows/);
+    expect(error?.message).toContain("N'Vanished'");
+    expect(error?.message).not.toContain('@p$');
   });
 });
 
@@ -275,8 +377,8 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     entity.Set('Name', 'Azure Blob Storage');
     entity.Set('IsActive', true);
 
-    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
-    const sfx = extractSuffix(fullSQL, 'ID');
+    const { fullSQL, simpleSQL, literalSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
+    const sfx = extractSuffix(literalSQL!, 'ID');
 
     expect(fullSQL).toContain('EXEC [dbo].spCreateWidget ');
     expect(fullSQL).not.toContain('IF NOT EXISTS');
@@ -314,13 +416,14 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Renamed');
 
-    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
-    const sfx = extractSuffix(fullSQL, 'Name');
+    const { fullSQL, simpleSQL, literalSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+    const sfx = extractSuffix(literalSQL!, 'Name');
 
-    // Executed form unchanged: every SP parameter, including untouched ones
-    expect(fullSQL).toContain(`@Description=@Description${sfx}`);
-    expect(fullSQL).toContain(`@IsActive=@IsActive${sfx}`);
-    expect(fullSQL).toContain('@ExternalID_Clear=1');
+    // Executed form: every SP parameter, including untouched ones
+    expect(fullSQL).toContain('@Description=@Description$');
+    expect(literalSQL).toContain(`@Description=@Description${sfx}`);
+    expect(literalSQL).toContain(`@IsActive=@IsActive${sfx}`);
+    expect(literalSQL).toContain('@ExternalID_Clear=1');
 
     // Logged form: spUpdate with the changed field and the key, same suffix, nothing else
     expect(simpleSQL).toBe(
@@ -361,9 +464,9 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     entity.Set('Name', 'Renamed');
     const options = Object.assign(new EntitySaveOptions(), { IgnoreDirtyState: true });
 
-    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER, options);
+    const { simpleSQL, literalSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER, options);
 
-    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toBe(literalSQL);
     expect(simpleSQL).toContain('@Description=@Description');
   });
 
@@ -374,9 +477,9 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     const entity = makeSavedWidgetEntity(info, TEST_USER);
     entity.Set('Name', 'Renamed');
 
-    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+    const { simpleSQL, literalSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
 
-    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toBe(literalSQL);
     expect(simpleSQL).toContain('@Description=@Description');
   });
 
@@ -444,7 +547,9 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
 
     expect(deleted).toBe(true);
     expect(mssqlState.Queries).toHaveLength(1);
-    expect(mssqlState.Queries[0].sql).toBe(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
+    expect(mssqlState.Queries[0].sql).toBe('EXEC [dbo].[spDeleteWidget] @ID=@p$0');
+    expect(mssqlState.Queries[0].inputs).toEqual([{ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'w-0001' }]);
+    expect(provider.LiteralSQL[0]).toBe(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
   });
 
   it('with TrackRecordChanges: wraps the delete in @ResultTable capture + Delete record-change EXEC', async () => {
@@ -456,13 +561,86 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(true);
-    const sql = mssqlState.Queries[0].sql;
+    expect(mssqlState.Queries[0].sql).toContain('EXEC [dbo].[spDeleteWidget] @ID=@p$0');
+    expect(mssqlState.Queries[0].sql).toContain('@RecordID=@p$1');
+    const sql = provider.LiteralSQL[0];
     expect(sql).toContain('DECLARE @ResultTable TABLE');
     expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
     expect(sql).toContain('spCreateRecordChange_Internal');
     expect(sql).toContain(`@Type='Delete'`);
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain('SELECT @ID AS [ID]'); // PK echoed back for delete validation
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: runs the proc uncaptured, so cascaded spUpdate rows cannot break an @ResultTable capture', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
+    // Real shape: our key first, a cascaded spUpdate full row, the proc's own echo, our key last
+    mssqlState.QueueResult({
+      recordsets: [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }], [{ ID: 'w-0001' }]],
+    });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    // Executed form: the key is bound once and that one parameter is reused by the EXEC, both
+    // existence checks and both key selects
+    const executed = mssqlState.Queries[0];
+    expect(executed.inputs[0]).toEqual({ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'w-0001' });
+    expect(executed.sql.split('@p$0').length - 1).toBe(5);
+    // "Deleted" requires that the row existed first: a key that was never there must not count as
+    // a successful delete or write a Delete record change
+    expect(executed.sql).toContain('@MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]=@p$0)');
+    expect(executed.sql).toContain('SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN @p$0 END AS [ID]');
+    // Rendered (literal) form, the shape a transaction group runs
+    const sql = provider.LiteralSQL[0];
+    expect(sql).not.toContain('INSERT INTO @ResultTable');
+    const rowGone = `NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]='w-0001')`;
+    const exec = `EXEC [dbo].[spDeleteWidget] @ID='w-0001'`;
+    const firstKey = `SELECT CASE WHEN @MJDeleteRowExisted = 1 THEN 'w-0001' END AS [ID]`;
+    const lastKey = `SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN 'w-0001' END AS [ID]`;
+    expect(sql).toContain(rowGone);
+    expect(sql).toContain(`@Type='Delete'`);
+    // Order: key for transaction groups (first result set) → proc → record change only if the row is gone → key last
+    expect(sql.indexOf(firstKey)).toBeGreaterThan(-1);
+    expect(sql.indexOf(firstKey)).toBeLessThan(sql.indexOf(exec));
+    expect(sql.indexOf(exec)).toBeLessThan(sql.indexOf(rowGone));
+    expect(sql.indexOf(rowGone)).toBeLessThan(sql.indexOf('spCreateRecordChange_Internal'));
+    expect(sql.trim().endsWith(lastKey)).toBe(true);
+    // Runtime logins have no SELECT on base tables, so neither existence check may read one
+    expect(sql).not.toContain('[dbo].[Widget]');
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: binds a quoted string key raw and escapes it in every place the literal form inlines it', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = new TestEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }));
+    entity.ContextCurrentUser = TEST_USER;
+    entity.SetMany({ ...savedWidgetRow(), ID: "w'0001" }, false, true, true);
+    mssqlState.QueueResult({ recordsets: [[{ ID: "w'0001" }], [{ ID: "w'0001" }]] });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    expect(mssqlState.Queries[0].inputs[0].value).toBe("w'0001"); // a parameter needs no escaping
+    const sql = provider.LiteralSQL[0];
+    expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w''0001'`);
+    expect(sql).toContain(`WHERE [ID]='w''0001'`);
+    expect(sql).toContain(`THEN 'w''0001' END AS [ID]`);
+    expect(sql).not.toMatch(/[^']'w'0001/);
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: returns false when the row was not deleted (NULL key)', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
+    mssqlState.QueueResult({ recordsets: [[{ ID: null }], [{ ID: null }]] });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
   });
 
   it('returns false when the proc echoes a different PK (delete validation)', async () => {
@@ -501,6 +679,53 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
   });
 });
 
+describe('SQLServerDataProvider delete inside a TransactionGroup (result callback validates the key)', () => {
+  let previousProvider: IMetadataProvider | undefined;
+  beforeEach(() => {
+    mssqlState.Reset();
+    previousProvider = Metadata.Provider;
+  });
+  afterEach(() => {
+    Metadata.Provider = previousProvider as IMetadataProvider;
+  });
+
+  async function deleteInGroup(info: EntityInfo, recordsets: Record<string, unknown>[][]): Promise<BaseEntity> {
+    const provider = makeProvider();
+    provider.SetTestEntities([info, makeRecordChangesEntityInfo()]);
+    Metadata.Provider = provider as unknown as IMetadataProvider;
+    const group = new SQLServerTransactionGroup();
+    const entity = makeSavedWidgetEntity(info, TEST_USER);
+    entity.TransactionGroup = group;
+    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(true); // queued, not run
+    mssqlState.QueueResult({ recordsets });
+    expect(await group.Submit()).toBe(true);
+    return entity;
+  }
+
+  it('CascadeDeletes: succeeds when the first result set carries the key', async () => {
+    const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
+    const entity = await deleteInGroup(info, [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }]]);
+
+    expect(mssqlState.Queries[0].sql).toContain('@MJDeleteRowExisted');
+    expect(entity.LatestResult?.Success).toBe(true);
+  });
+
+  it('CascadeDeletes: fails when the row did not exist (NULL key), instead of reporting success', async () => {
+    const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
+    const entity = await deleteInGroup(info, [[{ ID: null }], [{ ID: null }]]);
+
+    expect(entity.LatestResult?.Success).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+  });
+
+  it('fails when the proc echoes a different key', async () => {
+    const entity = await deleteInGroup(makeWidgetEntityInfo(), [[{ ID: 'some-other-record' }]]);
+
+    expect(entity.LatestResult?.Success).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+  });
+});
+
 describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () => {
   beforeEach(() => {
     mssqlState.Reset();
@@ -517,8 +742,8 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     const provider = makeProvider();
     await provider.Save(a, TEST_USER, new EntitySaveOptions());
     await provider.Save(b, TEST_USER, new EntitySaveOptions());
-    const sfxA = extractSuffix(mssqlState.Queries[0].sql, 'Name');
-    const sfxB = extractSuffix(mssqlState.Queries[1].sql, 'Name');
+    const sfxA = extractSuffix(provider.LiteralSQL[0], 'Name');
+    const sfxB = extractSuffix(provider.LiteralSQL[1], 'Name');
     expect(sfxA).toBe(sfxB);
     expect(sfxA).toMatch(/^_[0-9a-f]{12}$/);
     expect(sfxA).toBe(
@@ -539,9 +764,27 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     const provider = makeProvider();
     await provider.Save(a, TEST_USER, new EntitySaveOptions());
     await provider.Save(b, TEST_USER, new EntitySaveOptions());
-    expect(extractSuffix(mssqlState.Queries[0].sql, 'Name')).not.toBe(
-      extractSuffix(mssqlState.Queries[1].sql, 'Name'),
-    );
+    expect(extractSuffix(provider.LiteralSQL[0], 'Name')).not.toBe(extractSuffix(provider.LiteralSQL[1], 'Name'));
+  });
+
+  it('what runs is the same text for two records of an entity with the same field set, so SQL Server reuses its plan', async () => {
+    const info = makeWidgetEntityInfo();
+    const a = makeNewWidgetEntity(info, TEST_USER);
+    a.Set('Name', 'First');
+    a.Set('IsActive', true);
+    const b = makeNewWidgetEntity(info, TEST_USER);
+    b.Set('Name', "Second's");
+    b.Set('IsActive', false);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'First' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: "Second's" }] });
+    const provider = makeProvider();
+    await provider.Save(a, TEST_USER, new EntitySaveOptions());
+    await provider.Save(b, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries[1].sql).toBe(mssqlState.Queries[0].sql);
+    expect(mssqlState.Queries[0].inputs.map((i) => i.type)).toEqual(mssqlState.Queries[1].inputs.map((i) => i.type));
+    // The literal forms still differ per record: values and the per-record suffix.
+    expect(provider.LiteralSQL[0]).not.toBe(provider.LiteralSQL[1]);
   });
 
   describe('through a REAL SQLServerTransactionGroup (HandleSubmit reads Metadata.Provider)', () => {
@@ -579,6 +822,9 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
       await Promise.all([saveA, saveB]);
 
       expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+      // A group item carries the literal form, as before typed parameters: no inputs to bind.
+      expect(mssqlState.Queries[0].sql).not.toContain('@p$');
+      expect(mssqlState.Queries[0].inputs).toEqual([]);
       const first = extractSuffix(mssqlState.Queries[0].sql, 'Name');
       expect(first).toBe('_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']));
       expect(extractSuffix(mssqlState.Queries[1].sql, 'Name')).toBe(`${first}_2`);
@@ -623,5 +869,437 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
       // … and scopeItemVariables scopes EVERY declared local of every item, not just the first.
       expect(names.every((n) => /_mjb[0-2]$/.test(n))).toBe(true);
     });
+  });
+});
+
+describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\') literals', () => {
+  // spCreateRecordChange_Internal declares @EntityName, @RecordID, @ChangesJSON, @ChangesDescription
+  // and @FullRecordJSON as NVARCHAR. A plain '…' literal is read in the database's code page first,
+  // so on a SQL_Latin1_General_CP1 database every character outside code page 1252 (emoji, CJK,
+  // Greek, Cyrillic, …) is stored in the audit row as '?'. The record itself saves correctly.
+  const UNICODE_NAME = 'Zoë 😀 日本 Ωμέγα';
+
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('CREATE: every text argument of the record-change EXEC is an N literal and carries the text intact', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Name', UNICODE_NAME);
+    entity.Set('IsActive', true);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: UNICODE_NAME }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    // What runs binds the text as NVARCHAR(MAX) inputs, so it reaches SQL Server as Unicode.
+    const executed = mssqlState.Queries[0];
+    expect(executed.sql).toContain(`@EntityName=N'Widgets'`);
+    const fullRecord = executed.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{') && i.value.includes(UNICODE_NAME));
+    expect(fullRecord?.type).toEqual(mssql.NVarChar(mssql.MAX));
+
+    // The literal form (SQL log, migration captures) writes N'…' literals.
+    const sql = provider.LiteralSQL[0];
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'[^']*Zoë 😀 日本 Ωμέγα/);
+    expect(sql).not.toMatch(/@(EntityName|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('DELETE: the quoted RecordID and the JSON arguments are N literals', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+
+    await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    // What runs binds the record id as an NVARCHAR input; the literal form writes N'…' literals.
+    expect(inputWithValue(mssqlState.Queries[0], 'ID|w-0001').type).toEqual(mssql.NVarChar(750));
+    const sql = provider.LiteralSQL[0];
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@RecordID=N'ID\|w-0001'/);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'/);
+    expect(sql).not.toMatch(/@(EntityName|RecordID|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('IS-A sibling propagation: the entity name, record id and change text are N literals', () => {
+    const provider = makeProvider();
+    const sibling = provider as unknown as {
+      BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
+    };
+    const sql = sibling.BuildSiblingRecordChangeSQL('@_rc_prop_0', makeWidgetEntityInfo(), `{"Name":"${UNICODE_NAME}"}`, `Name changed to ${UNICODE_NAME}`, 'w-0001', TEST_USER.ID);
+
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toContain(`@RecordID=N'ID|w-0001'`);
+    expect(sql).toContain(`@ChangesJSON=N'{"Name":"${UNICODE_NAME}"}'`);
+    expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
+  });
+
+  it('exposes literalSQL and simpleSQL as lazy memoized getters on GenerateSaveSQL, and returns literalSQL from public GetSaveSQL', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Lazy Check');
+    entity.Set('IsActive', true);
+
+    const saveSQL = await provider.SaveSQLForTest(entity, true, TEST_USER);
+    const literalDesc = Object.getOwnPropertyDescriptor(saveSQL, 'literalSQL');
+    const simpleDesc = Object.getOwnPropertyDescriptor(saveSQL, 'simpleSQL');
+
+    expect(typeof literalDesc?.get).toBe('function');
+    expect(typeof simpleDesc?.get).toBe('function');
+    expect(saveSQL.literalSQL).toBe(saveSQL.literalSQL);
+    expect(saveSQL.simpleSQL).toBe(saveSQL.simpleSQL);
+    expect(saveSQL.literalSQL).toContain("N'Lazy Check'");
+    expect(saveSQL.simpleSQL).toContain("N'Lazy Check'");
+
+    const standaloneSQL = await provider.GetSaveSQL(entity, true, 'spCreateWidget', TEST_USER);
+    expect(standaloneSQL).toContain("N'Lazy Check'");
+    expect(standaloneSQL).not.toContain('@p$0');
+  });
+
+  it('populates extraData.overlappingChangeData.changesJSON with the diff JSON (not fullRecordJSON) on tracked updates', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Name', 'Updated Only Name');
+
+    const saveSQL = await provider.SaveSQLForTest(entity, false, TEST_USER);
+    const extraData = (saveSQL as unknown as {
+      extraData?: { overlappingChangeData?: { changesJSON: string; changesDescription: string } };
+    }).extraData;
+
+    expect(extraData?.overlappingChangeData).toBeDefined();
+    const parsedChanges = JSON.parse(extraData!.overlappingChangeData!.changesJSON) as Record<string, unknown>;
+    expect(Object.keys(parsedChanges)).toEqual(['Name']);
+    expect(parsedChanges['Name']).toMatchObject({
+      field: 'Name',
+      oldValue: 'Widget One',
+      newValue: 'Updated Only Name',
+    });
+    expect(parsedChanges['IsActive']).toBeUndefined();
+  });
+
+  it('does not lock _datetimeOffsetTestComplete on a transient probe error, allowing the next probe to succeed', async () => {
+    const provider = makeProvider();
+    const surface = provider as unknown as ProviderPrivateSurface & {
+      testDatetimeOffsetHandling: () => Promise<void>;
+    };
+    surface._datetimeOffsetTestComplete = false;
+    surface._needsDatetimeOffsetAdjustment = false;
+
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      mssqlState.QueueResult({ error: new Error('Transient pool timeout') });
+      await surface.testDatetimeOffsetHandling();
+
+      expect(surface._datetimeOffsetTestComplete).toBe(false);
+      expect(surface._needsDatetimeOffsetAdjustment).toBe(true);
+
+      mssqlState.QueueResult({ rows: [{ TestDateTime: new Date('1900-01-01T11:00:00.000Z') }] });
+      await surface.testDatetimeOffsetHandling();
+
+      expect(surface._datetimeOffsetTestComplete).toBe(true);
+      expect(surface._needsDatetimeOffsetAdjustment).toBe(false);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  it('backs off after a failed datetimeoffset probe instead of re-probing on every call, then retries', async () => {
+    const provider = makeProvider();
+    const surface = provider as unknown as ProviderPrivateSurface;
+    surface._datetimeOffsetTestComplete = false; // also clears any earlier backoff
+    surface._needsDatetimeOffsetAdjustment = false;
+
+    const probeSpy = vi.spyOn(provider, 'ExecuteSQL');
+    const probeCount = () => probeSpy.mock.calls.filter((c) => (c[2] as { description?: string } | undefined)?.description === 'DatetimeOffset handling test').length;
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      mssqlState.QueueResult({ error: new Error('Transient pool timeout') });
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(true);
+      expect(probeCount()).toBe(1);
+
+      // Within the backoff: the safe default, with no new probe and no new error log.
+      now += 29_000;
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(true);
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(true);
+      expect(probeCount()).toBe(1);
+      expect(errSpy).toHaveBeenCalledTimes(1);
+
+      // After the backoff: probes again, and a success completes the test.
+      now += 2_000;
+      mssqlState.QueueResult({ rows: [{ TestDateTime: new Date('1900-01-01T11:00:00.000Z') }] });
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(false);
+      expect(probeCount()).toBe(2);
+      expect(surface._datetimeOffsetTestComplete).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+      errSpy.mockRestore();
+      probeSpy.mockRestore();
+      surface._datetimeOffsetTestComplete = false;
+    }
+  });
+
+  it('HandleEntityActions fast path: runs Active actions when Loaded is true and short-circuits when only Disabled actions exist', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    const engine = EntityActionEngineServer.Instance;
+    const realHandle = (GenericDatabaseProvider.prototype as unknown as {
+      HandleEntityActions: (
+        e: BaseEntity,
+        baseType: 'save' | 'delete' | 'validate',
+        before: boolean,
+        u: UserInfo,
+      ) => Promise<unknown[]>;
+    }).HandleEntityActions;
+
+    const configSpy = vi.spyOn(engine, 'Config').mockResolvedValue(undefined as never);
+    const loadedSpy = vi.spyOn(engine, 'Loaded', 'get').mockReturnValue(true);
+    const invTypesSpy = vi
+      .spyOn(engine, 'InvocationTypes', 'get')
+      .mockReturnValue([{ ID: 'inv-val', Name: 'Validate' }] as never);
+    const byNameSpy = vi
+      .spyOn(engine, 'GetActionsByEntityName')
+      .mockImplementation((_entityName: string, status?: string) =>
+        status === 'Active' ? ([{ ID: 'ea-active', Status: 'Active' }] as never) : ([] as never),
+      );
+    const byInvSpy = vi
+      .spyOn(engine, 'GetActionsByEntityNameAndInvocationType')
+      .mockReturnValue([{ ID: 'ea-active', Status: 'Active' }] as never);
+    const runSpy = vi.spyOn(engine, 'RunEntityAction').mockResolvedValue({ Success: true } as never);
+
+    try {
+      const activeResult = await realHandle.call(provider, entity, 'validate', true, TEST_USER);
+      expect(configSpy).not.toHaveBeenCalled();
+      expect(byNameSpy).toHaveBeenCalledWith('Widgets', 'Active');
+      expect(runSpy).toHaveBeenCalledTimes(1);
+      expect(activeResult).toHaveLength(1);
+
+      runSpy.mockClear();
+      byNameSpy.mockImplementation((_entityName: string, status?: string) =>
+        status === 'Disabled' ? ([{ ID: 'ea-disabled', Status: 'Disabled' }] as never) : ([] as never),
+      );
+
+      const disabledOnlyResult = await realHandle.call(provider, entity, 'validate', true, TEST_USER);
+      expect(disabledOnlyResult).toEqual([]);
+      expect(runSpy).not.toHaveBeenCalled();
+    } finally {
+      configSpy.mockRestore();
+      loadedSpy.mockRestore();
+      invTypesSpy.mockRestore();
+      byNameSpy.mockRestore();
+      byInvSpy.mockRestore();
+      runSpy.mockRestore();
+    }
+  });
+});
+
+describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('declares @ResultTable with only PK + datestamps when EntityInfo.SaveReturnMode is datestamps_only and merges returned values onto entity state', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'datestamps_only' });
+    const entity = makeNewWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('ID', 'w-ds-01');
+    entity.Set('Name', 'High-Volume Step');
+    entity.Set('Description', 'Large JSON payload');
+    entity.Set('IsActive', true);
+
+    const createdAt = new Date('2026-04-17T10:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T10:00:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-ds-01', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    // @ResultTable contains ONLY ID, __mj_CreatedAt, __mj_UpdatedAt — NOT Name, Description, CategoryName
+    expect(sql).toContain('DECLARE @ResultTable TABLE');
+    expect(sql).toContain('[ID] uniqueidentifier NOT NULL');
+    expect(sql).toContain('[__mj_CreatedAt] datetimeoffset NOT NULL');
+    expect(sql).toContain('[__mj_UpdatedAt] datetimeoffset NOT NULL');
+    expect(sql).not.toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).not.toContain('[CategoryName] nvarchar(100) NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+
+    // Returned row merges the DB's ID + datestamps onto the entity's in-memory fields
+    expect(result).toMatchObject({
+      ID: 'w-ds-01',
+      Name: 'High-Volume Step',
+      Description: 'Large JSON payload',
+      IsActive: true,
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+
+  it('projects only PK + datestamps from @ResultTable when per-save options.SaveReturnMode is datestamps_only on a full entity', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'full' });
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'Delta Updated Name');
+
+    const createdAt = new Date('2025-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T11:30:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const saveOpts = new EntitySaveOptions();
+    saveOpts.SaveReturnMode = 'datestamps_only';
+    const result = await provider.Save(entity, TEST_USER, saveOpts);
+
+    const sql = mssqlState.Queries[0].sql;
+    // The stored procedure returns all view columns so @ResultTable still declares all columns,
+    // while the final SELECT projects only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] over the wire.
+    expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+    expect(result).toMatchObject({
+      ID: 'w-0001',
+      Name: 'Delta Updated Name',
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+
+  it('captures EXEC into @ResultTable and projects only PK + datestamps when TrackRecordChanges is false and per-save options.SaveReturnMode is datestamps_only on a full entity', async () => {
+    const provider = makeProvider();
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: false, saveReturnMode: 'full' });
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'High-Write Step Update');
+
+    const createdAt = new Date('2025-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T11:45:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const saveOpts = new EntitySaveOptions();
+    saveOpts.SaveReturnMode = 'datestamps_only';
+    const result = await provider.Save(entity, TEST_USER, saveOpts);
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain('DECLARE @ResultTable TABLE');
+    expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+    expect(result).toMatchObject({
+      ID: 'w-0001',
+      Name: 'High-Write Step Update',
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+});
+
+/**
+ * A restricted user's entity object never holds the fields they cannot read. Their Record
+ * Changes must still carry the whole record — the audit trail stores full payloads and projects
+ * them per reader — so the provider reads the stored row first and widens the snapshot from it.
+ */
+describe('SQLServerDataProvider Record Change snapshot of a narrowed object', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  /**
+   * A saved Widget held by a user who may not read Quantity: its hydration source omitted the
+   * field, as a restricted user's always does. Only such a user's save reads the stored row; an
+   * object that merely lacks a column its user may read is snapshotted as it is.
+   */
+  function makeNarrowedWidget(): TestEntity {
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true });
+    vi.spyOn(entityInfo, 'FieldLevelSecurityApplies', 'get').mockReturnValue(true);
+    vi.spyOn(entityInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['quantity']));
+    const entity = new TestEntity(entityInfo);
+    entity.ContextCurrentUser = TEST_USER;
+    const row = savedWidgetRow();
+    delete row.Quantity;
+    entity.Hydrate(row);
+    expect(entity.GetFieldByName('Quantity')?.NotLoaded).toBe(true);
+    return entity;
+  }
+
+  function fullRecordJSONInput(query: RecordedQuery): Record<string, unknown> {
+    const input = query.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{"ID"'));
+    expect(input, 'expected a FullRecordJSON input').toBeDefined();
+    return JSON.parse(String(input?.value)) as Record<string, unknown>;
+  }
+
+  it('UPDATE: FullRecordJSON carries the stored value the object never held; ChangesJSON only the change', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNarrowedWidget();
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77, Description: 'Second run' }] }); // the save
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Quantity] FROM [dbo].[vwWidgets] WHERE [ID]='w-0001'`);
+    const save = mssqlState.Queries[1];
+    const full = fullRecordJSONInput(save);
+    expect(full.Quantity).toBe(77);
+    expect(full.Description).toBe('Second run');
+    const changes = save.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{"Description"'));
+    expect(changes, 'expected a ChangesJSON input naming only Description').toBeDefined();
+    expect(Object.keys(JSON.parse(String(changes?.value)))).toEqual(['Description']);
+  });
+
+  it('UPDATE by a user denied nothing, of an object loaded without a column: one statement, no stored-row read', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = new TestEntity(makeWidgetEntityInfo({ trackRecordChanges: true }));
+    entity.ContextCurrentUser = TEST_USER;
+    const row = savedWidgetRow();
+    delete row.Quantity;
+    entity.Hydrate(row);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Description: 'Second run' }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(fullRecordJSONInput(mssqlState.Queries[0])).not.toHaveProperty('Quantity');
+  });
+
+  it('UPDATE of a full-width object: one statement, no stored-row read', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Description: 'Second run' }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(fullRecordJSONInput(mssqlState.Queries[0]).Quantity).toBe(3);
+  });
+
+  it('DELETE: the delete snapshot (what a restore brings back) carries the stored value', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNarrowedWidget();
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] }); // the delete
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(fullRecordJSONInput(mssqlState.Queries[1]).Quantity).toBe(77);
   });
 });

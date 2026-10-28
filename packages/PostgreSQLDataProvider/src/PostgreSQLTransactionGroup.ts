@@ -63,7 +63,7 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                 if (numValueSet > 0 && item.OperationType !== 'Delete') {
                     // Values changed — regenerate the SQL instruction
                     const bCreate = item.OperationType === 'Create';
-                    const newSqlResult = await pgProvider.GetSaveSQL(item.BaseEntity, bCreate, item.BaseEntity.ContextCurrentUser);
+                    const newSqlResult = await pgProvider.GetSaveSQL(item.BaseEntity, bCreate, item.BaseEntity.ContextCurrentUser, client);
                     item.Instruction = newSqlResult.fullSQL;
                     if (newSqlResult.parameters) {
                         item.ExtraData.parameters = newSqlResult.parameters;

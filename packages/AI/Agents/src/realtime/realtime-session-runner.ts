@@ -31,7 +31,7 @@ import {
     RealtimeUsageModalityDetail,
     RealtimeToolDefinition,
     RealtimeSessionError,
-    RealtimeMediaKind,
+    RealtimeInputFrame,
     JSONObject
 } from '@memberjunction/ai';
 import { RealtimeRecordingController } from './realtime-recording-capture';
@@ -445,11 +445,11 @@ export class RealtimeSessionRunner {
         recording.Start();
         session.OnOutput((chunk) => recording.AppendOutbound(chunk));
         const originalSendInput = session.SendInput.bind(session);
-        session.SendInput = (chunk: ArrayBuffer, kind?: RealtimeMediaKind): void => {
-            if (kind !== 'video') {
-                recording.AppendInbound(chunk);
+        session.SendInput = (frame: RealtimeInputFrame): void => {
+            if (frame.Kind === 'audio') {
+                recording.AppendInbound(frame.Data);
             }
-            originalSendInput(chunk, kind);
+            originalSendInput(frame);
         };
     }
 
@@ -665,15 +665,13 @@ export class RealtimeSessionRunner {
      * @param usage The incremental usage update reported by the provider.
      */
     private handleUsage(usage: RealtimeUsage): void {
+        const inputDetails = this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails);
+        const outputDetails = this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails);
         this.accumulatedUsage = {
             InputTokens: this.accumulatedUsage.InputTokens + usage.InputTokens,
             OutputTokens: this.accumulatedUsage.OutputTokens + usage.OutputTokens,
-            ...(this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)
-                ? { InputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)! }
-                : {}),
-            ...(this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)
-                ? { OutputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)! }
-                : {}),
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
         };
         this.usageDirty = true;
         this.scheduleUsageCheckpoint();
@@ -692,7 +690,7 @@ export class RealtimeSessionRunner {
             return undefined;
         }
         const sum: RealtimeUsageModalityDetail = {};
-        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'CachedTokens'] as const) {
+        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'VideoTokens', 'VideoSeconds', 'CachedTokens'] as const) {
             const av = a?.[key];
             const bv = b?.[key];
             if (typeof av === 'number' || typeof bv === 'number') {

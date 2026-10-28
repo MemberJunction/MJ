@@ -55,6 +55,8 @@ The widget decides how to authenticate from the attributes you give it. Exactly 
 
 The key identifies a `ConversationWidgetInstance` on your server. The instance decides the agent, the application, whether voice is enabled, the longest call, and which channels the visitor's session may use. If voice is not enabled for the instance the widget says so instead of failing silently. A rejected key gets the same answer whether it never existed or was revoked, so keys cannot be probed.
 
+Widget-key mode needs a page served over HTTPS (or from `localhost`). The widget binds the guest session to a Web Crypto key and signs each refresh with it, and browsers expose Web Crypto (`crypto.subtle`) only in a secure context, so on a plain `http://` page the session does not start. The refresh proof is signed on the server's clock, learned from each token's `iat`, so a visitor whose device clock is off can still renew.
+
 ### invite-token
 
 ```html
@@ -164,7 +166,7 @@ Every event is a `CustomEvent` that **bubbles and is composed**, so you can list
 | `mj-perception-changed` | `{ sourceId, label, channel, enabled, active, sources[] }` | The agent's view of a video source (a whiteboard, a shared screen, a rendered component) was switched on or off, by the person in the "agent can see" control, by your `perception` setting, or by the server's policy. `channel` is the channel the source belongs to, or `null`. `sources` lists every source with its state after the change. Appearing or disappearing sources are not toggles and are not reported. |
 | `mj-error` | `{ code, message, phase }` | Something failed. `message` is written for a visitor and always includes a way forward. Never a dead end: the widget offers "Try again". |
 
-`mj-error` codes: `load-failed` (the call code could not be downloaded; the widget offers Try again), `no-credential`, `no-agent`, `auth-failed`, `session-expired`, `voice-not-enabled`, `launcher-failed`, `start-failed`, `start-dropped`, `connection-lost`, `channel-failed`.
+`mj-error` codes: `load-failed` (the call code could not be downloaded; the widget offers Try again), `no-credential`, `no-agent`, `auth-failed`, `session-expired`, `voice-not-enabled`, `launcher-failed`, `start-failed`, `start-dropped`, `connection-lost`, `time-limit` (a relayed call reached its session time limit), `channel-failed`.
 
 **Attach your listeners early.** Listeners attach to the element itself, so they work before the element is upgraded, and `mj-ready` fires only once. Put your script above the widget bundle (as the sample page does), or read `data-phase` instead of waiting for `mj-ready`.
 

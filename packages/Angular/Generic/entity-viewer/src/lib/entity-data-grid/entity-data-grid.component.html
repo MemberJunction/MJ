@@ -65,7 +65,7 @@
         <!-- Recycle Bin chip — auto-hides when no deleted records, no tracking,
              or user lacks Delete permission. -->
         @if (ShowRecycleBin) {
-          <mj-recycle-bin-chip [EntityName]="entityInfoName"></mj-recycle-bin-chip>
+          <mj-recycle-bin-chip [Provider]="Provider" [EntityName]="entityInfoName"></mj-recycle-bin-chip>
         }
         <!-- New/Add Button (predefined) -->
         @if (ShowNewButton) {
@@ -315,6 +315,26 @@
 
   <!-- Grid Content -->
   <div class="mj-grid-content">
+    <!-- Non-disruptive Live Updates Floating Pill -->
+    @if (LivePendingChangesCount > 0) {
+      <div class="mj-grid-live-pill" role="status" aria-live="polite">
+        <button type="button" class="mj-grid-live-pill-btn" (click)="OnApplyLiveGridRefresh()">
+          <span class="mj-grid-live-pill-dot" aria-hidden="true"></span>
+          <span>
+            {{ LivePendingChangesCount }} {{ LivePendingChangesCount === 1 ? 'record' : 'records' }} updated live — Click to refresh
+          </span>
+          <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+        </button>
+        <button type="button"
+                class="mj-grid-live-pill-dismiss"
+                title="Dismiss"
+                aria-label="Dismiss live update notification"
+                (click)="OnDismissLiveGridPill($event)">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+    }
+
     <!-- Loading Overlay -->
     @if (loading && rowData.length === 0) {
       <div class="mj-grid-loading-overlay">

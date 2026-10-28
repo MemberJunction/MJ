@@ -19,6 +19,7 @@ import {
     MJEnvironmentEntityExtended,
     MJScheduledJobEntity,
     MJUserRoutineEntity,
+    MJUserRoutineEntity_IRoutineWakeConfiguration,
     MJUserRoutineRecipientEntity,
     MJUserRoutineRunEntity,
     MJUserNotificationEntity,
@@ -43,6 +44,12 @@ import {
     SortRecipientsBySequence,
     RunWithBoundedConcurrency,
 } from '../UserRoutineProcessor';
+import { WakeGateEvaluator, WakeGateEvaluationResult } from '../WakeGateEvaluator';
+
+interface GlobalUserCacheLookup {
+    Users: UserInfo[];
+    FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
 
 /**
  * Optional configuration (stored in ScheduledJob.Configuration). All fields optional —
@@ -260,10 +267,18 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         return result.Results ?? [];
     }
 
+    private readonly wakeGateEvaluator = new WakeGateEvaluator();
+
     /** Compute + persist NextRunAt for a never-scheduled routine WITHOUT running it. */
     private async seedNextRunAt(routine: MJUserRoutineEntity, now: Date): Promise<void> {
         try {
-            routine.NextRunAt = ComputeRoutineNextRunAt(routine.CronExpression, routine.Timezone, now, routine.StartAt);
+            routine.NextRunAt = ComputeRoutineNextRunAt(
+                routine.CronExpression,
+                routine.Timezone,
+                now,
+                routine.StartAt,
+                routine.ScheduleMode ?? 'Recurring'
+            );
             const saved = await routine.Save();
             if (!saved) {
                 this.logError(`Seeding NextRunAt for routine "${routine.Name}" failed: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`);
@@ -286,7 +301,18 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      */
     private async claimRoutine(routine: MJUserRoutineEntity, now: Date): Promise<boolean> {
         try {
-            routine.NextRunAt = ComputeRoutineNextRunAt(routine.CronExpression, routine.Timezone, now, routine.StartAt);
+            const scheduleMode = routine.ScheduleMode ?? 'Recurring';
+            if (scheduleMode === 'OneShot' && (!routine.CronExpression || routine.CronExpression.trim().length === 0)) {
+                routine.NextRunAt = null;
+            } else {
+                routine.NextRunAt = ComputeRoutineNextRunAt(
+                    routine.CronExpression,
+                    routine.Timezone,
+                    now,
+                    routine.StartAt,
+                    scheduleMode
+                );
+            }
             const saved = await routine.Save();
             if (!saved) {
                 this.log(`Claim for routine "${routine.Name}" did not persist (${routine.LatestResult?.CompleteMessage ?? 'unknown'}) — skipping this pass`);
@@ -299,12 +325,42 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         }
     }
 
+    /**
+     * Resolve the routine owner's `UserInfo` from `UserCache` so target execution runs under
+     * the routine owner's RBAC/RLS/FLS identity rather than the scheduler's system user.
+     * Fails closed when `UserCache` is populated and the owner is missing or inactive.
+     */
+    protected async resolveRoutineOwnerUser(
+        routine: MJUserRoutineEntity,
+        fallbackContextUser: UserInfo
+    ): Promise<UserInfo> {
+        const ownerUserId = routine.UserID;
+        if (!ownerUserId || (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID))) {
+            return fallbackContextUser;
+        }
+        const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
+        if (!userCache || typeof userCache.FindUser !== 'function') {
+            return fallbackContextUser;
+        }
+        const found = await userCache.FindUser({ ID: ownerUserId });
+        if (found) {
+            if (found.IsActive === false) {
+                throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+            }
+            return found;
+        }
+        if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
+            throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`);
+        }
+        return fallbackContextUser;
+    }
+
     // ========================================================================
     // Per-routine execution
     // ========================================================================
 
     /**
-     * Execute one claimed routine end-to-end: run row → target execution → run/routine
+     * Execute one claimed routine end-to-end: wake gate → run row → target execution → run/routine
      * bookkeeping → notification decision + delivery. Never throws for target failures —
      * those are recorded on the run row; only run-row creation failures propagate.
      *
@@ -321,11 +377,26 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         context: ScheduledJobExecutionContext
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
+        const ownerUser = await this.resolveRoutineOwnerUser(routine, contextUser);
+
+        let gateResult: WakeGateEvaluationResult | undefined;
+        if (routine.WakeConfiguration || routine.WakeConfigurationObject) {
+            gateResult = await this.wakeGateEvaluator.Evaluate(routine, ownerUser, new Date());
+            routine.LastCheckedAt = new Date();
+            if (!gateResult.shouldWake) {
+                this.log(`Routine "${routine.Name}" skipped by ${gateResult.decidedByTier} wake gate: ${gateResult.reason}`, true);
+                if (typeof routine.Save === 'function') {
+                    await routine.Save();
+                }
+                return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+            }
+        }
+
         const run = await this.createRunRow(routine, contextUser);
         this.log(`Running routine "${routine.Name}" (${routine.TargetType} target)`, true);
 
         try {
-            return await this.runAndRecord(routine, run, context);
+            return await this.runAndRecord(routine, run, context, ownerUser, gateResult);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.logError(`Routine "${routine.Name}" (${routine.ID}) failed after its run row was created`, error);
@@ -369,13 +440,16 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     private async runAndRecord(
         routine: MJUserRoutineEntity,
         run: MJUserRoutineRunEntity,
-        context: ScheduledJobExecutionContext
+        context: ScheduledJobExecutionContext,
+        ownerUser?: UserInfo,
+        gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
+        const targetExecutionUser = ownerUser ?? contextUser;
 
         let outcome: RoutineTargetOutcome;
         try {
-            outcome = await this.executeTarget(routine, contextUser, context.heartbeat);
+            outcome = await this.executeTarget(routine, targetExecutionUser, context.heartbeat, gateResult);
         } catch (error) {
             outcome = {
                 Success: false,
@@ -506,9 +580,23 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
 
     /** Roll the run outcome up onto the routine (LastRunAt / LastRunStatus / LastResultHash). */
     private async updateRoutineAfterRun(routine: MJUserRoutineEntity, run: MJUserRoutineRunEntity): Promise<void> {
+        // When an AgentWake routine runs an agent that invokes 'Schedule Next Agent Wake' mid-run,
+        // the action writes the new NextRunAt / WakeConfiguration directly to DB. Reload first so
+        // this post-run bookkeeping does not clobber the newly scheduled wake.
+        if (routine.RoutineType === 'AgentWake' && typeof routine.Load === 'function') {
+            try {
+                await routine.Load(routine.ID);
+            } catch {
+                // Best-effort reload; proceed with the in-memory instance if unavailable in unit tests
+            }
+        }
         routine.LastRunAt = run.StartedAt;
+        routine.LastCheckedAt = run.CompletedAt ?? new Date();
         routine.LastRunStatus = run.Status;
         routine.LastResultHash = run.ResultHash;
+        if ((routine.ScheduleMode === 'OneShot') && routine.NextRunAt == null && (!routine.CronExpression || routine.CronExpression.trim().length === 0)) {
+            routine.Status = 'Disabled';
+        }
         const saved = await routine.Save();
         if (!saved) {
             this.logError(`Failed to update routine "${routine.Name}" after run: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`);
@@ -534,12 +622,13 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     private async executeTarget(
         routine: MJUserRoutineEntity,
         contextUser: UserInfo,
-        heartbeat?: () => Promise<void>
+        heartbeat?: () => Promise<void>,
+        gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineTargetOutcome> {
         const targetType: MJUserRoutineEntity['TargetType'] = routine.TargetType;
         switch (targetType) {
             case 'Agent':
-                return this.executeAgentTarget(routine, contextUser, heartbeat);
+                return this.executeAgentTarget(routine, contextUser, heartbeat, gateResult);
             case 'Prompt':
                 return this.executePromptTarget(routine, contextUser);
             case 'Action':
@@ -550,7 +639,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     }
 
     /**
-     * Run an Agent target via AgentRunner, threading StartingPayload + RequestedSkillIDs.
+     * Run an Agent target via AgentRunner, threading StartingPayload + RequestedSkillIDs + _wakeContext.
      *
      * When the routine's dedicated conversation is available (existing `ConversationID`,
      * or creatable — see {@link EnsureRoutineConversation}), the run goes through
@@ -563,7 +652,8 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     private async executeAgentTarget(
         routine: MJUserRoutineEntity,
         contextUser: UserInfo,
-        heartbeat?: () => Promise<void>
+        heartbeat?: () => Promise<void>,
+        gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineTargetOutcome> {
         const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
         const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
@@ -571,14 +661,34 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             throw new Error(`Agent ${routine.TargetID} not found for routine "${routine.Name}"`);
         }
 
-        const userMessage = routine.InitialMessage ?? `Run routine "${routine.Name}"`;
+        const wakeConfig = routine.WakeConfigurationObject ??
+            (routine.WakeConfiguration ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration) : null);
+        const userMessage = routine.InitialMessage ??
+            (wakeConfig?.wakeReason ? `Scheduled wake: ${wakeConfig.wakeReason}` : `Run routine "${routine.Name}"`);
+        const basePayload = routine.StartingPayload ? SafeJSONParse<Record<string, unknown>>(routine.StartingPayload) ?? undefined : undefined;
+        const payload = (routine.RoutineType === 'AgentWake' || wakeConfig || gateResult)
+            ? {
+                ...(basePayload ?? {}),
+                _wakeContext: {
+                    routineId: routine.ID,
+                    routineType: routine.RoutineType,
+                    scheduleMode: routine.ScheduleMode,
+                    wakeReason: wakeConfig?.wakeReason ?? gateResult?.reason ?? null,
+                    resumeState: wakeConfig?.resumeState ?? {},
+                    watermarks: gateResult?.watermarks ?? {},
+                    decidedByTier: gateResult?.decidedByTier ?? 'None',
+                },
+            }
+            : basePayload;
+
         const runner = new AgentRunner();
         const baseParams = {
             agent,
             conversationMessages: [{ role: 'user' as const, content: userMessage }],
-            payload: routine.StartingPayload ? SafeJSONParse(routine.StartingPayload) ?? undefined : undefined,
+            payload,
             requestedSkillIDs: this.parseRequestedSkillIDs(routine),
             contextUser,
+            compactAfterRun: routine.RoutineType === 'AgentWake' ? true : undefined,
             // Keep the dispatcher job's lease alive while a long agent run makes progress.
             onProgress: () => { void heartbeat?.(); },
         };
@@ -862,7 +972,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 resultSummary: run.ResultSummary ?? '',
                 status: run.Status,
             };
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true, undefined, { ContextUser: contextUser });
             if (rendered.Success && rendered.Output) {
                 return rendered.Output;
             }

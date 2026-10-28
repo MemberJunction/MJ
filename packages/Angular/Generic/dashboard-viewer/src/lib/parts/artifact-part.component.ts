@@ -47,6 +47,7 @@ import { Subject } from 'rxjs';
           <!-- Artifact Viewer Panel -->
           @if (!IsLoading && !ErrorMessage && hasArtifact && artifactId) {
             <mj-artifact-viewer-panel
+              [Provider]="Provider"
               [artifactId]="artifactId"
               [currentUser]="currentUser"
               [environmentId]="environmentId"

@@ -17,6 +17,8 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../drivers/geminiRealtimeClient';
+import { ConfirmGeminiSetup, FakeMicCapture } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -60,14 +62,6 @@ class FakePlayback implements IGeminiAudioPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IGeminiMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -147,9 +141,13 @@ class TestGeminiClient extends GeminiRealtimeClient {
     public LastConnectArgs: GeminiClientConnectArgs | null = null;
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
+    /** How many Live connections the client opened (a resume opens another). */
+    public ConnectCount = 0;
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        this.ConnectCount++;
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -345,6 +343,18 @@ describe('GeminiRealtimeClient', () => {
             expect(client.Fake.RealtimeInputs).toEqual([{ text: 'Say one short first-person sentence.' }]);
             expect(client.Fake.ClientContents).toHaveLength(0);
             expect(client.IsBusy).toBe(true);
+        });
+
+        it('RequestSpokenTurn triggers the same realtime-text turn but keeps its reply a NORMAL turn (MJ#4591)', () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Greet the participant and ask the first question.');
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'Greet the participant and ask the first question.' }]);
+            expect(client.IsBusy).toBe(true);
+            client.Emit({ serverContent: { outputTranscription: { text: 'Hello, I am Nadia.', finished: true } } } as LiveServerMessage);
+            client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            // The delta and the final both carry the kind; neither is narration.
+            expect(transcripts.map((t) => t.Kind)).toEqual(['normal', 'normal']);
+            expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'Hello, I am Nadia.', IsFinal: true, Kind: 'normal' });
         });
 
         it("should tag the triggered turn's transcripts as narration, then reset to normal", () => {
@@ -808,6 +818,16 @@ describe('GeminiRealtimeClient', () => {
             ]);
         });
 
+        it("ends the call with a time-limit error, without resuming, when the relay closes at the session's time limit", async () => {
+            const { states, errors } = collect(client);
+            await connect(client);
+            client.Emit({ sessionResumptionUpdate: { newHandle: 'handle-1' } } as LiveServerMessage);
+            client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 4000, reason: 'Call time limit reached' }));
+            expect(errors).toEqual([{ Message: 'Gemini Live session reached its time limit (4000): Call time limit reached', Code: 'time-limit', Fatal: true }]);
+            expect(states[states.length - 1]).toBe('error');
+            expect(client.ConnectCount).toBe(1);
+        });
+
         it('should still emit the fatal error on an abnormal close when there is no global process (browser)', async () => {
             const { states, errors } = collect(client);
             await connect(client);
@@ -835,6 +855,7 @@ describe('GeminiRealtimeClient', () => {
                     this.ArgsPerSession.push(args);
                     const session = new FakeGeminiSession();
                     this.Sessions.push(session);
+                    ConfirmGeminiSetup(args);
                     return session;
                 }
             }
@@ -887,6 +908,15 @@ describe('GeminiRealtimeClient', () => {
         });
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestGeminiClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestGeminiClient()
+);
 
 describe('GeminiRealtimeClient remote media stream (issue #5153)', () => {
     /** Playback fake that exposes an output stream, like the production Web Audio engine. */

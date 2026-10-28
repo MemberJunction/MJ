@@ -469,6 +469,23 @@
             "lastModified": "2026-09-09T14:31:44.166Z",
             "checksum": "22a316ed9e0cb808317054f3f62ee6827d2acd78d442edc32b0e0839d142af48"
           }
+        },
+        {
+          "fields": {
+            "Code": "EntityAlternateBaseViews",
+            "DatasetID": "@parent:ID",
+            "Sequence": 33,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base Views",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Registered alternate base views (same columns, canonical row subset) for entities"
+          },
+          "primaryKey": {
+            "ID": "05FCCBE7-74AE-44F4-B3A0-ECC731320E35"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:08.042Z",
+            "checksum": "7f96867dd88781e423857bebf45e0d71f83a29fa39d1d33d28332eb5366e0711"
+          }
         }
       ]
     },

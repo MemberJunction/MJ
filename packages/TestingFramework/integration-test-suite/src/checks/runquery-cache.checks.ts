@@ -1,5 +1,5 @@
 /**
- * runquery-cache.checks.ts — the 'runquery-cache' bundle (Q1–Q12) + its fixtures.
+ * runquery-cache.checks.ts — the 'runquery-cache' bundle (Q1–Q21) + its fixtures.
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/runquery-cache-tests.ts.
  * Unlike the cache suites, this bundle needs self-contained fixtures: one Query
@@ -17,11 +17,12 @@
 import { RunView, RunQuery, Metadata, UserInfo } from '@memberjunction/core';
 import type { IRunQueryProvider, RunQueryResult, DatabaseProviderBase } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
-import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
+import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJQueryParameterEntity, MJQuerySQLEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '@memberjunction/testing-integration';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** All fixture-mutated settings share this prefix so teardown can sweep leftovers. */
 export const RUNQUERY_SETTING_PREFIX = 'mj.integrationtest.rq';
@@ -123,7 +124,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     ttlQuery.CategoryID = category.ID;
     ttlQuery.SQL = countSQL;
     ttlQuery.Status = 'Approved';
-    if (!await ttlQuery.Save()) {
+    if (!await ttlQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`TTL fixture query save failed: ${ttlQuery.LatestResult?.CompleteMessage}`);
     }
     fixtures.TtlQuery = ttlQuery;
@@ -148,7 +149,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
         `SELECT MAX(${q.QuoteIdentifier('__mj_UpdatedAt')}) AS ${q.QuoteIdentifier('MaxUpdatedAt')}, ` +
         `COUNT(*) AS ${q.QuoteIdentifier('RowCount')} ` +
         `FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
-    if (!await validatedQuery.Save()) {
+    if (!await validatedQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }
     fixtures.ValidatedQuery = validatedQuery;
@@ -200,6 +201,76 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
     return TeardownRunQueryFixtures(ctx, fixtures);
 }
 
+// ── Query-definition checks (Q13–Q19): helpers ───────────────────────────────────────────────
+
+/** Time for QueryEngine to apply a local save, which it does asynchronously. */
+const ENGINE_SETTLE_MS = 300;
+/**
+ * Time for QueryEngine to delete an edited query's cached results: it waits 3s after the last
+ * result-affecting save. Creating a query counts, so a check waits this long after creating its
+ * fixtures before warming a slot, or that deletion could remove the warmed slot mid-check.
+ */
+const DEFINITION_SETTLE_MS = 3500;
+
+/**
+ * A throwaway query in the fixture category whose SQL returns a `Marker` column, so a check can
+ * tell which version of the SQL produced the rows it got. Saved without AI enrichment.
+ */
+async function createMarkerQuery(ctx: IntegrationCheckContext, label: string, sql: string, reusable = false): Promise<MJQueryEntity> {
+    const { Category } = requireFixtures(ctx);
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+    query.Name = `CacheTest Def ${label} ${Date.now()}`;
+    query.CategoryID = Category.ID;
+    query.SQL = sql;
+    query.Status = 'Approved';
+    query.Reusable = reusable;
+    Assert(await query.Save(FixtureQuerySaveOptions()), `${label} fixture save failed: ${query.LatestResult?.CompleteMessage}`);
+    return query;
+}
+
+/** Applies `edit` to `query`, saves it the way the fixtures are saved, and lets the engine catch up. */
+async function editQuery(query: MJQueryEntity, edit: (q: MJQueryEntity) => void): Promise<void> {
+    edit(query);
+    Assert(await query.Save(FixtureQuerySaveOptions()), `query edit failed: ${query.LatestResult?.CompleteMessage}`);
+    await Sleep(ENGINE_SETTLE_MS);
+}
+
+/** One `CacheLocal` run; fresh params object per call. */
+async function runCached(ctx: IntegrationCheckContext, identity: { QueryID?: string; QueryName?: string; CategoryPath?: string }, parameters?: Record<string, string>): Promise<RunQueryResult> {
+    const result = await new RunQuery().RunQuery({ ...identity, CacheLocal: true, ...(parameters ? { Parameters: parameters } : {}) }, ctx.User);
+    Assert(result.Success, `run failed: ${result.ErrorMessage}`);
+    await Sleep(50); // the slot write is fire-and-forget
+    return result;
+}
+
+/** The `Marker` the rows report: which SQL produced them. */
+function markerOf(result: RunQueryResult): string {
+    return String(result.Results[0]?.Marker);
+}
+
+/** Warms a slot and proves the next run is served from it, so a later miss means something. */
+async function warmAndProveHit(ctx: IntegrationCheckContext, identity: { QueryID?: string; QueryName?: string }, expectedMarker: string, parameters?: Record<string, string>): Promise<void> {
+    const first = await runCached(ctx, identity, parameters);
+    AssertEqual(markerOf(first), expectedMarker, 'the first run must execute the current SQL');
+    const second = await runCached(ctx, identity, parameters);
+    AssertEqual(second.CacheHit, true, 'precondition: the repeat run must be served from the slot');
+}
+
+/** RunQuery slots in storage that belong to `queryID` (fingerprints carry the resolved ID). */
+async function slotsOf(ctx: IntegrationCheckContext, queryID: string): Promise<string[]> {
+    const id = queryID.toLowerCase();
+    const keys = await ctx.Storage.GetCategoryKeys('RunQueryCache');
+    return keys.filter(key => key.toLowerCase().includes(id));
+}
+
+/** Best-effort delete for check-local fixtures; never throws. */
+async function deleteQuietly(record: { Delete(): Promise<boolean> } | undefined): Promise<void> {
+    if (record) {
+        await record.Delete().catch(() => false);
+    }
+}
+
 /** The ordered runquery-cache bundle. The whole bundle mutates the DB by design. */
 export const RunQueryCacheChecks: NamedCheck[] = [
     {
@@ -243,7 +314,10 @@ export const RunQueryCacheChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { TtlQuery } = requireFixtures(ctx);
             const rq = new RunQuery();
-            const params = { QueryName: TtlQuery.Name, CacheLocal: true, CacheLocalTTL: 1200 };
+            // Own Parameters tag → own slot. A request by name reaches the same slot as one by ID
+            // (the fingerprint uses the resolved query), and Q2 already wrote that slot with no TTL;
+            // the TTL lives on the slot, not the request.
+            const params = { QueryName: TtlQuery.Name, CacheLocal: true, CacheLocalTTL: 1200, Parameters: { scope: 'q3' } };
             const first = await rq.RunQuery({ ...params }, ctx.User);
             Assert(first.Success, `first failed: ${first.ErrorMessage}`);
             await Sleep(1700); // outlive the TTL
@@ -363,7 +437,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             broken.CategoryID = Category.ID;
             broken.SQL = 'SELECT FROM nowhere_at_all';
             broken.Status = 'Approved';
-            Assert(await broken.Save(), `broken fixture save failed: ${broken.LatestResult?.CompleteMessage}`);
+            Assert(await broken.Save(FixtureQuerySaveOptions()), `broken fixture save failed: ${broken.LatestResult?.CompleteMessage}`);
             try {
                 await QueryEngine.Instance.Config(true, ctx.User);
                 ctx.Storage.ResetCounts();
@@ -437,14 +511,14 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 queryA.CategoryID = Category.ID;
                 queryA.SQL = `SELECT 'A' AS Slot`;
                 queryA.Status = 'Approved';
-                Assert(await queryA.Save(), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
+                Assert(await queryA.Save(FixtureQuerySaveOptions()), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
 
                 queryB = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
                 queryB.Name = sharedName;
                 queryB.CategoryID = categoryB.ID;
                 queryB.SQL = `SELECT 'B' AS Slot`;
                 queryB.Status = 'Approved';
-                Assert(await queryB.Save(), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
+                Assert(await queryB.Save(FixtureQuerySaveOptions()), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
 
                 // resolveQuery reads the QueryEngine cache — refresh so both fixtures resolve,
                 // then take each query's CANONICAL CategoryPath from the engine (guarantees the
@@ -509,7 +583,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 query.CategoryID = Category.ID;
                 query.SQL = `SELECT COUNT(*) AS SettingCount FROM ${ctx.Schema ?? '__mj'}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
                 query.Status = 'Approved';
-                Assert(await query.Save(), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
+                Assert(await query.Save(FixtureQuerySaveOptions()), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
 
                 // The Query Entities bridge row is what makes the FULL check consult entity
                 // CanRead — without it both checks trivially allow and the check is vacuous.
@@ -558,6 +632,219 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 if (bridge) { await bridge.Delete(); }
                 if (query) { await query.Delete(); }
             }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q13',
+        Name: "Q13: after a query's SQL is edited, the next CacheLocal run misses and returns the new SQL's rows",
+        Fn: async (ctx): Promise<void> => {
+            let query: MJQueryEntity | undefined;
+            try {
+                query = await createMarkerQuery(ctx, 'Q13', `SELECT 'v1' AS Marker`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                await warmAndProveHit(ctx, { QueryID: query.ID }, 'v1');
+
+                await editQuery(query, q => { q.SQL = `SELECT 'v2' AS Marker`; });
+                const afterEdit = await runCached(ctx, { QueryID: query.ID });
+                Assert(afterEdit.CacheHit !== true, 'the slot from the old SQL must not be served after the edit');
+                AssertEqual(markerOf(afterEdit), 'v2', 'the run after the edit must return the new SQL\'s rows');
+                const again = await runCached(ctx, { QueryID: query.ID });
+                AssertEqual(again.CacheHit, true, 'the rewritten slot must serve the next run');
+                AssertEqual(markerOf(again), 'v2', 'the rewritten slot must hold the new SQL\'s rows');
+            } finally {
+                await deleteQuietly(query);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q14',
+        Name: 'Q14: a description-only edit leaves the cached results in place (no over-invalidation)',
+        Fn: async (ctx): Promise<void> => {
+            let query: MJQueryEntity | undefined;
+            try {
+                query = await createMarkerQuery(ctx, 'Q14', `SELECT 'v1' AS Marker`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                await warmAndProveHit(ctx, { QueryID: query.ID }, 'v1');
+
+                await editQuery(query, q => { q.Description = `Reworded ${Date.now()}`; });
+                // Outlive the settle window, so a deletion wrongly triggered by the edit would have run.
+                await Sleep(DEFINITION_SETTLE_MS);
+                const afterEdit = await runCached(ctx, { QueryID: query.ID });
+                AssertEqual(afterEdit.CacheHit, true, 'a description edit must not stop the slot from being served');
+                AssertEqual(markerOf(afterEdit), 'v1', 'the served rows must be the cached ones');
+            } finally {
+                await deleteQuietly(query);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q15',
+        Name: "Q15: editing a parameter's ValidationFilters (which transforms the value) makes the next run miss",
+        Fn: async (ctx): Promise<void> => {
+            let query: MJQueryEntity | undefined;
+            try {
+                query = await createMarkerQuery(ctx, 'Q15', `SELECT {{ Tag | sqlString }} AS Marker`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                const parameterRow = QueryEngine.Instance.GetQueryParameters(query.ID).find(p => p.Name === 'Tag');
+                Assert(!!parameterRow, 'precondition: extraction must have created the Tag parameter');
+                await warmAndProveHit(ctx, { QueryID: query.ID }, 'abc', { Tag: 'abc' });
+
+                const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+                const parameter = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters', ctx.User);
+                Assert(await parameter.Load(parameterRow!.ID), 'parameter load failed');
+                parameter.ValidationFilters = JSON.stringify([{ name: 'upper' }]);
+                Assert(await parameter.Save(), `parameter save failed: ${parameter.LatestResult?.CompleteMessage}`);
+                await Sleep(ENGINE_SETTLE_MS);
+
+                const afterEdit = await runCached(ctx, { QueryID: query.ID }, { Tag: 'abc' });
+                Assert(afterEdit.CacheHit !== true, 'the slot from the old parameter definition must not be served');
+                AssertEqual(markerOf(afterEdit), 'ABC', 'the new validation filter must apply');
+            } finally {
+                await deleteQuietly(query);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q16',
+        Name: "Q16: editing a composed query's SQL makes the composing query's next run miss",
+        Fn: async (ctx): Promise<void> => {
+            let inner: MJQueryEntity | undefined;
+            let outer: MJQueryEntity | undefined;
+            try {
+                inner = await createMarkerQuery(ctx, 'Q16 inner', `SELECT 'b1' AS Marker`, true);
+                await Sleep(ENGINE_SETTLE_MS);
+                const innerPath = QueryEngine.Instance.FindQueryByID(inner.ID)?.CategoryPath;
+                Assert(!!innerPath, 'precondition: the inner query must resolve in the QueryEngine');
+                outer = await createMarkerQuery(ctx, 'Q16 outer', `SELECT b.Marker FROM {{query:"${innerPath}/${inner.Name}"}} b`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                const dependsOnInner = QueryEngine.Instance.Dependencies.some(d => UUIDsEqual(d.QueryID, outer!.ID) && UUIDsEqual(d.DependsOnQueryID, inner!.ID));
+                Assert(dependsOnInner, 'precondition: extraction must record the composition dependency');
+                await warmAndProveHit(ctx, { QueryID: outer.ID }, 'b1');
+
+                await editQuery(inner, q => { q.SQL = `SELECT 'b2' AS Marker`; });
+                const afterEdit = await runCached(ctx, { QueryID: outer.ID });
+                Assert(afterEdit.CacheHit !== true, 'the composing query\'s slot must not be served after the composed query changed');
+                AssertEqual(markerOf(afterEdit), 'b2', 'the composing query must return the composed query\'s new rows');
+            } finally {
+                await deleteQuietly(outer);
+                await deleteQuietly(inner);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q17',
+        Name: 'Q17: a query requested by ID, by name and by both shares one slot, and an SQL edit reaches all three',
+        Fn: async (ctx): Promise<void> => {
+            let query: MJQueryEntity | undefined;
+            try {
+                query = await createMarkerQuery(ctx, 'Q17', `SELECT 'v1' AS Marker`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                const identities = [{ QueryID: query.ID }, { QueryName: query.Name }, { QueryID: query.ID, QueryName: query.Name }];
+
+                const first = await runCached(ctx, identities[0]);
+                AssertEqual(markerOf(first), 'v1', 'the first run must execute the SQL');
+                for (const identity of identities.slice(1)) {
+                    const hit = await runCached(ctx, identity);
+                    AssertEqual(hit.CacheHit, true, `a request by ${Object.keys(identity).join('+')} must reach the slot the request by ID wrote`);
+                }
+
+                await editQuery(query, q => { q.SQL = `SELECT 'v2' AS Marker`; });
+                for (const identity of identities) {
+                    const afterEdit = await runCached(ctx, identity);
+                    AssertEqual(markerOf(afterEdit), 'v2', `a request by ${Object.keys(identity).join('+')} must get the new SQL's rows after the edit`);
+                }
+            } finally {
+                await deleteQuietly(query);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q18',
+        Name: "Q18: saving the query's SQL variant for the current platform makes the next run miss",
+        Fn: async (ctx): Promise<void> => {
+            let query: MJQueryEntity | undefined;
+            let variant: MJQuerySQLEntity | undefined;
+            try {
+                query = await createMarkerQuery(ctx, 'Q18', `SELECT 'base' AS Marker`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                await warmAndProveHit(ctx, { QueryID: query.ID }, 'base');
+
+                const platform = (ctx.Provider as unknown as DatabaseProviderBase).PlatformKey;
+                const dialect = QueryEngine.Instance.SQLDialects.find(d => d.PlatformKey === platform);
+                Assert(!!dialect, `precondition: an SQL dialect row must exist for platform '${platform}'`);
+                const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+                variant = await md.GetEntityObject<MJQuerySQLEntity>('MJ: Query SQLs', ctx.User);
+                variant.QueryID = query.ID;
+                variant.SQLDialectID = dialect!.ID;
+                variant.SQL = `SELECT 'dialect' AS Marker`;
+                Assert(await variant.Save(FixtureQuerySaveOptions()), `variant save failed: ${variant.LatestResult?.CompleteMessage}`);
+                await Sleep(ENGINE_SETTLE_MS);
+
+                const afterEdit = await runCached(ctx, { QueryID: query.ID });
+                Assert(afterEdit.CacheHit !== true, 'the slot from the base SQL must not be served once a platform variant exists');
+                AssertEqual(markerOf(afterEdit), 'dialect', 'the platform variant must run');
+            } finally {
+                await deleteQuietly(variant);
+                await deleteQuietly(query);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q19',
+        Name: "Q19: once an SQL edit settles, the query's old slots are deleted from storage",
+        Fn: async (ctx): Promise<void> => {
+            let query: MJQueryEntity | undefined;
+            try {
+                query = await createMarkerQuery(ctx, 'Q19', `SELECT 'v1' AS Marker`);
+                await Sleep(DEFINITION_SETTLE_MS);
+                await runCached(ctx, { QueryID: query.ID }, { scope: 'a' });
+                await runCached(ctx, { QueryID: query.ID }, { scope: 'b' });
+                AssertEqual((await slotsOf(ctx, query.ID)).length, 2, 'precondition: two slots of the query must be stored');
+
+                await editQuery(query, q => { q.SQL = `SELECT 'v2' AS Marker`; });
+                await Sleep(DEFINITION_SETTLE_MS);
+
+                AssertEqual((await slotsOf(ctx, query.ID)).length, 0, 'the edited query\'s slots must be deleted once the edit settles');
+            } finally {
+                await deleteQuietly(query);
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q20',
+        Name: "Q20: smart validation answers stale with fresh rows when the client's slot came from another query definition, even though CacheValidationSQL reports the data unchanged",
+        Fn: async (ctx): Promise<void> => {
+            const { ValidatedQuery } = requireFixtures(ctx);
+            const provider = Metadata.Provider as unknown as IRunQueryProvider; // global-provider-ok: integration test script — single-provider process by design
+            const params = () => ({ QueryID: ValidatedQuery.ID });
+
+            const fresh = await provider.RunQueriesWithCacheCheck!([{ params: params() }], ctx.User);
+            const serverHash = fresh.results[0]?.definitionHash;
+            Assert(!!serverHash, 'the server must return its definition hash with fresh rows, for the client to store');
+            const stamp = { maxUpdatedAt: fresh.results[0].maxUpdatedAt ?? '', rowCount: fresh.results[0].rowCount ?? 0 };
+
+            const current = await provider.RunQueriesWithCacheCheck!([{ params: params(), cacheStatus: { ...stamp, definitionHash: serverHash } }], ctx.User);
+            AssertEqual(current.results[0]?.status, 'current', 'precondition: the same data and the same definition must validate as current');
+
+            for (const clientHash of [`${serverHash}-older`, '']) {
+                const stale = await provider.RunQueriesWithCacheCheck!([{ params: params(), cacheStatus: { ...stamp, definitionHash: clientHash } }], ctx.User);
+                AssertEqual(stale.results[0]?.status, 'stale', `a slot written under definition '${clientHash}' must be stale, whatever the data says`);
+                Assert(Array.isArray(stale.results[0]?.results), 'a stale answer must carry fresh rows');
+                AssertEqual(stale.results[0]?.definitionHash, serverHash, 'a stale answer must carry the server\'s hash');
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q21',
+        Name: 'Q21: a client that sends no definition hash (an older release) gets the data-only validation it always got',
+        Fn: async (ctx): Promise<void> => {
+            const { ValidatedQuery } = requireFixtures(ctx);
+            const provider = Metadata.Provider as unknown as IRunQueryProvider; // global-provider-ok: integration test script — single-provider process by design
+            const fresh = await provider.RunQueriesWithCacheCheck!([{ params: { QueryID: ValidatedQuery.ID } }], ctx.User);
+            const stamp = { maxUpdatedAt: fresh.results[0]?.maxUpdatedAt ?? '', rowCount: fresh.results[0]?.rowCount ?? 0 };
+
+            const response = await provider.RunQueriesWithCacheCheck!([{ params: { QueryID: ValidatedQuery.ID }, cacheStatus: stamp }], ctx.User);
+            AssertEqual(response.results[0]?.status, 'current', 'without a definition hash, unchanged data must still validate as current');
         }
     }
 ];

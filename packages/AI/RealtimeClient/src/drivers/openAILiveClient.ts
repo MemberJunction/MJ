@@ -13,6 +13,7 @@ import {
     IRealtimeAudioSink,
     IRealtimeDataChannel,
     IRealtimePeerConnection,
+    IRealtimeRtpSender,
 } from './openAIRealtimeClient';
 
 /**
@@ -54,6 +55,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
     private micStream: MediaStream | null = null;
+    /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
+    private micSenders: IRealtimeRtpSender[] = [];
     protected sessionConfig: JSONObject | null = null;
 
     // ── State Machine ──────────────────────────────────────────────────────────
@@ -110,6 +113,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         micStream: MediaStream,
         _cameraStream?: MediaStream
     ): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');
@@ -158,6 +162,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
+        this.micSenders = [];
 
         if (this.dataChannel) {
             try {
@@ -264,11 +269,24 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Requests a brief interim narration utterance during delegated background work.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same commentary trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: the instructions ride a
+     * commentary frame and a `response.create` follows unless a tool batch holds it. Skipped while a
+     * response is in flight (the collision rule); `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (this.responseActive || this.audioPlaying) {
-            // Collision rule: narration is disposable; skip when response is in flight
             return;
         }
-        this.pendingNarration = true;
+        this.pendingNarration = kind === 'narration';
         this.sendDataChannelFrame({
             type: 'session.commentary.append',
             content: instructions,
@@ -323,6 +341,23 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         for (const track of this.micStream?.getAudioTracks() ?? []) {
             track.enabled = !muted;
         }
+    }
+
+    /**
+     * Moves the mic senders and the input meter to the stream's current tracks (obligation #10).
+     * `replaceTrack` needs no renegotiation, so the call carries on.
+     */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (this.micSenders.length === 0) {
+            return;
+        }
+        const tracks = micStream.getAudioTracks();
+        if (tracks.length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        await Promise.all(this.micSenders.map((sender, index) => sender.replaceTrack(tracks[index] ?? null)));
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     // ── Overridable Factory / Network Seams (Tests inject fakes) ───────────────
@@ -410,9 +445,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {
-        for (const track of micStream.getAudioTracks()) {
-            pc.addTrack(track, micStream);
-        }
+        this.micSenders = micStream.getAudioTracks().map((track) => pc.addTrack(track, micStream));
     }
 
     private attachRemoteAudio(pc: IRealtimePeerConnection): void {

@@ -1,5 +1,30 @@
 # @memberjunction/predictive-studio-sidecar
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- ff73341: Add the Predictive Studio planted-truth test suite (`packages/AI/PredictiveStudio/TruthSuite`: the datasets and the harness that loads and scores them) and Phase-0 containment safeguards. The containment gates are MJ Tests run with `mj test suite "Predictive Studio Gates — Containment"`. Containment fixes: uncapped default row reads for training and filter-scoped scoring, lifecycle status gates and dry-run isolation for model scoring, typed refusal codes the gates assert on, a feature-importance kind that decides which model drivers may be shown, polarity-aware risk bands and non-causal driver copy across UI and prompt templates, seeded, reproducible training (a fixed random state; the truth-suite sidecar also pins one thread for its determinism gate) and honest out-of-sample validation metrics (`kfold`/`holdout`), refusal of no-effect `AsOfStrategy` configurations, withholding of non-origin-split time-series forecasts, majority-class baseline enforcement on imbalanced classifiers, disabling the Run Experiment Session action, and keeping the maintenance job disabled, since nothing runs either yet.
+
+  Note: Pre-existing models trained with locked holdout explicitly disabled (`LockedHoldoutFraction = 0`) or graded on accuracy alone (without `AUC` or a recorded `BaselineAccuracy`) will display as unmeasured until retrained. Existing models' global driver lists stay hidden until retrained, because a model with no stored feature-importance kind has its drivers hidden.
+
+### Patch Changes
+
+- Updated dependencies [ff73341]
+  - @memberjunction/predictive-studio-core@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- @memberjunction/predictive-studio-core@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- @memberjunction/predictive-studio-core@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

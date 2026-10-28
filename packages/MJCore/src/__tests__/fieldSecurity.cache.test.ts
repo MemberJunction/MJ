@@ -3,17 +3,15 @@
  *
  * The invariant under test:
  *
- *   - The SERVER cache holds FULL-WIDTH slots serving every user: no `fls:` segment, no
- *     allowed-set fetch narrowing, no entity_object exemption. Per-request narrowing happens
- *     at read time in `ApplyFieldSecurityProjection`, which runs on both cache hits and misses
- *     and reads live metadata — so a permission change takes effect on the next metadata
- *     refresh with no result-cache invalidation.
- *   - The CLIENT segments, keyed on the ALLOWED list. Its slots are stored exactly as the
- *     server returned them (already narrowed on the wire) and are never projected on read, so
- *     the field set has to be part of slot identity.
+ *   - BOTH tiers segment slots by permission class, keyed on the ALLOWED list. A database
+ *     provider selects only the reader's allowed columns, and a browser stores rows exactly as
+ *     the server returned them, so on either tier the field set is part of slot identity.
+ *     `ApplyFieldSecurityProjection` still runs on every hit and miss as a backstop.
+ *   - Unrestricted users contribute no key, so their fingerprints are unchanged and shared.
  *
- * That asymmetry is decided in exactly one place — `ComputeRunViewFLSFingerprintKey` — which
- * is what these tests pin down.
+ * The key is decided in exactly one place — `ComputeRunViewFLSFingerprintKey` — which is what
+ * these tests pin down. The server-side behaviour (request user, pipeline isolation) is covered
+ * in fieldSecurity.cacheSegmentation.test.ts.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -204,7 +202,7 @@ const viewParams = (extra: Partial<RunViewParams> = {}): RunViewParams =>
 const cache = LocalCacheManager.Instance;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 1. The fls: fingerprint segment — still emitted, but only the CLIENT feeds it
+// 1. The fls: fingerprint segment
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('GenerateRunViewFingerprint — fls: segment', () => {
@@ -238,32 +236,33 @@ describe('GenerateRunViewFingerprint — fls: segment', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 2. The tier split — the single decision point for server vs client
+// 2. The key — the same on both tiers
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('ProviderBase.ComputeRunViewFLSFingerprintKey', () => {
-    it('SERVER: contributes NO key, even for a restricted user', () => {
-        // Server slots are full-width and shared; ApplyFieldSecurityProjection narrows per
-        // request at read time, so segmenting here would fragment one shared slot into one
-        // per permission class and protect nothing.
+    it('SERVER: contributes the allowed-list key for a restricted user', () => {
+        // A database provider selects only the reader's allowed columns, so a restricted fill
+        // is narrower than an unrestricted one and the two must never share a slot.
         const provider = setupProvider();
         provider.setSharedCache(true);
         provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
 
-        expect(provider.fingerprintKey(viewParams())).toBeUndefined();
+        expect(provider.fingerprintKey(viewParams())).toBe('id,name,notes');
     });
 
-    it('SERVER: restricted and unrestricted users therefore share one slot', () => {
+    it('SERVER: restricted and unrestricted users therefore get different slots', () => {
         const provider = setupProvider();
         provider.setSharedCache(true);
-        const params = viewParams({ ExtraFilter: 'IsActive=1' });
+        const params = () => viewParams({ ExtraFilter: 'IsActive=1' });
 
         provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
-        const restricted = cache.GenerateRunViewFingerprint(params, 'conn', '', undefined, provider.fingerprintKey(params));
+        const p1 = params();
+        const restricted = cache.GenerateRunViewFingerprint(p1, 'conn', '', undefined, provider.fingerprintKey(p1));
         provider.setCurrentUser(buildUser([HR_ROLE_ID]));
-        const unrestricted = cache.GenerateRunViewFingerprint(params, 'conn', '', undefined, provider.fingerprintKey(params));
+        const p2 = params();
+        const unrestricted = cache.GenerateRunViewFingerprint(p2, 'conn', '', undefined, provider.fingerprintKey(p2));
 
-        expect(restricted).toBe(unrestricted);
+        expect(restricted).not.toBe(unrestricted);
     });
 
     it('CLIENT: contributes the allowed-list key for a restricted user', () => {
@@ -305,8 +304,8 @@ describe('ProviderBase.ComputeRunViewFLSFingerprintKey', () => {
 
 describe('ProviderBase.ComputeRunViewFetchFields', () => {
     it('widens to ALL fields regardless of who is asking', () => {
-        // The fetch does not depend on the user at all, which is what lets one server slot
-        // serve everyone.
+        // The widened list does not depend on the user; a database provider leaves the user's
+        // denied columns out when it builds the SELECT.
         const provider = setupProvider();
         const entity = provider.EntityByName('Employees')!;
         const all = ['ID', 'Name', 'Salary', 'Bonus', 'Notes'];
@@ -382,8 +381,8 @@ describe('ProviderBase.ComputeClientFLSAllowedKey', () => {
 
 describe('ProviderBase.runViewCacheEligible', () => {
     it('does not exempt a restricted user\'s entity_object request', () => {
-        // Server slots are full-width, so a restricted user's entity_object request is as
-        // cacheable as anyone else's — field security only changes what is projected out.
+        // A restricted user's entity_object request is as cacheable as anyone else's — field
+        // security changes which slot it uses, not whether it is cached.
         const provider = setupProvider();
         provider.setSharedCache(true);
         provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));

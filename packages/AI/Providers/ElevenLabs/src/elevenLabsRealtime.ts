@@ -4,6 +4,7 @@ import { ElevenLabs, ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -16,8 +17,10 @@ import {
     type JSONValue,
     type RealtimeTurnDetectionSettings,
     type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseSingleton, RegisterClass } from '@memberjunction/global';
+import { ElevenLabsPremadeVoices } from './elevenLabsVoices';
 
 /**
  * Lifetime of an ElevenLabs signed websocket URL: the browser (or server bridge) must OPEN the
@@ -354,6 +357,51 @@ interface NativeWebSocketLike {
 }
 
 /**
+ * How long a fingerprint hit is trusted. Drift made by another MJAPI instance or in the ElevenLabs
+ * dashboard is invisible to this process's cache, so a hit must expire to be repaired.
+ */
+const ENSURE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** What the ensure cache remembers per managed-agent name. */
+export interface ManagedAgentCacheEntry {
+    /** The ensure in flight or finished; callers for the same name await the same promise. */
+    agentId: Promise<string>;
+    /** Tool-set + model-settings fingerprint the ensure ran with; a different one re-runs the ensure. */
+    fingerprint: string;
+    /** Epoch ms the entry was created; an entry older than {@link ENSURE_CACHE_TTL_MS} is a miss. */
+    cachedAt: number;
+}
+
+/**
+ * The process-wide home of the managed-agent ensure cache (MJ#4803): one map per ElevenLabs API key,
+ * shared by every {@link ElevenLabsRealtime} instance the session service builds. Entry semantics
+ * (fingerprint match, in-flight promise sharing, eviction of a rejected ensure) are
+ * {@link ElevenLabsRealtime.ensureAgent}'s; this class only owns the storage.
+ */
+export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManagedAgentCache> {
+    private readonly accounts = new Map<string, Map<string, ManagedAgentCacheEntry>>();
+
+    public static get Instance(): ElevenLabsManagedAgentCache {
+        return super.getInstance<ElevenLabsManagedAgentCache>();
+    }
+
+    /** The cache for one API key, created on first use. */
+    public ForAccount(apiKey: string): Map<string, ManagedAgentCacheEntry> {
+        let cache = this.accounts.get(apiKey);
+        if (!cache) {
+            cache = new Map<string, ManagedAgentCacheEntry>();
+            this.accounts.set(apiKey, cache);
+        }
+        return cache;
+    }
+
+    /** Forgets every account's entries. For tests only; nothing in production calls it. */
+    public Clear(): void {
+        this.accounts.clear();
+    }
+}
+
+/**
  * Real-time, full-duplex driver for the **ElevenLabs Agents Platform**, implementing the Core
  * {@link BaseRealtimeModel} primitive. Registers as `ElevenLabsRealtime` and is resolved for
  * `MJ: AI Models` typed `Realtime` (API-key env alias: `AI_VENDOR_API_KEY__ElevenLabsRealtime`).
@@ -396,14 +444,21 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     private elevenClient: ElevenLabsClient | null = null;
 
     /**
-     * Managed-agent ensure cache: managed agent NAME → the IN-FLIGHT ensure + the tool-set
-     * fingerprint it was started with. A cache hit with an identical fingerprint skips the REST
-     * round-trips entirely; a different fingerprint re-runs the ensure flow.
+     * Managed-agent ensure cache for THIS driver's API key: managed agent NAME → the IN-FLIGHT ensure +
+     * the tool-set fingerprint it was started with. A cache hit with an identical fingerprint skips the
+     * REST round-trips entirely; a different fingerprint re-runs the ensure flow.
      *
      * Holds the PROMISE, not the resolved id, so concurrent callers for the same name join the
      * one ensure already running instead of each starting their own — see {@link ensureAgent}.
+     *
+     * Lives in {@link ElevenLabsManagedAgentCache}, one per process, not on the instance: the session
+     * service builds a NEW driver for every session, so an instance field was always empty and every
+     * voice session start paid list → get (→ PATCH) → signed URL, about 3.8 s, before it could connect
+     * (MJ#4803). Keyed by API key, since agents belong to an ElevenLabs account.
      */
-    private agentCache = new Map<string, { agentId: Promise<string>; fingerprint: string }>();
+    private get agentCache(): Map<string, ManagedAgentCacheEntry> {
+        return ElevenLabsManagedAgentCache.Instance.ForAccount(this.apiKey);
+    }
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -442,17 +497,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * The built-in default voices available in ElevenLabs — used to populate the voice picker.
      */
     public override get SupportedVoices(): RealtimeVoiceOption[] {
-        return [
-            { ID: '21m00Tcm4TlvDq8ikWAM', Name: 'Rachel' },
-            { ID: 'pNInz6obpgDQGcFmaJgB', Name: 'Adam' },
-            { ID: 'AZnzlk1XvdvUeBnXmlld', Name: 'Domi' },
-            { ID: 'EXAVITQu4vr4xnSDxMaL', Name: 'Bella' },
-            { ID: 'ErXwobaYiN019PkySvjV', Name: 'Antoni' },
-            { ID: 'MF3mGyEYCl7XYWbV9V6O', Name: 'Elli' },
-            { ID: 'TxGEqnHWrfWFTfGW9XjX', Name: 'Josh' },
-            { ID: 'VR6AewLTigWG4xSOukaG', Name: 'Arnold' },
-            { ID: 'yoZ06aMxZJJ28mfd3POQ', Name: 'Sam' },
-        ];
+        return ElevenLabsPremadeVoices();
     }
 
     /**
@@ -606,13 +651,13 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const fingerprint = ElevenLabsRealtime.ToolSetFingerprint(tools)
             + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config);
         const cached = this.agentCache.get(model);
-        if (cached && cached.fingerprint === fingerprint) {
+        if (cached && cached.fingerprint === fingerprint && Date.now() - cached.cachedAt < ENSURE_CACHE_TTL_MS) {
             return cached.agentId;
         }
         // Publish the in-flight ensure BEFORE awaiting it, so a second caller arriving mid-flight
         // joins this one rather than starting a rival find-create and forking a duplicate agent.
         const pending = this.findCreateOrUpdateAgent(model, tools, params.Config);
-        this.agentCache.set(model, { agentId: pending, fingerprint });
+        this.agentCache.set(model, { agentId: pending, fingerprint, cachedAt: Date.now() });
         try {
             return await pending;
         } catch (error) {
@@ -1061,6 +1106,9 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      */
     private connectTimeToolsFingerprint = ElevenLabsRealtime.ToolSetFingerprint([]);
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('ElevenLabsRealtime', 'this session sends audio only');
+
     constructor() {
         this.metadataPromise = new Promise<void>((resolve, reject) => {
             this.resolveMetadata = resolve;
@@ -1109,9 +1157,18 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
         return this.metadataPromise;
     }
 
-    /** @inheritdoc — streams one PCM16 mic frame as a base64 `user_audio_chunk`. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    /**
+     * @inheritdoc
+     *
+     * Streams one PCM16 audio frame as a base64 `user_audio_chunk`. The session sends audio only, so a frame of another
+     * kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**
@@ -1205,14 +1262,15 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      * Sends `client_tool_result` correlated by `tool_call_id`. Sent IMMEDIATELY (never queued):
      * the platform requested the result (`expects_response: true` blocks the conversation on
      * it) and handles its own continuation, so deferring it could only delay the spoken reply.
-     * The result string is parsed to ride as structured JSON when possible; free-text results
-     * pass through as-is.
+     * The result string rides as given, never parsed.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
         this.sendFrame({
             type: 'client_tool_result',
             tool_call_id: callID,
-            result: ElevenLabsRealtimeSession.ParseToolOutput(output),
+            // ElevenLabs takes client_tool_result.result as a string and closes the conversation on an
+            // object, so the JSON string goes out unchanged (MJ#4806).
+            result: output,
             is_error: false,
         });
     }
@@ -1378,18 +1436,6 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
             this.resolveMetadata = null;
             this.metadataReceived = true; // nothing further can resolve/reject it
             reject(new Error(message));
-        }
-    }
-
-    /**
-     * Parses a JSON-stringified tool result into a structured value for the `result` slot,
-     * falling back to the raw string so a free-text result still round-trips.
-     */
-    public static ParseToolOutput(output: string): JSONValue {
-        try {
-            return JSON.parse(output) as JSONValue;
-        } catch {
-            return output;
         }
     }
 

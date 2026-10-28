@@ -10,12 +10,13 @@
      (wheel)="OnWheel($event)"
      (paste)="OnPaste($event)">
 
-  <div class="board-viewport" [style.transform]="ViewportTransform">
+  <div class="board-viewport" [class.board-viewport--stepping]="ViewportStepping" [style.transform]="ViewportTransform">
 
     <!-- ink + connectors -->
     <svg class="ink-layer">
       @for (ink of InkItems; track ink.ID) {
         <path [attr.d]="InkPath(ink.Points)"
+              [class]="TagClass(ink)"
               [class.ink-sage]="ink.Author === 'agent'"
               [class.wb-erasable]="Tool === 'eraser' || Tool === 'select'"
               [class.wb-ink-selected]="IsSelected(ink)"
@@ -26,7 +27,7 @@
               (contextmenu)="OnItemContextMenu($event, ink)"/>
       }
       @for (conn of ConnectorItems; track conn.ID) {
-        <g [class.conn-sage]="conn.Author === 'agent'" [class.conn-user]="conn.Author === 'user'">
+        <g [class]="TagClass(conn)" [class.conn-sage]="conn.Author === 'agent'" [class.conn-user]="conn.Author === 'user'">
           <path [attr.d]="ConnectorPath(conn)"
                 [class.draw-in]="PopInIDs.has(conn.ID)"
                 [class.wb-erasable]="Tool === 'eraser' || Tool === 'select'"
@@ -85,7 +86,7 @@
       @switch (item.Kind) {
 
         @case ('sticky') {
-          <div [class]="'bi sticky ' + StickyTintClass(item)"
+          <div [class]="'bi sticky ' + StickyTintClass(item) + ' ' + TagClass(item)"
                [class.selected]="IsSelected(item)"
                [class.dragging]="IsDragging(item)"
                [class.pop-in]="PopInIDs.has(item.ID)"
@@ -121,7 +122,7 @@
         }
 
         @case ('shape') {
-          <div class="bi shape-box"
+          <div [class]="'bi shape-box ' + TagClass(item)"
                [class.shape-box--ellipse]="item.Shape === 'ellipse'"
                [class.shape-box--diamond]="item.Shape === 'diamond'"
                [class.shape-box--sage]="item.Author === 'agent'"
@@ -156,7 +157,7 @@
         }
 
         @case ('text') {
-          <div class="bi tlabel"
+          <div [class]="'bi tlabel ' + TagClass(item)"
                [class.tlabel--user]="item.Author === 'user'"
                [class.selected]="IsSelected(item)"
                [class.dragging]="IsDragging(item)"
@@ -192,7 +193,7 @@
         }
 
         @case ('markdown') {
-          <div class="bi md-card"
+          <div [class]="'bi md-card ' + TagClass(item)"
                [class.md-card--sage]="item.Author === 'agent'"
                [class.selected]="IsSelected(item)"
                [class.dragging]="IsDragging(item)"
@@ -226,7 +227,7 @@
         }
 
         @case ('html') {
-          <div class="bi html-card"
+          <div [class]="'bi html-card ' + TagClass(item)"
                [class.html-card--sage]="item.Author === 'agent'"
                [class.selected]="IsSelected(item)"
                [class.dragging]="IsDragging(item)"
@@ -285,7 +286,7 @@
         }
 
         @case ('image') {
-          <div class="bi img-card"
+          <div [class]="'bi img-card ' + TagClass(item)"
                [class.selected]="IsSelected(item)"
                [class.dragging]="IsDragging(item)"
                [class.pop-in]="PopInIDs.has(item.ID)"

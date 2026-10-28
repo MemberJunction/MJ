@@ -15,6 +15,8 @@ import {
     IRealtimePeerConnection,
     OpenAIRealtimeClient,
 } from '../drivers/openAIRealtimeClient';
+import { FakeRtpSender } from './helpers/realtime-fakes';
+import { DescribeWebRtcMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no WebRTC) ──────────────────────────────────────────────
 
@@ -57,14 +59,19 @@ class FakeDataChannel implements IRealtimeDataChannel {
 class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
     public RemoteDescription: RTCSessionDescriptionInit | null = null;
     public Closed = false;
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
     public createDataChannel(label: string): IRealtimeDataChannel {
         this.ChannelLabel = label;
@@ -346,6 +353,24 @@ describe('OpenAIRealtimeClient', () => {
                 },
             ]);
             expect(client.IsBusy).toBe(true);
+        });
+
+        it('RequestSpokenTurn sends the same response.create but tags the reply normal (MJ#4591)', () => {
+            client.RequestSpokenUpdate('Open the conversation now: greet them.');
+            const updateFrames = channel.SentEvents();
+            // Back to idle so the turn is not skipped by the collision rule.
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.done' });
+            channel.Sent = [];
+
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Open the conversation now: greet them.');
+            expect(channel.SentEvents()).toEqual(updateFrames);
+            expect(client.IsBusy).toBe(true);
+
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.output_audio_transcript.done', transcript: 'Hello there.' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello there.', IsFinal: true, Kind: 'normal' }]);
         });
 
         it('should keep the session instructions on a spoken update — OpenAI treats response.instructions as a REPLACEMENT', () => {
@@ -686,6 +711,46 @@ describe('OpenAIRealtimeClient', () => {
             expect(states).toEqual(['listening']); // still reflects the user holding the floor
         });
 
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
+        });
+
+        it('raises OnUserSpeechStart alongside the interruption, before the listening state change', () => {
+            const log: string[] = [];
+            client.OnUserSpeechStart(() => log.push('userSpeechStart'));
+            client.OnInterruption(() => log.push('interruption'));
+            client.OnStateChange((s) => log.push(`state:${s}`));
+            channel.EmitServer({ type: 'response.created' });
+            log.length = 0; // ignore state changes from the response starting
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(log).toContain('userSpeechStart');
+            expect(log).toContain('interruption');
+            expect(log.indexOf('userSpeechStart')).toBeLessThan(log.indexOf('state:listening'));
+        });
+
+        it('forwards item_id from input_audio_buffer.speech_started to OnUserSpeechStart and carries it as ItemId on the completed user transcript', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started', item_id: 'item_abc' });
+            channel.EmitServer({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Hello from item abc',
+                item_id: 'item_abc',
+            });
+
+            expect(startedIds).toEqual(['item_abc']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'Hello from item abc', IsFinal: true, Kind: 'normal', ItemId: 'item_abc' },
+            ]);
+        });
+
         it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {
             const { interruptions } = collect(client);
             channel.EmitServer({ type: 'response.created' });
@@ -910,3 +975,13 @@ describe('OpenAIRealtimeClient', () => {
         });
     });
 });
+
+DescribeWebRtcMicrophoneReplacement(
+    async () => {
+        const client = new ConnectTestClient();
+        const track = new FakeTrack();
+        await client.Connect(makeConfig(), new FakeMediaStream([track]));
+        return { Client: client, Track: track, Senders: client.Pc.Senders };
+    },
+    () => new ConnectTestClient()
+);

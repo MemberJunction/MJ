@@ -1,5 +1,6 @@
 import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
 import {
+    DatabaseProviderBase,
     IMetadataProvider,
     UserInfo,
     CompositeKey,
@@ -10,12 +11,13 @@ import {
 } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import {
+    AssembleRealtimeRecordingFromLedger,
     RecoverRealtimeRecordingFromSegments,
     ResolveRecordingStorageAccountID,
-    type RecoverRealtimeRecordingInput,
-    type RecoverRealtimeRecordingResult,
+    SqlRealtimeRecordingLedger,
+    type IRealtimeRecordingLedger,
 } from '@memberjunction/ai-agents';
-import { GetHostInstanceID, GetHostNamePrefix } from './HostInstance.js';
+import { GetCurrentHostInstance, GetHostInstanceID, HostInstanceIdentity } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
@@ -30,8 +32,18 @@ const AGENT_ENTITY = 'MJ: AI Agents';
 /** A session whose recording recovery has failed this many times is given up on for the life of the process. */
 const MAX_RECOVERY_ATTEMPTS = 8;
 
-/** Recovery attempts (calls into the recovery routine) per sweep; bounds the I/O one tick can trigger. */
+/**
+ * Recovery attempts (calls into the recovery routine) per sweep; bounds the I/O one tick can trigger.
+ * The ledger sweep and the legacy segment sweep each get this many: a backlog in one must not starve
+ * the other, so a pass makes at most twice this many attempts.
+ */
 const MAX_RECOVERIES_PER_SWEEP = 5;
+
+/** The shard-ledger view (core schema); a session with rows in it is assembled by the ledger sweep. */
+const RECORDING_SHARD_VIEW = 'vwAIAgentSessionRecordingShards';
+
+/** Ledger shard rows each recovery pass deletes, at most, for sessions closed before the lookback window. */
+const MAX_PURGED_SHARDS_PER_PASS = 500;
 
 /**
  * Abandoned (timed-out, still running) recovery attempts allowed at once. Each keeps its socket and any
@@ -98,6 +110,71 @@ interface RecoveryBackoff {
     Deferred: boolean;
 }
 
+/**
+ * Per-session retry state of one recovery sweep, keyed by lowercase session id (process-local: a restart
+ * gets fresh attempts). A failing session backs off exponentially (`min(2^k * 5 min, 6 h)`) and is given
+ * up on after {@link MAX_RECOVERY_ATTEMPTS} failures with one log line.
+ */
+class RecoveryBackoffTracker {
+    private readonly states = new Map<string, RecoveryBackoff>();
+
+    /** True while a session's backoff (or give-up) window has not elapsed. */
+    public IsBackedOff(sessionID: string): boolean {
+        const state = this.states.get(sessionID.toLowerCase());
+        return state != null && Date.now() < state.NextAttemptAt;
+    }
+
+    /** Forgets a session's failures (it succeeded, or another writer took care of it). */
+    public Clear(sessionID: string): void {
+        this.states.delete(sessionID.toLowerCase());
+    }
+
+    /**
+     * Defers a session that cannot be recovered until configuration changes (its agent has no recording
+     * storage account). That is not a failed attempt, so it never counts toward the give-up: the session
+     * is re-checked every {@link RECOVERY_BACKOFF_MAX_MS} and logged only the first time.
+     */
+    public Defer(sessionID: string, reason: string): void {
+        const key = sessionID.toLowerCase();
+        const state = this.states.get(key);
+        if (!state?.Deferred) {
+            LogStatus(`[SessionJanitor] Recording recovery skipped for session ${sessionID}: ${reason}; re-checked every ${RECOVERY_BACKOFF_MAX_MS / 3_600_000} h`);
+        }
+        this.states.set(key, { Failures: state?.Failures ?? 0, NextAttemptAt: Date.now() + RECOVERY_BACKOFF_MAX_MS, Deferred: true });
+    }
+
+    /**
+     * Counts one more unsuccessful recovery for a session and schedules its next attempt
+     * (`min(2^k * 5 min, 6 h)`); at {@link MAX_RECOVERY_ATTEMPTS} it stops checking the session for this
+     * process with a single log line: a `LogError` when the last attempt failed, a `LogStatus` when it
+     * simply found no shards (nothing to recover is not an error).
+     */
+    public RecordFailure(sessionID: string, kind: 'Failed' | 'NoSegments'): void {
+        const key = sessionID.toLowerCase();
+        const failures = (this.states.get(key)?.Failures ?? 0) + 1;
+        if (failures >= MAX_RECOVERY_ATTEMPTS) {
+            this.states.set(key, { Failures: failures, NextAttemptAt: Infinity, Deferred: false });
+            if (kind === 'NoSegments') {
+                LogStatus(`[SessionJanitor] Session ${sessionID} had no recoverable segments in ${failures} checks; not checking it again until restart`);
+            } else {
+                LogError(`[SessionJanitor] Giving up on recording recovery for session ${sessionID} after ${failures} failed attempts`);
+            }
+        } else {
+            const waitMs = Math.min(2 ** failures * RECOVERY_BACKOFF_BASE_MS, RECOVERY_BACKOFF_MAX_MS);
+            this.states.set(key, { Failures: failures, NextAttemptAt: Date.now() + waitMs, Deferred: false });
+        }
+    }
+
+    /** Drops state for sessions that were not in the latest complete candidate set (lowercase ids). */
+    public Prune(candidateKeys: ReadonlySet<string>): void {
+        for (const key of this.states.keys()) {
+            if (!candidateKeys.has(key)) {
+                this.states.delete(key);
+            }
+        }
+    }
+}
+
 /** Per-sweep working state shared by every candidate in one recovery pass. */
 interface RecoverySweepContext {
     provider: IMetadataProvider;
@@ -126,9 +203,10 @@ interface RecoveryVisit {
  * Three close sweeps, all writing through {@link SessionManager.CloseSession} so Record Changes captures
  * each transition and channel rows are disconnected consistently:
  *
- * 1. **Own-host recovery ({@link RunStartupRecovery})** — run once at boot. Closes any `Active`/`Idle`
- *    session whose `HostInstanceID` belongs to a *previous* boot of *this* host (same hostname prefix,
- *    different `bootId`). Primary defense against the "Active forever" leak after a restart.
+ * 1. **Own-instance recovery ({@link RunStartupRecovery})** — run once at boot. Closes any `Active`/`Idle`
+ *    session whose `HostInstanceID` belongs to an *earlier* boot of *this* MJAPI instance (same host and port,
+ *    different boot; see {@link HostInstanceIdentity}). Another MJAPI on the same host serves on another port,
+ *    so its live sessions are left alone. Primary defense against the "Active forever" leak after a restart.
  * 2. **Global staleness sweep ({@link RunStalenessSweep})** — run on every periodic tick, on every
  *    instance. Closes any `Active`/`Idle` session whose `LastActiveAt` is older than
  *    `closeThresholdMinutes`, regardless of host. Catches sessions whose owner died without a clean
@@ -140,13 +218,17 @@ interface RecoveryVisit {
  * invoked from {@link Shutdown} during the graceful ShutdownRegistry drain — closes this exact host
  * instance's own live sessions with `CloseReason = 'Shutdown'`.
  *
- * Separately from closing, {@link RunRecordingRecoverySweep} runs after the close sweeps on every
- * periodic tick, without blocking them, and rebuilds the recording of already-`Closed` sessions whose
- * end-of-call upload never arrived (it closes nothing).
+ * Separately from closing, a recording recovery pass runs after the close sweeps on every periodic tick,
+ * without blocking them, and closes nothing. It purges shard-ledger rows past the lookback window, then
+ * {@link RunRecordingLedgerSweep} assembles the recordings of `Closed` sessions on the shard ledger that
+ * no terminal signal (or a dead assembler) left unassembled, then {@link RunRecordingRecoverySweep}
+ * rebuilds, from legacy storage segments, the recording of `Closed` sessions not on the ledger whose
+ * end-of-call upload never arrived.
  *
  * The close sweeps are **idempotent and safe to run concurrently** on every instance: closing an
- * already-`Closed` session is a no-op, and the close path is last-writer-wins. Recording recovery is not
- * strictly so: two instances can recover the same session at once (there is no claim column). Each
+ * already-`Closed` session is a no-op, and the close path is last-writer-wins. Ledger assembly is
+ * arbitrated by the ledger's atomic claim. Legacy recovery is not: two instances can recover the same
+ * session at once (there is no claim column for it). Each
  * attempt uploads its own file and defers to an already-stamped recording on a best-effort basis, so
  * the cost is duplicate work and an extra file, not a lost recording. The extra file is an orphan when the
  * second attempt's re-check sees the first stamp; when both re-checks pass first, both files are stamped in
@@ -165,11 +247,16 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     /** Set by {@link Stop}, cleared by {@link Start}: no new recovery pass starts while stopped. */
     private _stopped = false;
     private _registered = false;
-    private _provider: IMetadataProvider | null = null;
+    private _provider: DatabaseProviderBase | null = null;
     private _systemUser: UserInfo | null = null;
     private readonly sessionManager = new SessionManager();
-    /** Recovery retry state keyed by lowercase session id. Process-local: a restart gets fresh attempts. */
-    private readonly recoveryBackoff = new Map<string, RecoveryBackoff>();
+    /** Retry state of the legacy storage-segment recovery. */
+    private readonly recoveryBackoff = new RecoveryBackoffTracker();
+    /**
+     * Retry state of the ledger sweep, kept apart from {@link recoveryBackoff}: each sweep prunes its
+     * tracker by its own candidate set, so a shared one would forget the other sweep's failures.
+     */
+    private readonly ledgerBackoff = new RecoveryBackoffTracker();
     /**
      * Lowercase ids of sessions whose recovery attempt timed out but has not settled. Skipped by later
      * sweeps so a second attempt never runs alongside the abandoned one; removed when it settles.
@@ -216,9 +303,10 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      * close sweeps, then recording recovery). Idempotent: a second call does not stack a second timer.
      * Captures the provider + system user so the timer callback can run without re-supplying them, and
      * re-enables recording recovery after a {@link Stop}. Throws, before doing any work, when
-     * `intervalMs` is invalid (see {@link Configure}).
+     * `intervalMs` is invalid (see {@link Configure}). Takes the server's database provider because
+     * recording recovery calls the shard ledger's stored procedures.
      */
-    public async Start(provider: IMetadataProvider, systemUser: UserInfo, intervalMs?: number): Promise<void> {
+    public async Start(provider: DatabaseProviderBase, systemUser: UserInfo, intervalMs?: number): Promise<void> {
         if (intervalMs != null) {
             this.Configure({ sweepIntervalMs: intervalMs });
         }
@@ -280,19 +368,34 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * Force-close any `Active`/`Idle` session left behind by a *previous boot of this host*
-     * (matching hostname prefix, differing `bootId`). Returns the number of sessions closed.
+     * Force-close any `Active`/`Idle` session left behind by an earlier boot of this MJAPI instance: its
+     * `HostInstanceID` has this instance's prefix (`hostname:port:`) and another boot. The sessions of another
+     * MJAPI on the same host carry another port and stay open. Returns the number of sessions closed.
+     *
+     * @param provider The metadata provider for the reads and writes.
+     * @param systemUser The user the closes run as.
+     * @param hostInstance The instance whose earlier boots to close. Defaults to this process's
+     *   ({@link GetCurrentHostInstance}).
      */
-    public async RunStartupRecovery(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
-        const prefix = GetHostNamePrefix().replace(/'/g, "''");
-        const current = GetHostInstanceID().replace(/'/g, "''");
+    public async RunStartupRecovery(
+        provider: IMetadataProvider,
+        systemUser: UserInfo,
+        hostInstance: HostInstanceIdentity = GetCurrentHostInstance(),
+    ): Promise<number> {
+        const prefix = hostInstance.GetInstancePrefix().replace(/'/g, "''");
+        const current = hostInstance.GetHostInstanceID().replace(/'/g, "''");
         const filter =
             `Status IN ('Active','Idle') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
             `AND HostInstanceID <> '${current}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor');
+        // The LIKE narrows the read; the exact check decides, since LIKE reads a `_` in a host name as any character.
+        const isPriorBoot = (session: MJAIAgentSessionEntity): boolean => hostInstance.IsPriorBoot(session.HostInstanceID);
+        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor', isPriorBoot);
         if (closed > 0) {
-            LogStatus(`[SessionJanitor] Startup recovery closed ${closed} orphaned session(s) from a prior boot of this host`);
+            LogStatus(
+                `[SessionJanitor] Startup recovery closed ${closed} orphaned session(s) from an earlier boot of this instance ` +
+                    `(${hostInstance.GetInstancePrefix()})`,
+            );
         }
         return closed;
     }
@@ -349,20 +452,102 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      * sessions that left the candidate set are pruned, but only after a pass that saw every candidate, so
      * a capped pass never forgets sessions it did not reach.
      *
+     * Sessions on the shard ledger (a `RecordingStatus`, or any ledger row) are left to
+     * {@link RunRecordingLedgerSweep}: their audio is in SQL, not in storage segments.
+     *
      * Never throws for a single bad session. Returns the number of recordings recovered.
      */
-    public async RunRecordingRecoverySweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
+    public async RunRecordingRecoverySweep(provider: DatabaseProviderBase, systemUser: UserInfo): Promise<number> {
         if (this.isRecoveryPausedForAbandonedAttempts()) {
             return 0;
         }
-        const nowMs = Date.now();
-        const graceCutoff = new Date(nowMs - this._config.recordingRecoveryGraceMinutes * 60_000).toISOString();
-        const lookbackCutoff = new Date(nowMs - this._config.recordingRecoveryLookbackHours * 3_600_000).toISOString();
+        const { graceCutoff, lookbackCutoff } = this.recoveryWindow();
         const filter =
             `Status = 'Closed' AND RecordingStartedAt IS NOT NULL AND RecordingFileID IS NULL ` +
-            `AND ClosedAt < '${graceCutoff}' AND ClosedAt >= '${lookbackCutoff}'`;
+            `AND ClosedAt < '${graceCutoff.toISOString()}' AND ClosedAt >= '${lookbackCutoff.toISOString()}' ` +
+            `AND RecordingStatus IS NULL AND ID NOT IN (SELECT AgentSessionID FROM ${this.shardViewName(provider)})`;
 
         const context: RecoverySweepContext = { provider, systemUser, storage: new Map() };
+        const recovered = await this.sweepRecoveryCandidates(filter, provider, systemUser, this.recoveryBackoff,
+            session => this.recoverSessionRecording(session, context));
+        if (recovered > 0) {
+            LogStatus(`[SessionJanitor] Recording recovery rebuilt ${recovered} recording(s)`);
+        }
+        return recovered;
+    }
+
+    /**
+     * Backstop for client-direct recordings on the shard ledger: assembles the recording of `Closed`
+     * sessions that closed between the lookback window and the grace period and are still
+     * - `Pending` (shards, or a terminal signal, with no assembly since: the browser died before its
+     *   terminal request, or the in-process assembly request was lost with its host),
+     * - `Assembling` with no write for `recordingRecoveryAttemptTimeoutMinutes` (the assembler died, or
+     *   it hit a transient error and left the claim for a re-claim), or
+     * - status-less while the ledger holds shards for them (see {@link restoreLostRecordingStatus}).
+     *
+     * Each candidate is claimed with the ledger's atomic, stale-aware claim (a lost claim is skipped: another
+     * assembler has it) and assembled with `ForcePartial`, so missing shards become silence. An attempt is
+     * bounded by `recordingRecoveryAttemptTimeoutMinutes` and shares the legacy sweep's abandoned-attempt
+     * pause; failures back off and are given up on exactly like legacy recovery, in their own tracker.
+     * At most {@link MAX_RECOVERIES_PER_SWEEP} assemblies per call. Never throws for a single bad session.
+     * Returns the number of recordings assembled (`Complete` or `Partial`).
+     */
+    public async RunRecordingLedgerSweep(provider: DatabaseProviderBase, systemUser: UserInfo): Promise<number> {
+        if (this.isRecoveryPausedForAbandonedAttempts()) {
+            return 0;
+        }
+        const { graceCutoff, lookbackCutoff } = this.recoveryWindow();
+        const staleCutoff = new Date(Date.now() - this._config.recordingRecoveryAttemptTimeoutMinutes * 60_000);
+        // Every Assembling session is fetched, not only stale ones, and a fresh one is skipped below: a
+        // session whose assembly left a Retry claim is fresh for a while, and dropping it from the walk
+        // would prune its backoff, so the give-up cap would never be reached.
+        const filter =
+            `Status = 'Closed' AND ClosedAt < '${graceCutoff.toISOString()}' AND ClosedAt >= '${lookbackCutoff.toISOString()}' ` +
+            `AND (RecordingStatus IN ('Pending','Assembling') ` +
+            `OR (RecordingStatus IS NULL AND ID IN (SELECT AgentSessionID FROM ${this.shardViewName(provider)})))`;
+
+        const ledger = new SqlRealtimeRecordingLedger(provider, systemUser);
+        const assembled = await this.sweepRecoveryCandidates(
+            filter, provider, systemUser, this.ledgerBackoff,
+            session => this.assembleSessionFromLedger(session, ledger, staleCutoff, provider, systemUser),
+            // The claim proc re-checks staleness atomically; this only spares a claim that would lose.
+            session => session.RecordingStatus === 'Assembling' && session.__mj_UpdatedAt.getTime() >= staleCutoff.getTime(),
+        );
+        if (assembled > 0) {
+            LogStatus(`[SessionJanitor] Recording ledger sweep assembled ${assembled} recording(s)`);
+        }
+        return assembled;
+    }
+
+    /** The closed-at window recording recovery considers: older than the grace, newer than the lookback. */
+    private recoveryWindow(): { graceCutoff: Date; lookbackCutoff: Date } {
+        const nowMs = Date.now();
+        return {
+            graceCutoff: new Date(nowMs - this._config.recordingRecoveryGraceMinutes * 60_000),
+            lookbackCutoff: new Date(nowMs - this._config.recordingRecoveryLookbackHours * 3_600_000),
+        };
+    }
+
+    /** The schema-qualified, dialect-quoted shard-ledger view, for filter sub-queries. */
+    private shardViewName(provider: DatabaseProviderBase): string {
+        return provider.QuoteSchemaAndView(provider.MJCoreSchemaName, RECORDING_SHARD_VIEW);
+    }
+
+    /**
+     * Walks every session matching `filter` and runs `recover` on each one that is not backed off, not
+     * abandoned, and not `isBusy`, sequentially, stopping at {@link MAX_RECOVERIES_PER_SWEEP} attempts or
+     * {@link MAX_ABANDONED_RECOVERIES} abandoned attempts. Backoff entries of sessions that left the
+     * candidate set are pruned, but only after a walk that saw every candidate, so a capped walk never
+     * forgets sessions it did not reach. Returns the number recovered.
+     */
+    private async sweepRecoveryCandidates(
+        filter: string,
+        provider: IMetadataProvider,
+        systemUser: UserInfo,
+        backoff: RecoveryBackoffTracker,
+        recover: (session: MJAIAgentSessionEntity) => Promise<RecoveryVisit>,
+        isBusy: (session: MJAIAgentSessionEntity) => boolean = () => false,
+    ): Promise<number> {
         const seen = new Set<string>();
         let attempts = 0;
         let recovered = 0;
@@ -370,13 +555,13 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         const walk = await this.forEachSessionPage(filter, provider, systemUser, async page => {
             for (const session of page) {
                 seen.add(session.ID.toLowerCase());
-                if (this.isRecoveryBackedOff(session.ID) || this.abandonedRecoveries.has(session.ID.toLowerCase())) {
+                if (backoff.IsBackedOff(session.ID) || this.abandonedRecoveries.has(session.ID.toLowerCase()) || isBusy(session)) {
                     continue;
                 }
                 if (attempts >= MAX_RECOVERIES_PER_SWEEP || this.abandonedRecoveries.size >= MAX_ABANDONED_RECOVERIES) {
                     return false; // per-sweep cap, or too many abandoned attempts still running: stop paging
                 }
-                const visit = await this.recoverSessionRecording(session, context);
+                const visit = await recover(session);
                 attempts += visit.Attempted ? 1 : 0;
                 recovered += visit.Recovered ? 1 : 0;
             }
@@ -385,12 +570,139 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         // Only a walk that reached the end saw every candidate. A capped or failed-load walk has an
         // incomplete `seen`; pruning on it would wipe backoff and give-up state for unseen sessions.
         if (walk === 'complete') {
-            this.pruneRecoveryBackoff(seen);
-        }
-        if (recovered > 0) {
-            LogStatus(`[SessionJanitor] Recording recovery rebuilt ${recovered} recording(s)`);
+            backoff.Prune(seen);
         }
         return recovered;
+    }
+
+    /**
+     * Claims and assembles one ledger candidate and updates its backoff. Never throws: any exception is
+     * logged with the session id and counted as a failure.
+     */
+    private async assembleSessionFromLedger(
+        candidate: MJAIAgentSessionEntity,
+        ledger: IRealtimeRecordingLedger,
+        staleCutoff: Date,
+        provider: DatabaseProviderBase,
+        systemUser: UserInfo,
+    ): Promise<RecoveryVisit> {
+        const sessionID = candidate.ID;
+        let attempted = false;
+        try {
+            if (candidate.RecordingStatus == null) {
+                // The restore is a write; a failing one counts toward the per-sweep cap like an assembly.
+                attempted = true;
+                if (!(await this.restoreLostRecordingStatus(candidate, ledger))) {
+                    return this.recordLedgerFailure(sessionID, true);
+                }
+                attempted = false;
+            }
+            const version = await ledger.ClaimAssembly(sessionID, staleCutoff);
+            if (version === null) {
+                LogStatus(`[SessionJanitor] Recording ledger sweep skipped session ${sessionID}: another assembler holds its claim`);
+                return { Attempted: false, Recovered: false };
+            }
+            attempted = true;
+            const outcome = await this.runWithinAttemptTimeout(
+                sessionID,
+                AssembleRealtimeRecordingFromLedger({
+                    SessionID: sessionID, Version: version, Ledger: ledger,
+                    ContextUser: systemUser, Provider: provider, ForcePartial: true,
+                }),
+                late => late,
+            );
+            switch (outcome) {
+                case 'Complete':
+                case 'Partial':
+                    this.ledgerBackoff.Clear(sessionID);
+                    LogStatus(`[SessionJanitor] Assembled the recording of session ${sessionID} from its shard ledger: ${outcome} (version ${version})`);
+                    return { Attempted: true, Recovered: true };
+                case 'Superseded':
+                    this.ledgerBackoff.Clear(sessionID);
+                    LogStatus(`[SessionJanitor] Ledger assembly of session ${sessionID} (version ${version}) was Superseded by a newer claim; left to it`);
+                    return { Attempted: true, Recovered: false };
+                case 'Retry':
+                    // The assembler already logged the error; the claim stays Assembling for a re-claim after the backoff.
+                    LogStatus(`[SessionJanitor] Ledger assembly of session ${sessionID} (version ${version}) hit a transient error; retried after its backoff`);
+                    return this.recordLedgerFailure(sessionID, true);
+                case 'Deferred':
+                    LogError(`[SessionJanitor] Forced ledger assembly of session ${sessionID} (version ${version}) returned Deferred, which only an unforced assembly should; backing off`);
+                    return this.recordLedgerFailure(sessionID, true);
+                case 'Failed':
+                    LogError(`[SessionJanitor] Ledger assembly of session ${sessionID} (version ${version}) Failed; its recording status is now Failed`);
+                    return this.recordLedgerFailure(sessionID, true);
+                case 'TimedOut':
+                    LogError(
+                        `[SessionJanitor] Ledger assembly of session ${sessionID} (version ${version}) did not finish within ` +
+                        `${this._config.recordingRecoveryAttemptTimeoutMinutes} minutes; abandoning this attempt (it may still finish) ` +
+                        `and continuing the sweep. The session is not retried until it settles.`,
+                    );
+                    return this.recordLedgerFailure(sessionID, true);
+            }
+        } catch (err) {
+            LogError(`[SessionJanitor] Recording ledger sweep failed for session ${sessionID}: ${err instanceof Error ? err.message : String(err)}`);
+            return this.recordLedgerFailure(sessionID, attempted);
+        }
+    }
+
+    /**
+     * Gives a status-less session with ledger shards back a `Pending` status so it can be claimed (the
+     * claim only takes Pending/Partial/stale Assembling). That is how statuses were lost before #6010
+     * made the ledger columns not updatable through an entity save (a stale `Save` of the session, e.g. its
+     * close, put back the NULL status and counts). The restore stays for rows hit before then.
+     *
+     * The terminal proc is the existing way to set a NULL status to `Pending`. It is stamped with the
+     * counts the session still stores, or 0 for a NULL count (the proc accepts any count over NULL), and
+     * never with counts invented from the ledger: a made-up terminal could make a recording whose tail
+     * never arrived assemble as Complete, which deletes its shards. With no real terminal the stored shard
+     * count differs from the stamped one, so the assembly is Partial and keeps the shards; a later real
+     * terminal (higher counts) or late shard re-opens it intact.
+     * Returns false (logged) when the status could not be restored.
+     */
+    private async restoreLostRecordingStatus(candidate: MJAIAgentSessionEntity, ledger: IRealtimeRecordingLedger): Promise<boolean> {
+        const sessionID = candidate.ID;
+        const expectedShards = candidate.RecordingExpectedShards ?? 0;
+        // Number(): the candidate comes from a RunView entity page, which keeps the driver's value for a
+        // BIGINT column, and the SQL Server driver returns BIGINT as a string (the ledger refuses strings).
+        const capturedSamples = Number(candidate.RecordingCapturedSamples ?? 0);
+        const stamped = await ledger.StampTerminal(sessionID, expectedShards, capturedSamples);
+        if (stamped.RecordingStatus == null) {
+            LogError(
+                `[SessionJanitor] Could not restore the recording status of session ${sessionID} ` +
+                `(terminal stamp of ${expectedShards} shard(s), ${capturedSamples} sample(s) was ${stamped.Outcome}); backing off`,
+            );
+            return false;
+        }
+        LogStatus(
+            `[SessionJanitor] Restored recording status ${stamped.RecordingStatus} for session ${sessionID} ` +
+            `(stamped its stored counts: ${expectedShards} shard(s), ${capturedSamples} sample(s))`,
+        );
+        return true;
+    }
+
+    /** Counts a failed ledger assembly in its backoff (see {@link RecoveryBackoffTracker.RecordFailure}). */
+    private recordLedgerFailure(sessionID: string, attempted: boolean): RecoveryVisit {
+        this.ledgerBackoff.RecordFailure(sessionID, 'Failed');
+        return { Attempted: attempted, Recovered: false };
+    }
+
+    /**
+     * Deletes up to {@link MAX_PURGED_SHARDS_PER_PASS} ledger shards of sessions closed before the lookback
+     * window, which no sweep assembles any more. Never throws: a failure is logged and retried next pass.
+     */
+    private async purgeExpiredLedgerShards(provider: DatabaseProviderBase, systemUser: UserInfo): Promise<void> {
+        const { lookbackCutoff } = this.recoveryWindow();
+        try {
+            const purged = await new SqlRealtimeRecordingLedger(provider, systemUser).PurgeClosedBefore(lookbackCutoff, MAX_PURGED_SHARDS_PER_PASS);
+            if (purged > 0) {
+                LogStatus(`[SessionJanitor] Purged ${purged} recording shard(s) of sessions closed before ${lookbackCutoff.toISOString()}`);
+            }
+        } catch (err) {
+            LogError(
+                `[SessionJanitor] Recording shard purge (sessions closed before ${lookbackCutoff.toISOString()}) failed: ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
     }
 
     /** Parses the absolute deadline (ms) from a session's `Config_` JSON, or null when absent/malformed. */
@@ -458,14 +770,37 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
+     * One recording recovery pass: purge expired ledger shards, then the ledger sweep, then legacy
+     * segment recovery. The ledger sweep goes first because its sessions are the current recording path;
+     * a failed ledger sweep is logged here so legacy recovery still runs. A legacy failure rejects (logged
+     * by {@link startRecoveryPass}).
+     */
+    private async runRecoveryPass(provider: DatabaseProviderBase, systemUser: UserInfo): Promise<void> {
+        await this.purgeExpiredLedgerShards(provider, systemUser);
+        // A Stop() during a step ends the pass before the next one, so Shutdown waits on less work.
+        if (this._stopped) {
+            return;
+        }
+        try {
+            await this.RunRecordingLedgerSweep(provider, systemUser);
+        } catch (err) {
+            LogError(`SessionJanitor recording ledger sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        if (this._stopped) {
+            return;
+        }
+        await this.RunRecordingRecoverySweep(provider, systemUser);
+    }
+
+    /**
      * Fire-and-forget recording recovery, skipped when the previous pass is still running or the janitor
      * has been stopped (a tick that was mid-close-sweep when {@link Stop} ran must not start one).
      */
-    private startRecoveryPass(provider: IMetadataProvider, systemUser: UserInfo): void {
+    private startRecoveryPass(provider: DatabaseProviderBase, systemUser: UserInfo): void {
         if (this._stopped || this._recoveryPass) {
             return;
         }
-        this._recoveryPass = this.RunRecordingRecoverySweep(provider, systemUser)
+        this._recoveryPass = this.runRecoveryPass(provider, systemUser)
             .then(
                 () => undefined,
                 err => {
@@ -528,7 +863,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
             const storage = await this.resolveRecoveryStorage(candidate.AgentID, context);
             if (storage.Kind === 'NoAccount') {
-                return this.deferRecovery(candidate.ID, `no recording storage account for agent ${candidate.AgentID}`);
+                this.recoveryBackoff.Defer(candidate.ID, `no recording storage account for agent ${candidate.AgentID}`);
+                return { Attempted: false, Recovered: false };
             }
             if (storage.Kind === 'AgentUnavailable') {
                 LogStatus(`[SessionJanitor] Recording recovery skipped for session ${candidate.ID}: agent ${candidate.AgentID} could not be loaded`);
@@ -536,13 +872,17 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
             const accountID = storage.AccountID;
             attempted = true;
-            const result = await this.recoverWithinTimeout({
-                SessionID: candidate.ID,
-                StorageAccountID: accountID,
-                StartedAt: startedAt,
-                ContextUser: context.systemUser,
-                Provider: context.provider,
-            });
+            const result = await this.runWithinAttemptTimeout(
+                candidate.ID,
+                RecoverRealtimeRecordingFromSegments({
+                    SessionID: candidate.ID,
+                    StorageAccountID: accountID,
+                    StartedAt: startedAt,
+                    ContextUser: context.systemUser,
+                    Provider: context.provider,
+                }),
+                late => late.Outcome,
+            );
             if (result === 'TimedOut') {
                 LogError(
                     `[SessionJanitor] Recording recovery for session ${candidate.ID} did not finish within ` +
@@ -553,11 +893,11 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
             switch (result.Outcome) {
                 case 'Recovered':
-                    this.recoveryBackoff.delete(candidate.ID.toLowerCase());
+                    this.recoveryBackoff.Clear(candidate.ID);
                     LogStatus(`[SessionJanitor] Recovered recording for session ${candidate.ID} from ${result.SegmentCount} segment(s) (file ${result.FileID})`);
                     return { Attempted: true, Recovered: true };
                 case 'Superseded':
-                    this.recoveryBackoff.delete(candidate.ID.toLowerCase());
+                    this.recoveryBackoff.Clear(candidate.ID);
                     LogStatus(`[SessionJanitor] Session ${candidate.ID} was given a recording by another writer; recovery left it alone`);
                     return { Attempted: true, Recovered: false };
                 case 'NoSegments':
@@ -576,13 +916,12 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * Runs one session's recovery, giving up on waiting after `recordingRecoveryAttemptTimeoutMinutes`.
-     * A call cannot be cancelled, so a timed-out one keeps running: the session is marked abandoned until
-     * it settles (later sweeps skip it), and its late outcome is logged then.
+     * Waits for one session's recovery attempt for at most `recordingRecoveryAttemptTimeoutMinutes`.
+     * An attempt cannot be cancelled, so a timed-out one keeps running: the session is marked abandoned
+     * until it settles (later sweeps skip it), and its late outcome (`describeLate`) is logged then.
      */
-    private async recoverWithinTimeout(input: RecoverRealtimeRecordingInput): Promise<RecoverRealtimeRecordingResult | 'TimedOut'> {
-        const key = input.SessionID.toLowerCase();
-        const attempt = RecoverRealtimeRecordingFromSegments(input);
+    private async runWithinAttemptTimeout<T>(sessionID: string, attempt: Promise<T>, describeLate: (late: T) => string): Promise<T | 'TimedOut'> {
+        const key = sessionID.toLowerCase();
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timedOut = new Promise<'TimedOut'>(resolve => {
             timer = setTimeout(() => resolve('TimedOut'), this._config.recordingRecoveryAttemptTimeoutMinutes * 60_000);
@@ -593,8 +932,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             if (outcome === 'TimedOut') {
                 this.abandonedRecoveries.add(key);
                 attempt.then(
-                    late => LogStatus(`[SessionJanitor] Abandoned recording recovery for session ${input.SessionID} finished late: ${late.Outcome}`),
-                    err => LogError(`[SessionJanitor] Abandoned recording recovery for session ${input.SessionID} failed late: ${err instanceof Error ? err.message : String(err)}`),
+                    late => LogStatus(`[SessionJanitor] Abandoned recording recovery for session ${sessionID} finished late: ${describeLate(late)}`),
+                    err => LogError(`[SessionJanitor] Abandoned recording recovery for session ${sessionID} failed late: ${err instanceof Error ? err.message : String(err)}`),
                 ).finally(() => this.abandonedRecoveries.delete(key));
             }
             return outcome;
@@ -623,21 +962,6 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     }
 
     /**
-     * Defers a session that cannot be recovered until configuration changes (its agent has no recording
-     * storage account). That is not a failed attempt, so it never counts toward the give-up: the session
-     * is re-checked every {@link RECOVERY_BACKOFF_MAX_MS} and logged only the first time.
-     */
-    private deferRecovery(sessionID: string, reason: string): RecoveryVisit {
-        const key = sessionID.toLowerCase();
-        const state = this.recoveryBackoff.get(key);
-        if (!state?.Deferred) {
-            LogStatus(`[SessionJanitor] Recording recovery skipped for session ${sessionID}: ${reason}; re-checked every ${RECOVERY_BACKOFF_MAX_MS / 3_600_000} h`);
-        }
-        this.recoveryBackoff.set(key, { Failures: state?.Failures ?? 0, NextAttemptAt: Date.now() + RECOVERY_BACKOFF_MAX_MS, Deferred: true });
-        return { Attempted: false, Recovered: false };
-    }
-
-    /**
      * Loads the agent carrying a session's recording storage config and resolves its storage account,
      * memoized per agent for the sweep: the resolve may force a storage-engine reload, so it must not
      * repeat for every session of the same agent.
@@ -661,42 +985,10 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         return storage;
     }
 
-    /** True while a session's backoff (or give-up) window has not elapsed. */
-    private isRecoveryBackedOff(sessionID: string): boolean {
-        const state = this.recoveryBackoff.get(sessionID.toLowerCase());
-        return state != null && Date.now() < state.NextAttemptAt;
-    }
-
-    /**
-     * Counts one more unsuccessful recovery for a session and schedules its next attempt
-     * (`min(2^k * 5 min, 6 h)`); at {@link MAX_RECOVERY_ATTEMPTS} it stops checking the session for this
-     * process with a single log line: a `LogError` when the last attempt failed, a `LogStatus` when it
-     * simply found no shards (nothing to recover is not an error).
-     */
+    /** Counts a failed legacy recovery in its backoff (see {@link RecoveryBackoffTracker.RecordFailure}). */
     private recordRecoveryFailure(sessionID: string, attempted: boolean, kind: 'Failed' | 'NoSegments' = 'Failed'): RecoveryVisit {
-        const key = sessionID.toLowerCase();
-        const failures = (this.recoveryBackoff.get(key)?.Failures ?? 0) + 1;
-        if (failures >= MAX_RECOVERY_ATTEMPTS) {
-            this.recoveryBackoff.set(key, { Failures: failures, NextAttemptAt: Infinity, Deferred: false });
-            if (kind === 'NoSegments') {
-                LogStatus(`[SessionJanitor] Session ${sessionID} had no recoverable segments in ${failures} checks; not checking it again until restart`);
-            } else {
-                LogError(`[SessionJanitor] Giving up on recording recovery for session ${sessionID} after ${failures} failed attempts`);
-            }
-        } else {
-            const waitMs = Math.min(2 ** failures * RECOVERY_BACKOFF_BASE_MS, RECOVERY_BACKOFF_MAX_MS);
-            this.recoveryBackoff.set(key, { Failures: failures, NextAttemptAt: Date.now() + waitMs, Deferred: false });
-        }
+        this.recoveryBackoff.RecordFailure(sessionID, kind);
         return { Attempted: attempted, Recovered: false };
-    }
-
-    /** Drops backoff state for sessions that were not in the latest complete candidate set. */
-    private pruneRecoveryBackoff(candidateKeys: ReadonlySet<string>): void {
-        for (const key of this.recoveryBackoff.keys()) {
-            if (!candidateKeys.has(key)) {
-                this.recoveryBackoff.delete(key);
-            }
-        }
     }
 
     /**

@@ -1,6 +1,6 @@
 import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, IEntityDataProvider, LogError, LogStatus, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { MJApplicationEntity, MJUserApplicationEntity } from "@memberjunction/core-entities";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { GroupByUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
 /**
  * Server-Only custom sub-class for Applications entity.
@@ -234,13 +234,14 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
             const allUserApps = (allUserAppsResult.Results ?? []) as UserAppRow[];
 
             LogStatus(`Found ${users.length} active users`);
+            // Group once rather than scanning every user's applications for every user.
+            const userAppsByUser = GroupByUUID(allUserApps, ua => ua.UserID);
 
             // For each user, create a UserApplication record
             for (const user of users) {
+                const userApps = userAppsByUser.Get(user.ID) ?? [];
                 // Filter existing UserApplications for this user/app combination (client-side)
-                const existingForUserApp = allUserApps.filter(ua =>
-                    UUIDsEqual(ua.UserID, user.ID) && UUIDsEqual(ua.ApplicationID, this.ID)
-                );
+                const existingForUserApp = userApps.filter(ua => UUIDsEqual(ua.ApplicationID, this.ID));
 
                 // Skip if already exists
                 if (existingForUserApp.length > 0) {
@@ -249,7 +250,6 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
                 }
 
                 // Calculate sequence using DefaultSequence to place the app in its intended position
-                const userApps = allUserApps.filter((ua: {UserID: string}) => UUIDsEqual(ua.UserID, user.ID));
                 const sequence = this.calculateSequenceFromDefault(userApps);
 
                 // Create new UserApplication record

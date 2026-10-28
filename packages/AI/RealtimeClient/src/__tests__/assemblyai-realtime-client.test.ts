@@ -11,7 +11,8 @@ import {
     ASSEMBLYAI_AGENT_WS_URL,
     ASSEMBLYAI_PCM_SAMPLE_RATE,
 } from '../drivers/assemblyAIRealtimeClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -85,14 +86,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -332,6 +325,15 @@ describe('AssemblyAIRealtimeClient', () => {
             });
             expect(client.IsBusy).toBe(true);
             expect(states).toEqual([]); // narration waits for the first model output
+        });
+
+        it('RequestSpokenTurn sends the same reply.create but keeps the reply a NORMAL turn (MJ#4591)', () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Greet the participant.');
+            expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'reply.create', instructions: 'Greet the participant.' });
+            expect(client.IsBusy).toBe(true);
+            client.Emit({ type: 'transcript.agent', text: 'Hello, welcome.', reply_id: 'r1' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello, welcome.', IsFinal: true, Kind: 'normal' }]);
         });
 
         it('should tag the NEXT agent transcript as narration, then reset to normal (stamp-at-send)', () => {
@@ -884,3 +886,12 @@ describe('session.resume reconnect window', () => {
         expect(frames.some((f) => f.type === 'input.audio')).toBe(true);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestAssemblyAIClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestAssemblyAIClient()
+);

@@ -457,102 +457,108 @@
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Tasks",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "5E7BF3A4-6639-4835-85A6-24301BAF41B9"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queue Tasks&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:53.525Z",
-      "checksum": "c2cef9edeb0107c7232a8387558949df81559693cf54a99fe55d4ddbc1dd7395"
+      "lastModified": "2026-10-27T00:34:10.503Z",
+      "checksum": "468f16ffc2de3d11c02cddcae1ef5f8d38e72b1c09ec7fc1f27ace7c9f5d7e8b"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Tasks",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "E2F619C6-126E-4564-B16D-F24D7F037E16"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queue Tasks&RoleID=@lookup:MJ: Roles.Name=Integration&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:53.544Z",
-      "checksum": "36ddacaac668c7e01da80d64242d55e54b43dcdfd74a2c7efcd61ec596efa228"
+      "lastModified": "2026-10-27T00:34:10.503Z",
+      "checksum": "77266b936e3e5e352fc81b195e24b4d7b1497e354404d794ba29d42d437426ff"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Queues",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "24E99F57-5CC9-4C4C-B86F-7E256C0BB00C"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queues&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:53.559Z",
-      "checksum": "b8383b17670c5b180261a9d3320d3156f8e2e216d25e7836c1ef611805f7953d"
+      "lastModified": "2026-10-27T00:34:10.504Z",
+      "checksum": "ac7fc964075e9bc071552fe0e38b41e4637bbe227c9b003c4e04d8f25c598755"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Queues",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "E724004E-7BA3-4CB5-8E80-7137D24323E6"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queues&RoleID=@lookup:MJ: Roles.Name=Integration&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:53.583Z",
-      "checksum": "f43234e7aba04b0246b7589d733e3926e6355790ca120454a89520c5208d2e20"
+      "lastModified": "2026-10-27T00:34:10.508Z",
+      "checksum": "99341cadace514aaa6d9e970444d5d06e252fa55fd8905e54355832a44b41fa0"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Types",
       "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "0C54ACE1-D81E-446D-B2B9-7D91FD6B55BA"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queue Types&RoleID=@lookup:MJ: Roles.Name=Integration&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:53.598Z",
-      "checksum": "bf0e9cb9af67f5e9c625412a4fedc13051c62a981f357c6cff79b3ff1e6a8851"
+      "lastModified": "2026-10-27T00:34:10.508Z",
+      "checksum": "f827545b59c0d912adecba0b24f1538b52f6ab6b754aba2e247bba804261ae95"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Types",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "C6D88D08-4583-468C-9106-CCAB00308BDE"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queue Types&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:53.611Z",
-      "checksum": "fda68614f8fd529a3e30dc30b23a210aa1376d798dd5601fe4af02082b9fd017"
+      "lastModified": "2026-10-27T00:34:10.509Z",
+      "checksum": "a829b221ff1a2f1914007edb1598c00fbac146086287d73ced3c06a0147d03e8"
     }
   },
   {
@@ -576,6 +582,7 @@
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions",
       "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
@@ -584,17 +591,18 @@
       "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Sessions"
     },
     "primaryKey": {
-      "ID": "662A433E-F36B-1410-8595-00C8AD7ACEA2"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-09-14T00:43:05.196Z",
-      "checksum": "562944e4f8efb990e8eac3e5a4dfcdf3bde5636b285b1045606adb1a14c0281f"
+      "lastModified": "2026-10-27T00:34:10.512Z",
+      "checksum": "2a1c71aa4e7796b6eb966079483c3b57734c6f113604762de7f42429dfe77ac4"
     }
   },
   {
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Session Channels",
       "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
@@ -603,11 +611,29 @@
       "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Session Channels"
     },
     "primaryKey": {
-      "ID": "7E2A433E-F36B-1410-8595-00C8AD7ACEA2"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Session Channels&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
     },
     "sync": {
-      "lastModified": "2026-09-14T00:43:05.195Z",
-      "checksum": "af3d006e4f981ac3689d5b20d230b6a884fc5fd20e8fdcdb5a259f53d8c4c730"
+      "lastModified": "2026-10-27T00:34:10.514Z",
+      "checksum": "43f9dd31d1b9e2e3bbf50160ad210714e2e64843ebcf3894af164ae803b2dbd8"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Record Logs",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: User Record Logs&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-10-27T00:34:10.515Z",
+      "checksum": "ddaefec783fe523a5c49e3fc3c78a1abfb03347c61af822841b02033faedd4f1"
     }
   }
 ]

@@ -19,11 +19,11 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
+import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 import { randomUUID } from 'node:crypto';
 import {
   RemoteBrowserAction,
@@ -34,13 +34,16 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import {
+  LoadOwnedRealtimeSession,
+  RealtimeSessionNotFoundError,
+  RealtimeSessionOwnershipError,
+} from '../realtimeSessions/ownedRealtimeSession.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
-/** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
 /**
@@ -261,6 +264,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    */
   private startedScreencasts = new Map<string, number>();
 
+  /** Checks the co-agent run id read from a session's owner-editable `Config_` before a step is attached to it. */
+  private readonly runIDVerifier = new SessionRunIDVerifier();
+
   /**
    * Surfaces whose live tab-audio stream this resolver has already started, keyed by
    * {@link RemoteBrowserActionResolver.streamKey} for the same reason the screencast map is. Entries
@@ -400,7 +406,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
-    const coAgentRunID = ExtractCoAgentRunID(session.Config_);
+    // The owner can edit Config_, so its run id is used only when it is a run of this session.
+    const { CoAgentRunID: coAgentRunID } = await this.runIDVerifier.Verify(
+      session.ID,
+      { CoAgentRunID: ExtractCoAgentRunID(session.Config_) },
+      contextUser,
+      provider,
+    );
     const goalStep = await BeginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
 
     // ASYNC START: a goal loop can run for minutes; do NOT hold this request open for it (browser
@@ -1074,14 +1086,17 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @returns The loaded, owned session entity.
    */
   protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
-    const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-    if (!(await session.Load(agentSessionID))) {
-      throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+    try {
+      return await LoadOwnedRealtimeSession(agentSessionID, contextUser, provider);
+    } catch (err) {
+      if (err instanceof RealtimeSessionNotFoundError) {
+        throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+      }
+      if (err instanceof RealtimeSessionOwnershipError) {
+        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+      }
+      throw err;
     }
-    if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-      throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-    }
-    return session;
   }
 
   /**

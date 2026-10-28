@@ -1,0 +1,225 @@
+/**
+ * @fileoverview The conversation branch on `RunAIAgentFromConversationDetail`.
+ *
+ * The branch defaults to the person's message the mutation is given, or — when `replyBranchId` is supplied
+ * (such as Regenerate forking from an earlier message) — is validated to be a branch of the conversation
+ * whose path holds the person's message. These tests pin that the mutation loads history along that branch's
+ * path, creates the reply on that branch, hands the branch to the agent run on both the synchronous and
+ * fire-and-forget paths, and reads the trunk when the message has no branch; and that `executeAIAgent` puts
+ * the branch on the run's params only when there is one.
+ */
+import 'reflect-metadata'; // must precede any type-graphql decorator evaluation
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { PubSubEngine } from 'type-graphql';
+
+// type-graphql's real decorators need emitDecoratorMetadata, which vitest's esbuild transform
+// does not emit; the schema is irrelevant here, so every decorator is a no-op.
+vi.mock('type-graphql', () => {
+    const decoratorFactory = (..._args: unknown[]) => (..._decorated: unknown[]) => undefined;
+    const exportNames = [
+        'Resolver', 'Query', 'Mutation', 'Subscription', 'Arg', 'Args', 'ArgsType', 'Ctx', 'Root',
+        'Info', 'Field', 'FieldResolver', 'ObjectType', 'InputType', 'InterfaceType', 'Authorized',
+        'UseMiddleware', 'Extensions', 'Directive', 'ID', 'Int', 'Float', 'GraphQLISODateTime',
+        'GraphQLTimestamp', 'registerEnumType', 'createMethodDecorator', 'createParamDecorator',
+        'buildSchema', 'buildSchemaSync', 'PubSub',
+    ];
+    return Object.fromEntries(exportNames.map((name) => [name, decoratorFactory]));
+});
+
+const hoisted = vi.hoisted(() => ({
+    runAgentInConversation: vi.fn(),
+    createAgentReplyDetail: vi.fn(),
+}));
+
+vi.mock('@memberjunction/ai-agents', () => ({
+    AgentRunner: class {
+        RunAgentInConversation(...args: unknown[]) {
+            return hoisted.runAgentInConversation(...args);
+        }
+        CreateAgentReplyDetail(...args: unknown[]) {
+            return hoisted.createAgentReplyDetail(...args);
+        }
+    },
+    ArtifactToolManager: class {},
+}));
+
+vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({
+    ResolveWidgetGuestRunContext: vi.fn().mockResolvedValue(null),
+    ElevateUserPayload: vi.fn(),
+}));
+
+import { ConversationEngine } from '@memberjunction/core-entities';
+import { RunAIAgentResolver } from '../resolvers/RunAIAgentResolver.js';
+import type { AppContext, UserPayload } from '../types.js';
+
+const USER = { ID: 'user-1', Email: 'user@example.com' };
+
+type Fn = ReturnType<typeof vi.fn>;
+
+/** The private members this test reaches, through an explicit shape (no `any`). */
+interface ResolverSeams {
+    CheckAPIKeyScopeAuthorization: Fn;
+    GetUserFromPayload: Fn;
+    loadConversationHistoryWithAttachments: Fn;
+    executeAIAgent: Fn;
+    executeAgentInBackground: Fn;
+    loadInputArtifactsBatch: Fn;
+    validateAgent: Fn;
+    persistInFlightAgentFailure: Fn;
+}
+
+function makeResolver(): { resolver: RunAIAgentResolver; seams: ResolverSeams } {
+    const resolver = new RunAIAgentResolver();
+    const seams = resolver as unknown as ResolverSeams;
+    seams.CheckAPIKeyScopeAuthorization = vi.fn().mockResolvedValue(undefined);
+    seams.GetUserFromPayload = vi.fn().mockReturnValue(USER);
+    return { resolver, seams };
+}
+
+function makeContext(branchId: string | null, sequence = 3): AppContext {
+    const provider = {
+        GetEntityObject: vi.fn().mockResolvedValue({
+            ConversationID: 'conv-1',
+            BranchID: branchId,
+            Sequence: sequence,
+            Load: vi.fn().mockResolvedValue(true),
+        }),
+    };
+    return {
+        userPayload: { sessionId: 'session-1', userRecord: USER } as unknown as UserPayload,
+        providers: [{ type: 'Read-Write', provider }],
+        dataSource: {},
+    } as unknown as AppContext;
+}
+
+const pubSub = { publish: vi.fn() } as unknown as PubSubEngine;
+
+async function runMutation(
+    resolver: RunAIAgentResolver,
+    branchId: string | null,
+    fireAndForget?: boolean,
+    replyBranchId?: string,
+    sequence = 3
+) {
+    return resolver.RunAIAgentFromConversationDetail(
+        'detail-1', 'agent-1', makeContext(branchId, sequence), 'session-1', pubSub,
+        undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+        undefined, undefined, fireAndForget, undefined, undefined, undefined,
+        undefined, undefined, replyBranchId
+    );
+}
+
+afterEach(() => {
+    vi.restoreAllMocks();
+});
+
+describe('RunAIAgentFromConversationDetail — branch', () => {
+    let resolver: RunAIAgentResolver;
+    let seams: ResolverSeams;
+
+    beforeEach(() => {
+        ({ resolver, seams } = makeResolver());
+        seams.loadConversationHistoryWithAttachments = vi.fn().mockResolvedValue([]);
+        seams.executeAIAgent = vi.fn().mockResolvedValue({ success: true, result: '{}' });
+        seams.executeAgentInBackground = vi.fn();
+        hoisted.createAgentReplyDetail.mockReset().mockResolvedValue({ ID: 'reply-1', __mj_CreatedAt: new Date() });
+    });
+
+    // executeAIAgent / executeAgentInBackground end with (..., branchId, replyDetail).
+    it('loads history on the message\'s branch, creates the reply there, and hands the branch to the run', async () => {
+        await runMutation(resolver, 'branch-b');
+        expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBe('branch-b');
+        expect(hoisted.createAgentReplyDetail).toHaveBeenCalledWith(expect.objectContaining({ branchId: 'branch-b' }));
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBe('branch-b');
+    });
+
+    it('passes the branch to the background path too', async () => {
+        await runMutation(resolver, 'branch-b', true);
+        expect(seams.executeAgentInBackground.mock.calls[0].at(-2)).toBe('branch-b');
+    });
+
+    it('reads the trunk when the message has no branch (control)', async () => {
+        await runMutation(resolver, null);
+        expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBeNull();
+        expect(hoisted.createAgentReplyDetail).toHaveBeenCalledWith(expect.objectContaining({ branchId: null }));
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBeNull();
+    });
+
+    it('places the reply and history on replyBranchId when a regeneration forks from a message on its ancestor path', async () => {
+        vi.spyOn(ConversationEngine, 'LoadBranchesFresh').mockResolvedValue([
+            {
+                ID: 'branch-regen',
+                ConversationID: 'conv-1',
+                ParentBranchID: null,
+                ForkFromSequence: 5,
+            } as never,
+        ]);
+
+        const result = await runMutation(resolver, null, false, 'branch-regen', 3);
+
+        expect(result.success).toBe(true);
+        expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBe('branch-regen');
+        expect(hoisted.createAgentReplyDetail).toHaveBeenCalledWith(expect.objectContaining({ branchId: 'branch-regen' }));
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBe('branch-regen');
+    });
+
+    it('refuses a replyBranchId whose path does not include the user message, and creates nothing', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(ConversationEngine, 'LoadBranchesFresh').mockResolvedValue([
+            {
+                ID: 'branch-regen',
+                ConversationID: 'conv-1',
+                ParentBranchID: null,
+                ForkFromSequence: 5,
+            } as never,
+        ]);
+
+        const result = await runMutation(resolver, null, false, 'branch-regen', 8);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toContain('branch-regen');
+        expect(hoisted.createAgentReplyDetail).not.toHaveBeenCalled();
+        expect(seams.executeAIAgent).not.toHaveBeenCalled();
+    });
+});
+
+describe('loadConversationHistoryWithAttachments — branch', () => {
+    it('passes the branch to the fresh loader', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.loadInputArtifactsBatch = vi.fn().mockResolvedValue(new Map());
+        const loadRows = vi.spyOn(ConversationEngine, 'LoadWindowRowsFresh').mockResolvedValue([]);
+        const provider = {};
+        const load = (resolver as unknown as {
+            loadConversationHistoryWithAttachments(
+                conversationId: string, user: unknown, max: number, provider: unknown,
+                exclude?: string[], historyFrom?: Date, branchId?: string | null
+            ): Promise<unknown[]>;
+        }).loadConversationHistoryWithAttachments.bind(resolver);
+        await load('conv-1', USER, 20, provider, ['detail-1'], undefined, 'branch-b');
+        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, undefined, 'branch-b');
+    });
+});
+
+describe('executeAIAgent — ConversationBranchID', () => {
+    it('puts the branch on the run\'s params, and leaves it unset for the trunk', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.validateAgent = vi.fn().mockResolvedValue({ ID: 'agent-1', Name: 'Test Agent' });
+        seams.persistInFlightAgentFailure = vi.fn().mockResolvedValue(undefined);
+        hoisted.runAgentInConversation.mockReset().mockRejectedValue(new Error('stop here'));
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const execute = (resolver as unknown as { executeAIAgent(...args: unknown[]): Promise<unknown> }).executeAIAgent.bind(resolver);
+        const userPayload = { sessionId: 'session-1', userRecord: USER };
+        const base = [
+            {}, {}, 'agent-1', userPayload, '[{"role":"user","content":"hi"}]', 'session-1', pubSub,
+            undefined, undefined, undefined, undefined, undefined, undefined, 'detail-1', false, false,
+            undefined, undefined, 'conv-1', undefined, undefined, undefined, undefined, undefined,
+            false, // trustReservedRunData
+        ];
+        await execute(...base, 'branch-b');
+        await execute(...base, null);
+        const [withBranch, trunk] = hoisted.runAgentInConversation.mock.calls.map(c => c[0] as Record<string, unknown>);
+        expect(withBranch.ConversationBranchID).toBe('branch-b');
+        expect(trunk).not.toHaveProperty('ConversationBranchID');
+    });
+});

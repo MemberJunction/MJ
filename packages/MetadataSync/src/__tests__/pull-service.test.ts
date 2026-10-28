@@ -12,7 +12,7 @@ import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
 import { BaseEntity, EntityInfo, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { PullService } from '../services/PullService';
+import { PullService, PullOptions } from '../services/PullService';
 import { FileWriteBatch } from '../lib/file-write-batch';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { resetMissingEntitySubclassWarnings } from '../lib/entity-subclass-guard';
@@ -35,11 +35,11 @@ const companyInfo = new EntityInfo({
 
 const idOf = (n: number): string => `A0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-function dbCompanies(count: number): BaseEntity[] {
+function dbCompanies(count: number, namePrefix = 'Company'): BaseEntity[] {
   return Array.from({ length: count }, (_, i) => {
     const record = new UntypedCompany(companyInfo);
     record.Set('ID', idOf(i + 1));
-    record.Set('Name', `Company ${i + 1}`);
+    record.Set('Name', `${namePrefix} ${i + 1}`);
     return record;
   });
 }
@@ -49,7 +49,7 @@ function runViewResult(records: BaseEntity[]): RunViewResult<BaseEntity> {
 }
 
 /** The entity directory layout from the bug report: one array file new records are appended to. */
-async function createEntityDir(root: string, pullOverrides: { backupDirectory?: string; updateExistingRecords?: boolean } = {}): Promise<string> {
+async function createEntityDir(root: string, pullOverrides: { backupDirectory?: string; updateExistingRecords?: boolean; createNewFileIfNotFound?: boolean } = {}): Promise<string> {
   const dir = path.join(root, 'companies');
   await fs.ensureDir(dir);
   await fs.writeJson(path.join(dir, '.mj-sync.json'), {
@@ -90,9 +90,9 @@ describe('PullService.pull — records whose entity subclass is not registered',
     await fs.remove(root);
   });
 
-  async function pull(dir: string, records: BaseEntity[]) {
+  async function pull(dir: string, records: BaseEntity[], extraOptions: Partial<PullOptions> = {}) {
     vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(runViewResult(records));
-    return service.pull({ entity: ENTITY, targetDir: dir }, { onWarn: (m) => warnings.push(m) });
+    return service.pull({ entity: ENTITY, targetDir: dir, ...extraOptions }, { onWarn: (m) => warnings.push(m) });
   }
 
   async function readCompanies(dir: string): Promise<RecordData[]> {
@@ -145,6 +145,43 @@ describe('PullService.pull — records whose entity subclass is not registered',
 
     const written = await readCompanies(dir);
     expect(written.map((r) => r.primaryKey?.ID)).toEqual(keys);
+  });
+
+  it('skips existing records when updateExistingRecords is false over a folder value of true', async () => {
+    const dir = await createEntityDir(root);
+    await pull(dir, dbCompanies(2));
+
+    const result = await pull(dir, dbCompanies(3), { updateExistingRecords: false });
+
+    expect(result).toMatchObject({ updated: 0, skipped: 2, created: 1 });
+    expect(await readCompanies(dir)).toHaveLength(3);
+  });
+
+  it('creates no records when createNewFileIfNotFound is false', async () => {
+    const dir = await createEntityDir(root);
+
+    const result = await pull(dir, dbCompanies(3), { createNewFileIfNotFound: false });
+
+    expect(result).toMatchObject({ created: 0, skipped: 3 });
+  });
+
+  it('skips existing records when the folder sets updateExistingRecords to false and no option is given', async () => {
+    const dir = await createEntityDir(root, { updateExistingRecords: false });
+    await pull(dir, dbCompanies(2));
+
+    const result = await pull(dir, dbCompanies(2));
+
+    expect(result).toMatchObject({ updated: 0, skipped: 2, created: 0 });
+  });
+
+  it('updates existing records when updateExistingRecords is true over a folder value of false', async () => {
+    const dir = await createEntityDir(root, { updateExistingRecords: false });
+    await pull(dir, dbCompanies(2));
+
+    const result = await pull(dir, dbCompanies(2, 'Renamed'), { updateExistingRecords: true });
+
+    expect(result).toMatchObject({ updated: 2, skipped: 0, created: 0 });
+    expect((await readCompanies(dir)).map((r) => r.fields?.Name)).toEqual(['Renamed 1', 'Renamed 2']);
   });
 
   it('warns once that the entity subclass is missing, in pull terms', async () => {
@@ -240,5 +277,60 @@ describe('PullService.pull — backupBeforeUpdate', () => {
 
     expect(await readCompanies(dir)).toHaveLength(1);
     expect(await fs.pathExists(path.join(root, 'escaped'))).toBe(false);
+  });
+});
+
+describe('PullService.pull — mergeStrategy skip', () => {
+  const originalCwd = process.cwd();
+  let root: string;
+  let service: PullService;
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-pull-skip-'));
+    const user = new UserInfo(null, { ID: 'user-1', Name: 'Test', Email: 'test@example.com' });
+    const syncEngine = new SyncEngine(user);
+    vi.spyOn(syncEngine, 'getEntityInfo').mockReturnValue(companyInfo);
+    service = new PullService(syncEngine, user);
+  });
+
+  afterEach(async () => {
+    process.chdir(originalCwd);
+    vi.restoreAllMocks();
+    await fs.remove(root);
+  });
+
+  it('counts existing records as skipped and leaves the file byte-identical', async () => {
+    const dir = await createEntityDir(root);
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(runViewResult(dbCompanies(2)));
+    await service.pull({ entity: ENTITY, targetDir: dir });
+    process.chdir(originalCwd);
+
+    const config = await fs.readJson(path.join(dir, '.mj-sync.json'));
+    config.pull.mergeStrategy = 'skip';
+    await fs.writeJson(path.join(dir, '.mj-sync.json'), config);
+    const file = path.join(dir, '.companies.json');
+    await fs.appendFile(file, '\n');
+    const before = await fs.readFile(file, 'utf8');
+
+    const result = await service.pull({ entity: ENTITY, targetDir: dir });
+
+    expect(result).toMatchObject({ updated: 0, skipped: 2 });
+    expect(await fs.readFile(file, 'utf8')).toBe(before);
+  });
+
+  it('applies a MergeStrategy option of skip over a merge folder config', async () => {
+    const dir = await createEntityDir(root);
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(runViewResult(dbCompanies(2)));
+    await service.pull({ entity: ENTITY, targetDir: dir });
+    process.chdir(originalCwd);
+
+    const file = path.join(dir, '.companies.json');
+    await fs.appendFile(file, '\n');
+    const before = await fs.readFile(file, 'utf8');
+
+    const result = await service.pull({ entity: ENTITY, targetDir: dir, MergeStrategy: 'skip' });
+
+    expect(result).toMatchObject({ updated: 0, skipped: 2 });
+    expect(await fs.readFile(file, 'utf8')).toBe(before);
   });
 });

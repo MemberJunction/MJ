@@ -14,7 +14,8 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeToolDefinition,
-    RealtimeSessionError
+    RealtimeSessionError,
+    RealtimeInputFrame
 } from '@memberjunction/ai';
 import {
     RealtimeSessionRunner,
@@ -24,6 +25,7 @@ import {
     ToolExecutionResult,
     INVOKE_TARGET_AGENT_TOOL_NAME
 } from '../realtime/realtime-session-runner';
+import { RealtimeRecordingController } from '../realtime/realtime-recording-capture';
 
 // ════════════════════════════════════════════════════════════════════
 // Mock realtime model + session
@@ -48,7 +50,10 @@ class MockRealtimeSession implements IRealtimeSession {
     private interruptionHandler: (() => void) | null = null;
     private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
 
-    SendInput(_chunk: ArrayBuffer): void { /* no-op for tests */ }
+    /** Frames that reached the session (after any recording tap the runner wraps around SendInput). */
+    public SentInput: RealtimeInputFrame[] = [];
+
+    SendInput(frame: RealtimeInputFrame): void { this.SentInput.push(frame); }
 
     async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
         this.RegisterToolsCallCount++;
@@ -483,6 +488,34 @@ describe('RealtimeSessionRunner', () => {
             expect(h.checkpointSpy.mock.calls[1][0]).toEqual({ InputTokens: 6, OutputTokens: 3 });
             expect(result.FinalUsage).toEqual({ InputTokens: 6, OutputTokens: 3 });
         });
+
+        it('accumulates VideoTokens and VideoSeconds in InputTokenDetails and OutputTokenDetails', async () => {
+            vi.useFakeTimers();
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireUsage({
+                InputTokens: 100,
+                OutputTokens: 200,
+                InputTokenDetails: { TextTokens: 40, VideoTokens: 60 },
+                OutputTokenDetails: { AudioTokens: 50, VideoTokens: 150, VideoSeconds: 2.5 },
+            });
+            h.session.fireUsage({
+                InputTokens: 50,
+                OutputTokens: 100,
+                InputTokenDetails: { VideoTokens: 50 },
+                OutputTokenDetails: { VideoTokens: 100, VideoSeconds: 1.5 },
+            });
+
+            const result = await runner.Stop();
+            expect(result.FinalUsage).toEqual({
+                InputTokens: 150,
+                OutputTokens: 300,
+                InputTokenDetails: { TextTokens: 40, VideoTokens: 110 },
+                OutputTokenDetails: { AudioTokens: 50, VideoTokens: 250, VideoSeconds: 4 },
+            });
+        });
     });
 
     // ── Failure containment ───────────────────────────────────────────
@@ -727,6 +760,26 @@ describe('RealtimeSessionRunner', () => {
             const result = await runner.Stop();
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('close failed');
+        });
+    });
+
+    describe('recording tap', () => {
+        it('records inbound audio only, and every frame still reaches the session', async () => {
+            const recording = new RealtimeRecordingController();
+            const appendInbound = vi.spyOn(recording, 'AppendInbound');
+            const h = buildHarness({ Recording: recording });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            const audio: RealtimeInputFrame = { Data: new ArrayBuffer(4), Kind: 'audio' };
+            const video: RealtimeInputFrame = { Data: new ArrayBuffer(8), Kind: 'video', MimeType: 'image/jpeg' };
+            h.session.SendInput(audio);
+            h.session.SendInput(video);
+
+            expect(appendInbound).toHaveBeenCalledTimes(1);
+            expect(appendInbound).toHaveBeenCalledWith(audio.Data);
+            expect(h.session.SentInput).toEqual([audio, video]);
+            await runner.Stop();
         });
     });
 

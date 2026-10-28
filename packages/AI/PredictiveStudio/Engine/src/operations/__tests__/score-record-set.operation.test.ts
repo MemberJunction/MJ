@@ -146,3 +146,20 @@ describe('PredictiveStudioScoreRecordSetServerOperation — validation', () => {
     expect(runner.CallCount).toBe(0);
   });
 });
+
+describe('PredictiveStudioScoreRecordSetServerOperation — dry run (W1 → S7.3, F-SCO-2)', () => {
+  it('forwards dryRun to the runner so a preview writes nothing', async () => {
+    const runner = new MockRunner({ scoredCount: 5, failedCount: 0, skippedCount: 0, wroteBack: false });
+    await new TestableScoreOp(runner).ExecuteServer(
+      { modelId: 'm1', scope: { records: ['r1'] }, dryRun: true, writeBack: { OutputMapping: { fields: { TruthScore: '$.score' } } } },
+      new CapturingContext(),
+    );
+    expect(runner.LastRequest?.dryRun).toBe(true);
+  });
+
+  it('treats an omitted dryRun as a real run', async () => {
+    const runner = new MockRunner({ scoredCount: 1, failedCount: 0, skippedCount: 0, wroteBack: true });
+    await new TestableScoreOp(runner).ExecuteServer({ modelId: 'm1', scope: { records: ['r1'] }, writeBack: true }, new CapturingContext());
+    expect(runner.LastRequest?.dryRun).toBe(false);
+  });
+});

@@ -1,5 +1,6 @@
 import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
-import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /** The provider's SQL dialect, referenced via indexed access so we don't take a direct
  *  dependency on `@memberjunction/sql-dialect` just to name the type. */
@@ -17,13 +18,26 @@ export interface AgentRunWatchdogConfig {
     sweepIntervalMs: number;
     /** A Running run whose heartbeat is older than this (or NULL with an older StartedAt) is force-failed. */
     staleThresholdMinutes: number;
+    /**
+     * How often this process checks whether one of its in-flight runs was marked `Cancelled` from
+     * outside (the Stop button writes the row; see {@link AgentRunWatchdog.Track}). Bounds how long
+     * a stop takes to reach the running agent, so it is deliberately much shorter than the heartbeat.
+     */
+    cancellationPollIntervalMs: number;
 }
 
 const DEFAULT_CONFIG: AgentRunWatchdogConfig = {
     heartbeatIntervalMs: 30_000,
     sweepIntervalMs: 5 * 60_000,
     staleThresholdMinutes: 5,
+    cancellationPollIntervalMs: 3_000,
 };
+
+/** The row shape the cancellation poll reads back from the AI Agent Runs view. */
+interface CancelledRunRow {
+    ID: string;
+    CancellationReason: string | null;
+}
 
 /** Matches a canonical UUID. Tracked IDs come from provider-generated PKs, but we validate
  *  before ever interpolating into SQL so a proc argument can never become an injection vector. */
@@ -55,6 +69,14 @@ const SP_CANCEL = 'spCancelAIAgentRun';
  *    boot (closes restart-orphans) and on a timer (closes mid-life orphans).
  * 3. **Graceful shutdown** — on SIGTERM/SIGINT (via {@link ShutdownRegistry}) this process marks
  *    the runs *it* owns `Cancelled` via {@link SP_CANCEL}, closing the deploy case instantly.
+ * 4. **Stop relay** — the database row is also the control channel in the OTHER direction. A Stop
+ *    button (or anything else) marks a Running row `Cancelled`; every
+ *    {@link AgentRunWatchdogConfig.cancellationPollIntervalMs} this process reads back which of
+ *    ITS runs were cancelled and aborts the `AbortController` the owning agent registered with
+ *    {@link Track}. BaseAgent already checks that signal throughout its loop and forwards it into
+ *    prompts and actions, so the in-flight step ends and the run finalizes as Cancelled. Because
+ *    the row is the channel, the replica that owns the run is the one that reacts, with no
+ *    cross-process messaging.
  *
  * Every proc filters `Status='Running'` only — `Paused` and `AwaitingFeedback` are
  * legitimately-not-progressing states and are never touched. The watchdog accesses the DB only
@@ -64,12 +86,27 @@ const SP_CANCEL = 'spCancelAIAgentRun';
  * PostgreSQL unchanged.
  */
 export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements IShutdownable {
+    /**
+     * The abort reason the stop relay raises when a run's row was marked `Cancelled` with
+     * `CancellationReason = 'User Request'` (the Stop button). BaseAgent maps it back to the same
+     * reason on the run it finalizes, so the row the UI wrote and the row the agent writes agree.
+     */
+    public static readonly UserCancelAbortReason = 'Cancelled by user request';
+
+    /** The abort reason the stop relay raises for a row cancelled with any other reason. */
+    public static readonly ExternalCancelAbortReason = 'Cancelled externally';
+
     private _config: AgentRunWatchdogConfig = DEFAULT_CONFIG;
-    private _trackedRuns = new Set<string>();
+    /** Guarded runs keyed by lowercased run ID, storing each run's own provider and contextUser for multi-tenant isolation. */
+    private _trackedRuns = new Map<string, { provider: DatabaseProviderBase; contextUser: UserInfo }>();
+    /** The abort controller each tracked run registered, keyed by lowercased run ID. */
+    private _abortControllers = new Map<string, AbortController>();
     private _provider: DatabaseProviderBase | null = null;
     private _contextUser: UserInfo | null = null;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _sweepTimer: ReturnType<typeof setInterval> | null = null;
+    private _cancellationPollTimer: ReturnType<typeof setInterval> | null = null;
+    private _cancellationPollInFlight = false;
     private _registered = false;
 
     protected constructor() {
@@ -89,16 +126,25 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * Begin guarding a run. The owning agent calls this immediately after the run row is saved
-     * (so it has a stable ID). Idempotent per run ID. Capturing the provider/user lets the
-     * central heartbeat + shutdown statements run without each run re-supplying them.
+     * (so it has a stable ID). Idempotent per run ID. Capturing the provider/user per run lets the
+     * central heartbeat + shutdown statements run against each run's own tenant provider and user.
+     *
+     * @param abortController The run's own abort controller. When supplied, the stop relay aborts
+     *   it as soon as the run's row is seen marked `Cancelled` by someone else (the Stop button),
+     *   with {@link UserCancelAbortReason} when the row says `User Request`. Without it the run
+     *   is still heart-beaten and swept, but a stop cannot reach it.
      */
-    public Track(runID: string, provider: DatabaseProviderBase, contextUser: UserInfo): void {
+    public Track(runID: string, provider: DatabaseProviderBase, contextUser: UserInfo, abortController?: AbortController): void {
         if (!runID || !UUID_RE.test(runID)) {
             return;
         }
+        const key = runID.toLowerCase();
         this._provider = provider;
         this._contextUser = contextUser;
-        this._trackedRuns.add(runID.toLowerCase());
+        this._trackedRuns.set(key, { provider, contextUser });
+        if (abortController) {
+            this._abortControllers.set(key, abortController);
+        }
         this.ensureStarted();
     }
 
@@ -106,13 +152,46 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
      *  callers may invoke it for prompt cleanup right after writing a terminal state. */
     public Untrack(runID: string): void {
         if (runID) {
-            this._trackedRuns.delete(runID.toLowerCase());
+            const key = runID.toLowerCase();
+            this._trackedRuns.delete(key);
+            this._abortControllers.delete(key);
+            this.pauseActiveRunTimersIfIdle();
         }
+    }
+
+    /**
+     * Abort a run this process owns, right now, without waiting for the poll. The in-process
+     * counterpart of the row-driven relay: a caller that already knows the run was cancelled (a
+     * resolver on the same replica, a test) can fire the signal directly.
+     *
+     * @returns true when a controller was registered for the run and had not already fired.
+     */
+    public RequestCancel(runID: string, reason: string = AgentRunWatchdog.UserCancelAbortReason): boolean {
+        const controller = runID ? this._abortControllers.get(runID.toLowerCase()) : undefined;
+        if (!controller || controller.signal.aborted) {
+            return false;
+        }
+        controller.abort(reason);
+        this.Untrack(runID);
+        return true;
+    }
+
+    /** Whether a stop can reach this run from this process (a controller is registered for it). */
+    public IsStoppable(runID: string): boolean {
+        return !!runID && this._abortControllers.has(runID.toLowerCase());
     }
 
     /** Number of runs this process is currently guarding (primarily for tests/diagnostics). */
     public get TrackedCount(): number {
         return this._trackedRuns.size;
+    }
+
+    /**
+     * Returns true when the heartbeat and cancellation-poll timers are currently active.
+     * Exposed for diagnostics and tests verifying idle-timer suspension.
+     */
+    public get HasActiveRunTimers(): boolean {
+        return this._heartbeatTimer !== null || this._cancellationPollTimer !== null;
     }
 
     /**
@@ -122,22 +201,22 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
      */
     public async Shutdown(): Promise<void> {
         this.stopTimers();
-        const ids = this.trackedIds();
+        const groups = this.groupRunsByProvider(this.trackedIds());
         this._trackedRuns.clear();
-        if (!ids.length || !this._provider) {
-            return;
-        }
-        const schema = AgentRunWatchdog.schemaOf(this._provider);
-        if (!schema) {
-            return;
-        }
-        const d = this._provider.Dialect;
-        // One batched round-trip (one EXEC per id, newline-separated) rather than a call per run.
-        const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_CANCEL, ids);
-        try {
-            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, this._contextUser ?? undefined);
-        } catch (err) {
-            LogError(`AgentRunWatchdog.Shutdown failed to cancel runs [${ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+        this._abortControllers.clear();
+        for (const group of groups) {
+            const schema = AgentRunWatchdog.schemaOf(group.provider);
+            if (!schema) {
+                continue;
+            }
+            const d = group.provider.Dialect;
+            // One batched round-trip per provider (one EXEC per id, newline-separated) rather than a call per run.
+            const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_CANCEL, group.ids);
+            try {
+                await group.provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, group.contextUser);
+            } catch (err) {
+                LogError(`AgentRunWatchdog.Shutdown failed to cancel runs [${group.ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 
@@ -201,6 +280,25 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             this._sweepTimer = setInterval(() => void this.periodicSweep(), this._config.sweepIntervalMs);
             this._sweepTimer.unref?.();
         }
+        if (!this._cancellationPollTimer && this._abortControllers.size > 0) {
+            this._cancellationPollTimer = setInterval(() => void this.pollCancellations(), this._config.cancellationPollIntervalMs);
+            this._cancellationPollTimer.unref?.();
+        }
+    }
+
+    /**
+     * Stop the high-frequency heartbeat and cancellation-poll timers when no runs are active
+     * so idle servers don't wake up on 3s / 30s intervals. Calling `Track()` restarts them.
+     */
+    private pauseActiveRunTimersIfIdle(): void {
+        if (this._abortControllers.size === 0 && this._cancellationPollTimer) {
+            clearInterval(this._cancellationPollTimer);
+            this._cancellationPollTimer = null;
+        }
+        if (this._trackedRuns.size === 0 && this._heartbeatTimer) {
+            clearInterval(this._heartbeatTimer);
+            this._heartbeatTimer = null;
+        }
     }
 
     private stopTimers(): void {
@@ -212,74 +310,166 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             clearInterval(this._sweepTimer);
             this._sweepTimer = null;
         }
+        if (this._cancellationPollTimer) {
+            clearInterval(this._cancellationPollTimer);
+            this._cancellationPollTimer = null;
+        }
     }
 
     /** Stamp LastHeartbeatAt for every run this process is guarding, via {@link SP_HEARTBEAT}.
      *  Never throws (runs on a timer); a per-run failure is logged and the rest still beat. */
     private async heartbeat(): Promise<void> {
-        if (!this._provider) {
-            return;
-        }
-        const ids = this.trackedIds();
-        if (!ids.length) {
-            return;
-        }
-        const schema = AgentRunWatchdog.schemaOf(this._provider);
-        if (!schema) {
-            return;
-        }
-        const d = this._provider.Dialect;
-        // One batched round-trip (one EXEC per id, newline-separated) rather than a call per run.
-        const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_HEARTBEAT, ids);
-        try {
-            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, this._contextUser ?? undefined);
-        } catch (err) {
-            LogError(`AgentRunWatchdog heartbeat failed for runs [${ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+        const groups = this.groupRunsByProvider(this.trackedIds());
+        for (const group of groups) {
+            const schema = AgentRunWatchdog.schemaOf(group.provider);
+            if (!schema) {
+                continue;
+            }
+            const d = group.provider.Dialect;
+            // One batched round-trip per provider (one EXEC per id, newline-separated) rather than a call per run.
+            const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_HEARTBEAT, group.ids);
+            try {
+                await group.provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, group.contextUser);
+            } catch (err) {
+                LogError(`AgentRunWatchdog heartbeat failed for runs [${group.ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 
     /** Periodic tick: force-fail orphans, then prune any terminal runs out of the tracked set. */
     private async periodicSweep(): Promise<void> {
-        if (!this._provider || !this._contextUser) {
-            return;
+        const groups = this.groupRunsByProvider(this.trackedIds());
+        if (groups.length > 0) {
+            for (const group of groups) {
+                await AgentRunWatchdog.SweepOrphanedRuns(group.provider, group.contextUser, this._config);
+            }
+        } else if (this._provider && this._contextUser) {
+            await AgentRunWatchdog.SweepOrphanedRuns(this._provider, this._contextUser, this._config);
         }
-        await AgentRunWatchdog.SweepOrphanedRuns(this._provider, this._contextUser, this._config);
         await this.pruneTerminalRuns();
     }
 
     /**
+     * The stop relay's read side. One RunView per (provider, contextUser) over the AI Agent Runs entity
+     * for the tracked runs that have a registered controller and whose row is now `Cancelled`; each one
+     * has its controller aborted with a reason derived from the row's `CancellationReason`, and leaves the
+     * tracked set (the agent's own cancelled-result save follows). Runs without a controller are
+     * left to the prune. Never throws (runs on a timer); overlapping ticks are skipped rather than
+     * stacked.
+     */
+    private async pollCancellations(): Promise<void> {
+        if (this._cancellationPollInFlight || this._abortControllers.size === 0) {
+            return;
+        }
+        const groups = this.groupRunsByProviderAndUser(Array.from(this._abortControllers.keys()));
+        if (groups.length === 0) {
+            return;
+        }
+        this._cancellationPollInFlight = true;
+        try {
+            for (const group of groups) {
+                const ids = AgentRunWatchdog.idList(group.ids);
+                if (!ids) {
+                    continue;
+                }
+                const rows = await this.readTrackedRunsForContext<CancelledRunRow>(
+                    group.provider,
+                    group.contextUser,
+                    MJAIAgentRunEntityExtended.CancelledStatus,
+                    ids,
+                    ['ID', 'CancellationReason'],
+                    'AgentRunWatchdog cancellation poll'
+                );
+                for (const row of rows) {
+                    if (typeof row?.ID !== 'string') {
+                        continue;
+                    }
+                    const reason = AgentRunWatchdog.abortReasonFor(row.CancellationReason);
+                    if (this.RequestCancel(row.ID, reason)) {
+                        LogStatus(`[AgentRunWatchdog] Run ${row.ID} was marked Cancelled (${row.CancellationReason ?? 'no reason'}); aborting the in-flight agent`);
+                    }
+                }
+            }
+        } catch (err) {
+            LogError(`AgentRunWatchdog cancellation poll failed: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this._cancellationPollInFlight = false;
+        }
+    }
+
+    /**
+     * The tracked runs (among `ids`) whose row carries `status`, read through RunView against the
+     * entity so the read goes where every other entity read goes: the entity's view, under the
+     * tracked user's read permission, with the fields named. `ids` is the quoted, UUID-validated
+     * list from {@link idList}. Reads the database, not the cache: the rows this looks for were
+     * written moments ago by a Stop button or by the finishing agent.
+     */
+    private async readTrackedRunsForContext<T>(
+        provider: DatabaseProviderBase,
+        contextUser: UserInfo,
+        status: string,
+        ids: string,
+        fields: string[],
+        description: string
+    ): Promise<T[]> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<T>({
+            EntityName: AGENT_RUN_ENTITY,
+            ExtraFilter: `Status='${status}' AND ID IN (${ids})`,
+            Fields: fields,
+            ResultType: 'simple',
+            IgnoreMaxRows: true,
+            BypassCache: true,
+        }, contextUser);
+        if (!result.Success) {
+            throw new Error(result.ErrorMessage || `${description}: RunView failed`);
+        }
+        return Array.isArray(result.Results) ? result.Results : [];
+    }
+
+    /** Maps a run row's `CancellationReason` to the abort reason the owning agent will see. */
+    private static abortReasonFor(cancellationReason: string | null): string {
+        return cancellationReason === MJAIAgentRunEntityExtended.UserRequestCancellationReason ? AgentRunWatchdog.UserCancelAbortReason : AgentRunWatchdog.ExternalCancelAbortReason;
+    }
+
+    /**
      * Drop any tracked run that is no longer `Running` so the in-memory set can't grow unbounded
-     * over a long-lived process. A single SELECT (against the base VIEW — the runtime user has no
-     * table access) of the still-running subset; the rest are pruned.
+     * over a long-lived process. One RunView per (provider, contextUser) of the still-running subset;
+     * the rest are pruned.
      */
     private async pruneTerminalRuns(): Promise<void> {
-        const ids = this.trackedIdList();
-        if (!ids || !this._provider) {
+        const groups = this.groupRunsByProviderAndUser(this.trackedIds());
+        if (groups.length === 0) {
             return;
         }
-        const view = AgentRunWatchdog.viewOf(this._provider);
-        if (!view) {
-            return;
-        }
-        const d = this._provider.Dialect;
         try {
-            const rows = await this._provider.ExecuteSQL<{ ID: string }>(
-                `SELECT ${d.QuoteIdentifier('ID')} FROM ${view} ` +
-                `WHERE ${d.QuoteIdentifier('Status')} = 'Running' AND ${d.QuoteIdentifier('ID')} IN (${ids});`,
-                undefined, { ignoreLogging: true, description: 'AgentRunWatchdog tracked-set prune' }, this._contextUser ?? undefined);
-            const stillRunning = new Set<string>();
-            if (Array.isArray(rows)) {
+            for (const group of groups) {
+                const ids = AgentRunWatchdog.idList(group.ids);
+                if (!ids) {
+                    continue;
+                }
+                const rows = await this.readTrackedRunsForContext<{ ID: string }>(
+                    group.provider,
+                    group.contextUser,
+                    'Running',
+                    ids,
+                    ['ID'],
+                    'AgentRunWatchdog tracked-set prune'
+                );
+                const stillRunning = new Set<string>();
                 for (const row of rows) {
                     if (typeof row?.ID === 'string') {
                         stillRunning.add(row.ID.toLowerCase());
                     }
                 }
-            }
-            for (const tracked of Array.from(this._trackedRuns)) {
-                if (!stillRunning.has(tracked)) {
-                    this._trackedRuns.delete(tracked);
+                for (const tracked of group.ids) {
+                    if (!stillRunning.has(tracked)) {
+                        this._trackedRuns.delete(tracked);
+                        this._abortControllers.delete(tracked);
+                    }
                 }
             }
+            this.pauseActiveRunTimersIfIdle();
         } catch (err) {
             LogError(`AgentRunWatchdog prune failed: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -287,7 +477,39 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Validated, lowercased UUIDs this process is guarding (for per-run proc calls). */
     private trackedIds(): string[] {
-        return Array.from(this._trackedRuns).filter(id => UUID_RE.test(id));
+        return Array.from(this._trackedRuns.keys()).filter(id => UUID_RE.test(id));
+    }
+
+    /** Groups run IDs by their tracked `DatabaseProviderBase` so per-tenant DB connections stay isolated. */
+    private groupRunsByProvider(runIds: string[]): Array<{ provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }> {
+        const groups = new Map<DatabaseProviderBase, { provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }>();
+        for (const id of runIds) {
+            const entry = this._trackedRuns.get(id);
+            if (!entry) continue;
+            let group = groups.get(entry.provider);
+            if (!group) {
+                group = { provider: entry.provider, contextUser: entry.contextUser, ids: [] };
+                groups.set(entry.provider, group);
+            }
+            group.ids.push(id);
+        }
+        return Array.from(groups.values());
+    }
+
+    /** Groups run IDs by `(provider, contextUser)` so `RunView` permission checks use each run's own user and provider. */
+    private groupRunsByProviderAndUser(runIds: string[]): Array<{ provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }> {
+        const groups: Array<{ provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }> = [];
+        for (const id of runIds) {
+            const entry = this._trackedRuns.get(id);
+            if (!entry) continue;
+            let group = groups.find(g => g.provider === entry.provider && g.contextUser === entry.contextUser);
+            if (!group) {
+                group = { provider: entry.provider, contextUser: entry.contextUser, ids: [] };
+                groups.push(group);
+            }
+            group.ids.push(id);
+        }
+        return groups;
     }
 
     /**
@@ -302,22 +524,17 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Comma-joined, quoted, validated UUID list for an `ID IN (...)` clause, or '' if none. */
     private trackedIdList(): string {
-        return this.trackedIds().map(id => `'${id}'`).join(',');
+        return AgentRunWatchdog.idList(this.trackedIds());
+    }
+
+    /** `ids` as a quoted SQL list, keeping only well-formed UUIDs: the values reach a filter string. */
+    private static idList(ids: string[]): string {
+        return ids.filter(id => UUID_RE.test(id)).map(id => `'${id}'`).join(',');
     }
 
     /** Schema that owns the AIAgentRun objects (for qualifying proc calls), or null if unresolved. */
     private static schemaOf(provider: DatabaseProviderBase): string | null {
         const entity = provider.EntityByName(AGENT_RUN_ENTITY);
         return entity?.SchemaName || null;
-    }
-
-    /** Fully-qualified, dialect-quoted base VIEW for AIAgentRun reads, or null if unresolved. */
-    private static viewOf(provider: DatabaseProviderBase): string | null {
-        const entity = provider.EntityByName(AGENT_RUN_ENTITY);
-        if (!entity || !entity.BaseView) {
-            return null;
-        }
-        const d = provider.Dialect;
-        return entity.SchemaName ? d.QuoteSchema(entity.SchemaName, entity.BaseView) : d.QuoteIdentifier(entity.BaseView);
     }
 }
