@@ -22,7 +22,7 @@ import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
@@ -248,6 +248,12 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
     if (!compatResult.Compatible) {
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
+    }
+
+    // Before any database or file change: an npm auth failure or an unpublished package stops here (#3796).
+    const preflight = await PreflightManifestPackages(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
+    if (!preflight.Success) {
+      return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
     }
 
     // Steps 4-5: Resolve the full transitive dependency graph and install members
@@ -805,6 +811,17 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
     }
 
+    // When upgrading to an explicit version, pin packages exactly; otherwise use default strategy
+    const effectiveUpgradeVersion = explicitUpgradeVersion ? targetVersion.replace(/^v/, '') : manifest.version;
+    const effectiveUpgradeStrategy: VersionStrategy | undefined = explicitUpgradeVersion ? 'exact' : context.VersionStrategy;
+
+    // Before migrations, dependency installs or any file change: an expired npm token found here
+    // leaves the host untouched instead of half-upgraded (#5517).
+    const preflight = await PreflightManifestPackages(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy);
+    if (!preflight.Success) {
+      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, preflight.ErrorMessage ?? 'Package preflight failed');
+    }
+
     // Step 3: Check dependency compatibility
     if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
       const depResult = await ResolveDependencyChain(manifest, context);
@@ -905,11 +922,8 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     }
 
     // Steps 5-6: Update packages
-    // When upgrading to an explicit version, pin packages exactly; otherwise use default strategy
     let npmInstallWarning: string | undefined;
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'PackagesInstalled')) {
-      const effectiveUpgradeVersion = explicitUpgradeVersion ? targetVersion.replace(/^v/, '') : manifest.version;
-      const effectiveUpgradeStrategy: VersionStrategy | undefined = explicitUpgradeVersion ? 'exact' : context.VersionStrategy;
       const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
       if (!pkgResult.Success) {
         if (pkgResult.PackageJsonUpdated) {
@@ -2049,6 +2063,39 @@ async function DownloadAppMigrations(
   }
 
   return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath, manifest.name);
+}
+
+/**
+ * Checks every package the manifest declares against the registry before anything changes
+ * (see {@link PreflightAppPackages}). Checks that could not complete are reported as warnings.
+ */
+async function PreflightManifestPackages(
+  manifest: MJAppManifest,
+  context: OrchestratorContext,
+  packageVersion: string,
+  versionStrategy: VersionStrategy | undefined,
+): Promise<InternalResult> {
+  if (!manifest.packages) {
+    return { Success: true };
+  }
+  context.Callbacks?.OnProgress?.('Packages', 'Checking app packages against the npm registry...');
+  const result = await PreflightAppPackages({
+    RepoRoot: context.RepoRoot,
+    ServerPackages: manifest.packages.server ?? [],
+    ClientPackages: manifest.packages.client ?? [],
+    SharedPackages: manifest.packages.shared ?? [],
+    Version: packageVersion,
+    PackageManager: context.PackageManager,
+    VersionStrategy: versionStrategy,
+    RegistryUrl: manifest.packages.registry,
+  });
+  if (result.SkippedReason) {
+    context.Callbacks?.OnProgress?.('Packages', `Skipped the registry check: ${result.SkippedReason}.`);
+  }
+  for (const warning of result.Warnings) {
+    context.Callbacks?.OnWarn?.('Packages', warning);
+  }
+  return result.Success ? { Success: true } : { Success: false, ErrorMessage: result.ErrorMessage };
 }
 
 /**

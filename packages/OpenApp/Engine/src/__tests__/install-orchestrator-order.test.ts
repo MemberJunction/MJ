@@ -59,6 +59,7 @@ vi.mock('../install/package-manager.js', () => ({
     RemoveAppPackages: vi.fn(),
     RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
+    PreflightAppPackages: vi.fn(async () => ({ Success: true, Checks: [], Warnings: [] })),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
@@ -98,7 +99,7 @@ import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
-import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies } from '../install/package-manager.js';
+import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages } from '../install/package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
@@ -1352,5 +1353,78 @@ describe('creating the app schema — core schema owner (#4756)', () => {
             expect(typeof w.Message).toBe('string');
             expect(w.Message.length).toBeGreaterThan(0);
         }
+    });
+});
+
+describe('npm registry preflight runs before any database or file change (#3796, #5517)', () => {
+    const authFailure = { Success: false, Checks: [], Warnings: [], ErrorMessage: "npm authentication failed for @acme/server@^2.0.0. Run 'npm login'" };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 0, AppliedFiles: [] });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
+        vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
+    });
+
+    it('install: a failed preflight stops before dependencies, schema, record or package.json', async () => {
+        serveManifests({
+            'https://github.com/test/app-x': manifestJSON('app-x', { 'app-dep': dep('app-dep') }),
+            'https://github.com/test/app-dep': manifestJSON('app-dep', {}),
+        });
+        vi.mocked(PreflightAppPackages).mockResolvedValueOnce(authFailure);
+
+        const result = await InstallApp({ Source: 'https://github.com/test/app-x' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorPhase).toBe('Packages');
+        expect(result.ErrorMessage).toContain('npm login');
+        expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
+        expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
+        expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
+        expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
+    });
+
+    it('install: checks the version and strategy that will be written (explicit version pins exactly)', async () => {
+        serveManifests({ 'https://github.com/test/app-x': manifestJSON('app-x', {}) });
+        vi.mocked(PreflightAppPackages).mockResolvedValueOnce(authFailure);
+
+        await InstallApp({ Source: 'https://github.com/test/app-x', Version: 'v1.2.3' }, context);
+
+        expect(vi.mocked(PreflightAppPackages)).toHaveBeenCalledWith(
+            expect.objectContaining({ RepoRoot: '/tmp/test-repo', Version: '1.2.3', VersionStrategy: 'exact' }),
+        );
+    });
+
+    it('upgrade: a failed preflight leaves status, migrations and package.json untouched', async () => {
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        serveManifests({
+            'https://github.com/test/app-x': JSON.stringify({
+                ...JSON.parse(manifestJSON('app-x', {})),
+                version: '2.0.0',
+                migrations: { directory: 'migrations' },
+            }),
+        });
+        vi.mocked(PreflightAppPackages).mockResolvedValueOnce(authFailure);
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorPhase).toBe('Packages');
+        expect(result.ErrorMessage).toContain('npm login');
+        expect(vi.mocked(PreflightAppPackages)).toHaveBeenCalledWith(expect.objectContaining({ Version: '2.0.0' }));
+        expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
+        expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
+        expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
     });
 });
