@@ -154,13 +154,15 @@ export class ProvenanceResolver {
   }
 
   /**
-   * For each key, the instant of its first complete Record Change when that change is its Create row (by lower-cased
-   * key); keys whose history starts otherwise, or that have none, are absent.
+   * For each key, its Create instant when its history starts with its own Create row (by lower-cased key), as the
+   * assembly's history decides it: the history starts at the record's first Create or Snapshot row (earlier Update rows
+   * do not start it), and only a Create row says when the record was created. Keys whose history starts with a
+   * Snapshot, or that have none, are absent.
    */
   private static async createRowInstants(sources: ProvenanceSources, entity: AssemblyEntityInfo, keys: readonly string[]): Promise<Map<string, Date>> {
     const out = new Map<string, Date>();
     for (const [key, changes] of await ProvenanceResolver.changesByKey(sources, entity, keys)) {
-      const first = changes[0];
+      const first = changes.find((c) => c.Type === 'Create' || c.Type === 'Snapshot');
       if (first && first.Type === 'Create') out.set(key, first.ChangedAt);
     }
     return out;
@@ -227,12 +229,18 @@ export class ProvenanceResolver {
    * The reference names the row's owner (the row's stored owner key) and the row's decision day; the owner's child
    * rows are read again and the aggregate rebuilt from the spec's window as of that day (rows entered after it dropped,
    * as the assembly drops them): the value equals the cell and the contributor hash equals the version. A row with no
-   * owner resolves to a missing value with the empty contributor hash.
+   * owner resolves to a missing value with the empty contributor hash. A `created-after-decision` entry (the join
+   * through the row's owner key read no owner because the row itself did not exist on its decision day) names no
+   * record, so it is bound to the row by checking that claim: the row's own record was created on or after the day
+   * after its decision day.
    */
   private static async resolveWindowedAggregate(sources: ProvenanceSources, check: ProvenanceCheck, source: WindowedAggregateSource): Promise<boolean> {
     const { Provenance: p, Cells: cells } = check;
     const owner = ProvenanceResolver.expectedOwner(source, check.Row);
-    if (p.sourceVersion === CREATED_AFTER_DECISION) return ProvenanceResolver.allMissing(cells);
+    if (p.sourceVersion === CREATED_AFTER_DECISION) {
+      if (p.sourceRef !== 'none' || source.ownerKeyField === null || !(await ProvenanceResolver.rowCreatedAfterDecision(sources, check.Row))) return false;
+      return ProvenanceResolver.allMissing(cells);
+    }
     if (p.sourceRef === 'none') return owner === null && ProvenanceResolver.allMissing(cells) && p.sourceVersion === AsOfFeatureAssembler.ContributorsVersion([]);
     const ref = ProvenanceResolver.parseAggregateRef(p.sourceRef, source.foreignKey);
     if (ref === null || owner === null || !UUIDsEqual(ref.Owner, owner) || ref.AsOfDay !== ProvenanceResolver.decisionDayIso(check.Row)) return false;
@@ -303,6 +311,21 @@ export class ProvenanceResolver {
     if (source.ownerKeyField === null) return null;
     const v = row.Fields[source.ownerKeyField];
     return v === null || v === undefined || String(v) === '' ? null : String(v);
+  }
+
+  /**
+   * Whether the scored row's own record came into existence (by the assembly's creation rule) on or after the day after
+   * its decision day; false when its creation instant is unknown (the unit's premise: it existed).
+   */
+  private static async rowCreatedAfterDecision(sources: ProvenanceSources, row: ScoredRowBinding): Promise<boolean> {
+    const entity = sources.Metadata.Entity(row.Entity);
+    const before = ProvenanceResolver.dayAfterDecision(row);
+    if (!entity || before === null) return false;
+    const hasCreatedAt = ProvenanceResolver.hasField(entity, '__mj_CreatedAt');
+    const record = await ProvenanceResolver.readByKey(sources, entity, row.RowId, hasCreatedAt ? ['__mj_CreatedAt'] : []);
+    if (record === null) return false;
+    const created = await ProvenanceResolver.creationInstant(sources, entity, row.RowId, hasCreatedAt ? record.__mj_CreatedAt : null);
+    return created !== null && created.getTime() >= before.getTime();
   }
 
   /** The start of the day after the row's decision day (anything before it was known on the decision day); null when the date is invalid. */

@@ -64,6 +64,16 @@ describe('ProvenanceResolver — record-changes', () => {
     expect(await ProvenanceResolver.ResolveValueProvenance(src, { Provenance: named('c1', '2025-01-01T00:00:00.000Z'), Cells: ['Active'], Spec: spec, Folded: [], Row: yearRow('2025-10-01T00:00:00.000Z') })).toBe(false);
   });
 
+  it('resolves a change made at 12:00 on the decision day (in effect on that day)', async () => {
+    const midday = sources([person], { 'MJ: Record Changes': [...changes, change('c3', PERSON_ENTITY_ID, 'p1', 'Update', '2025-06-01T12:00:00.000Z', { ID: 'p1', Status: 'Paused' })] });
+    expect(await ProvenanceResolver.ResolveValueProvenance(midday, { Provenance: named('c3', '2025-06-01T12:00:00.000Z'), Cells: ['Paused'], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z') })).toBe(true);
+  });
+
+  it('does not resolve a change made at 00:00 on the day after the decision day', async () => {
+    const nextDay = sources([person], { 'MJ: Record Changes': [...changes, change('c3', PERSON_ENTITY_ID, 'p1', 'Update', '2025-06-02T00:00:00.000Z', { ID: 'p1', Status: 'Paused' })] });
+    expect(await ProvenanceResolver.ResolveValueProvenance(nextDay, { Provenance: named('c3', '2025-06-02T00:00:00.000Z'), Cells: ['Paused'], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z') })).toBe(false);
+  });
+
   it('does not resolve a reference to another record than the one the row joins to', async () => {
     expect(await ProvenanceResolver.ResolveValueProvenance(src, { Provenance: named('c1', '2025-01-01T00:00:00.000Z'), Cells: ['Active'], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z', 'p2') })).toBe(false);
   });
@@ -87,6 +97,23 @@ describe('ProvenanceResolver — immutable-field created:<instant>', () => {
 
   it('does not resolve when the cell differs from the stored value', async () => {
     expect(await ProvenanceResolver.ResolveValueProvenance(src, { Provenance: p(`created:${created}`, created), Cells: [2025], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z') })).toBe(false);
+  });
+});
+
+describe('ProvenanceResolver — creation instant of a tracked record', () => {
+  const spec: FeatureColumnSpec = { name: 'JoinYear', source: { kind: 'immutable-field', entity: PERSON, field: 'JoinYear', keyField: 'PersonID' }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing };
+  const person = entity(PERSON_ENTITY_ID, PERSON, true, ['ID', 'JoinYear', '__mj_CreatedAt']);
+  // The history's first Create-or-Snapshot row is the Create of 1 April; the Update before it does not start the history.
+  const changes = [
+    change('c0', PERSON_ENTITY_ID, 'p1', 'Update', '2024-02-01T00:00:00.000Z', { ID: 'p1', JoinYear: 2024 }),
+    change('c1', PERSON_ENTITY_ID, 'p1', 'Create', '2024-04-01T00:00:00.000Z', { ID: 'p1', JoinYear: 2024 }),
+  ];
+  const src = sources([person], { [PERSON]: [{ ID: 'p1', JoinYear: 2024, __mj_CreatedAt: '2024-03-01T00:00:00.000Z' }], 'MJ: Record Changes': changes });
+  const p = (at: string): ValueProvenance => ({ column: 'JoinYear', source: 'immutable-field', sourceRef: `${PERSON}/p1/JoinYear`, sourceVersion: `created:${at}`, computedAt: at });
+
+  it('a leading Update row before the Create does not change the creation instant (the later of the Create row and __mj_CreatedAt)', async () => {
+    expect(await ProvenanceResolver.ResolveValueProvenance(src, { Provenance: p('2024-04-01T00:00:00.000Z'), Cells: [2024], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z') })).toBe(true);
+    expect(await ProvenanceResolver.ResolveValueProvenance(src, { Provenance: p('2024-03-01T00:00:00.000Z'), Cells: [2024], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z') })).toBe(false);
   });
 });
 
@@ -117,6 +144,24 @@ describe('ProvenanceResolver — windowed aggregate over a tracked child', () =>
 
   it('does not resolve a reference whose as-of day is not the row\'s decision day', async () => {
     expect(await ProvenanceResolver.ResolveValueProvenance(src, { Provenance: p(versionOf([e1]), '2025-06-02'), Cells: [3], Spec: spec, Folded: [], Row: yearRow('2025-06-01T00:00:00.000Z') })).toBe(false);
+  });
+
+  describe('a row created after its decision day', () => {
+    const year = entity('33333333-3333-3333-3333-333333333333', YEAR, false, ['ID', 'PersonID', '__mj_CreatedAt']);
+    const withYears = sources([event, year], {
+      [EVENT]: [e1, e2], 'MJ: Record Changes': changes,
+      [YEAR]: [{ ID: 'y1', PersonID: 'p1', __mj_CreatedAt: '2025-07-01T00:00:00.000Z' }, { ID: 'y2', PersonID: 'p1', __mj_CreatedAt: '2025-01-01T00:00:00.000Z' }],
+    });
+    const createdAfter: ValueProvenance = { column: 'points_y', source: 'windowed-aggregate', sourceRef: 'none', sourceVersion: 'created-after-decision', computedAt: '2025-06-02T00:00:00.000Z' };
+    const rowOf = (id: string): ScoredRowBinding => ({ ...yearRow('2025-06-01T00:00:00.000Z'), RowId: id, Fields: { ID: id, PersonID: 'p1' } });
+
+    it('resolves a missing value when the row was created after its decision day', async () => {
+      expect(await ProvenanceResolver.ResolveValueProvenance(withYears, { Provenance: createdAfter, Cells: [null], Spec: spec, Folded: [], Row: rowOf('y1') })).toBe(true);
+    });
+
+    it('does not resolve the created-after entry for a row that existed on its decision day', async () => {
+      expect(await ProvenanceResolver.ResolveValueProvenance(withYears, { Provenance: createdAfter, Cells: [null], Spec: spec, Folded: [], Row: rowOf('y2') })).toBe(false);
+    });
   });
 
   it('does not resolve a reference whose owner is not the row\'s owner', async () => {
