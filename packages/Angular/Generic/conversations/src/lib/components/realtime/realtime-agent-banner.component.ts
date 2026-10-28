@@ -90,8 +90,21 @@ export class RealtimeAgentBannerComponent {
   // STATE + WINDOW-CHROME only. Captions & End were removed (they duplicated the bottom dock's
   // controls — one home per control), and "pure audio" was folded into the gear's Density = Simple.
 
-  /** Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). */
-  @Input() ShowGear = false;
+  /**
+   * Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). Taking the
+   * gear away also closes its popover, so no empty popover outlives the button that opened it.
+   */
+  @Input()
+  set ShowGear(value: boolean) {
+    this._showGear = value;
+    if (!value) {
+      this.GearOpen = false;
+    }
+  }
+  get ShowGear(): boolean {
+    return this._showGear;
+  }
+  private _showGear = false;
 
   /**
    * Whether the interface-density segmented control renders inside the gear popover.
