@@ -8,6 +8,7 @@ import {
   BuildDropActionParams,
   BuildLoadActionParams,
   BuildRestoreActionParams,
+  CanonicalizeTableSelection,
   DefaultStagingDatabaseName,
   NewArchiveSeedWork,
   RunManifestFor,
@@ -117,6 +118,18 @@ describe('ArchiveSeedState', () => {
     });
     it('accepts known tables', () => {
       expect(ValidateTableSelection(work, ['A'])).toBeUndefined();
+    });
+    it('matches case-insensitively and canonicalizes to the discovered spelling', () => {
+      const w = MakeWork({ Tables: [
+        { Name: 'Customers', ColumnCount: 1, HasPrimaryKey: true },
+        { Name: 'Orders', ColumnCount: 1, HasPrimaryKey: true },
+      ] });
+      expect(ValidateTableSelection(w, ['customers', 'ORDERS'])).toBeUndefined();
+      expect(CanonicalizeTableSelection(w, ['customers', 'ORDERS'])).toEqual(['Customers', 'Orders']);
+    });
+    it('rejects a name repeated in two casings', () => {
+      const w = MakeWork({ Tables: [{ Name: 'Customers', ColumnCount: 1, HasPrimaryKey: true }] });
+      expect(ValidateTableSelection(w, ['Customers', 'customers'])).toBe("Duplicate table 'customers'");
     });
   });
 

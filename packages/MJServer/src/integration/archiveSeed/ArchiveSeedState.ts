@@ -97,14 +97,36 @@ export function Transition(work: ArchiveSeedWork, next: ArchiveSeedState, now: D
   return { ...work, ...patch, State: next, StateChangedAt: now.toISOString() };
 }
 
-/** The validation failure for a table selection, or undefined when every name was discovered. */
+/**
+ * The validation failure for a table selection, or undefined when it is acceptable.
+ * Names match the discovered tables case-insensitively (SQL Server identifiers are case-insensitive);
+ * an empty list, an unknown name, or a name repeated after case folding is rejected.
+ */
 export function ValidateTableSelection(work: ArchiveSeedWork, tableNames: string[]): string | undefined {
   if (tableNames.length === 0) {
     return 'Select at least one table';
   }
-  const known = new Set((work.Tables ?? []).map(t => t.Name));
-  const unknown = tableNames.find(n => !known.has(n));
-  return unknown === undefined ? undefined : `Unknown table '${unknown}'`;
+  const known = new Set((work.Tables ?? []).map(t => t.Name.toLowerCase()));
+  const seen = new Set<string>();
+  for (const name of tableNames) {
+    const folded = name.toLowerCase();
+    if (!known.has(folded)) return `Unknown table '${name}'`;
+    if (seen.has(folded)) return `Duplicate table '${name}'`;
+    seen.add(folded);
+  }
+  return undefined;
+}
+
+/**
+ * The selected names spelled exactly as discovered in `work.Tables`, in selection order.
+ * Call after {@link ValidateTableSelection} passes; names not found are dropped. Store the result
+ * as `SelectedTables`.
+ */
+export function CanonicalizeTableSelection(work: ArchiveSeedWork, tableNames: string[]): string[] {
+  const byFolded = new Map((work.Tables ?? []).map(t => [t.Name.toLowerCase(), t.Name]));
+  return tableNames
+    .map(n => byFolded.get(n.toLowerCase()))
+    .filter((n): n is string => n !== undefined);
 }
 
 /** Every present value becomes a string Input ActionParam; undefined/null/'' are dropped. */
