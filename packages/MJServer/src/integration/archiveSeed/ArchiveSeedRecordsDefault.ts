@@ -33,7 +33,7 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
       'MJ: Integrations', `ClassName IN (${inList})`, ['ID', 'ClassName'], user, provider,
     );
     for (const className of SQLSERVER_CLASS_NAMES) {
-      const match = rows.find(r => r.ClassName === className);
+      const match = rows.find(r => r.ClassName?.trim().toLowerCase() === className.toLowerCase());
       if (match) {
         return match.ID;
       }
