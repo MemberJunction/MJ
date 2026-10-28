@@ -83,7 +83,7 @@ function coldFilter(tag: string): string {
  * Clone a UserInfo the way the server's per-request stamping path does: the spread captures
  * the enumerable `_`-prefixed backing fields (contexts survive), and UserRoles needs the
  * explicit dance because it is a prototype accessor the spread cannot see (CLAUDE §2.3 /
- * buildMagicLinkSessionUser). Bindings are then stamped ONLY on the clone — never on the
+ * BuildMagicLinkSessionUser). Bindings are then stamped ONLY on the clone — never on the
  * shared source instance, which other checks read concurrently.
  */
 function cloneUser(source: UserInfo): UserInfo {

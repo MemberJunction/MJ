@@ -9,7 +9,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 /**
  * Locked outbound telephony brief enforced before any Chief of Staff voice session or outbound call.
  */
-export interface ChiefOfStaffOutboundCallBrief {
+export interface OutboundCallBrief {
     briefVersion: '1.0';
     agentID: string;
     agentDisplayName: string;
@@ -27,6 +27,7 @@ export interface ChiefOfStaffOutboundCallBrief {
     maxDurationSeconds: number;
 }
 
+
 const CORE_CALL_PROHIBITIONS: ReadonlyArray<string> = [
     'Always state upfront that you are an AI assistant calling on the user\'s behalf.',
     'Do not make financial commitments or authorize payments not explicitly listed in authorizedBounds.',
@@ -36,11 +37,11 @@ const CORE_CALL_PROHIBITIONS: ReadonlyArray<string> = [
 
 /**
  * Action that validates `PhoneChannelMode` and approval guardrails on the caller's
- * `MJ: AI Agent User Policies` and constructs a locked `ChiefOfStaffOutboundCallBrief`
+ * `MJ: AI Agent User Policies` and constructs a locked `OutboundCallBrief`
  * with mandatory upfront AI disclosure before any outbound telephony call.
  */
-@RegisterClass(BaseAction, 'Prepare Chief of Staff Outbound Call')
-export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
+@RegisterClass(BaseAction, 'Prepare Outbound Call Brief')
+export class PrepareOutboundCallBriefAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -48,7 +49,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
                 return {
                     Success: false,
                     ResultCode: 'MISSING_USER_CONTEXT',
-                    Message: 'Prepare Chief of Staff Outbound Call requires a valid ContextUser.',
+                    Message: 'Prepare Outbound Call Brief requires a valid ContextUser.',
                     Params: params.Params,
                 };
             }
@@ -112,7 +113,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             const callerName = contextUser.Name || contextUser.Email || 'my principal';
             const mandatoryUpfrontDisclosure = `Hello ${ targetRecipientName }, I am ${ agentDisplayName }, an AI assistant calling on behalf of ${ callerName }.`;
 
-            const brief: ChiefOfStaffOutboundCallBrief = {
+            const brief: OutboundCallBrief = {
                 briefVersion: '1.0',
                 agentID: agent.ID,
                 agentDisplayName,
@@ -139,12 +140,22 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             this.setOutputParam(params, 'DisclosureStatement', mandatoryUpfrontDisclosure);
 
             if (needsApproval) {
+                const approvalTypeId = await AIEngine.Instance.ResolveAgentRequestTypeID('Approval', contextUser);
+                if (!approvalTypeId) {
+                    return {
+                        Success: false,
+                        ResultCode: 'REQUEST_TYPE_NOT_FOUND',
+                        Message: 'Agent request type "Approval" is not in metadata; the call brief was prepared but cannot be queued for approval.',
+                        Params: params.Params,
+                    };
+                }
                 const md = params.Provider ?? new Metadata();
                 const approvalReq = await md.GetEntityObject<MJAIAgentRequestEntity>(
                     'MJ: AI Agent Requests',
                     contextUser
                 );
                 approvalReq.AgentID = agent.ID;
+                approvalReq.RequestTypeID = approvalTypeId;
                 approvalReq.RequestedAt = new Date();
                 approvalReq.RequestForUserID = contextUser.ID;
                 approvalReq.Status = 'Requested';
@@ -181,7 +192,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            LogError(`PrepareChiefOfStaffOutboundCallAction error: ${ message }`);
+            LogError(`PrepareOutboundCallBriefAction error: ${ message }`);
             return {
                 Success: false,
                 ResultCode: 'UNEXPECTED_ERROR',

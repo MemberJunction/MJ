@@ -12379,6 +12379,17 @@ export const MJCommunicationProviderSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.`),
+    AllowUserDelegatedOAuth: z.boolean().describe(`
+        * * Field Name: AllowUserDelegatedOAuth
+        * * Display Name: Allow User Delegated O Auth
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Posture 3 master switch (Gate 1). When 1, users may connect their own mailbox/calendar to this provider through per-user delegated OAuth 2.0 (3LO) with PKCE, subject to AllowedEmailDomains and AllowedOAuthTenantIDs. Default 0: no user can initiate a personal OAuth flow.`),
+    AllowedOAuthTenantIDs: z.string().nullable().describe(`
+        * * Field Name: AllowedOAuthTenantIDs
+        * * Display Name: Allowed O Auth Tenant I Ds
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional comma-separated allowlist of identity tenant identifiers (Gate 3) that a user-delegated OAuth token must carry: Azure AD tenant IDs (tid) or Google Workspace hosted domains (hd). NULL means no tenant restriction beyond AllowedEmailDomains.`),
     DefaultCredential: z.string().nullable().describe(`
         * * Field Name: DefaultCredential
         * * Display Name: Default Credential
@@ -76967,6 +76978,33 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
     set DefaultCredentialID(value: string | null) {
         this.Set('DefaultCredentialID', value);
+    }
+
+    /**
+    * * Field Name: AllowUserDelegatedOAuth
+    * * Display Name: Allow User Delegated O Auth
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Posture 3 master switch (Gate 1). When 1, users may connect their own mailbox/calendar to this provider through per-user delegated OAuth 2.0 (3LO) with PKCE, subject to AllowedEmailDomains and AllowedOAuthTenantIDs. Default 0: no user can initiate a personal OAuth flow.
+    */
+    get AllowUserDelegatedOAuth(): boolean {
+        return this.Get('AllowUserDelegatedOAuth');
+    }
+    set AllowUserDelegatedOAuth(value: boolean) {
+        this.Set('AllowUserDelegatedOAuth', value);
+    }
+
+    /**
+    * * Field Name: AllowedOAuthTenantIDs
+    * * Display Name: Allowed O Auth Tenant I Ds
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional comma-separated allowlist of identity tenant identifiers (Gate 3) that a user-delegated OAuth token must carry: Azure AD tenant IDs (tid) or Google Workspace hosted domains (hd). NULL means no tenant restriction beyond AllowedEmailDomains.
+    */
+    get AllowedOAuthTenantIDs(): string | null {
+        return this.Get('AllowedOAuthTenantIDs');
+    }
+    set AllowedOAuthTenantIDs(value: string | null) {
+        this.Set('AllowedOAuthTenantIDs', value);
     }
 
     /**

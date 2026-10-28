@@ -4009,6 +4009,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.2.0-edge.5
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.5
+        version: link:../../Credentials/Engine
       '@memberjunction/document-parsing':
         specifier: 6.2.0-edge.5
         version: link:../../DocumentParsing

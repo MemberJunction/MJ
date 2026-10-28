@@ -14,10 +14,14 @@
  *     already drops fields that are empty across every record) and
  *   - flattens each cell to `{ RecordID: <key string>, Value: <stringified> }`.
  *
+ * The prompt, and the reasoning text stored from it, are read by every reader of the duplicate
+ * run, so a field that field-level security restricts for any role (`GetIndexRestrictedFieldNames`)
+ * is left out of the deltas, and a record is labelled by its key when its name field is restricted.
+ *
  * @module @memberjunction/ai-vector-dupe
  */
 
-import { RunView, CompositeKey, EntityInfo, EntityFieldInfo, UserInfo, BaseEntity } from '@memberjunction/core';
+import { RunView, CompositeKey, EntityInfo, EntityFieldInfo, UserInfo, BaseEntity, GetIndexRestrictedFieldNames } from '@memberjunction/core';
 import {
     RecordComparisonEngine,
     RecordComparisonOptions,
@@ -80,7 +84,10 @@ export class MatchedSetDeltaBuilder {
         if (!result.Success) {
             return { FieldDeltas: [], Labels: new Map() };
         }
-        return { FieldDeltas: this.project(result), Labels: this.buildLabels(result) };
+        const restricted = GetIndexRestrictedFieldNames(entityInfo);
+        const nameField = entityInfo.NameField?.Name.trim().toLowerCase();
+        const labels = nameField && restricted.has(nameField) ? this.keyLabels(result) : this.buildLabels(result);
+        return { FieldDeltas: this.project(result).filter(d => !restricted.has(d.FieldName.trim().toLowerCase())), Labels: labels };
     }
 
     /**
@@ -125,6 +132,11 @@ export class MatchedSetDeltaBuilder {
             labels.set(record.Key.Values(), record.Label);
         }
         return labels;
+    }
+
+    /** Labels every loaded record by its own key string, for an entity whose name field is restricted. */
+    protected keyLabels(result: RecordComparisonResult): Map<string, string> {
+        return new Map(result.Records.map(record => [record.Key.Values(), record.Key.Values()]));
     }
 
     /**

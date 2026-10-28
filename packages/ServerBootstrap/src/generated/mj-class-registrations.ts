@@ -1399,7 +1399,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (64 classes)
+// @memberjunction/core-entities-server (65 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1425,6 +1425,7 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
@@ -1541,7 +1542,6 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -1639,7 +1639,7 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -1664,6 +1664,7 @@ import {
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -2717,6 +2718,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
@@ -2760,11 +2762,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
-    SQLServerCodeGenProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
     CreateScheduledJobAction,
     DeleteScheduledJobAction,
@@ -2805,7 +2807,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -2903,7 +2904,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -2928,6 +2929,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,

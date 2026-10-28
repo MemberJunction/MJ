@@ -178,3 +178,30 @@ describe('TaskStore', () => {
         });
     });
 });
+
+describe('TaskStore ownership', () => {
+    const OWNER = 'AAAAAAAA-0000-0000-0000-000000000001';
+    const OTHER = 'BBBBBBBB-0000-0000-0000-000000000002';
+
+    it("returns a task only to the user who created it", () => {
+        const store = new TaskStore();
+        const task = makeTask('t1', 'completed', new Date());
+        store.Set('t1', task, OWNER);
+        expect(store.GetForUser('t1', OWNER.toLowerCase())).toBe(task);
+        expect(store.GetForUser('t1', OTHER)).toBeUndefined();
+    });
+
+    it('returns a task stored without an owner to no one', () => {
+        const store = new TaskStore();
+        store.Set('t1', makeTask('t1', 'pending', new Date()));
+        expect(store.GetForUser('t1', OWNER)).toBeUndefined();
+    });
+
+    it('forgets the owner when the task is removed', () => {
+        const store = new TaskStore();
+        store.Set('t1', makeTask('t1', 'pending', new Date()), OWNER);
+        store.Delete('t1');
+        store.Set('t1', makeTask('t1', 'pending', new Date()));
+        expect(store.GetForUser('t1', OWNER)).toBeUndefined();
+    });
+});
