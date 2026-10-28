@@ -98,13 +98,6 @@ export function IsPlainObject(value: unknown): value is Record<string, unknown> 
 }
 
 /**
- * Keys a deep merge must never write: assigning through them reaches `Object.prototype` (or a
- * constructor's prototype) instead of creating an own property. `JSON.parse('{"__proto__":{}}')`
- * produces an own `__proto__` key, so parsed input can carry them.
- */
-const UNSAFE_MERGE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
-
-/**
  * Deep-merges plain-object layers, EARLIEST first — later layers win per key — into a fresh object,
  * without prototype pollution.
  *
@@ -142,7 +135,12 @@ export function SafeDeepMerge(...layers: ReadonlyArray<unknown>): Record<string,
 /** Recursive worker for {@link SafeDeepMerge} — merges `source` into `target` in place. */
 function safeMergeInto(target: Record<string, unknown>, source: Record<string, unknown>): void {
     for (const key of Object.keys(source)) {
-        if (UNSAFE_MERGE_KEYS.has(key)) {
+        // Keys a deep merge must never write: assigning through them reaches `Object.prototype` (or a
+        // constructor's prototype) instead of creating an own property. `JSON.parse('{"__proto__":{}}')`
+        // produces an own `__proto__` key, so parsed input can carry them. Written as inline equality
+        // checks, not a Set lookup, because CodeQL (js/prototype-pollution-utility) only recognizes
+        // this form as a guard.
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
             continue;
         }
         const incoming = source[key];

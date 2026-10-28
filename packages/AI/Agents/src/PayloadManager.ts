@@ -1113,6 +1113,12 @@ export class PayloadManager {
         const result = _.cloneDeep(destination);
         
         for (const key in source) {
+            // Skip keys whose assignment reaches a prototype instead of creating an own property:
+            // `JSON.parse('{"__proto__":{}}')` yields an own `__proto__` key, and writing it here
+            // would call Object.setPrototypeOf on the result.
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                continue;
+            }
             if (source.hasOwnProperty(key)) {
                 if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
                     // Both are objects - recursive merge

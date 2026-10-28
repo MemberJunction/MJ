@@ -65,9 +65,11 @@ describe('SafeDeepMerge — prototype pollution', () => {
     });
 
     it('ignores a nested __proto__ key, whether or not the parent already exists', () => {
-        SafeDeepMerge({ a: { b: 1 } }, JSON.parse('{"a":{"__proto__":{"polluted":1}}}'));
-        SafeDeepMerge(JSON.parse('{"a":{"__proto__":{"polluted":1}}}'));
+        const r1 = SafeDeepMerge({ a: { b: 1 } }, JSON.parse('{"a":{"__proto__":{"polluted":1}}}'));
+        const r2 = SafeDeepMerge(JSON.parse('{"a":{"__proto__":{"polluted":1}}}'));
         expect(({} as Polluted).polluted).toBeUndefined();
+        expect(r1).toEqual({ a: { b: 1 } });
+        expect(r2).toEqual({ a: {} });
     });
 
     it('ignores constructor and prototype keys at every depth', () => {

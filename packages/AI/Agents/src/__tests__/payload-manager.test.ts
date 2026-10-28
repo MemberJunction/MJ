@@ -96,6 +96,15 @@ describe('PayloadManager', () => {
             const result = pm.deepMerge(dest, src);
             expect(result.x).toEqual({ now: 'object' });
         });
+
+        it('should skip __proto__, constructor and prototype keys from parsed JSON', () => {
+            const src = JSON.parse('{"__proto__":{"polluted":1},"a":{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted":1}},"ok":true}}');
+            const result = pm.DeepMerge<Record<string, unknown>>({ a: { b: 1 } }, src);
+            expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+            expect(Object.getPrototypeOf(result.a)).toBe(Object.prototype);
+            expect(result).toEqual({ a: { b: 1, ok: true } });
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+        });
     });
 
     // ════════════════════════════════════════════════════════════════════
