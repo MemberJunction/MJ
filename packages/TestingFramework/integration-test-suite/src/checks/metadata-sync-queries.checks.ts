@@ -1,5 +1,5 @@
 /**
- * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ7), deterministic
+ * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ9), deterministic
  * tier (IT140).
  *
  * `mj sync push`, through `PushService`, of scratch `MJ: Queries` trees, and the child rows that
@@ -16,7 +16,11 @@
  *    collection's default `upsert` mode never deletes); a `deleteRecord` entry removes it;
  *  - MSQ6: an unchanged re-push writes no row (snapshots with timestamps compared, not push counts);
  *  - MSQ7: pushing a copy of the shipped `metadata/queries` tree changes no query, field, parameter,
- *    entity or dependency row.
+ *    entity or dependency row;
+ *  - MSQ8: one push creates a reusable query and a query composing it: the composed query is found
+ *    in the push's own transaction, before the shared query cache has heard of it;
+ *  - MSQ9: a declared field that carries only its name and annotations gets its facts (sequence,
+ *    types, source) from extraction when it is first written.
  *
  * Query text is looked up per platform (the SQL dialect by `PlatformKey`). Every query lives in a
  * per-run `zzz-it140` category; Teardown deletes it with its queries and removes the scratch trees.
@@ -388,6 +392,43 @@ async function checkMsq7ShippedQueriesPushIsANoOp(ctx: IntegrationCheckContext):
     Assert(before === after, `MSQ7: pushing the shipped queries again changed rows: ${SnapshotDifference(before, after)}`);
 }
 
+// ─── MSQ8–MSQ9: compositions and fact-less declarations in one push ─────────
+
+async function checkMsq8ComposedInSamePush(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const [targetID, composerID] = ids(2);
+    const target = queryRecord(f, { ID: targetID, Name: 'MSQ8 target', SQL: vendorSQL(f.Platform, '', '') });
+    const targetFields = (target as { fields: { [key: string]: JsonValue } }).fields;
+    targetFields.Reusable = true;
+    const targetPath = `${f.Category.Name}/${PREFIX} MSQ8 target`;
+    const composer = queryRecord(f, { ID: composerID, Name: 'MSQ8 composer', SQL: ForPlatform(`SELECT t.[ID], t.[Name] FROM {{query:"${targetPath}"}} t`, f.Platform) });
+    await pushQueries(ctx, 'msq8', [target, composer], composerID);
+
+    const rows = await ReadQueryRows(ctx, BUNDLE, composerID);
+    AssertEqual(rows.Dependencies.map(d => NormalizeUUID(d.DependsOnQueryID)).join(','), NormalizeUUID(targetID), 'MSQ8: the composing query depends on the query pushed with it');
+    AssertEqual(fieldLines(rows), 'ID:Database | Name:Database', 'MSQ8: the composing query\'s fields come from describing the composed render');
+    const stored = await ReloadQuery(ctx, composerID);
+    // A Warning can come from the post-commit description pass (no model configured); a composition
+    // problem would be an Error or carry an MJQ_COMPOSITION diagnostic.
+    const message = stored.ExtractionMessage ?? '';
+    Assert(stored.ExtractionStatus !== 'Error' && !message.includes('MJQ_COMPOSITION'),
+        `MSQ8: the composing query extracted without a composition problem (status ${stored.ExtractionStatus}: ${message})`);
+}
+
+async function checkMsq9FactlessDeclaredFieldGetsFacts(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const [queryID, fieldID] = ids(2);
+    const field: ChildRecord = { primaryKey: { ID: fieldID }, fields: { Name: 'Name', Description: 'The vendor name (declared, no facts).', IsSummary: false, DetectionMethod: 'Manual' } };
+    await pushQueries(ctx, 'msq9', [queryRecord(f, { ID: queryID, Name: 'MSQ9 factless', SQL: vendorSQL(f.Platform), Collections: { Fields: [field] } })], queryID);
+
+    const rows = await ReadQueryRows(ctx, BUNDLE, queryID);
+    const name = rows.Fields.find(x => NormalizeUUID(x.ID) === NormalizeUUID(fieldID));
+    Assert(name !== undefined, 'MSQ9: the declared field is stored under its own ID');
+    AssertEqual(`${name!.Sequence}:${name!.DetectionMethod}:${name!.Description}`, '2:Manual:The vendor name (declared, no facts).', 'MSQ9: the declared field keeps its annotations and takes its sequence');
+    Assert(!!name!.SQLBaseType && !!name!.SQLFullType, `MSQ9: the declared field takes its types from the describe (got '${name!.SQLBaseType}' / '${name!.SQLFullType}')`);
+    AssertEqual(NormalizeUUID(name!.SourceEntityID ?? ''), NormalizeUUID(f.VendorEntityID), 'MSQ9: the declared field takes its source entity from the describe');
+}
+
 export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ1`, Name: 'MSQ1: declared collections are stored as declared on a new query and updated in place', Fn: checkMsq1DeclaredCollections },
     { Id: `${BUNDLE}.MSQ2`, Name: 'MSQ2: the legacy relatedEntities format is promoted, so each declared row is stored once under its own ID', Fn: checkMsq2LegacyRelatedEntitiesPromoted },
@@ -396,6 +437,8 @@ export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ5`, Name: 'MSQ5: a declared parameter left out of the file is kept and flagged; a deleteRecord entry removes it', Fn: checkMsq5RemovedDeclaredParameter },
     { Id: `${BUNDLE}.MSQ6`, Name: 'MSQ6: an unchanged re-push writes no row', Fn: checkMsq6UnchangedRePushWritesNothing },
     { Id: `${BUNDLE}.MSQ7`, Name: 'MSQ7: pushing a copy of the shipped metadata/queries tree changes no query or child row', Fn: checkMsq7ShippedQueriesPushIsANoOp },
+    { Id: `${BUNDLE}.MSQ8`, Name: 'MSQ8: one push creates a reusable query and a query composing it', Fn: checkMsq8ComposedInSamePush },
+    { Id: `${BUNDLE}.MSQ9`, Name: 'MSQ9: a declared field with only its name and annotations gets its facts from extraction', Fn: checkMsq9FactlessDeclaredFieldGetsFacts },
 ];
 
 for (const check of MetadataSyncQueriesChecks) {

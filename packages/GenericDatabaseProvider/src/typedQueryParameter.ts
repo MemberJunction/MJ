@@ -18,6 +18,29 @@ export class TypedQueryParameter {
     ) {}
 }
 
+/**
+ * One bind parameter passed by name, whose type the driver infers from the value. Statements
+ * reference it by the dialect's placeholder (`DialectBinding.ParameterPlaceholder`): SQL Server
+ * providers bind it by name (`@p0` is bound as `p0`) and leave the statement text alone; PostgreSQL
+ * providers bind it by position (`$1`).
+ *
+ * This is how MJ's own parameterized SQL passes untyped values. A plain array of values is the
+ * legacy positional form, which SQL Server providers bind by rewriting every `?` in the text,
+ * including a `?` inside a string literal, quoted identifier or comment.
+ */
+export class NamedQueryParameter {
+    constructor(
+        /** The name the driver binds it under (`p0`), or its position's name (`$1`). */
+        public readonly Name: string,
+        public readonly Value: TypedQueryParameterValue,
+    ) {}
+}
+
+/** True when `parameters` is a non-empty list of {@link NamedQueryParameter}. */
+export function IsNamedQueryParameterList(parameters: unknown): parameters is NamedQueryParameter[] {
+    return Array.isArray(parameters) && parameters.length > 0 && parameters.every(p => p instanceof NamedQueryParameter);
+}
+
 /** True when `parameters` is a non-empty list of {@link TypedQueryParameter}. */
 export function IsTypedQueryParameterList(parameters: unknown): parameters is TypedQueryParameter[] {
     return Array.isArray(parameters) && parameters.length > 0 && parameters.every(p => p instanceof TypedQueryParameter);

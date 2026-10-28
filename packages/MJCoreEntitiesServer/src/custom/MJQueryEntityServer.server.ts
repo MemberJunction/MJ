@@ -41,6 +41,8 @@ import {
     ApplyFieldFacts,
     RunDescriptionPass,
     SQLUsesTemplate,
+    ReadCompositionTargetsAsync,
+    MergeCompositionCandidates,
 } from "./query-extraction";
 import type {
     QuerySyncContext,
@@ -50,6 +52,7 @@ import type {
     QueryExtractionOverride,
     QueryExtractionResult,
     ChildRowWriteSummary,
+    CompositionTargetRead,
 } from "./query-extraction";
 import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
 
@@ -280,9 +283,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     /**
      * Gives each field row this save declares the facts extraction established for it, before the
      * graph is written. Facts follow the SQL and the database server whatever a caller declares, so
-     * a declaration made on another platform (shipped metadata declares SQL Server types) is
-     * corrected before it is written instead of being written and then corrected, and a new
-     * declared row gets the types its columns require.
+     * a declaration that carries facts (types, nullability, sequence, source) for another platform is
+     * corrected before it is written instead of being written and then corrected, and a new declared
+     * row, which may declare only its name and annotations, gets the facts its columns require.
      */
     private applyFactsToDeclaredFields(extraction: QueryExtractionResult): void {
         if (!extraction.Fields) return;
@@ -447,6 +450,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         if (this.presetExtraction) return this.presetExtraction;
         const provider = this.ProviderToUse;
         await this.ensureQueryEngineLoadedAsync();
+        const targets = await this.readCompositionTargetsAsync();
         return ComputeQueryExtraction({
             QueryID: this.IsSaved ? this.ID : null,
             QueryName: this.Name,
@@ -459,9 +463,24 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             ParameterHints: this.ParameterHints,
             ContextUser: this.ContextCurrentUser,
             Entities: provider instanceof DatabaseProviderBase ? provider.Entities : [],
-            Queries: QueryEngine.Instance.Queries,
+            Queries: MergeCompositionCandidates(targets.Candidates, QueryEngine.Instance.Queries),
+            CompositionDependencies: targets.InlineDependencies,
             Describe: provider instanceof GenericDatabaseProvider ? (sql: string) => provider.DescribeStatement(sql, this.ContextCurrentUser) : null,
         });
+    }
+
+    /**
+     * The queries the SQL composes, read on this save's provider with every cache bypassed, so a
+     * target saved earlier in the same transaction (one metadata push creating both queries) is
+     * found before the shared query cache hears of it. Nothing is read for SQL that composes
+     * nothing, or on a provider that cannot run views.
+     */
+    private async readCompositionTargetsAsync(): Promise<CompositionTargetRead> {
+        const provider = this.ProviderToUse;
+        if (!(provider instanceof DatabaseProviderBase)) return { Candidates: [], InlineDependencies: [] };
+        const engine = QueryEngine.Instance;
+        const cachedIDs = new Set(engine.Queries.map(q => q.ID.toLowerCase()));
+        return ReadCompositionTargetsAsync(this.extractionSQL, this.extractionPlatform, provider, this.extractionUser, cachedIDs, engine.SQLDialects);
     }
 
     /** Loads QueryEngine when this process has not yet (a CLI or sync context); compositions resolve against it. */

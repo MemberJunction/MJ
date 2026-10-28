@@ -132,6 +132,7 @@ function renderVariant(input: QueryExtractionInput, definitions: readonly Render
             QueryInfo: { SQL: input.SQL, UsesTemplate: true, Parameters: definitions },
             UsesTemplate: true,
             OriginalSQL: input.SQL,
+            Dependencies: input.CompositionDependencies && input.CompositionDependencies.length > 0 ? [...input.CompositionDependencies] : undefined,
         });
         return { SQL: result.FinalSQL, Error: null };
     } catch (e) {

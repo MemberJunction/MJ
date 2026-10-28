@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
-import { TypedQueryParameter } from '../typedQueryParameter';
+import { NamedQueryParameter, TypedQueryParameter } from '../typedQueryParameter';
 
 /**
  * The `spec` shape `buildMaterializedReadQuery` declares, derived from the real signature so it cannot drift.
@@ -424,6 +424,44 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery (typed by the snaps
         expect(build({ ...base, dialect: GetDialect('sqlserver'), columnTypes, spec: amount, paramValues: { a: 'ten' } })).toBeNull();
         const list = [{ column: 'Amount', operator: 'IN', paramName: 'a', kind: 'list' as const }];
         expect(build({ ...base, dialect: GetDialect('sqlserver'), columnTypes, spec: list, paramValues: { a: [1, 'two'] } })).toBeNull();
+    });
+});
+
+/**
+ * Without the snapshot's column types but with a dialect, values bind as named parameters, so a SQL Server
+ * provider does not rewrite a `?` in the statement text (the legacy positional array form rewrites every one).
+ */
+describe('GenericDatabaseProvider.buildMaterializedReadQuery (untyped, with a dialect: named parameters)', () => {
+    const build = GenericDatabaseProvider.buildMaterializedReadQuery;
+    const base = { outputColumns: ['ID', 'Ready?'], schemaName: '__mj', viewName: 'materialized_vwT' };
+
+    it('SQL Server: `@pN` placeholders bound by name as `pN`; BIT values stay 1 / 0', () => {
+        const plan = build({
+            ...base, dialect: GetDialect('sqlserver'),
+            spec: [
+                { column: 'Status', operator: 'IN', paramName: 's', kind: 'list' },
+                { column: 'Active', operator: '=', paramName: 'b', kind: 'scalar' },
+            ],
+            paramValues: { s: ['Open', 'Held'], b: 'true' },
+            paramTypes: { s: 'array', b: 'boolean' },
+        });
+        expect(plan!.sql).toBe('SELECT [ID], [Ready?] FROM [__mj].[materialized_vwT] WHERE [Status] IN (@p0, @p1) AND [Active] = @p2 ORDER BY [__mj_MaterializedRowID]');
+        expect(plan!.parameters).toEqual([new NamedQueryParameter('p0', 'Open'), new NamedQueryParameter('p1', 'Held'), new NamedQueryParameter('p2', 1)]);
+    });
+
+    it('PostgreSQL: `$n` placeholders named by position; booleans stay native', () => {
+        const plan = build({
+            ...base, dialect: GetDialect('postgresql'),
+            spec: [{ column: 'Active', operator: '=', paramName: 'b', kind: 'scalar' }],
+            paramValues: { b: true }, paramTypes: { b: 'boolean' },
+        });
+        expect(plan!.sql).toBe('SELECT "ID", "Ready?" FROM "__mj"."materialized_vwT" WHERE "Active" = $1 ORDER BY "__mj_MaterializedRowID"');
+        expect(plan!.parameters).toEqual([new NamedQueryParameter('$1', true)]);
+    });
+
+    it('returns null (→ live) for a list element no parameter can carry', () => {
+        const spec = [{ column: 'Status', operator: 'IN', paramName: 's', kind: 'list' as const }];
+        expect(build({ ...base, dialect: GetDialect('sqlserver'), spec, paramValues: { s: ['Open', { nested: true }] } })).toBeNull();
     });
 });
 

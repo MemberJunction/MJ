@@ -1,5 +1,5 @@
-import type { DatabasePlatform, EntityInfo, UserInfo } from "@memberjunction/core";
-import type { MJQueryEntityExtended } from "@memberjunction/core-entities";
+import type { DatabasePlatform, EntityInfo, QueryDependencySpec, UserInfo } from "@memberjunction/core";
+import type { CompositionCandidate } from "./compositionTargets";
 import type { DescribeStatementResult } from "@memberjunction/generic-database-provider";
 
 /**
@@ -63,7 +63,12 @@ export interface QueryExtractionInput {
     /** The entity catalog sources and table references are mapped through. */
     readonly Entities: readonly EntityInfo[];
     /** The saved queries compositions resolve against. */
-    readonly Queries: readonly MJQueryEntityExtended[];
+    readonly Queries: readonly CompositionCandidate[];
+    /**
+     * Render specs for composed queries the shared query cache does not hold yet (saved earlier in
+     * the same transaction), searched before the cache when the describe renders compose them.
+     */
+    readonly CompositionDependencies?: readonly QueryDependencySpec[];
     /** Describes a rendered statement on the database server; `null` when the provider cannot. */
     readonly Describe: ((sql: string) => Promise<DescribeStatementResult>) | null;
 }

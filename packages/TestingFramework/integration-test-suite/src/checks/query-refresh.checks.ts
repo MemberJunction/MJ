@@ -201,15 +201,26 @@ async function queryFacts(ctx: IntegrationCheckContext, queryIDs: readonly strin
     return facts.join('\n');
 }
 
+/** Each query row's `__mj_UpdatedAt`, read from the database, as one string. */
+async function queryStamps(ctx: IntegrationCheckContext, queryIDs: readonly string[]): Promise<string> {
+    const stamps: string[] = [];
+    for (const id of queryIDs) {
+        const q = await ReloadQuery(ctx, id);
+        stamps.push(`${q.Name}|${new Date(q.__mj_UpdatedAt).toISOString()}`);
+    }
+    return stamps.join('\n');
+}
+
 /**
- * A refresh that finds nothing to change still saves the query row (its timestamp moves), so
- * this check compares every child row in full and, on the query rows, the SQL and the
- * extraction columns.
+ * A refresh that finds nothing to change writes nothing: every child row is compared in full, the
+ * query rows' SQL and extraction columns are compared, and each query row's `__mj_UpdatedAt` must
+ * not move (the query row is not saved).
  */
 async function checkQr1UnchangedRefreshWritesNothing(ctx: IntegrationCheckContext): Promise<void> {
     const all = ids(QUERY_KEYS);
     const before = await SnapshotQueryRows(ctx, BUNDLE, all, true);
     const factsBefore = await queryFacts(ctx, all);
+    const stampsBefore = await queryStamps(ctx, all);
     const run = await service(ctx).RefreshQueries({ QueryIDs: all });
     AssertEqual(run.Reports.length, all.length, 'QR1: one report per query');
     const changed = run.Reports.filter(r => r.Outcome !== 'Unchanged').map(r => `${r.QueryName}: ${describeReport(r)}`);
@@ -217,6 +228,7 @@ async function checkQr1UnchangedRefreshWritesNothing(ctx: IntegrationCheckContex
     const after = await SnapshotQueryRows(ctx, BUNDLE, all, true);
     Assert(before === after, `QR1: an unchanged refresh wrote child rows: ${SnapshotDifference(before, after)}`);
     AssertEqual(await queryFacts(ctx, all), factsBefore, 'QR1: an unchanged refresh changes no SQL or extraction column');
+    AssertEqual(await queryStamps(ctx, all), stampsBefore, 'QR1: an unchanged refresh leaves the query rows untouched (__mj_UpdatedAt did not move)');
 }
 
 async function checkQr2DependenciesFirst(ctx: IntegrationCheckContext): Promise<void> {

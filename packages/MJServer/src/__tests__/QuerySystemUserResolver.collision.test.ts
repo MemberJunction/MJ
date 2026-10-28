@@ -48,6 +48,10 @@ interface StoredQuery { ID: string; Name: string; CategoryID: string | null }
 const CATEGORY = 'C0000000-0000-0000-0000-000000000001';
 let rows: StoredQuery[];
 let lookups: RunViewParams[];
+/** The child-row reads the resolver made, with every cache bypassed or not. */
+let childReads: RunViewParams[];
+/** The field rows stored per query ID, as the database holds them (the query cache holds none). */
+let storedFields: Map<string, Array<{ ID: string; QueryID: string; Name: string; Sequence: number }>>;
 let nextID: number;
 
 /** A query record as the stub provider hands out: its insert yields first and enforces the unique name. */
@@ -96,6 +100,14 @@ const provider = {
     async GetEntityObject(): Promise<StubQueryRecord> {
         return new StubQueryRecord();
     },
+    async RunViews(params: RunViewParams[]) {
+        childReads.push(...params);
+        return params.map(p => {
+            const queryID = /QueryID='(.*)'/.exec(p.ExtraFilter ?? '')?.[1] ?? '';
+            const results = p.EntityName === 'MJ: Query Fields' ? (storedFields.get(queryID) ?? []) : [];
+            return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+        });
+    },
     async RunView(params: RunViewParams) {
         lookups.push(params);
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -123,6 +135,8 @@ async function createConcurrently(count: number, name: string, autoResolve: bool
 beforeEach(() => {
     rows = [];
     lookups = [];
+    childReads = [];
+    storedFields = new Map();
     nextID = 0;
 });
 
@@ -146,6 +160,23 @@ describe('CreateQueryExtended — concurrent creates with the same name (#6007)'
         expect(results.every(r => r.Success)).toBe(true);
         expect(rows).toHaveLength(1);
         expect(new Set(results.map(r => r.Query?.ID))).toEqual(new Set([rows[0].ID]));
+    });
+
+    it('without AutoResolveCollision, a request that loses the race gets the other query\'s fields, read from the database', async () => {
+        const saveOnce = StubQueryRecord.prototype.Save;
+        vi.spyOn(StubQueryRecord.prototype, 'Save').mockImplementation(async function (this: StubQueryRecord) {
+            const saved = await saveOnce.call(this);
+            if (saved) storedFields.set(this.ID, [{ ID: `${this.ID}-f1`, QueryID: this.ID, Name: 'One', Sequence: 1 }]);
+            return saved;
+        });
+        const results = await createConcurrently(3, 'With Fields', false);
+
+        const winnerID = rows[0].ID;
+        const losers = results.filter(r => r.Fields?.length === 1);
+        expect(losers).toHaveLength(2);
+        expect(losers.every(r => r.Query?.ID === winnerID && r.Fields?.[0].Name === 'One')).toBe(true);
+        expect(childReads.length).toBeGreaterThan(0);
+        expect(childReads.every(r => r.BypassCache === true)).toBe(true);
     });
 
     it('reads every existence check from the database, never a cache', async () => {

@@ -18,7 +18,7 @@ const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
-import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
+import { ClearRowCap, ReadRowCap, RowCapFieldFor, WriteRowCap, type RowCapField, type RowCapInfo } from './legacy/nodeSqlRowCap.js';
 import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
 import type { LexDialect } from './sqlLexer.js';
 import { FixMaxTypeSerialization, NodeSqlParse } from './legacy/nodeSqlParserCore.js';
@@ -162,11 +162,11 @@ export type SQLStatementKind =
 
 /**
  * Dialect-neutral description of the outermost row cap on a parsed SELECT.
- * Defined in {@link ./ASTDialectAdapter}; re-exported here so consumers can
- * import it from `@memberjunction/sql-parser` without referencing the adapter.
+ * Defined in `legacy/nodeSqlRowCap`; re-exported here so consumers can
+ * import it from `@memberjunction/sql-parser`.
  * Returned by {@link SQLParser.OuterCap}.
  */
-export type { RowCapInfo } from './ASTDialectAdapter.js';
+export type { RowCapInfo } from './legacy/nodeSqlRowCap.js';
 
 // ═══════════════════════════════════════════════════
 // SQLParser class
@@ -193,7 +193,8 @@ export class SQLParser {
     // ─── Instance state ────────────────────────────────
     private readonly _sql: string;
     private readonly _dialect: SQLParserDialect;
-    private readonly _adapter: ASTDialectAdapter;
+    /** The AST field the dialect's grammar keeps the row cap on. */
+    private readonly _rowCapField: RowCapField;
     private readonly _ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null;
     /** alias → original bracketed identifier; set when bracket preprocessing was applied */
     private readonly _aliasMap: Map<string, string> | null;
@@ -216,7 +217,7 @@ export class SQLParser {
     constructor(sql: string, dialect: SQLParserDialect) {
         this._sql = sql;
         this._dialect = dialect;
-        this._adapter = GetASTDialectAdapter(dialect);
+        this._rowCapField = RowCapFieldFor(dialect);
 
         // Fast path: direct parse (matches the old static ParseSQL contract).
         const direct = NodeSqlParse(sql, dialect.ParserDialect);
@@ -379,7 +380,7 @@ export class SQLParser {
     // These operate on the instance's parsed AST and hide node-sql-parser's
     // shape behind typed, dialect-neutral accessors. The shape of `top`,
     // `limit`, `into`, `set_op`, etc. is confined to this region and to
-    // ASTDialectAdapter — the only places that track those details.
+    // legacy/nodeSqlRowCap — the only places that track those details.
     //
     // All inspect the FIRST statement only (matching SqlifyAST, which
     // serializes only the first); MJ query SQL is single-statement.
@@ -443,18 +444,18 @@ export class SQLParser {
 
     /**
      * The outermost row cap on the parsed SELECT, dialect-neutral, or `null`
-     * when none is present. Backed by the dialect's ASTDialectAdapter, so the
+     * when none is present. Read from the AST field the dialect's grammar uses, so the
      * caller never needs to know whether the cap was a `TOP` or `LIMIT`.
      * @deprecated Use `SqlDocument.Parse(sql, dialect).RowCaps()` or `AnalyzePagingShape`.
      */
     get OuterCap(): RowCapInfo | null {
         const root = SQLParser.unwrapRoot(this._ast);
         if (!root || root.type !== 'select') return null;
-        return this._adapter.ReadRowCap(root);
+        return ReadRowCap(root, this._rowCapField);
     }
 
     /**
-     * Sets the outermost row cap. The adapter writes the dialect's form
+     * Sets the outermost row cap, in the dialect's form
      * (`TOP N` on SQL Server, `LIMIT N` elsewhere), preserving any existing
      * OFFSET. No-op when the root isn't a SELECT.
      * @deprecated Use the `SetRowCap` transform, which edits the SQL text as written.
@@ -462,7 +463,7 @@ export class SQLParser {
     SetOuterCap(cap: number): void {
         const root = SQLParser.unwrapRoot(this._ast);
         if (!root || root.type !== 'select') return;
-        this._adapter.WriteRowCap(root, cap);
+        WriteRowCap(root, this._rowCapField, cap);
     }
 
     /**
@@ -478,7 +479,7 @@ export class SQLParser {
     ClearOuterCap(): void {
         const root = SQLParser.unwrapRoot(this._ast);
         if (!root || root.type !== 'select') return;
-        this._adapter.ClearRowCap(root);
+        ClearRowCap(root, this._rowCapField);
     }
 
     /**

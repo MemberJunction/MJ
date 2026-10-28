@@ -130,15 +130,6 @@
           "fields": {
             "Name": "Total",
             "Description": "Total number of conversation detail rows that match the filter",
-            "Sequence": 1,
-            "SQLBaseType": "int",
-            "SQLFullType": "int",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "COUNT(*) aggregate counting all matching rows",
             "DetectionMethod": "Manual"
@@ -151,15 +142,6 @@
           "fields": {
             "Name": "AvgRating",
             "Description": "Average user rating across matching rows",
-            "Sequence": 2,
-            "SQLBaseType": "float",
-            "SQLFullType": "float",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "AVG(CAST(cd.UserRating AS FLOAT)) computes the mean rating",
             "DetectionMethod": "Manual"
@@ -172,15 +154,6 @@
           "fields": {
             "Name": "PositiveCount",
             "Description": "Count of rows with a user rating of 8 or higher",
-            "Sequence": 3,
-            "SQLBaseType": "int",
-            "SQLFullType": "int",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "SUM of CASE expression that adds 1 for each rating >= 8",
             "DetectionMethod": "Manual"
@@ -193,15 +166,6 @@
           "fields": {
             "Name": "NegativeCount",
             "Description": "Count of rows with a user rating of 3 or lower",
-            "Sequence": 4,
-            "SQLBaseType": "int",
-            "SQLFullType": "int",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "SUM of CASE expression that adds 1 for each rating <= 3",
             "DetectionMethod": "Manual"

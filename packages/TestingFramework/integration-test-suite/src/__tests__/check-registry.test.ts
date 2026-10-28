@@ -143,9 +143,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
-        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // RLS1–RLS12 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
         // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 19],
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 20],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -231,7 +231,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
         ['query-extraction', QueryExtractionChecks, 11], // QE1-QE11 exact fields, entities, parameters and dependencies a query save extracts, both platforms (IT138)
         ['query-refresh', QueryRefreshChecks, 12], // QR1-QR12 refresh and re-bind against a fixture schema the checks alter, dry run, order, drift, authorization (IT139)
-        ['metadata-sync-queries', MetadataSyncQueriesChecks, 7], // MSQ1-MSQ7 declared query children through PushService, re-push and shipped-tree no-ops (IT140)
+        ['metadata-sync-queries', MetadataSyncQueriesChecks, 9], // MSQ1-MSQ9 declared query children through PushService, re-push and shipped-tree no-ops (IT140)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -357,7 +357,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-consistency': 7,
         'metadata-sync': 9,
         'metadata-sync-push': 10,
-        'metadata-sync-queries': 7,
+        'metadata-sync-queries': 9,
         'native-tool-calling-live': 4,
         'native-tool-loop': 13,
         'native-tool-loop-live': 3,
@@ -395,13 +395,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 19,
+        'rls-isolation': 20,
         'rls-isolation-client': 1,
         'role-elevation': 6,
         'rubrics': 15,
         'runquery-cache': 21,
         'runquery-catalog': 6,
-        'runquery-features': 16,
+        'runquery-features': 17,
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,

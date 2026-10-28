@@ -32,15 +32,6 @@
           "fields": {
             "Name": "ID",
             "Description": "Unique identifier for the user",
-            "Sequence": 1,
-            "SQLBaseType": "uniqueidentifier",
-            "SQLFullType": "uniqueidentifier",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=ID",
-            "SourceFieldName": "ID",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -52,15 +43,6 @@
           "fields": {
             "Name": "Name",
             "Description": "Full name of the user",
-            "Sequence": 2,
-            "SQLBaseType": "nvarchar",
-            "SQLFullType": "nvarchar(100)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Name",
-            "SourceFieldName": "Name",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -72,15 +54,6 @@
           "fields": {
             "Name": "Email",
             "Description": "Email address of the user",
-            "Sequence": 3,
-            "SQLBaseType": "nvarchar",
-            "SQLFullType": "nvarchar(100)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Email",
-            "SourceFieldName": "Email",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -92,15 +65,6 @@
           "fields": {
             "Name": "Type",
             "Description": "Type or role of the user",
-            "Sequence": 4,
-            "SQLBaseType": "nchar",
-            "SQLFullType": "nchar(15)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Type",
-            "SourceFieldName": "Type",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -112,15 +76,6 @@
           "fields": {
             "Name": "CreatedAt",
             "Description": "Timestamp when the user record was created",
-            "Sequence": 5,
-            "SQLBaseType": "datetimeoffset",
-            "SQLFullType": "datetimeoffset(7)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=__mj_CreatedAt",
-            "SourceFieldName": "__mj_CreatedAt",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -193,15 +148,6 @@
           "fields": {
             "Name": "EntityName",
             "Description": "Name of the entity that had record changes",
-            "Sequence": 1,
-            "SQLBaseType": "nvarchar",
-            "SQLFullType": "nvarchar(255)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Entities",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=Name",
-            "SourceFieldName": "Name",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -213,15 +159,6 @@
           "fields": {
             "Name": "ChangeCount",
             "Description": "Total number of changes for the entity",
-            "Sequence": 2,
-            "SQLBaseType": "int",
-            "SQLFullType": "int",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "COUNT(*) aggregate counting all record changes per entity",
             "DetectionMethod": "Manual"
@@ -234,15 +171,6 @@
           "fields": {
             "Name": "LatestChange",
             "Description": "Most recent change timestamp for the entity",
-            "Sequence": 3,
-            "SQLBaseType": "datetimeoffset",
-            "SQLFullType": "datetimeoffset(7)",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "MAX(rc.CreatedAt) - latest change timestamp per entity",
             "DetectionMethod": "Manual"
@@ -255,15 +183,6 @@
           "fields": {
             "Name": "EarliestChange",
             "Description": "Earliest change timestamp for the entity",
-            "Sequence": 4,
-            "SQLBaseType": "datetimeoffset",
-            "SQLFullType": "datetimeoffset(7)",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "MIN(rc.CreatedAt) - earliest change timestamp per entity",
             "DetectionMethod": "Manual"
@@ -293,7 +212,7 @@
       "QualityRank": 7,
       "ExecutionCostRank": 3,
       "Reusable": false,
-      "UsesTemplate": false
+      "UsesTemplate": true
     },
     "relatedEntities": {
       "MJ: Query SQLs": [
@@ -315,15 +234,6 @@
           "fields": {
             "Name": "UserName",
             "Description": "Name of the user",
-            "Sequence": 1,
-            "SQLBaseType": "nvarchar",
-            "SQLFullType": "nvarchar(100)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Name",
-            "SourceFieldName": "Name",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -335,15 +245,6 @@
           "fields": {
             "Name": "Email",
             "Description": "Email address of the user",
-            "Sequence": 2,
-            "SQLBaseType": "nvarchar",
-            "SQLFullType": "nvarchar(100)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Email",
-            "SourceFieldName": "Email",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -355,15 +256,6 @@
           "fields": {
             "Name": "UserType",
             "Description": "Type classification of the user",
-            "Sequence": 3,
-            "SQLBaseType": "nchar",
-            "SQLFullType": "nchar(15)",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Type",
-            "SourceFieldName": "Type",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -375,15 +267,6 @@
           "fields": {
             "Name": "RecentChanges",
             "Description": "Number of recent changes made by the user",
-            "Sequence": 4,
-            "SQLBaseType": "int",
-            "SQLFullType": "int",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": false,
             "ComputationDescription": "COALESCE(rc.ChangeCount, 0) - returns 0 if no changes found",
             "DetectionMethod": "Manual"
@@ -396,15 +279,6 @@
           "fields": {
             "Name": "LatestChange",
             "Description": "Date/time of the most recent change",
-            "Sequence": 5,
-            "SQLBaseType": "datetimeoffset",
-            "SQLFullType": "datetimeoffset(7)",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },

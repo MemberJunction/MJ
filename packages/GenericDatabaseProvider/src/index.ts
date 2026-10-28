@@ -45,7 +45,7 @@ export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, ParseToIR, 
 export type { OrderByAnalysis, QueryIR, CTENode, Fragment, SQLFragment, TemplateExprFragment, BlockFragment, CommentFragment, CompositionRefFragment, CTEOrigin } from '@memberjunction/sql-parser';
 export { DescribeStatementFailure, DescribeStatementSuccess, BaseTypeOf } from './describeStatement.js';
 export type { DescribedColumn, DescribedColumnSource, DescribeStatementResult } from './describeStatement.js';
-export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue } from './typedQueryParameter.js';
+export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue, NamedQueryParameter, IsNamedQueryParameterList } from './typedQueryParameter.js';
 export type { TypedQueryParameterValue } from './typedQueryParameter.js';
 export { StatementMemo } from './statementMemo.js';
 export { FindProjectionStars } from './fieldSecurity/projectionStars.js';

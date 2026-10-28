@@ -8,6 +8,8 @@ export type { ChildRowWriteContext, ChildRowWriteSummary, ChildRowChange, QueryC
 export { RunDescriptionPass } from "./descriptionPass";
 export type { DescriptionPassRequest } from "./descriptionPass";
 export { AnalyzeQueryTemplate, SQLUsesTemplate, DescribeDiagnostic } from "./templateFacts";
+export { ReadCompositionTargetsAsync, MergeCompositionCandidates } from "./compositionTargets";
+export type { CompositionCandidate, CompositionCandidateParameter, CompositionTargetRead } from "./compositionTargets";
 export type { TemplateAnalysis } from "./templateFacts";
 export { DescribeQueryOutput, SampleValueFor } from "./describeFacts";
 export type { DescribedOutput } from "./describeFacts";

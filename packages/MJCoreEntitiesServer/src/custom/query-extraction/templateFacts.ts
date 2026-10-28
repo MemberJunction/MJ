@@ -1,5 +1,5 @@
 import type { DatabasePlatform } from "@memberjunction/core";
-import type { MJQueryEntityExtended, MJQueryParameterEntity } from "@memberjunction/core-entities";
+import type { CompositionCandidate, CompositionCandidateParameter } from "./compositionTargets";
 import { GetQueryDialect } from "@memberjunction/sql-dialect";
 import type { ParserDialect } from "@memberjunction/sql-dialect";
 import {
@@ -58,7 +58,7 @@ export interface TemplateAnalysis {
 /** A composition resolved to the query it names. */
 interface ResolvedReference {
     readonly Reference: CompositionReference;
-    readonly Target: MJQueryEntityExtended;
+    readonly Target: CompositionCandidate;
 }
 
 /**
@@ -111,7 +111,7 @@ export function DescribeDiagnostic(diagnostic: Diagnostic): string {
 // ─── Compositions ───────────────────────────────────────────────────────────
 
 /** The composed query at a reference's full path, as `QueryTemplate.Validate` asks for it. */
-function resolveTarget(fullPath: string, queries: readonly MJQueryEntityExtended[]): CompositionTarget | null {
+function resolveTarget(fullPath: string, queries: readonly CompositionCandidate[]): CompositionTarget | null {
     const segments = CompositionPathSegments(fullPath);
     const name = segments.pop() ?? '';
     const match = MatchCompositionPath(segments, name, queries);
@@ -128,16 +128,16 @@ function resolveTarget(fullPath: string, queries: readonly MJQueryEntityExtended
 }
 
 /** The full paths of the queries `query` composes, from its stored dependency rows. */
-function composedPaths(query: MJQueryEntityExtended, queries: readonly MJQueryEntityExtended[]): string[] {
+function composedPaths(query: CompositionCandidate, queries: readonly CompositionCandidate[]): string[] {
     const byID = IndexByUUID(queries);
     return (query.QueryDependencies ?? [])
         .map(d => byID.Get(d.DependsOnQueryID))
-        .filter((q): q is MJQueryEntityExtended => q !== undefined)
+        .filter((q): q is CompositionCandidate => q !== undefined)
         .map(q => CompositionFullPath(q));
 }
 
 /** Each composition with the query it names (exact path, or a unique partial path). */
-function resolveReferences(references: readonly CompositionReference[], queries: readonly MJQueryEntityExtended[]): { References: ResolvedReference[]; Complete: boolean; Notes: string[] } {
+function resolveReferences(references: readonly CompositionReference[], queries: readonly CompositionCandidate[]): { References: ResolvedReference[]; Complete: boolean; Notes: string[] } {
     const resolved: ResolvedReference[] = [];
     const notes: string[] = [];
     for (const reference of references) {
@@ -199,7 +199,7 @@ function hintFor(name: string, hints?: ReadonlyMap<string, string>): string | nu
 }
 
 /** The composed query's parameter an explicit `(Arg=Name)` argument passes `name` to; the first one wins. */
-function passThroughTarget(name: string, references: readonly ResolvedReference[]): MJQueryParameterEntity | undefined {
+function passThroughTarget(name: string, references: readonly ResolvedReference[]): CompositionCandidateParameter | undefined {
     const wanted = name.toLowerCase();
     for (const { Reference, Target } of references) {
         const argument = Reference.Arguments.find(a => a.Expression.Kind === 'Name' && a.Expression.Name.toLowerCase() === wanted);
@@ -209,7 +209,7 @@ function passThroughTarget(name: string, references: readonly ResolvedReference[
     return undefined;
 }
 
-function inheritedDescription(parameter: MJQueryParameterEntity): string | null {
+function inheritedDescription(parameter: CompositionCandidateParameter): string | null {
     return parameter.Description ? `${parameter.Description} (passed through to "${parameter.Query}" as "${parameter.Name}")` : null;
 }
 

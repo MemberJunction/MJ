@@ -106,7 +106,8 @@ import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, SqlDocument, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
-import { TypedBindValue, TypedQueryParameter } from './typedQueryParameter.js';
+import { NamedQueryParameter, TypedBindValue, TypedQueryParameter } from './typedQueryParameter.js';
+import type { TypedQueryParameterValue } from './typedQueryParameter.js';
 import { StatementMemo } from './statementMemo.js';
 import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
 import { UndescribedColumnNames, WithheldColumnNames, WithholdColumns } from './fieldSecurity/queryColumnSecurity.js';
@@ -5627,7 +5628,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * a {@link TypedQueryParameter} of the filtered column's own type, referenced by the dialect's typed
      * placeholder (`DialectBinding.TypedParameter`): a named, declared parameter on SQL Server, so a
      * varchar column is compared with a varchar value and keeps its index seek; `$n::type` on PostgreSQL.
-     * Without `columnTypes` (deprecated) values bind untyped, SQL Server `?`, PostgreSQL `$n`.
+     * Without `columnTypes` (deprecated) values bind untyped: with a `dialect`, as named parameters
+     * ({@link NamedQueryParameter}, referenced `@pN` on SQL Server, `$n` on PostgreSQL); with neither a
+     * dialect nor column types, as the legacy positional array (SQL Server `?`, PostgreSQL `$n`).
      *
      * Returns null on ANY condition that would make the materialized read UNFAITHFUL to the live query, so
      * the caller falls back to running live (always correct): an operator outside the safe set, a spec
@@ -5691,11 +5694,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const types = opts.columnTypes
             ? new Map(Object.entries(opts.columnTypes).map(([name, type]): [string, string] => [name.toLowerCase(), type]))
             : null;
-        const untypedPlaceholder = (index: number): string => (opts.dialect ? dialect.Binding.ParameterPlaceholder(index) : opts.isPostgres ? `$${index + 1}` : '?');
+        const untypedPlaceholder = (index: number): string => (opts.isPostgres ? `$${index + 1}` : '?');
         return {
             Parameters: parameters,
             Typed: types !== null,
             Bind(column: string, value: unknown): string | null {
+                if (types === null && opts.dialect) {
+                    return GenericDatabaseProvider.bindNamedParameter(parameters, dialect, value);
+                }
                 if (types === null) {
                     parameters.push(value);
                     return untypedPlaceholder(parameters.length - 1);
@@ -5708,6 +5714,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 return reference.Placeholder;
             },
         };
+    }
+
+    /**
+     * Adds `value` to `parameters` as a {@link NamedQueryParameter} and returns the dialect's placeholder for
+     * it (`@p0` bound as `p0` on SQL Server, `$1` on PostgreSQL). Passing the value by name keeps a SQL Server
+     * provider from rewriting `?` in the statement text, which the legacy positional array form does
+     * everywhere, inside a quoted identifier included. Null (→ live) for a value no parameter can carry.
+     */
+    private static bindNamedParameter(parameters: unknown[], dialect: SQLDialect, value: unknown): string | null {
+        const bound = GenericDatabaseProvider.namedParameterValue(value);
+        if (bound === undefined) return null;
+        const placeholder = dialect.Binding.ParameterPlaceholder(parameters.length);
+        parameters.push(new NamedQueryParameter(placeholder.startsWith('@') ? placeholder.slice(1) : placeholder, bound));
+        return placeholder;
+    }
+
+    /** `value` as a bind parameter value, or undefined when it is not a scalar a parameter can carry. */
+    private static namedParameterValue(value: unknown): TypedQueryParameterValue | undefined {
+        if (value === null || value instanceof Date) return value;
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+        return undefined;
     }
 
     /** One spec element as a bound predicate, or null when it cannot be served faithfully (→ live). */

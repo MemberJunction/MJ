@@ -243,6 +243,14 @@ export class DeleteQueryResultType {
     Status?: string;
 }
 
+/** A query's child rows, read from the database. */
+interface StoredQueryChildren {
+    readonly Fields: MJQueryFieldEntity[];
+    readonly Parameters: MJQueryParameterEntity[];
+    readonly Entities: MJQueryEntityEntity[];
+    readonly Permissions: MJQueryPermissionEntity[];
+}
+
 @Resolver()
 export class MJQueryResolverExtended extends MJQueryResolver {
     /**
@@ -385,7 +393,10 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         LogStatus(`[CreateQuery] Unique constraint detected for query '${name}'. Using existing query (ID: ${existing.ID}) created by concurrent request.`);
         const existingEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', user);
         if (await existingEntity.Load(existing.ID)) {
-            return this.buildSuccessResult(existingEntity, user, provider);
+            // The other request may have run on another server, or its rows may not have reached this
+            // process's query cache yet, so the child rows are read from the database.
+            const children = await this.readStoredChildrenAsync(provider, existing.ID, user);
+            return this.buildSuccessResult(existingEntity, user, provider, children);
         }
         return {
             Success: false,
@@ -400,17 +411,39 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      *
      * @param contextUser The caller the result is for. Field security projects the record for them.
      */
-    private async buildSuccessResult(entity: MJQueryEntityServer, contextUser: UserInfo, provider: DatabaseProviderBase): Promise<QueryMutationResultType> {
+    private async buildSuccessResult(entity: MJQueryEntityServer, contextUser: UserInfo, provider: DatabaseProviderBase, children?: StoredQueryChildren): Promise<QueryMutationResultType> {
         return {
             Success: true,
             // Mapped for the caller, so the field-security projection applies: the record was just
             // saved, and a save re-reads the whole row.
             // fls-guard: projected for contextUser by MapFieldNamesToCodeNames
             Query: await this.MapFieldNamesToCodeNames('MJ: Queries', entity.GetAll(), contextUser, provider) as MJQuery_,
-            Fields: this.mapFields(entity.QueryFields),
-            Parameters: this.mapParameters(entity.QueryParameters),
-            Entities: this.mapEntities(entity.QueryEntities),
-            Permissions: this.mapPermissions(entity.QueryPermissions),
+            Fields: this.mapFields(children?.Fields ?? entity.QueryFields),
+            Parameters: this.mapParameters(children?.Parameters ?? entity.QueryParameters),
+            Entities: this.mapEntities(children?.Entities ?? entity.QueryEntities),
+            Permissions: this.mapPermissions(children?.Permissions ?? entity.QueryPermissions),
+        };
+    }
+
+    /**
+     * A query's child rows read from the database with every cache bypassed. A collection whose
+     * read fails comes back empty, as the cache would have given it.
+     */
+    private async readStoredChildrenAsync(provider: DatabaseProviderBase, queryID: string, user: UserInfo): Promise<StoredQueryChildren> {
+        const filter = `QueryID='${EscapeSQLString(queryID)}'`;
+        const view = (entityName: string, orderBy?: string) => ({ EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, ResultType: 'entity_object' as const, BypassCache: true });
+        const [fields, parameters, entities, permissions] = await provider.RunViews([
+            view('MJ: Query Fields', 'Sequence'),
+            view('MJ: Query Parameters', 'Name'),
+            view('MJ: Query Entities'),
+            view('MJ: Query Permissions'),
+        ], user);
+        const rows = <T>(result: { Success: boolean; Results: T[] } | undefined): T[] => (result?.Success ? result.Results : []);
+        return {
+            Fields: rows<MJQueryFieldEntity>(fields),
+            Parameters: rows<MJQueryParameterEntity>(parameters),
+            Entities: rows<MJQueryEntityEntity>(entities),
+            Permissions: rows<MJQueryPermissionEntity>(permissions),
         };
     }
 

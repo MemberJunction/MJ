@@ -33,15 +33,6 @@
           "fields": {
             "Name": "TagID",
             "Description": "The unique identifier for the tag being aggregated",
-            "Sequence": 1,
-            "SQLBaseType": "uniqueidentifier",
-            "SQLFullType": "uniqueidentifier",
-            "IsNullable": false,
-            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Tagged Items",
-            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=TagID",
-            "SourceFieldName": "TagID",
-            "SourceObjectName": null,
-            "IsComputed": false,
             "IsSummary": false,
             "DetectionMethod": "Manual"
           },
@@ -53,15 +44,6 @@
           "fields": {
             "Name": "ItemCount",
             "Description": "Total number of items associated with this tag",
-            "Sequence": 2,
-            "SQLBaseType": "int",
-            "SQLFullType": "int",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "COUNT(*) aggregate counting all records per TagID",
             "DetectionMethod": "Manual"
@@ -74,15 +56,6 @@
           "fields": {
             "Name": "AvgWeight",
             "Description": "The average relevance weight of the items for this tag, formatted to two decimal places",
-            "Sequence": 3,
-            "SQLBaseType": "decimal",
-            "SQLFullType": "decimal(4,2)",
-            "IsNullable": true,
-            "SourceEntityID": null,
-            "SourceEntityFieldID": null,
-            "SourceFieldName": null,
-            "SourceObjectName": null,
-            "IsComputed": true,
             "IsSummary": true,
             "ComputationDescription": "Calculates the average of the Weight field after casting to FLOAT, handles NULLs with ISNULL(..., 0), and casts the final result to DECIMAL(4,2)",
             "DetectionMethod": "Manual"

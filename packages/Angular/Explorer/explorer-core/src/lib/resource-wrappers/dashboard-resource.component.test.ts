@@ -4,7 +4,7 @@ import type { ChangeDetectorRef, ViewContainerRef } from '@angular/core';
 import type { ResolvedLayoutConfig } from 'golden-layout';
 import { LogError } from '@memberjunction/core';
 import type { RunViewParams } from '@memberjunction/core';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, SqlDocument } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import type { RecentAccessService } from '@memberjunction/ng-shared';
@@ -1278,7 +1278,7 @@ function clientFilterRefusal(filter: string, dialect: SQLParserDialect): string 
   if (SQLParser.HasStackedStatements(filter, dialect)) return `${dialect.ParserDialect}: more than one statement`;
   const wrapped = `SELECT 1 FROM __mj_clause_screen WHERE (${filter})`;
   const parser = new SQLParser(wrapped, dialect);
-  if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+  if (!parser.IsValid || !SqlDocument.Parse(wrapped, dialect).IsReadOnly().Value.IsReadOnly || parser.StatementKind !== 'select') {
     return `${dialect.ParserDialect}: not a safe read-only filter fragment`;
   }
   const tables = SQLParser.ExtractTableRefs(wrapped, dialect).map(table => table.TableName.toLowerCase());
