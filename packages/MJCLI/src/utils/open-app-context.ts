@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
+import type { GitHubClientOptions, GitHubTokenSource } from '@memberjunction/open-app-engine';
 import { GetValidatedConfig } from '../config.js';
 
 type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
@@ -273,17 +274,23 @@ interface OrchestratorContextShape {
  */
 export function BuildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
-}): { Token?: string; TokenMap?: Record<string, string> } {
+}): GitHubClientOptions {
+  const configToken = config.openApps?.github?.token;
+  const envToken = process.env.GITHUB_TOKEN;
+  // Recorded so a "cannot read this repository" message names the token that was actually used:
+  // a config token silently beats GITHUB_TOKEN, so exporting a fresh one changes nothing.
+  const tokenSource: GitHubTokenSource | undefined = configToken != null ? 'Config' : envToken != null ? 'Environment' : undefined;
   return {
-    Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
+    Token: configToken ?? envToken,
     TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
+    TokenSource: tokenSource,
   };
 }
 
 /** @deprecated Use {@link BuildGitHubOptions}. */
 export function buildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
-}): { Token?: string; TokenMap?: Record<string, string> } {
+}): GitHubClientOptions {
   return BuildGitHubOptions(config);
 }
 

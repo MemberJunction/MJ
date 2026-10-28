@@ -1,5 +1,6 @@
 /**
- * `mj app install` / `mj app upgrade` must exit 1 — once — when the engine reports failure.
+ * `mj app install` / `upgrade` / `remove` / `enable` / `disable` must exit 1 — once — when the
+ * engine reports failure.
  *
  * oclif's `this.exit(1)` works by THROWING an ExitError. Called inside the command's generic
  * try/catch, the catch swallowed its own exit: it printed a second "failed" line and re-raised the
@@ -12,6 +13,9 @@ import { fileURLToPath } from 'node:url';
 vi.mock('@memberjunction/open-app-engine', () => ({
     InstallApp: vi.fn(async () => ({ Success: false, ErrorMessage: 'Cannot read Acme/Private.' })),
     UpgradeApp: vi.fn(async () => ({ Success: false, ErrorMessage: 'Cannot read Acme/Private.' })),
+    RemoveApp: vi.fn(async () => ({ Success: false, ErrorMessage: "App 'no-such-app' is not installed" })),
+    EnableApp: vi.fn(async () => ({ Success: false, ErrorMessage: "App 'no-such-app' is not installed" })),
+    DisableApp: vi.fn(async () => ({ Success: false, ErrorMessage: "App 'no-such-app' is not installed" })),
 }));
 vi.mock('../utils/open-app-context.js', () => ({
     BuildOrchestratorContext: vi.fn(async () => ({})),
@@ -41,6 +45,27 @@ describe('app command exit code on an engine failure', () => {
     it('upgrade exits 1 with ExitError, not 2 with "EEXIT: 1"', async () => {
         const { default: AppUpgrade } = await import('../commands/app/upgrade.js');
         const result = await runAndCatch(() => AppUpgrade.run(['some-app', '--version', '1.0.0'], packageRoot));
+        expect(result.exit).toBe(1);
+        expect(result.message).toBe('EEXIT: 1');
+    }, 60_000);
+
+    it('remove exits 1 with ExitError, not 2 with "EEXIT: 1" (#5930)', async () => {
+        const { default: AppRemove } = await import('../commands/app/remove.js');
+        const result = await runAndCatch(() => AppRemove.run(['no-such-app', '--yes', '--force'], packageRoot));
+        expect(result.exit).toBe(1);
+        expect(result.message).toBe('EEXIT: 1');
+    }, 60_000);
+
+    it('enable exits 1 with ExitError, not 2 with "EEXIT: 1" (#5930)', async () => {
+        const { default: AppEnable } = await import('../commands/app/enable.js');
+        const result = await runAndCatch(() => AppEnable.run(['no-such-app'], packageRoot));
+        expect(result.exit).toBe(1);
+        expect(result.message).toBe('EEXIT: 1');
+    }, 60_000);
+
+    it('disable exits 1 with ExitError, not 2 with "EEXIT: 1" (#5930)', async () => {
+        const { default: AppDisable } = await import('../commands/app/disable.js');
+        const result = await runAndCatch(() => AppDisable.run(['no-such-app'], packageRoot));
         expect(result.exit).toBe(1);
         expect(result.message).toBe('EEXIT: 1');
     }, 60_000);

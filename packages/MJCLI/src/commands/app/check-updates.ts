@@ -1,5 +1,5 @@
 import { Command } from '@oclif/core';
-import { ListInstalledApps, GetLatestVersion } from '@memberjunction/open-app-engine';
+import { ListInstalledApps, GetLatestVersion, DescribeUnresolvedVersion } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { BuildContextUser, BuildGitHubOptions } from '../../utils/open-app-context.js';
@@ -37,8 +37,11 @@ export default class AppCheckUpdates extends Command {
       // A bare `{ Token }` dropped the per-repo TokenMap, and every private repo whose token lives
       // there reported "up to date" forever.
       const githubOptions = BuildGitHubOptions(config);
-      const report = await CheckAppsForUpdates(apps, (repoUrl, subpath) =>
-        GetLatestVersion(repoUrl, githubOptions, subpath)
+      const report = await CheckAppsForUpdates(
+        apps,
+        (repoUrl, subpath) => GetLatestVersion(repoUrl, githubOptions, subpath),
+        // An empty listing may be a private repo this credential cannot see (GitHub 404s it).
+        (repoUrl, subpath) => DescribeUnresolvedVersion(repoUrl, githubOptions, subpath)
       );
 
       spinner.stop();

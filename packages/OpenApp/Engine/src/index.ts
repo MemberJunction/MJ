@@ -70,6 +70,7 @@ export {
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
+    GitHubTokenSource,
     GitHubRelease,
     ManifestFetchResult,
     MigrationDownloadResult
