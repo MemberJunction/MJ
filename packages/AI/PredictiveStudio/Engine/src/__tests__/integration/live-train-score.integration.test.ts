@@ -465,6 +465,12 @@ function readMetric(model: RecordingEntity, field: 'Metrics' | 'HoldoutMetrics',
 
 // region: the suite ----------------------------------------------------------
 
+/**
+ * The models trained here belong to pipelines without a Prediction Unit. Scoring asks the pipeline whether its models
+ * do; the fake provider has no RunView for the production lookup, so the answer is given here.
+ */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+
 describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score (real sidecar)', () => {
   // 3,000 rows: the locked holdout is a seeded, stratified 20% sample (LockedHoldoutSplitter), and on
   // this generator the xgboost holdout AUC's 1st percentile across random 600-row holdouts is 0.77,
@@ -552,6 +558,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader,
       artifactLoader,
       sidecar: new LiveSidecarPredictor(sidecar),
+      pipelineUnits: NO_PIPELINE_UNITS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
 
@@ -647,6 +654,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
       sidecar: new LiveSidecarPredictor(sidecar),
+      pipelineUnits: NO_PIPELINE_UNITS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
     const [pos, neg] = await processor.ProcessBatch(
@@ -699,6 +707,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
       sidecar: new LiveSidecarPredictor(sidecar),
+      pipelineUnits: NO_PIPELINE_UNITS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
     const [hi, lo] = await processor.ProcessBatch(

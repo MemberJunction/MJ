@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
-import { RecordHistory, type RecordChangeRow } from '../record-history';
+import { RecordHistory, RunViewRecordHistoryReader, type RecordChangeRow } from '../record-history';
+import type { FetchRowsParams, FetchRowsResult, SourceRow } from '../../data-access';
+import type { AssemblyEntityInfo } from '../../assembly-metadata';
+import { TableDataAccess } from '../../../__tests__/fakes/table-data-access';
 
 const rc = (id: string, key: string, type: RecordChangeRow['Type'], at: string, full: Record<string, string | null>, changed: string[] = [], source: RecordChangeRow['Source'] = 'Internal'): RecordChangeRow =>
   ({ ID: id, RecordID: `ID|${key}`, Type: type, Source: source, ChangedAt: new Date(at), ChangesJSON: JSON.stringify(Object.fromEntries(changed.map((f) => [f, { field: f, oldValue: null, newValue: full[f] }]))), FullRecordJSON: JSON.stringify(full) });
@@ -24,6 +27,11 @@ describe('BuildEntityHistory', () => {
   it('refuses to fill a decision date before the record\'s history start with today\'s value', () => {
     expect(h.ValueAt('P1', 'Status', new Date('2020-12-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'before-history-start' });
     expect(h.ValueAt('P3', 'Status', new Date('2025-01-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'no-history' });
+  });
+  it('has no history for a record whose change rows hold no Create or Snapshot row to start from', () => {
+    const updatesOnly = RecordHistory.BuildEntityHistory('People', [rc('u1', 'P4', 'Update', '2022-01-01T00:00:00Z', { Status: 'Lapsed' }, ['Status'])],
+      new Map([['p4', { Status: 'Lapsed' }]]), ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, now);
+    expect(updatesOnly.ValueAt('P4', 'Status', new Date('2023-01-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'no-history' });
   });
   it('marks a record whose replay disagrees with its stored value as uncovered (continuity check)', () => {
     // P2's history says Active; the stored row says Lapsed: a change bypassed Record Changes.
@@ -92,5 +100,41 @@ describe('WriteHistorySnapshots', () => {
 
     await expect(RecordHistory.WriteHistorySnapshots('People', provider as unknown as IMetadataProvider, user)).rejects.toThrow(/1 of 3 failed: ID P\|4: /);
     expect(provider.Saved.map((s) => s.RecordID).sort()).toEqual(['ID|P2', 'ID|P3']);
+  });
+});
+
+describe('RunViewRecordHistoryReader', () => {
+  /** A table fake that counts the row reads of each entity. */
+  class CountingTables extends TableDataAccess {
+    public readonly Reads = new Map<string, number>();
+    public async fetchRows(p: FetchRowsParams): Promise<FetchRowsResult> {
+      this.Reads.set(p.EntityName, (this.Reads.get(p.EntityName) || 0) + 1);
+      return super.fetchRows(p);
+    }
+  }
+  const people: AssemblyEntityInfo = {
+    ID: 'E-PE', Name: 'People', PrimaryKey: 'ID', TrackRecordChanges: true,
+    Fields: ['ID', 'Status', 'Tier'].map((Name) => ({ Name, SqlType: 'nvarchar', TSType: 'string', AllowUpdateAPI: Name !== 'ID', IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false })),
+  };
+  const changeRow = (c: RecordChangeRow): SourceRow => ({ ...c, EntityID: 'E-PE', Status: 'Complete' });
+
+  it('reads an entity\'s change rows once for every field list and key set it loads', async () => {
+    const data = new CountingTables({
+      People: [{ ID: 'P1', Status: 'Lapsed', Tier: 'A' }, { ID: 'P2', Status: 'Active', Tier: 'B' }],
+      'MJ: Record Changes': [
+        changeRow(rc('c1', 'P1', 'Create', '2021-01-01T00:00:00Z', { Status: 'Active', Tier: 'A' })),
+        changeRow(rc('c2', 'P1', 'Update', '2023-01-01T00:00:00Z', { Status: 'Lapsed', Tier: 'A' }, ['Status'])),
+        changeRow(rc('c3', 'P2', 'Snapshot', '2022-06-01T00:00:00Z', { Status: 'Active', Tier: 'B' })),
+      ],
+    });
+    const reader = new RunViewRecordHistoryReader(data, { mode: 'complete' });
+    const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
+    const now = new Date('2026-10-12T00:00:00Z');
+    const status = await reader.Load(people, ['P1'], ['Status'], policy, now);
+    const tier = await reader.Load(people, ['P1', 'P2'], ['Tier'], policy, now);
+    expect(data.Reads.get('MJ: Record Changes')).toBe(1);
+    expect(data.Reads.get('People')).toBe(2);
+    expect(status.ValueAt('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active' });
+    expect(tier.ValueAt('P2', 'Tier', new Date('2023-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'B' });
   });
 });

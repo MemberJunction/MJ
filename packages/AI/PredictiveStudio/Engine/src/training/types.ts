@@ -199,7 +199,7 @@ export interface TrainingDeps {
   /** The clock for a unit whose censoring cutoff is `now`; defaults to the current time. */
   now?: () => Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The Record Changes history the as-of assembly replays; defaults to a `RunViewRecordHistoryReader` (complete reads) over `dataAccess`. */
-  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**

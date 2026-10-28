@@ -95,6 +95,12 @@ export interface ColumnProvenance {
   readonly sourceVersion: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** A categorical column whose distinct levels exceeded its cap: the levels kept and those folded into `__other`. */
   readonly categoryFold?: { readonly kept: readonly string[]; readonly folded: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * A windowed-aggregate column: how many child rows were dropped from owner windows because they were entered after the
+   * owner row's decision day (0 when none). Absent on other columns and on an aggregate column whose rows were all
+   * uncovered, where no window was read.
+   */
+  readonly lateEnteredDropped?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 export interface ValueProvenance {

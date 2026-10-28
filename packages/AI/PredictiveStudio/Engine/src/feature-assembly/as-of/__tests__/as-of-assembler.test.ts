@@ -57,6 +57,8 @@ const entities: Record<string, AssemblyEntityInfo> = {
   Gifts: { ID: 'E-GI', Name: 'Gifts', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('GivenOn', 'Date'), field('Amount', 'number')] },
   // A field declared not updatable, on an entity that carries its creation time.
   Badges: { ID: 'E-BA', Name: 'Badges', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), { ...field('Level'), AllowUpdateAPI: false }, field('__mj_CreatedAt', 'Date')] },
+  // A tracked entity with an updatable field that also carries its creation time.
+  Tiers: { ID: 'E-TI', Name: 'Tiers', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('Tier'), field('__mj_CreatedAt', 'Date')] },
 };
 const metadata: IAssemblyMetadata = { Entity: (n) => entities[n] || null };
 
@@ -493,7 +495,7 @@ describe('AsOfFeatureAssembler history loads, late-entered child rows and creati
     if (out.Status !== 'assembled') return;
     // e2 is dated inside y2's window but was entered two weeks after y2's decision day: it did not exist then.
     expect(out.Rows.map((r) => r.Values[0])).toEqual([1, 1]);
-    expect(out.ColumnProvenance[0].sourceVersion).toBe('window:all;aggregate:count;late-entered-dropped:1');
+    expect(out.ColumnProvenance[0]).toMatchObject({ sourceVersion: 'window:all;aggregate:count', lateEnteredDropped: 1 });
   });
   it('drops an untracked child row whose __mj_CreatedAt is after the owner row\'s decision day', async () => {
     const data: Record<string, SourceRow[]> = {
@@ -507,7 +509,7 @@ describe('AsOfFeatureAssembler history loads, late-entered child rows and creati
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
     expect(out.Rows.map((r) => r.Values[0])).toEqual([1, 1]);
-    expect(out.ColumnProvenance[0].sourceVersion).toBe('window:all;aggregate:count;late-entered-dropped:1');
+    expect(out.ColumnProvenance[0]).toMatchObject({ sourceVersion: 'window:all;aggregate:count', lateEnteredDropped: 1 });
   });
   it('reads an immutable field of a tracked entity whose record was created after the decision day as missing', async () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([region], { Changes: yearCreates }));
@@ -535,6 +537,63 @@ describe('AsOfFeatureAssembler history loads, late-entered child rows and creati
     };
     const sum: FeatureColumnSpec = { ...countOf('Gifts', 'GivenOn'), source: { ...countOf('Gifts', 'GivenOn').source, aggregate: 'sum', valueField: 'Amount' } as FeatureColumnSpec['source'] };
     expect(await new AsOfFeatureAssembler().Assemble(input([sum], { Tables: data, Changes: gifts }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Gifts', field: 'Amount', changesAfter: 1 } });
+  });
+});
+
+describe('AsOfFeatureAssembler creation from the stored column, and the late-entered drop count', () => {
+  const read = (name: string, entity: string): FeatureColumnSpec =>
+    ({ name, source: { kind: 'immutable-field', entity, field: name, keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
+  const excludeAndCount: PredictionUnitSpec = { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } };
+
+  it('reads a tracked record whose history starts with a Snapshot after the decision day as missing when its __mj_CreatedAt is after it too', async () => {
+    const data: Record<string, SourceRow[]> = {
+      ...tables,
+      Tiers: [{ ID: 'y1', Tier: 'Gold', __mj_CreatedAt: new Date('2022-06-01T00:00:00Z') }, { ID: 'y2', Tier: 'Silver', __mj_CreatedAt: new Date('2024-01-01T00:00:00Z') }],
+    };
+    const tierChanges: Record<string, RecordChangeRow[]> = {
+      ...changes,
+      Tiers: [rc('ts-1', 'y1', 'Snapshot', '2022-07-01T00:00:00Z', { ID: 'y1', Tier: 'Gold' }), rc('ts-2', 'y2', 'Snapshot', '2024-02-01T00:00:00Z', { ID: 'y2', Tier: 'Silver' })],
+    };
+    const out = await new AsOfFeatureAssembler().Assemble(input([read('Tier', 'Tiers')], { Tables: data, Changes: tierChanges }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    // y2 did not exist on its decision day (2023-12-01): missing, not a history gap that refuses the assembly.
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['Gold', null]);
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ sourceRef: 'Tiers/y2/Tier', sourceVersion: 'created-after-decision' });
+  });
+  it('takes the later of the Create row and __mj_CreatedAt as the creation instant', async () => {
+    const data: Record<string, SourceRow[]> = {
+      ...tables,
+      Badges: [{ ID: 'y1', Level: 'Gold', __mj_CreatedAt: new Date('2023-01-01T00:00:00Z') }, { ID: 'y2', Level: 'Silver', __mj_CreatedAt: new Date('2022-01-01T00:00:00Z') }],
+    };
+    const badgeChanges: Record<string, RecordChangeRow[]> = {
+      ...changes,
+      Badges: [rc('bc-1', 'y1', 'Create', '2022-01-01T00:00:00Z', { ID: 'y1', Level: 'Gold' }), rc('bc-2', 'y2', 'Create', '2022-01-01T00:00:00Z', { ID: 'y2', Level: 'Silver' })],
+    };
+    const out = await new AsOfFeatureAssembler().Assemble(input([read('Level', 'Badges')], { Tables: data, Changes: badgeChanges }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    // y1's column says it was created after its decision day (2022-12-01), though its Create row is earlier.
+    expect(out.Rows.map((r) => r.Values[0])).toEqual([null, 'Silver']);
+    expect(out.Rows[0].Provenance[0]).toMatchObject({ sourceVersion: 'created-after-decision' });
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ sourceVersion: 'created:2022-01-01T00:00:00.000Z' });
+  });
+  it('reports a zero drop count on an aggregate column that dropped nothing, and none on one whose rows are all uncovered', async () => {
+    const count: FeatureColumnSpec = {
+      name: 'Given', source: { kind: 'windowed-aggregate', childEntity: 'Gifts', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'GivenOn', endDateField: null, voidedAtField: null, aggregate: 'count', valueField: null, windowDays: null, filter: [] },
+      encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null },
+    };
+    const data: Record<string, SourceRow[]> = { ...tables, Gifts: [{ ID: 'g1', PersonID: 'P1', GivenOn: '2022-06-01', Amount: 20 }] };
+    const giftHistory = (personId: string): Record<string, RecordChangeRow[]> =>
+      ({ ...changes, Gifts: [rc('gc-1', 'g1', 'Create', '2022-06-01T00:00:00Z', { ID: 'g1', PersonID: personId, GivenOn: '2022-06-01', Amount: 20 })] });
+    const clean = await new AsOfFeatureAssembler().Assemble(input([count], { Tables: data, Changes: giftHistory('P1') }));
+    expect(clean.Status === 'assembled' && clean.ColumnProvenance[0]).toMatchObject({ sourceVersion: 'window:all;aggregate:count', lateEnteredDropped: 0 });
+    // The owner key's history says P0 while the row says P1: every unit row is uncovered, so no window was read.
+    const out = await new AsOfFeatureAssembler().Assemble(input([count], { Tables: data, Changes: giftHistory('P0'), Unit: excludeAndCount }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
+    expect(out.ColumnProvenance[0].lateEnteredDropped).toBeUndefined();
   });
 });
 

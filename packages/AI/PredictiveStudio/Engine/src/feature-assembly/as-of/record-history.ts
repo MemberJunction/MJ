@@ -9,7 +9,7 @@
  * ChangeHistoryPolicy. Today's value never fills a gap.
  */
 import { CompositeKey, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, OrdinalCompare } from '@memberjunction/global';
+import { EscapeSQLString, OrdinalCompare, UUIDMap } from '@memberjunction/global';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { ChangeHistoryCoverage, ChangeHistoryPolicy, JsonValue, ParseResult, ReadPolicy } from '@memberjunction/predictive-studio-core';
 import { JsonParse } from '@memberjunction/predictive-studio-core';
@@ -283,21 +283,44 @@ export class RecordHistory {
   }
 }
 
-/** Production reader: one complete read of the entity's Record Changes plus the current values of the requested keys. */
+/**
+ * Production reader: one complete read of an entity's Record Changes plus the current values of the requested keys.
+ * The change rows are read once per entity for the life of the reader, however many field lists and key sets load
+ * that entity's history; the current values are read on every load, since each load asks for its own keys and fields.
+ * Build one reader per assembly (as training and scoring do): a reader kept longer would replay change rows written
+ * after its first load as if they did not exist.
+ */
 export class RunViewRecordHistoryReader implements IRecordHistoryReader {
+  /** The complete change-row read of each entity, by entity ID; a refused read is kept and refuses again. */
+  private readonly changeRows = new UUIDMap<Promise<RecordChangeRow[]>>();
+
   constructor(private readonly dataAccess: ICountingDataAccess, private readonly read: ReadPolicy) {}
 
   /** The entity's replayable history for `keys`; a short read of either source ends the assembly with its refusal. */
   public async Load(entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], policy: ChangeHistoryPolicy, now: Date): Promise<EntityHistory> {
+    const changes = await this.changeRowsOf(entity);
+    const current = await KeyedReader.ReadByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
+    if (current.Status === 'refused') throw new AssemblyRefused(current.Refusal);
+    return RecordHistory.BuildEntityHistory(entity.Name, changes, current.Rows, fields, policy, now);
+  }
+
+  /** The entity's complete change rows, read on the first load of the entity and shared by every later one. */
+  private changeRowsOf(entity: AssemblyEntityInfo): Promise<RecordChangeRow[]> {
+    const cached = this.changeRows.Get(entity.ID);
+    if (cached) return cached;
+    const pending = this.readChangeRows(entity);
+    this.changeRows.Set(entity.ID, pending);
+    return pending;
+  }
+
+  private async readChangeRows(entity: AssemblyEntityInfo): Promise<RecordChangeRow[]> {
     const changes = await CompleteReader.ReadCompletely(this.dataAccess, {
       EntityName: 'MJ: Record Changes', KeyField: 'ID',
       ExtraFilter: `[EntityID]='${EscapeSQLString(entity.ID)}' AND [Status]='Complete'`,
       Fields: ['ID', 'RecordID', 'Type', 'Source', 'ChangedAt', 'ChangesJSON', 'FullRecordJSON'],
     }, this.read);
     if (changes.Status === 'refused') throw new AssemblyRefused(changes.Refusal);
-    const current = await KeyedReader.ReadByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
-    if (current.Status === 'refused') throw new AssemblyRefused(current.Refusal);
-    return RecordHistory.BuildEntityHistory(entity.Name, changes.Rows.map((r) => RunViewRecordHistoryReader.toChangeRow(r)), current.Rows, fields, policy, now);
+    return changes.Rows.map((r) => RunViewRecordHistoryReader.toChangeRow(r));
   }
 
   /** A Record Changes row as read; an unknown Type/Source value falls back to the conservative Update/Internal. */

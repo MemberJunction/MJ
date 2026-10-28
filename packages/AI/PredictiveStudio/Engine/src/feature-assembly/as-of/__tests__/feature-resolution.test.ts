@@ -56,6 +56,13 @@ describe('ResolveFeatureColumns', () => {
     expect(FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['Nope'] }] }, unitSpec, years, metadata, { denyFields: [], denySources: [] }))
       .toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'Nope' } });
   });
+  it('refuses a standardize, one-hot or bin step on a column no feature produces', () => {
+    const refusedFor = (step: FeatureStepGraph['Steps'][number]) => FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['EventsAttended'] }, step] }, unitSpec, years, metadata, { denyFields: [], denySources: [] });
+    const refusal = { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'TenureDays' } };
+    expect(refusedFor({ Id: 'z', Kind: 'standardize', Columns: ['EventsAttended', 'TenureDays'] })).toEqual(refusal);
+    expect(refusedFor({ Id: 'o', Kind: 'onehot', Column: 'TenureDays' })).toEqual(refusal);
+    expect(refusedFor({ Id: 'b', Kind: 'bin', Column: 'TenureDays', Bins: [0, 10] })).toEqual(refusal);
+  });
   it('refuses llm-derived features without a version pin and steps with no as-of semantics', () => {
     expect(FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'llm-derived', FeaturePipelineRef: 'fp', Columns: ['Sentiment'] }] }, unitSpec, years, metadata, { denyFields: [], denySources: [] }))
       .toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'Sentiment' } });

@@ -9,7 +9,7 @@ import type { DatedSource, TemporalSpec } from '@memberjunction/predictive-studi
 import { MS_PER_DAY } from '../../prediction-unit/utc-day';
 
 /** A series feature reference, derived from the contract's `series` source (never restated). */
-// case-violation-ok-legacy-back-compat: `kind` is DatedSource's contracts.ts wire discriminant
+// case-violation-ok-legacy-back-compat: contracts.ts wire name
 export type SeriesFeatureRef = Extract<DatedSource, { kind: 'series' }>['feature'];
 
 /** One observed period of one entity's series. */
