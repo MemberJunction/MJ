@@ -15,6 +15,7 @@ import {
   KeyValuePair,
   LogDebug,
   LogError,
+  LogErrorEx,
   LogStatus,
   Metadata,
   ProjectEntityValuesForUser,
@@ -2340,16 +2341,16 @@ export class ResolverBase {
         
         // Log as warning to console and ErrorLog table instead of throwing error
         console.warn('Entity save inconsistency detected but allowing save to continue:', JSON.stringify(msg));
-        LogError({
-          service: 'ResolverBase',
-          operation: 'TestAndSetClientOldValuesToDBValues',
-          error: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
-          details: {
+        LogErrorEx({
+          message: `Entity save inconsistency detected: ${JSON.stringify(msg)}`,
+          severity: 'warning',
+          category: 'ResolverBase.TestAndSetClientOldValuesToDBValues',
+          metadata: {
             entityName: entityObject.EntityInfo.Name,
             clientDifferences: clientDifferences,
             dbDifferences: dbDifferences,
-            overlap: overlap
-          }
+            overlap: overlap,
+          },
         });
 
         // Create ErrorLog record in the database — use the entity's bound provider so the
@@ -2357,7 +2358,8 @@ export class ResolverBase {
         try {
           const md = entityObject.ProviderToUse as unknown as IMetadataProvider;
           const errorLogEntity = await md.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
-          errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
+          // Code is NCHAR(20); a longer value is rejected at the database
+          errorLogEntity.Code = 'SAVE_INCONSISTENCY';
           errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
           errorLogEntity.Status = 'Warning';
           errorLogEntity.Category = 'Entity Save';
@@ -2365,7 +2367,9 @@ export class ResolverBase {
           
           const saveResult = await errorLogEntity.Save();
           if (!saveResult) {
-            console.error('Failed to save ErrorLog record');
+            console.error(
+              `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
+            );
           }
         } catch (errorLogError) {
           console.error('Error creating ErrorLog record:', errorLogError);

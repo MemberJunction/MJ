@@ -16,6 +16,22 @@ export type RoomAuthorizerFn = (
   provider?: IMetadataProvider,
 ) => Promise<RoomAuthorizationResult>;
 
+/**
+ * Decides whether an ANONYMOUS caller owns one of a room's agent sessions. Every anonymous visitor is the ONE shared
+ * Anonymous user, so `UserID` cannot tell visitors apart; the per-visitor scope id can, and only the server that
+ * stamps it (MJServer: the session conversation's `ExternalID`) can compare it. That server registers this check
+ * through {@link RoomAuthorizationService.SetAnonymousSessionOwnerCheck}; this package cannot import it.
+ *
+ * @param agentSessionIds The agent sessions the room carries (from its interactions, bridges and live roster).
+ * @param user The anonymous caller.
+ * @returns `true` when the caller owns at least one of them.
+ */
+export type AnonymousSessionOwnerCheck = (
+  agentSessionIds: string[],
+  user: UserInfo,
+  provider?: IMetadataProvider,
+) => Promise<boolean>;
+
 interface MeetingLookupRow {
   ID: string;
   Status: string;
@@ -66,6 +82,8 @@ interface AgentSessionLookupRow {
  *    - Never ad-hoc.
  *    - User who has an `Accepted` offer for this room is granted access.
  *    - User who started it (the Interaction's agent-session owner) is granted access.
+ *    - An anonymous visitor is granted access only to a room whose agent session it owns by scope, as the
+ *      registered {@link AnonymousSessionOwnerCheck} decides; offers and `UserID` matches never admit one.
  *    - Otherwise access is refused.
  *
  * 3. Rooms tied to an `MJ: Interaction Offers` record:
@@ -78,6 +96,7 @@ interface AgentSessionLookupRow {
  */
 export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationService> {
   private authorizerOverride?: RoomAuthorizerFn;
+  private anonymousSessionOwnerCheck?: AnonymousSessionOwnerCheck;
   private sipRoomPrefix: string = (process.env.LIVEKIT_SIP_ROOM_PREFIX ?? DEFAULT_SIP_CALL_ROOM_PREFIX).trim() || DEFAULT_SIP_CALL_ROOM_PREFIX;
 
   public constructor() {
@@ -93,6 +112,14 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
    */
   public SetAuthorizerForTesting(fn?: RoomAuthorizerFn): void {
     this.authorizerOverride = fn;
+  }
+
+  /**
+   * Registers how an anonymous caller's ownership of an agent session is decided (MJ#6044). With none registered,
+   * every anonymous caller is refused the call and agent-session rooms of rule 2 — failing closed.
+   */
+  public SetAnonymousSessionOwnerCheck(check?: AnonymousSessionOwnerCheck): void {
+    this.anonymousSessionOwnerCheck = check;
   }
 
   /**
@@ -247,6 +274,14 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
       // 2. Check if room is tied to an Interaction, has active agent sessions (e.g. web agent rooms), or has a SIP call prefix (never ad-hoc)
       const isSipCallRoom = trimmedRoom.startsWith(this.sipRoomPrefix);
       if (interactions.length > 0 || isSipCallRoom || agentSessionIDs.size > 0) {
+        // An anonymous visitor is decided apart: every one is the ONE shared Anonymous user, so neither an offer's
+        // TargetUserID match below nor an owner's UserID match tells visitors apart — either would admit every
+        // visitor to every visitor's session room (MJ#6044). Its own agent-session room is still its to join
+        // (Explorer's LiveKit room serves an anonymous magic-link invitee too), by the per-visitor scope check.
+        if (user.IsMagicLinkAnonymous) {
+          return this.authorizeAnonymousOwner(trimmedRoom, [...agentSessionIDs], user, provider);
+        }
+
         // User with an Accepted offer for it
         const hasAcceptedOffer = offers.some(
           (o) => UUIDsEqual(o.TargetUserID, user.ID) && o.Status === 'Accepted',
@@ -255,7 +290,7 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
           return { Authorized: true };
         }
 
-        // User who started it (the Interaction's or Agent Session's owner)
+        // User who started it (the Interaction's or Agent Session's owner).
         if (agentSessionIDs.size > 0) {
           const filter = [...agentSessionIDs].map((id) => `ID = '${EscapeSQLString(id)}'`).join(' OR ');
           const sessionResult = await rv.RunView<AgentSessionLookupRow>(
@@ -299,6 +334,31 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
       const msg = err instanceof Error ? err.message : String(err);
       LogError(`[RoomAuthorizationService] Unexpected error authorizing room '${trimmedRoom}': ${msg}`);
       return { Authorized: false, Reason: `Internal authorization error: ${msg}` };
+    }
+  }
+
+  /**
+   * Rule 2 for an anonymous caller. Neither the offer's `TargetUserID` nor a session's `UserID` can tell anonymous
+   * visitors apart (each is the shared Anonymous user), so the only grant is owning one of the room's agent
+   * sessions by scope, as the registered {@link AnonymousSessionOwnerCheck} decides. No session to own, no check
+   * registered, or a check that fails: refused.
+   */
+  private async authorizeAnonymousOwner(
+    roomName: string,
+    agentSessionIds: string[],
+    user: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<RoomAuthorizationResult> {
+    const refused: RoomAuthorizationResult = { Authorized: false, Reason: 'Anonymous visitors may join only the agent session rooms they started.' };
+    if (agentSessionIds.length === 0 || !this.anonymousSessionOwnerCheck) {
+      return refused;
+    }
+    try {
+      return (await this.anonymousSessionOwnerCheck(agentSessionIds, user, provider)) ? { Authorized: true } : refused;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`[RoomAuthorizationService] Anonymous session-owner check failed for room '${roomName}' (visitor ${user.AnonymousVisitorID ?? 'unknown'}): ${message}`);
+      return refused;
     }
   }
 }

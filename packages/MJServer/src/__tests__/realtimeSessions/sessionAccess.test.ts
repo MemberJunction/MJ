@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { AuthorizeSessionAccess, LoadSessionForAccess } from '../../realtimeSessions/sessionAccess.js';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { AuthorizeSessionAccess, AuthorizeConversationTurn, AuthorizeAnonymousRoomSessions, LoadSessionForAccess, LoadSessionConversationScope, LoadConversationScope, AuthorizeLoadedSession } from '../../realtimeSessions/sessionAccess.js';
 
 const OWNER = 'AAAAAAAA-0000-4000-8000-000000000001';
 const OTHER = 'AAAAAAAA-0000-4000-8000-000000000002';
@@ -187,5 +188,159 @@ describe('LoadSessionForAccess', () => {
         const loaded = await LoadSessionForAccess(SESSION_ID, USER, fakeProvider({ session: { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID }, conversation: { ExternalID: null } }));
         expect(loaded?.ConversationExternalID).toBeNull();
         expect(loaded?.ConversationReadable).toBe(true);
+    });
+});
+
+describe('LoadSessionConversationScope', () => {
+    const sessionWithConversation = { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID } as unknown as MJAIAgentSessionEntity;
+
+    it('reads the conversation for an unscoped named user too, so its result is the conversation as that user sees it', async () => {
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        const scope = await LoadSessionConversationScope(sessionWithConversation, USER, provider);
+        expect(scope).toEqual({ ExternalID: 'scope-1', Readable: true });
+        expect(provider.GetEntityObject).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads the conversation when the caller carries a scope identity', async () => {
+        const scopedUser = { ID: OWNER, MagicLinkScope: { ResourceID: 'scope-1' } } as unknown as UserInfo;
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        const scope = await LoadSessionConversationScope(sessionWithConversation, scopedUser, provider);
+        expect(scope).toEqual({ ExternalID: 'scope-1', Readable: true });
+        expect(provider.GetEntityObject).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('LoadConversationScope (a conversation addressed directly, e.g. by a text agent turn)', () => {
+    it('reports the owner and scope id of a readable conversation', async () => {
+        const scope = await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: { UserID: OWNER, ExternalID: 'scope-1' } }));
+        expect(scope).toEqual({ UserID: OWNER, ExternalID: 'scope-1', Readable: true });
+    });
+
+    it('reports an unreadable conversation (missing, refused by RLS, or a failed read) without an owner', async () => {
+        expect(await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: null }))).toEqual({ UserID: null, ExternalID: null, Readable: false });
+        expect(await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: {}, conversationThrows: true }))).toEqual({ UserID: null, ExternalID: null, Readable: false });
+    });
+
+    it('reports a null scope id for a readable conversation with no stamp', async () => {
+        const scope = await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: { UserID: OWNER, ExternalID: null } }));
+        expect(scope).toEqual({ UserID: OWNER, ExternalID: null, Readable: true });
+    });
+
+    it('does not touch the database for an empty id', async () => {
+        const provider = fakeProvider({});
+        expect(await LoadConversationScope('', USER, provider)).toEqual({ UserID: null, ExternalID: null, Readable: false });
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+});
+
+describe('AuthorizeConversationTurn (a text agent turn addressed by a message in the conversation, MJ#6032)', () => {
+    const ANON = 'AAAAAAAA-0000-4000-8000-00000000A0A0';
+    const visitor = (sid: string) => ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: sid, MagicLinkScope: { ResourceID: sid } }) as unknown as UserInfo;
+
+    it('allows a named principal without reading the conversation (its permissions already decided the turn)', async () => {
+        const provider = fakeProvider({});
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, { ID: OWNER } as UserInfo, provider)).toEqual({ Allowed: true });
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+
+    it('allows the anonymous visitor whose scope id the conversation carries', async () => {
+        const provider = fakeProvider({ conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-1'), provider)).toEqual({ Allowed: true });
+    });
+
+    it('refuses a second anonymous visitor — same shared user, different scope id (the UI-guest-role leak)', async () => {
+        const provider = fakeProvider({ conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-2'), provider)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+    });
+
+    it('refuses an anonymous visitor when the conversation cannot be read or carries no scope id', async () => {
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-1'), fakeProvider({ conversation: null }))).toEqual({ Allowed: false, Reason: 'not_owner' });
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-1'), fakeProvider({ conversation: { UserID: ANON, ExternalID: null } }))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+    });
+});
+
+describe('AuthorizeAnonymousRoomSessions (who of the anonymous visitors owns a LiveKit room\'s agent session, MJ#6044)', () => {
+    const ANON = 'AAAAAAAA-0000-4000-8000-00000000A0A0';
+    const visitor = (sid: string) => ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: sid, MagicLinkScope: { ResourceID: sid } }) as unknown as UserInfo;
+    const roomSession = { ID: SESSION_ID, UserID: ANON, ConversationID: CONVERSATION_ID };
+
+    it("admits the visitor whose scope id the session's conversation carries", async () => {
+        const provider = fakeProvider({ session: roomSession, conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-1'), provider)).toBe(true);
+    });
+
+    it('refuses another visitor — same shared user, different scope id', async () => {
+        const provider = fakeProvider({ session: roomSession, conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-2'), provider)).toBe(false);
+    });
+
+    it('refuses when the session cannot be read as the caller', async () => {
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-1'), fakeProvider({ session: null }))).toBe(false);
+    });
+
+    it('refuses without reading anything when there is no session or no provider', async () => {
+        const provider = fakeProvider({});
+        expect(await AuthorizeAnonymousRoomSessions([], visitor('sid-1'), provider)).toBe(false);
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-1'), undefined)).toBe(false);
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+});
+
+
+describe('AuthorizeLoadedSession', () => {
+    const principals: Array<[string, UserInfo]> = [
+        ['named owner, no scope', { ID: OWNER } as UserInfo],
+        ['named owner, scope-1', { ID: OWNER, MagicLinkScope: { ResourceID: 'scope-1' } } as unknown as UserInfo],
+        ['named owner, scope-2', { ID: OWNER, MagicLinkScope: { ResourceID: 'scope-2' } } as unknown as UserInfo],
+        ['anonymous, scope-1', { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-1', MagicLinkScope: { ResourceID: 'scope-1' } } as unknown as UserInfo],
+        ['anonymous, scope-2', { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-2', MagicLinkScope: { ResourceID: 'scope-2' } } as unknown as UserInfo],
+        ['anonymous, visitor id only', { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-1' } as unknown as UserInfo],
+        ['anonymous, no scope', { ID: OWNER, IsMagicLinkAnonymous: true } as unknown as UserInfo],
+        ['named non-owner', { ID: OTHER } as UserInfo],
+    ];
+    const conversations: Array<[string, { conversationId: string | null; rows: Parameters<typeof fakeProvider>[0] }]> = [
+        ['no conversation', { conversationId: null, rows: {} }],
+        ['missing or refused', { conversationId: CONVERSATION_ID, rows: { conversation: null } }],
+        ['read fails', { conversationId: CONVERSATION_ID, rows: { conversation: {}, conversationThrows: true } }],
+        ['unstamped', { conversationId: CONVERSATION_ID, rows: { conversation: { ExternalID: null } } }],
+        ['stamped scope-1', { conversationId: CONVERSATION_ID, rows: { conversation: { ExternalID: 'scope-1' } } }],
+        ['stamped scope-2', { conversationId: CONVERSATION_ID, rows: { conversation: { ExternalID: 'scope-2' } } }],
+    ];
+
+    for (const [principalName, principal] of principals) {
+        for (const [conversationName, { conversationId, rows }] of conversations) {
+            it(`decides as if it always read the conversation: ${principalName} × ${conversationName}`, async () => {
+                const session = { ID: SESSION_ID, UserID: OWNER, ConversationID: conversationId } as unknown as MJAIAgentSessionEntity;
+                const scope = await LoadConversationScope(conversationId, principal, fakeProvider(rows));
+                const alwaysRead = AuthorizeSessionAccess(
+                    { SessionUserID: session.UserID, ConversationExternalID: scope.ExternalID, ConversationReadable: scope.Readable },
+                    principal,
+                );
+                expect(await AuthorizeLoadedSession(session, principal, fakeProvider(rows))).toEqual(alwaysRead);
+            });
+        }
+    }
+
+    const sessionWithConversation = { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID } as unknown as MJAIAgentSessionEntity;
+    const conversationReads = (provider: IMetadataProvider) =>
+        vi.mocked(provider.GetEntityObject).mock.calls.filter(([name]) => name === 'MJ: Conversations').length;
+
+    it('does not read the conversation for a named owner without a scope, the usual signed-in caller', async () => {
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        expect(await AuthorizeLoadedSession(sessionWithConversation, USER, provider)).toEqual({ Allowed: true });
+        expect(conversationReads(provider)).toBe(0);
+    });
+
+    it('does not read the conversation for a caller who does not own the session', async () => {
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        expect(await AuthorizeLoadedSession(sessionWithConversation, { ID: OTHER } as UserInfo, provider)).toEqual({ Allowed: false, Reason: 'not_owner' });
+        expect(conversationReads(provider)).toBe(0);
+    });
+
+    it('reads the conversation once for a caller with a scope identity', async () => {
+        const provider = fakeProvider({ conversation: { ExternalID: 'scope-1' } });
+        const guest = { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-1', MagicLinkScope: { ResourceID: 'scope-1' } } as unknown as UserInfo;
+        expect(await AuthorizeLoadedSession(sessionWithConversation, guest, provider)).toEqual({ Allowed: true });
+        expect(conversationReads(provider)).toBe(1);
     });
 });

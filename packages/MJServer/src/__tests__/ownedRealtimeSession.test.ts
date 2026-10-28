@@ -36,4 +36,18 @@ describe('LoadOwnedRealtimeSession', () => {
         await expect(LoadOwnedRealtimeSession(SESSION, STRANGER, providerWith({ UserID: OWNER.ID })))
             .rejects.toThrow('Not authorized: you do not own this realtime session');
     });
+
+    it('skips loading MJ: Conversations when the caller is a standard named user without a scope identity', async () => {
+        const getEntityObject = vi.fn(async (name: string) => ({
+            UserID: OWNER.ID,
+            ConversationID: '22222222-2222-4222-8222-222222222222',
+            Load: vi.fn(async () => name === 'MJ: AI Agent Sessions'),
+        }));
+        const prov = { GetEntityObject: getEntityObject } as unknown as IMetadataProvider;
+
+        await LoadOwnedRealtimeSession(SESSION, OWNER, prov);
+
+        expect(getEntityObject).toHaveBeenCalledTimes(1);
+        expect(getEntityObject).toHaveBeenCalledWith('MJ: AI Agent Sessions', OWNER);
+    });
 });

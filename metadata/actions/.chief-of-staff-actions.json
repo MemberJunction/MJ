@@ -514,9 +514,9 @@
   },
   {
     "fields": {
-      "Name": "Chief of Staff Inter-Agent Request",
+      "Name": "Send Inter-Agent Request",
       "Description": "Sends a structured coordination request from one user's Chief of Staff to another user's Chief of Staff while respecting sender CoordinationMode and recipient data boundaries.",
-      "DriverClass": "Chief of Staff Inter-Agent Request",
+      "DriverClass": "Send Inter-Agent Request",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
@@ -604,15 +604,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional related entity name (e.g., 'MJ: Tasks' or 'MJ: Issues')",
+            "Description": "Optional related entity name (e.g., 'MJ_BizApps_Tasks: Tasks' or 'MJ_BizApps_Issues: Issues')",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:47.302Z",
-            "checksum": "7f687f8615f661a299e9399f79647e07dcccf1e5b500ce08fe88bd5989ce10f7"
+            "lastModified": "2026-10-27T15:09:40.671Z",
+            "checksum": "5c9249c30c4e27e58051775c178f7a12928dd5059f1eea2681cf851e8eb90857"
           }
         },
         {
@@ -689,15 +689,15 @@
       "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.928Z",
-      "checksum": "070c1706965ff2b95fa4f3ed247a718091a2db67bcbeec1ac52b111deed1aa53"
+      "lastModified": "2026-10-27T15:09:40.629Z",
+      "checksum": "23ccac78f55ccc88315ed613f47eefb60c8c1d783b92bc12a8b69490a11d7ae3"
     }
   },
   {
     "fields": {
-      "Name": "Prepare Chief of Staff Outbound Call",
+      "Name": "Prepare Outbound Call Brief",
       "Description": "Validates the user's PhoneChannelMode policy and generates a structured outbound telephony brief with mandatory AI disclosure greeting, tight objective, fallback plan, and prohibited commitments.",
-      "DriverClass": "Prepare Chief of Staff Outbound Call",
+      "DriverClass": "Prepare Outbound Call Brief",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "CodeApprovalStatus": "Approved",
@@ -867,8 +867,8 @@
       "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:46.939Z",
-      "checksum": "0aaa746765e5e23b2e7cabe11864479fcebbe0d727ec3145f6df20814e4eb254"
+      "lastModified": "2026-10-27T15:09:40.640Z",
+      "checksum": "e9e1b1b9117ec3e1d37a5d3b89cf995a3724492eda551ae0ac9b8003959ae647"
     }
   },
   {

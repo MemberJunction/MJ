@@ -31,7 +31,7 @@ export interface DeterministicParameter {
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Inferred type based on how the parameter is used in the template */
     type: TemplateParamType;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** Whether the parameter is required (used outside any conditional guard) */
+    /** Whether the parameter is required (used outside any conditional guard). Always false for system variables. */
     isRequired: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /**
      * Default value detected from `| default('value')` filter or `param or 'fallback'` pattern.

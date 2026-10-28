@@ -51,6 +51,45 @@ export interface DependencyAnalysisResult {
 }
 
 /**
+ * Depth-first topological order: each record comes after every record it depends on that is in
+ * `byId`. Records with no dependencies are started first, then the rest in input order. A cycle is
+ * broken where the walk meets it (cycles are reported separately); a dependency missing from `byId`
+ * is skipped.
+ */
+export function DependencyOrder(records: FlattenedRecord[], byId: ReadonlyMap<string, FlattenedRecord>): FlattenedRecord[] {
+  const result: FlattenedRecord[] = [];
+  const visited = new Set<string>();
+  const inProgress = new Set<string>();
+
+  const visit = (recordId: string): void => {
+    if (visited.has(recordId) || inProgress.has(recordId)) {
+      return;
+    }
+    const record = byId.get(recordId);
+    if (!record) {
+      return;
+    }
+    inProgress.add(recordId);
+    for (const depId of record.dependencies) {
+      visit(depId);
+    }
+    inProgress.delete(recordId);
+    visited.add(recordId);
+    result.push(record);
+  };
+
+  for (const record of records) {
+    if (record.dependencies.size === 0) {
+      visit(record.id);
+    }
+  }
+  for (const record of records) {
+    visit(record.id);
+  }
+  return result;
+}
+
+/**
  * Analyzes and sorts records based on their dependencies
  */
 /** Group flattened rows by JSON-root graph for provider affinity. */
@@ -654,56 +693,7 @@ export class RecordDependencyAnalyzer {
    * Performs topological sort on the dependency graph
    */
   private topologicalSort(): FlattenedRecord[] {
-    const result: FlattenedRecord[] = [];
-    const visited = new Set<string>();
-    const tempStack = new Set<string>();
-
-    const visit = (recordId: string): boolean => {
-      if (tempStack.has(recordId)) {
-        // Circular dependency - we've already detected these
-        return false;
-      }
-
-      if (visited.has(recordId)) {
-        return true;
-      }
-
-      tempStack.add(recordId);
-
-      const record = this.recordIdMap.get(recordId);
-      if (record) {
-        // Visit dependencies first
-        for (const depId of record.dependencies) {
-          visit(depId);
-        }
-      }
-
-      tempStack.delete(recordId);
-      visited.add(recordId);
-      
-      if (record) {
-        result.push(record);
-      }
-
-      return true;
-    };
-
-    // Process all records, starting with those that have no dependencies
-    // First, process records with no dependencies
-    for (const record of this.flattenedRecords) {
-      if (record.dependencies.size === 0 && !visited.has(record.id)) {
-        visit(record.id);
-      }
-    }
-
-    // Then process any remaining records (handles disconnected components)
-    for (const record of this.flattenedRecords) {
-      if (!visited.has(record.id)) {
-        visit(record.id);
-      }
-    }
-
-    return result;
+    return DependencyOrder(this.flattenedRecords, this.recordIdMap);
   }
 
   /**
@@ -846,53 +836,22 @@ export class RecordDependencyAnalyzer {
    *
    * This is simply the reverse of the forward topological sort used for creates.
    */
-  public ReverseTopologicalSort(
-    records: FlattenedRecord[],
-    reverseDependencies: Map<string, ReverseDependency[]>
-  ): FlattenedRecord[][] {
-    // Calculate forward dependency levels (same as creation order)
-    const recordLevels = new Map<string, number>();
+  public ReverseTopologicalSort(records: FlattenedRecord[]): FlattenedRecord[][] {
+    // The same DFS order and level grouping the forward sort uses, over only these records: a
+    // dependency outside the set has no level, so it is ignored. The DFS visits each record's
+    // dependencies before the record, so the levels do not depend on the input order (#4935).
+    const byId = new Map(records.map((record) => [record.id, record] as const));
+    const ordered = DependencyOrder(records, byId);
+    // A record's level is one more than its highest dependency's, so the levels have no gaps
+    const forwardLevels = this.groupByDependencyLevels(ordered, new Map());
 
-    // Calculate the level for each record based on its FORWARD dependencies
-    for (const record of records) {
-      let maxDependencyLevel = -1;
-
-      // Find the maximum level of all dependencies (things this record depends ON)
-      for (const depId of record.dependencies) {
-        const depLevel = recordLevels.get(depId);
-        if (depLevel !== undefined && depLevel > maxDependencyLevel) {
-          maxDependencyLevel = depLevel;
-        }
-      }
-
-      // This record's level is one more than its highest dependency
-      const recordLevel = maxDependencyLevel + 1;
-      recordLevels.set(record.id, recordLevel);
-    }
-
-    // Group records by level
-    const forwardLevels: FlattenedRecord[][] = [];
-    for (const record of records) {
-      const level = recordLevels.get(record.id) || 0;
-
-      if (!forwardLevels[level]) {
-        forwardLevels[level] = [];
-      }
-      forwardLevels[level].push(record);
-    }
-
-    // Reverse the array for deletion order
-    // Forward level 0 (roots) becomes last to delete
-    // Forward level N (leaves) becomes first to delete
+    // Forward level 0 (roots) deletes last; the highest level (leaves) deletes first
     return forwardLevels.reverse();
   }
 
   /** @deprecated Use {@link ReverseTopologicalSort}. */
-  public reverseTopologicalSort(
-    records: FlattenedRecord[],
-    reverseDependencies: Map<string, ReverseDependency[]>
-  ): FlattenedRecord[][] {
-    return this.ReverseTopologicalSort(records, reverseDependencies);
+  public reverseTopologicalSort(records: FlattenedRecord[]): FlattenedRecord[][] {
+    return this.ReverseTopologicalSort(records);
   }
 
   /**

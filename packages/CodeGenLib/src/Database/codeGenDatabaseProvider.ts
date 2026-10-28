@@ -1320,6 +1320,27 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Returns true when the field's database default must be resolved into its
+     * parameter BEFORE the INSERT rather than inlined into the value list's
+     * null-coalescing wrap. The base implementation inlines every default; a
+     * dialect whose null-coalescing call rejects some default expressions
+     * (SQL Server: `NEXT VALUE FOR` inside `ISNULL`/`CASE`) overrides this and
+     * emits the assignments through {@link GeneratePreInsertDefaultAssignments}.
+     */
+    protected isPreInsertDefault(_ef: EntityFieldInfo): boolean {
+        return false;
+    }
+
+    /**
+     * Returns the statements that assign expression defaults (see
+     * {@link isPreInsertDefault}) to their parameters before the INSERT of a
+     * create routine. Empty when the dialect inlines every default.
+     */
+    GeneratePreInsertDefaultAssignments(_entity: EntityInfo): string {
+        return '';
+    }
+
+    /**
      * Generates the parameter list string for a CRUD routine with tolerant
      * SP signatures (Pillar 1 of the cross-app migration architecture).
      *
@@ -1435,7 +1456,17 @@ export abstract class CodeGenDatabaseProvider {
 
             const paramRef = dialect.ParameterRef(ef.CodeName);
 
-            if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
+            if (ef.HasDefaultValue && this.isPreInsertDefault(ef)) {
+                // The default is an expression that cannot sit inside ISNULL/CASE (e.g. NEXT VALUE
+                // FOR). GeneratePreInsertDefaultAssignments already resolved it into the parameter
+                // before the INSERT, so the value list only reads the parameter back.
+                if (ef.AllowsNull && !ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
+                    const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
+                    parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${paramRef} END`);
+                } else {
+                    parts.push(paramRef);
+                }
+            } else if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
                 // GUID-PK insert: detect empty-sentinel and fall back to DB default
                 const formattedDefault = this.formatInsertDefaultValue(ef);
                 parts.push(`CASE WHEN ${paramRef} = ${dialect.EmptyUUIDLiteral()} THEN ${formattedDefault} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
@@ -1926,6 +1957,20 @@ export abstract class CodeGenDatabaseProvider {
      * @returns True if execution succeeded, false otherwise.
      */
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Reduces a CRUD routine definition — a generated script or the live catalog text — to a
+     * canonical form, so CodeGen can tell when the live routine no longer matches what it would
+     * generate now (a column default or type changed before CodeGen ran, or a cascade target
+     * dropped a column). Two definitions that normalize to the same string are treated as equal.
+     *
+     * Returns `null` when the platform does not support the comparison or the text holds no
+     * routine; callers then fall back to their other regeneration triggers. The base returns
+     * `null`; SQL Server implements it against `OBJECT_DEFINITION`.
+     */
+    NormalizeRoutineDefinitionForComparison(_definition: string): string | null {
+        return null;
+    }
 
     /**
      * Optional — dialect-specific fast path for regenerating a single entity's

@@ -1,5 +1,70 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- a4246f5: Properties on dashboards, input mappings, events and wires, and an Interactive Component part (#4789, A15). A dashboard with no properties, mappings or wires renders and saves exactly as before. `minor` because of the new `MJ: Dashboard Part Types` metadata row.
+  - `@memberjunction/ng-dashboard-viewer`: a dashboard's config may hold `Properties` (name, type, description, required, and a default: a fixed value or a context token) and `Wires`; a part's config may hold `inputMappings` (`{ Input, Property?, Default? }`). The viewer's new `Properties` input lets a host set values once. Each part declares its inputs (View: its view's properties; Query: its query's parameters; Component: the component's props; Web URL: `{Name}` placeholders, URL-encoded when filled; Artifact: none) and works them out in one order: host value, then a wired event's value, then the property's default, then the mapping's default, then the input's own default. Token defaults are worked out in the browser with the provider's user and the browser's zone. A broken mapping or a required input with no value stops the part with a message naming it; an input only the server may set can't be mapped. Parts raise their events (View `RecordSelected`, Query `RowSelected`, a component's declared events); a wire sets a dashboard property from one of the event's values, never a part input, the host's value always wins, clearing the selection removes the value, and a part never sees the value its own event set. The viewer raises `PanelInteraction` `'record-select'` for a View or Query selection. A save with properties, mappings or wires checks them (`LastSaveError` says why it refused). New: the `Component` part (`ComponentPanelRenderer`, renders a registered component by name and optional version in the React host with `ProviderToUse` for its utilities) and its config panel, the Properties and wires dialog, the Inputs list in the part dialog, and plain-TypeScript models (`DashboardPropertyResolver`, `ResolvePartInputs`, `ValidateDashboardBindings`, `LoadPartInterface`, `PartInputsEditor`).
+  - `@memberjunction/ng-query-viewer`: `MappedParameters` input: mapped values override the user's saved values, are never saved into `QueryViewer_<id>_LastParams`, and show read-only. The parameter form's `ReadOnlyParameters` input disables those fields with a lock. A server-set parameter (`IsServerSet`) shows as "Set by server", is not required in the form, and is never sent.
+  - `@memberjunction/ng-dashboards`: the dashboard editor gets a Properties button that opens the Properties and wires dialog, passes the dashboard's properties to the part dialog, and shows the viewer's reason when a save is refused.
+  - Metadata: a `Component` row in `MJ: Dashboard Part Types`.
+
+### Patch Changes
+
+- f2248d5: Context tokens, the caller's time zone, and provider threading for dashboard parts.
+  - `@memberjunction/core` adds the context-token module: the closed `ContextToken` list, `PropertyDefault`, `UserViewProperty`, `ResolvePropertyDefault` / `ResolveContextToken` (user tokens; date tokens worked out in an IANA zone with Monday or Sunday week starts and day to year offsets), `ValidatePropertyDefault`, `IsValidTimeZone` and `GetLocalTimeZone`. `RunViewParams` and `RunQueryParams` gain a server-only `TimeZone`. Nothing reads them yet.
+  - `GraphQLDataProvider` sends the runtime's IANA zone as `x-mj-timezone` on every HTTP request; MJServer validates it into `UserPayload.TimeZone`, and the view and query resolvers pass it on as `TimeZone`. An absent or invalid header leaves it unset (UTC).
+  - The dashboard viewer hands its `Provider` to the parts it creates, the View, Query and Artifact parts pass it to their viewers, and the query viewer, its grid and info panel, and the entity viewer's recycle bin read through it. With no `Provider` set, behaviour is unchanged.
+  - `SERVER_ONLY_RUN_VIEW_PARAMS` / `StripServerOnlyRunViewParams` name the run fields only server code sets. The REST view routes strip them from the request body, and the route's entity name now wins over an `EntityName` in the body (before, the body could replace it and skip the entity allowlist check).
+  - **Deployments:** browser requests now carry an `x-mj-timezone` header. MJAPI's CORS setup reflects requested headers, so it needs nothing, but a proxy or gateway that pins `Access-Control-Allow-Headers` must add `x-mj-timezone`, or browser preflights will fail.
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [d538c14]
+- Updated dependencies [0581392]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [a4246f5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [6c92b0d]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [291485d]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-shared-generic@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ng-query-viewer@6.2.0-edge.6
+  - @memberjunction/ng-artifacts@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+  - @memberjunction/ng-map-view@6.2.0-edge.6
+  - @memberjunction/ng-react@6.2.0-edge.6
+  - @memberjunction/ng-trees@6.2.0-edge.6
+  - @memberjunction/interactive-component-types@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

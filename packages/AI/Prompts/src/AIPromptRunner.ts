@@ -747,9 +747,8 @@ export class AIPromptRunner extends BaseModelRunner {
       const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
 
       // Get prompt-specific model associations using the model selection prompt
-      const promptModels = AIEngine.Instance.PromptModels.filter(
+      const promptModels = this.getPromptModelsForPromptId(modelSelectionPrompt.ID).filter(
         (pm) =>
-          UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
           (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)) &&
           UUIDsEqual(AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID))?.AIModelTypeID, requiredTypeId),
