@@ -2,7 +2,7 @@
 #   proper scores: log_loss_score (binary + multiclass), brier, poisson_deviance, tweedie_deviance(power 1.5), rmse [S4.1, S4.3]
 #   secondary:     auc (binary; macro one-vs-rest for multiclass), mae, r2
 #   intervals:     bootstrap_ci / paired_bootstrap, optionally clustered (entity or origin blocks)            [S6.2, S-T.5]
-#   calibration:   slope, intercept, CITL — same GLM method as the review's reference-model evaluation     [S6.3]
+#   calibration:   slope, intercept (binomial GLM of y on logit p), CITL (intercept with logit p as offset) [S6.3]
 #   importance:    held-out permutation importance aggregated per source column                             [S9.4, S2.4(iii)]
 #   residuals:     acf1, durbin_watson, ljung_box, effective_n, panel_acf (pooled within-entity)            [S-T.6]
 #   forecasts:     mase_scale (origin training window only), diebold_mariano (HLN-corrected)               [S-T.3]

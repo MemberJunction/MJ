@@ -1,5 +1,5 @@
-# truthsuite/refpipe/run.py — the reference pipeline (the professional-grade yardstick), ported from the review at
-# commit d47dfb8. Usage, from TruthSuite/python:
+# truthsuite/refpipe/run.py — the reference pipeline (the professional-grade yardstick); first written in the review
+# at commit d47dfb8, ported here, where fixtures/reference/p5-golden.json pins its results. Usage, from TruthSuite/python:
 #   python -m truthsuite.refpipe.run <scenario_id> --out <file> [--shuffle-labels]
 # Scenario ids: the generated scenarios (the spec seed's rows.csv + manifest.json in the data cache), the committed real
 # cases R2-real and T1-real (fixtures/real/), C1 and T2-real (fixtures/real/person_years.parquet) and C3 (the generated
@@ -201,8 +201,7 @@ def _scenario_files(sid: str) -> tuple[pathlib.Path, pathlib.Path]:
     spec seed in the generated-data cache."""
     if sid in REAL_CASES:
         return paths.real_fixture(f"{sid}.rows.csv"), paths.real_fixture(f"{sid}.manifest.json")
-    spec = json.loads((paths.FIXTURES / "scenarios" / "specs" / f"{sid}.json").read_text(encoding="utf-8"))
-    d = paths.seed_dir("scenario", sid, int(spec["seed"]))
+    d = paths.spec_seed_dir(sid)
     return d / "rows.csv", d / "manifest.json"
 
 
@@ -893,7 +892,7 @@ def _criteria(sc: Scenario, split: Split, res: Json, primary_name: str, audit_fl
     add("S4.2", "promotion gate: lower 95% bound of the paired (baseline - model) loss > 0 for every comparator; the GLM baseline is excluded only when it is literally the delivered predictor")
     add("S5.2", "selection by inner CV on the training carve only; the locked test is scored once for the one finalist")
     add("S5.3", "candidates ranked with the SE of paired differences (Newey-West for series); differences inside 1 SE are not wins (simplest kept)")
-    add("S5.4", "every estimator seeded and single-threaded; byte-identical JSON on re-run (test_run.py)")
+    add("S5.4", "every estimator seeded and single-threaded; byte-identical JSON when the same scenario is run again")
     add("S6.2", "95% bootstrap CI on every reported score and paired difference")
     add("S6.5", f"noSignal={res['noSignal']} is an allowed, recorded outcome")
     if sc.problem in ("binary", "multiclass"):

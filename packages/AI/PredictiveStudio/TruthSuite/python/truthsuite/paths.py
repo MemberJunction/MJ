@@ -55,6 +55,22 @@ def seed_dir(kind: DatasetKind, dataset_id: str, seed: int) -> Path:
     return directory
 
 
+# A derived scenario generated from another scenario's output, with that scenario's spec (the catalog's alias).
+_SPEC_OF_DERIVED_SCENARIO: dict[str, str] = {"T3-lag": "T3"}
+
+
+def spec_seed_dir(scenario_id: str) -> Path:
+    """The generated directory of a scenario's spec seed (the seed its spec file names; a derived scenario uses the
+    spec it is generated from). Raises KeyError like seed_dir when that seed is not generated."""
+    spec_id = _SPEC_OF_DERIVED_SCENARIO.get(scenario_id, scenario_id)
+    spec_path = FIXTURES / "scenarios" / "specs" / f"{spec_id}.json"
+    raw: object = json.loads(spec_path.read_text(encoding="utf-8"))
+    seed = raw.get("seed") if isinstance(raw, dict) else None
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError(f"{spec_path} has no integer seed")
+    return seed_dir("scenario", scenario_id, seed)
+
+
 def real_fixture(name: str) -> Path:
     """A committed real case under fixtures/real/ (`person_years.parquet`, `R2-real.rows.csv`, …)."""
     path = FIXTURES / "real" / name
