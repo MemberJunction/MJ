@@ -1,8 +1,10 @@
-"""Primary proper scores per task family, as per-row losses and their aggregates.
+"""Proper scores per task family (per-row losses and their aggregates), secondary metrics, metric direction and the
+cross-family ranking refusal.
 
-Every primary score is lower-is-better. A per-row loss exists for every metric that is a mean of row losses, so
-paired comparisons (model vs baseline on the same rows) and the one-standard-error selection rule use the same
-numbers. RMSE and MASE are aggregates of a row loss (sqrt of mean squared error; mean of scaled absolute errors).
+Every primary score is lower-is-better; `METRIC_DIRECTION` gives the direction of every metric key, secondary metrics
+included. A per-row loss exists for every metric that is a mean of row losses, so paired comparisons (model vs
+baseline on the same rows) and the one-standard-error selection rule use the same numbers. RMSE and MASE are
+aggregates of a row loss (sqrt of mean squared error; mean of scaled absolute errors).
 
 Predictions: binary -> P(classOrder[1]) as a 1-D array; multiclass -> (n, K) probabilities in classOrder;
 continuous/count/non-negative -> the conditional mean.
@@ -19,9 +21,13 @@ from dataclasses import dataclass
 from typing import Callable, Literal
 
 import numpy as np
-import numpy.typing as npt
+from scipy import stats
 
-FArr = npt.NDArray[np.float64]
+from .array_types import FArr
+from .calibration import calibration_fit
+from .failures import RequestRefused
+from .trainer_schemas import MetricKey, SecondaryMetric
+
 EPS = 1e-15
 
 PrimaryMetric = Literal[
@@ -133,3 +139,118 @@ def primary_score(metric: PrimaryMetric, tweedie_power: float | None) -> Primary
         rl = row_tweedie_deviance(tweedie_power)
         return PrimaryScore(metric, rl, _mean_of(rl))
     raise ValueError(f"unknown primary metric {metric}")
+
+
+# ------------------------------------------------------------------------------- secondary + direction -----
+
+MetricDirection = Literal["lower-is-better", "higher-is-better", "closer-to-one"]
+METRIC_DIRECTION: dict[MetricKey, MetricDirection] = {
+    "log-loss": "lower-is-better", "brier": "lower-is-better", "multiclass-log-loss": "lower-is-better",
+    "rmse": "lower-is-better", "mae": "lower-is-better", "poisson-deviance": "lower-is-better",
+    "tweedie-deviance": "lower-is-better", "mase": "lower-is-better", "auc": "higher-is-better",
+    "accuracy": "higher-is-better", "f1": "higher-is-better", "precision": "higher-is-better",
+    "recall": "higher-is-better", "r2": "higher-is-better", "calibration-slope": "closer-to-one",
+}
+"""The direction of every metric key, mirroring Core's `METRIC_DIRECTION` key for key."""
+
+
+def _auc_binary(y: FArr, s: FArr) -> float:
+    pos = y == 1
+    n1 = int(pos.sum())
+    n0 = len(y) - n1
+    if n1 == 0 or n0 == 0:
+        return float("nan")
+    r = stats.rankdata(s)
+    return float((r[pos].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
+
+
+def auc(y: FArr, p: FArr) -> float:
+    """Binary AUC of P(classOrder[1]); multiclass: macro one-vs-rest."""
+    pa = _f(p)
+    if pa.ndim == 1:
+        return _auc_binary(_f(y), pa)
+    return float(np.mean(auc_by_class(y, pa)))
+
+
+def auc_by_class(y: FArr, p: FArr) -> list[float]:
+    """One-vs-rest AUC per class column of an (n, K) probability matrix, in classOrder."""
+    yi = np.asarray(y, dtype=np.int64)
+    pa = _f(p)
+    return [_auc_binary((yi == k).astype(np.float64), pa[:, k]) for k in range(pa.shape[1])]
+
+
+def _labels(p: FArr) -> FArr:
+    pa = _f(p)
+    return (pa >= 0.5).astype(np.float64) if pa.ndim == 1 else np.argmax(pa, axis=1).astype(np.float64)
+
+
+def accuracy(y: FArr, p: FArr) -> float:
+    return float(np.mean(_labels(p) == _f(y)))
+
+
+def _prf(y: FArr, p: FArr) -> tuple[float, float, float]:
+    yy = _f(y)
+    yhat = _labels(p)
+    tp = float(np.sum((yhat == 1) & (yy == 1)))
+    fp = float(np.sum((yhat == 1) & (yy == 0)))
+    fn = float(np.sum((yhat == 0) & (yy == 1)))
+    prec = tp / (tp + fp) if tp + fp > 0 else 0.0
+    rec = tp / (tp + fn) if tp + fn > 0 else 0.0
+    f1 = 2 * prec * rec / (prec + rec) if prec + rec > 0 else 0.0
+    return prec, rec, f1
+
+
+def r2(y: FArr, p: FArr) -> float:
+    yy = _f(y)
+    ss = float(np.sum((yy - yy.mean()) ** 2))
+    return float(1 - float(np.sum((yy - _f(p)) ** 2)) / ss) if ss > 0 else float("nan")
+
+
+_SECONDARY: dict[SecondaryMetric, ScoreFn] = {
+    "auc": auc, "accuracy": accuracy, "r2": r2,
+    "precision": lambda y, p: _prf(y, p)[0], "recall": lambda y, p: _prf(y, p)[1],
+    "f1": lambda y, p: _prf(y, p)[2],
+    "calibration-slope": lambda y, p: calibration_fit(y, p).slope,
+}
+
+
+def secondary_fn(metric: SecondaryMetric) -> ScoreFn:
+    """The score function of a secondary metric. Secondary metrics are reported with intervals and never rank or
+    gate. precision/recall/f1 are for the binary positive class classOrder[1] at threshold 0.5."""
+    return _SECONDARY[metric]
+
+
+# Task kinds and the proper-score families the protocol declares (Core `PROPER_SCORES_BY_FAMILY`).
+ScoreFamily = Literal["binary", "multiclass", "continuous", "count", "non-negative", "forecast"]
+
+FAMILY_OF_METRIC: dict[PrimaryMetric, tuple[ScoreFamily, ...]] = {
+    "log-loss": ("binary",), "brier": ("binary",), "multiclass-log-loss": ("multiclass",),
+    "rmse": ("continuous", "forecast"), "mae": ("continuous",), "poisson-deviance": ("count",),
+    "tweedie-deviance": ("non-negative",), "mase": ("forecast",),
+}
+
+
+class CrossFamilyRankingRefused(RequestRefused):
+    """A primary score of another family than the task (HTTP 400, nothing fitted); typed so the route and tests read
+    the fields, never the message."""
+
+    def __init__(self, task_kind: ScoreFamily, family: ScoreFamily, metric: PrimaryMetric) -> None:
+        super().__init__(
+            f"primary score {metric} (family '{family}') cannot rank a '{task_kind}' task: ranking across families "
+            f"(e.g. Tweedie vs squared-error by RMSE) is refused; use the task family's proper score"
+        )
+        self.task_kind: ScoreFamily = task_kind
+        self.family: ScoreFamily = family
+        self.metric: PrimaryMetric = metric
+
+
+def refuse_cross_family(task_kind: ScoreFamily, family: ScoreFamily, metric: PrimaryMetric) -> None:
+    """Rank only by the task family's own proper score. A Tweedie or Poisson task ranked by RMSE (or any family
+    mismatch) is refused before anything is fitted.
+
+    Raises:
+        CrossFamilyRankingRefused: When the protocol's score family is not the task's, or the metric is not one of
+            that family's proper scores.
+    """
+    if family != task_kind or task_kind not in FAMILY_OF_METRIC[metric]:
+        raise CrossFamilyRankingRefused(task_kind, family, metric)

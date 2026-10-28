@@ -2,7 +2,7 @@
 /**
  * run-pytest.mjs — run TruthSuite's Python tests using its bundled .venv.
  * `--mypy` type-checks the Python package and its tests, and the sidecar's trainer-contract, column-encoding,
- * snapshot-loading, inner-fold and estimator-factory modules and test fixtures (`mypy --strict`, python/mypy.ini), instead.
+ * snapshot-loading, inner-fold, estimator-factory, scoring, interval and calibration modules and test fixtures (`mypy --strict`, python/mypy.ini), instead.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -31,7 +31,7 @@ if (process.platform === 'darwin') {
 }
 
 // The sidecar's trainer contract, its column encoding, its snapshot loading, its inner-validation folds, its estimator
-// factories, its proper scores, candidate selection and selection stage, its CodeVersion, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
+// factories, its proper scores and secondary metrics, holdout intervals, calibration, candidate selection and selection stage, its CodeVersion, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
 const SIDECAR_TYPED_MODULES = [
   'app/trainer_schemas.py',
   'app/failures.py',
@@ -40,7 +40,10 @@ const SIDECAR_TYPED_MODULES = [
   'app/snapshot.py',
   'app/folds.py',
   'app/algorithms.py',
+  'app/array_types.py',
   'app/scores.py',
+  'app/intervals.py',
+  'app/calibration.py',
   'app/selection.py',
   'app/trainer.py',
   'app/code_version.py',
