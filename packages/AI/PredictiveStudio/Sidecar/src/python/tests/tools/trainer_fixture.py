@@ -162,8 +162,10 @@ def snapshot_files(df: pd.DataFrame, features: Mapping[str, JsonObject], holdout
                    id_col: str = "ID", decision: JsonObject | None = None, incumbent_col: str | None = None,
                    reference_col: str | None = None, slice_cols: Mapping[str, str] | None = None,
                    source_of: Mapping[str, str] | None = None) -> tuple[bytes, bytes]:
-    """(matrix.jsonl bytes, manifest.jsonl bytes) for a frame, byte for byte as `SerializeSnapshotFiles` writes them:
-    every line is canonical JSON (sorted keys, no whitespace); matrix line 1 is the header, then one JSON array per
+    """(matrix.jsonl bytes, manifest.jsonl bytes) for a frame in the format `SerializeSnapshotFiles` writes: every line
+    is canonical JSON (sorted keys, no whitespace) and matches the engine's `Canonicalize` byte for byte for the number
+    forms the product emits (integers and plain decimals); exponent-form floats (1e-07, 1e+21) serialize differently in
+    Python and JavaScript and never appear in these fixtures. Matrix line 1 is the header, then one JSON array per
     row; manifest line i is the SnapshotRowKey of matrix row i (positional, no row-id column). Rows whose ID is in
     `holdout_ids` are the locked holdout. Only fixtures set `referenceScoreColumn` (a planted truth such as a world's
     true probability); snapshots the product writes leave it null. The provenance file is not written: the trainer
@@ -345,14 +347,18 @@ def spec_seed(sid: str) -> int:
 
 
 def scenario_seeds400(sid: str) -> list[int]:
-    """The truth suite's `n400` seed set for a scenario as the catalog generated it: the spec seed first, then the
-    other 399. A set that is not fully generated raises KeyError (generate it with `--set n400`)."""
+    """The truth suite's `n400` seed set for a scenario as the catalog generated it: the spec seed, then
+    spec*1000+1 … spec*1000+399 (C2: 2201, 2201001 … 2201399). The generated seeds must be exactly that set; one that
+    is not fully generated raises KeyError (generate it with `--set n400`)."""
     _require_truthsuite()
     from truthsuite import paths
 
     seeds = paths.generated_scenario_seeds(sid)
-    if len(seeds) != 400:
-        raise KeyError(f"scenario {sid} has {len(seeds)} generated seeds, not the 400 of the n400 set; generate them with "
+    spec = seeds[0]
+    expected = [spec] + [spec * 1000 + k for k in range(1, 400)]
+    if seeds != expected:
+        raise KeyError(f"scenario {sid}'s {len(seeds)} generated seeds are not its n400 set (spec seed {spec}, then "
+                       f"{spec * 1000 + 1} … {spec * 1000 + 399}); generate them with "
                        f"`pnpm run truth:data -- --set n400 --only {sid}`")
     return seeds
 

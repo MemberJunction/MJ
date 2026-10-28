@@ -9,11 +9,12 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import EvaluationProtocol, TrainerCompleted, TrainerFailed, TrainerRequest, TrainerResult
-from tests.tools.trainer_fixture import FileServer, candidates, protocol, request, snapshot_files
+from tests.tools.trainer_fixture import FileServer, JsonObject, JsonValue, candidates, protocol, request, snapshot_files
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
-# Copied from Core/src/trainer-contract.ts (TRAINER_REQUEST_KEYS, TRAINER_COMPLETED_KEYS, TRAINER_FAILED_KEYS), whose
-# compile-time guards tie each list to its TypeScript type; a member added on either side without the other fails here.
+# Static copies of Core/src/trainer-contract.ts TRAINER_REQUEST_KEYS, TRAINER_COMPLETED_KEYS and TRAINER_FAILED_KEYS.
+# A member added to a TypeScript type fails that file's compile guard until its list is updated; this test then fails
+# until the copy here is updated to match and the pydantic model gains the member.
 TRAINER_REQUEST_KEYS = [
     "trainingRunId", "snapshot", "incumbent", "protocol", "task", "candidates", "seed", "threads", "timeoutSeconds", "maxRetries",
 ]
@@ -87,6 +88,61 @@ def test_snapshot_files_are_canonical_positional_json_lines() -> None:
     assert [json.loads(n)["rowId"] for n in n_lines] == list(df["ID"])
     assert [json.loads(n)["role"] for n in n_lines] == ["development"] * 5 + ["locked-holdout"]
     assert all(isinstance(json.loads(r)[3], int) for r in m_lines[1:])  # an integral label is written as an integer
+
+
+def _guided_protocol() -> JsonObject:
+    return protocol("binary", search={"kind": "guided", "method": "bayesian", "equalCostComparisonId": "cmp-1"})
+
+
+def test_a_guided_search_comparison_id_is_a_plain_string() -> None:
+    assert EvaluationProtocol.model_validate(_guided_protocol()).search.kind == "guided"
+
+
+def _with(path: str, value: JsonValue) -> JsonObject:
+    """The binary protocol with the value at a dotted path (list items by index) replaced."""
+    p = json.loads(json.dumps(protocol("binary")))
+    *parents, last = path.split(".")
+    node = p
+    for key in parents:
+        node = node[int(key)] if isinstance(node, list) else node[key]
+    if isinstance(node, list):
+        node[int(last)] = value
+    else:
+        node[last] = value
+    result: JsonObject = p
+    return result
+
+
+_DRIFT = {"kind": "calibration-drift", "slopeOutside": [0.8, 1.2], "consecutivePeriods": 2}
+
+
+@pytest.mark.parametrize("case, proto", [
+    ("negative seed", _with("seed", -1)),
+    ("fractional seed", _with("seed", 1.5)),
+    ("season 0", _with("baselines.2", {"kind": "seasonal-naive", "season": 0})),
+    ("empty heuristic name", _with("baselines.2", {"kind": "incumbent-heuristic", "name": ""})),
+    ("holdout fraction 0", _with("holdout.newEntityReport", {"groupKey": "EntityKey", "holdoutFraction": 0})),
+    ("holdout fraction 1", _with("holdout.newEntityReport", {"groupKey": "EntityKey", "holdoutFraction": 1})),
+    ("holdout end at cutoff", _with("holdout.holdoutEnd", "2024-01-01")),
+    ("holdout end before cutoff", _with("holdout.holdoutEnd", "2023-06-01")),
+    ("empty group key", _with("innerValidation", {"kind": "grouped-kfold", "folds": 5, "repeats": 1, "groupKey": ""})),
+    ("degradation over 0 periods",
+     _with("retrainTriggers", [{"kind": "outcome-degradation", "margin": 0, "consecutivePeriods": 0}])),
+    ("drift over 0 periods", _with("retrainTriggers", [{**_DRIFT, "consecutivePeriods": 0}])),
+    ("drift range reversed", _with("retrainTriggers", [{**_DRIFT, "slopeOutside": [1.2, 0.8]}])),
+    ("drift range empty", _with("retrainTriggers", [{**_DRIFT, "slopeOutside": [1.0, 1.0]}])),
+    ("empty author", _with("authoredBy", {"kind": "human", "userId": ""})),
+])
+def test_the_protocol_refuses_what_the_core_parser_refuses(case: str, proto: JsonObject) -> None:
+    with pytest.raises(ValidationError):
+        EvaluationProtocol.model_validate(proto)
+
+
+def test_the_protocol_accepts_the_boundaries_the_core_parser_accepts() -> None:
+    ok = _with("holdout.holdoutEnd", "2024-01-02")
+    ok["retrainTriggers"] = [{**_DRIFT, "consecutivePeriods": 1}]
+    ok["holdout"]["newEntityReport"] = {"groupKey": "EntityKey", "holdoutFraction": 0.3}
+    assert EvaluationProtocol.model_validate(ok).seed == 0
 
 
 def test_budget_hard_stop_raises_budget_exceeded() -> None:

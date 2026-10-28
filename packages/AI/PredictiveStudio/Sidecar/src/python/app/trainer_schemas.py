@@ -10,13 +10,15 @@ from __future__ import annotations
 
 from typing import Annotated, Dict, List, Literal, Optional, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from .failures import FailedStage  # the stage union has one definition, in failures.py
 
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Uuid = Annotated[str, StringConstraints(min_length=36, max_length=36)]
 IsoDateTime = str
+# A non-empty identifier the contract types as a plain string (not necessarily a UUID).
+Id = Annotated[str, StringConstraints(min_length=1)]
 IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 HyperparameterValue = Union[bool, int, float, str, None]
 # The 0.95 level the contract fixes (a float cannot be a typing Literal).
@@ -128,12 +130,12 @@ class NaiveBaseline(_Frozen):
 
 class SeasonalNaiveBaseline(_Frozen):
     kind: Literal["seasonal-naive"]
-    season: int
+    season: int = Field(ge=1)
 
 
 class IncumbentHeuristicBaseline(_Frozen):
     kind: Literal["incumbent-heuristic"]
-    name: str
+    name: Id
 
 
 BaselineSpec = Annotated[
@@ -145,7 +147,7 @@ BaselineSpec = Annotated[
 
 class NewEntityReport(_Frozen):
     groupKey: str
-    holdoutFraction: float
+    holdoutFraction: float = Field(gt=0, lt=1)
 
 
 class DateCarvedHoldout(_Frozen):
@@ -154,6 +156,13 @@ class DateCarvedHoldout(_Frozen):
     cutoff: IsoDate
     holdoutEnd: Optional[IsoDate]
     newEntityReport: Optional[NewEntityReport]
+
+    @model_validator(mode="after")
+    def _end_after_cutoff(self) -> DateCarvedHoldout:
+        # yyyy-mm-dd strings order as their dates.
+        if self.holdoutEnd is not None and self.holdoutEnd <= self.cutoff:
+            raise ValueError("holdoutEnd must be a date after cutoff")
+        return self
 
 
 class RollingOriginHoldout(_Frozen):
@@ -178,7 +187,7 @@ class GroupedKFold(_Frozen):
     kind: Literal["grouped-kfold"]
     folds: int = Field(ge=2)
     repeats: int = Field(ge=1)
-    groupKey: str
+    groupKey: Id
 
 
 class BlockedTime(_Frozen):
@@ -271,13 +280,19 @@ class ResidualDiagnosticsSpec(_Frozen):
 class OutcomeDegradationTrigger(_Frozen):
     kind: Literal["outcome-degradation"]
     margin: float = Field(ge=0)
-    consecutivePeriods: int
+    consecutivePeriods: int = Field(ge=1)
 
 
 class CalibrationDriftTrigger(_Frozen):
     kind: Literal["calibration-drift"]
     slopeOutside: Tuple[float, float]
-    consecutivePeriods: int
+    consecutivePeriods: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _range_ordered(self) -> CalibrationDriftTrigger:
+        if not self.slopeOutside[0] < self.slopeOutside[1]:
+            raise ValueError("slopeOutside must be [lo, hi] with lo < hi")
+        return self
 
 
 RetrainTrigger = Annotated[Union[OutcomeDegradationTrigger, CalibrationDriftTrigger], Field(discriminator="kind")]
@@ -291,7 +306,7 @@ class RandomSearch(_Frozen):
 class GuidedSearch(_Frozen):
     kind: Literal["guided"]
     method: Literal["bayesian", "successive-halving"]
-    equalCostComparisonId: Uuid
+    equalCostComparisonId: Id
 
 
 SearchStrategy = Annotated[Union[RandomSearch, GuidedSearch], Field(discriminator="kind")]
@@ -311,7 +326,7 @@ class ProtocolExclusions(_Frozen):
 
 class HumanActor(_Frozen):
     kind: Literal["human"]
-    userId: str
+    userId: Id
 
 
 class AgentActor(_Frozen):
@@ -340,7 +355,7 @@ class EvaluationProtocol(_Frozen):
     name: str
     holdout: HoldoutSplit
     innerValidation: InnerValidation
-    seed: int
+    seed: int = Field(ge=0)
     holdoutAccessBudget: Literal[1]
     primaryScore: ProperScore
     secondaryMetrics: List[SecondaryMetric]
@@ -383,7 +398,7 @@ class SnapshotRef(_Frozen):
 
 
 class IncumbentRef(_Frozen):
-    modelId: Uuid
+    modelId: Id
     artifact: PreAuthDownload
 
 
@@ -496,7 +511,7 @@ class ReturnedArtifact(_Frozen):
 
 
 class IncumbentDiff(_Frozen):
-    incumbentModelId: Uuid
+    incumbentModelId: Id
     value: float
     lower: float
     upper: float
