@@ -29,6 +29,7 @@ import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata'
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { StorageProviderSnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import { SnapshotRetrainer, type RetrainResult } from '../snapshot/snapshot-retrainer';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
@@ -59,8 +60,9 @@ import type {
 // ----- Training ---------------------------------------------------------------
 
 /**
- * The training delegation every in-process caller uses: one production deps builder and one train-by-pipeline entry
- * point, so the Train operation, the Train action, auto-train, the pipeline builder and the rigs train the same way.
+ * The training delegation every in-process caller uses: one production deps builder, one train-by-pipeline entry
+ * point and one retrain-from-snapshot entry point, so the Train operation, the Train action, auto-train, the pipeline
+ * builder and the rigs train (and retrain) the same way.
  * Static members on one owner.
  */
 export class TrainingDelegation {
@@ -121,6 +123,25 @@ export class TrainingDelegation {
     engine: TrainingEngine = new TrainingEngine(),
   ): Promise<TrainModelResult> {
     return engine.trainModel(input, await TrainingDelegation.BuildTrainingDeps(provider, user));
+  }
+
+  /**
+   * Retrain a completed unit run from its Training Snapshot with production deps, delegating to
+   * {@link SnapshotRetrainer.Retrain}: the stored files are verified against the snapshot row, the logged request is
+   * sent again and the holdout metrics are compared.
+   *
+   * @param trainingRunId the `MJ: ML Training Runs` row to retrain
+   * @param provider the owning provider
+   * @param user the acting user
+   * @param retrainer optional retrainer override (defaults to a fresh {@link SnapshotRetrainer})
+   */
+  public static async RetrainFromSnapshotViaEngine(
+    trainingRunId: string,
+    provider: IMetadataProvider,
+    user: UserInfo,
+    retrainer: SnapshotRetrainer = new SnapshotRetrainer(),
+  ): Promise<RetrainResult> {
+    return retrainer.Retrain(trainingRunId, await TrainingDelegation.BuildTrainingDeps(provider, user));
   }
 }
 

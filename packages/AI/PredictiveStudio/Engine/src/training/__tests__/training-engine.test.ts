@@ -1,35 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
-import type {
-  MJMLTrainingPipelineEntity,
-  MJMLModelEntity,
-  MJMLTrainingRunEntity,
-  MJTrainingSnapshotEntity,
-} from '@memberjunction/core-entities';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
   InvalidMajorityBaselineRuleError,
   TrustVerdicts,
-  type TrainRequest,
   type TrainResponse,
   type MatrixData,
   type FeatureStepGraph,
-  type SourceBinding,
   type AsOfStrategy,
-  type LeakageGuard,
   type ValidationStrategy,
-  type PredictionUnitColumns,
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training-engine';
-import { InMemoryArtifactStore } from '../artifact-store';
 import { DEFAULT_SPLIT_SEED } from '../locked-holdout';
-import type {
-  IEntityFactory,
-  IRecordLoader,
-  ISidecarTrainer,
-  TrainingDeps,
-} from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type {
   IFeatureDataAccess,
@@ -37,226 +20,34 @@ import type {
   FetchRowsResult,
   SourceRow,
 } from '../../feature-assembly';
-import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
 import { MLModelInferenceProcessor } from '../../scoring/ml-model-inference-processor';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
 import type { MLInferenceDeps } from '../../scoring/types';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type { RecordProcessorContext } from '@memberjunction/record-set-processor-base';
-import { FakePredictionUnitStore, UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
-import { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
+import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import {
+  FakeEntityFactory,
+  FakeMLModel,
+  FakeMLPipeline,
+  FakeSidecar,
+  FakeTrainingSnapshot,
+  buildDeps,
+  cleanResponse,
+  fakeProvider,
+  fakeUser,
+  unitHarness,
+} from '../../__tests__/fakes/training-fakes';
+import type { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
 import { SnapshotFiles, type SnapshotContent } from '../../snapshot/snapshot-serialization';
-import type { ITrainingSnapshotStore } from '../../snapshot/training-snapshot-store';
 
 /**
  * Unit tests for the TrainingEngine. NO live DB, NO live sidecar — every seam is
  * an in-memory fake. These tests prove the orchestration flow (plan §3 / §4.3 /
  * §4.4 / §8.2 / §6.4 / §11): the assembled matrix → carved locked holdout →
  * correctly-shaped TrainRequest → immutable Draft ML Model + Completed Training
- * Run, leakage-dominance handling, and Save-failure surfacing.
+ * Run, leakage-dominance handling, and Save-failure surfacing. The fakes are shared
+ * (`__tests__/fakes/training-fakes`).
  */
-
-// ---------------------------------------------------------------------------
-// In-memory entity fakes. BaseEntity uses getter/setters and can't be
-// constructed without a provider, so tests use plain field-bag fakes exposing
-// exactly the typed members the engine touches, plus Save() / LatestResult.
-// They are handed to the engine through the IEntityFactory seam via a single,
-// deliberate test-double cast at the boundary (the engine only ever calls the
-// strongly-typed properties below — never .Get()/.Set()).
-// ---------------------------------------------------------------------------
-
-interface FakeSaveResult {
-  CompleteMessage: string;
-}
-
-class FakeEntity {
-  public ID = '';
-  private saveOk: boolean;
-  public LatestResult: FakeSaveResult | null = null;
-  public SaveCallCount = 0;
-
-  constructor(idSeed: string, saveOk = true) {
-    this.ID = idSeed;
-    this.saveOk = saveOk;
-  }
-
-  public failNextSaveWith(message: string): void {
-    this.saveOk = false;
-    this.LatestResult = { CompleteMessage: message };
-  }
-
-  public async Save(): Promise<boolean> {
-    this.SaveCallCount++;
-    if (!this.saveOk) {
-      return false;
-    }
-    this.LatestResult = { CompleteMessage: '' };
-    return true;
-  }
-}
-
-class FakeMLModel extends FakeEntity {
-  public PipelineID = '';
-  public Version = 0;
-  public AlgorithmID = '';
-  public ArtifactFileID: string | null = null;
-  public FittedPreprocessing: string | null = null;
-  public FeatureSchema = '';
-  public TargetVariable = '';
-  public ProblemType: 'classification' | 'regression' = 'classification';
-  public Metrics: string | null = null;
-  public HoldoutMetrics: string | null = null;
-  public FeatureImportance: string | null = null;
-  public Lineage: string | null = null;
-  public TrainedAt: Date | null = null;
-  public TrainingDurationSec: number | null = null;
-  public TrainingRowCount: number | null = null;
-  public Status: 'Archived' | 'Draft' | 'Published' | 'Validated' = 'Draft';
-}
-
-class FakeMLRun extends FakeEntity {
-  public PipelineID = '';
-  public ResultingModelID: string | null = null;
-  public ExperimentSessionIterationID: string | null = null;
-  public FeaturesUsed: string | null = null;
-  public AlgorithmID = '';
-  public Hyperparameters: string | null = null;
-  public ValidationResults: string | null = null;
-  public Status: 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running' = 'Pending';
-  public StartedAt: Date | null = null;
-  public CompletedAt: Date | null = null;
-  public ComputeCost: number | null = null;
-  public EvaluationProtocolID: string | null = null;
-  public TrainingSnapshotID: string | null = null;
-  public TokensUsed: number | null = null;
-  public Notes: string | null = null;
-}
-
-/**
- * A Training Snapshot row: the counts the tests read as typed fields; the builder sets the other columns on the same
- * object. Save() assigns the next ID, as the database does.
- */
-class FakeTrainingSnapshot extends FakeEntity {
-  public ContentHash = '';
-  public MatrixFileID = '';
-  public RowManifestFileID = '';
-  public ProvenanceFileID = '';
-  public ManifestRowCount = 0;
-  public HoldoutRowCount = 0;
-  public CensoredRowsExcluded = 0;
-
-  public override async Save(): Promise<boolean> {
-    const ok = await super.Save();
-    if (ok && this.ID === '') this.ID = `snapshot-${FakeTrainingSnapshot.saved++}`;
-    return ok;
-  }
-
-  private static saved = 1;
-}
-
-/** An `MJ: Files` row (the in-memory snapshot file store writes none; served so the factory covers every entity training creates). */
-class FakeFileRow extends FakeEntity {}
-
-/** A pipeline fake exposing the JSON config columns + denormalized view fields. */
-class FakeMLPipeline {
-  public ID = 'pipe-1';
-  public Name = 'Member Renewal Predictor';
-  public Version = 3;
-  public TargetEntity = 'Members';
-  public TargetVariable = 'Renewed';
-  public ProblemType: 'classification' | 'regression' = 'classification';
-  public Algorithm = 'xgboost';
-  public AlgorithmID = 'algo-xgb';
-  public Hyperparameters: string | null = JSON.stringify({ max_depth: 4 });
-  public SourceBindings: string | null = JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }] as SourceBinding[]);
-  public FeatureSteps: string | null = JSON.stringify({
-    Steps: [
-      { Id: 's1', Kind: 'select', Columns: ['tenure', 'events_at_signup', 'city'] },
-      { Id: 's2', Kind: 'impute', Column: 'tenure', Strategy: 'mean' },
-      { Id: 's3', Kind: 'standardize', Columns: ['tenure', 'events_at_signup'] },
-      { Id: 's4', Kind: 'onehot', Column: 'city' },
-    ],
-  } satisfies FeatureStepGraph);
-  public AsOfStrategy: string | null = JSON.stringify({ Mode: 'none' } as AsOfStrategy);
-  public PredictionUnitID: string | null = null;
-  public EvaluationProtocolID: string | null = null;
-  public LeakageGuard: string | null = JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 } as LeakageGuard);
-  public ValidationStrategy: string | null = JSON.stringify({
-    Strategy: 'train_test_split',
-    TestSize: 0.2,
-    LockedHoldoutFraction: 0.2,
-  } as ValidationStrategy);
-}
-
-/** Entity-factory fake — hands back the queued model/run fakes per entity name. */
-class FakeEntityFactory implements IEntityFactory {
-  public readonly Models: FakeMLModel[] = [];
-  public readonly Runs: FakeMLRun[] = [];
-  public readonly Snapshots: FakeTrainingSnapshot[] = [];
-  public readonly Files: FakeFileRow[] = [];
-
-  constructor(
-    private readonly modelFactory: () => FakeMLModel = () => new FakeMLModel('model-1'),
-    private readonly runFactory: () => FakeMLRun = () => new FakeMLRun('run-1'),
-  ) {}
-
-  async getEntityObject<T extends BaseEntity>(entityName: string, _contextUser?: UserInfo): Promise<T> {
-    if (entityName === 'MJ: ML Models') {
-      const m = this.modelFactory();
-      this.Models.push(m);
-      // Single deliberate test-double cast at the seam boundary (see header note).
-      return m as unknown as T;
-    }
-    if (entityName === 'MJ: ML Training Runs') {
-      const r = this.runFactory();
-      this.Runs.push(r);
-      return r as unknown as T;
-    }
-    if (entityName === 'MJ: Training Snapshots') {
-      const snapshot = new FakeTrainingSnapshot('');
-      this.Snapshots.push(snapshot);
-      return snapshot as unknown as T;
-    }
-    if (entityName === 'MJ: Files') {
-      const file = new FakeFileRow(`file-${this.Files.length + 1}`);
-      this.Files.push(file);
-      return file as unknown as T;
-    }
-    throw new Error(`FakeEntityFactory: unexpected entity ${entityName}`);
-  }
-}
-
-/** Record-loader fake — returns a configured pipeline + next version. */
-class FakeRecordLoader implements IRecordLoader {
-  constructor(
-    private readonly pipeline: FakeMLPipeline | null,
-    private readonly nextVersion = 5,
-  ) {}
-
-  async loadPipeline(_pipelineId: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null> {
-    return this.pipeline as unknown as MJMLTrainingPipelineEntity | null;
-  }
-
-  async nextModelVersion(_pipelineId: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<number> {
-    return this.nextVersion;
-  }
-}
-
-/** Sidecar fake — captures the request + holdout, returns a canned response. */
-class FakeSidecar implements ISidecarTrainer {
-  public LastRequest: TrainRequest | null = null;
-  public LastHoldout: MatrixData | null = null;
-  public CallCount = 0;
-
-  constructor(private readonly response: TrainResponse) {}
-
-  async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
-    this.CallCount++;
-    this.LastRequest = req;
-    this.LastHoldout = lockedHoldout ?? null;
-    return this.response;
-  }
-}
 
 /** In-memory feature data access backing the assembler (no DB); records every read so tests can check its ORDER BY. */
 class InMemoryDataAccess implements IFeatureDataAccess {
@@ -289,26 +80,7 @@ function syntheticMembers(): SourceRow[] {
   return rows;
 }
 
-const cleanResponse: TrainResponse = {
-  artifact_b64: Buffer.from('fake-model-bytes').toString('base64'),
-  fitted_preprocessing: { 'standardize.tenure': { mean: 5, std: 2.5 } },
-  metrics: { auc: 0.82, f1: 0.78 },
-  feature_importance: { tenure: 0.3, events_at_signup: 0.25, city: 0.2, emb_0: 0.25 },
-  feature_importance_kind: 'split_or_impurity',
-  training_row_count: 8,
-  duration_sec: 1.4,
-  holdout_metrics: { auc: 0.79 },
-  validation_out_of_sample: true,
-};
 
-/**
- * The provider slice training uses: `EntityByName` for the target's primary key (the training read is ordered by it).
- * Handed to the engine through one deliberate test-double cast at the seam boundary.
- */
-const fakeProvider = {
-  EntityByName: (name: string) => (name === 'Members' ? { PrimaryKeys: [{ Name: 'ID' }] } : undefined),
-} as unknown as IMetadataProvider;
-const fakeUser = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
 
 /** Build a TrainingEngine wired to an assembler over the given member rows. */
 function buildEngine(dataAccess: InMemoryDataAccess = new InMemoryDataAccess({ Members: syntheticMembers() })): TrainingEngine {
@@ -323,26 +95,6 @@ function buildEngine(dataAccess: InMemoryDataAccess = new InMemoryDataAccess({ M
   return new TrainingEngine(new TestAssembler());
 }
 
-function buildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeline | null; response?: TrainResponse }): {
-  deps: TrainingDeps;
-  factory: FakeEntityFactory;
-  sidecar: FakeSidecar;
-  store: InMemoryArtifactStore;
-} {
-  const factory = (overrides?.entityFactory as FakeEntityFactory) ?? new FakeEntityFactory();
-  const sidecar = new FakeSidecar(overrides?.response ?? cleanResponse);
-  const store = new InMemoryArtifactStore();
-  const pipeline = overrides?.pipeline === undefined ? new FakeMLPipeline() : overrides.pipeline;
-  const deps: TrainingDeps = {
-    entityFactory: factory,
-    recordLoader: new FakeRecordLoader(pipeline),
-    sidecar,
-    artifactStore: store,
-    contextUser: fakeUser,
-    provider: fakeProvider,
-  };
-  return { deps, factory, sidecar, store };
-}
 
 describe('TrainingEngine.trainModel — happy path', () => {
   it('produces a Draft ML Model + Completed Training Run with a correctly-shaped TrainRequest', async () => {
@@ -613,57 +365,6 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
   });
 });
 
-// ---------------------------------------------------------------------------
-// Prediction Unit pipelines: the unit store, the assembly metadata and a counting data access over the unit world.
-// ---------------------------------------------------------------------------
-
-/** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows. */
-function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] }): {
-  engine: TrainingEngine;
-  deps: TrainingDeps;
-  sidecar: FakeSidecar;
-  pipeline: FakeMLPipeline;
-  runs: FakeMLRun[];
-  models: FakeMLModel[];
-  snapshots: FakeTrainingSnapshot[];
-  files: InMemorySnapshotFileStore;
-  snapshotStore: FakeTrainingSnapshotStore;
-} {
-  const pipeline = new FakeMLPipeline();
-  pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
-  pipeline.TargetEntity = 'Years';
-  pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
-  pipeline.FeatureSteps = JSON.stringify(featureSteps);
-  const { deps, factory, sidecar } = buildDeps({ pipeline });
-  deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
-  deps.assemblyMetadata = UnitYearsWorld.Metadata();
-  deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
-  const files = new InMemorySnapshotFileStore('provider-local');
-  deps.snapshotFiles = files;
-  const snapshotStore = new FakeTrainingSnapshotStore(factory);
-  deps.snapshots = snapshotStore;
-  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
-}
-
-/** Finds the snapshots the factory saved by content hash, as the RunView store finds the saved rows. */
-class FakeTrainingSnapshotStore implements ITrainingSnapshotStore {
-  /** Content-hash lookups that found a saved snapshot: each one is a build that reused it instead of writing. */
-  public ReusedLookups = 0;
-  constructor(private readonly factory: FakeEntityFactory) {}
-  public async FindByContentHash(contentHash: string): Promise<MJTrainingSnapshotEntity | null> {
-    const found = this.factory.Snapshots.find((s) => s.ID !== '' && s.ContentHash === contentHash);
-    if (found) this.ReusedLookups++;
-    return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
-  }
-  public async LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null> {
-    const found = this.factory.Snapshots.find((s) => s.ID === id);
-    return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
-  }
-  public async LoadRun(id: string): Promise<MJMLTrainingRunEntity | null> {
-    const found = this.factory.Runs.find((r) => r.ID === id);
-    return found ? (found as unknown as MJMLTrainingRunEntity) : null;
-  }
-}
 
 /** The stored snapshot's content, read back from the in-memory file store. */
 async function storedContent(files: InMemorySnapshotFileStore, s: FakeTrainingSnapshot): Promise<SnapshotContent> {

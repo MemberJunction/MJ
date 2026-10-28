@@ -21,7 +21,7 @@ export * from './feature-assembly';
 
 // Training Snapshot — the matrix (with the header the trainer reads), row manifest and per-value provenance files,
 // their hashes and the snapshot content hash, the assembly code-version stamp, the write-once file stores, the
-// holdout carver and the snapshot builder.
+// holdout carver, the snapshot builder, and training and retraining from a snapshot.
 export * from './snapshot/index';
 
 // Prediction Unit rows — PredictionUnitRowReader: one row per grain record (or grain record x period) with its
