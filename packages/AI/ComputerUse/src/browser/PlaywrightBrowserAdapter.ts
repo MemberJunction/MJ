@@ -1125,9 +1125,10 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * one could run first and `continue()` past the other.
      */
     private async setupRouteInterceptor(): Promise<void> {
-        // On the context, not the page: a popup (`window.open`, `target=_blank`) is a new page that a
-        // page route never sees.
-        await this.context!.route('**/*', async (route: Route) => {
+        // On the context, so a popup (`window.open`, `target=_blank`), a new page that a page route never
+        // sees, is covered too. A context this adapter attached to is someone else's, with pages of its own
+        // to leave alone, so there it covers this page only.
+        await (this.ownsContext ? this.context! : this.page!).route('**/*', async (route: Route) => {
             const requestUrl = route.request().url();
             if (this.navigationPolicy?.AllowedPrivateHosts && /^https?:/i.test(requestUrl) && this.isBlockedPrivateHost(new URL(requestUrl))) {
                 await route.abort('blockedbyclient');

@@ -18,10 +18,11 @@
 import { NavigationDecision } from '../types/browser.js';
 
 /**
- * Name suffixes that only resolve inside a private network: `localhost` subdomains, and the Docker
- * (`host.docker.internal`), cloud-metadata (`metadata.google.internal`) and Kubernetes (`*.svc`) names.
+ * Name suffixes that only resolve inside a private network: `localhost` subdomains, the Docker
+ * (`host.docker.internal`), cloud-metadata (`metadata.google.internal`) and Kubernetes (`*.svc`) names,
+ * and the usual home and office ones. None is a public top-level domain.
  */
-const PRIVATE_NAME_SUFFIXES = ['.localhost', '.internal', '.local', '.lan', '.corp', '.home.arpa', '.svc'];
+const PRIVATE_NAME_SUFFIXES = ['.localhost', '.localdomain', '.internal', '.local', '.lan', '.corp', '.home', '.home.arpa', '.intranet', '.private', '.svc'];
 
 export class NavigationGuard {
     private allowedDomains: string[];

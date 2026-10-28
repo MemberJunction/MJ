@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { launch } = vi.hoisted(() => ({ launch: vi.fn() }));
 vi.mock('playwright', () => ({ chromium: { launch, connect: vi.fn(), connectOverCDP: vi.fn() } }));
 
+import { chromium } from 'playwright';
 import { PlaywrightBrowserAdapter } from '../browser/PlaywrightBrowserAdapter.js';
 import { NavigationGuard } from '../browser/NavigationGuard.js';
 import { BrowserConfig, NavigateAction } from '../types/browser.js';
@@ -72,7 +73,7 @@ describe('NavigationGuard.IsPrivateNetworkHost', () => {
     });
 
     it('flags private-network names and the remaining special-use ranges', () => {
-        for (const host of ['metadata.google.internal', 'host.docker.internal', 'gateway.docker.internal', 'kubernetes.default.svc', 'db.internal', 'printer.local', 'nas.lan', 'wiki.corp', 'router.home.arpa', 'api.payments.svc', '[fec0::1]', '[::7f00:1]', '[64:ff9b::7f00:1]', '[64:ff9b::a00:1]', '192.0.0.192', '198.18.0.1', '198.19.255.1']) {
+        for (const host of ['metadata.google.internal', 'host.docker.internal', 'gateway.docker.internal', 'kubernetes.default.svc', 'db.internal', 'printer.local', 'nas.lan', 'wiki.corp', 'router.home.arpa', 'api.payments.svc', 'localhost.localdomain', 'nas.localdomain', 'router.home', 'wiki.intranet', 'db.private', '[fec0::1]', '[::7f00:1]', '[64:ff9b::7f00:1]', '[64:ff9b::a00:1]', '192.0.0.192', '198.18.0.1', '198.19.255.1']) {
             expect([host, NavigationGuard.IsPrivateNetworkHost(host)]).toEqual([host, true]);
         }
         // NAT64 to a public IPv4 is public.
@@ -80,7 +81,7 @@ describe('NavigationGuard.IsPrivateNetworkHost', () => {
     });
 
     it('lets public names through, including ones that merely start like an IPv6 prefix', () => {
-        for (const host of ['example.com', 'fda.gov', 'fdic.gov', 'fcc.gov', 'fe80.example.com', '8.8.8.8', '172.32.0.1', '[2606:4700::1]']) {
+        for (const host of ['example.com', 'fda.gov', 'fdic.gov', 'fcc.gov', 'fe80.example.com', '8.8.8.8', '172.32.0.1', '[2606:4700::1]', 'home.com', 'private.io', 'local.example.com', 'corp.example.org', 'intranet.example.net']) {
             expect([host, NavigationGuard.IsPrivateNetworkHost(host)]).toEqual([host, false]);
         }
     });
@@ -123,6 +124,15 @@ describe('PlaywrightBrowserAdapter.RestrictNavigation', () => {
         };
         expect(await request('http://10.0.0.5/admin')).toBe('aborted');
         expect(await request('https://example.com/a.js')).toBe('continued');
+    });
+
+    it('on a context it attached to rather than created, intercepts only its own page', async () => {
+        vi.mocked(chromium.connectOverCDP).mockResolvedValue({ contexts: () => [context], close: vi.fn(), isConnected: () => true } as never);
+        const adapter = new PlaywrightBrowserAdapter();
+        await adapter.Launch(Object.assign(new BrowserConfig(), { Connect: 'http://127.0.0.1:9222', ReuseExistingContext: true }));
+        await adapter.RestrictNavigation([]);
+        expect(context.route).not.toHaveBeenCalled();
+        expect(page.route).toHaveBeenCalledTimes(1);
     });
 
     it('refuses a navigation a redirect lands on a private host, even after the listener has moved the page away', async () => {
