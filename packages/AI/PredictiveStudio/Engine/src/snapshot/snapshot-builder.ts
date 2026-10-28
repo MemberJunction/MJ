@@ -153,14 +153,21 @@ export class TrainingSnapshotBuilder {
    * The three write-once files, uploaded in parallel (independent objects) under the content-hash prefix. The keys
    * are deterministic and the stores accept identical bytes under an existing key, so a build that failed after
    * writing, or lost the content-hash race, leaves the same objects a later build of the same content reuses.
+   *
+   * The provenance file is outside the content hash (it records when each value was computed), so identical content
+   * can carry different provenance bytes; its object is keyed by its own SHA-256 so each version gets its own object.
+   * A build that loses the content-hash race can therefore leave one provenance object no snapshot references (the
+   * row references the winner's). Readers reach every file through the row's file IDs and the `MJ: Files` row's
+   * stored key, never by rebuilding a key.
    */
   protected async WriteFiles(store: ISnapshotFileStore, contentHash: string, files: SnapshotFileBytes): Promise<StoredSnapshotFiles> {
     const prefix = `predictive-studio/training-snapshots/${contentHash}`;
     const short = contentHash.slice(0, 12);
+    const provenanceSha256 = SnapshotHash.Sha256Hex(files.Provenance);
     const [matrix, manifest, provenance] = await Promise.all([
       store.Put(`${prefix}/matrix.jsonl`, `snapshot-${short}-matrix.jsonl`, files.Matrix, 'application/x-ndjson'),
       store.Put(`${prefix}/manifest.jsonl`, `snapshot-${short}-manifest.jsonl`, files.Manifest, 'application/x-ndjson'),
-      store.Put(`${prefix}/provenance.jsonl`, `snapshot-${short}-provenance.jsonl`, files.Provenance, 'application/x-ndjson'),
+      store.Put(`${prefix}/provenance-${provenanceSha256}.jsonl`, `snapshot-${short}-provenance-${provenanceSha256.slice(0, 12)}.jsonl`, files.Provenance, 'application/x-ndjson'),
     ]);
     return { Matrix: matrix, Manifest: manifest, Provenance: provenance };
   }

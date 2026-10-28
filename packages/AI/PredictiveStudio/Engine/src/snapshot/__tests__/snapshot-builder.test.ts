@@ -243,6 +243,27 @@ describe('Snapshot file write-once rule', () => {
     expect(retried.Reused).toBe(false);
     expect(files.Saved.size).toBe(3);
     expect(files.Saved.get(retried.Entity.MatrixFileID)?.Key).toBe(`predictive-studio/training-snapshots/${retried.Entity.ContentHash}/matrix.jsonl`);
+    expect(files.Saved.get(retried.Entity.ProvenanceFileID)?.Key).toBe(`predictive-studio/training-snapshots/${retried.Entity.ContentHash}/provenance-${retried.Entity.ProvenanceSha256}.jsonl`);
+  });
+});
+
+describe('Snapshot provenance object', () => {
+  it('lets two builds of identical content with different computedAt both succeed, sharing the matrix and manifest and keeping two provenance objects', async () => {
+    const files = new InMemorySnapshotFileStore('provider-local');
+    const first = await new TrainingSnapshotBuilder().Build(input(files));
+    const later: AsOfAssembledMatrix = { ...assembled, Rows: assembled.Rows.map((r) => ({ ...r, Provenance: r.Provenance.map((v) => ({ ...v, computedAt: '2026-10-28T00:00:00.000Z' })) })) };
+    let lookups = 0;
+    // The later build finds no snapshot before writing, then loses the unique content hash to the first build's row.
+    const existing = async (): Promise<MJTrainingSnapshotEntity | null> => (lookups++ === 0 ? null : first.Entity);
+    const second = await new TrainingSnapshotBuilder().Build({ ...input(files, new FakeEntityFactory(1)), Assembled: later, ExistingByContentHash: existing });
+    expect(second.Reused).toBe(true);
+    expect(second.Entity).toBe(first.Entity);
+    const prefix = `predictive-studio/training-snapshots/${first.Entity.ContentHash}`;
+    const keys = [...files.Saved.values()].map((f) => f.Key).sort();
+    const provenanceKeys = keys.filter((k) => k.startsWith(`${prefix}/provenance-`));
+    expect(keys.filter((k) => !provenanceKeys.includes(k))).toEqual([`${prefix}/manifest.jsonl`, `${prefix}/matrix.jsonl`]);
+    expect(provenanceKeys).toHaveLength(2);
+    expect(files.Saved.get(first.Entity.ProvenanceFileID)?.Key).toBe(`${prefix}/provenance-${first.Entity.ProvenanceSha256}.jsonl`);
   });
 });
 

@@ -7,7 +7,8 @@
  *   reference-score and slice columns, the unit's `DecisionSpec`, and the sidecar feature schema and preprocessing
  *   recipe; then one JSON array per manifest row.
  * - `manifest.jsonl` — one `SnapshotRowKey` per row, in the same order: matrix row i is manifest line i.
- * - `provenance.jsonl` — one `RowProvenance` (`{ rowId, values }`) per row, in the same order.
+ * - `provenance.jsonl` — one `RowProvenance` (`{ rowId, values }`) per row, in the same order (stored as
+ *   `provenance-<sha256>.jsonl`, since provenance is outside the content hash).
  *
  * The persisted shapes, reserved column names and their schemas are Core's (`snapshot-format`, `StoreSchemas`); this
  * module writes, reads and fingerprints the bytes. Every line is written through MJ's `Canonicalize` from

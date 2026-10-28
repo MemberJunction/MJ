@@ -6,9 +6,12 @@
  *
  * Write-once with byte-equal idempotence: a key that already holds an object is never overwritten. When the stored
  * bytes are identical to the new ones (equal SHA-256), the write succeeds without writing; different bytes are
- * refused with `SnapshotFileExistsError`. Snapshot keys are derived from the content hash, so a build that failed
- * after writing its files never blocks a later build of the same content, and two builds racing on one content
- * write the same objects instead of two file sets.
+ * refused with `SnapshotFileExistsError`. Snapshot keys are derived from the content hash (the provenance object's
+ * also from its own SHA-256), so a build that failed after writing its files never blocks a later build of the same
+ * content, and two builds racing on one content share the matrix and manifest objects. A lost race can leave one
+ * unreferenced provenance object: provenance is outside the content hash, so the loser's may differ from the
+ * winner's, and the snapshot row references the winner's. Readers resolve a file through its `MJ: Files` row's stored
+ * `ProviderKey` (`Get(fileId)`), never by rebuilding a key.
  *
  * The provider is the `MJ: File Storage Providers` row named by `PS_SNAPSHOT_STORAGE_PROVIDER` (default
  * "Local File System"), read from `FileStorageEngine`'s cached providers. It is selected by name whatever its
