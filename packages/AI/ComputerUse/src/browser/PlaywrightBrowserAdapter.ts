@@ -473,12 +473,17 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             if (this.page!.url() !== 'about:blank') {
                 await this.page!.goto('about:blank');
             }
-            throw new Error(`Navigation refused: it was redirected to ${new URL(landed).host}, which is on a private network.`);
+            const where = /^https?:/i.test(landed) ? `${new URL(landed).host}, which is on a private network` : `a ${landed.split(':')[0]}: page`;
+            throw new Error(`Navigation refused: it was redirected to ${where}.`);
         }
     }
 
+    /** Whether a page landed somewhere the policy refuses: a scheme other than http(s), or a blocked host. */
     private isBlockedLanding(url: string): boolean {
-        return /^https?:/i.test(url) && this.isBlockedPrivateHost(new URL(url));
+        if (!this.navigationPolicy || /^about:blank(#|$)/i.test(url)) {
+            return false;
+        }
+        return !/^https?:/i.test(url) || this.isBlockedPrivateHost(new URL(url));
     }
 
     /** Throws when the navigation policy refuses `url`. */
@@ -1120,7 +1125,9 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * one could run first and `continue()` past the other.
      */
     private async setupRouteInterceptor(): Promise<void> {
-        await this.page!.route('**/*', async (route: Route) => {
+        // On the context, not the page: a popup (`window.open`, `target=_blank`) is a new page that a
+        // page route never sees.
+        await this.context!.route('**/*', async (route: Route) => {
             const requestUrl = route.request().url();
             if (this.navigationPolicy?.AllowedPrivateHosts && /^https?:/i.test(requestUrl) && this.isBlockedPrivateHost(new URL(requestUrl))) {
                 await route.abort('blockedbyclient');

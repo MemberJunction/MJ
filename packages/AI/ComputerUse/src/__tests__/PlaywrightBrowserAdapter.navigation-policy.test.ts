@@ -21,6 +21,8 @@ let page: {
     url: () => string; close: () => Promise<void>; setDefaultNavigationTimeout: () => void; setDefaultTimeout: () => void;
 };
 
+let context: { newPage: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; addCookies: ReturnType<typeof vi.fn>; route: ReturnType<typeof vi.fn> };
+
 beforeEach(() => {
     currentUrl = 'about:blank';
     inFlight = false;
@@ -52,7 +54,7 @@ beforeEach(() => {
         setDefaultNavigationTimeout: () => undefined,
         setDefaultTimeout: () => undefined,
     };
-    const context = { newPage: vi.fn().mockResolvedValue(page), close: vi.fn(), addCookies: vi.fn() };
+    context = { newPage: vi.fn().mockResolvedValue(page), close: vi.fn(), addCookies: vi.fn(), route: vi.fn().mockResolvedValue(undefined) };
     launch.mockResolvedValue({ newContext: vi.fn().mockResolvedValue(context), contexts: () => [], close: vi.fn(), isConnected: () => true });
 });
 
@@ -67,6 +69,14 @@ describe('NavigationGuard.IsPrivateNetworkHost', () => {
         for (const host of ['localhost', 'localhost.', 'api.localhost', 'intranet', '127.0.0.1', '127.0.0.1.', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '[::1]', '[fd00::1]', '[fc00::1]', '[fe80::1]', '[::ffff:7f00:1]']) {
             expect([host, NavigationGuard.IsPrivateNetworkHost(host)]).toEqual([host, true]);
         }
+    });
+
+    it('flags private-network names and the remaining special-use ranges', () => {
+        for (const host of ['metadata.google.internal', 'host.docker.internal', 'gateway.docker.internal', 'kubernetes.default.svc', 'db.internal', 'printer.local', 'nas.lan', 'wiki.corp', 'router.home.arpa', 'api.payments.svc', '[fec0::1]', '[::7f00:1]', '[64:ff9b::7f00:1]', '[64:ff9b::a00:1]', '192.0.0.192', '198.18.0.1', '198.19.255.1']) {
+            expect([host, NavigationGuard.IsPrivateNetworkHost(host)]).toEqual([host, true]);
+        }
+        // NAT64 to a public IPv4 is public.
+        expect(NavigationGuard.IsPrivateNetworkHost('[64:ff9b::808:808]')).toBe(false);
     });
 
     it('lets public names through, including ones that merely start like an IPv6 prefix', () => {
@@ -103,8 +113,9 @@ describe('PlaywrightBrowserAdapter.RestrictNavigation', () => {
         await adapter.Navigate('https://example.com/');
         expect(page.goto.mock.calls.map((c) => c[0])).toEqual(['http://localhost:4200/app', 'https://example.com/']);
 
-        // A link the page follows or a fetch it makes goes through the route, not Navigate.
-        const handler = page.route.mock.calls[0][1] as RouteHandler;
+        // A link the page follows, a fetch it makes, or a popup it opens goes through the context's route.
+        expect(page.route).not.toHaveBeenCalled();
+        const handler = context.route.mock.calls[0][1] as RouteHandler;
         const request = async (url: string) => {
             const route = { request: () => ({ url: () => url, headers: () => ({}) }), abort: vi.fn().mockResolvedValue(undefined), continue: vi.fn().mockResolvedValue(undefined) };
             await handler(route);
@@ -136,6 +147,17 @@ describe('PlaywrightBrowserAdapter.RestrictNavigation', () => {
         const action = Object.assign(new NavigateAction(), { Url: 'https://short.example/x' });
         expect((await adapter.ExecuteAction(action)).Error).toContain('redirected to');
         expect((await adapter.ExecuteAction(Object.assign(new NavigateAction(), { Url: 'https://example.org/' }))).Success).toBe(true);
+    });
+
+    it('refuses a landing on any scheme other than http(s), as for a page that sends itself to data:', async () => {
+        const adapter = await launched();
+        await adapter.RestrictNavigation([]);
+        redirects['https://example.com/go'] = 'data:text/html,<h1>x</h1>';
+        await expect(adapter.Navigate('https://example.com/go')).rejects.toThrow('redirected to a data: page');
+        const onNavigated = page.on.mock.calls.find((c) => c[0] === 'framenavigated')![1] as FrameListener;
+        currentUrl = 'blob:https://example.com/123';
+        onNavigated(mainFrame);
+        expect(page.goto).toHaveBeenLastCalledWith('about:blank');
     });
 
     it('sends the page back when a main-frame navigation it did not start (a followed link) lands on a private host', async () => {
