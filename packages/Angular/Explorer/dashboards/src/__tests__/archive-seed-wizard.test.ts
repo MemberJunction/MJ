@@ -42,6 +42,7 @@ function createWizard(): { wizard: ArchiveSeedWizardComponent; service: ServiceS
   internals['lastSeq'] = 0;
   internals['pollTimer'] = null;
   internals['reconnectStartedAt'] = null;
+  internals['generation'] = 0;
   internals['eventTables'] = undefined;
   internals['seedSummary'] = undefined;
   internals['isOpen'] = false;
@@ -66,6 +67,17 @@ function createWizard(): { wizard: ArchiveSeedWizardComponent; service: ServiceS
   wizard.Closed = { emit: vi.fn() } as unknown as typeof wizard.Closed;
   wizard.Completed = { emit: vi.fn() } as unknown as typeof wizard.Completed;
   return { wizard, service };
+}
+
+/** A promise the test resolves by hand, to hold a service call in flight. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>(r => { resolve = r; });
+  return { promise, resolve };
+}
+
+function pollTimerOf(wizard: ArchiveSeedWizardComponent): unknown {
+  return (wizard as unknown as Record<string, unknown>)['pollTimer'];
 }
 
 /** Runs one polling round the way the timer would. */
@@ -257,5 +269,78 @@ describe('ArchiveSeedWizardComponent', () => {
     wizard.Close();
     expect(wizard.JobID).toBeNull();
     expect(wizard.Closed.emit).toHaveBeenCalled();
+  });
+
+  describe('stops following the job once the wizard is closed or destroyed', () => {
+    async function pollResolvingAfter(stop: (wizard: ArchiveSeedWizardComponent) => void): Promise<ArchiveSeedWizardComponent> {
+      vi.useFakeTimers();
+      const { wizard, service } = createWizard();
+      wizard.JobID = 'job-1';
+      wizard.CurrentStep = 4;
+      wizard.CurrentState = 'Building';
+      const pending = deferred<ReturnType<typeof seedState>>();
+      service.GetArchiveSeedState.mockReturnValue(pending.promise);
+
+      const round = pollOnce(wizard);
+      stop(wizard);
+      pending.resolve(seedState('Mapping', { CurrentRunID: 'run-b' }));
+      await round;
+
+      expect(service.TailBootstrapRun).not.toHaveBeenCalled();
+      expect(pollTimerOf(wizard)).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(wizard.JobID).toBeNull();
+      return wizard;
+    }
+
+    it('an in-flight state read that resolves after Close() arms no timer', async () => {
+      const wizard = await pollResolvingAfter(w => w.Close());
+      expect(wizard.CurrentState).toBe('Building');
+    });
+
+    it('an in-flight state read that resolves after ngOnDestroy() arms no timer', async () => {
+      await pollResolvingAfter(w => w.ngOnDestroy());
+    });
+
+    it('an in-flight state read that resolves after the host binds IsOpen to false arms no timer', async () => {
+      await pollResolvingAfter(w => {
+        (w as unknown as Record<string, unknown>)['isOpen'] = true;
+        w.IsOpen = false;
+      });
+    });
+
+    it('an unreachable server after Close() does not keep reconnecting', async () => {
+      vi.useFakeTimers();
+      const { wizard, service } = createWizard();
+      wizard.JobID = 'job-1';
+      wizard.CurrentState = 'Building';
+      const pending = deferred<{ Success: boolean; Message: string }>();
+      service.GetArchiveSeedState.mockReturnValue(pending.promise);
+
+      const round = pollOnce(wizard);
+      wizard.Close();
+      pending.resolve({ Success: false, Message: 'Failed to fetch' });
+      await round;
+
+      expect(wizard.IsReconnecting).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('a StartArchiveSeed that resolves after Close() leaves JobID null and arms no timer', async () => {
+      vi.useFakeTimers();
+      const { wizard, service } = createWizard();
+      const pending = deferred<{ Success: boolean; Message: string; JobID: string; RunID: string }>();
+      service.StartArchiveSeed.mockReturnValue(pending.promise);
+
+      const starting = wizard.StartRestore();
+      wizard.Close();
+      pending.resolve({ Success: true, Message: 'started', JobID: 'job-1', RunID: 'run-a' });
+      await starting;
+
+      expect(wizard.JobID).toBeNull();
+      expect(wizard.RunID).toBeNull();
+      expect(pollTimerOf(wizard)).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });

@@ -47,7 +47,11 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   @Input()
   set IsOpen(value: boolean) {
     const opening = value && !this.isOpen;
+    const closing = !value && this.isOpen;
     this.isOpen = value;
+    if (closing) {
+      this.stopFollowing();
+    }
     if (opening) {
       this.resetWizard();
       if (this.resumeJobID) {
@@ -127,11 +131,17 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSeq = 0;
   private reconnectStartedAt: number | null = null;
+  /**
+   * Bumped whenever the wizard stops following a job (close, destroy, a new job). Every async path
+   * captures it before awaiting and bails out afterwards when it changed, so a request still in
+   * flight can never re-arm the poll timer or write state into a closed or destroyed wizard.
+   */
+  private generation = 0;
   private eventTables: IntegrationArchiveSeedTable[] | undefined = undefined;
   private seedSummary: IntegrationArchiveSeedSummary | undefined = undefined;
 
   ngOnDestroy(): void {
-    this.stopPolling();
+    this.stopFollowing();
   }
 
   public get IsStep1Valid(): boolean {
@@ -186,6 +196,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   public async StartRestore(): Promise<void> {
     if (!this.IsStep1Valid || this.IsSubmitting) return;
     this.clearJob();
+    const generation = this.generation;
     this.CurrentStep = 2;
     this.IsSubmitting = true;
     this.cdr.detectChanges();
@@ -200,6 +211,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
         StagingDatabaseName: this.StagingDatabaseName.trim(),
         BatchSize: this.BatchSize,
       });
+      if (generation !== this.generation) return; // closed or destroyed while starting
       if (!started.Success || !started.JobID) {
         this.ExecutionError = started.Message || 'The archive seed could not be started.';
         return;
@@ -226,11 +238,13 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
       return;
     }
     const jobID = this.JobID;
+    const generation = this.generation;
     this.IsSubmitting = true;
     this.SelectionError = null;
     this.cdr.detectChanges();
     try {
       const result = await this.integrationService.SelectArchiveSeedTables(jobID, names);
+      if (generation !== this.generation) return;
       if (!result.Success) {
         this.SelectionError = result.Message || 'The table selection was not accepted.';
         return;
@@ -249,11 +263,13 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   /** Step 5 → 6: finishes the job, dropping the restored staging database when `drop` is true. */
   public async RemoveArchive(drop: boolean): Promise<void> {
     if (!this.JobID || this.IsSubmitting) return;
+    const generation = this.generation;
     this.IsSubmitting = true;
     this.ExecutionError = null;
     this.cdr.detectChanges();
     try {
       const result = await this.integrationService.FinishArchiveSeed(this.JobID, drop);
+      if (generation !== this.generation) return;
       if (!result.Success) {
         this.ExecutionError = result.Message || 'The archive seed could not be finished.';
         return;
@@ -280,8 +296,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
 
   /** Closes the wizard. The job keeps running on the server and can be resumed by its ID. */
   public Close(): void {
-    this.stopPolling();
-    this.JobID = null;
+    this.stopFollowing();
     this.Closed.emit();
   }
 
@@ -301,9 +316,10 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
 
   /** One polling round: read the job's state, tail its current run, then show the state. */
   private async pollJob(jobID: string): Promise<void> {
+    const generation = this.generation;
     if (this.JobID !== jobID) return;
     const read = await this.readState(jobID);
-    if (this.JobID !== jobID) return;
+    if (generation !== this.generation || this.JobID !== jobID) return;
     if (!read.State) {
       this.handleUnreachable(jobID, read.Message);
       return;
@@ -311,7 +327,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.reconnectStartedAt = null;
     this.IsReconnecting = false;
     await this.tailRun(read.State.CurrentRunID);
-    if (this.JobID !== jobID) return;
+    if (generation !== this.generation || this.JobID !== jobID) return;
     this.applyState(read.State);
     if (!RESTING_STATES.has(read.State.State)) {
       this.schedulePoll(jobID);
@@ -355,13 +371,14 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   /** Appends the run's new events to the log. The job opens a new run after the API restart; a new run starts from its first event. */
   private async tailRun(runID: string | undefined): Promise<void> {
     if (!runID) return;
+    const generation = this.generation;
     if (runID !== this.RunID) {
       this.RunID = runID;
       this.lastSeq = 0;
     }
     try {
       const tail = await this.integrationService.TailBootstrapRun(runID, this.lastSeq);
-      if (!tail.Success || this.RunID !== runID) return;
+      if (generation !== this.generation || !tail.Success || this.RunID !== runID) return;
       this.ProgressLog = [...this.ProgressLog, ...ProgressLinesFromEvents(tail.Events)];
       this.eventTables = ReadSeedTablesFromEvents(tail.Events) ?? this.eventTables;
       this.lastSeq = Math.max(this.lastSeq, tail.LatestSeq);
@@ -405,6 +422,13 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.cdr.detectChanges();
   }
 
+  /** Stops following the current job: in-flight requests are discarded and no further poll runs. */
+  private stopFollowing(): void {
+    this.generation++;
+    this.stopPolling();
+    this.JobID = null;
+  }
+
   private schedulePoll(jobID: string): void {
     this.stopPolling();
     this.pollTimer = setTimeout(() => { void this.pollJob(jobID); }, RUN_POLL_INTERVAL_MS);
@@ -419,8 +443,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
 
   /** Forgets the followed job (stops polling) and everything learned from it. */
   private clearJob(): void {
-    this.stopPolling();
-    this.JobID = null;
+    this.stopFollowing();
     this.RunID = null;
     this.CurrentState = null;
     this.ProgressLog = [];
