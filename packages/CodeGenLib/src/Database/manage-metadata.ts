@@ -8625,11 +8625,22 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * Refuses to write in three cases, each of which would otherwise make the
     * feature actively harmful rather than merely unhelpful:
     *
-    * - **Low confidence.** A confidently wrong display name is worse than an
-    *   ugly accurate one, since nothing downstream flags it as a guess.
+    * - **Not high or medium confidence.** A confidently wrong display name is worse
+    *   than an ugly accurate one, since nothing downstream flags it as a guess. An
+    *   allowlist, not a `'low'` check: a missing, null or oddly-cased confidence is
+    *   a model that did not answer the question, and it is treated the same way.
     * - **No change.** Skipped so the run does not report work it did not do.
     * - **Empty or over-long.** `Entity.DisplayName` is nvarchar(255); a model
     *   that returns prose instead of a name is discarded rather than truncated.
+    *
+    * The schema prefix a name rule puts on `Entity.Name` (`CRM: ACCT_STAT_CD`) is
+    * stripped from the proposal first: `DisplayName` drops it by convention (see
+    * {@link createNewEntityDisplayName}), and a model that keeps it would otherwise
+    * leave this one entity prefixed while its siblings are not.
+    *
+    * The UPDATE goes through the SQL capture like every other metadata write here,
+    * so it reaches the CodeGen_Run_*.sql file that becomes the migration. A bare
+    * `runQuery` would land it in this machine's database and nowhere else.
     */
    protected async applyEntityDisplayName(
       pool: CodeGenConnection,
@@ -8637,10 +8648,10 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       result: EntityDisplayNameResult
    ): Promise<void> {
       const entityName = String(entityRecord.Name ?? '');
-      const proposed = (result.DisplayName ?? '').trim();
+      const proposed = this.stripEntityNameAffixes((result.DisplayName ?? '').trim(), String(entityRecord.SchemaName ?? ''));
 
-      if (result.Confidence === 'low') {
-         logStatus(`         Skipped display name for ${entityName}: low confidence ("${proposed}")`);
+      if (result.Confidence !== 'high' && result.Confidence !== 'medium') {
+         logStatus(`         Skipped display name for ${entityName}: confidence is ${JSON.stringify(result.Confidence ?? null)}, not high or medium ("${proposed}")`);
          return;
       }
 
@@ -8655,12 +8666,41 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       }
 
       const sql = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, ${this.qi('DisplayName')} = '${EscapeSQLString(proposed)}' WHERE ID = '${String(entityRecord.ID)}' AND ${this.qi('AutoUpdateDisplayName')} = ${this.boolLit(true)}`;
-      await this.runQuery(pool, sql);
+      await this.logSQLAndExecute(pool, sql, `Update display name for ${entityName}`);
 
-      const expansions = result.Expansions?.length
-         ? ` [${result.Expansions.map(e => `${e.From}->${e.To}`).join(', ')}]`
-         : '';
+      // The model's list of what it expanded is for the log only; a malformed one must not turn a
+      // write that already happened into "Error Processing Entity Advanced Generation".
+      const expansionList = Array.isArray(result.Expansions)
+         ? result.Expansions.filter((e): e is { From: string; To: string } => !!e && typeof e === 'object')
+         : [];
+      const expansions = expansionList.length ? ` [${expansionList.map(e => `${e.From}->${e.To}`).join(', ')}]` : '';
       logStatus(`         Display name for ${entityName}: "${current || '(none)'}" -> "${proposed}"${expansions}`);
+   }
+
+   /**
+    * Removes the prefix and suffix the entity's schema name rule adds to `Entity.Name` from a
+    * proposed display name. `DisplayName` never carries them (`createNewEntityDisplayName` strips
+    * them the same way), so a proposal that kept the prefix — `CRM: Account Status Codes`, or
+    * `CRM:Account Status Codes` with the separator space dropped — becomes `Account Status Codes`.
+    * Without a rule, or when stripping would leave nothing, the proposal is returned as given.
+    */
+   protected stripEntityNameAffixes(proposed: string, schemaName: string): string {
+      const rule = schemaName ? this.getNewEntityNameRule(schemaName) : undefined;
+      if (!rule) {
+         return proposed;
+      }
+      let name = proposed.trim();
+      // The rule's prefix is typically "CRM: "; match its core ("CRM") followed by any separator the
+      // model kept or dropped, so both spellings above strip.
+      const prefixCore = (rule.EntityNamePrefix ?? '').trim().replace(/[\s:]+$/, '');
+      if (prefixCore.length > 0 && name.startsWith(prefixCore)) {
+         name = name.substring(prefixCore.length).replace(/^[\s:]+/, '').trim();
+      }
+      const suffix = (rule.EntityNameSuffix ?? '').trim();
+      if (suffix.length > 0 && name.endsWith(suffix)) {
+         name = name.substring(0, name.length - suffix.length).trim();
+      }
+      return name.length > 0 ? name : proposed.trim();
    }
 
    /**
