@@ -5,19 +5,23 @@
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/external-change-detection": minor
-"@memberjunction/external-data-sources": minor
 "@memberjunction/external-data-source-databricks": minor
 "@memberjunction/external-data-source-mysql": minor
 "@memberjunction/external-data-source-oracle": minor
 "@memberjunction/external-data-source-postgres": minor
 "@memberjunction/external-data-source-snowflake": minor
 "@memberjunction/external-data-source-sqlserver": minor
+"@memberjunction/external-data-sources": minor
 "@memberjunction/generic-database-provider": minor
 "@memberjunction/global": minor
 "@memberjunction/integration-test-suite": minor
 "@memberjunction/materialization": minor
 "@memberjunction/metadata-sync": minor
+"@memberjunction/ng-artifacts": minor
+"@memberjunction/ng-code-editor": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-dashboards": minor
+"@memberjunction/ng-query-viewer": minor
 "@memberjunction/postgresql-dataprovider": minor
 "@memberjunction/query-processor": minor
 "@memberjunction/react-linter": minor
@@ -38,3 +42,5 @@ Saving a new or edited query now extracts its metadata from the database server'
 Saved queries can be refreshed on demand without changing their SQL: `QueryExtractionService` (`RefreshQuery`, `RefreshQueries` by ID, name or full path, category path, entity read, or all) runs the same extraction a save runs, one transaction per query and the queries a composition depends on first, with a dry run that reports the changes without writing and an optional LLM description pass. Each query gets a report: its outcome, the child rows added, updated and removed, flagged parameters and the run's diagnostics. A refresh needs Update on `MJ: Queries` and Create, Update and Delete on its child entities (a dry run too), and read access to every entity the query reads with no field denied; a refused single query reads exactly like one that does not exist, and a bulk run reports it as skipped. The entry points are the `Query.RefreshExtraction` remote operation (long-running with progress; API keys need the new `query:refresh` scope), `mj query refresh [--id|--name|--category|--entity|--all] [--dry-run] [--with-ai]`, and a CodeGen pass that re-binds the queries reading an entity whose fields were added, dropped or changed type, recording a query the change broke as an `Error` with the server's message and warning when a query authorized by its role list gains a field-restricted column. A query that reads a table named by a template parameter (the External Change Detection queries) keeps its declared fields instead of describing a sample table.
 
 **Upgrading:** after migrating, run `mj query refresh --all --dry-run` to review, then `mj query refresh --all`, so every existing query's fields, parameters, entities and Extraction columns are established from its SQL and the database server.
+
+Explorer: the query form saves the query with its parameters, fields and entity links as one graph save; a refused save lists each finding with its rule code, line, column and fix, and marks it in the SQL editor (`<mj-code-editor>` gains `SetDiagnosticMarkers` and `RevealPosition`). The form shows the extraction status and message, and its field and parameter grids show how each row was detected, nullability and the source entity field (as a link) or server-reported object; facts are read-only and annotations editable. "Refresh metadata" in the form and in the Query Browser (the selected query, a category, or all) always runs a dry run first, shows live progress and a per-query report with change counts and a drill-in, then applies on request; a user setting skips the dry run for single-query refreshes. The query results grid builds its columns from the columns the result carries, using Query Fields only to format and link them, so a column field-level security dropped never appears, and the query info panel and form list only the fields the user may see (`MJQueryEntityExtended.QueryFieldsVisibleTo`). The save-query dialog, the data artifact's "update query" and the Query Browser editor show the server's findings instead of a generic failure; findings travel as text lines read with `ParseQuerySaveMessage` / `ParseQueryDiagnostics`.

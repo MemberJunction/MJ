@@ -105,6 +105,30 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         return QueryEngine.Instance.GetQueryFields(this.ID);
     }
 
+    /**
+     * The field definitions a user may see: every field of a query with `MJ: Query Permissions`
+     * rows (definer's rights, so the user receives every column), and otherwise the fields whose
+     * source entity field the user may read, plus those with no entity source. A column whose
+     * source the user may not read is left out of the results the user gets, so its definition is
+     * left out here too, and a UI listing these never names it.
+     *
+     * @param user The viewing user; with none, every field is returned (the server stays the boundary).
+     * @param catalog Every entity the provider knows, to resolve each field's source entity.
+     */
+    public QueryFieldsVisibleTo(user: UserInfo | null | undefined, catalog: readonly EntityInfo[]): MJQueryFieldEntity[] {
+        const fields = this.QueryFields;
+        const permissions = this.QueryPermissions;
+        if (!user || (permissions && permissions.length > 0)) return fields;
+        const entities = IndexByUUID(catalog);
+        return fields.filter(f => {
+            if (!f.SourceEntityID || !f.SourceFieldName) return true;
+            const entity = entities.Get(f.SourceEntityID);
+            if (!entity) return true;
+            if (!entity.GetUserPermisions(user)?.CanRead) return false;
+            return entity.IsFieldReadableByUser(f.SourceFieldName, user);
+        });
+    }
+
     /** All parameter definitions for this query */
     public get QueryParameters(): MJQueryParameterEntity[] {
         return QueryEngine.Instance.GetQueryParameters(this.ID);

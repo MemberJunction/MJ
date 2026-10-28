@@ -61,14 +61,17 @@ interface QueryInfoShape {
   QueryFields: MJQueryFieldEntity[];
   QueryParameters: MJQueryParameterEntity[];
   QueryDependents: unknown[];
+  QueryFieldsVisibleTo: () => MJQueryFieldEntity[];
 }
 
 function queryInfo(partial: Partial<QueryInfoShape> & { Name: string }): MJQueryEntityExtended {
+  const fields = partial.QueryFields ?? [];
   const full: QueryInfoShape = {
     Status: 'Approved',
-    QueryFields: [],
+    QueryFields: fields,
     QueryParameters: [],
     QueryDependents: [],
+    QueryFieldsVisibleTo: () => fields,
     ...partial,
   };
   return full as MJQueryEntityExtended;
@@ -129,6 +132,17 @@ describe('QueryInfoPanelComponent (DOM)', () => {
     // 'fields' is expanded by default
     expect(text(f, '.field-name')).toBe('ID');
     expect(queryAll(f, '.field-item').length).toBe(2);
+  });
+
+  it('lists and counts only the fields the user may see, never naming the others', () => {
+    const visible = [field('ID', 'uniqueidentifier')];
+    const f = render({
+      Visible: true,
+      QueryInfo: queryInfo({ Name: 'Q', QueryFields: [field('ID', 'uniqueidentifier'), field('SSN', 'nvarchar')], QueryFieldsVisibleTo: () => visible }),
+    });
+    expect(queryAll(f, '.field-item').length).toBe(1);
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('SSN');
+    expect((f.nativeElement as HTMLElement).textContent).toContain('(1)');
   });
 
   it('marks the status badge approved when Status is Approved', () => {

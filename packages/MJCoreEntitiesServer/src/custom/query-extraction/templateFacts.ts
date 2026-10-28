@@ -19,6 +19,7 @@ import type {
     TemplateParameter,
 } from "@memberjunction/sql-parser";
 import { IndexByUUID } from "@memberjunction/global";
+import { FormatQueryDiagnostic, QueryTextPosition } from "@memberjunction/core-entities";
 import { ExtractAliasFromSQL } from "./resolve";
 import { BindTableReferences, EntityObjectIndex } from "./sourceBinding";
 import type {
@@ -103,9 +104,20 @@ export function SQLUsesTemplate(sql: string, platform: DatabasePlatform): boolea
     return SqlTokens.Lex(sql, GetQueryDialect(platform)).HasTemplate;
 }
 
-/** A diagnostic as one line of `ExtractionMessage` or a refusal: code, message and fix. */
-export function DescribeDiagnostic(diagnostic: Diagnostic): string {
-    return `${diagnostic.Code}: ${diagnostic.Message}${diagnostic.FixHint ? ` ${diagnostic.FixHint}` : ''}`;
+/**
+ * A diagnostic as one line of `ExtractionMessage` or a refusal: code, location, message and fix,
+ * in the shared format clients read back with `ParseQueryDiagnostic`. The location is the line and
+ * column of the diagnostic's start in `sql`, the text it was found in; without `sql` it is left out.
+ */
+export function DescribeDiagnostic(diagnostic: Diagnostic, sql?: string): string {
+    const at = sql !== undefined ? QueryTextPosition(sql, diagnostic.Span.Start) : null;
+    return FormatQueryDiagnostic({
+        Code: diagnostic.Code,
+        Message: diagnostic.Message,
+        FixHint: diagnostic.FixHint,
+        Line: at?.Line ?? null,
+        Column: at?.Column ?? null,
+    });
 }
 
 // ─── Compositions ───────────────────────────────────────────────────────────

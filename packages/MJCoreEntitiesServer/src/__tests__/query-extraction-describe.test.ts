@@ -21,6 +21,7 @@ import { DescribeStatementFailure, DescribeStatementSuccess } from '@memberjunct
 import { ComputeQueryExtraction, ExtractionSQLHash } from '../custom/query-extraction/extractQuery';
 import type { KnownQueryParameter, QueryExtractionInput } from '../custom/query-extraction/extractionTypes';
 import type { MJQueryEntityExtended, MJQueryParameterEntity } from '@memberjunction/core-entities';
+import { ParseQuerySaveMessage } from '@memberjunction/core-entities';
 
 type ComposedShape = Pick<MJQueryEntityExtended, 'ID' | 'Name' | 'CategoryPath' | 'Reusable' | 'QueryParameters' | 'QueryDependencies'>;
 
@@ -296,6 +297,19 @@ describe('ComputeQueryExtraction — refusals (R10, save-time rules)', () => {
         expect(refresh.Refusal).toBeNull();
         expect(refresh.Status).toBe('Error');
         expect(refresh.Messages.join('\n')).toContain('MJQ_TAG_IN_STRING_LITERAL');
+    });
+
+    it('writes each rule error with its line, column and fix, in the form clients read back', async () => {
+        const sql = "SELECT u.ID\nFROM __mj.vwUsers u\nWHERE u.Name = '{{ Who }}'";
+        const save = await ComputeQueryExtraction(input(sql));
+
+        const parsed = ParseQuerySaveMessage(save.Refusal);
+        expect(parsed.Headline).toBe('Query "Test Query" was not saved:');
+        const finding = parsed.Diagnostics.find(d => d.Code === 'MJQ_TAG_IN_STRING_LITERAL');
+        expect(finding).toBeDefined();
+        expect(finding?.Line).toBe(3);
+        expect(finding?.Column).toBeGreaterThanOrEqual(16);
+        expect(finding?.FixHint).toBeTruthy();
     });
 
     it('requires an argument for a required parameter of a composed query, unless the server sets it', async () => {

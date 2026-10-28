@@ -37,7 +37,7 @@ interface Findings {
 export async function ComputeQueryExtraction(input: QueryExtractionInput): Promise<QueryExtractionResult> {
     const analysis = AnalyzeQueryTemplate(input);
     const findings: Findings = { Errors: [], Warnings: [], Notes: [] };
-    const refusal = saveRefusal(input, analysis.Errors.map(DescribeDiagnostic), analysis.DuplicateOutputNames);
+    const refusal = saveRefusal(input, analysis.Errors.map(d => DescribeDiagnostic(d, input.SQL)), analysis.DuplicateOutputNames);
     if (refusal) return resultOf(input, analysis, null, findings, refusal);
     recordAnalysis(input, analysis, findings);
     if (input.IsExternal) {
@@ -83,9 +83,9 @@ function duplicateMessage(duplicates: readonly string[]): string {
 
 /** Records what the template analysis found: refresh-mode rule errors, warnings, unread facts, orphaned authored parameters. */
 function recordAnalysis(input: QueryExtractionInput, analysis: TemplateAnalysis, findings: Findings): void {
-    findings.Errors.push(...analysis.Errors.map(DescribeDiagnostic));
+    findings.Errors.push(...analysis.Errors.map(d => DescribeDiagnostic(d, input.SQL)));
     if (analysis.DuplicateOutputNames.length > 0) findings.Errors.push(duplicateMessage(analysis.DuplicateOutputNames));
-    findings.Warnings.push(...analysis.Warnings.map(DescribeDiagnostic), ...analysis.Notes);
+    findings.Warnings.push(...analysis.Warnings.map(d => DescribeDiagnostic(d, input.SQL)), ...analysis.Notes);
     const used = new Set(analysis.Parameters.map(p => p.Name.toLowerCase()));
     for (const known of input.KnownParameters) {
         if (known.IsAuthored && !used.has(known.Name.toLowerCase())) {

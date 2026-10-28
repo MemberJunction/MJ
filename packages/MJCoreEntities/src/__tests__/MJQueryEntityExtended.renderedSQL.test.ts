@@ -14,15 +14,18 @@ vi.mock('../generated/entity_subclasses', () => ({
     },
 }));
 
-const engineState: { permissions: Array<{ QueryID: string; Role: string }>; queryEntities: Array<{ QueryID: string; EntityID: string }> } = {
+type FieldRow = { QueryID: string; Name: string; SourceEntityID: string | null; SourceFieldName: string | null };
+const engineState: { permissions: Array<{ QueryID: string; Role: string }>; queryEntities: Array<{ QueryID: string; EntityID: string }>; fields: FieldRow[] } = {
     permissions: [],
     queryEntities: [],
+    fields: [],
 };
 vi.mock('../engines/QueryEngine', () => ({
     QueryEngine: {
         get Instance() {
             return {
                 GetQueryPermissions: (id: string) => engineState.permissions.filter(p => p.QueryID === id),
+                GetQueryFields: (id: string) => engineState.fields.filter(f => f.QueryID === id),
                 get QueryEntities() { return engineState.queryEntities; },
             };
         },
@@ -167,5 +170,36 @@ describe('MJQueryEntityExtended.UserCanRunRenderedSQL', () => {
         const result = query('q-k').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver', { ProjectionStarOffsets: new Set([sql.indexOf('*')]) });
         expect(result).toEqual({ canRun: true, deniedEntities: [] });
         engineState.permissions = [];
+    });
+});
+
+describe('MJQueryEntityExtended.QueryFieldsVisibleTo', () => {
+    const fieldsOf = (id: string): FieldRow[] => [
+        { QueryID: id, Name: 'ID', SourceEntityID: PEOPLE_ID, SourceFieldName: 'ID' },
+        { QueryID: id, Name: 'Salary', SourceEntityID: PEOPLE_ID, SourceFieldName: 'Salary' },
+        { QueryID: id, Name: 'Total', SourceEntityID: null, SourceFieldName: null },
+        { QueryID: id, Name: 'PayrollID', SourceEntityID: PAYROLL_ID, SourceFieldName: 'ID' },
+    ];
+    const names = (q: MJQueryEntityExtended, u: UserInfo | null) => q.QueryFieldsVisibleTo(u, catalog).map(f => f.Name);
+
+    it('leaves out a field whose source field the user may not read, and one from an entity the user may not read', () => {
+        engineState.fields = fieldsOf('q-v1');
+        expect(names(query('q-v1'), staff)).toEqual(['ID', 'Total']);
+        engineState.fields = [];
+    });
+
+    it('keeps every field for a user denied nothing', () => {
+        engineState.fields = fieldsOf('q-v2');
+        expect(names(query('q-v2'), hr)).toEqual(['ID', 'Salary', 'Total', 'PayrollID']);
+        engineState.fields = [];
+    });
+
+    it('keeps every field of a query with Query Permissions (definer\'s rights) and with no user', () => {
+        engineState.fields = fieldsOf('q-v3');
+        engineState.permissions = [{ QueryID: 'q-v3', Role: `Role-${STAFF}` }];
+        expect(names(query('q-v3'), staff)).toHaveLength(4);
+        engineState.permissions = [];
+        expect(names(query('q-v3'), null)).toHaveLength(4);
+        engineState.fields = [];
     });
 });
