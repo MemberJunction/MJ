@@ -5,10 +5,11 @@ authoritative; this module only chooses the artifacts the sidecar returns."""
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Set, Tuple, get_args
+from typing import Dict, List, Literal, Optional, Set, Tuple, Union, get_args, get_origin
 
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
 from app import gate as G, trainer_schemas as TS
 from app.array_types import FArr
@@ -39,18 +40,40 @@ def test_gate_decision_is_refpipes_tuple_form() -> None:
     assert len(G.GATE_BRANCHES) == 4
 
 
+def _literal_values(model: type[BaseModel], field: str) -> Set[str]:
+    """The Literal values of a wire model's field, unwrapping an Optional explicitly."""
+    annotation = model.model_fields[field].annotation
+    if get_origin(annotation) is Union:
+        parts = [a for a in get_args(annotation) if a is not type(None)]
+        assert len(parts) == 1
+        annotation = parts[0]
+    assert get_origin(annotation) is Literal
+    return {str(v) for v in get_args(annotation)}
+
+
+def test_gate_decision_tie_ships_the_alphabetically_first_member() -> None:
+    assert G.gate_decision(False, False, {"oneFeature": True, "glm": True}, {"glm": 0.3, "oneFeature": 0.3}, None) == (
+        "keep-simple-baseline", "b:keep-simple-baseline", "glm")
+
+
+def test_gate_decision_delivered_member_absent_from_members() -> None:
+    # as the reference pipeline's table gives: delivered_member is set, so branch a is skipped; nothing is eligible
+    assert G.gate_decision(True, True, {"glm": False}, {"glm": 0.3}, "ghost") == (
+        "model", "a:Q15-only-model-beats-dummy", None)
+
+
 def test_vocabularies_equal_the_wire_models_and_the_literals() -> None:
     wire = (TS.GateModel, TS.GateKeepSimple, TS.GateNoSignal)
     outcomes: List[str] = []
     branches: List[str] = []
     for m in wire:
-        outcomes += get_args(m.model_fields["outcome"].annotation)
-        branches += get_args(m.model_fields["branch"].annotation)
+        outcomes += sorted(_literal_values(m, "outcome"))
+        branches += sorted(_literal_values(m, "branch"))
     assert set(G.GATE_OUTCOMES) == set(outcomes) and len(outcomes) == len(G.GATE_OUTCOMES)
     assert set(G.GATE_BRANCHES) == set(branches) and len(branches) == len(G.GATE_BRANCHES)
     assert set(G.GATE_OUTCOMES) == set(get_args(G.GateOutcome))
     assert set(G.GATE_BRANCHES) == set(get_args(G.GateBranch))
-    assert G.NO_SIMPLE_SIGNAL_NOTE in get_args(TS.GateModel.model_fields["note"].annotation)[0].__args__
+    assert _literal_values(TS.GateModel, "note") == {G.NO_SIMPLE_SIGNAL_NOTE}
 
 
 # ---------------------------------------------------------------------------------------------- run_gate -------
@@ -97,6 +120,8 @@ def test_beats_is_lower_bound_above_margin() -> None:
     assert base.beats and base.lower > 0
     above = _run(base.lower + 0.01).comparisons["modelVsDummy"]
     assert above.lower == base.lower and not above.beats
+    at = _run(base.lower).comparisons["modelVsDummy"]
+    assert at.lower == base.lower and not at.beats   # strictly greater: a lower bound equal to the margin does not beat
 
 
 def test_empty_simple_set_with_model_beating_dummy() -> None:
