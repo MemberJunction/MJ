@@ -1,6 +1,10 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLModelEntity, MJPredictionUnitEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import type {
+  MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity, MJRecordProcessEntity,
+  MJTrainingSnapshotEntity,
+} from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
+import { ResolveStorageDriver } from '@memberjunction/storage';
 import { HarnessAgent } from './agent';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
@@ -99,12 +103,26 @@ export type CleanupRecordProcessRow = CleanupRow & Pick<MJRecordProcessEntity, '
 /** A Prediction Unit row: a cleanup row with its version (later versions are deleted before their lineage root). */
 export type CleanupPredictionUnitRow = CleanupRow & Pick<MJPredictionUnitEntity, 'Version'>;
 
-/** Where cleanup reads the rows it deletes (the entity layer in a run; a fake in a unit test). */
+/** A training run row: a cleanup row with the Training Snapshot it trained on. */
+export type CleanupTrainingRunRow = CleanupRow & Pick<MJMLTrainingRunEntity, 'TrainingSnapshotID'>;
+
+/** A Training Snapshot row: a cleanup row with its three stored files. */
+export type CleanupSnapshotRow = CleanupRow & Pick<MJTrainingSnapshotEntity, 'MatrixFileID' | 'RowManifestFileID' | 'ProvenanceFileID'>;
+
+/** An `MJ: Files` row: a cleanup row with the provider and key of the object it records. */
+export type CleanupFileRow = CleanupRow & Pick<MJFileEntity, 'ProviderID' | 'ProviderKey'>;
+
+/** Where cleanup reads the rows it deletes and removes stored objects (the entity layer in a run; a fake in a unit test). */
 export interface CleanupStore {
   Models(filter: string): Promise<CleanupModelRow[]>;
   PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]>;
   RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]>;
+  TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]>;
+  TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]>;
+  Files(filter: string): Promise<CleanupFileRow[]>;
   Rows(entityName: string, filter: string): Promise<CleanupRow[]>;
+  /** Delete the object a file row records, through its provider's driver; null when deleted, else why not. */
+  DeleteStoredObject(file: CleanupFileRow): Promise<string | null>;
 }
 
 /** Deletes the pipelines and models a run recorded, and everything hanging off them, through the entity layer. */
@@ -115,15 +133,22 @@ export class HarnessCleanup {
       Models: (filter) => HarnessCleanup.load<MJMLModelEntity>(provider, user, 'MJ: ML Models', filter),
       PredictionUnits: (filter) => HarnessCleanup.load<MJPredictionUnitEntity>(provider, user, 'MJ: Prediction Units', filter),
       RecordProcesses: (filter) => HarnessCleanup.load<MJRecordProcessEntity>(provider, user, 'MJ: Record Processes', filter),
+      TrainingRuns: (filter) => HarnessCleanup.load<MJMLTrainingRunEntity>(provider, user, 'MJ: ML Training Runs', filter),
+      TrainingSnapshots: (filter) => HarnessCleanup.load<MJTrainingSnapshotEntity>(provider, user, 'MJ: Training Snapshots', filter),
+      Files: (filter) => HarnessCleanup.load<MJFileEntity>(provider, user, 'MJ: Files', filter),
       Rows: (entityName, filter) => HarnessCleanup.load<BaseEntity & { ID: string }>(provider, user, entityName, filter),
+      DeleteStoredObject: (file) => HarnessCleanup.deleteStoredObject(provider, user, file),
     };
   }
 
   /**
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
-   * runs, run details and watermarks; training runs; then models, their artifact files, pipelines, and last the recorded
-   * Prediction Unit versions (pipelines reference them). Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed.
+   * runs, run details and watermarks; training runs; then models, the Training Snapshots the runs trained on and the
+   * recorded pipelines' snapshots, each deleted snapshot's three files (stored object, then `MJ: Files` row), the models'
+   * artifact files, pipelines, and last the recorded Prediction Unit versions (pipelines and snapshots reference them).
+   * Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed and per stored
+   * object that could not be deleted.
    */
   public static async DeleteRecorded(store: CleanupStore, records: RunRecords): Promise<string[]> {
     const modelFilter = HarnessCleanup.anyIn([['ID', records.ModelIDs], ['PipelineID', records.PipelineIDs]]);
@@ -144,7 +169,10 @@ export class HarnessCleanup {
     const bindings = bindingFilter ? await store.Rows('MJ: ML Model Scoring Bindings', bindingFilter) : [];
     const details = detailFilter ? await store.Rows('MJ: Process Run Details', detailFilter) : [];
     const watermarks = processFilter ? await store.Rows('MJ: Record Process Watermarks', processFilter) : [];
-    const runs = runFilter ? await store.Rows('MJ: ML Training Runs', runFilter) : [];
+    const runs = runFilter ? await store.TrainingRuns(runFilter) : [];
+    const snapshotIds = new UUIDSet(runs.flatMap((r) => (r.TrainingSnapshotID ? [r.TrainingSnapshotID] : [])));
+    const snapshotFilter = HarnessCleanup.anyIn([['ID', snapshotIds], ['PipelineID', pipelineIds]]);
+    const snapshots = snapshotFilter ? await store.TrainingSnapshots(snapshotFilter) : [];
     const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
     const failures = [
@@ -155,11 +183,59 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: Record Processes', processes)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', runs)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', models, (id) => records.ModelIDs.Delete(id))),
+      ...(await HarnessCleanup.deleteSnapshots(store, snapshots)),
       ...(await HarnessCleanup.deleteAll('MJ: Files', files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', pipelines, (id) => records.PipelineIDs.Delete(id))),
       ...(await HarnessCleanup.deletePredictionUnits(store, records)),
     ];
     return failures;
+  }
+
+  /**
+   * Delete the Training Snapshot rows, then the three files of each snapshot that was deleted: the stored object first,
+   * then its `MJ: Files` row (the snapshot row references the file rows, so it goes first). A snapshot whose row could
+   * not be deleted keeps its files, so a surviving snapshot never loses its bytes; a file whose object could not be
+   * deleted keeps its row, so the object stays findable. Returns one line per failure.
+   */
+  private static async deleteSnapshots(store: CleanupStore, snapshots: CleanupSnapshotRow[]): Promise<string[]> {
+    const fileIdsOf = new Map(snapshots.map((s) => [s.ID, [s.MatrixFileID, s.RowManifestFileID, s.ProvenanceFileID]]));
+    const deletedFileIds = new UUIDSet();
+    const failures = await HarnessCleanup.deleteAll('MJ: Training Snapshots', snapshots, (id) => {
+      for (const fileId of fileIdsOf.get(id) || []) deletedFileIds.Add(fileId);
+    });
+    const fileFilter = HarnessCleanup.anyIn([['ID', deletedFileIds]]);
+    const files = fileFilter ? await store.Files(fileFilter) : [];
+    const objectFailures = await Promise.all(files.map(async (f) => ({ File: f, Failure: await HarnessCleanup.tryDeleteStoredObject(store, f) })));
+    const objectsDeleted = objectFailures.filter((o) => o.Failure === null).map((o) => o.File);
+    return [
+      ...failures,
+      ...objectFailures.flatMap((o) => (o.Failure === null ? [] : [`stored object of MJ: Files ${o.File.ID} (${o.File.ProviderKey || '(no key)'}): ${o.Failure}`])),
+      ...(await HarnessCleanup.deleteAll('MJ: Files', objectsDeleted)),
+    ];
+  }
+
+  /** The store's object delete, with a thrown error (an unresolvable or unconfigured driver) reported as the failure, so the rest of cleanup still runs. */
+  private static async tryDeleteStoredObject(store: CleanupStore, file: CleanupFileRow): Promise<string | null> {
+    try {
+      return await store.DeleteStoredObject(file);
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /**
+   * Delete the object a file row records through the shipped driver of the provider the row names, initialised from
+   * this process's environment (the same configuration the server stored it with). Returns null when deleted.
+   */
+  private static async deleteStoredObject(provider: IMetadataProvider, user: UserInfo, file: CleanupFileRow): Promise<string | null> {
+    if (!file.ProviderKey) return 'the file row has no ProviderKey';
+    const rows = await HarnessCleanup.load<MJFileStorageProviderEntity>(provider, user, 'MJ: File Storage Providers', `ID='${EscapeSQLString(file.ProviderID)}'`);
+    const row = rows[0];
+    if (!row) return `no MJ: File Storage Providers row ${file.ProviderID}`;
+    const driver = ResolveStorageDriver(row);
+    await driver.initialize();
+    if (!driver.IsConfigured) return `storage provider "${row.Name}" is not configured in this process`;
+    return (await driver.DeleteObject(file.ProviderKey)) ? null : `${row.Name} refused to delete it`;
   }
 
   /**

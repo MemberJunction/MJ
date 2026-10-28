@@ -392,6 +392,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     model.Lineage = JSON.stringify({
       predictionUnitId: UnitYearsWorld.UnitID, predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Years',
       featureSpec: training.Features, categoryLevels: Object.fromEntries(training.Assembled.CategoryLevels),
+      trainingSnapshotId: 'TS-1', snapshotContentHash: 'a'.repeat(64),
       targetEntityName: 'Years', sourceBindings: [], featureSteps: steps, asOfStrategy: { Mode: 'none' },
     });
     if (lineageOverride !== undefined) model.Lineage = lineageOverride;

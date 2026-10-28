@@ -21,8 +21,8 @@ import {
 } from '@memberjunction/predictive-studio-core';
 
 /**
- * The unit version a model was trained on, the typed feature columns its matrix was assembled from and the kept
- * levels of each categorical column.
+ * The unit version a model was trained on, the typed feature columns its matrix was assembled from, the kept
+ * levels of each categorical column and the Training Snapshot its rows came from.
  */
 export interface UnitModelLineage {
   predictionUnitId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -35,6 +35,10 @@ export interface UnitModelLineage {
   featureSpec: FeatureColumnSpec[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** The kept levels of each categorical column, by column name; scoring folds every other value into the fold level. */
   categoryLevels: Record<string, string[]>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The `MJ: Training Snapshots` row the model was trained from. */
+  trainingSnapshotId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** That snapshot's content hash, so the lineage names the exact rows even if the row were ever re-pointed. */
+  snapshotContentHash: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** One validation step: the typed value, or the first problem found (a sentence naming the member's path). */
@@ -80,10 +84,15 @@ export class UnitModelLineageParser {
     if (features.Ok === false) return features;
     const levels = UnitModelLineageParser.categoryLevels(v.categoryLevels);
     if (levels.Ok === false) return levels;
+    const snapshotId = JsonParse.JsonString(v, 'trainingSnapshotId');
+    if (snapshotId === null) return UnitModelLineageParser.fail('trainingSnapshotId', 'is missing or not a non-empty string');
+    const contentHash = JsonParse.JsonString(v, 'snapshotContentHash');
+    if (contentHash === null) return UnitModelLineageParser.fail('snapshotContentHash', 'is missing or not a non-empty string');
     const [unitVersion, labelVersion, specVersion] = versions.Value;
     return UnitModelLineageParser.ok({
       predictionUnitId: unitId, predictionUnitVersion: unitVersion, labelVersion, featureSpecVersion: specVersion,
       unitRowEntity: rowEntity, featureSpec: features.Value, categoryLevels: levels.Value,
+      trainingSnapshotId: snapshotId, snapshotContentHash: contentHash,
     });
   }
 

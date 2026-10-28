@@ -1550,6 +1550,9 @@ importers:
       '@memberjunction/predictive-studio-sidecar':
         specifier: 6.2.0-edge.5
         version: link:../Sidecar
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.5
+        version: link:../../../MJStorage
       '@memberjunction/testing-integration':
         specifier: 6.2.0-edge.5
         version: link:../../../TestingFramework/testing-integration

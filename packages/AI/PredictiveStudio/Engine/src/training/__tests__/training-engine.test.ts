@@ -4,6 +4,7 @@ import type {
   MJMLTrainingPipelineEntity,
   MJMLModelEntity,
   MJMLTrainingRunEntity,
+  MJTrainingSnapshotEntity,
 } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
@@ -43,6 +44,9 @@ import type { MLInferenceDeps } from '../../scoring/types';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type { RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { FakePredictionUnitStore, UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
+import { SnapshotFiles, type SnapshotContent } from '../../snapshot/snapshot-serialization';
+import type { ITrainingSnapshotStore } from '../../snapshot/training-snapshot-store';
 
 /**
  * Unit tests for the TrainingEngine. NO live DB, NO live sidecar — every seam is
@@ -123,9 +127,35 @@ class FakeMLRun extends FakeEntity {
   public CompletedAt: Date | null = null;
   public ComputeCost: number | null = null;
   public EvaluationProtocolID: string | null = null;
+  public TrainingSnapshotID: string | null = null;
   public TokensUsed: number | null = null;
   public Notes: string | null = null;
 }
+
+/**
+ * A Training Snapshot row: the counts the tests read as typed fields; the builder sets the other columns on the same
+ * object. Save() assigns the next ID, as the database does.
+ */
+class FakeTrainingSnapshot extends FakeEntity {
+  public ContentHash = '';
+  public MatrixFileID = '';
+  public RowManifestFileID = '';
+  public ProvenanceFileID = '';
+  public ManifestRowCount = 0;
+  public HoldoutRowCount = 0;
+  public CensoredRowsExcluded = 0;
+
+  public override async Save(): Promise<boolean> {
+    const ok = await super.Save();
+    if (ok && this.ID === '') this.ID = `snapshot-${FakeTrainingSnapshot.saved++}`;
+    return ok;
+  }
+
+  private static saved = 1;
+}
+
+/** An `MJ: Files` row (the in-memory snapshot file store writes none; served so the factory covers every entity training creates). */
+class FakeFileRow extends FakeEntity {}
 
 /** A pipeline fake exposing the JSON config columns + denormalized view fields. */
 class FakeMLPipeline {
@@ -162,6 +192,8 @@ class FakeMLPipeline {
 class FakeEntityFactory implements IEntityFactory {
   public readonly Models: FakeMLModel[] = [];
   public readonly Runs: FakeMLRun[] = [];
+  public readonly Snapshots: FakeTrainingSnapshot[] = [];
+  public readonly Files: FakeFileRow[] = [];
 
   constructor(
     private readonly modelFactory: () => FakeMLModel = () => new FakeMLModel('model-1'),
@@ -179,6 +211,16 @@ class FakeEntityFactory implements IEntityFactory {
       const r = this.runFactory();
       this.Runs.push(r);
       return r as unknown as T;
+    }
+    if (entityName === 'MJ: Training Snapshots') {
+      const snapshot = new FakeTrainingSnapshot('');
+      this.Snapshots.push(snapshot);
+      return snapshot as unknown as T;
+    }
+    if (entityName === 'MJ: Files') {
+      const file = new FakeFileRow(`file-${this.Files.length + 1}`);
+      this.Files.push(file);
+      return file as unknown as T;
     }
     throw new Error(`FakeEntityFactory: unexpected entity ${entityName}`);
   }
@@ -583,6 +625,8 @@ function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, feat
   pipeline: FakeMLPipeline;
   runs: FakeMLRun[];
   models: FakeMLModel[];
+  snapshots: FakeTrainingSnapshot[];
+  files: InMemorySnapshotFileStore;
 } {
   const pipeline = new FakeMLPipeline();
   pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
@@ -593,7 +637,40 @@ function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, feat
   deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
   deps.assemblyMetadata = UnitYearsWorld.Metadata();
   deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
-  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models };
+  const files = new InMemorySnapshotFileStore('provider-local');
+  deps.snapshotFiles = files;
+  deps.snapshots = new FakeTrainingSnapshotStore(factory);
+  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files };
+}
+
+/** Finds the snapshots the factory saved by content hash, as the RunView store finds the saved rows. */
+class FakeTrainingSnapshotStore implements ITrainingSnapshotStore {
+  constructor(private readonly factory: FakeEntityFactory) {}
+  public async FindByContentHash(contentHash: string): Promise<MJTrainingSnapshotEntity | null> {
+    const found = this.factory.Snapshots.find((s) => s.ID !== '' && s.ContentHash === contentHash);
+    return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
+  }
+  public async LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null> {
+    const found = this.factory.Snapshots.find((s) => s.ID === id);
+    return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
+  }
+  public async LoadRun(id: string): Promise<MJMLTrainingRunEntity | null> {
+    const found = this.factory.Runs.find((r) => r.ID === id);
+    return found ? (found as unknown as MJMLTrainingRunEntity) : null;
+  }
+}
+
+/** The stored snapshot's content, read back from the in-memory file store. */
+async function storedContent(files: InMemorySnapshotFileStore, s: FakeTrainingSnapshot): Promise<SnapshotContent> {
+  return SnapshotFiles.ParseSnapshotFiles(await files.Get(s.MatrixFileID), await files.Get(s.RowManifestFileID), await files.Get(s.ProvenanceFileID));
+}
+
+/** The snapshot rows of one manifest role, cut to the columns the trainer is sent (feature-schema columns, then the label). */
+function rowsOfRole(content: SnapshotContent, role: SnapshotContent['Manifest'][number]['role']): MatrixData {
+  const columns = [...content.Header.featureSchema.map((f) => f.Name), content.Header.labelColumn];
+  const at = columns.map((c) => content.Header.columns.indexOf(c));
+  const rows = content.Rows.filter((_r, i) => content.Manifest[i].role === role).map((r) => at.map((k) => r[k] ?? null));
+  return { columns, rows };
 }
 
 /** Every matrix row the sidecar saw (training data and the locked holdout), as column → value. */
@@ -721,6 +798,42 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     pipeline.EvaluationProtocolID = 'EP-1';
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(runs[0].EvaluationProtocolID).toBe('EP-1');
+  });
+
+  it('freezes the unit rows into one Training Snapshot and trains from its development and locked-holdout rows', async () => {
+    const { engine, deps, sidecar, pipeline, runs, models, snapshots, files } = unitHarness(years, unitColumns);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(snapshots).toHaveLength(1);
+    const s = snapshots[0];
+    expect([s.ManifestRowCount, s.CensoredRowsExcluded]).toEqual([8, 4]);
+    expect(runs[0].TrainingSnapshotID).toBe(s.ID);
+    expect(JSON.parse(models[0].Lineage!)).toMatchObject({ trainingSnapshotId: s.ID, snapshotContentHash: s.ContentHash });
+    const content = await storedContent(files, s);
+    const holdout = rowsOfRole(content, 'locked-holdout');
+    expect(holdout.rows.length).toBe(s.HoldoutRowCount);
+    expect(holdout.rows.length).toBeGreaterThan(0);
+    expect(sidecar.LastRequest?.data).toEqual(rowsOfRole(content, 'development'));
+    expect(sidecar.LastHoldout).toEqual(holdout);
+    const results = JSON.parse(runs[0].ValidationResults!);
+    expect(results.legacyRequest).toMatchObject({ algorithm: 'xgboost', problemType: 'classification', hyperparameters: { max_depth: 4 } });
+    expect(results.legacy).toMatchObject({ trainingRowCount: 8 - s.HoldoutRowCount, holdoutRowCount: s.HoldoutRowCount });
+  });
+
+  it('reuses the snapshot for a second training of identical data: one snapshot row, two runs pointing at it', async () => {
+    const { engine, deps, pipeline, runs, snapshots } = unitHarness(years, unitColumns);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(snapshots).toHaveLength(1);
+    expect(runs).toHaveLength(2);
+    expect(runs.map((r) => r.TrainingSnapshotID)).toEqual([snapshots[0].ID, snapshots[0].ID]);
+  });
+
+  it('refuses to train a unit pipeline without a snapshot file store, before calling the sidecar', async () => {
+    const { engine, deps, sidecar, pipeline, snapshots } = unitHarness(years, unitColumns);
+    delete deps.snapshotFiles;
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/snapshot file store/);
+    expect(sidecar.CallCount).toBe(0);
+    expect(snapshots).toHaveLength(0);
   });
 
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {

@@ -27,6 +27,8 @@ import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../trainin
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+import { StorageProviderSnapshotFileStore } from '../snapshot/snapshot-file-store';
+import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
@@ -72,7 +74,10 @@ export class TrainingDelegation {
    * disk) so a model never gets trained to one family and scored from another.
    *
    * The Record Changes history the as-of assembly replays is left to the engine's default: a complete-read
-   * `RunViewRecordHistoryReader` over the same `dataAccess`.
+   * `RunViewRecordHistoryReader` over the same `dataAccess`; so is the holdout carver (the trailing
+   * `LockedHoldoutFraction`). A unit run's Training Snapshot files go to the storage provider
+   * `PS_SNAPSHOT_STORAGE_PROVIDER` names, recorded as `MJ: Files` rows, and snapshots are found by content hash
+   * through the same provider and user.
    *
    * @param provider the owning provider for data access / multi-provider correctness
    * @param user the acting user threaded through every entity op for isolation/audit
@@ -91,6 +96,8 @@ export class TrainingDelegation {
       predictionUnits: new RunViewPredictionUnitStore(provider, user),
       assemblyMetadata: new ProviderAssemblyMetadata(provider),
       dataAccess: new RunViewDataAccess(user, provider),
+      snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, provider, user),
+      snapshots: new RunViewTrainingSnapshotStore(provider, user),
     };
   }
 

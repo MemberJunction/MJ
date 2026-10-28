@@ -34,10 +34,15 @@
  * row reader reads every unit row (censored and label-known rows excluded and
  * counted), the target is validated, and the matrix is assembled as of each row's
  * decision date by {@link TrainingEngine.AssembleForTraining} — the same
- * `AsOfFeatureAssembler` the scoring path calls. A refusal is recorded on the run
- * as a `refused` envelope ({@link TrainingRefusedError}); a completed run stores
- * the unit resolution counts, and the model Lineage names the unit version, the
- * typed feature columns and the kept categorical levels scoring reuses.
+ * `AsOfFeatureAssembler` the scoring path calls. The assembled rows are then frozen
+ * into an immutable Training Snapshot (the trailing fraction of rows, in decision-date
+ * order, is the locked holdout; identical content reuses the existing snapshot), and
+ * the sidecar is trained from the snapshot's development rows and scores its
+ * locked-holdout rows once. A refusal is recorded on the run as a `refused` envelope
+ * ({@link TrainingRefusedError}); a completed run references its snapshot and stores
+ * the unit resolution counts and the request it trained with, and the model Lineage
+ * names the unit version, the typed feature columns, the kept categorical levels
+ * scoring reuses, and the snapshot's ID and content hash.
  *
  * Every external dependency is injected (see {@link TrainingDeps}) so the engine
  * is unit-testable with no live database and no live sidecar.
@@ -46,12 +51,9 @@
 import { LogError, type IMetadataProvider } from '@memberjunction/core';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
-  type TrainRequest,
   type TrainResponse,
   type ValidationConfig,
   type MatrixData,
-  type FeatureSchemaEntry,
-  type PreprocessingOp,
   type SourceBinding,
   type AsOfStrategy,
   type LeakageGuard,
@@ -64,6 +66,7 @@ import {
   EvaluationLineage,
   type EvaluationRecord,
   LABEL_COLUMN,
+  JsonParse,
   PredictionUnit,
   TaskTypeRules,
   TRAINING_RUN_RESULTS_SCHEMA,
@@ -72,13 +75,14 @@ import {
   type UnitResolutionCounts,
   type UncoveredRowsCount,
   type FeatureColumnSpec,
+  type LegacyRequestConfig,
 } from '@memberjunction/predictive-studio-core';
-import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
-import { AsOfFeatureAssembler, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
+import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
 import { FeatureResolver } from '../feature-assembly/as-of/feature-resolution';
 import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
 import { SeriesFeatures, type SeriesHistory, type SeriesPoint } from '../feature-assembly/as-of/series-features';
@@ -86,7 +90,14 @@ import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '.
 import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingRefusedError } from './training-refusal';
+import { TrailingFractionCarver } from '../snapshot/holdout-carver';
+import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapshot-builder';
+import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
+import type { SnapshotContent } from '../snapshot/snapshot-serialization';
+import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import { SnapshotRetrainer } from '../snapshot/snapshot-retrainer';
 import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
+import { TrainRequestBuilder } from './train-request';
 import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage } from './types';
 import type { UnitModelLineage } from './unit-model-lineage';
 
@@ -183,8 +194,16 @@ export class TrainingEngine {
         : assembly.matrix.rows;
       const cleanMatrix: MatrixData = { columns: assembly.matrix.columns, rows: cleanRows };
       const split = this.carveLockedHoldout(cleanMatrix, resolved, DEFAULT_SPLIT_SEED);
-      const validation = this.buildValidationConfig(resolved.validation);
-      const trainRequest = this.buildTrainRequest(resolved, assembly, split.Training, validation);
+      const trainRequest = TrainRequestBuilder.Build({
+        Algorithm: resolved.algorithmDriverKey,
+        ProblemType: resolved.problemType,
+        Hyperparameters: resolved.hyperparameters,
+        Validation: this.buildValidationConfig(resolved.validation),
+        FeatureSchema: assembly.featureSchema,
+        Preprocessing: assembly.preprocessing,
+        Target: resolved.targetVariable,
+        Data: split.Training,
+      });
 
       const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
       const evaluation = EvaluationLineage.Build(resolved.validation, {
@@ -218,15 +237,17 @@ export class TrainingEngine {
    * Train a pipeline that points at a Prediction Unit. The unit decides the rows, their decision dates and their
    * labels: inputs that would override them (`maxRows`, `labelEventDates`, a point-in-time AsOfStrategy) are refused,
    * censored and label-known rows are excluded and counted, and a target that cannot train a model is refused before
-   * the sidecar is called. The matrix is assembled as of each decision date ({@link AssembleForTraining}). A refusal is
-   * recorded on the run row as a `refused` envelope; the counts and the unit's identity are stored on a completed run
-   * and its model.
+   * the sidecar is called. The matrix is assembled as of each decision date ({@link AssembleForTraining}) and frozen
+   * into a Training Snapshot the run references; the sidecar trains from the snapshot's rows. A refusal is recorded on
+   * the run row as a `refused` envelope; the counts, the unit's identity and the snapshot are stored on a completed run
+   * and its model. Deps without a snapshot file store are incomplete and the run fails before anything is read.
    */
   private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
     try {
       TrainingEngine.refuseUnitOverrides(input, resolved);
+      const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
       const unit = await this.loadUnitSpec(unitId, deps);
       const seams = this.unitSeams(deps);
       const unitRead = await this.readUnitRows(unit, seams, deps);
@@ -235,11 +256,11 @@ export class TrainingEngine {
 
       const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata });
       if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
-      const labels = new Map(unitRead.Rows.map((r) => [r.RowId, r.Label]));
-      const legacyShaped = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembly.Assembled, labels, LABEL_COLUMN);
+      const snapshot = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, deps);
+      run.TrainingSnapshotID = snapshot.Entity.ID;
       const unitResolved: ResolvedPipeline = { ...resolved, targetEntityName: unitRead.RowEntity.Name, targetVariable: LABEL_COLUMN, problemType: TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome) };
-      const lineage = this.unitLineage(unit, resolved, unitRead, assembly.Features, assembly.Assembled.CategoryLevels);
-      const model = await this.fitUnitModel(run, unitResolved, input, legacyShaped, deps, majorityBaselineRule, lineage, unitRead.Counts, assembly.Assembled.UncoveredRowsExcluded);
+      const lineage = this.unitLineage(unit, resolved, unitRead, assembly.Features, assembly.Assembled.CategoryLevels, snapshot.Entity);
+      const model = await this.fitUnitModel(run, unitResolved, input, snapshot.Content, deps, majorityBaselineRule, lineage, unitRead.Counts, assembly.Assembled.UncoveredRowsExcluded);
       return { model, run };
     } catch (err) {
       await this.recordRunError(run, err, deps);
@@ -254,29 +275,87 @@ export class TrainingEngine {
     if (resolved.asOf.Mode !== 'none') throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } });
   }
 
-  /** Carve the locked holdout, train through the sidecar, create the model row and complete the run. */
+  /**
+   * The deps' snapshot file store. A unit run trains only from a Training Snapshot, so deps without one are incomplete
+   * (a wiring error, not a refusal of the pipeline) and the run fails rather than training from rows nothing recorded.
+   */
+  private static requireSnapshotFiles(deps: TrainingDeps): ISnapshotFileStore {
+    if (!deps.snapshotFiles) {
+      throw new Error('TrainingEngine: the training deps are incomplete: a Prediction Unit pipeline trains from a Training Snapshot, and no snapshot file store (snapshotFiles) was supplied');
+    }
+    return deps.snapshotFiles;
+  }
+
+  /**
+   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the holdout carver (by
+   * default the trailing `LockedHoldoutFraction` of the rows in decision-date order), and identical content reuses the
+   * snapshot that already holds it.
+   */
+  private async freezeSnapshot(
+    resolved: ResolvedPipeline, assembly: UnitTrainingAssembly, assembled: AsOfAssembledMatrix, files: ISnapshotFileStore, deps: TrainingDeps,
+  ): Promise<BuiltSnapshot> {
+    const carver = deps.holdoutCarver || new TrailingFractionCarver(resolved.validation.LockedHoldoutFraction);
+    const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
+    return new TrainingSnapshotBuilder().Build({
+      PipelineID: resolved.pipeline.ID,
+      FeatureSpecVersion: resolved.pipeline.Version,
+      Unit: assembly.Unit,
+      UnitRead: assembly.UnitRead,
+      Features: assembly.Features,
+      Assembled: assembled,
+      Roles: carver.AssignRoles(assembled.Rows),
+      EvaluationProtocolID: resolved.pipeline.EvaluationProtocolID || null,
+      // The incumbent-score and slice columns serve an evaluation protocol's baselines and slices; this trainer reads neither.
+      IncumbentScore: false,
+      SliceFields: [],
+      Files: files,
+      EntityFactory: deps.entityFactory,
+      ContextUser: deps.contextUser,
+      ExistingByContentHash: (contentHash) => snapshots.FindByContentHash(contentHash),
+    });
+  }
+
+  /**
+   * The request settings a unit run trains with: the algorithm's driver key, the unit's problem type, the pipeline's
+   * hyperparameters (a column that is not a JSON object sends none) and its validation.
+   */
+  private legacyRequestFor(resolved: ResolvedPipeline): LegacyRequestConfig {
+    const hyper = JsonParse.ParseJsonText(resolved.pipeline.Hyperparameters || '{}', 'Hyperparameters');
+    return {
+      algorithm: resolved.algorithmDriverKey,
+      problemType: resolved.problemType,
+      hyperparameters: hyper.Ok && JsonParse.IsJsonObject(hyper.Value) ? hyper.Value : {},
+      validation: this.buildValidationConfig(resolved.validation),
+    };
+  }
+
+  /**
+   * Train through the sidecar from the snapshot's rows (development rows trained on, locked-holdout rows scored once),
+   * create the model row and complete the run. The split the run and model record is read from the snapshot manifest.
+   */
   private async fitUnitModel(
     run: MJMLTrainingRunEntity,
     resolved: ResolvedPipeline,
     input: TrainModelInput,
-    assembly: FeatureAssemblyResult,
+    content: SnapshotContent,
     deps: TrainingDeps,
     majorityBaselineRule: ReturnType<typeof EvaluationLineage.ParseMajorityBaselineRule>,
     lineage: UnitModelLineage,
     counts: UnitResolutionCounts,
     uncovered: readonly UncoveredRowsCount[],
   ): Promise<MJMLModelEntity> {
-    const split = this.carveLockedHoldout(assembly.matrix, resolved, DEFAULT_SPLIT_SEED);
-    const trainRequest = this.buildTrainRequest(resolved, assembly, split.Training, this.buildValidationConfig(resolved.validation));
-    const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
+    const request = this.legacyRequestFor(resolved);
+    const response = await SnapshotRetrainer.TrainOnSnapshot(content, request, deps.sidecar);
+    const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
+    const schema = { featureSchema: [...content.Header.featureSchema] };
     const evaluation = EvaluationLineage.Build(resolved.validation, {
       ValidationOutOfSample: response.validation_out_of_sample === true,
       ImportanceKind: response.feature_importance_kind || null,
       MajorityBaselineRule: majorityBaselineRule,
     });
     const dominance = this.checkLeakage(response, resolved.leakageGuard);
-    const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps, lineage);
-    await this.finalizeUnitRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, counts, split, uncovered);
+    const model = await this.createModelRow(resolved, input, schema, split, response, evaluation, deps, lineage);
+    await this.finalizeUnitRunSuccess(run, model, schema, resolved, response, dominance, evaluation, counts, split, uncovered, request);
     return model;
   }
 
@@ -369,9 +448,10 @@ export class TrainingEngine {
     return parsed.Value;
   }
 
-  /** The unit's identity, the typed feature columns and the kept categorical levels, stored in the model Lineage. */
+  /** The unit's identity, the typed feature columns, the kept categorical levels and the snapshot, stored in the model Lineage. */
   private unitLineage(
     unit: PredictionUnitSpec, resolved: ResolvedPipeline, unitRead: UnitRowsRead, features: readonly FeatureColumnSpec[], levels: ReadonlyMap<string, readonly string[]>,
+    snapshot: MJTrainingSnapshotEntity,
   ): UnitModelLineage {
     return {
       predictionUnitId: unit.id,
@@ -381,6 +461,8 @@ export class TrainingEngine {
       unitRowEntity: unitRead.RowEntity.Name,
       featureSpec: [...features],
       categoryLevels: Object.fromEntries([...levels].map(([column, kept]) => [column, [...kept]])),
+      trainingSnapshotId: snapshot.ID,
+      snapshotContentHash: snapshot.ContentHash,
     };
   }
 
@@ -409,11 +491,14 @@ export class TrainingEngine {
     }
   }
 
-  /** Mark a unit run `Completed` with the `completed` envelope: the unit resolution counts and the trainer's metrics. */
+  /**
+   * Mark a unit run `Completed` with the `completed` envelope: the unit resolution counts, the trainer's metrics and
+   * the request settings it trained with.
+   */
   private async finalizeUnitRunSuccess(
     run: MJMLTrainingRunEntity,
     model: MJMLModelEntity,
-    assembly: FeatureAssemblyResult,
+    assembly: Pick<FeatureAssemblyResult, 'featureSchema'>,
     resolved: ResolvedPipeline,
     response: TrainResponse,
     dominance: DominanceResult,
@@ -421,10 +506,12 @@ export class TrainingEngine {
     counts: UnitResolutionCounts,
     split: LockedHoldoutSplit,
     uncovered: readonly UncoveredRowsCount[],
+    request: LegacyRequestConfig,
   ): Promise<void> {
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts,
       legacy: { metrics: response.metrics ?? {}, holdoutMetrics: response.holdout_metrics ?? null, trainingRowCount: split.TrainingRowCount, holdoutRowCount: split.HoldoutRowCount },
+      legacyRequest: request,
     };
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
@@ -610,27 +697,6 @@ export class TrainingEngine {
     };
   }
 
-  // region: sidecar request -----------------------------------------------------
-
-  /** Build the `/train` request from the resolved pipeline + assembled training matrix. */
-  private buildTrainRequest(
-    resolved: ResolvedPipeline,
-    assembly: FeatureAssemblyResult,
-    trainingMatrix: MatrixData,
-    validation: ValidationConfig,
-  ): TrainRequest {
-    return {
-      algorithm: resolved.algorithmDriverKey,
-      problem_type: resolved.problemType,
-      hyperparameters: resolved.hyperparameters,
-      validation,
-      feature_schema: assembly.featureSchema as FeatureSchemaEntry[],
-      preprocessing: assembly.preprocessing as PreprocessingOp[],
-      target: resolved.targetVariable,
-      data: trainingMatrix,
-    };
-  }
-
   // region: leakage -------------------------------------------------------------
 
   /** Run the single-feature-dominance check against the leakage threshold (§6.4). */
@@ -648,7 +714,7 @@ export class TrainingEngine {
   private async createModelRow(
     resolved: ResolvedPipeline,
     input: TrainModelInput,
-    assembly: FeatureAssemblyResult,
+    assembly: Pick<FeatureAssemblyResult, 'featureSchema'>,
     split: LockedHoldoutSplit,
     response: TrainResponse,
     evaluation: EvaluationRecord,

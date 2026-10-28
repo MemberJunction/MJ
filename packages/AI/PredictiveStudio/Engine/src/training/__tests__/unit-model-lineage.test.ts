@@ -12,6 +12,7 @@ const events: FeatureColumnSpec = {
 const lineage: UnitModelLineage = {
   predictionUnitId: 'U-1', predictionUnitVersion: 2, labelVersion: 1, featureSpecVersion: 3, unitRowEntity: 'Years',
   featureSpec: [status, events], categoryLevels: { Status: ['Active', 'Lapsed'] },
+  trainingSnapshotId: 'TS-1', snapshotContentHash: 'a'.repeat(64),
 };
 /** The lineage as stored: the unit part beside the pipeline provenance. */
 const stored = (over: Record<string, unknown> = {}) => JSON.stringify({ pipelineId: 'p', ...lineage, ...over });
@@ -38,6 +39,13 @@ describe('UnitModelLineageParser.ParseUnitModelLineage', () => {
     expect(badLevels.Ok === false && badLevels.Errors[0]).toMatch(/categoryLevels\.Status/);
     const noEntity = UnitModelLineageParser.ParseUnitModelLineage(stored({ unitRowEntity: '' }));
     expect(noEntity.Ok === false && noEntity.Errors[0]).toMatch(/unitRowEntity/);
+  });
+
+  it('fails a lineage that does not name the Training Snapshot the model was trained from', () => {
+    const noSnapshot = UnitModelLineageParser.ParseUnitModelLineage(stored({ trainingSnapshotId: undefined }));
+    expect(noSnapshot.Ok === false && noSnapshot.Errors[0]).toMatch(/trainingSnapshotId/);
+    const noHash = UnitModelLineageParser.ParseUnitModelLineage(stored({ snapshotContentHash: 7 }));
+    expect(noHash.Ok === false && noHash.Errors[0]).toMatch(/snapshotContentHash/);
   });
 
   it('fails a lineage with no unit part (a model trained without a unit)', () => {

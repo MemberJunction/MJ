@@ -3,13 +3,14 @@
  *
  * What a unit-based training run stores in `MJ: ML Training Runs.ValidationResults` (schema `ps-run-results/v2`).
  * The `refused` variant carries the refusal (its stage and reason); the `completed` variant carries the unit resolution
- * counts and the trainer's metrics and row counts (`legacy`).
+ * counts, the trainer's metrics and row counts (`legacy`) and the request settings the trainer was called with
+ * (`legacyRequest`), so a later training of the same snapshot can call the trainer the same way.
  */
 import { z } from 'zod';
 import type { AssemblyRefusal } from './assembly-contract';
 import type { UnitRefusal } from './prediction-unit';
 import { TASK_KINDS } from './task-type';
-import { JsonParse, type ParseResult } from './json-value';
+import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
 
 export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
 
@@ -41,9 +42,26 @@ export interface LegacyTrainerMetrics {
   readonly holdoutRowCount: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
+/**
+ * The settings a unit run called the trainer with, apart from the rows (those come from the run's Training Snapshot):
+ * the algorithm driver key, the problem type, the hyperparameters and the validation the trainer applies inside the
+ * development rows.
+ */
+export interface LegacyRequestConfig {
+  readonly algorithm: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly problemType: 'classification' | 'regression';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly hyperparameters: JsonObject;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly validation: {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+    readonly strategy: 'train_test_split' | 'kfold' | 'holdout';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+    readonly test_size?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+    readonly k?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+    readonly random_state?: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  };
+}
+
 export type TrainingRunResults =
   | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'refused'; readonly refusal: TrainingRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'completed'; readonly unitResolution: UnitResolutionCounts; readonly legacy: LegacyTrainerMetrics | null };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'completed'; readonly unitResolution: UnitResolutionCounts; readonly legacy: LegacyTrainerMetrics | null; readonly legacyRequest: LegacyRequestConfig | null };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
 // The stored envelope is parsed with zod, never `JSON.parse(...) as T`: the column is text any writer
 // (a migration, a hand edit, an older build) can change, so every member is checked before the type is trusted.
@@ -89,9 +107,23 @@ const legacyTrainerMetricsSchema: z.ZodType<LegacyTrainerMetrics> = z.object({
   metrics: z.record(z.number()), holdoutMetrics: z.record(z.number()).nullable(),
   trainingRowCount: z.number(), holdoutRowCount: z.number(),
 });
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)]),
+);
+const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
+  algorithm: z.string(),
+  problemType: z.enum(['classification', 'regression']),
+  hyperparameters: z.record(jsonValueSchema),
+  validation: z.object({
+    strategy: z.enum(['train_test_split', 'kfold', 'holdout']),
+    test_size: z.number().optional(),
+    k: z.number().int().optional(),
+    random_state: z.number().int().optional(),
+  }),
+});
 const trainingRunResultsSchema: z.ZodType<TrainingRunResults> = z.discriminatedUnion('status', [
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('refused'), refusal: trainingRefusalSchema }),
-  z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('completed'), unitResolution: unitResolutionCountsSchema, legacy: legacyTrainerMetricsSchema.nullable() }),
+  z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('completed'), unitResolution: unitResolutionCountsSchema, legacy: legacyTrainerMetricsSchema.nullable(), legacyRequest: legacyRequestConfigSchema.nullable() }),
 ]);
 
 /** Reads the ValidationResults envelope of a unit-based run (static member on one owner). */

@@ -1124,7 +1124,7 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/storage (7 classes)
+// @memberjunction/storage (8 classes)
 import {
     AWSFileStorage,
     AzureFileStorage,
@@ -1132,6 +1132,7 @@ import {
     DropboxFileStorage,
     GoogleDriveFileStorage,
     GoogleFileStorage,
+    LocalFileSystemStorage,
     SharePointFileStorage,
 } from '@memberjunction/storage';
 
@@ -2526,6 +2527,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DropboxFileStorage,
     GoogleDriveFileStorage,
     GoogleFileStorage,
+    LocalFileSystemStorage,
     SharePointFileStorage,
     DefaultArchiveDriver,
     ArchiveDataAction,
@@ -2562,11 +2564,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
-    GetRubricConsensusAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GetRubricConsensusAction,
     GetRubricSubjectAction,
     HumanRubricEvaluator,
     LLMRubricEvaluator,
@@ -2766,11 +2768,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTrainingSnapshotEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
-    MJUserRoutineEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
@@ -2970,11 +2972,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
-    MJWorkQueueMessageEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    MJWorkQueueMessageEntityServer,
     MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
@@ -3011,7 +3013,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1219;
+export const CLASS_REGISTRATIONS_COUNT = 1220;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

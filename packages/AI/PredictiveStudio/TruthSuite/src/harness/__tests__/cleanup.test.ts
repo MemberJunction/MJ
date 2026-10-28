@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
-import { HarnessCleanup, RunRecords, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow, type CleanupStore } from '../cleanup';
+import {
+  HarnessCleanup, RunRecords, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
+  type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
+} from '../cleanup';
 
 const P1 = 'aaaaaaaa-0000-0000-0000-000000000001'; // lower case: UUIDSet normalises IDs to lower case
 const M1 = 'bbbbbbbb-0000-0000-0000-000000000001';
@@ -13,12 +16,23 @@ const PR1 = 'eeeeeeee-0000-0000-0000-000000000001'; // RP1's process run
 const U1 = '11111111-0000-0000-0000-000000000001'; // a unit's lineage root (Version 1)
 const U2 = '11111111-0000-0000-0000-000000000002'; // its Version 2
 const U3 = '11111111-0000-0000-0000-000000000003'; // its Version 3
+const TS1 = '22222222-0000-0000-0000-000000000001'; // the snapshot RUN-1 trained on
+const TS2 = '22222222-0000-0000-0000-000000000002'; // a snapshot of P1 no remaining run references
+const fileOf = (snapshot: string, n: number): string => `${snapshot}-file-${n}`; // each snapshot's three file IDs
+
+/** What the fake store holds besides the fixed rows: RUN-1's snapshot, the snapshots it answers, failing object deletes. */
+interface FakeStoreOptions {
+  readonly RunSnapshotID?: string | null;
+  readonly Snapshots?: readonly string[];
+  readonly FailObjects?: ReadonlySet<string>;
+  readonly ThrowObjects?: ReadonlySet<string>;
+}
 
 /** A fake store: answers from fixed rows, records each filter and every delete in order. */
 class FakeStore implements CleanupStore {
   public readonly Filters: string[] = [];
   public readonly Deleted: string[] = [];
-  constructor(private readonly fail: ReadonlySet<string> = new Set()) {}
+  constructor(private readonly fail: ReadonlySet<string> = new Set(), private readonly options: FakeStoreOptions = {}) {}
   /** A row whose ID reads empty once deleted, as a deleted entity object's fields do. */
   private row(entity: string, id: string, pipelineId = '', artifactFileId: string | null = null): CleanupModelRow & CleanupRecordProcessRow {
     let deleted = false;
@@ -49,10 +63,28 @@ class FakeStore implements CleanupStore {
     const process = (id: string, modelId: string): CleanupRecordProcessRow => ({ ...this.row('MJ: Record Processes', id), Configuration: JSON.stringify({ modelId: modelId.toUpperCase() }) });
     return [process(RP1, M2), process(RP_OTHER, 'ffffffff-0000-0000-0000-000000000009')];
   }
+  public async TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]> {
+    this.Filters.push(`MJ: ML Training Runs | ${filter}`);
+    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID ?? null }];
+  }
+  public async TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]> {
+    this.Filters.push(`MJ: Training Snapshots | ${filter}`);
+    return (this.options.Snapshots || []).map((id) => ({ ...this.row('MJ: Training Snapshots', id), MatrixFileID: fileOf(id, 1), RowManifestFileID: fileOf(id, 2), ProvenanceFileID: fileOf(id, 3) }));
+  }
+  public async Files(filter: string): Promise<CleanupFileRow[]> {
+    this.Filters.push(`MJ: Files | ${filter}`);
+    const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    return ids.map((id) => ({ ...this.row('MJ: Files', id), ProviderID: 'provider-local', ProviderKey: `key/${id}` }));
+  }
+  public async DeleteStoredObject(file: CleanupFileRow): Promise<string | null> {
+    if (this.options.FailObjects?.has(file.ID)) return 'the storage root is not writable';
+    if (this.options.ThrowObjects?.has(file.ID)) throw new Error('no driver registered for "Local File System Storage"');
+    this.Deleted.push(`object:${file.ProviderKey}`);
+    return null;
+  }
   public async Rows(entityName: string, filter: string): Promise<CleanupRow[]> {
     this.Filters.push(`${entityName} | ${filter}`);
     if (entityName === 'MJ: ML Training Pipelines') return [this.row(entityName, P1), this.row(entityName, AGENT_P)];
-    if (entityName === 'MJ: ML Training Runs') return [this.row(entityName, 'RUN-1')];
     if (entityName === 'MJ: Process Runs') return [this.row(entityName, PR1)];
     if (entityName === 'MJ: Process Run Details') return [this.row(entityName, 'DETAIL-1')];
     if (entityName === 'MJ: Record Process Watermarks') return [];
@@ -76,6 +108,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: Process Run Details | ProcessRunID IN ('${PR1}')`,
       `MJ: Record Process Watermarks | RecordProcessID IN ('${RP1}')`,
       `MJ: ML Training Runs | PipelineID IN ('${P1}','${AGENT_P}') OR ResultingModelID IN ('${M1}','${M2}')`,
+      `MJ: Training Snapshots | PipelineID IN ('${P1}','${AGENT_P}')`,
       `MJ: Files | ID IN ('${F1}')`,
       `MJ: ML Training Pipelines | ID IN ('${P1}','${AGENT_P}')`,
     ]);
@@ -87,6 +120,41 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     ]);
     expect(store.Deleted.join(' ')).not.toContain(RP_OTHER);
     expect(records.ModelIDs.Size + records.PipelineIDs.Size).toBe(0);
+  });
+
+  it("deletes the runs' and the pipelines' Training Snapshots after the runs, then each snapshot's stored objects and file rows", async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordPredictionUnit(U1);
+    const store = new FakeStore(new Set(), { RunSnapshotID: TS1, Snapshots: [TS1, TS2] });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Filters).toContain(`MJ: Training Snapshots | ID IN ('${TS1}') OR PipelineID IN ('${P1}','${AGENT_P}')`);
+    const files = [TS1, TS2].flatMap((s) => [1, 2, 3].map((n) => fileOf(s, n)));
+    expect(store.Filters).toContain(`MJ: Files | ID IN (${files.map((f) => `'${f}'`).join(',')})`);
+    const at = (entry: string): number => store.Deleted.indexOf(entry);
+    expect(at('MJ: ML Training Runs:RUN-1')).toBeLessThan(at(`MJ: Training Snapshots:${TS1}`));
+    for (const f of files) {
+      expect(at(`MJ: Training Snapshots:${TS2}`)).toBeLessThan(at(`object:key/${f}`));
+      expect(at(`object:key/${f}`)).toBeLessThan(at(`MJ: Files:${f}`));
+      expect(at(`MJ: Files:${f}`)).toBeLessThan(at(`MJ: ML Training Pipelines:${P1}`));
+    }
+    expect(at(`MJ: ML Training Pipelines:${AGENT_P}`)).toBeLessThan(at(`MJ: Prediction Units:${U1}`));
+  });
+
+  it("keeps a snapshot's files when its row survives, and a file's row when its stored object survives, reporting both", async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const store = new FakeStore(new Set([TS1]), { Snapshots: [TS1, TS2], FailObjects: new Set([fileOf(TS2, 1)]), ThrowObjects: new Set([fileOf(TS2, 3)]) });
+    const failures = await HarnessCleanup.DeleteRecorded(store, records);
+    expect(failures).toEqual([
+      `MJ: Training Snapshots ${TS1}: ${TS1} is still referenced`,
+      `stored object of MJ: Files ${fileOf(TS2, 1)} (key/${fileOf(TS2, 1)}): the storage root is not writable`,
+      `stored object of MJ: Files ${fileOf(TS2, 3)} (key/${fileOf(TS2, 3)}): no driver registered for "Local File System Storage"`,
+    ]);
+    expect(store.Deleted).toContain(`MJ: ML Training Pipelines:${P1}`); // a failed object delete never stops the rest of cleanup
+    expect(store.Deleted.filter((d) => d.includes(TS1))).toEqual([]);
+    expect(store.Deleted).not.toContain(`MJ: Files:${fileOf(TS2, 1)}`);
+    expect(store.Deleted).toContain(`MJ: Files:${fileOf(TS2, 2)}`);
   });
 
   it('reads nothing when nothing was recorded', async () => {
