@@ -612,7 +612,7 @@ function ToggleEntriesForApp(content: string, appName: string, enabled: boolean)
         const location = LocateDynamicArray(result, arrayName);
         if (location) {
             result = ReplaceInRange(result, location.OpenBracketPos, location.ClosePos, pattern,
-                (match) => match.replace(/(?:true|false)$/, String(enabled)));
+                (match) => match.replace(/(?:true|false)$/, () => String(enabled)));
         }
     }
     return result;
