@@ -61,7 +61,8 @@ interface QueryInfoShape {
   QueryFields: MJQueryFieldEntity[];
   QueryParameters: MJQueryParameterEntity[];
   QueryDependents: unknown[];
-  QueryFieldsVisibleTo: () => MJQueryFieldEntity[];
+  /** Typed off the entity so the fixture stays comparable with it; a stub may ignore the arguments. */
+  QueryFieldsVisibleTo: MJQueryEntityExtended['QueryFieldsVisibleTo'];
 }
 
 function queryInfo(partial: Partial<QueryInfoShape> & { Name: string }): MJQueryEntityExtended {

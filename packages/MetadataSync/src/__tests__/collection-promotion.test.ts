@@ -50,6 +50,9 @@ function entityInfo(id: string, name: string): EntityInfo {
 let parentInfo: EntityInfo;
 let childInfo: EntityInfo;
 
+/** A child record with no collections of its own (BaseEntity is abstract). */
+class ChildEntity extends BaseEntity {}
+
 /** A parent declaring one collection of each kind the promotion rules distinguish. */
 class ParentEntity extends BaseEntity {
   public readonly Params = this.DeclareRelatedRecords({
@@ -69,7 +72,7 @@ class ParentEntity extends BaseEntity {
 /** The entity provider: hands out child records for a collection's `Create()`. */
 const PROVIDER = {
   CurrentUser: USER,
-  GetEntityObject: async () => new BaseEntity(childInfo, PROVIDER),
+  GetEntityObject: async () => new ChildEntity(childInfo, PROVIDER),
 } as unknown as IEntityDataProvider;
 
 function newParent(): ParentEntity {
@@ -79,7 +82,7 @@ function newParent(): ParentEntity {
 /** A metadata provider whose entity objects are `ParentEntity` for 'Parents' and plain otherwise. */
 function metadataProvider(): IMetadataProvider {
   return {
-    GetEntityObject: vi.fn(async (name: string) => (name === 'Parents' ? newParent() : new BaseEntity(childInfo, PROVIDER))),
+    GetEntityObject: vi.fn(async (name: string) => (name === 'Parents' ? newParent() : new ChildEntity(childInfo, PROVIDER))),
   } as unknown as IMetadataProvider;
 }
 
