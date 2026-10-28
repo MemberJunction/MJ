@@ -73,6 +73,14 @@ export class BootstrapProgress {
         this.emitter.StageError(this.currentStage, message, { code: 'bootstrap-failed' });
         await this.emitter.Fail(message, 'bootstrap-failed');
     }
+
+    /**
+     * Waits until every queued event is written. A phase action calls this before returning so the
+     * next writer that resumes the same run continues after everything this one emitted.
+     */
+    public async Flush(): Promise<void> {
+        await this.emitter?.Flush();
+    }
 }
 
 // Re-export shared types for backward compatibility
@@ -442,7 +450,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     }
 
     /** The result for an input the action cannot run with; a detached run is terminated with the reason. */
-    private async rejectInput(params: RunActionParams, progress: BootstrapProgress, resultCode: string, message: string): Promise<ActionResultSimple> {
+    protected async rejectInput(params: RunActionParams, progress: BootstrapProgress, resultCode: string, message: string): Promise<ActionResultSimple> {
         await progress.Fail(message);
         return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
     }

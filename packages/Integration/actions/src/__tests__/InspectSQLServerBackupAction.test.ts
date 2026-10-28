@@ -107,12 +107,12 @@ describe('InspectSQLServerBackupAction', () => {
     });
 
     describe('Parameter Validation', () => {
-        it('returns MISSING_PARAMETER when CompanyIntegrationID is absent', async () => {
-            const params = makeParams({ BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak' });
+        it('inspects without a CompanyIntegrationID', async () => {
+            const params = makeParams({ BackupUrls: 'C:\\backups\\db.bak' });
             const result = await action['InternalRunAction'](params);
 
-            expect(result.Success).toBe(false);
-            expect(result.ResultCode).toBe('MISSING_PARAMETER');
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
         });
 
         it('returns MISSING_PARAMETER when BackupUrls is absent', async () => {

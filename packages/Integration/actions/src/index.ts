@@ -3,3 +3,6 @@ export * from './RunSyncAction.js';
 export * from './BootstrapSQLServerIntegrationFromBackupAction.js';
 export * from './ListAzureBackupBlobsAction.js';
 export * from './InspectSQLServerBackupAction.js';
+export * from './RestoreSQLServerBackupToStagingAction.js';
+export * from './LoadSQLServerIntegrationFromStagingAction.js';
+export * from './DropSQLServerStagingDatabaseAction.js';

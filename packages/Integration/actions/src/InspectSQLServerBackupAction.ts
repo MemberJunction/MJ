@@ -9,7 +9,7 @@ import { BaseIntegrationAction } from './BaseIntegrationAction.js';
  * by running RESTORE HEADERONLY and RESTORE FILELISTONLY across all media stripes.
  *
  * Parameters (Input):
- *   - CompanyIntegrationID (required): ID of the Company Integration being inspected
+ *   - CompanyIntegrationID (optional): ID of the Company Integration being inspected; not used by the inspection
  *   - BackupUrls (required): Single backup URL/path or comma-separated list of URLs/paths for striped sets
  *   - SasToken (optional): Shared Access Signature token for container access
  *   - StorageCredentialID (optional): MJ Credentials record ID storing the SAS token
@@ -29,16 +29,6 @@ export class InspectSQLServerBackupAction extends BaseIntegrationAction {
         let executor;
 
         try {
-            const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
-            if (!companyIntegrationID) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_PARAMETER',
-                    Message: "Parameter 'CompanyIntegrationID' is required.",
-                    Params: params.Params,
-                };
-            }
-
             const backupUrlsRaw = this.getStringParam(params, 'BackupUrls');
             if (!backupUrlsRaw) {
                 return {
