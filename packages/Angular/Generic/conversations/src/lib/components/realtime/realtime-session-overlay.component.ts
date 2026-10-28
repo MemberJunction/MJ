@@ -1911,10 +1911,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * dock's hide control). Opening raises the 'engaged' milestone for the cross-session ratchet —
    * but the dock itself stays a per-session, user-owned toggle either way.
    *
-   * Invariant: the typing box is open only while the conversation is visible — a participant must
-   * see what they type (Caliber). So an open while the thread is hidden reveals it first, through
-   * the same path as the hero's "Show the conversation" ({@link OnTextReveal}: captions on and
-   * persisted, {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a
+   * Invariant: the typing box is open only while the conversation is readable — a participant must
+   * see what they type (Caliber). Readable = the thread is shown AND captions are on: a console keeps
+   * the thread with captions off, but the thread then hides every caption turn. So an open while the
+   * conversation is unreadable reveals it first, through the same path as the hero's "Show the
+   * conversation" ({@link OnTextReveal}: captions on and persisted, {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a
    * programmatic open) funnels through here; {@link OnCaptionsToggled} holds the other half.
    */
   public OnComposerOpenChanged(open: boolean): void {
@@ -1923,7 +1924,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (open && !this._ui.allowTyping) {
       return;
     }
-    if (open && !this._ui.showThread) {
+    if (open && !(this._ui.showThread && this.ShowCaptions)) {
       this.OnTextReveal();
     }
     this.ComposerOpen = open;
@@ -2112,8 +2113,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * (raising the text disclosure milestone); off → the orb hero owns the screen again,
    * at any level. Persisted per-user so the choice survives refresh and devices.
    *
-   * Invariant: the typing box is open only while the conversation is visible — a participant must
-   * see what they type (Caliber). So turning captions off closes an open box; the composer instance
+   * Invariant: the typing box is open only while the conversation is readable (thread shown AND
+   * captions on) — a participant must see what they type (Caliber). So turning captions off closes an
+   * open box, in a console too, where the thread stays but hides its caption turns; the composer instance
    * is kept, so its draft survives and comes back with the next open. Every captions road (the CC
    * buttons, {@link SetCaptions}, {@link ToggleCaptions}) funnels through here;
    * {@link OnComposerOpenChanged} holds the other half.

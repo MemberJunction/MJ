@@ -32,7 +32,7 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[Compact]` | `boolean` | `false` | Force dense spacing/type (else inferred from width). |
 | `[AutoHideControls]` | `boolean` | `true` | Deprecated no‑op (the fade was never implemented). |
 | `[AllowTextReveal]` | `boolean` | `true` | Can the user open the transcript? `false` ⇒ pure voice: `'auto'` never graduates to a console, and a forced `'console'` shows the orb hero. Review still shows the thread. |
-| `[AllowTyping]` | `boolean` | `true` | Typing into the session (strip and lean‑sheet Type, hotkey, programmatic open). `false` when `AllowTextReveal` is `false`. The typing box is open only while the conversation is visible: opening it with the thread hidden first reveals the conversation (captions on, `TextRevealed` emitted), and turning captions off closes it (the draft is kept). The narration line under the banner shows only while the thread does. |
+| `[AllowTyping]` | `boolean` | `true` | Typing into the session (strip and lean‑sheet Type, hotkey, programmatic open). `false` when `AllowTextReveal` is `false`. The typing box is open only while the conversation is readable (thread shown and captions on): opening it otherwise first reveals the conversation (captions on, `TextRevealed` emitted), and turning captions off closes it (the draft is kept). The narration line under the banner shows only while the thread does. |
 | `[ShowCaptionsControl]` | `boolean` | `true` | Captions toggle. |
 | `[ShowDensityPicker]` | `boolean` | `true` | Density picker (in the gear). |
 | `[ShowMinimize]` | `boolean` | `true` | Minimize (collapse call, keep it live). |

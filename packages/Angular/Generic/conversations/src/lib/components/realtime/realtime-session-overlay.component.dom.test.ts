@@ -2049,6 +2049,30 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
         expect(query(f, 'mj-realtime-session-thread')).toBeNull();
         expect(revealed).toHaveLength(0);
       });
+
+      it('in a console, opening the typing box with captions off turns captions on', async () => {
+        // A console keeps the thread with captions off, but the thread hides every caption turn — the conversation
+        // is shown yet unreadable, so the box must still reveal it. The thread scrolls to new turns; jsdom has no scrollIntoView.
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: () => undefined });
+        try {
+          const { f, captions$ } = await renderCall('console');
+          f.componentInstance.SetCaptions(false);
+          captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+          f.detectChanges();
+          await settle();
+          expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+          expect(f.componentInstance.ShowCaptions).toBe(false);
+          expect(queryAll(f, 'mj-realtime-session-thread .turn')).toHaveLength(0);
+          f.componentInstance.OnComposerOpenChanged(true);
+          f.detectChanges();
+          await settle();
+          expect(f.componentInstance.ComposerOpen).toBe(true);
+          expect(f.componentInstance.ShowCaptions).toBe(true);
+          expect(queryAll(f, 'mj-realtime-session-thread .turn')).toHaveLength(1);
+        } finally {
+          Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+        }
+      });
     });
   });
 });
