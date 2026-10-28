@@ -31,6 +31,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 
 export interface LoadedCheckModulesSummary {
     /** Specifiers that imported successfully. */
@@ -43,8 +44,9 @@ export interface LoadedCheckModulesSummary {
 
 /**
  * Side-effect-import each configured check module so its bundles register on the
- * `IntegrationCheckRegistry`. Bare specifiers (package names) import as-is through Node
- * resolution; relative/absolute paths resolve against `cwd` and import via file:// URL.
+ * `IntegrationCheckRegistry`. Bare specifiers (package names) load through `ImportFromHost`,
+ * which falls back to resolving from `cwd`'s project; relative/absolute paths resolve against
+ * `cwd` and import via file:// URL.
  *
  * Per-specifier failures are collected, not thrown — a missing optional module should
  * produce an actionable report line, and the driver's own "Unknown integration check
@@ -64,9 +66,9 @@ export async function LoadCheckModules(specifiers: string[], cwd: string = proce
                 // Dynamic import: plugin discovery from config — path known only at runtime.
                 await import(pathToFileURL(absPath).href);
             } else {
-                // Bare package specifier — let Node resolution find it (workspace symlink
-                // in-repo; node_modules in an adopter's project).
-                await import(specifier);
+                // Bare package specifier — installed by the adopter's project, not by this
+                // package, so resolve it from the host anchored at `cwd` (#3741).
+                await ImportFromHost(specifier, path.join(cwd, 'package.json'));
             }
             summary.Loaded.push(specifier);
         } catch (err) {

@@ -13,6 +13,7 @@ import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
+import { ImportFromHost } from "@memberjunction/dynamic-packages";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
@@ -1612,8 +1613,12 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         const driverClassName = model.DriverClass;
         const driverModuleName = model.DriverImportPath;
         try {
-            if (driverModuleName && driverModuleName.length > 0) {
-                const driverModule = await import(driverModuleName);
+            // DriverImportPath names a package this package does not declare, so it loads from the
+            // host application (#3741). Skipped when the class is already registered, e.g. by the
+            // host's class-registration manifest.
+            const alreadyRegistered = MJGlobal.Instance.ClassFactory.GetRegistration(BaseModel, driverClassName) != null;
+            if (driverModuleName && driverModuleName.length > 0 && !alreadyRegistered) {
+                const driverModule = await ImportFromHost(driverModuleName);
                 if (!driverModule)
                     throw new Error(`Error loading driver module '${driverModuleName}'`);
             }

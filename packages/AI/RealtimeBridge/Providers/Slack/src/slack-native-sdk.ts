@@ -34,6 +34,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import {
     ISlackHuddleSdk,
     SlackAudioFrame,
@@ -284,9 +285,9 @@ function unwrapDefault(mod: unknown): unknown {
  */
 export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
-        // Dynamic import — category 5 (runtime plugin discovery from config): the addon specifier is
-        // deployment-supplied and unknown at build time, so a static import is impossible.
-        const mod: unknown = await import(/* @vite-ignore */ specifier);
+        // A bare package name is installed by the host application, not by this package, so it loads
+        // through ImportFromHost (#3741); a path specifier imports as before.
+        const mod: unknown = await ImportFromHost(specifier);
         const resolved = unwrapDefault(mod);
         if (!isNativeModule(resolved)) {
             throw new Error('resolved module has no createClient() factory');

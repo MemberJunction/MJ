@@ -105,6 +105,8 @@
     "check:api-root": "eslint --no-eslintrc --no-inline-config -c .github/eslint/api-root.cjs --ext .ts --ignore-pattern '**/__tests__/**' --ignore-pattern '**/generated/**' packages/MJServer/src packages/ServerExtensionsCore/src packages/TelephonyAdapters/src packages/MessagingAdapters/src",
     "check:dynamic-replace": "node .github/scripts/check-dynamic-replace.mjs",
     "check:dynamic-replace:all": "node .github/scripts/check-dynamic-replace.mjs --all",
+    "check:dynamic-imports": "node .github/scripts/check-dynamic-imports.mjs",
+    "check:dynamic-imports:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-dynamic-imports",
     "check:peer-deps": "node .github/scripts/check-internal-peer-deps.mjs packages",
     "check:explorer-deps": "node .github/scripts/check-explorer-external-deps.mjs",
     "check:explorer-angular-compiler": "node .github/scripts/check-explorer-angular-compiler.mjs",

@@ -58,7 +58,7 @@ async function getCohereClientCtor(): Promise<new (opts: { token: string }) => C
                 return mod.CohereClient as unknown as new (opts: { token: string }) => CohereClientLike;
             } catch (err) {
                 throw new Error(
-                    `CohereReRanker: 'cohere-ai' is not installed. Add it to your project's dependencies if you intend to use the Cohere reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
+                    `CohereReRanker: could not load 'cohere-ai', an optional dependency of @memberjunction/search-engine. It is skipped when its install fails or optional dependencies are omitted (--no-optional, --omit=optional); reinstall with optional dependencies to use the Cohere reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
                 );
             }
         })();

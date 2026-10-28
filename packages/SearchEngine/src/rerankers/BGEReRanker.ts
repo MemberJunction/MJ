@@ -57,7 +57,7 @@ function loadTransformers(): Promise<TransformersModule> {
                 return mod;
             } catch (err) {
                 throw new Error(
-                    `BGEReRanker: '@xenova/transformers' is not installed. Add it to your project's dependencies if you intend to use the BGE local reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
+                    `BGEReRanker: could not load '@xenova/transformers', an optional dependency of @memberjunction/search-engine. It is skipped when its install fails or optional dependencies are omitted (--no-optional, --omit=optional); reinstall with optional dependencies to use the BGE local reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
                 );
             }
         })();

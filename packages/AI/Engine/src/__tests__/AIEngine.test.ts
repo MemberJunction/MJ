@@ -166,6 +166,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
                         ChatCompletions: vi.fn(),
                         EmbedText: vi.fn(),
                     }),
+                    GetRegistration: vi.fn().mockReturnValue(null),
                 },
                 GetEventListener: vi.fn().mockReturnValue(eventListener),
             }
@@ -200,6 +201,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         Base64ToFloat32Vector,
     };
 });
+
+vi.mock('@memberjunction/dynamic-packages', () => ({
+    ImportFromHost: vi.fn().mockResolvedValue({}),
+}));
 
 vi.mock('@memberjunction/core-entities', () => ({
     // Real behaviour, mirroring INJECTABLE_NOTE_STATUSES — the fallback-cache note filter calls
@@ -353,6 +358,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
 import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import type { ChatMessageContent } from '@memberjunction/ai';
 import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -1087,6 +1093,32 @@ describe('AIEngine', () => {
     // ======================================================================
     // GetStringOutputFromActionResults (protected)
     // ======================================================================
+
+    describe('getDriver', () => {
+        type DriverModel = { DriverClass: string; DriverImportPath: string | null };
+        function callGetDriver(model: DriverModel): Promise<unknown> {
+            return (engine as unknown as { getDriver(m: DriverModel, key: string): Promise<unknown> }).getDriver(model, 'key');
+        }
+
+        it('loads DriverImportPath from the host when the driver class is not registered (#3741)', async () => {
+            await callGetDriver({ DriverClass: 'CustomLLM', DriverImportPath: '@acme/custom-llm' });
+            expect(ImportFromHost).toHaveBeenCalledWith('@acme/custom-llm');
+            expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalled();
+        });
+
+        it('skips the import when the driver class is already registered', async () => {
+            vi.mocked(MJGlobal.Instance.ClassFactory.GetRegistration).mockReturnValueOnce({} as ReturnType<typeof MJGlobal.Instance.ClassFactory.GetRegistration>);
+            await callGetDriver({ DriverClass: 'OpenAILLM', DriverImportPath: '@memberjunction/ai-openai' });
+            expect(ImportFromHost).not.toHaveBeenCalled();
+            expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalled();
+        });
+
+        it('wraps an import failure with the driver names', async () => {
+            vi.mocked(ImportFromHost).mockRejectedValueOnce(new Error("Cannot find package '@acme/missing'"));
+            await expect(callGetDriver({ DriverClass: 'MissingLLM', DriverImportPath: '@acme/missing' }))
+                .rejects.toThrow("Error loading driver '@acme/missing' / 'MissingLLM' : Cannot find package '@acme/missing'");
+        });
+    });
 
     describe('GetStringOutputFromActionResults', () => {
         function callGetStringOutput(actionName: string, result: Record<string, unknown>): string {

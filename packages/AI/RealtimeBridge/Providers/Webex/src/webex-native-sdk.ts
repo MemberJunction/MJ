@@ -32,6 +32,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import {
     IWebexMeetingSdk,
     WebexAudioFrame,
@@ -279,9 +280,9 @@ function unwrapDefault(mod: unknown): unknown {
  */
 export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
-        // `/* @vite-ignore */`: the specifier is a deployment-supplied, runtime-resolved plugin path (not a
-        // build-time constant), so Vite/ESBuild must not try to analyze or pre-bundle it.
-        const mod: unknown = await import(/* @vite-ignore */ specifier);
+        // A bare package name is installed by the host application, not by this package, so it loads
+        // through ImportFromHost (#3741); a path specifier imports as before.
+        const mod: unknown = await ImportFromHost(specifier);
         const resolved = unwrapDefault(mod);
         if (!isNativeModule(resolved)) {
             throw new Error('resolved module has no createClient() factory');

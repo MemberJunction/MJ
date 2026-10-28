@@ -20,7 +20,8 @@
     "@memberjunction/core": "6.2.0-edge.6",
     "@memberjunction/global": "6.2.0-edge.6",
     "@memberjunction/core-entities": "6.2.0-edge.6",
-    "@memberjunction/ai-bridge-base": "6.2.0-edge.6"
+    "@memberjunction/ai-bridge-base": "6.2.0-edge.6",
+    "@memberjunction/dynamic-packages": "6.2.0-edge.6"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

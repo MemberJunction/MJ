@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, isAbsolute, resolve } from 'path';
 import { pathToFileURL } from 'url';
 import { MJGlobal } from '@memberjunction/global';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import { BaseCLIPlugin } from './base-cli-plugin';
 import type { MJCLIResult, PluginUsage, RuntimeHint } from './types';
 
@@ -69,11 +70,10 @@ export class CLIPluginRegistry {
     }
 
     const specifiers = Array.isArray(parsed.plugins) ? parsed.plugins : [];
-    const configDir = dirname(configPath);
 
     for (const specifier of specifiers) {
       try {
-        await this.importSpecifier(specifier, configDir);
+        await this.importSpecifier(specifier, configPath);
         result.loaded.push(specifier);
       } catch (e) {
         // A broken/optional plugin must not take down the whole CLI; record the
@@ -86,16 +86,18 @@ export class CLIPluginRegistry {
   }
 
   /**
-   * Resolves a plugin entry point. Package specifiers (`@scope/pkg`,
-   * `@scope/pkg/plugins`) import as-is; relative paths resolve against the config
-   * file's directory and convert to a file URL for ESM import.
+   * Resolves a plugin entry point. Relative paths resolve against the config
+   * file's directory and convert to a file URL for ESM import. Package specifiers
+   * (`@scope/pkg`, `@scope/pkg/plugins`) are installed by the project that owns the
+   * config, not by this package, so they load through `ImportFromHost` anchored at
+   * that config file (#3741).
    */
-  private static async importSpecifier(specifier: string, configDir: string): Promise<void> {
+  private static async importSpecifier(specifier: string, configPath: string): Promise<void> {
     if (specifier.startsWith('.') || isAbsolute(specifier)) {
-      const abs = isAbsolute(specifier) ? specifier : resolve(configDir, specifier);
+      const abs = isAbsolute(specifier) ? specifier : resolve(dirname(configPath), specifier);
       await import(pathToFileURL(abs).href);
     } else {
-      await import(specifier);
+      await ImportFromHost(specifier, configPath);
     }
   }
 
