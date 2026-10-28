@@ -131,6 +131,13 @@ export type { TemplateParameterType, MJQuerySqlFilter } from './template/queryLa
 export type { TemplateParameter, ParameterUse, ContextTokenUse } from './template/parameterAnalysis.js';
 export type { ValueUseRole } from './template/templateWalker.js';
 export type { CompositionReference } from './template/compositionReferences.js';
+export {
+    MatchCompositionPath,
+    CompositionPathSegments,
+    CompositionFullPath,
+    NormalizeCompositionCategoryPath,
+} from './template/compositionPathMatch.js';
+export type { CompositionPathCandidate, CompositionPathMatch } from './template/compositionPathMatch.js';
 export type { TemplateDocComments, DocCommentEntry, DocCommentSource } from './template/docComments.js';
 export { BranchVariantValues } from './template/branchVariants.js';
 export type { BranchVariant, BranchVariantSet, BranchToggle } from './template/branchVariants.js';

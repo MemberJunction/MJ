@@ -971,6 +971,22 @@ describe('Passthrough Parameter Extraction', () => {
             expect(ResolveQueryByNameAndCategory('Sales Summary', ['Other'], [q])).toBeUndefined();
         });
 
+        // A path that is a whole-segment suffix of exactly one same-named query's category path resolves (with a
+        // warning; save refuses it), so a stored query naming "Demos/Active Users" for "MJ/Demos/Active Users" runs.
+        it('should resolve a partial path that is a segment suffix of exactly one query\'s category path', () => {
+            const q = stubQuery({ name: 'Active Users', categoryPath: 'MJ/Demos' });
+            expect(ResolveQueryByNameAndCategory('Active Users', ['Demos'], [q])).toBe(q);
+            expect(ResolveQueryByNameAndCategory('Active Users', ['MJ'], [q])).toBeUndefined(); // a leading segment is not a suffix
+            expect(ResolveQueryByNameAndCategory('Active Users', ['mos'], [q])).toBeUndefined(); // nor part of a segment
+        });
+
+        it('should not resolve a partial path that is a suffix of more than one query\'s category path', () => {
+            const mj = stubQuery({ id: 'q-mj', name: 'Active Users', categoryPath: 'MJ/Demos' });
+            const archive = stubQuery({ id: 'q-archive', name: 'Active Users', categoryPath: 'Archive/Demos' });
+            expect(ResolveQueryByNameAndCategory('Active Users', ['Demos'], [mj, archive])).toBeUndefined();
+            expect(ResolveQueryByNameAndCategory('Active Users', ['Archive', 'Demos'], [mj, archive])).toBe(archive);
+        });
+
         // Composition resolves by full category path + name (DISCUSSION §6, 2026-10-27). CR1 (was pinned: the
         // qualified branch compared "/Finance/" against "Finance" and never matched).
         it('should resolve the same-named query in the referenced category path', () => {

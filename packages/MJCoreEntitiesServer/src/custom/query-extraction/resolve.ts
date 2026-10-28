@@ -11,12 +11,13 @@ import {
     EntityInfo,
     FindAlternateBaseViewByPhysicalName,
     IMetadataProvider,
+    LogStatus,
     TypeScriptTypeFromSQLType,
 } from "@memberjunction/core";
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, QueryEngine } from "@memberjunction/core-entities";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
-import { SQLParser } from "@memberjunction/sql-parser";
+import { MatchCompositionPath, SQLParser } from "@memberjunction/sql-parser";
 import { GetDialect } from "@memberjunction/sql-dialect";
 import type { MJParameterInfo, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
@@ -89,27 +90,27 @@ export function ResolveCompositionReferences(
 }
 
 /**
- * Resolves a query by its full category path and name, the way a composition reference names it.
- * Both must match (names and path segments compared ignoring case and surrounding spaces); there
- * is no name-only fallback, so a reference with a wrong or partial path resolves to nothing even
- * when its name alone is unique. Category path + name is unique, so at most one query matches.
+ * Resolves a query the way a composition reference names it: by its full category path and name,
+ * or by a path that is a whole-segment suffix of exactly one same-named query's category path
+ * (`Demos/Active Users` finds `MJ/Demos/Active Users`; a warning is logged, and saving such a
+ * reference is refused by the template validation). Names and path segments compare ignoring case
+ * and surrounding spaces. There is no name-only fallback: a reference with a wrong path, or with no
+ * path for a query that has a category, resolves to nothing, and so does a partial path that is a
+ * suffix of more than one query's path.
  */
 export function ResolveQueryByNameAndCategory(
     queryName: string,
     categorySegments: string[],
     allQueries: MJQueryEntityExtended[]
 ): MJQueryEntityExtended | undefined {
-    const queryNameLower = queryName.toLowerCase();
-    const expectedPath = normalizeCategoryPath(categorySegments.join('/'));
-    const matches = allQueries.filter(q =>
-        q.Name.toLowerCase() === queryNameLower && normalizeCategoryPath(q.CategoryPath) === expectedPath
+    const match = MatchCompositionPath(categorySegments, queryName, allQueries);
+    if (match.Kind === 'Exact') return match.Target;
+    if (match.Kind !== 'PartialPath') return undefined;
+    LogStatus(
+        `Warning (MJQ_COMPOSITION_PARTIAL_PATH): the composition reference "${[...categorySegments, queryName].join('/')}" ` +
+        `names the query at "${match.FullPath}" by part of its category path; write the full path {{query:"${match.FullPath}"}}.`
     );
-    return matches.length === 1 ? matches[0] : undefined;
-}
-
-/** A category path in comparable form: segments trimmed, empty ones dropped, joined by `/`, lower case. */
-function normalizeCategoryPath(path: string | null | undefined): string {
-    return (path ?? '').split('/').map(s => s.trim()).filter(s => s.length > 0).join('/').toLowerCase();
+    return match.Target;
 }
 
 /**

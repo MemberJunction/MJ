@@ -529,7 +529,8 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
             AssertEqual(results.length, 2, 'QF16: the batch returns one result per member');
             Assert(results[0].Success, `QF16: the VALID member must succeed despite the bad sibling: ${results[0].ErrorMessage}`);
             AssertEqual(results[1].Success, false, 'QF16: the unresolvable member must error');
-            Assert(/not found/i.test(results[1].ErrorMessage ?? ''), `QF16: the per-item error names the cause (got "${results[1].ErrorMessage}")`);
+            // A missing query and one the caller may not run get the same message, so it can't say which.
+            Assert(/does not exist or you do not have permission to run it/i.test(results[1].ErrorMessage ?? ''), `QF16: the per-item error is the uniform unavailable-query message (got "${results[1].ErrorMessage}")`);
         }
     },
 ];

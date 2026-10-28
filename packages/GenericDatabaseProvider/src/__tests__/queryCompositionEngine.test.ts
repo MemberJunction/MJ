@@ -2490,12 +2490,37 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             expect(outcome.Error).toMatch(/not found/i);
         });
 
-        // Composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3 (was pinned).
-        it('refuses a partial category path (a sub-category without its parent)', () => {
+        // A partial category path (a sub-category without its parent) is a whole-segment suffix of exactly one
+        // query's path, so it runs, with a warning (MJQ_COMPOSITION_PARTIAL_PATH; save refuses it). Was: 'refuses a
+        // partial category path' (CR3); the rule was reconciled so existing queries keep running, and a wrong path
+        // still never resolves (the tests around this one).
+        it('resolves a partial category path that is a segment suffix of exactly one query\'s path', () => {
             mockQueryEngineQueries([nested()]);
+            expect(resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r').QueryID).toBe('roster-nested');
+        });
+
+        it('refuses a partial category path that is a suffix of more than one same-named query\'s path', () => {
+            const archived = makeQueryInfo({ ID: 'roster-archived', Name: 'Active Member Roster', CategoryPath: '/Archive/Roster/', SQL: 'SELECT 4 AS Roster' });
+            mockQueryEngineQueries([nested(), archived]);
             const outcome = resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r');
             expect(outcome.QueryID).toBeUndefined();
             expect(outcome.Error).toMatch(/not found/i);
+            expect(resolveOrError('SELECT * FROM {{query:"Archive/Roster/Active Member Roster"}} r').QueryID).toBe('roster-archived');
+        });
+
+        it('refuses a path that is not a whole-segment suffix (a part of a segment, or a leading segment)', () => {
+            mockQueryEngineQueries([nested()]);
+            expect(resolveOrError('SELECT * FROM {{query:"ster/Active Member Roster"}} r').Error).toMatch(/not found/i);
+            expect(resolveOrError('SELECT * FROM {{query:"Members/Active Member Roster"}} r').Error).toMatch(/not found/i);
+        });
+
+        it('an exact path wins over a partial one, and an inline dependency resolves by a partial path too', () => {
+            const top = makeQueryInfo({ ID: 'roster-top', Name: 'Active Member Roster', CategoryPath: '/Roster/', SQL: 'SELECT 5 AS Roster' });
+            mockQueryEngineQueries([nested(), top]);
+            expect(resolveOrError('SELECT * FROM {{query:"Roster/Active Member Roster"}} r').QueryID).toBe('roster-top');
+            mockQueryEngineQueries([]);
+            const inline: QueryDependencySpec[] = [{ Name: 'Leaderboard', CategoryPath: '/Org/Engagement/', SQL: 'SELECT 2 AS EngBoard' }];
+            expect(resolveOrError('SELECT * FROM {{query:"Engagement/Leaderboard"}} l', inline).QueryID).toBe('__inline__/org/engagement/leaderboard');
         });
 
         // Composition resolves by full category path + name only; no name-only fallback (DISCUSSION §6, 2026-10-27). TEST-INVENTORY CR3 (was pinned).

@@ -30,6 +30,12 @@ export interface CompositionTarget {
     readonly Exists: boolean;
     readonly Reusable: boolean;
     readonly Parameters: readonly CompositionTargetParameter[];
+    /**
+     * The query's own full path (category path and name), when the resolver found it by a partial
+     * path: a whole-segment suffix of its category path (see `MatchCompositionPath`). A reference
+     * that differs from it is reported (`MJQ_COMPOSITION_PARTIAL_PATH`).
+     */
+    readonly FullPath?: string;
     /** The full paths of the queries it composes in turn, for cycle detection. Leave out when unknown. */
     readonly Compositions?: readonly string[];
 }

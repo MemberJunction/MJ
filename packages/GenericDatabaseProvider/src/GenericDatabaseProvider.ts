@@ -5850,12 +5850,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * persisted spec fully covers the query's parameters. Returns null on ANY uncertainty → the caller runs
      * the live query (serving live is always correct — this is a transparent optimization, never a
      * correctness dependency).
+     *
+     * @param renderedSQL - The SQL the live path runs for this call (rendered, not paged). The ordering
+     *   check reads it; without it the check reads the platform SQL, where template syntax makes any
+     *   template query read as ordered (→ live).
      */
     protected async tryBuildMaterializedQueryPlan(
         query: MJQueryEntityExtended,
         params: RunQueryParams,
         contextUser?: UserInfo,
         contextValues?: Record<string, string>,
+        renderedSQL?: string,
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
         // A snapshot is shared by every caller and was built without this caller's Context (user, date), so a
@@ -5888,10 +5893,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
         // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
         // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
-        // Check the PLATFORM-resolved SQL (the exact SQL the live path executes — GetPlatformSQL, line ~3642),
-        // not the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
+        // Check the SQL the live path executes: the rendered statement when the caller has it (a template decides
+        // its ORDER BY only when it renders, and the structural reader does not read template syntax, so the
+        // template text of every template query would read as ordered), otherwise the PLATFORM-resolved SQL — not
+        // the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
         // ORDER BY the base SQL lacks, and parsing the base SQL would miss it and serve mis-ordered snapshot pages.
-        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.GetPlatformSQL(this.PlatformKey) ?? '', this.PlatformKey)) return null;
+        const orderingSQL = renderedSQL ?? query.GetPlatformSQL(this.PlatformKey) ?? '';
+        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(orderingSQL, this.PlatformKey)) return null;
 
         // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
         // to interpolate into ExtraFilter — it never carries caller input.
@@ -6015,7 +6023,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // RowFilterBroad materialization, serve from the materialized table with the row-filter params
             // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
             // we fall through to the live execution below — a materialized read can never diverge from live.
-            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues);
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues, finalSQL);
             if (matPlan) {
                 // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
                 // live-rendered SQL), so a fallback below runs the live path unchanged.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, type UserInfo } from '@memberjunction/core';
 import { RenderPipeline } from '../renderPipeline';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
@@ -162,23 +162,31 @@ describe('composition tokens', () => {
 
 describe('Nunjucks templates', () => {
 
-    it('preserves `{{ paramName }}` verbatim when UsesTemplate is false', () => {
+    // Whether SQL is a template is a lexical fact (COMPAT-MAP B12): template syntax outside SQL comments renders
+    // whatever the stored UsesTemplate flag says, because unrendered `{{ }}` text is never valid SQL.
+    it('renders `{{ paramName }}` when UsesTemplate is false (B12: the lexer decides)', () => {
         stubMetadata();
         const result = RenderPipeline.Run(`SELECT * FROM t WHERE name = {{ paramName | sqlString }}`, {
             Platform: 'sqlserver',
             UsesTemplate: false,
+            Parameters: { paramName: "O'Brien" },
         });
-        expect(result.FinalSQL).toContain('{{ paramName | sqlString }}');
+        expect(result.FinalSQL).toBe(`SELECT * FROM t WHERE name = 'O''Brien'`);
     });
 
-    it('preserves `{% if %}` block-tags verbatim when UsesTemplate is false', () => {
+    it('renders `{% if %}` block-tags when UsesTemplate is false (B12)', () => {
         stubMetadata();
-        const result = RenderPipeline.Run(`SELECT * FROM t {% if Param %}WHERE x = 1{% endif %}`, {
-            Platform: 'sqlserver',
-            UsesTemplate: false,
-        });
-        expect(result.FinalSQL).toContain('{% if Param %}');
-        expect(result.FinalSQL).toContain('{% endif %}');
+        const sql = `SELECT * FROM t {% if Param %}WHERE x = 1{% endif %}`;
+        expect(RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false }).FinalSQL).toBe('SELECT * FROM t ');
+        expect(RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { Param: 'yes' } }).FinalSQL).toBe('SELECT * FROM t WHERE x = 1');
+    });
+
+    it('renders a query whose only tags read Context, with no UsesTemplate flag (B12)', () => {
+        stubMetadata();
+        const user = { ID: 'C2B8E4A1-0000-4000-8000-000000000001', Email: 'a@b.c', Name: 'A' } as unknown as UserInfo;
+        const result = RenderPipeline.Run('SELECT {{ Context.UserID | sqlString }} AS UserID', { Platform: 'sqlserver', ContextUser: user });
+        expect(result.FinalSQL).toBe("SELECT 'C2B8E4A1-0000-4000-8000-000000000001' AS UserID");
+        expect(result.ContextValues).toEqual({ UserID: 'C2B8E4A1-0000-4000-8000-000000000001' });
     });
 
     it('strips template-like content out of block comments', () => {
@@ -191,20 +199,24 @@ describe('Nunjucks templates', () => {
         expect(result.FinalSQL).toMatch(/SELECT\s+1/);
     });
 
-    it('preserves a string literal containing {{ }} verbatim', () => {
+    // SQL quoting does not hide a tag (guides/MJ_QUERY_LANGUAGE.md §1): a tag inside a string literal or a quoted
+    // identifier is still a tag, so it renders (B12). Save refuses both placements (MJQ_TAG_IN_STRING_LITERAL,
+    // MJQ_TAG_IN_QUOTED_IDENTIFIER); a stored query that has one keeps running, as it did when flagged.
+    it('renders a tag inside a string literal (B12; refused at save)', () => {
         stubMetadata();
-        const sql = `SELECT 'literal {{ not_a_param }} text' AS s FROM t`;
-        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false });
-        expect(result.FinalSQL).toContain(`'literal {{ not_a_param }} text'`);
+        const sql = `SELECT 'literal {{ word }} text' AS s FROM t`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', UsesTemplate: false, Parameters: { word: 'plain' } });
+        expect(result.FinalSQL).toBe(`SELECT 'literal plain text' AS s FROM t`);
     });
 
-    it('preserves a bracket identifier containing {{ }} verbatim', () => {
+    it('renders a tag inside a bracket identifier (B12; refused at save)', () => {
         stubMetadata();
-        const result = RenderPipeline.Run('SELECT [{{not_a_param}}] FROM t', {
+        const result = RenderPipeline.Run('SELECT [{{ col }}] FROM t', {
             Platform: 'sqlserver',
             UsesTemplate: false,
+            Parameters: { col: 'Name' },
         });
-        expect(result.FinalSQL).toContain('[{{not_a_param}}]');
+        expect(result.FinalSQL).toBe('SELECT [Name] FROM t');
     });
 
     it('throws when a template processing error occurs', () => {

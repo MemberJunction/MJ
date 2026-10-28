@@ -386,9 +386,14 @@ JOIN {{query:"Sales/Reports/Customer Totals(Year=Year - 1)"}} s ON s.CustomerID 
 ### Path
 
 - The path is in **double quotes**, directly after `query:`. Nothing may follow the closing quote.
-- It is the full category path and the query name, joined by `/`. It must resolve exactly. There is no name-only
-  fallback: a query in a category is always named with its category path. Segments are trimmed; an empty segment is
+- It is the full category path and the query name, joined by `/`. There is no name-only fallback: a query in a
+  category is always named with its category path. Segments are trimmed; an empty segment is
   `MJQ_COMPOSITION_MALFORMED`.
+- **Partial paths.** A path that matches no query exactly still finds one when it is a whole-segment suffix of
+  exactly one same-named query's category path: `"Demos/Active Users"` finds `MJ/Demos/Active Users`. Such a
+  reference runs, with a warning (`MJQ_COMPOSITION_PARTIAL_PATH`, logged once per process at run time); saving it is
+  an error whose fix hint names the full path. A path that is not such a suffix, or is the suffix of more than one
+  query's path, finds nothing. `MatchCompositionPath` implements the rule for resolvers.
 - **Parentheses in names.** The argument list is the parenthesized group that ends the path, when it is empty or
   starts with `Name=`. Otherwise the parentheses are part of the name: `"Finance/Year-End (2024) Summary"` names a
   query, and `"Finance/Year-End (2024) Summary(Region='WEST')"` passes `Region`.
@@ -412,6 +417,7 @@ JOIN {{query:"Sales/Reports/Customer Totals(Year=Year - 1)"}} s ON s.CustomerID 
 |---|---|
 | **Position.** A composition stands only where a table source goes: directly after `FROM`, `JOIN` or `APPLY`, or after a comma in a `FROM` list. Not in a select list, a `WHERE`, or after `(` or `IN`. | `MJQ_COMPOSITION_POSITION` |
 | The target must exist at that full path. | `MJQ_COMPOSITION_NOT_FOUND` |
+| The path must be the target's full path, not a suffix of it. Error on save, warning on refresh. | `MJQ_COMPOSITION_PARTIAL_PATH` |
 | The target must be marked Reusable. | `MJQ_COMPOSITION_NOT_REUSABLE` |
 | Every **required** parameter of the target must be passed. | `MJQ_COMPOSITION_MISSING_ARGUMENT` |
 | An unpassed target parameter named like an outer parameter (case-insensitive) is refused. Error on save, warning on refresh. | `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` |
@@ -558,6 +564,7 @@ reported. **Info** is a note.
 | `MJQ_COMPOSITION_MALFORMED` | Error | A `{{query:…}}` whose path or arguments do not parse | `{{query:"Category/Path/Name(Arg=Value, …)"}}`, path in double quotes. |
 | `MJQ_COMPOSITION_POSITION` | Error | A composition outside a table-source position | `FROM {{query:"…"}} alias` or `JOIN {{query:"…"}} alias ON …`. |
 | `MJQ_COMPOSITION_NOT_FOUND` | Error | No query at that full path | Give the full category path and name. |
+| `MJQ_COMPOSITION_PARTIAL_PATH` | Error; **Warning in Refresh** | The path is a whole-segment suffix of the target's full path (the resolver returned `FullPath`) | Write the full path the hint names. |
 | `MJQ_COMPOSITION_NOT_REUSABLE` | Error | The target is not marked Reusable | Mark it Reusable, or copy its SQL in. |
 | `MJQ_COMPOSITION_MISSING_ARGUMENT` | Error | A required target parameter is not passed | Pass it: `(Name=Name)` or `(Name='value')`. |
 | `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` | Error; **Warning in Refresh** | An unpassed target parameter named like an outer parameter | Pass it as `(Name=Name)`, or rename one. |
@@ -703,7 +710,7 @@ FROM dbo.Orders a                                        -- break the loop
 ## 13. Validating from code
 
 ```ts
-import { QueryTemplate, MJQueryDiagnosticCodes } from '@memberjunction/sql-parser';
+import { QueryTemplate, MJQueryDiagnosticCodes, MatchCompositionPath } from '@memberjunction/sql-parser';
 import { GetQueryDialect } from '@memberjunction/sql-dialect';
 
 const template = QueryTemplate.Parse(sqlText, GetQueryDialect('sqlserver'));
@@ -716,10 +723,12 @@ const check = template.Validate({
     ],
     QueryPath: 'Sales/Reports/Regional Orders',     // this query's full path, for cycle detection
     ResolveComposition: fullPath => {
-        const query = findQueryByFullPath(fullPath); // category path + name, exact match
-        if (!query) return null;
+        const match = MatchCompositionPath(categoryPathOf(fullPath), nameOf(fullPath), allQueries);
+        if (match.Kind !== 'Exact' && match.Kind !== 'PartialPath') return null;
+        const query = match.Target;
         return {
             Exists: true,
+            FullPath: match.Kind === 'PartialPath' ? match.FullPath : undefined, // reports a partial path
             Reusable: query.Reusable,
             Parameters: query.Parameters.map(p => ({ Name: p.Name, IsRequired: p.IsRequired })),
             Compositions: query.ComposedPaths,      // optional: full paths it composes, for cycles
@@ -736,10 +745,10 @@ if (!check.Value.IsValid) {
 
 | Option | Default | Effect |
 |---|---|---|
-| `Mode` | `'Save'` | `'Refresh'` makes `MJQ_FILTER_TYPE_MISMATCH` and `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` warnings. |
+| `Mode` | `'Save'` | `'Refresh'` makes `MJQ_FILTER_TYPE_MISMATCH`, `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` and `MJQ_COMPOSITION_PARTIAL_PATH` warnings. |
 | `DeclaredParameters` | none | `{ Name, Type, IsServerSet? }` from the query's metadata. `Type` drives the filter-fit and unfiltered rules and the `for` iterable check; `IsServerSet` lets a value go unfiltered. Their names also count as outer names for `MJQ_COMPOSITION_IMPLICIT_ARGUMENT`. |
 | `ContextTokens` | the nine tokens | The allowed `Context` tokens. |
-| `ResolveComposition` | none | `(fullPath) => { Exists, Reusable, Parameters: [{ Name, IsRequired }], Compositions? } \| null`. Without it, targets are not checked, `MJQ_COMPOSITION_UNCHECKED` is reported, and the result is not `Complete`. Position and duplicate-argument checks run either way. |
+| `ResolveComposition` | none | `(fullPath) => { Exists, Reusable, Parameters: [{ Name, IsRequired }], FullPath?, Compositions? } \| null`; `FullPath` is the target's own full path when it was found by a partial path. Without it, targets are not checked, `MJQ_COMPOSITION_UNCHECKED` is reported, and the result is not `Complete`. Position and duplicate-argument checks run either way. |
 | `QueryPath` | none | The full path of the query being validated, so a composition that leads back to it is a cycle. |
 
 The result is `{ Value: { IsValid, ErrorCount, WarningCount }, Complete, Diagnostics }`. Each diagnostic has `Code`,

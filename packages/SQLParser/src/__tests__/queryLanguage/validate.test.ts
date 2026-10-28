@@ -18,6 +18,9 @@ const CATALOG: Readonly<Record<string, CompositionTarget>> = {
     'self/back': { Exists: true, Reusable: true, Parameters: [], Compositions: ['Me/Outer'] },
     'plain/list': { Exists: true, Reusable: true, Parameters: [] },
     'plain/optional': { Exists: true, Reusable: true, Parameters: [{ Name: 'status', IsRequired: false }] },
+    'mj/demos/active users': { Exists: true, Reusable: true, Parameters: [] },
+    // Found by a partial path: the resolver reports the query's own full path.
+    'demos/active users': { Exists: true, Reusable: true, Parameters: [], FullPath: 'MJ/Demos/Active Users' },
 };
 
 const RESOLVE: QueryTemplateValidateOptions = {
@@ -64,6 +67,7 @@ const CASES: readonly RuleCase[] = [
     { Code: 'MJQ_COMPOSITION_MALFORMED', Bad: 'SELECT * FROM {{query:Sales/Top}} x', Good: 'SELECT * FROM {{query:"Plain/List"}} x', Options: RESOLVE },
     { Code: 'MJQ_COMPOSITION_POSITION', Bad: 'SELECT {{query:"Plain/List"}}', Good: 'SELECT * FROM {{query:"Plain/List"}} x', Options: RESOLVE },
     { Code: 'MJQ_COMPOSITION_NOT_FOUND', Bad: 'SELECT * FROM {{query:"Top Customers(Region=\'W\')"}} x', Good: 'SELECT * FROM {{query:"Sales/Top Customers(Region=\'W\')"}} x', Options: RESOLVE },
+    { Code: 'MJQ_COMPOSITION_PARTIAL_PATH', Bad: 'SELECT * FROM {{query:"Demos/Active Users"}} x', Good: 'SELECT * FROM {{query:"MJ/Demos/Active Users"}} x', Options: RESOLVE },
     { Code: 'MJQ_COMPOSITION_NOT_REUSABLE', Bad: 'SELECT * FROM {{query:"Sales/Private"}} x', Good: 'SELECT * FROM {{query:"Plain/List"}} x', Options: RESOLVE },
     { Code: 'MJQ_COMPOSITION_MISSING_ARGUMENT', Bad: 'SELECT * FROM {{query:"Sales/Top Customers"}} x', Good: 'SELECT * FROM {{query:"Sales/Top Customers(Region=\'W\')"}} x', Options: RESOLVE },
     {
@@ -181,6 +185,16 @@ describe('QueryTemplate.Validate: details', () => {
         expect(mismatch.Value.IsValid).toBe(true);
         const implicit = validate('SELECT * FROM {{query:"Plain/Optional"}} x WHERE x.s = {{ status | sqlString }}', { ...RESOLVE, Mode: 'Refresh' });
         expect(implicit.Diagnostics.map(d => [d.Code, d.Severity])).toEqual([['MJQ_COMPOSITION_IMPLICIT_ARGUMENT', 'Warning']]);
+    });
+
+    it('a partial composition path: an error at save naming the full path, a warning on refresh', () => {
+        const sql = 'SELECT * FROM {{query:"Demos/Active Users"}} x';
+        const save = validate(sql, RESOLVE);
+        expect(save.Diagnostics.map(d => [d.Code, d.Severity])).toEqual([['MJQ_COMPOSITION_PARTIAL_PATH', 'Error']]);
+        expect(save.Diagnostics[0].FixHint).toContain('{{query:"MJ/Demos/Active Users"}}');
+        const refresh = validate(sql, { ...RESOLVE, Mode: 'Refresh' });
+        expect(refresh.Diagnostics.map(d => [d.Code, d.Severity])).toEqual([['MJQ_COMPOSITION_PARTIAL_PATH', 'Warning']]);
+        expect(refresh.Value.IsValid).toBe(true);
     });
 
     it('counts declared outer parameters for the implicit-argument rule', () => {

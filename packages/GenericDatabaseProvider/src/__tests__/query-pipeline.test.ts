@@ -1169,8 +1169,8 @@ class TestMatPlanProvider extends TestPipelineProvider {
         })));
     }
 
-    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo, contextValues?: Record<string, string>) {
-        return this.tryBuildMaterializedQueryPlan(query, params, user, contextValues);
+    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo, contextValues?: Record<string, string>, renderedSQL?: string) {
+        return this.tryBuildMaterializedQueryPlan(query, params, user, contextValues, renderedSQL);
     }
 }
 
@@ -1200,6 +1200,18 @@ describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', (
         p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
         const q = matQuery({ SQL: 'SELECT ID, X FROM __mj.t ORDER BY x', GetPlatformSQL: () => 'SELECT ID, X FROM __mj.t', QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
         expect(await p.plan(q, matParams({ x: 'a' }))).not.toBeNull();
+    });
+
+    it('a template query: the ordering check reads the rendered statement, not the template text', async () => {
+        // The template text does not read completely as SQL (`{{ … }}`), so checked as written every template
+        // query would count as ordered and never be served from its snapshot.
+        const p = new TestMatPlanProvider();
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const template = 'SELECT ID, X FROM __mj.t WHERE X = {{ x | sqlString }}';
+        const q = matQuery({ SQL: template, GetPlatformSQL: () => template, UsesTemplate: true, QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {})).toBeNull();
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {}, "SELECT ID, X FROM __mj.t WHERE X = 'a'")).not.toBeNull();
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {}, "SELECT ID, X FROM __mj.t WHERE X = 'a' ORDER BY X")).toBeNull();
     });
 
     it('FIX #4: refuses (→ live) when the spec carries a param the query no longer has (over-filter guard)', async () => {

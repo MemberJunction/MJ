@@ -107,7 +107,7 @@ export class CompositionRender {
         const recorder = new UnitRecorder(this, unit, request, this.trustedNames(unit, request));
         let sql: string;
         let applied: Record<string, string> = {};
-        if (this.rendersAsTemplate(request, unit, outer) && !staticOnly) {
+        if (this.rendersAsTemplate(request, unit) && !staticOnly) {
             unit.AssertRenderable(request.Label, request.Definitions);
             const result = this.process(request, unit, unit.TemplateText(), recorder, request.Definitions);
             sql = result.SQL;
@@ -125,15 +125,13 @@ export class CompositionRender {
     }
 
     /**
-     * Whether a unit renders as a template: when it is flagged one, and otherwise when its SQL holds
-     * template syntax and it takes part in a composition (a composed instance, or an outer query that
-     * composes), because the `UsesTemplate` flag can be stale (COMPAT-MAP B12) and such SQL always
-     * rendered when composed. A query that composes nothing keeps the flag's meaning: unflagged
-     * template-looking text stays verbatim.
+     * Whether a unit renders as a template: when it is flagged one, or when its SQL holds template
+     * syntax outside SQL comments. Whether SQL is a template is a lexical fact (COMPAT-MAP B12): the
+     * stored `UsesTemplate` flag can be stale or unset (a query whose only tokens read `Context` has
+     * no parameters to flag it by), and unrendered `{{ }}` text is never valid SQL.
      */
-    private rendersAsTemplate(request: UnitRenderRequest, unit: TemplateUnit, outer: boolean): boolean {
-        if (request.RendersTemplate) return true;
-        return (!outer || unit.References.length > 0) && unit.HasTemplateSyntax();
+    private rendersAsTemplate(request: UnitRenderRequest, unit: TemplateUnit): boolean {
+        return request.RendersTemplate || unit.HasTemplateSyntax();
     }
 
     /**

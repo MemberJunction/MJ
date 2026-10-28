@@ -2,6 +2,7 @@ import { MakeDiagnostic } from '../common/analysis.js';
 import type { Diagnostic, DiagnosticSeverity, Span } from '../common/analysis.js';
 import { MJQueryDiagnosticCodes } from '../common/diagnosticCodes.js';
 import type { CompositionReference } from './compositionReferences.js';
+import { NormalizeCompositionCategoryPath } from './compositionPathMatch.js';
 import type { CompositionResolver, CompositionTarget, QueryTemplateValidateOptions } from './validationTypes.js';
 
 /** What {@link CompositionRules.Check} found. */
@@ -55,12 +56,25 @@ export class CompositionRules {
                 'Give the full category path and query name, e.g. "Sales/Reports/Top Customers".');
             return;
         }
+        this.checkPartialPath(reference, target);
         if (!target.Reusable) {
             this.add(MJQueryDiagnosticCodes.CompositionNotReusable, 'Error', reference.PathSpan, `"${reference.FullPath}" is not marked Reusable.`,
                 'Mark the composed query Reusable, or copy its SQL in.');
         }
         this.checkArguments(reference, target);
         this.checkCycle(reference, resolver);
+    }
+
+    /**
+     * A reference that found its query by part of the category path: an error at save, so new SQL
+     * names the full path, and a warning on refresh, so a stored query keeps running.
+     */
+    private checkPartialPath(reference: CompositionReference, target: CompositionTarget): void {
+        if (target.FullPath === undefined || NormalizeCompositionCategoryPath(target.FullPath) === NormalizeCompositionCategoryPath(reference.FullPath)) return;
+        const severity: DiagnosticSeverity = this.options.Mode === 'Refresh' ? 'Warning' : 'Error';
+        this.add(MJQueryDiagnosticCodes.CompositionPartialPath, severity, reference.PathSpan,
+            `"${reference.FullPath}" names the query at "${target.FullPath}" by part of its category path.`,
+            `Write the full path: {{query:"${target.FullPath}"}}.`);
     }
 
     private checkDuplicateArguments(reference: CompositionReference): void {

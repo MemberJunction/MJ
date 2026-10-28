@@ -65,6 +65,11 @@ export const MJQueryDiagnosticCodes = {
     CompositionPosition: 'MJQ_COMPOSITION_POSITION',
     /** The composed query does not exist at that full path. */
     CompositionNotFound: 'MJQ_COMPOSITION_NOT_FOUND',
+    /**
+     * The path names the composed query by part of its category path (a whole-segment suffix of
+     * exactly one query's). It runs, with a warning; save refuses it.
+     */
+    CompositionPartialPath: 'MJQ_COMPOSITION_PARTIAL_PATH',
     /** The composed query is not marked Reusable. */
     CompositionNotReusable: 'MJQ_COMPOSITION_NOT_REUSABLE',
     /** A required parameter of the composed query is not passed. */
