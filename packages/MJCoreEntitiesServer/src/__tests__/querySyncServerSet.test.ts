@@ -20,15 +20,7 @@ interface ParamRow {
     Delete: ReturnType<typeof vi.fn>;
 }
 
-const { existing } = vi.hoisted(() => ({ existing: [] as ParamRow[] }));
-
-vi.mock('@memberjunction/core-entities', async (importOriginal) => {
-    const actual = await importOriginal<Record<string, unknown>>();
-    return {
-        ...actual,
-        QueryEngine: { Instance: { Loaded: true, GetQueryParameters: () => existing } },
-    };
-});
+const existing: ParamRow[] = [];
 
 import { SyncParameters } from '../custom/query-extraction/sync';
 import type { ExtractedParameter } from '../custom/query-extraction/types';
@@ -54,8 +46,13 @@ const metadataProvider = {
     }),
 } as unknown as IMetadataProvider;
 
+// SyncParameters reads existing rows through the caller's provider, never the QueryEngine cache.
+const runViewProvider = {
+    RunView: vi.fn(async () => ({ Success: true, Results: existing })),
+} as unknown as IRunViewProvider;
+
 async function sync(params: ExtractedParameter[]): Promise<void> {
-    await SyncParameters('q-1', params, { ID: 'u-1' } as UserInfo, metadataProvider, {} as IRunViewProvider, true);
+    await SyncParameters('q-1', params, { ID: 'u-1' } as UserInfo, metadataProvider, runViewProvider, true);
 }
 
 beforeEach(() => {

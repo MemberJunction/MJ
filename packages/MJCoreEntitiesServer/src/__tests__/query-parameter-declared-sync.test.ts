@@ -138,8 +138,8 @@ function extracted(overrides?: Partial<ExtractedParameter>): ExtractedParameter 
         isRequired: true,
         description: 'AI-generated description',
         usage: [],
-        defaultValue: null,
-        sampleValue: "['abc']",
+        DefaultValue: "['default']",
+        SampleValue: "['abc']",
         ...overrides,
     };
 }
@@ -175,6 +175,7 @@ describe('SyncParameters — declared parameters are authoritative', () => {
         expect(row.ID).toBe(DECLARED_PARAM_ID);
         expect(row.DetectionMethod).toBe('Manual');
         expect(row.Description).toBe('Company IDs to filter on');
+        expect(row.DefaultValue).toBeNull();
         expect(row.SampleValue).toBe("['11111111-1111-1111-1111-111111111111']");
     });
 
@@ -241,7 +242,10 @@ describe('SyncParameters — declared parameters are authoritative', () => {
 
         await SyncParameters(QUERY_ID, [extracted()], CONTEXT_USER, metadataProvider, runViewProvider, true);
 
-        expect(table.Find('CompanyIDs')?.Description).toBe('AI-generated description');
+        const row = table.Find('CompanyIDs');
+        expect(row?.Description).toBe('AI-generated description');
+        expect(row?.DefaultValue).toBe("['default']");
+        expect(row?.SampleValue).toBe("['abc']");
     });
 
     // The pipeline calls SyncParameters with an empty list when the SQL yields no parameters

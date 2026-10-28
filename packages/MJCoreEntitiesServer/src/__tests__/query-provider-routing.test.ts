@@ -78,6 +78,8 @@ describe('query pipeline reads through the caller provider, not the stale QueryE
             IsRequired: true,
             DetectionMethod: 'Manual',
             Description: 'declared',
+            DefaultValue: null,
+            SampleValue: 'declared-sample',
             Save: vi.fn(async () => true),
         };
         const runViewProvider = runViewProviderFor({ 'MJ: Query Parameters': [visibleOnlyToProvider] });
@@ -88,8 +90,8 @@ describe('query pipeline reads through the caller provider, not the stale QueryE
             isRequired: true,
             description: 'inferred',
             usage: [],
-            defaultValue: null,
-            sampleValue: null,
+            DefaultValue: 'inferred-default',
+            SampleValue: 'inferred-sample',
         };
 
         await SyncParameters(QUERY_ID, [extracted], CONTEXT_USER, metadataProvider, runViewProvider, true);
@@ -97,6 +99,8 @@ describe('query pipeline reads through the caller provider, not the stale QueryE
         // Reading the stale cache would miss the row and create a duplicate.
         expect(metadataProvider.GetEntityObject).not.toHaveBeenCalled();
         expect(visibleOnlyToProvider.Description).toBe('declared');
+        expect(visibleOnlyToProvider.DefaultValue).toBeNull();
+        expect(visibleOnlyToProvider.SampleValue).toBe('declared-sample');
     });
 
     it('upsertQuerySQLRecord updates the dialect record the supplied provider returns', async () => {
