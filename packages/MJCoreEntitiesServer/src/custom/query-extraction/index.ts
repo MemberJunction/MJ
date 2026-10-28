@@ -51,5 +51,17 @@ export {
 // Sync engine
 export { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
 
+// Declared child rows (graph saves)
+export {
+    CollectDeclaredQueryChildren,
+    HasDeclaredQueryChildren,
+    FindReplacedRows,
+    QueueReplacedRowDeletion,
+    QueryChildNameKey,
+    QueryEntityKey,
+    NO_DECLARED_QUERY_CHILDREN,
+} from "./declared";
+export type { DeclaredQueryChildren, DeclaredQueryCollections } from "./declared";
+
 // Dialect conversion
 export { ConvertTSQLToPostgreSQL } from "./dialect";

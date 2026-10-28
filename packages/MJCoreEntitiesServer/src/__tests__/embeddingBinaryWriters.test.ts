@@ -71,7 +71,12 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         MJAIAgentNoteEntity: class extends StubEntity {},
         MJAIAgentExampleEntity: class extends StubEntity {},
         MJComponentEntityExtended: class extends StubEntity {},
-        MJQueryEntityExtended: class extends StubEntity {},
+        MJQueryEntityExtended: class extends StubEntity {
+            /** The query's declared child collections, empty: this save declares no children. */
+            public DeclaredParameters = { Items: [] };
+            public DeclaredFields = { Items: [] };
+            public DeclaredEntities = { Items: [] };
+        },
         MJTagEntity: class extends StubEntity {},
     };
 });

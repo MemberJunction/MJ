@@ -6,7 +6,12 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 });
 
 vi.mock('../generated/entity_subclasses', () => ({
-    MJQueryEntity: class MockQueryEntity {},
+    MJQueryEntity: class MockQueryEntity {
+        /** The extended class declares its child collections at construction; none is used here. */
+        protected DeclareRelatedRecords(): { Items: never[] } {
+            return { Items: [] };
+        }
+    },
 }));
 
 const engineState: { permissions: Array<{ QueryID: string; Role: string }>; queryEntities: Array<{ QueryID: string; EntityID: string }> } = {

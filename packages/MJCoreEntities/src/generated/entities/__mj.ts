@@ -29048,6 +29048,27 @@ export const MJQuerySchema = z.object({
         * * Display Name: Approved Fingerprint
         * * SQL Data Type: nvarchar(100)
         * * Description: SHA-256 fingerprint of the definition that was approved: its SQL, dialect variants and parameter contract. The approval is current only while this matches the fingerprint of the current definition.`),
+    ExtractedSQLHash: z.string().nullable().describe(`
+        * * Field Name: ExtractedSQLHash
+        * * Display Name: Extracted SQL Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale.`),
+    ExtractionStatus: z.union([z.literal('Error'), z.literal('OK'), z.literal('Skipped'), z.literal('Warning')]).nullable().describe(`
+        * * Field Name: ExtractionStatus
+        * * Display Name: Extraction Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * OK
+    *   * Skipped
+    *   * Warning
+        * * Description: Outcome of the last extraction run. "OK" means all facts were extracted. "Warning" means extraction succeeded with findings (see ExtractionMessage). "Error" means the database server could not describe the query, so existing rows were kept. "Skipped" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted.`),
+    ExtractionMessage: z.string().nullable().describe(`
+        * * Field Name: ExtractionMessage
+        * * Display Name: Extraction Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -29379,7 +29400,7 @@ export const MJQueryFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Database'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29387,13 +29408,31 @@ export const MJQueryFieldSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * AI
+    *   * Database
     *   * Manual
-        * * Description: Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.`),
+    *   * Parser
+        * * Description: Who wrote this field row. "Database" means its facts (name, order, types, nullability, source) came from the database server describing the query output. "Parser" means they came from MJ's analysis of the query template and structure. "Manual" means a user authored the row. "AI" means an LLM wrote its description; an LLM never sets types or sources.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
         * * SQL Data Type: decimal(3, 2)
         * * Description: Confidence score (0.00-1.00) indicating how certain the AI was about this field detection. Only populated when DetectionMethod="AI". Factors include: clarity of the SELECT clause, complexity of any expressions or transformations, confidence in type inference, and ability to trace back to source entity/column. Complex computed fields or ambiguous aliases result in lower scores. This helps identify fields that may need manual verification.`),
+    SourceEntityFieldID: z.string().nullable().describe(`
+        * * Field Name: SourceEntityFieldID
+        * * Display Name: Source Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+        * * Description: The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted.`),
+    IsNullable: z.boolean().nullable().describe(`
+        * * Field Name: IsNullable
+        * * Display Name: Is Nullable
+        * * SQL Data Type: bit
+        * * Description: Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability.`),
+    SourceObjectName: z.string().nullable().describe(`
+        * * Field Name: SourceObjectName
+        * * Display Name: Source Object Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.`),
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -29401,6 +29440,10 @@ export const MJQueryFieldSchema = z.object({
     SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    SourceEntityField: z.string().nullable().describe(`
+        * * Field Name: SourceEntityField
+        * * Display Name: Source Entity Field
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -121076,6 +121119,51 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: ExtractedSQLHash
+    * * Display Name: Extracted SQL Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale.
+    */
+    get ExtractedSQLHash(): string | null {
+        return this.Get('ExtractedSQLHash');
+    }
+    set ExtractedSQLHash(value: string | null) {
+        this.Set('ExtractedSQLHash', value);
+    }
+
+    /**
+    * * Field Name: ExtractionStatus
+    * * Display Name: Extraction Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * OK
+    *   * Skipped
+    *   * Warning
+    * * Description: Outcome of the last extraction run. "OK" means all facts were extracted. "Warning" means extraction succeeded with findings (see ExtractionMessage). "Error" means the database server could not describe the query, so existing rows were kept. "Skipped" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted.
+    */
+    get ExtractionStatus(): 'Error' | 'OK' | 'Skipped' | 'Warning' | null {
+        return this.Get('ExtractionStatus');
+    }
+    set ExtractionStatus(value: 'Error' | 'OK' | 'Skipped' | 'Warning' | null) {
+        this.Set('ExtractionStatus', value);
+    }
+
+    /**
+    * * Field Name: ExtractionMessage
+    * * Display Name: Extraction Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions.
+    */
+    get ExtractionMessage(): string | null {
+        return this.Get('ExtractionMessage');
+    }
+    set ExtractionMessage(value: string | null) {
+        this.Set('ExtractionMessage', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -121915,13 +122003,15 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * AI
+    *   * Database
     *   * Manual
-    * * Description: Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.
+    *   * Parser
+    * * Description: Who wrote this field row. "Database" means its facts (name, order, types, nullability, source) came from the database server describing the query output. "Parser" means they came from MJ's analysis of the query template and structure. "Manual" means a user authored the row. "AI" means an LLM wrote its description; an LLM never sets types or sources.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Database' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Database' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -121936,6 +122026,46 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     }
     set AutoDetectConfidenceScore(value: number | null) {
         this.Set('AutoDetectConfidenceScore', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityFieldID
+    * * Display Name: Source Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    * * Description: The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted.
+    */
+    get SourceEntityFieldID(): string | null {
+        return this.Get('SourceEntityFieldID');
+    }
+    set SourceEntityFieldID(value: string | null) {
+        this.Set('SourceEntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: IsNullable
+    * * Display Name: Is Nullable
+    * * SQL Data Type: bit
+    * * Description: Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability.
+    */
+    get IsNullable(): boolean | null {
+        return this.Get('IsNullable');
+    }
+    set IsNullable(value: boolean | null) {
+        this.Set('IsNullable', value);
+    }
+
+    /**
+    * * Field Name: SourceObjectName
+    * * Display Name: Source Object Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.
+    */
+    get SourceObjectName(): string | null {
+        return this.Get('SourceObjectName');
+    }
+    set SourceObjectName(value: string | null) {
+        this.Set('SourceObjectName', value);
     }
 
     /**
@@ -121954,6 +122084,15 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     */
     get SourceEntity(): string | null {
         return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: SourceEntityField
+    * * Display Name: Source Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntityField(): string | null {
+        return this.Get('SourceEntityField');
     }
 }
 

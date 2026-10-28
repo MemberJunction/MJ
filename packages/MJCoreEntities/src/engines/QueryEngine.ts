@@ -42,7 +42,7 @@ const RESULT_AFFECTING_COLUMNS: Readonly<Record<string, readonly string[] | 'all
     'mj: query sqls': 'all',
     'mj: query parameters': ['QueryID', 'Name', 'Type', 'IsRequired', 'ValidationFilters'],
     'mj: query dependencies': 'all',
-    'mj: query fields': ['QueryID', 'Name', 'Sequence', 'SQLBaseType', 'SQLFullType', 'SourceEntityID', 'SourceFieldName', 'IsComputed'],
+    'mj: query fields': ['QueryID', 'Name', 'Sequence', 'SQLBaseType', 'SQLFullType', 'SourceEntityID', 'SourceFieldName', 'IsComputed', 'IsNullable', 'SourceEntityFieldID'],
 };
 
 /** Engine properties a query definition is computed from. A change to any of them clears the memo. */
@@ -50,8 +50,9 @@ const DEFINITION_PROPERTIES = new Set(['_queries', '_parameters', '_fields', '_d
 
 /**
  * The facts of one Query Field row that are part of its query's definition signature, in hashed
- * order. A fact is something about the result column itself: its name, its position, its type, and
- * where its values come from. A new fact column belongs here, as one more entry, so that editing it
+ * order. A fact is something about the result column itself: its name, its position, its type, its
+ * nullability, and where its values come from (source entity, source entity field and field name).
+ * An unknown nullability (`null`) hashes differently from both `true` and `false`. A new fact column belongs here, as one more entry, so that editing it
  * changes the signature. Descriptions and other annotations (`Description`,
  * `ComputationDescription`, `SummaryDescription`, detection method and confidence) never belong
  * here: editing them must not change the signature, or it would throw away the query's cached
@@ -64,6 +65,8 @@ const QUERY_FIELD_FACTS: ReadonlyArray<(field: MJQueryFieldEntity) => string> = 
     field => (field.SourceEntityID ?? '').toLowerCase(),
     field => field.SourceFieldName ?? '',
     field => field.IsComputed ? '1' : '0',
+    field => field.IsNullable == null ? '' : (field.IsNullable ? '1' : '0'),
+    field => (field.SourceEntityFieldID ?? '').toLowerCase(),
 ];
 
 /** Rows of the definition entities, grouped by query, built once per memo generation. */
@@ -264,7 +267,7 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
      * `ExternalDataSourceID`, `IsMaterialized`, `SQLDialectID`), its `CacheValidationSQL`, its
      * parameters' names, types, required flags and validation filters, its result fields' facts in
      * column order (see {@link QUERY_FIELD_FACTS}: name, sequence, SQL type, source entity and field,
-     * computed flag), and, recursively, the signatures of the queries it composes (a cycle is
+     * computed flag, nullability, source entity field), and, recursively, the signatures of the queries it composes (a cycle is
      * hashed as a marker rather than followed). Descriptive columns (the query's, its parameters'
      * and its fields'), parameter default values (informational only), permissions and cache
      * settings are not part of it.

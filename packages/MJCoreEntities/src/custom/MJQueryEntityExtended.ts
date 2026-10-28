@@ -48,6 +48,56 @@ export interface RenderedSQLCheckResult {
 @RegisterClass(BaseEntity, 'MJ: Queries')
 export class MJQueryEntityExtended extends MJQueryEntity {
 
+    // ─── Declared child collections (graph saves) ───────────────────────────────
+    //
+    // These three collections let a caller save a query together with child rows it declares
+    // (hand-written parameters, fields and entity links) as ONE unit of work: the query row is
+    // written first, then the declared children, inside one transaction. On the server,
+    // `MJQueryEntityServer.Save` runs its extraction after `super.Save()` returns, so extraction
+    // sees the declared children already written. On a client the whole graph travels to the server
+    // and is saved there by the same code.
+    //
+    // They are NOT a read model: they start empty and load only on an explicit `Load()`. Reading a
+    // query's current children goes through the cache-backed `QueryParameters`, `QueryFields` and
+    // `QueryEntities` getters below. The companion names (`Parameters`, `Fields`, `Entities`) are
+    // the keys metadata files use under `collections`; the properties carry a `Declared` prefix
+    // because `BaseEntity.Fields` already names the entity's own field list.
+
+    /** Parameters declared with this query in a graph save (companion name `Parameters`). */
+    public readonly DeclaredParameters = this.DeclareRelatedRecords<MJQueryParameterEntity>({
+        Name: 'Parameters',
+        RelatedEntity: 'MJ: Query Parameters',
+        RelatedEntityJoinField: 'QueryID',
+        OrderBy: 'Name ASC',
+        Load: 'explicit',
+        Source: 'database',
+        ReadOnly: false,
+        OnRemove: 'delete',
+    });
+
+    /** Output fields declared with this query in a graph save (companion name `Fields`). */
+    public readonly DeclaredFields = this.DeclareRelatedRecords<MJQueryFieldEntity>({
+        Name: 'Fields',
+        RelatedEntity: 'MJ: Query Fields',
+        RelatedEntityJoinField: 'QueryID',
+        OrderBy: 'Sequence ASC',
+        Load: 'explicit',
+        Source: 'database',
+        ReadOnly: false,
+        OnRemove: 'delete',
+    });
+
+    /** Entity links declared with this query in a graph save (companion name `Entities`). */
+    public readonly DeclaredEntities = this.DeclareRelatedRecords<MJQueryEntityEntity>({
+        Name: 'Entities',
+        RelatedEntity: 'MJ: Query Entities',
+        RelatedEntityJoinField: 'QueryID',
+        Load: 'explicit',
+        Source: 'database',
+        ReadOnly: false,
+        OnRemove: 'delete',
+    });
+
     // ─── Child Relationship Getters (read-through from QueryEngine) ─────────────
 
     /** All field definitions for this query */

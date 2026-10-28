@@ -293,6 +293,14 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         return this.options.Load ?? 'explicit';
     }
 
+    /**
+     * The automatic sequence numbering this collection applies, if declared. When set, every
+     * `Add`/`Create`/`Remove` renumbers the children's sequence field from their position.
+     */
+    public get SequenceOptions(): Readonly<RelatedRecordSequence> | undefined {
+        return this.options.Sequence;
+    }
+
     /** What removal means for this collection. */
     public get RemovalMode(): RelatedRecordRemovalMode {
         return this.options.OnRemove ?? 'delete';

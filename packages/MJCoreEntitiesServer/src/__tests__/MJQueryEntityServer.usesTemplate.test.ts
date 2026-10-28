@@ -27,6 +27,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 
     /** Stands in for the generated query base: plain fields and a Save that records each write. */
     class StubQuery {
+        /** The query's declared child collections, empty: this save declares no children. */
+        public DeclaredParameters = { Items: [] };
+        public DeclaredFields = { Items: [] };
+        public DeclaredEntities = { Items: [] };
         public ID = 'q-under-test';
         public Name = 'Templated Query';
         public Status = 'Pending';

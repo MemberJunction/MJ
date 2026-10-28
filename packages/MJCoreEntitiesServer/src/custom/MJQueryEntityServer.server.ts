@@ -8,6 +8,8 @@ import {
 } from "@memberjunction/core";
 import {
     ComputeQueryFingerprintAsync,
+    MJQueryEntityEntity,
+    MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQuerySQLEntity,
     MJQueryEntityExtended,
@@ -21,8 +23,15 @@ import {
     RunExtractionPipeline,
     CleanupQueryData,
     ConvertTSQLToPostgreSQL,
+    CollectDeclaredQueryChildren,
+    HasDeclaredQueryChildren,
+    FindReplacedRows,
+    QueueReplacedRowDeletion,
+    QueryChildNameKey,
+    QueryEntityKey,
+    NO_DECLARED_QUERY_CHILDREN,
 } from "./query-extraction";
-import type { QuerySyncContext } from "./query-extraction";
+import type { QuerySyncContext, DeclaredQueryChildren } from "./query-extraction";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { GetDialect } from "@memberjunction/sql-dialect";
 import { resolveDbPlatformFromEnv } from "@memberjunction/generic-database-provider";
@@ -111,6 +120,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             const descriptionField = this.GetFieldByName('Description');
             const userQuestionField = this.GetFieldByName('UserQuestion');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
+            const declared = await this.PrepareDeclaredChildrenAsync(options);
             const shouldGenerateEmbedding = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
 
             // Generate embedding from composite text for better semantic search
@@ -122,15 +132,17 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
                 this.EmbeddingModelID = null;
             }
 
-            // Save the query first without AI processing
+            // Save the query first without AI processing. With declared children this is a graph
+            // save: the query row, then the children, in one transaction.
             const saveResult = await super.Save(options);
             if (!saveResult) {
                 return false;
             }
 
-            // Extract and sync parameters AFTER saving, outside of any transaction
+            // Extract AFTER the save, so the declared children are already written. Inside an
+            // enclosing transaction (an atomic metadata push) these writes join it.
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync(options?.SkipEntityAIActions === true);
+                await this.extractAndSyncDataAsync(options?.SkipEntityAIActions === true, declared);
                 await this.autoConvertDialectsAsync();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
@@ -148,6 +160,74 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             LogError('Failed to save query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
+        }
+    }
+
+    /**
+     * The declared-rows-win hook, run before the save writes anything.
+     *
+     * A caller can save a query together with child rows it declares, through the `Parameters`,
+     * `Fields` and `Entities` collections. Two rules make those declared rows win over what
+     * extraction writes for the same key — a parameter or field name, or a linked entity:
+     *
+     * 1. **A stored row extraction created is replaced by the declared one.** When a NEW declared
+     *    row has the key of a stored row with a different ID whose `DetectionMethod` is not `Manual`,
+     *    the stored row is deleted inside the same graph save, before the declared row is inserted.
+     *    The declared row keeps the ID the caller gave it, which is what makes a metadata file that
+     *    names its child IDs converge instead of colliding with rows extraction wrote earlier.
+     * 2. **Extraction leaves declared rows alone.** The returned keys go to extraction, which does not
+     *    add, update or delete a row with a declared key during this save.
+     *
+     * A stored row whose `DetectionMethod` is `Manual` was authored and is never deleted here; a
+     * declared row that collides with one fails the save on the database's own uniqueness rule
+     * where there is one.
+     *
+     * Extraction is the consumer of rule 2: whichever implementation runs after `super.Save()`
+     * receives the declared keys through `QuerySyncContext.DeclaredChildren`, and may report the
+     * facts it computes for a declared row but never write them. Rule 1 runs here, not in
+     * extraction, because it has to happen inside the graph save, before the children's inserts.
+     *
+     * @param options - The save's options. A `ReplayOnly` save, or one that skips related
+     *   collections, writes no declared rows, so nothing is declared.
+     * @returns The keys of the child rows this save declares.
+     */
+    protected async PrepareDeclaredChildrenAsync(options?: EntitySaveOptions): Promise<DeclaredQueryChildren> {
+        if (options?.ReplayOnly || options?.SkipRelatedCollections) {
+            return NO_DECLARED_QUERY_CHILDREN;
+        }
+        const collections = { Parameters: this.DeclaredParameters, Fields: this.DeclaredFields, Entities: this.DeclaredEntities };
+        const declared = CollectDeclaredQueryChildren(collections);
+        if (this.IsSaved && HasDeclaredQueryChildren(declared)) {
+            await this.queueReplacedRowDeletionsAsync();
+        }
+        return declared;
+    }
+
+    /**
+     * Rule 1 of {@link PrepareDeclaredChildrenAsync}: reads the stored child rows from the database
+     * (never a cache, which inside a transaction can miss rows written earlier in it) and queues the
+     * extraction-created rows each new declared row replaces for deletion in the graph save.
+     */
+    private async queueReplacedRowDeletionsAsync(): Promise<void> {
+        const filter = `QueryID='${EscapeSQLString(this.ID)}'`;
+        const [parameters, fields, entities] = await this.RunViewProviderToUse.RunViews([
+            { EntityName: 'MJ: Query Parameters', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true },
+            { EntityName: 'MJ: Query Fields', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true },
+            { EntityName: 'MJ: Query Entities', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true },
+        ], this.ContextCurrentUser);
+        if (!parameters?.Success || !fields?.Success || !entities?.Success) {
+            throw new Error(`could not read the query's stored child rows: ${parameters?.ErrorMessage || fields?.ErrorMessage || entities?.ErrorMessage}`);
+        }
+        const newItems = <T extends { IsSaved: boolean }>(items: readonly T[]): T[] => items.filter(i => !i.IsSaved);
+        const byName = (row: { Name: string }) => QueryChildNameKey(row.Name);
+        for (const row of FindReplacedRows<MJQueryParameterEntity>(newItems(this.DeclaredParameters.Items), parameters.Results as MJQueryParameterEntity[], byName)) {
+            QueueReplacedRowDeletion(this.DeclaredParameters, row);
+        }
+        for (const row of FindReplacedRows<MJQueryFieldEntity>(newItems(this.DeclaredFields.Items), fields.Results as MJQueryFieldEntity[], byName)) {
+            QueueReplacedRowDeletion(this.DeclaredFields, row);
+        }
+        for (const row of FindReplacedRows<MJQueryEntityEntity>(newItems(this.DeclaredEntities.Items), entities.Results as MJQueryEntityEntity[], QueryEntityKey)) {
+            QueueReplacedRowDeletion(this.DeclaredEntities, row);
         }
     }
 
@@ -265,7 +345,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
      * Resolves the SQL to the appropriate dialect variant for the connected database.
      */
-    private buildSyncContext(skipAIEnrichment = false): QuerySyncContext {
+    private buildSyncContext(skipAIEnrichment = false, declared?: DeclaredQueryChildren): QuerySyncContext {
         return {
             queryID: this.ID,
             queryName: this.Name,
@@ -277,6 +357,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
             SkipAIEnrichment: skipAIEnrichment,
+            DeclaredChildren: declared,
         };
     }
 
@@ -297,10 +378,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * On error, sets UsesTemplate=false and attempts to save so the query remains usable.
      *
      * @param skipAIEnrichment Skip the LLM enrichment stage (the save asked to skip AI actions).
+     * @param declared Child rows the save declared, which extraction leaves as written.
      */
-    private async extractAndSyncDataAsync(skipAIEnrichment: boolean): Promise<void> {
+    private async extractAndSyncDataAsync(skipAIEnrichment: boolean, declared?: DeclaredQueryChildren): Promise<void> {
         try {
-            const ctx = this.buildSyncContext(skipAIEnrichment);
+            const ctx = this.buildSyncContext(skipAIEnrichment, declared);
             const pipelineResult = await RunExtractionPipeline(ctx);
             this.UsesTemplate = pipelineResult.UsesTemplate;
 

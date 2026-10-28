@@ -7,6 +7,7 @@ import {
     QueryEngine,
 } from "@memberjunction/core-entities";
 import { IndexByUUID, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { QueryChildNameKey, QueryEntityKey } from "./declared";
 import type {
     ExtractedField,
     ExtractedParameter,
@@ -97,6 +98,9 @@ function defaultSQLTypesForField(fieldType: string, platform: DatabasePlatform =
  * Synchronizes extracted query parameters with the database.
  * Filters out "query" params (composition token safety net), handles add/update/remove,
  * and maps types to database-supported types.
+ *
+ * @param declaredNames - Lower-cased names of parameters the same save declared. Those rows are the
+ *   caller's: they are never added, updated or deleted here, whatever the SQL says.
  */
 export async function SyncParameters(
     queryID: string,
@@ -104,17 +108,19 @@ export async function SyncParameters(
     contextUser: UserInfo,
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    declaredNames: ReadonlySet<string> = new Set<string>()
 ): Promise<void> {
     // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens, and
     // the reserved Context object: `{{ Context.UserID }}` reads a server-set value, and a parameter
-    // named Context would shadow it.
-    const filteredParams = extractedParams.filter(p => p.name !== 'query' && !isReservedContextName(p.name));
+    // named Context would shadow it. Declared parameters are left to the caller.
+    const filteredParams = extractedParams.filter(p =>
+        p.name !== 'query' && !isReservedContextName(p.name) && !declaredNames.has(QueryChildNameKey(p.name)));
 
     try {
-        const existingParams = await loadExistingRecords<MJQueryParameterEntity>(
+        const existingParams = (await loadExistingRecords<MJQueryParameterEntity>(
             'MJ: Query Parameters', queryID, runViewProvider, contextUser, isSaved
-        );
+        )).filter(ep => !declaredNames.has(QueryChildNameKey(ep.Name)));
 
         const extractedParamNames = filteredParams.map(p => p.name.toLowerCase());
 
@@ -246,6 +252,8 @@ function updateParameterIfChanged(
  * Synchronizes extracted query fields with the database.
  * Expands wildcards, maps ExtractedField to MJQueryFieldEntity with sqlBaseType/sqlFullType override,
  * handles add/update/remove.
+ *
+ * @param declaredNames - Lower-cased names of fields the same save declared; see {@link SyncParameters}.
  */
 export async function SyncFields(
     queryID: string,
@@ -254,17 +262,20 @@ export async function SyncFields(
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
     isSaved: boolean,
-    platform: DatabasePlatform = 'sqlserver'
+    platform: DatabasePlatform = 'sqlserver',
+    declaredNames: ReadonlySet<string> = new Set<string>()
 ): Promise<void> {
     try {
-        const existingFields = await loadExistingRecords<MJQueryFieldEntity>(
+        // Fields the same save declared are the caller's: never added, updated or deleted here.
+        const existingFields = (await loadExistingRecords<MJQueryFieldEntity>(
             'MJ: Query Fields', queryID, runViewProvider, contextUser, isSaved
-        );
+        )).filter(ef => !declaredNames.has(QueryChildNameKey(ef.Name)));
 
         const fieldNamesToSync = extractedFields.map(f => f.name.toLowerCase());
 
         const fieldsToAdd = extractedFields.filter(
-            f => !existingFields.some(ef => ef.Name.toLowerCase() === f.name.toLowerCase())
+            f => !declaredNames.has(QueryChildNameKey(f.name))
+                && !existingFields.some(ef => ef.Name.toLowerCase() === f.name.toLowerCase())
         );
         const fieldsToUpdate = existingFields.filter(
             ef => extractedFields.some(f => f.name.toLowerCase() === ef.Name.toLowerCase())
@@ -530,6 +541,9 @@ function partitionQueryEntityDiff(
 /**
  * Synchronizes extracted entity metadata entries with QueryEntity records in the database.
  * Matches by `(EntityID, AlternateBaseViewID)`, handling add, update, and remove.
+ *
+ * @param declaredEntityKeys - Entity links the same save declared, keyed by `QueryEntityKey`; see
+ *   {@link SyncParameters}.
  */
 export async function SyncEntities(
     queryID: string,
@@ -537,13 +551,16 @@ export async function SyncEntities(
     contextUser: UserInfo,
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    declaredEntityKeys: ReadonlySet<string> = new Set<string>()
 ): Promise<void> {
     try {
-        const existingEntities = await loadExistingRecords<MJQueryEntityEntity>(
+        // Entity links the same save declared are the caller's: never added, updated or deleted here.
+        const existingEntities = (await loadExistingRecords<MJQueryEntityEntity>(
             'MJ: Query Entities', queryID, runViewProvider, contextUser, isSaved
-        );
-        const entityMappings = mapExtractedEntitiesToMetadata(entityMetadata, metadataProvider);
+        )).filter(ee => !declaredEntityKeys.has(QueryEntityKey(ee)));
+        const entityMappings = mapExtractedEntitiesToMetadata(entityMetadata, metadataProvider)
+            .filter(m => !declaredEntityKeys.has(QueryEntityKey({ EntityID: m.entityID })));
         const { entitiesToAdd, entitiesToUpdate, entitiesToRemove } = partitionQueryEntityDiff(
             entityMappings,
             existingEntities

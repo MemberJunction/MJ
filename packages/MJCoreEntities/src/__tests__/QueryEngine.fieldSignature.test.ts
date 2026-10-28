@@ -1,7 +1,8 @@
 /**
  * QueryEngine's definition signature and a query's result fields.
  *
- * A field row's facts (name, sequence, SQL type, source entity and field, computed flag) and the
+ * A field row's facts (name, sequence, SQL type, source entity and field, computed flag, nullability,
+ * source entity field) and the
  * set and order of field rows are part of the signature, so editing them retires cached results.
  * A field's descriptions are annotations: editing them must leave the signature alone.
  */
@@ -38,6 +39,8 @@ interface FieldRow {
     SourceEntityID: string | null;
     SourceFieldName: string | null;
     IsComputed: boolean;
+    IsNullable: boolean | null;
+    SourceEntityFieldID: string | null;
     ComputationDescription: string | null;
     SummaryDescription: string | null;
     __mj_UpdatedAt: Date;
@@ -70,6 +73,7 @@ function field(id: string, name: string, sequence: number, overrides: Partial<Fi
     return {
         ID: id, QueryID: A, Name: name, Description: `The ${name}`, Sequence: sequence, SQLBaseType: 'int',
         SQLFullType: 'int', SourceEntityID: ENTITY_1, SourceFieldName: name, IsComputed: false,
+        IsNullable: false, SourceEntityFieldID: null,
         ComputationDescription: null, SummaryDescription: null, __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
         ...overrides,
     };
@@ -112,11 +116,28 @@ describe('QueryEngine.GetDefinitionSignature and query fields', () => {
         ['SourceEntityID', { SourceEntityID: ENTITY_2 }],
         ['SourceFieldName', { SourceFieldName: 'Amount' }],
         ['IsComputed', { IsComputed: true }],
+        ['IsNullable', { IsNullable: true }],
+        ['SourceEntityFieldID', { SourceEntityFieldID: 'F0F0F0F0-0000-0000-0000-0000000000F0' }],
     ];
     it.each(factEdits)('changes when a field\'s %s changes', (_column, edit) => {
         const before = hash();
         setFields([fields[0], { ...fields[1], ...edit }]);
         expect(hash()).not.toBe(before);
+    });
+
+    it('hashes an unknown nullability apart from both known values', () => {
+        const notNull = hash();
+        setFields([fields[0], { ...fields[1], IsNullable: null }]);
+        const unknown = hash();
+        setFields([fields[0], { ...fields[1], IsNullable: true }]);
+        expect(new Set([notNull, unknown, hash()]).size).toBe(3);
+    });
+
+    it('compares the source entity field ID case-insensitively', () => {
+        setFields([fields[0], { ...fields[1], SourceEntityFieldID: 'f0f0f0f0-0000-0000-0000-0000000000f0' }]);
+        const lower = hash();
+        setFields([fields[0], { ...fields[1], SourceEntityFieldID: 'F0F0F0F0-0000-0000-0000-0000000000F0' }]);
+        expect(hash()).toBe(lower);
     });
 
     it('hashes SQLBaseType when SQLFullType is empty', () => {

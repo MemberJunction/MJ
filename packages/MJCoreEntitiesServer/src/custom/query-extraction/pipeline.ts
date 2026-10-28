@@ -12,6 +12,7 @@ import {
 } from "./resolve";
 import { RunLLMEnrichment, MergeParametersWithLLM } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
+import { NO_DECLARED_QUERY_CHILDREN } from "./declared";
 import { QueryEngine } from "@memberjunction/core-entities";
 import { BaseEntity, LocalCacheManager } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -185,10 +186,15 @@ async function sync(
     resolveResult: ResolveResult
 ): Promise<void> {
     const syncPromises: Promise<void>[] = [];
+    const declared = ctx.DeclaredChildren ?? NO_DECLARED_QUERY_CHILDREN;
 
     // Parameters
     if (finalParams) {
-        syncPromises.push(SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.ParameterNames));
+    } else if (declared.ParameterNames.size > 0) {
+        // No parameter in the SQL, but the save declared some: sync an empty list so the declared
+        // rows stay and only the undeclared ones go.
+        syncPromises.push(SyncParameters(ctx.queryID, [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.ParameterNames));
     } else {
         syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
@@ -196,13 +202,15 @@ async function sync(
     // Fields: when finalFields is null, preserve existing fields instead of deleting them.
     // Deletion only happens when we have a positive new field list (handled inside SyncFields via diff).
     if (finalFields) {
-        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, ctx.platform));
+        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, ctx.platform, declared.FieldNames));
     }
     // When finalFields is null, we intentionally do NOT call RemoveAllRecords — existing fields are preserved.
 
     // Entities
     if (resolveResult.EntityMetadata.length > 0) {
-        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.EntityKeys));
+    } else if (declared.EntityKeys.size > 0) {
+        syncPromises.push(SyncEntities(ctx.queryID, [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.EntityKeys));
     } else {
         syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
