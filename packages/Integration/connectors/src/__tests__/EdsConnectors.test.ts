@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { UserInfo, ExternalSchemaDescriptor } from '@memberjunction/core';
+import type { UserInfo, ExternalSchemaDescriptor, ExternalSchemaObject } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJExternalDataSourceEntity, MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
 import {
     BaseExternalDataSourceDriver,
@@ -106,6 +106,11 @@ class TestSqlConnector extends BaseSqlExternalDataSourceConnector {
     public buildRecord(row: Record<string, unknown>, objectName: string, primaryKeyFields: string[], watermarkField?: string) {
         return this.BuildRecord(row, objectName, primaryKeyFields, watermarkField);
     }
+}
+
+class ExposedConnector extends TestSqlConnector {
+    constructor() { super(resolvedFor(new MockDriver())); }
+    public Detect(obj: ExternalSchemaObject): string | undefined { return this.DetectWatermarkField(obj); }
 }
 
 class TestDocConnector extends BaseDocumentDataSourceConnector {
@@ -282,5 +287,15 @@ describe('ContentKey — excludes the watermark column so a PK-less row updates 
         const before = c.buildRecord({ email: 'a@x.com', updated_at: '2026-01-01T00:00:00.000Z' }, 'events', [], 'updated_at');
         const after = c.buildRecord({ email: 'a@x.com', updated_at: '2026-02-01T00:00:00.000Z' }, 'events', [], 'updated_at');
         expect(after.ExternalID).toBe(before.ExternalID);
+    });
+});
+
+describe('DetectWatermarkField name hints', () => {
+    const col = (Name: string) => ({ Name, NativeType: 'datetime', Nullable: true, IsPrimaryKey: false });
+    it('detects ModifiedDate and UpdatedDate', () => {
+        const c = new ExposedConnector();
+        expect(c.Detect({ Name: 't', ObjectType: 'table', Columns: [col('ID'), col('ModifiedDate')] })).toBe('ModifiedDate');
+        expect(c.Detect({ Name: 't', ObjectType: 'table', Columns: [col('UpdatedDate')] })).toBe('UpdatedDate');
+        expect(c.Detect({ Name: 't', ObjectType: 'table', Columns: [col('CreatedDate')] })).toBeUndefined();
     });
 });

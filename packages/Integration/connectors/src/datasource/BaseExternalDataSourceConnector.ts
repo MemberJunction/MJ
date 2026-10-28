@@ -663,6 +663,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         'modifiedat', 'updatedat', 'lastmodified', 'lastupdated', 'modified', 'updated',
         'datemodified', 'dateupdated', 'lastmodifieddate', 'lastupdateddate', 'changedate',
         'mjupdatedat', 'rowlastupdated', 'lastchange', 'lastchanged',
+        'modifieddate', 'updateddate',
     ]);
 
     /**
