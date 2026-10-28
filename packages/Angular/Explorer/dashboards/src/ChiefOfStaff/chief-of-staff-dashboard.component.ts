@@ -17,7 +17,7 @@ import {
     MJUserRoutineEntity,
     ResourceData,
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, UUIDSet, MJGlobal } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, UUIDSet, UUIDMap, MJGlobal } from '@memberjunction/global';
 import { ActionParam } from '@memberjunction/actions-base';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -60,6 +60,8 @@ import {
     ValidateChiefOfStaffTabParam,
     ValidateHealthFilterParam,
     ValidateSearchQueryParam,
+    LoadTaskAssignees,
+    TaskAssigneeMap,
 } from './chief-of-staff-agent-context';
 import { IsCockpitEntityChange } from './chief-of-staff-live-refresh';
 
@@ -133,6 +135,10 @@ export class ChiefOfStaffDashboardComponent
     public PolicyDirty = false;
 
     public Tasks: BizAppsTaskRecordLike[] = [];
+    /** Who is assigned to each loaded task, for the objective cards and milestone rows. */
+    private taskAssignees: TaskAssigneeMap = new UUIDMap();
+    /** The signed-in user's People record, when one resolved; marks the milestones they hold. */
+    private currentPersonID: string | null = null;
     /** False when the signed-in user has no `MJ_BizApps_Common: People` record linked via `LinkedUserID`; the Priorities tab then shows guidance instead of tasks. */
     public HasLinkedPerson = true;
     public Routines: MJUserRoutineEntity[] = [];
@@ -502,6 +508,7 @@ export class ChiefOfStaffDashboardComponent
                 taskRes && taskRes.Success
                     ? (taskRes.Results as BizAppsTaskRecordLike[])
                     : [];
+            this.taskAssignees = await this.loadTaskAssignees(rv);
 
             this.recalculateMetrics();
 
@@ -546,6 +553,8 @@ export class ChiefOfStaffDashboardComponent
             this.Tasks,
             routineSummaries,
             requestSummaries,
+            new Date(),
+            { Assignees: this.taskAssignees, CurrentPersonID: this.currentPersonID },
         );
     }
 
@@ -1298,6 +1307,25 @@ export class ChiefOfStaffDashboardComponent
         this.cdr.markForCheck();
     }
 
+    /** True when `personID` is the signed-in user's People record. */
+    public IsCurrentPerson(personID: string): boolean {
+        return !!this.currentPersonID && UUIDsEqual(personID, this.currentPersonID);
+    }
+
+    /** Assignees of the loaded tasks; an empty map when the BizApps Common app is absent or the lookup fails (the cards still render). */
+    private async loadTaskAssignees(rv: RunView): Promise<TaskAssigneeMap> {
+        const peopleEntity = this.ProviderToUse.EntityByName(BIZAPPS_PEOPLE_ENTITY_NAME);
+        if (!peopleEntity || this.Tasks.length === 0) {
+            return new UUIDMap();
+        }
+        try {
+            return await LoadTaskAssignees(rv, peopleEntity.ID, this.Tasks.map((t) => t.ID));
+        } catch (err) {
+            LogError(`Chief of Staff cockpit: could not load task assignees: ${err instanceof Error ? err.message : String(err)}`);
+            return new UUIDMap();
+        }
+    }
+
     /**
      * Resolve the filter scoping Tasks to the signed-in user's linked person. Returns null (and clears
      * `HasLinkedPerson`) when no person is linked, or when the lookup fails after surfacing the error.
@@ -1312,6 +1340,7 @@ export class ChiefOfStaffDashboardComponent
         try {
             const scope = await ResolvePersonTaskScope(rv, currentUserId, peopleEntity.ID, this.ProviderToUse.CurrentUser?.Email ?? null);
             this.HasLinkedPerson = scope.HasLinkedPerson;
+            this.currentPersonID = scope.HasLinkedPerson ? scope.PersonID : null;
             return scope.HasLinkedPerson ? scope.Filter : null;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

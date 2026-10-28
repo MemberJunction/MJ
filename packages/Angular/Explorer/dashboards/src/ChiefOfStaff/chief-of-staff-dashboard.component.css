@@ -1082,3 +1082,39 @@
     flex: 1 1 auto;
     min-height: 0;
 }
+
+/* Assignees on objective cards and milestone rows. */
+.cos-assignees {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+    color: var(--mj-text-secondary);
+    font-size: 12px;
+}
+
+.cos-assignees--inline {
+    margin-top: 0;
+}
+
+.cos-assignee-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--mj-bg-subtle);
+    color: var(--mj-text-primary);
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.cos-assignee-chip--me {
+    background: var(--mj-color-primary);
+    color: var(--mj-color-on-primary);
+}
+
+.cos-subtask-row--mine {
+    border-left: 3px solid var(--mj-color-primary);
+}

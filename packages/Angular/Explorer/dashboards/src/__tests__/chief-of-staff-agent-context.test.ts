@@ -23,6 +23,8 @@ import {
     ValidateSearchQueryParam,
 } from '../ChiefOfStaff/chief-of-staff-agent-context';
 import { AGENT_CONTEXT_NAME_LIST_CAP } from '../shared/agent-tool-validation';
+import { BuildScopeRootTasksFilter, LoadTaskAssignees, type TaskAssignee } from '../ChiefOfStaff/chief-of-staff-agent-context';
+import { UUIDMap } from '@memberjunction/global';
 
 function makeBaseTask(overrides: Partial<BizAppsTaskRecordLike>): BizAppsTaskRecordLike {
     return {
@@ -443,9 +445,10 @@ describe('ResolvePersonTaskScope', () => {
                 "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001') OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000001')",
             );
         }
-        // Owned roots are looked up on the Tasks entity so children created by other people load with the objective.
+        // Scope roots are looked up on the Tasks entity: root objectives the person created or is assigned to, plus the
+        // root above every milestone the person is assigned to, so children created by other people load with the objective.
         expect(runner.Calls[2]).toBe(
-            "MJ_BizApps_Tasks: Tasks :: ParentID IS NULL AND (CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001'))",
+            "MJ_BizApps_Tasks: Tasks :: (ParentID IS NULL AND (CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001'))) OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001')",
         );
         expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
         // Task Assignments has no PersonID column: the assignee is the polymorphic (AssigneeEntityID, AssigneeRecordID) pair.
@@ -590,5 +593,129 @@ describe('BuildTaskRecordKey', () => {
 
         expect(key.KeyValuePairs.map((kv) => kv.FieldName)).toEqual(['TenantID', 'ID']);
         expect(key.KeyValuePairs.map((kv) => kv.Value)).toEqual(['tenant-a', 'task-1']);
+    });
+});
+
+describe('ResolvePersonTaskScope — a milestone the person is assigned to brings its objective along', () => {
+    const PEOPLE_ENTITY_ID = 'EEEEEEEE-0000-0000-0000-000000000001';
+    function makeRunner(responses: Record<string, Array<Record<string, string | null>>>): TaskScopeQueryRunner & { Calls: Array<{ Entity: string; Filter: string; Fields?: string[] }> } {
+        const calls: Array<{ Entity: string; Filter: string; Fields?: string[] }> = [];
+        return {
+            Calls: calls,
+            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string; Fields?: string[] }) => {
+                calls.push({ Entity: params.EntityName, Filter: params.ExtraFilter ?? '', Fields: params.Fields });
+                return { Success: true, Results: (responses[params.EntityName] ?? []) as T[] };
+            },
+        };
+    }
+
+    it('adds the root above an assigned milestone to the scope so the whole objective renders for the assignee', async () => {
+        const runner = makeRunner({
+            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000002' }],
+            'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'MMMMMMMM-0000-0000-0000-000000000001' }],
+            // The roots query returns the assigned milestone itself (not a root) carrying its RootParentID.
+            'MJ_BizApps_Tasks: Tasks': [{ ID: 'MMMMMMMM-0000-0000-0000-000000000001', RootParentID: 'RRRRRRRR-0000-0000-0000-000000000009' }],
+        });
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000002', PEOPLE_ENTITY_ID);
+        expect(scope.HasLinkedPerson).toBe(true);
+        if (scope.HasLinkedPerson) {
+            expect(scope.Filter).toBe(
+                "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000002' OR ID IN ('MMMMMMMM-0000-0000-0000-000000000001') OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000009')",
+            );
+        }
+        expect(runner.Calls[2].Fields).toEqual(['ID', 'RootParentID']);
+    });
+
+    it('de-duplicates roots that are both owned and reached through an assigned milestone', async () => {
+        const runner = makeRunner({
+            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
+            'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'MMMMMMMM-0000-0000-0000-000000000001' }],
+            'MJ_BizApps_Tasks: Tasks': [
+                { ID: 'RRRRRRRR-0000-0000-0000-000000000001', RootParentID: 'RRRRRRRR-0000-0000-0000-000000000001' },
+                { ID: 'MMMMMMMM-0000-0000-0000-000000000001', RootParentID: 'rrrrrrrr-0000-0000-0000-000000000001' },
+            ],
+        });
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
+        if (scope.HasLinkedPerson) {
+            expect(scope.Filter.match(/RootParentID IN \(([^)]*)\)/)?.[1]).toBe("'RRRRRRRR-0000-0000-0000-000000000001'");
+        }
+    });
+});
+
+describe('BuildScopeRootTasksFilter', () => {
+    it('covers owned roots and every assigned task, so the assigned tasks\' roots can be read off RootParentID', () => {
+        expect(BuildScopeRootTasksFilter('P1', ['T1'])).toBe("(ParentID IS NULL AND (CreatedByPersonID = 'P1' OR ID IN ('T1'))) OR ID IN ('T1')");
+        expect(BuildScopeRootTasksFilter('P1', [])).toBe("ParentID IS NULL AND (CreatedByPersonID = 'P1')");
+    });
+});
+
+describe('LoadTaskAssignees', () => {
+    const PEOPLE_ENTITY_ID = 'EEEEEEEE-0000-0000-0000-000000000001';
+    function makeRunner(responses: Record<string, Array<Record<string, string | null>>>): TaskScopeQueryRunner & { Calls: Array<{ Entity: string; Filter: string }> } {
+        const calls: Array<{ Entity: string; Filter: string }> = [];
+        return {
+            Calls: calls,
+            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string }) => {
+                calls.push({ Entity: params.EntityName, Filter: params.ExtraFilter ?? '' });
+                return { Success: true, Results: (responses[params.EntityName] ?? []) as T[] };
+            },
+        };
+    }
+
+    it('maps each task to the people assigned to it, by name', async () => {
+        const runner = makeRunner({
+            'MJ_BizApps_Tasks: Task Assignments': [
+                { TaskID: 'T1', AssigneeRecordID: 'p1' },
+                { TaskID: 'T1', AssigneeRecordID: 'P2' },
+                { TaskID: 'T2', AssigneeRecordID: 'P2' },
+            ],
+            'MJ_BizApps_Common: People': [
+                { ID: 'P1', FirstName: 'Paul', LastName: 'Christmann' },
+                { ID: 'P2', FirstName: 'Jimmy', LastName: 'Smits' },
+            ],
+        });
+        const map = await LoadTaskAssignees(runner, PEOPLE_ENTITY_ID, ['T1', 'T2']);
+        expect(map.Get('t1')?.map((a) => a.Name)).toEqual(['Paul Christmann', 'Jimmy Smits']);
+        expect(map.Get('T2')?.map((a) => a.PersonID)).toEqual(['P2']);
+        expect(runner.Calls[0].Filter).toBe(`AssigneeEntityID = '${PEOPLE_ENTITY_ID}' AND TaskID IN ('T1', 'T2')`);
+        expect(runner.Calls[1].Filter).toBe("ID IN ('p1', 'P2')");
+    });
+
+    it('runs no query for an empty task list', async () => {
+        const runner = makeRunner({});
+        const map = await LoadTaskAssignees(runner, PEOPLE_ENTITY_ID, []);
+        expect(map.Get('T1')).toBeUndefined();
+        expect(runner.Calls).toEqual([]);
+    });
+});
+
+describe('CalculateChiefOfStaffMetrics — assignees on cards and milestones', () => {
+    it('attaches assignees to the objective and each milestone, and marks the ones held by the current person', () => {
+        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack' });
+        const mine = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core' });
+        const theirs = makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Finalize requirements' });
+        const assignees = new UUIDMap<TaskAssignee[]>();
+        assignees.Set('r1', [{ PersonID: 'P1', Name: 'Paul Christmann' }]);
+        assignees.Set('M1', [{ PersonID: 'p2', Name: 'Jimmy Smits' }]);
+
+        const metrics = CalculateChiefOfStaffMetrics([root, mine, theirs], [], [], new Date(), { Assignees: assignees, CurrentPersonID: 'P2' });
+
+        const card = metrics.PriorityCards[0];
+        expect(card.Assignees.map((a) => a.Name)).toEqual(['Paul Christmann']);
+        expect(card.AssignedToMe).toBe(false);
+        expect(card.Milestones.map((m) => [m.Task.ID, m.Assignees.map((a) => a.Name), m.AssignedToMe])).toEqual([
+            ['M1', ['Jimmy Smits'], true],
+            ['M2', [], false],
+        ]);
+        expect(card.Subtasks.map((s) => s.ID)).toEqual(['M1', 'M2']);
+    });
+
+    it('yields empty assignee lists when no assignment data is supplied', () => {
+        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack' });
+        const child = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Step' });
+        const card = CalculateChiefOfStaffMetrics([root, child], [], []).PriorityCards[0];
+        expect(card.Assignees).toEqual([]);
+        expect(card.AssignedToMe).toBe(false);
+        expect(card.Milestones[0].Assignees).toEqual([]);
     });
 });

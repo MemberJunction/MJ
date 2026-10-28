@@ -21,7 +21,7 @@ import type {
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
 import { CompositeKey, type EntityInfo, type RunViewParams } from '@memberjunction/core';
-import { EscapeSQLString, GroupByUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GroupByUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -97,14 +97,43 @@ export interface BizAppsTaskRecordLike {
 /**
  * Grouped priority objective card with its child milestones/tasks and computed progress.
  */
+/** A person assigned to a task through `MJ_BizApps_Tasks: Task Assignments`. */
+export interface TaskAssignee {
+    PersonID: string;
+    Name: string;
+}
+
+/** Assignees keyed by task ID (case-insensitive: SQL Server returns upper-case IDs, PostgreSQL lower-case). */
+export type TaskAssigneeMap = UUIDMap<TaskAssignee[]>;
+
+/** A milestone row under an objective card, with who holds it. */
+export interface MilestoneRowViewModel {
+    Task: BizAppsTaskRecordLike;
+    Assignees: TaskAssignee[];
+    /** True when the signed-in user's person is among the assignees. */
+    AssignedToMe: boolean;
+}
+
 export interface PriorityObjectiveCardViewModel {
     Task: BizAppsTaskRecordLike;
     Subtasks: BizAppsTaskRecordLike[];
+    /** The same subtasks with their assignees; the template renders these. */
+    Milestones: MilestoneRowViewModel[];
+    /** People assigned to the objective itself. */
+    Assignees: TaskAssignee[];
+    /** True when the signed-in user's person is assigned to the objective itself. */
+    AssignedToMe: boolean;
     CompletedSubtaskCount: number;
     EffectivePercentComplete: number;
     EffectiveHealth: TaskHealthStatus;
     MetricProgressLabel: string | null;
     IsOverdue: boolean;
+}
+
+/** Optional assignment data for {@link CalculateChiefOfStaffMetrics}. */
+export interface ChiefOfStaffMetricsOptions {
+    Assignees?: TaskAssigneeMap;
+    CurrentPersonID?: string | null;
 }
 
 export interface RoutineSummaryItem {
@@ -322,7 +351,7 @@ export type PersonTaskScope =
  *
  * The scope covers the whole tree of every root objective the person owns: milestones added under their
  * objective by an administrator, a teammate or the agent load with it, whoever created them. Children of a
- * task the person is merely assigned to are not pulled in, so scope never widens to a sibling tree.
+ * milestone the person is merely assigned to bring the objective above them in as well, so the assignee sees the milestone in context; scope never widens to an unrelated tree.
  */
 export async function ResolvePersonTaskScope(
     runner: TaskScopeQueryRunner,
@@ -335,12 +364,12 @@ export async function ResolvePersonTaskScope(
         return { HasLinkedPerson: false };
     }
     const assignedTaskIDs = await loadAssignedTaskIDs(runner, peopleEntityId, match.PersonID);
-    const ownedRootIDs = await loadOwnedRootTaskIDs(runner, match.PersonID, assignedTaskIDs);
+    const scopeRootIDs = await loadScopeRootTaskIDs(runner, match.PersonID, assignedTaskIDs);
     return {
         HasLinkedPerson: true,
         PersonID: match.PersonID,
         MatchedBy: match.MatchedBy,
-        Filter: BuildPersonScopedTaskFilter(match.PersonID, assignedTaskIDs, ownedRootIDs),
+        Filter: BuildPersonScopedTaskFilter(match.PersonID, assignedTaskIDs, scopeRootIDs),
     };
 }
 
@@ -395,22 +424,108 @@ async function loadAssignedTaskIDs(runner: TaskScopeQueryRunner, peopleEntityId:
 }
 
 /** IDs of the root objectives the person created or is assigned to; their whole trees belong on the cockpit. */
-async function loadOwnedRootTaskIDs(runner: TaskScopeQueryRunner, personID: string, assignedTaskIDs: readonly string[]): Promise<string[]> {
-    const roots = await runner.RunView<{ ID: string }>({
+/**
+ * The root objectives whose whole tree belongs in the person's scope: the roots they created or
+ * are assigned to, plus the root above every milestone they are assigned to (read off the
+ * milestone's `RootParentID`, which on a root is the root's own ID). A person given one milestone
+ * therefore sees the objective it belongs to, with the rest of its milestones as context.
+ */
+async function loadScopeRootTaskIDs(runner: TaskScopeQueryRunner, personID: string, assignedTaskIDs: readonly string[]): Promise<string[]> {
+    const rows = await runner.RunView<{ ID: string; RootParentID: string | null }>({
         EntityName: BIZAPPS_TASKS_ENTITY_NAME,
-        ExtraFilter: BuildOwnedRootTasksFilter(personID, assignedTaskIDs),
-        Fields: ['ID'],
+        ExtraFilter: BuildScopeRootTasksFilter(personID, assignedTaskIDs),
+        Fields: ['ID', 'RootParentID'],
         ResultType: 'simple',
     });
-    if (!roots.Success) {
-        throw new Error(roots.ErrorMessage ?? 'Failed to load the owned root objectives.');
+    if (!rows.Success) {
+        throw new Error(rows.ErrorMessage ?? 'Failed to load the scope root objectives.');
     }
-    return roots.Results.map((r) => r.ID).filter((id) => !!id);
+    const roots: string[] = [];
+    const seen = new UUIDSet();
+    for (const row of rows.Results) {
+        const rootID = row.RootParentID || row.ID;
+        if (rootID && !seen.Has(rootID)) {
+            seen.Add(rootID);
+            roots.push(rootID);
+        }
+    }
+    return roots;
 }
 
 /** ExtraFilter for `MJ_BizApps_Tasks: Tasks` selecting the root tasks (no parent) the person created or is assigned to. */
 export function BuildOwnedRootTasksFilter(personID: string, assignedTaskIDs: readonly string[]): string {
     return `ParentID IS NULL AND (${buildCreatedOrAssignedClause(personID, assignedTaskIDs)})`;
+}
+
+/**
+ * {@link BuildOwnedRootTasksFilter} plus every assigned task, root or not, so a milestone's
+ * `RootParentID` can name the objective above it.
+ */
+export function BuildScopeRootTasksFilter(personID: string, assignedTaskIDs: readonly string[]): string {
+    const owned = BuildOwnedRootTasksFilter(personID, assignedTaskIDs);
+    if (assignedTaskIDs.length === 0) {
+        return owned;
+    }
+    return `(${owned}) OR ID IN (${quoteIDList(assignedTaskIDs)})`;
+}
+
+/**
+ * Who is assigned to each of `taskIDs`, by name, from `MJ_BizApps_Tasks: Task Assignments` rows
+ * whose assignee is a `MJ_BizApps_Common: People` record. Two queries; none for an empty list.
+ */
+export async function LoadTaskAssignees(runner: TaskScopeQueryRunner, peopleEntityId: string, taskIDs: readonly string[]): Promise<TaskAssigneeMap> {
+    const map: TaskAssigneeMap = new UUIDMap<TaskAssignee[]>();
+    if (taskIDs.length === 0) {
+        return map;
+    }
+    const assignments = await runner.RunView<{ TaskID: string; AssigneeRecordID: string }>({
+        EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
+        ExtraFilter: `AssigneeEntityID = '${EscapeSQLString(peopleEntityId)}' AND TaskID IN (${quoteIDList(taskIDs)})`,
+        Fields: ['TaskID', 'AssigneeRecordID'],
+        ResultType: 'simple',
+    });
+    if (!assignments.Success) {
+        throw new Error(assignments.ErrorMessage ?? 'Failed to load task assignees.');
+    }
+    const personIDs = distinctUUIDs(assignments.Results.map((a) => a.AssigneeRecordID));
+    if (personIDs.length === 0) {
+        return map;
+    }
+    const people = await runner.RunView<{ ID: string; FirstName: string | null; LastName: string | null }>({
+        EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
+        ExtraFilter: `ID IN (${quoteIDList(personIDs)})`,
+        Fields: ['ID', 'FirstName', 'LastName'],
+        ResultType: 'simple',
+    });
+    if (!people.Success) {
+        throw new Error(people.ErrorMessage ?? 'Failed to load assignee names.');
+    }
+    const nameByPerson = new UUIDMap<string>();
+    for (const person of people.Results) {
+        nameByPerson.Set(person.ID, [person.FirstName, person.LastName].filter((n) => !!n).join(' ').trim() || person.ID);
+    }
+    for (const a of assignments.Results) {
+        if (!a.TaskID || !a.AssigneeRecordID) {
+            continue;
+        }
+        const list = map.Get(a.TaskID) ?? [];
+        list.push({ PersonID: a.AssigneeRecordID, Name: nameByPerson.Get(a.AssigneeRecordID) ?? a.AssigneeRecordID });
+        map.Set(a.TaskID, list);
+    }
+    return map;
+}
+
+/** The distinct, non-empty IDs of `ids`, first spelling kept, compared case-insensitively. */
+function distinctUUIDs(ids: readonly (string | null | undefined)[]): string[] {
+    const seen = new UUIDSet();
+    const out: string[] = [];
+    for (const id of ids) {
+        if (id && !seen.Has(id)) {
+            seen.Add(id);
+            out.push(id);
+        }
+    }
+    return out;
 }
 
 function buildCreatedOrAssignedClause(personID: string, assignedTaskIDs: readonly string[]): string {
@@ -460,7 +575,11 @@ export function CalculateChiefOfStaffMetrics(
     routines: readonly RoutineSummaryItem[],
     requests: readonly RequestSummaryItem[],
     now: Date = new Date(),
+    options: ChiefOfStaffMetricsOptions = {},
 ): ChiefOfStaffMetrics {
+    const assigneesOf = (taskID: string): TaskAssignee[] => options.Assignees?.Get(taskID) ?? [];
+    const heldByMe = (assignees: readonly TaskAssignee[]): boolean =>
+        !!options.CurrentPersonID && assignees.some((a) => UUIDsEqual(a.PersonID, options.CurrentPersonID));
     const subtasksByParent = GroupByUUID(
         tasks.filter((t) => !!t.ParentID),
         (t) => t.ParentID,
@@ -522,9 +641,16 @@ export function CalculateChiefOfStaffMetrics(
             dueDate.getTime() < now.getTime() &&
             effectiveHealth !== 'Completed';
 
+        const rootAssignees = assigneesOf(root.ID);
         return {
             Task: root,
             Subtasks: children,
+            Milestones: children.map((child) => {
+                const assignees = assigneesOf(child.ID);
+                return { Task: child, Assignees: assignees, AssignedToMe: heldByMe(assignees) };
+            }),
+            Assignees: rootAssignees,
+            AssignedToMe: heldByMe(rootAssignees),
             CompletedSubtaskCount: completedChildren,
             EffectivePercentComplete: effectivePercent,
             EffectiveHealth: effectiveHealth,

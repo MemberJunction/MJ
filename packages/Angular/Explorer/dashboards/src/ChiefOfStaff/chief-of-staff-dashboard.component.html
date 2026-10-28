@@ -413,6 +413,14 @@
                                                 }
                                             </div>
                                             <h3 class="cos-priority-card__title">{{ card.Task.Name }}</h3>
+                                            @if (card.Assignees.length > 0) {
+                                                <div class="cos-assignees" title="Assigned to">
+                                                    <i class="fa-solid fa-user-group"></i>
+                                                    @for (who of card.Assignees; track who.PersonID) {
+                                                        <span class="cos-assignee-chip" [class.cos-assignee-chip--me]="card.AssignedToMe && IsCurrentPerson(who.PersonID)">{{ who.Name }}</span>
+                                                    }
+                                                </div>
+                                            }
                                         </div>
                                     </div>
 
@@ -474,8 +482,9 @@
                                                 <span>Milestones & Workstreams ({{ card.Subtasks.length }})</span>
                                             </div>
                                             <div class="cos-subtasks__list">
-                                                @for (sub of card.Subtasks; track sub.ID) {
-                                                    <div class="cos-subtask-row" (click)="OpenTaskRecord(sub.ID, $event)">
+                                                @for (row of card.Milestones; track row.Task.ID) {
+                                                    @let sub = row.Task;
+                                                    <div class="cos-subtask-row" [class.cos-subtask-row--mine]="row.AssignedToMe" (click)="OpenTaskRecord(sub.ID, $event)">
                                                         <div class="cos-subtask-row__left">
                                                             <i class="fa-solid"
                                                                [class.fa-circle-check]="sub.Status === 'Completed' || sub.Status === 'Done'"
@@ -490,6 +499,13 @@
                                                             </div>
                                                         </div>
                                                         <div class="cos-subtask-row__right">
+                                                            @if (row.Assignees.length > 0) {
+                                                                <span class="cos-assignees cos-assignees--inline" title="Assigned to">
+                                                                    @for (who of row.Assignees; track who.PersonID) {
+                                                                        <span class="cos-assignee-chip" [class.cos-assignee-chip--me]="IsCurrentPerson(who.PersonID)">{{ IsCurrentPerson(who.PersonID) ? 'You' : who.Name }}</span>
+                                                                    }
+                                                                </span>
+                                                            }
                                                             <span class="cos-meta-badge">{{ sub.Status }}</span>
                                                             @if (sub.DueAt) {
                                                                 <span class="cos-subtask-row__due">
