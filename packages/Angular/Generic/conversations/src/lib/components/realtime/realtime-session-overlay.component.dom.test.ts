@@ -22,12 +22,15 @@ import {
   type RealtimeDelegationProgress,
   type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers, ExpectNoAxeViolations, capture } from '@memberjunction/ng-test-utils';
+import { By } from '@angular/platform-browser';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MediaDevice, MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { SharePanelRegistry } from '@memberjunction/ng-realtime-media';
 import { WhiteboardState } from '@memberjunction/ng-whiteboard';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
+import { RealtimeComposerComponent } from './realtime-composer.component';
+import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
 import { RealtimeCameraChannel } from './capture/realtime-capture-channel';
@@ -1773,6 +1776,140 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       expect(alertOf(f)).not.toBeNull();
       await ExpectNoAxeViolations(f);
+    });
+  });
+
+  describe('host switches (#6101)', () => {
+    /** A live call fronting Sage, in the given chrome, with the given host inputs bound. */
+    const renderCall = async (chrome: 'orb' | 'console' = 'console', inputs: Record<string, unknown> = {}) => {
+      const session = fakeSession();
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        autoDetect: true,
+      });
+      session.active$.next(true);
+      await settle();
+      return { f, ...session };
+    };
+    type Fixture = Awaited<ReturnType<typeof renderCall>>['f'];
+    const TYPE_BUTTON = '[aria-label="Open the typed-input composer"]';
+    const keydown = (f: Fixture, key: string): void => {
+      f.componentInstance.OnDocumentKeydown(new KeyboardEvent('keydown', { key, bubbles: true }));
+      f.detectChanges();
+    };
+
+    it('AllowTyping=false removes the Type buttons, ignores the hotkey and refuses a programmatic open', async () => {
+      const { f } = await renderCall('console', { AllowTyping: false });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+      keydown(f, 'h');
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+      expect(query(f, '.dock__input')).toBeNull();
+      f.componentInstance.OnComposerOpenChanged(true);
+      f.detectChanges();
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('AllowTextReveal=false also removes typing, the hero reveal button and the captions control', async () => {
+      const { f } = await renderCall('console', { AllowTextReveal: false, ShowCaptionsControl: false });
+      expect(query(f, '.hero')).not.toBeNull();
+      expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+      expect(query(f, '.hero__reveal')).toBeNull();
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+      expect(queryAll(f, '[aria-label="Captions"]')).toHaveLength(0);
+      keydown(f, 'h');
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('an open dock closes when the host turns typing off, and the draft survives', async () => {
+      const { f } = await renderCall('console');
+      f.componentInstance.OnComposerOpenChanged(true);
+      f.detectChanges();
+      await settle();
+      const composer = f.debugElement.query(By.directive(RealtimeComposerComponent)).componentInstance as RealtimeComposerComponent;
+      const input = query(f, '.dock__input') as HTMLTextAreaElement;
+      input.value = 'keep me';
+      input.dispatchEvent(new Event('input'));
+      f.detectChanges();
+      expect(composer.Draft).toBe('keep me');
+      f.componentInstance.AllowTyping = false;
+      f.detectChanges();
+      expect(f.componentInstance.ComposerOpen).toBe(false);
+      expect(query(f, '.dock__input')).toBeNull();
+      expect(composer.Draft).toBe('keep me');
+    });
+
+    it('the UiConfig bag gates typing', async () => {
+      const { f } = await renderCall('console', { UiConfig: { allowTyping: false } });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(0);
+    });
+
+    it('a dedicated AllowTyping=true wins over a UiConfig bag false', async () => {
+      const { f } = await renderCall('console', { UiConfig: { allowTyping: false }, AllowTyping: true });
+      expect(queryAll(f, TYPE_BUTTON)).toHaveLength(1);
+    });
+
+    it('ShowEnd=false removes End from the composer', async () => {
+      const { f } = await renderCall('console', { ShowEnd: false });
+      expect(queryAll(f, '[aria-label="End call"]')).toHaveLength(0);
+    });
+
+    it('ShowDevLinks=false removes the gear toggle and passes no dev mode to the banner and thread even after DevMode is on', async () => {
+      const { f } = await renderCall('console', { ShowDevLinks: false });
+      f.componentInstance.OnDevModeToggled(true);
+      f.detectChanges();
+      const banner = f.debugElement.query(By.directive(RealtimeAgentBannerComponent)).componentInstance as RealtimeAgentBannerComponent;
+      expect(banner.DevMode).toBe(false);
+      expect(banner.AllowDevLinks).toBe(false);
+      click(f, 'mj-realtime-agent-banner .bar-actions .iconb[aria-expanded]');
+      await settle();
+      expect(query(f, '.gear-pop')).not.toBeNull();
+      expect(query(f, '.gp-link')).toBeNull();
+      expect(query(f, '.dev-link')).toBeNull();
+    });
+
+    it('RevealText and SetCaptions(true) are refused when text is disallowed: nothing emitted, hero stays', async () => {
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      const revealed = capture(f.componentInstance.TextRevealed);
+      f.componentInstance.ShowCaptions = false;
+      f.componentInstance.RevealText();
+      f.componentInstance.SetCaptions(true);
+      f.detectChanges();
+      expect(revealed).toHaveLength(0);
+      expect(f.componentInstance.ShowCaptions).toBe(false);
+      expect(query(f, '.hero')).not.toBeNull();
+    });
+
+    it('a captions preference saved as on cannot leak text under AllowTextReveal=false', async () => {
+      vi.mocked(UserInfoEngine.Instance.GetSetting).mockImplementation((key: string) =>
+        key === 'mj.realtimeVoice.captions.v1' ? 'true'
+          : key === 'mj.realtime.placement.v1' ? savedLayout
+          : key === 'mj.realtime.pip.v1' ? savedPips
+          : undefined
+      );
+      const { f } = await renderCall('console', { AllowTextReveal: false });
+      expect(f.componentInstance.ShowCaptions).toBe(true);
+      expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+      expect(query(f, '.hero__caption')).toBeNull();
+      expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
+      // The gate must hold even while the agent's video presents in the hero (captions would run over it).
+      vi.spyOn(f.componentInstance, 'PresenterOnStage', 'get').mockReturnValue(true);
+      expect(f.componentInstance.ShowHero).toBe(true);
+      expect(f.componentInstance.ShowAvatarCaptions).toBe(false);
+    });
+
+    it('the focus pill hides End and Show-thread when the host disallows them', async () => {
+      const { f, board, focus$ } = await renderWithBoard(undefined, new TestWhiteboardChannel(), 'console');
+      f.componentInstance.ShowEnd = false;
+      f.componentInstance.AllowTextReveal = false;
+      focus$.next({ Channel: board, Focused: true });
+      await settle();
+      expect(query(f, '.board-focus-pill')).not.toBeNull();
+      expect(query(f, '.board-focus-pill__btn--end')).toBeNull();
+      expect(query(f, '[aria-label="Show the conversation thread"]')).toBeNull();
     });
   });
 });

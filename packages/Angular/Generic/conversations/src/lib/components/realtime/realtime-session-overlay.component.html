@@ -23,7 +23,8 @@
         [AgentName]="AgentName"
         [ErrorLabel]="CallEndLabel"
         [ModelName]="IsReviewing ? null : (ModelName$ | async)"
-        [DevMode]="DevMode"
+        [DevMode]="Ui.showDevLinks"
+        [AllowDevLinks]="AllowDevLinks"
         [SessionID]="IsReviewing ? ReviewSessionID : SessionID"
         [ReviewMode]="IsReviewing"
         [ReviewStartedAt]="ReviewStartedAt"
@@ -68,7 +69,7 @@
       }
 
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
-      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread) {
+      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread && Ui.allowTextReveal) {
         <div class="banner-live-note" role="status" aria-live="polite">
           <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
           {{ State.Narration }}
@@ -124,7 +125,7 @@
               <!-- The agent's tile names it and says what it is doing; this live region still says it for screen readers. -->
               <span class="hero__sr">{{ HeroStateLabel(state) }}</span>
             }
-            @if (PresenterOnStage || !Ui.showCaptionsControl) {
+            @if (Ui.allowTextReveal && (PresenterOnStage || !Ui.showCaptionsControl)) {
               <button type="button" class="hero__reveal" (click)="OnTextReveal()"
                       title="Show the conversation as text">
                 <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
@@ -132,13 +133,13 @@
               </button>
             }
           </div>
-        } @else {
+        } @else if (Ui.showThread) {
           <mj-realtime-session-thread
             [State]="State"
             [AgentName]="AgentName"
             [UserName]="CurrentUser?.Name || 'You'"
             [ShowCaptions]="IsReviewing ? true : ShowCaptions"
-            [DevMode]="DevMode"
+            [DevMode]="Ui.showDevLinks"
             (OpenRunRequested)="OnOpenRunRequested($event)"
             (OpenArtifactRequested)="OnOpenArtifactRequested($event)"
             (CancelRequested)="OnCancelDelegation($event)">
@@ -169,6 +170,9 @@
             [Open]="ComposerOpen"
             [Compact]="Ui.chrome === 'orb' || Ui.compact"
             (OpenChanged)="OnComposerOpenChanged($event)"
+            [AllowTyping]="Ui.allowTyping"
+            [ShowEnd]="Ui.showEnd"
+            [ShowCaptionsControl]="Ui.showCaptionsControl"
             [CaptionsOn]="ShowCaptions"
             [IsMuted]="Muted"
             [ShowCamera]="CaptureOffers.Camera"
@@ -213,7 +217,7 @@
       <div class="call-panel" [style.width.px]="PanelAreaSize">
         <mj-realtime-surface-tabs
           [State]="State"
-          [DevMode]="DevMode"
+          [DevMode]="Ui.showDevLinks"
           [CurrentUser]="CurrentUser"
           [EnvironmentID]="EnvironmentID"
           [ShowActivityTab]="ShowActivityTab"
@@ -302,11 +306,13 @@
                 [attr.aria-label]="FocusPillMuted ? 'Unmute microphone' : 'Mute microphone'">
           <i class="fa-solid" [class.fa-microphone]="!FocusPillMuted" [class.fa-microphone-slash]="FocusPillMuted" aria-hidden="true"></i>
         </button>
-        <button type="button" class="board-focus-pill__btn"
-                (click)="OnFocusPillExit()"
-                title="Show thread" aria-label="Show the conversation thread">
-          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
-        </button>
+        @if (Ui.allowTextReveal) {
+          <button type="button" class="board-focus-pill__btn"
+                  (click)="OnFocusPillExit()"
+                  title="Show thread" aria-label="Show the conversation thread">
+            <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+          </button>
+        }
         @if (StagePlugin; as stagePlugin) {
           <mj-media-move-menu
             [Key]="stagePlugin.ChannelName"
@@ -317,11 +323,13 @@
             (ResetLayoutRequested)="OnResetLayout()">
           </mj-media-move-menu>
         }
-        <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
-                (click)="OnFocusPillEnd()"
-                title="End call" aria-label="End the call">
-          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-        </button>
+        @if (Ui.showEnd) {
+          <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
+                  (click)="OnFocusPillEnd()"
+                  title="End call" aria-label="End the call">
+            <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+          </button>
+        }
       </div>
     }
 
