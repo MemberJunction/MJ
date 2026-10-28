@@ -35,6 +35,12 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         Templates: MJTemplateEntityExtended[],
         TemplateContents: MJTemplateContentEntity[],
         TemplateParams: MJTemplateParamEntity[]
+    } = {
+        TemplateContentTypes: [],
+        TemplateCategories: [],
+        Templates: [],
+        TemplateContents: [],
+        TemplateParams: []
     };
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
@@ -44,7 +50,14 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
                 DatasetName: 'Template_Metadata',
                 DatasetResultHandling: "single_property",
                 PropertyName: "_metadata",
-                AutoRefresh: true
+                AutoRefresh: true,
+                Entities: [
+                    'MJ: Template Content Types',
+                    'MJ: Template Categories',
+                    'MJ: Templates',
+                    'MJ: Template Contents',
+                    'MJ: Template Params'
+                ]
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -67,20 +80,20 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
     public get Templates(): MJTemplateEntityExtended[] {
-        return this._metadata.Templates;
+        return this._metadata?.Templates ?? [];
     }
 
     public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
-        return this._metadata.TemplateContentTypes;
+        return this._metadata?.TemplateContentTypes ?? [];
     }
     public get TemplateCategories(): MJTemplateCategoryEntity[] {
-        return this._metadata.TemplateCategories;
+        return this._metadata?.TemplateCategories ?? [];
     }
     public get TemplateContents(): MJTemplateContentEntity[] {
-        return this._metadata.TemplateContents;
+        return this._metadata?.TemplateContents ?? [];
     }
     public get TemplateParams(): MJTemplateParamEntity[] {
-        return this._metadata.TemplateParams;
+        return this._metadata?.TemplateParams ?? [];
     }
 
     private _indexedTemplatesRef?: MJTemplateEntityExtended[];
