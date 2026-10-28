@@ -1599,6 +1599,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT138 - Archive Seed (staging actions and host data source)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "45C3DCE0-D71B-498C-9A5C-8C2C5FDA6E5E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT133 - FLS Close-out (server)",
             "Sequence": 49,
             "Status": "Active"

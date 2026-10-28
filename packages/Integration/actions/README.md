@@ -199,6 +199,27 @@ These are decisions of the current release, recorded so they can be revisited.
 - **A. One SQL Server connection per workspace.** The archive seed refuses to start when another SQL Server company integration exists. Per-connection catalog and schema scoping is a follow-up.
 - **B. Seeded entities carry no record-change history.** Seeded entities keep `AllowDirectSQLInsert = true`, with `TrackRecordChanges` and `TrustServerCacheCompletely` off permanently, so they have no record-change history and the Bootstrap re-seed keeps working.
 
+### Operator walkthrough (Explorer)
+
+An `archive-seed` pending-work job in MJAPI drives the three actions; Explorer's Integrations dashboard drives the job.
+
+1. **Integrations → Add Integration → SQL Server → Choose an archive.** (The other choice, credentials, connects to a live server as before.)
+2. **Pick the backup.** Choose Local Disk File (a path the SQL Server instance can read, e.g. a path inside the SQL Server container) or Azure Blob Storage, verify it, then **Restore**. The job restores the backup into a new staging database on the API's own SQL Server (`Restore SQL Server Backup To Staging`).
+3. **Choose tables.** The job reads the staging database through an External Data Source in `authMode: "host"` mode, which connects with MJAPI's own SQL login and names the staging database in `DefaultDatabase`. Keep Select all or untick tables (views are listed too; untick them).
+4. **Create and load.** The job creates the selected tables as MJ entities, runs CodeGen and restarts MJAPI; the wizard waits for the API to come back and reconnects. The job resumes after the restart and loads the tables (`Load SQL Server Integration From Staging`), seeding each map's watermark to the backup's start time.
+5. **Remove the archive.** Choose Remove when the load finishes: the job drops the staging database (`Drop SQL Server Staging Database`).
+6. The integration's card shows **Seeded · source not connected**: the data is in MJ, and the live source can be connected later to sync changes made after the backup.
+
+### Running it on a development machine
+
+- **The build step restarts MJAPI.** Set `RSU_RESTART_COMMAND` to a command that restarts the API process, or run the API under PM2 (process name `mjapi`, or set `RSU_PM2_PROCESS_NAME`). Without either, the restart falls back to `pm2 start ecosystem.config.cjs`, the running API is not restarted, and the new entities never reach it, so the load does not run.
+- **MJAPI's SQL login must be allowed to restore.** `RESTORE DATABASE` into a new database needs `CREATE ANY DATABASE` (for example the `dbcreator` server role). A least-privilege login such as `MJ_Connect` fails the restore.
+- `authMode: "host"` needs MJAPI to connect with a SQL login (user and password); with any other authentication host mode is unavailable and the data source is refused.
+
+### Test coverage
+
+The deterministic integration tier's `archive-seed` bundle (`IT138 - Archive Seed (staging actions and host data source)`) runs the drop against a throwaway database, connects a host-mode data source through `ExternalDataSourceRouter`, and checks that a load against a missing staging database fails with `STAGING_NOT_FOUND`. The tier has no `.bak` fixture, so the restore itself is covered by this package's unit tests and by a manual run of the walkthrough above.
+
 ---
 
 ## Scheduling via MJ Scheduler

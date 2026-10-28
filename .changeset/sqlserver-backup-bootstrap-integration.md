@@ -9,6 +9,10 @@
 "@memberjunction/external-data-source-snowflake": minor
 "@memberjunction/server": minor
 "@memberjunction/graphql-dataprovider": minor
+"@memberjunction/external-data-source-sqlserver": minor
+"@memberjunction/schema-engine": minor
+"@memberjunction/integration-progress-artifacts": minor
+"@memberjunction/server-bootstrap": minor
 ---
 
 Add SQL Server backup bootstrap integration actions, Azure blob inspection, and Explorer integration dashboard bootstrap wizard.
@@ -41,3 +45,10 @@ Add SQL Server backup bootstrap integration actions, Azure blob inspection, and 
   - Abstract base class with shared parameter extraction, SAS credential resolution, container URL parsing, and backup inspection helpers.
 - **`Restore SQL Server Backup To Staging`**, **`Load SQL Server Integration From Staging`** and **`Drop SQL Server Staging Database`**:
   - The bootstrap split into restore, load and drop phases so a server-side job can seed an integration from a backup archive, retry a failed load against the kept staging database, and always clean up. Documented in the package README with the two product decisions (one SQL Server connection per workspace; seeded entities keep no record-change history).
+
+### Archive seed (`@memberjunction/server`, `@memberjunction/graphql-dataprovider`, `@memberjunction/ng-dashboards`)
+- Explorer's Add Integration → SQL Server offers **Choose an archive**: restore a backup into a staging database, choose its tables, build them as entities (CodeGen + API restart), load them, then remove the archive. The card then shows **Seeded · source not connected**.
+- MJAPI drives it with an `archive-seed` pending-work job that resumes after the restart, exposed through archive seed GraphQL operations and `GraphQLIntegrationClient` methods.
+- `@memberjunction/external-data-sources` / `@memberjunction/external-data-source-sqlserver`: `authMode: "host"` connects a SQL Server data source with the host's own SQL login (MJServer registers the resolver at boot; `DefaultDatabase` is required).
+- `@memberjunction/schema-engine`: the archive-seed pending-work payload and lookups. `@memberjunction/integration-progress-artifacts`: emitter resume. `@memberjunction/server-bootstrap`: class manifest regenerated.
+- Decisions: one SQL Server connection per workspace (a second archive seed fails fast); seeded entities keep record-change history off.

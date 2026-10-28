@@ -16491,6 +16491,12 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.2.0-edge.5
         version: link:../../Encryption
+      '@memberjunction/external-data-source-sqlserver':
+        specifier: 6.2.0-edge.5
+        version: link:../../ExternalDataSources/Providers/SQLServer
+      '@memberjunction/external-data-sources':
+        specifier: 6.2.0-edge.5
+        version: link:../../ExternalDataSources/Engine
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0-edge.5
         version: link:../../AI/Knowledge/FeaturePipelines
@@ -16506,6 +16512,9 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0-edge.5
         version: link:../../GraphQLDataProvider
+      '@memberjunction/integration-actions':
+        specifier: 6.2.0-edge.5
+        version: link:../../Integration/actions
       '@memberjunction/livekit-room-server':
         specifier: 6.2.0-edge.5
         version: link:../../LiveKitRoomServer
