@@ -41,15 +41,22 @@ export class PsGatePytest {
     return m ? PsGatePytest.unescape(m[1]) : '';
   }
 
-  /** pytest's `--junitxml` report → one case per `<testcase>`; node id = classname with `/` + `.py::` + name. */
+  /**
+   * pytest's `--junitxml` report → one case per distinct node id (the first `<testcase>` for it wins, so a case the
+   * report repeats counts once); node id = classname with `/` + `.py::` + name.
+   */
   private static parseCases(xml: string): JUnitCase[] {
     const out: JUnitCase[] = [];
+    const seen = new Set<string>();
     for (const m of xml.matchAll(TESTCASE)) {
       const classname = PsGatePytest.attr(m[1], 'classname');
       const name = PsGatePytest.attr(m[1], 'name');
       const child = /<(failure|error|skipped)\b/.exec(m[2] || '');
       const result: CaseResult = child === null ? 'passed' : child[1] === 'failure' ? 'failed' : child[1] === 'error' ? 'error' : 'skipped';
-      out.push({ NodeId: classname === '' ? name : `${classname.replace(/\./g, '/')}.py::${name}`, Result: result });
+      const nodeId = classname === '' ? name : `${classname.replace(/\./g, '/')}.py::${name}`;
+      if (seen.has(nodeId)) continue;
+      seen.add(nodeId);
+      out.push({ NodeId: nodeId, Result: result });
     }
     return out;
   }

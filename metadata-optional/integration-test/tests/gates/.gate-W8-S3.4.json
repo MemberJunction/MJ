@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W8 -> S3.4",
-    "Description": "Gate G2.27 (phase 2, dataset W8, criterion S3.4): with shuffled labels, the target-encoded high-cardinality feature of W8-highcard s42 scores a held-out AUC whose 95% interval covers 0.5, 1 of 1. The gate exercises the sidecar's in-fold target encoder on a W8 snapshot built by the test fixture (the product's snapshot assembler emits one-hot encodings only, so a target-encoded column is not reachable from a product snapshot yet). It fails when the target encoder is fitted on all rows before the folds, so the shuffled-label AUC interval excludes 0.5.",
+    "Description": "Gate G2.27 (phase 2, dataset W8, criterion S3.4): with shuffled labels, the target-encoded high-cardinality feature of W8-highcard s42 scores no better than chance, 1 of 1: the 95% interval of the development rows' out-of-fold AUC does not lie above 0.5, and the held-out AUC's 95% interval covers 0.5. The gate exercises the sidecar's in-fold target encoder on a W8 snapshot built by the test fixture (the product's snapshot assembler emits one-hot encodings only, so a target-encoded column is not reachable from a product snapshot yet). It fails when the target encoder is fitted before the folds, on the development rows (the out-of-fold AUC interval lies above 0.5) or on all rows (the held-out interval excludes 0.5 too).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G2.27\",\"owner:PR3\",\"phase:2\",\"dataset:W8\",\"criterion:S3.4\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "With shuffled labels, a logistic regression on the in-fold target-encoded 400-level PostalCode of W8-highcard s42 scores a held-out AUC whose 95% Hanley-McNeil interval covers 0.5 (1 of 1 pytest case passes)."
+      "summary": "With shuffled labels, a logistic regression on the in-fold target-encoded 400-level PostalCode of W8-highcard s42 scores no better than chance: the out-of-fold AUC's 95% Hanley-McNeil interval does not lie above 0.5 and the held-out AUC's interval covers 0.5 (1 of 1 pytest case passes)."
     },
     "Configuration": {
       "tier": "mutation",

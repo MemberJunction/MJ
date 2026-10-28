@@ -21,6 +21,11 @@ describe('PsGatePytest.FromJUnit', () => {
     expect(PsGatePytest.FromJUnit([`${NODES_FILE}::test_renamed`], CANNED))
       .toEqual({ Collected: 0, Passed: 0, Failed: 0, Errors: 0, NotCollected: [`${NODES_FILE}::test_renamed`] });
   });
+  it('counts a case the report repeats once', () => {
+    const repeated = '<testsuites><testsuite><testcase classname="tests.gates.test_trainer_contract_gates" name="test_W8_S3_4_target_encoding_is_in_fold" time="0.4" /><testcase classname="tests.gates.test_trainer_contract_gates" name="test_W8_S3_4_target_encoding_is_in_fold" time="0.4" /></testsuite></testsuites>';
+    expect(PsGatePytest.FromJUnit([`${NODES_FILE}::test_W8_S3_4_target_encoding_is_in_fold`], repeated))
+      .toEqual({ Collected: 1, Passed: 1, Failed: 0, Errors: 0, NotCollected: [] });
+  });
   it('counts a collection error (a testcase no requested node owns) in Errors', () => {
     const collectionError = '<testsuites><testsuite><testcase classname="" name="tests.gates.test_trainer_contract_gates" time="0"><error message="collection failure">ImportError</error></testcase></testsuite></testsuites>';
     expect(PsGatePytest.FromJUnit([`${NODES_FILE}::test_W8_S3_4_target_encoding_is_in_fold`], collectionError))

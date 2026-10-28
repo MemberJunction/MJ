@@ -8,7 +8,7 @@ export const PsGateW8S34Checks: NamedCheck[] = [
     Id: 'ps-gate-w8-s3-4.G2.27', Name: 'G2.27 W8 → S3.4: shuffled labels give a target-encoded held-out AUC interval covering 0.5', RequiresMutation: true,
     Fn: async () => {
       const nodes = ['tests/gates/test_trainer_contract_gates.py::test_W8_S3_4_target_encoding_is_in_fold'] as const;
-      const expectedCases = 1;   // a parametrized node contributes one case per parameter set
+      const expectedCases = 1;   // one unparametrized node: one case
       const r = await PsGatePytest.Run(nodes);
       PsGate.Assert({
         Passed: r.Failed === 0 && r.Errors === 0 && r.NotCollected.length === 0 && r.Collected === expectedCases && r.Passed === expectedCases,

@@ -11,7 +11,7 @@ export const PsGateW1S54No3Checks: NamedCheck[] = [
       const nodes = ['tests/gates/test_trainer_contract_gates.py::test_W1_S5_4_3_versions_and_threads_logged'] as const;
       const expectedCases = 1;
       const r = await PsGatePytest.Run(nodes);
-      const refusal = await SidecarGates.MeasureCodeVersionRefusal();
+      const refusal = SidecarGates.MeasureCodeVersionRefusal();
       const pytestPassed = r.Failed === 0 && r.Errors === 0 && r.NotCollected.length === 0 && r.Collected === expectedCases && r.Passed === expectedCases;
       PsGate.Assert({
         Passed: pytestPassed && refusal.Passed,

@@ -4,7 +4,7 @@
     "Name": "W1 -> S5.4 #2",
     "Description": "Gate G2.31 (phase 2, dataset W1, criterion S5.4 #2): two single-threaded trainings of random forest and MLP on W1-signal s42 give predictions equal within 1e-9, 2 of 2. It fails when the random forest and MLP estimators drop random_state, so predictions differ.",
     "Status": "Active",
-    "Tags": "[\"gate\",\"G2.31\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S5.4#2\"]",
+    "Tags": "[\"gate\",\"G2.31\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S5.4 #2\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "Two single-threaded trainings of a random forest and of an MLP on W1-signal s42 give predictions equal within 1e-9 (2 of 2 pytest cases pass)."
