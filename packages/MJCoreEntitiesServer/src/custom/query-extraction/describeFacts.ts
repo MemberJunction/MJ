@@ -1,7 +1,8 @@
 import type { MJQueryParameterEntity } from "@memberjunction/core-entities";
-import { RenderPipeline } from "@memberjunction/generic-database-provider";
+import { IsQuerySafetyError, RenderPipeline, SafetyGate } from "@memberjunction/generic-database-provider";
+import { GetDialect } from "@memberjunction/sql-dialect";
 import type { DescribedColumn } from "@memberjunction/generic-database-provider";
-import { BranchVariantValues } from "@memberjunction/sql-parser";
+import { BranchVariantValues, LexSQL, SignificantTokens } from "@memberjunction/sql-parser";
 import type { BranchValue, QueryTemplate } from "@memberjunction/sql-parser";
 import { NormalizeDefaultForType } from "./enrich";
 import type { KnownQueryParameter, QueryExtractionInput, QueryParameterFact, QueryParameterType } from "./extractionTypes";
@@ -21,6 +22,8 @@ export interface DescribedOutput {
 /** A parameter as a render is given it. */
 type RenderDefinition = Pick<MJQueryParameterEntity, 'Name' | 'Type' | 'IsRequired' | 'IsServerSet' | 'ValidationFilters'> & {
     readonly SampleValue: string | null;
+    /** Whether a row or a typed use establishes the type (otherwise `Type` is the `string` fallback). */
+    readonly TypeKnown: boolean;
 };
 
 /** The most branch renders described beyond the base, so a template with many blocks stays bounded. */
@@ -45,13 +48,28 @@ export async function DescribeQueryOutput(input: QueryExtractionInput, template:
         if (rendered.Error !== null) return failure(`Render ${index} could not be made: ${rendered.Error}`);
         if (seenSQL.has(rendered.SQL)) continue;
         seenSQL.add(rendered.SQL);
-        const described = await input.Describe(rendered.SQL);
+        const described = await input.Describe(WithoutStatementSemicolons(rendered.SQL, input));
         if (!described.Success) return failure(`The database server could not describe the query: ${described.Diagnostics.join('; ') || 'no reason given'}`);
         for (const name of duplicateNames(described.Columns)) duplicates.add(name);
         if (index > 0) noteMissingColumns(columns, described.Columns, index, branchOnly);
         mergeColumns(columns, described.Columns, index, branchOnly);
     }
     return { Columns: columns, BranchOnlyColumns: branchOnly, DuplicateNames: [...duplicates], Failure: null };
+}
+
+/**
+ * The statement without the semicolons before and after it (`;SELECT …;`): a statement described on
+ * its own (PostgreSQL prepares it) cannot carry them, though the query runs with them.
+ */
+export function WithoutStatementSemicolons(sql: string, input: Pick<QueryExtractionInput, 'Platform'>): string {
+    const tokens = SignificantTokens(LexSQL(sql, GetDialect(input.Platform)));
+    let first = 0;
+    while (first < tokens.length && tokens[first].Kind === 'semicolon') first++;
+    let last = tokens.length - 1;
+    while (last >= first && tokens[last].Kind === 'semicolon') last--;
+    if (first > last) return sql;
+    if (first === 0 && last === tokens.length - 1) return sql;
+    return sql.substring(0, tokens[0].Start) + sql.substring(tokens[first].Start, tokens[last].End);
 }
 
 function failure(message: string): DescribedOutput {
@@ -103,6 +121,7 @@ function renderDefinitions(parameters: readonly QueryParameterFact[], known: rea
         return {
             Name: p.Name,
             Type: row?.Type ?? p.Type ?? 'string',
+            TypeKnown: row?.Type !== undefined || p.Type !== null,
             IsRequired: p.IsRequired,
             IsServerSet: row?.IsServerSet ?? false,
             ValidationFilters: row?.ValidationFilters ?? null,
@@ -112,9 +131,53 @@ function renderDefinitions(parameters: readonly QueryParameterFact[], known: rea
     return definitions;
 }
 
+/**
+ * Why a render of the query may not run, as the run would refuse it: the first render (the base,
+ * then each `{% if %}` toggled) that is not a single read query or calls a function a query may not
+ * call. `null` when every render passes; a render that fails for another reason is left to
+ * {@link DescribeQueryOutput}, which reports it.
+ */
+export function FindUnsafeRender(input: QueryExtractionInput, template: QueryTemplate, parameters: readonly QueryParameterFact[]): string | null {
+    const definitions = renderDefinitions(parameters, input.KnownParameters);
+    const renders = template.Tokens.HasTemplate ? renderAssignments(template) : [null];
+    for (const values of renders) {
+        const rendered = renderVariant(input, definitions, values);
+        if (rendered.Unsafe) return rendered.Error;
+    }
+    return null;
+}
+
+/** One render's SQL. */
+interface RenderedVariant {
+    SQL: string;
+    /** Why the render failed; `null` when it did not. */
+    Error: string | null;
+    /** Whether it failed because the SQL may not run (not one read query, or a forbidden call). */
+    Unsafe: boolean;
+}
+
+/**
+ * A failed render. It is unsafe when the safety stage found a write or a forbidden call; SQL it
+ * refused only because it could not read it (a WITH clause written for another platform, whose own
+ * variant is saved later) is left to the describe and to the run-time gate, which fails closed.
+ */
+function renderFailure(e: unknown): RenderedVariant {
+    return { SQL: '', Error: e instanceof Error ? e.message : String(e), Unsafe: IsQuerySafetyError(e) && !e.Unreadable };
+}
+
+/** Plain SQL, as written, once it passes the safety stage every rendered statement passes. */
+function plainVariant(input: QueryExtractionInput): RenderedVariant {
+    try {
+        SafetyGate.AssertSafeToExecute(input.SQL, GetDialect(input.Platform), false);
+        return { SQL: input.SQL, Error: null, Unsafe: false };
+    } catch (e) {
+        return renderFailure(e);
+    }
+}
+
 /** One render's SQL for `values` (`null`: plain SQL, rendered as written), or why it failed. */
-function renderVariant(input: QueryExtractionInput, definitions: readonly RenderDefinition[], values: Record<string, BranchValue> | null): { SQL: string; Error: string | null } {
-    if (values === null) return { SQL: input.SQL, Error: null };
+function renderVariant(input: QueryExtractionInput, definitions: readonly RenderDefinition[], values: Record<string, BranchValue> | null): RenderedVariant {
+    if (values === null) return plainVariant(input);
     const callerValues: Record<string, string> = {};
     const serverValues: Record<string, string> = {};
     for (const definition of definitions) {
@@ -134,9 +197,9 @@ function renderVariant(input: QueryExtractionInput, definitions: readonly Render
             OriginalSQL: input.SQL,
             Dependencies: input.CompositionDependencies && input.CompositionDependencies.length > 0 ? [...input.CompositionDependencies] : undefined,
         });
-        return { SQL: result.FinalSQL, Error: null };
+        return { SQL: result.FinalSQL, Error: null, Unsafe: false };
     } catch (e) {
-        return { SQL: '', Error: e instanceof Error ? e.message : String(e) };
+        return renderFailure(e);
     }
 }
 
@@ -144,12 +207,19 @@ function renderVariant(input: QueryExtractionInput, definitions: readonly Render
 function renderValue(branch: BranchValue | undefined, definition: RenderDefinition): string | undefined {
     if (!branch || branch.Kind === 'Absent') return undefined;
     if (branch.Kind === 'Literal') return branch.Value === null ? undefined : String(branch.Value);
-    return SampleValueFor(definition.Type, definition.SampleValue);
+    return definition.TypeKnown ? SampleValueFor(definition.Type, definition.SampleValue) : definition.SampleValue?.trim() || UNTYPED_SAMPLE;
 }
 
 /**
+ * The sample of a parameter whose type nothing establishes: a numeric string, valid wherever such
+ * a value can go (a string, a number in arithmetic or a comparison, a composed number argument).
+ */
+const UNTYPED_SAMPLE = '1';
+
+/**
  * A truthy sample value of `type`, as a render takes it: the row's sample when it fits the type,
- * otherwise a fixed value (`Sample`, `1`, `2024-01-01`, `true`, `["Sample"]`).
+ * otherwise a fixed value (`Sample`, `1`, `2024-01-01`, `true`, `["1"]`). An array's fixed element is
+ * a numeric string, so a loop over it can feed a string hole or a number argument alike.
  */
 export function SampleValueFor(type: QueryParameterType, sample: string | null): string {
     const given = sample?.trim() ? sample : null;
@@ -157,7 +227,7 @@ export function SampleValueFor(type: QueryParameterType, sample: string | null):
         case 'number': return given !== null && !isNaN(Number(given)) && Number(given) !== 0 ? given : '1';
         case 'date': return given !== null && !isNaN(new Date(given).getTime()) ? given : '2024-01-01';
         case 'boolean': return 'true';
-        case 'array': return given !== null ? NormalizeDefaultForType(given, 'array') : '["Sample"]';
+        case 'array': return given !== null ? NormalizeDefaultForType(given, 'array') : '["1"]';
         default: return given ?? 'Sample';
     }
 }

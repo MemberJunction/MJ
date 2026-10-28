@@ -59,6 +59,7 @@ interface IfEntry {
 type Overlay = Map<string, BranchValue>;
 
 const MAX_COMBINATIONS = 4096;
+const COMPARISON_OPERATORS: readonly string[] = ['==', '!=', '<', '>', '<=', '>='];
 const SAMPLE: BranchValue = { Kind: 'Sample' };
 const ABSENT: BranchValue = { Kind: 'Absent' };
 
@@ -185,14 +186,38 @@ function search(
     }
 }
 
-/** Adds the literals a condition compares each parameter with to that parameter's candidates. */
+/**
+ * Adds the literals a condition compares each parameter with to that parameter's candidates. A
+ * side that is an inline if compares each name its branches can give.
+ */
 function collectComparisons(condition: TemplateExpression, candidates: Map<string, BranchValue[]>): void {
     WalkExpression(condition, node => {
-        if (node.Kind !== 'Binary' || !['==', '!=', '<', '>', '<=', '>='].includes(node.Operator)) return;
-        const pair = nameAndLiteral(node.Left, node.Right) ?? nameAndLiteral(node.Right, node.Left);
-        const list = pair ? candidates.get(pair.Name) : undefined;
-        if (pair && list) for (const value of literalCandidates(pair.Value)) addCandidate(list, value);
+        if (node.Kind !== 'Binary' || !COMPARISON_OPERATORS.includes(node.Operator)) return;
+        for (const [side, other] of [[node.Left, node.Right], [node.Right, node.Left]]) {
+            const value = literalOf(other);
+            if (value === undefined) continue;
+            for (const name of comparedNames(side)) {
+                const list = candidates.get(name);
+                if (list) for (const candidate of literalCandidates(value)) addCandidate(list, candidate);
+            }
+        }
     });
+}
+
+/** The names a compared side can give: the name itself, or the names of an inline if's branches. */
+function comparedNames(side: TemplateExpression): string[] {
+    if (side.Kind === 'Name') return [side.Name];
+    if (side.Kind !== 'InlineIf') return [];
+    return [...comparedNames(side.Body), ...(side.Else === null ? [] : comparedNames(side.Else))];
+}
+
+/** The value of a literal, or of a negated number literal; `undefined` for anything else. */
+function literalOf(expression: TemplateExpression): TemplateLiteralValue | undefined {
+    if (expression.Kind === 'Literal') return expression.Value;
+    if (expression.Kind === 'Unary' && expression.Operator === '-' && expression.Operand.Kind === 'Literal' && typeof expression.Operand.Value === 'number') {
+        return -expression.Operand.Value;
+    }
+    return undefined;
 }
 
 /** The parameter names an `{% if %}` block's conditions read. */
@@ -204,15 +229,6 @@ function conditionNames(node: IfNode, opaque: ReadonlySet<string>): string[] {
         });
     }
     return names;
-}
-
-function nameAndLiteral(a: TemplateExpression, b: TemplateExpression): { Name: string; Value: TemplateLiteralValue } | null {
-    if (a.Kind !== 'Name') return null;
-    if (b.Kind === 'Literal') return { Name: a.Name, Value: b.Value };
-    if (b.Kind === 'Unary' && b.Operator === '-' && b.Operand.Kind === 'Literal' && typeof b.Operand.Value === 'number') {
-        return { Name: a.Name, Value: -b.Operand.Value };
-    }
-    return null;
 }
 
 /** A compared literal, plus values on each side of it, so every comparison can go both ways. */

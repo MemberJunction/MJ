@@ -125,15 +125,23 @@ interface RowLabel {
     readonly SourceEntityFieldID?: string | null;
 }
 
-/** A write for `row` when it has unsaved changes; counts and records it as added or updated. */
-function saveIfDirty(row: BaseEntity, summary: ChildRowWriteSummary, label: RowLabel): Write[] {
-    if (row.IsSaved && !row.Dirty) return [];
+/**
+ * A write for `row` when it has unsaved changes; counts and records it as added or updated.
+ *
+ * `alsoChanged` names columns that changed although the entity's dirty check does not see it: a
+ * nullable bit column going between `null` and `false` reads as unchanged there. Such a row is
+ * still written (ignoring the dirty state) and the column is reported.
+ */
+function saveIfDirty(row: BaseEntity, summary: ChildRowWriteSummary, label: RowLabel, alsoChanged: readonly string[] = []): Write[] {
+    if (row.IsSaved && !row.Dirty && alsoChanged.length === 0) return [];
     const action = row.IsSaved ? 'Updated' : 'Added';
     if (row.IsSaved) summary.Updated++;
     else summary.Added++;
-    const changedColumns = row.IsSaved ? row.Fields.filter(f => f.Dirty).map(f => f.Name) : [];
+    const dirtyColumns = row.IsSaved ? row.Fields.filter(f => f.Dirty).map(f => f.Name) : [];
+    const changedColumns = row.IsSaved ? [...dirtyColumns, ...alsoChanged.filter(c => !dirtyColumns.includes(c))] : [];
     summary.Changes.push({ ...changeOf(label, action), ChangedColumns: changedColumns });
-    return [() => row.Save()];
+    const ignoreDirtyState = row.IsSaved && !row.Dirty;
+    return [() => row.Save(ignoreDirtyState ? { IgnoreDirtyState: true } : undefined)];
 }
 
 function deleteRows<T extends BaseEntity>(rows: readonly T[], summary: ChildRowWriteSummary, labelOf: (row: T) => RowLabel): Write[] {
@@ -172,8 +180,9 @@ async function fieldWrites(context: ChildRowWriteContext, stored: MJQueryFieldEn
         existing.delete(fact.Name.toLowerCase());
         if (!row) row = await newRow<MJQueryFieldEntity>(context, 'MJ: Query Fields', r => newField(r, context.QueryID, fact));
         else applyFieldAnnotations(row, fact);
+        const nullabilityChanged = row.IsSaved && (row.IsNullable ?? null) !== (fact.IsNullable ?? null);
         ApplyFieldFacts(row, fact);
-        writes.push(...saveIfDirty(row, summary, fieldLabel(row)));
+        writes.push(...saveIfDirty(row, summary, fieldLabel(row), nullabilityChanged ? ['IsNullable'] : []));
         if (isEmpty(row.Description)) summary.FieldsWithoutDescription.push(row.Name);
     }
     return [...writes, ...deleteRows([...existing.values()], summary, fieldLabel)];

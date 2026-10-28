@@ -83,7 +83,8 @@ export class DocCommentReader {
         for (const line of lines) {
             const tag = TAG_LINE.exec(line.Text);
             if (tag === null) {
-                const text = line.Text.replace(/^\s*\*?\s?/, '').trimEnd();
+                // The indentation is layout, with or without a JSDoc-style leading star.
+                const text = line.Text.replace(/^\s*\*?\s*/, '').trimEnd();
                 if (open) open.Continuation.push(text);
                 else summaryLines.push(text);
                 continue;

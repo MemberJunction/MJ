@@ -56,8 +56,9 @@ describe('Template injection: a tag inside a string literal', () => {
         RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
     });
 
-    it('the shipped GetAgentRunTree SQL carries the quoted tag this file is about', () => {
-        expect(AGENT_RUN_TREE_SQL).toContain("WHERE r.ID = '{{ agentRunID }}'");
+    it('the shipped GetAgentRunTree SQL no longer quotes the tag: it formats the value with sqlString', () => {
+        expect(AGENT_RUN_TREE_SQL).not.toContain("WHERE r.ID = '{{ agentRunID }}'");
+        expect(AGENT_RUN_TREE_SQL).toContain('WHERE r.ID = {{ agentRunID | sqlString }}');
     });
 
     it('renders a benign agentRunID into both templates (setup works)', () => {
@@ -69,12 +70,17 @@ describe('Template injection: a tag inside a string literal', () => {
         }
     });
 
-    it('today the injected value closes the literal and appends a predicate (observed evidence)', () => {
-        for (const sql of [AGENT_RUN_TREE_SQL, SYNTHETIC_SQL]) {
-            const result = render(sql, INJECTION);
-            expect(result.success).toBe(true);
-            expect(result.processedSQL).toContain(INJECTED_PREDICATE);
-        }
+    it('a quoted tag lets the injected value close the literal and append a predicate (observed evidence, synthetic copy)', () => {
+        const result = render(SYNTHETIC_SQL, INJECTION);
+        expect(result.success).toBe(true);
+        expect(result.processedSQL).toContain(INJECTED_PREDICATE);
+    });
+
+    it('the shipped GetAgentRunTree SQL keeps the injected value inside one escaped literal', () => {
+        const result = render(AGENT_RUN_TREE_SQL, INJECTION);
+        expect(result.success).toBe(true);
+        expect(result.processedSQL).not.toContain(INJECTED_PREDICATE);
+        expect(result.processedSQL).toMatch(/r\.ID = N?'x'' OR ''1''=''1'/);
     });
 
     // Pinned: Save-time template rule — a tag inside a string literal is refused (DISCUSSION §6, 2026-10-26).

@@ -27,9 +27,12 @@ export const MJQueryDiagnosticCodes = {
     FunctionCall: 'MJQ_FUNCTION_CALL',
     /** A subscript (`x[0]`, `x['k']`) in an expression. */
     Subscript: 'MJQ_SUBSCRIPT',
-    /** An inline `a if b else c` expression. */
+    /**
+     * No longer reported: the inline `a if b else c` is part of the language. The code is kept
+     * so it is never reused for another rule.
+     */
     InlineIf: 'MJQ_INLINE_IF',
-    /** Attribute access other than `Context.<Token>` and `loop.<member>`. */
+    /** Attribute access other than `Context.<Token>`, `loop.<member>` and `<name>.length`. */
     MemberAccess: 'MJQ_MEMBER_ACCESS',
     /** An operator outside the grammar (`in`, `is`, `~`, `**`, `//`, list or object literals). */
     UnsupportedOperator: 'MJQ_UNSUPPORTED_OPERATOR',

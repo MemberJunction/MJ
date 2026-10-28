@@ -1,4 +1,4 @@
-import type { TemplateExpression, TemplateLiteralValue } from './expressionTypes.js';
+import type { InlineIfExpression, NameExpression, TemplateExpression, TemplateLiteralValue } from './expressionTypes.js';
 
 /**
  * The value a branch variant gives a parameter.
@@ -19,20 +19,30 @@ export type BranchLookup = (name: string) => BranchValue | undefined;
 /** Looks up the value of a `loop.<member>`, such as `last`; `undefined` when it cannot be known. */
 export type LoopMemberLookup = (member: string) => TemplateLiteralValue | undefined;
 
-/** What an expression is known to evaluate to. */
+/**
+ * What an expression is known to evaluate to. `SampleLength` is the length of a `Sample`: a
+ * whole number of at least 1, whose exact value is not known.
+ */
 type Abstract =
     | { readonly Kind: 'Absent' }
     | { readonly Kind: 'Sample' }
+    | { readonly Kind: 'SampleLength' }
     | { readonly Kind: 'Value'; readonly Value: TemplateLiteralValue }
     | { readonly Kind: 'Unknown' };
 
 const UNKNOWN: Abstract = { Kind: 'Unknown' };
 const SAMPLE: Abstract = { Kind: 'Sample' };
+const ABSENT: Abstract = { Kind: 'Absent' };
+const SAMPLE_LENGTH: Abstract = { Kind: 'SampleLength' };
+const RELATIONAL: ReadonlySet<string> = new Set(['<', '>', '<=', '>=']);
+const MIRRORED: Readonly<Record<string, string>> = { '<': '>', '>': '<', '<=': '>=', '>=': '<=', '==': '==', '!=': '!=' };
 
 /**
  * Evaluates `{% if %}` conditions over branch values, as far as they can be known. A `Sample`
- * is truthy but cannot be compared; loop values and filtered values are unknown. Comparisons and
- * arithmetic on literals follow the template engine's (JavaScript's) rules.
+ * is truthy but cannot be compared, and its length is at least 1; loop values and filtered values
+ * are unknown. `<name>.length` of an absent value, or of a value with no length, is `undefined`,
+ * so every comparison with it but `!=` is false. An inline if takes the branch its condition
+ * picks. Comparisons and arithmetic on literals follow the template engine's (JavaScript's) rules.
  */
 export class BranchEvaluator {
     /**
@@ -57,6 +67,8 @@ export class BranchEvaluator {
             case 'Name': return this.evaluateName(expression.Name);
             case 'Context': return SAMPLE;
             case 'LoopMember': return this.evaluateLoopMember(expression.Member);
+            case 'Length': return this.evaluateLength(expression.Object);
+            case 'InlineIf': return this.evaluateInlineIf(expression);
             case 'Unary': return this.evaluateUnary(expression.Operator, this.evaluate(expression.Operand));
             case 'Binary': return this.evaluateBinary(expression.Operator, expression.Left, expression.Right);
             default: return UNKNOWN;
@@ -69,6 +81,24 @@ export class BranchEvaluator {
         if (value === undefined || value.Kind === 'Absent') return { Kind: 'Absent' };
         if (value.Kind === 'Sample') return SAMPLE;
         return { Kind: 'Value', Value: value.Value };
+    }
+
+    private evaluateLength(object: NameExpression): Abstract {
+        const value = this.evaluateName(object.Name);
+        switch (value.Kind) {
+            case 'Sample': return SAMPLE_LENGTH;
+            case 'Value': return typeof value.Value === 'string' ? { Kind: 'Value', Value: value.Value.length } : ABSENT;
+            case 'Absent': return ABSENT;
+            default: return UNKNOWN;
+        }
+    }
+
+    /** The branch the condition picks; with no `else`, a false condition gives the empty string. */
+    private evaluateInlineIf(expression: InlineIfExpression): Abstract {
+        const truth = this.Truth(expression.Condition);
+        if (truth === null) return UNKNOWN;
+        if (truth) return this.evaluate(expression.Body);
+        return expression.Else === null ? { Kind: 'Value', Value: '' } : this.evaluate(expression.Else);
     }
 
     private evaluateLoopMember(member: string): Abstract {
@@ -89,6 +119,8 @@ export class BranchEvaluator {
         if (operator === 'and' || operator === 'or') return this.evaluateLogical(operator, left, right);
         const a = this.evaluate(left);
         const b = this.evaluate(right);
+        if (a.Kind === 'SampleLength') return compareSampleLength(operator, b);
+        if (b.Kind === 'SampleLength') return compareSampleLength(MIRRORED[operator] ?? '', a);
         if (!isComparable(a) || !isComparable(b)) return UNKNOWN;
         const x = a.Kind === 'Absent' ? undefined : a.Value;
         const y = b.Kind === 'Absent' ? undefined : b.Value;
@@ -110,6 +142,7 @@ function truthOf(value: Abstract): boolean | null {
     switch (value.Kind) {
         case 'Absent': return false;
         case 'Sample': return true;
+        case 'SampleLength': return true;
         case 'Value': return Boolean(value.Value);
         default: return null;
     }
@@ -120,6 +153,35 @@ function isComparable(value: Abstract): value is { readonly Kind: 'Absent' } | {
 }
 
 type Primitive = TemplateLiteralValue | undefined;
+
+/**
+ * `length <operator> other`, where the length is a whole number of at least 1: known only when
+ * every such number gives the same answer. Arithmetic on it is unknown.
+ */
+function compareSampleLength(operator: string, other: Abstract): Abstract {
+    if (other.Kind === 'Absent' || (other.Kind === 'Value' && other.Value === null)) {
+        if (operator === '==' || operator === '!=') return { Kind: 'Value', Value: operator === '!=' };
+    }
+    const bound = other.Kind === 'Absent' ? NaN : other.Kind === 'Value' ? Number(other.Value) : null;
+    if (bound === null || (other.Kind === 'Value' && typeof other.Value === 'string')) return UNKNOWN;
+    const result = lengthComparison(operator, bound);
+    return result === null ? UNKNOWN : { Kind: 'Value', Value: result };
+}
+
+/** Whether every whole number n >= 1 gives the same `n <operator> bound`: that answer, or `null`. */
+function lengthComparison(operator: string, bound: number): boolean | null {
+    if (isNaN(bound)) return RELATIONAL.has(operator) ? false : null;
+    const reachable = bound >= 1 && Number.isInteger(bound);
+    switch (operator) {
+        case '>': return bound < 1 ? true : null;
+        case '>=': return bound <= 1 ? true : null;
+        case '<': return bound <= 1 ? false : null;
+        case '<=': return bound < 1 ? false : null;
+        case '==': return reachable ? null : false;
+        case '!=': return reachable ? null : true;
+        default: return null;
+    }
+}
 
 /** Applies an operator with JavaScript's rules; `undefined` when the result is not a literal value. */
 function applyOperator(operator: string, x: Primitive, y: Primitive): TemplateLiteralValue | undefined {

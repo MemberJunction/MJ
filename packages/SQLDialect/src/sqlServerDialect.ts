@@ -37,6 +37,22 @@ const SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
     'fn_get_audit_file', 'fn_xe_file_target_read_file', 'fn_trace_gettable'
 ];
 
+/** Keywords that begin a T-SQL statement that writes data, changes the schema or runs code. */
+const SQL_SERVER_WRITE_STATEMENT_KEYWORDS: readonly string[] = Object.freeze([
+    ...ANSI_WRITE_STATEMENT_KEYWORDS.filter(keyword => keyword !== 'CALL'),
+    'EXEC', 'EXECUTE', 'DENY', 'BULK', 'BACKUP', 'RESTORE', 'DBCC', 'RECONFIGURE', 'SHUTDOWN', 'KILL',
+]);
+
+/**
+ * Reserved T-SQL keywords that only ever begin a statement. T-SQL needs no separator between
+ * statements, so one of these as a bare word after a statement's first word starts another
+ * statement in the same batch.
+ */
+const SQL_SERVER_STATEMENT_KEYWORDS: readonly string[] = [
+    'SET', 'DECLARE', 'WAITFOR', 'USE', 'PRINT', 'RAISERROR', 'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVE', 'GOTO', 'RETURN',
+    'IF', 'WHILE', 'BREAK', 'CONTINUE', 'OPEN', 'CLOSE', 'DEALLOCATE', 'CHECKPOINT', 'READTEXT', 'WRITETEXT', 'UPDATETEXT',
+];
+
 /**
  * SQL Server grammar facts: `TOP` and `OFFSET … FETCH` row caps, no ORDER BY in a CTE or derived
  * table without TOP/OFFSET/FOR XML, no nested WITH, plain `WITH` for recursion, the `OPTION (…)`
@@ -54,11 +70,9 @@ export const SQL_SERVER_GRAMMAR: DialectGrammar = Object.freeze({
     QueryHintKeyword: 'OPTION',
     DocumentTailClauses: Object.freeze(['FOR JSON', 'FOR XML']),
     CorrelatedJoin: 'apply',
-    WriteStatementKeywords: Object.freeze([
-        ...ANSI_WRITE_STATEMENT_KEYWORDS.filter(keyword => keyword !== 'CALL'),
-        'EXEC', 'EXECUTE', 'DENY', 'BULK', 'BACKUP', 'RESTORE', 'DBCC', 'RECONFIGURE', 'SHUTDOWN', 'KILL',
-    ]),
+    WriteStatementKeywords: SQL_SERVER_WRITE_STATEMENT_KEYWORDS,
     CallerSQLForbiddenFunctions: SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS,
+    UnseparatedStatementKeywords: Object.freeze([...SQL_SERVER_WRITE_STATEMENT_KEYWORDS, ...SQL_SERVER_STATEMENT_KEYWORDS]),
     DefaultPagingOrderBy: '(SELECT NULL)',
     SelectListPagingOrderBy: '1',
     PagingRequiresOrderBy: true,

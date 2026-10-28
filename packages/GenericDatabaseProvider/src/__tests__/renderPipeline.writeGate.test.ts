@@ -11,7 +11,9 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Metadata, DatabasePlatform, QueryDependencySpec, UserInfo } from '@memberjunction/core';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import { RenderPipeline, RenderContext } from '../renderPipeline';
+import { IsQuerySafetyError, QuerySafetyError, SafetyGate } from '../index';
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -163,5 +165,55 @@ describe('the read-only gate does not need a complete structural parse', () => {
         const deps: QueryDependencySpec[] = [{ Name: 'Into', CategoryPath: '/Test/', SQL: SELECT_INTO }];
         expect(() => RenderPipeline.Run('SELECT * FROM {{query:"Test/Into"}} [w]', { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps }))
             .toThrow(/writes its result into a table/);
+    });
+});
+
+// A caller that renders SQL for a reason other than running it (a save that describes the query)
+// must tell a safety refusal from any other render failure, so the gate throws its own error type.
+describe('the safety refusal is a QuerySafetyError', () => {
+    it.each([
+        ['a write', 'DELETE FROM t'],
+        ['an unseparated T-SQL write after a read', 'SELECT 1 AS a DELETE FROM t'],
+        ['a forbidden function call', "SELECT * FROM OPENROWSET(BULK 'x', SINGLE_CLOB) AS r"],
+    ])('%s', (_label, sql) => {
+        let caught: unknown = null;
+        try {
+            renderSaved(sql);
+        } catch (e) {
+            caught = e;
+        }
+        expect(caught).toBeInstanceOf(QuerySafetyError);
+        expect(IsQuerySafetyError(caught)).toBe(true);
+    });
+
+    it('is thrown by SafetyGate.AssertSafeToExecute for plain SQL, with the same message the pipeline gives', () => {
+        expect(() => SafetyGate.AssertSafeToExecute('UPDATE t SET a = 1', GetDialect('sqlserver'), true))
+            .toThrow('RenderPipeline: only a single read query may be run here, and this SQL is not one: it starts with UPDATE, not SELECT or WITH.');
+    });
+
+    it('says when the SQL was refused only because it could not be read', () => {
+        const refusal = (sql: string, platform: DatabasePlatform): QuerySafetyError => {
+            try {
+                SafetyGate.AssertSafeToExecute(sql, GetDialect(platform), true);
+            } catch (e) {
+                if (e instanceof QuerySafetyError) return e;
+            }
+            throw new Error(`expected a QuerySafetyError for ${sql}`);
+        };
+        expect(refusal('WITH [A Set] AS (SELECT 1 AS x) SELECT x FROM [A Set]', 'postgresql').Unreadable).toBe(true);
+        expect(refusal('DELETE FROM t', 'postgresql').Unreadable).toBe(false);
+        expect(refusal("SELECT pg_read_file('x')", 'postgresql').Unreadable).toBe(false);
+    });
+
+    it('is not the error of a render that fails for another reason', () => {
+        let caught: unknown = null;
+        try {
+            stubMetadata();
+            RenderPipeline.Run('SELECT * FROM {{query:"Nowhere/Missing"}} m', { Platform: 'sqlserver', ContextUser: mockUser });
+        } catch (e) {
+            caught = e;
+        }
+        expect(caught).not.toBeNull();
+        expect(IsQuerySafetyError(caught)).toBe(false);
     });
 });

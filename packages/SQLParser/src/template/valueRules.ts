@@ -2,7 +2,7 @@ import { MakeDiagnostic } from '../common/analysis.js';
 import type { Diagnostic, DiagnosticSeverity, Span } from '../common/analysis.js';
 import { MJQueryDiagnosticCodes } from '../common/diagnosticCodes.js';
 import { WalkExpression } from './expressionTypes.js';
-import type { FilterExpression, TemplateExpression } from './expressionTypes.js';
+import type { FilterExpression, LengthExpression, TemplateExpression } from './expressionTypes.js';
 import { SetVariableNames } from './parameterAnalysis.js';
 import type { TemplateParameter } from './parameterAnalysis.js';
 import {
@@ -61,22 +61,40 @@ export class ValueRules {
     // ─── Holes ────────────────────────────────────────────
 
     private checkHole(node: ExpressionNode, scope: WalkScope): void {
-        const { Base, Filters } = UnwrapFilters(node.Expression);
+        this.checkHoleValue(node.Expression, [], scope, false);
+    }
+
+    /**
+     * Checks a value a hole writes: the hole's expression, or a branch of an inline if in it.
+     * `outer` are the filters applied around it, innermost first. A literal is allowed as a branch
+     * (the author wrote it), not as a whole hole; an inline if's condition is not written.
+     */
+    private checkHoleValue(expression: TemplateExpression, outer: readonly FilterExpression[], scope: WalkScope, inBranch: boolean): void {
+        const { Base, Filters } = UnwrapFilters(expression);
         if (Base.Kind === 'Binary' || Base.Kind === 'Unary') {
             this.add(MJQueryDiagnosticCodes.ArithmeticInHole, 'Error', Base.Span, 'Operators are not allowed inside a {{ }} hole.',
                 'Do the arithmetic in SQL around the hole ({{ Year | sqlNumber }} - 1), or in a {% set %}.');
             return;
         }
         if (Base.Kind === 'Literal') {
-            this.add(MJQueryDiagnosticCodes.HoleNotAValue, 'Error', Base.Span, 'A {{ }} hole must start from a parameter, a Context token or a loop value.',
-                'Write the literal into the SQL itself.');
+            if (!inBranch) {
+                this.add(MJQueryDiagnosticCodes.HoleNotAValue, 'Error', Base.Span, 'A {{ }} hole must start from a parameter, a Context token or a loop value.',
+                    'Write the literal into the SQL itself.');
+            }
             return;
         }
         this.checkDefaults(Filters);
-        const sqlFilters = Filters.filter(f => FindSqlFilter(f.Name) !== undefined);
+        const filters = [...Filters, ...outer];
+        if (Base.Kind === 'InlineIf') {
+            this.checkHoleValue(Base.Body, filters, scope, true);
+            if (Base.Else !== null) this.checkHoleValue(Base.Else, filters, scope, true);
+            return;
+        }
+        const sqlFilters = filters.filter(f => FindSqlFilter(f.Name) !== undefined);
         const last = sqlFilters.length > 0 ? sqlFilters[sqlFilters.length - 1] : undefined;
         if (Base.Kind === 'Context') this.checkContextHole(Base.FullName, Base.Span, last);
         else if (Base.Kind === 'Name') this.checkNameHole(Base.Name, Base.Span, last, scope);
+        else if (Base.Kind === 'Length') this.checkLengthHole(Base, last);
     }
 
     private checkDefaults(filters: readonly FilterExpression[]): void {
@@ -107,6 +125,13 @@ export class ValueRules {
         if (name === 'loop' || name === 'Context') return;
         if (last === undefined) this.checkUnfilteredParameter(name, span);
         else this.checkFilterFits(name, last);
+    }
+
+    /** `<name>.length` written into the SQL: a number, so it takes `sqlNumber` like any value of unchecked shape. */
+    private checkLengthHole(length: LengthExpression, last: FilterExpression | undefined): void {
+        const text = `${length.Object.Name}.length`;
+        if (last === undefined) this.unfiltered(length.Span, text, 'sqlNumber');
+        else if (FindSqlFilter(last.Name)?.ValueType !== 'number') this.mismatch(last, text, 'sqlNumber');
     }
 
     /** An unfiltered parameter: allowed for numbers, booleans and server-set values. */

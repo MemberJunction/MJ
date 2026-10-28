@@ -76,6 +76,12 @@ export interface SQLParserDialect {
      * them.
      */
     CallerSQLForbiddenFunctions: readonly string[];
+    /**
+     * Upper-case keywords that start a new statement wherever they appear as a bare word at the top
+     * level of another one, because the platform needs no separator between statements; empty or
+     * absent when statements must be separated. SQL Server: the statement keywords; PostgreSQL: none.
+     */
+    UnseparatedStatementKeywords?: readonly string[];
 }
 
 /**
@@ -740,6 +746,11 @@ export abstract class SQLDialect extends QueryDialect implements SQLParserDialec
     /** {@inheritDoc SQLParserDialect.CallerSQLForbiddenFunctions} */
     get CallerSQLForbiddenFunctions(): readonly string[] {
         return this.Grammar.CallerSQLForbiddenFunctions;
+    }
+
+    /** {@inheritDoc SQLParserDialect.UnseparatedStatementKeywords} */
+    get UnseparatedStatementKeywords(): readonly string[] {
+        return this.Grammar.UnseparatedStatementKeywords ?? [];
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

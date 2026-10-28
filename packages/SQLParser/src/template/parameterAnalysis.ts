@@ -17,10 +17,18 @@ export interface ParameterUse {
     readonly Span: Span;
     /** The whole tag the use sits in. */
     readonly TagSpan: Span;
-    /** The filter names applied to the value, innermost first; empty unless the use starts a `{{ }}` hole. */
+    /**
+     * The filter names applied to the value, innermost first; empty unless the use is a value a
+     * `{{ }}` hole writes (the hole's own value, or a branch of an inline if in it).
+     */
     readonly Filters: readonly string[];
-    /** Whether the use sits inside an `{% if %}` block, or is part of an `{% if %}` condition. */
+    /**
+     * Whether the use sits inside an `{% if %}` block, is part of an `{% if %}` condition, or is
+     * any part of an inline if.
+     */
     readonly InsideConditional: boolean;
+    /** Whether the use is `<name>.length`, which reads the length of the value. */
+    readonly ReadsLength: boolean;
     /** Whether a `default(…)` filter supplies a value when the parameter has none. */
     readonly HasDefault: boolean;
     readonly SqlContext: TemplateSqlContext;
@@ -31,12 +39,16 @@ export interface TemplateParameter {
     readonly Name: string;
     /** Every filter name applied to it, in order of first appearance. */
     readonly Filters: readonly string[];
-    /** The type its SQL filters imply (the last SQL filter of each use), or `array` for a loop's iterable. */
+    /**
+     * The type its SQL filters imply (the last SQL filter of each use), or `array` for a loop's
+     * iterable. `<name>.length` implies no type of its own (an array and a string both have a
+     * length); a number or boolean use beside it is reported as a type conflict.
+     */
     readonly InferredType: TemplateParameterType;
     /**
      * Whether the template needs a value: true when at least one use sits outside every
-     * `{% if %}` block and has no `default(…)`. A parameter used only inside conditional blocks,
-     * or only in `{% if %}` conditions, is optional.
+     * `{% if %}` block and every inline if, and has no `default(…)`. A parameter used only inside
+     * conditional blocks, only in conditions, or only inside inline ifs, is optional.
      */
     readonly IsRequired: boolean;
     /** The literal its first `default(…)` filter gives, or `null`. */
@@ -127,7 +139,8 @@ export class ParameterAnalyzer {
         const filters = visit.Filters.map(f => f.Name);
         const use: ParameterUse = {
             Role: visit.Role, Span: visit.Reference.Span, TagSpan: visit.Owner.Span, Filters: filters,
-            InsideConditional: visit.Scope.Conditional, HasDefault: filters.includes(DEFAULT_FILTER_NAME), SqlContext: visit.SqlContext,
+            InsideConditional: visit.Scope.Conditional, ReadsLength: visit.ReadsLength,
+            HasDefault: filters.includes(DEFAULT_FILTER_NAME), SqlContext: visit.SqlContext,
         };
         const list = target.get(key);
         if (list) list.push(use);
@@ -145,19 +158,26 @@ export class ParameterAnalyzer {
     }
 }
 
-/** The type the uses imply; a second, different type is reported. */
+/** Types that have no length: `<name>.length` of such a value is always `undefined`. */
+const TYPES_WITHOUT_LENGTH: ReadonlySet<TemplateParameterType> = new Set<TemplateParameterType>(['number', 'boolean']);
+
+/** The type the uses imply; a second, different type is reported, as is `.length` of a number or boolean. */
 function inferType(name: string, uses: readonly ParameterUse[], diagnostics: Diagnostic[]): TemplateParameterType {
     let type: TemplateParameterType = 'unknown';
     for (const use of uses) {
         const implied = use.Role === 'LoopIterable' ? 'array' : TypeFromFilters(use.Filters);
         if (implied === 'unknown') continue;
         if (type === 'unknown') type = implied;
-        else if (implied !== type) {
-            diagnostics.push(MakeDiagnostic(MJQueryDiagnosticCodes.ParameterTypeConflict, 'Warning', use.Span,
-                `"${name}" is used as ${type} elsewhere but as ${implied} here.`, 'Use one type, and the filter for it, at every use.'));
-        }
+        else if (implied !== type) diagnostics.push(typeConflict(use.Span, `"${name}" is used as ${type} elsewhere but as ${implied} here.`));
+    }
+    if (TYPES_WITHOUT_LENGTH.has(type)) {
+        for (const use of uses.filter(u => u.ReadsLength)) diagnostics.push(typeConflict(use.Span, `"${name}" is used as ${type} elsewhere, which has no length.`));
     }
     return type;
+}
+
+function typeConflict(span: Span, message: string): Diagnostic {
+    return MakeDiagnostic(MJQueryDiagnosticCodes.ParameterTypeConflict, 'Warning', span, message, 'Use one type, and the filter for it, at every use.');
 }
 
 /** The literal value of a filter's first argument, or `null`. */

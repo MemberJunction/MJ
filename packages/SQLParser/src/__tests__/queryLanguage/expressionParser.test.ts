@@ -17,6 +17,8 @@ function show(e: TemplateExpression): string {
         case 'Name': return e.Name;
         case 'Context': return e.FullName;
         case 'LoopMember': return `loop.${e.Member}`;
+        case 'Length': return `${e.Object.Name}.length`;
+        case 'InlineIf': return `(${show(e.Body)} if ${show(e.Condition)}${e.Else ? ` else ${show(e.Else)}` : ''})`;
         case 'Literal': return JSON.stringify(e.Value);
         case 'Unary': return `(${e.Operator} ${show(e.Operand)})`;
         case 'Binary': return `(${show(e.Left)} ${e.Operator} ${show(e.Right)})`;
@@ -51,6 +53,16 @@ describe('TemplateExpressionParser: the grammar', () => {
         ['a + b | sqlNumber', '(a + b|sqlNumber)'],
         ['-x | sqlNumber', '(- x)|sqlNumber'],
         ['Context.Today | sqlDate', 'Context.Today|sqlDate'],
+        ['x.length', 'x.length'],
+        ['x and x.length > 0', '(x and (x.length > 0))'],
+        ['not x.length', '(not x.length)'],
+        ['loop.length', 'loop.length'],
+        ['x | sqlNumber if x else 12', '(x|sqlNumber if x else 12)'],
+        ['x | sqlNumber if x else y | sqlNumber', '(x|sqlNumber if x else y|sqlNumber)'],
+        ['a if b', '(a if b)'],
+        ['a or b if c and d else e + 1', '((a or b) if (c and d) else (e + 1))'],
+        ['(a if b else c) | sqlNumber', '(a if b else c)|sqlNumber'],
+        ['a if (b if c else d) else e', '(a if (b if c else d) else e)'],
     ])('parses %s', (text, expected) => {
         const parsed = parse(text);
         expect(show(parsed.Expression)).toBe(expected);
@@ -78,8 +90,15 @@ describe('TemplateExpressionParser: refused constructs', () => {
         ['f(x)', 'MJQ_FUNCTION_CALL', '!FunctionCall[f,x]'],
         ['x.upper()', 'MJQ_MEMBER_ACCESS', '!FunctionCall[!MemberAccess[x]]'],
         ['x[0]', 'MJQ_SUBSCRIPT', '!Subscript[x,0]'],
-        ['a if b else c', 'MJQ_INLINE_IF', '!InlineIf[a,b,c]'],
         ['x.y', 'MJQ_MEMBER_ACCESS', '!MemberAccess[x]'],
+        ['x.foo > 0', 'MJQ_MEMBER_ACCESS', '(!MemberAccess[x] > 0)'],
+        ['x.constructor', 'MJQ_MEMBER_ACCESS', '!MemberAccess[x]'],
+        ['x.Length', 'MJQ_MEMBER_ACCESS', '!MemberAccess[x]'],
+        ["x['length']", 'MJQ_SUBSCRIPT', '!Subscript[x,"length"]'],
+        ['x.length()', 'MJQ_FUNCTION_CALL', '!FunctionCall[x.length]'],
+        ['x.length.length', 'MJQ_MEMBER_ACCESS', '!MemberAccess[x.length]'],
+        ['Context.UserID.length', 'MJQ_MEMBER_ACCESS', '!MemberAccess[Context.UserID]'],
+        ["'abc'.length", 'MJQ_MEMBER_ACCESS', '!MemberAccess["abc"]'],
         ['a in b', 'MJQ_UNSUPPORTED_OPERATOR', '!Operator[a,b]'],
         ['a not in b', 'MJQ_UNSUPPORTED_OPERATOR', '!Operator[a,b]'],
         ['a is defined', 'MJQ_UNSUPPORTED_OPERATOR', '!Operator[a,defined]'],
@@ -102,6 +121,8 @@ describe('TemplateExpressionParser: refused constructs', () => {
         ['a b', 'Unexpected "b".'],
         ['x |', 'Expected a filter name after "|".'],
         ['@', 'Unexpected "@".'],
+        ['a if b else c if d else e', 'Unexpected "if".'],
+        ['a if', 'Expected a value.'],
     ])('reports a syntax error in %j', (text, message) => {
         const parsed = parse(text);
         expect(Codes(parsed.Diagnostics)).toContain('MJQ_SYNTAX');

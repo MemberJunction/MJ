@@ -1661,6 +1661,72 @@
           "primaryKey": {
             "ID": "86466F49-FA5A-4B12-BE14-3277813C886C"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT141 - Query API Lifecycle over GraphQL",
+            "Sequence": 78,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3FC29331-C6D5-4C8B-8083-7FBAE89C6889"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT142 - Query Security",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D5A17CDE-C46C-405A-8156-265CB272B15E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT143 - SQL Pipeline Scenario Matrix",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5D13057D-F57E-4E7D-A760-1D37B38FC47A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT144 - SQL Pipeline Extraction Fixtures",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "13C81E72-03FB-475F-A271-F9DEBD11435F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99D3FE11-6191-46B9-8990-7B70ED3C9B67"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT145 - SQL Pipeline Scenario Matrix over GraphQL",
+            "Sequence": 79,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "07B6EF3D-D0FD-4C75-8CB8-9D1BAA7EBE2E"
+          }
         }
       ]
     },

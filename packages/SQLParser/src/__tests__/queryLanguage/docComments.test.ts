@@ -61,6 +61,12 @@ WHERE CreatedAt >= {{ Since | sqlDate }} {% if Region %}AND Region = {{ Region |
         expect(docs('{#\n * @param x The x\n #}SELECT {{ x | sqlNumber }}').Value.Parameters.map(p => p.Description)).toEqual(['The x']);
     });
 
+    it('drops the alignment after a leading star on continuation and summary lines, as it does without stars', () => {
+        const result = docs('{#\n *   Rows by x.\n * @param x The x,\n *        continued.\n #}SELECT {{ x | sqlNumber }}');
+        expect(result.Value.Summary).toBe('Rows by x.');
+        expect(result.Value.Parameters.map(p => p.Description)).toEqual(['The x,\ncontinued.']);
+    });
+
     it('ignores a comment with no tags', () => {
         const result = docs('{# just a note #}SELECT 1');
         expect(result.Value).toEqual({ Summary: null, Parameters: [], Fields: [] });

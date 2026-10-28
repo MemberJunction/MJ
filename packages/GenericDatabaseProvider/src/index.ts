@@ -39,6 +39,7 @@ export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 export type { RowCapOutcome, RowCapMethod, RowCapResult } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
+export { SafetyGate, QuerySafetyError, IsQuerySafetyError } from './composition/safetyGate.js';
 export { SymbolTable } from './symbolTable.js';
 // Re-export from @memberjunction/sql-parser for backward compatibility
 export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, ParseToIR, RenderIR } from '@memberjunction/sql-parser';

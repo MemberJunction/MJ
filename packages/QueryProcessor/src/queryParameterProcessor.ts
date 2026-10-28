@@ -594,6 +594,8 @@ export class QueryParameterProcessor {
     /**
      * The values a template renders with: the validated parameters and, when force-processing,
      * every other value given (caller and server) so Nunjucks can resolve composed queries' tokens.
+     * A `null` or `undefined` value is no value: validation leaves it out of the validated set, and
+     * adding it back would make `default(…)` see a value and a filter format `null` (as `0`).
      */
     private static buildRenderParams(
         validated: Record<string, unknown>,
@@ -605,7 +607,7 @@ export class QueryParameterProcessor {
         const given = this.mergeServerValues(parameters, serverValues);
         if (forceTemplateProcessing && given) {
             for (const [key, value] of Object.entries(given)) {
-                if (!(key in renderParams)) {
+                if (!(key in renderParams) && value !== null && value !== undefined) {
                     renderParams[key] = value;
                 }
             }

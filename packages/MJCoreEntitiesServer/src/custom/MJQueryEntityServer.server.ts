@@ -8,6 +8,8 @@ import {
     IRunViewProvider,
     LogError,
     PostCommitToken,
+    ProviderBase,
+    ProviderType,
     SimpleEmbeddingResult,
     UserInfo,
 } from "@memberjunction/core";
@@ -187,6 +189,10 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // Over a client provider (a process that loads this package but saves over GraphQL), the server
+        // the save reaches applies the approval rules and extracts; doing it here too would write the
+        // child rows twice, the second time from the client.
+        if (this.savesOverNetwork) return super.Save(options);
         let approving: boolean;
         try {
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
@@ -207,6 +213,12 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             this.presetExtraction = null;
             this.refreshing = false;
         }
+    }
+
+    /** Whether this object saves through a network (client) provider rather than to a database. */
+    private get savesOverNetwork(): boolean {
+        const provider: unknown = this.ProviderToUse;
+        return provider instanceof ProviderBase && provider.ProviderType === ProviderType.Network;
     }
 
     /**

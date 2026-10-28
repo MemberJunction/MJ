@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT146 - SQL Pipeline Scenario Cross Products",
+    "Description": "The high-risk full cross products of the SQL pipeline scenario matrix (same dimensions, oracles and checks as IT143), on SQL Server and PostgreSQL: SPM2 composition × templating × MaxRows × StartRow on the mock schema with a CTE-shaped outer query (so a dependency's own CTE named like the outer one collides); SPM3 conditional parameters × composition on the core schema, including the refused missing / implicit same-name / unknown arguments; SPM4 own row cap (TOP, LIMIT, PERCENT, WITH TIES, OFFSET-FETCH, an unordered TOP) × composition × MaxRows × StartRow; SPM5 the extraction properties of every query saved. Split from IT143 to keep each bundle within its time limit. Self-cleaning.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every scenario of the high-risk cross products returns the rows of its plain-SQL oracle, and its extracted metadata satisfies the spec rules."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "sqlpipe-matrix-cross"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F0064B54-8769-4B97-816B-EC592D200749"
+  }
+}

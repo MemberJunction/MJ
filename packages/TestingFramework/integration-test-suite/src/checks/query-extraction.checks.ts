@@ -1,5 +1,5 @@
 /**
- * query-extraction.checks.ts — the 'query-extraction' bundle (QE1–QE11), deterministic tier (IT138).
+ * query-extraction.checks.ts — the 'query-extraction' bundle (QE1–QE15), deterministic tier (IT138).
  *
  * Saves fixture queries with extraction ON (a normal save) and asserts exactly what extraction
  * wrote, on SQL Server and PostgreSQL:
@@ -17,20 +17,31 @@
  *  - QE9: a query returning two columns with one name is refused at save, and nothing is written;
  *  - QE10: `ExtractionStatus`, `ExtractedSQLHash` and `UsesTemplate` are recorded on the query row;
  *  - QE11: a composition that leaves out a required parameter of its target is refused at save;
- *    one that passes it records a dependency row by full path, with the argument mapping.
+ *    one that passes it records a dependency row by full path, with the argument mapping;
+ *  - QE12: the JSDoc-style header form — leading stars, `{type}`, a `- ` separator, continuation
+ *    lines, a quoted field name — and a header description beating a trailing `--:` one
+ *    (`MJQ_DOC_DUPLICATE`); the `{type}` and the summary are not stored;
+ *  - QE13: an `@param` naming no parameter and an unknown `@tag` are Warnings, located, in
+ *    `ExtractionMessage`, and write no row;
+ *  - QE14: an unpassed target parameter named like an outer parameter refuses the save of a new
+ *    query (nothing written) and is a Warning when a stored query is refreshed;
+ *  - QE15: arithmetic and Context-token arguments are recorded as expressions in ParameterMapping;
+ *    the outer parameter an argument reads is a required parameter of the composer.
  *
  * The fixture schema `mjit_extract` (two tables, a view over a view) is created in Setup and
  * dropped in Teardown. Every query lives in a per-run `zzz-it138` category, deleted in Teardown.
  */
 import { createHash } from 'node:crypto';
 import type { DatabasePlatform } from '@memberjunction/core';
+import { ParseQueryDiagnostics, ParseQuerySaveMessage, QueryTextPosition } from '@memberjunction/core-entities';
 import type { MJExternalDataSourceEntity, MJQueryCategoryEntity, MJQueryFieldEntity } from '@memberjunction/core-entities';
+import { IsQueryRefreshProvider, QueryExtractionService } from '@memberjunction/core-entities-server';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
     ColumnName, CreateFixtureCategory, CreateFixtureQuery, FixtureCategoryPath, CreateSchemaStatement, DeleteFixtureCategory, DropSchemaStatements,
-    ForPlatform, NewFixtureQuery, ObjectName, PlatformOf, ReadQueryRows, RequireQueryDb, RunFixtureSQL, RunFixtureSQLQuietly, RunStamp,
+    ForPlatform, NewFixtureQuery, ObjectName, PlatformOf, ReadQueryRows, ReloadQuery, RequireQueryDb, RunFixtureSQL, RunFixtureSQLQuietly, RunStamp,
 } from './query-extraction-fixture';
 import type { FixtureQuerySpec } from './query-extraction-fixture';
 import type { MJQueryEntityServer } from '@memberjunction/core-entities-server';
@@ -413,6 +424,145 @@ async function checkQe11CompositionArguments(ctx: IntegrationCheckContext): Prom
     AssertEqual(rows.Fields.map(x => x.Name).join(','), 'ID,Name', 'QE11: the composer is described through the composed query');
 }
 
+// ─── QE12–QE13: the doc-comment header form ─────────────────────────────────
+
+const HEADER_DOC_SQL = [
+    '{#',
+    ' * Customers by region and balance.',
+    ' * A second summary line.',
+    ' * @param {string} RegionID - The region to list,',
+    ' *        continued on this line.',
+    ' * @param {number} Floor The minimum balance.',
+    " * @field ID The customer's ID.",
+    ' * @field [Customer Name] The display name,',
+    ' *        continued.',
+    ' * @field Balance The balance (header).',
+    '#}',
+    'SELECT c.[ID], c.[Name] AS [Customer Name], c.[Balance] --: The balance (trailing).',
+    'FROM mjit_extract.[Customer] c',
+    'WHERE c.[RegionID] = {{ RegionID | sqlNumber }} AND c.[Balance] >= {{ Floor | sqlNumber }}',
+].join('\n');
+
+/** One stored `ExtractionMessage` diagnostic as `Code@line:column Message`, its location read from `sql`. */
+function diagnosticAt(sql: string, code: string, needle: string, message: string): string {
+    const at = QueryTextPosition(sql, sql.indexOf(needle));
+    return `${code}@${at.Line}:${at.Column} ${message}`;
+}
+
+/** The coded diagnostics of a stored message, each as `Code@line:column Message`, in order. */
+function codedDiagnostics(message: string | null): string[] {
+    return ParseQueryDiagnostics(message).filter(d => d.Code !== null).map(d => `${d.Code}@${d.Line}:${d.Column} ${d.Message}`);
+}
+
+/**
+ * The JSDoc-style header: leading stars, an optional `{type}`, a `- ` separator, continuation
+ * lines joined with a line break (their alignment dropped), a bracket- or double-quoted field
+ * name, and a header description beating a trailing `--:` one (`MJQ_DOC_DUPLICATE`, a Warning).
+ * The `{type}` is not stored: a parameter's Type follows its filter. The summary before the first
+ * tag is not stored on the query row either: its Description stays as the save left it.
+ */
+async function checkQe12HeaderDocComments(ctx: IntegrationCheckContext): Promise<void> {
+    const query = await saveQuery(ctx, 'QE12 header docs', HEADER_DOC_SQL);
+    const rows = await ReadQueryRows(ctx, BUNDLE, query.ID);
+    AssertEqual(rows.Parameters.map(r => `${r.Name}:${r.Type}:${String(r.IsRequired)}:${r.Description ?? ''}`).join(' | '),
+        'Floor:number:true:The minimum balance. | RegionID:number:true:The region to list,\ncontinued on this line.',
+        'QE12: @param descriptions, the - separator and a continuation line; Type follows the filter, not the {type}');
+    AssertEqual(rows.Fields.map(f => `${f.Name}=${f.Description ?? ''}`).join(' | '),
+        "ID=The customer's ID. | Customer Name=The display name,\ncontinued. | Balance=The balance (header).",
+        'QE12: @field descriptions, a quoted name with a space, and the header beating the trailing --: comment');
+    AssertEqual(query.ExtractionStatus, 'Warning', `QE12: the duplicate description is a Warning (message: ${query.ExtractionMessage ?? ''})`);
+    AssertEqual(codedDiagnostics(query.ExtractionMessage).join(' / '),
+        diagnosticAt(query.SQL ?? '', 'MJQ_DOC_DUPLICATE', '--:', '"Balance" is already described; this description is ignored.'),
+        'QE12: the ExtractionMessage holds exactly the duplicate-description warning, at the trailing comment');
+    AssertEqual((await ReloadQuery(ctx, query.ID)).Description, null, 'QE12: the header summary is not written to the query\'s Description');
+}
+
+/** An `@param` naming no parameter and an unknown `@tag` are Warnings in ExtractionMessage; neither writes a row. */
+async function checkQe13UnknownDocTags(ctx: IntegrationCheckContext): Promise<void> {
+    const sql = ['{#', '  @param Ghost Not a parameter of this query.', '  @returns The rows.', '  @param RegionID The region.', '#}',
+        'SELECT c.[ID] FROM mjit_extract.[Customer] c WHERE c.[RegionID] = {{ RegionID | sqlNumber }}'].join('\n');
+    const query = await saveQuery(ctx, 'QE13 unknown doc tags', sql);
+    AssertEqual(query.ExtractionStatus, 'Warning', `QE13: doc-comment findings are Warnings (message: ${query.ExtractionMessage ?? ''})`);
+    const stored = query.SQL ?? '';
+    AssertEqual(codedDiagnostics(query.ExtractionMessage).join(' / '), [
+        diagnosticAt(stored, 'MJQ_DOC_UNKNOWN_TAG', '  @returns', '@returns is not a doc-comment tag; it is ignored.'),
+        diagnosticAt(stored, 'MJQ_DOC_UNKNOWN_PARAMETER', 'Ghost', '@param Ghost does not name a parameter of this query.'),
+    ].join(' / '), 'QE13: the unknown tag and the unknown parameter, each with its code and location');
+    const rows = await ReadQueryRows(ctx, BUNDLE, query.ID);
+    AssertEqual(rows.Parameters.map(r => `${r.Name}:${r.Description ?? ''}`).join(','), 'RegionID:The region.', 'QE13: no row for Ghost; RegionID keeps its description');
+}
+
+// ─── QE14–QE15: composition arguments ───────────────────────────────────────
+
+function refreshService(ctx: IntegrationCheckContext): QueryExtractionService {
+    const provider = RequireQueryDb(ctx.Provider, BUNDLE);
+    if (!IsQueryRefreshProvider(provider)) throw new Error(`${BUNDLE}: the provider cannot run views`);
+    return new QueryExtractionService({ Provider: provider, User: ctx.User });
+}
+
+async function countRows(ctx: IntegrationCheckContext, entityName: string, filter: string): Promise<number> {
+    const result = await RequireQueryDb(ctx.Provider, BUNDLE).RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only', BypassCache: true }, ctx.User);
+    if (!result.Success) throw new Error(`${BUNDLE}: counting ${entityName} failed: ${result.ErrorMessage}`);
+    return result.TotalRowCount;
+}
+
+/**
+ * A target parameter the composition does not pass, named like a parameter of the outer query,
+ * is `MJQ_COMPOSITION_IMPLICIT_ARGUMENT`: an Error that refuses the save of a new query (nothing
+ * is written), and a Warning when a stored query is refreshed (the rows are written, the run is
+ * recorded as a Warning with the same diagnostic). The stored copy is saved with extraction off.
+ */
+async function checkQe14ImplicitArgument(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const target = await saveQuery(ctx, 'QE14 target',
+        'SELECT c.[ID], c.[Name] FROM mjit_extract.[Customer] c {% if RegionID %}WHERE c.[RegionID] = {{ RegionID | sqlNumber }}{% endif %}', { Reusable: true });
+    const path = `${FixtureCategoryPath(f.Category)}/${target.Name}`;
+    const sql = `SELECT x.[ID] FROM {{query:"${path}"}} x WHERE x.[ID] > {{ RegionID | sqlNumber }}`;
+    const expected = `"RegionID" is a parameter of both queries but is not passed to "${path}"; values never flow implicitly.`;
+    const refused = await NewFixtureQuery(ctx, f.Category.ID, spec('QE14 implicit', sql, f.Platform));
+    Assert(!await refused.Save(FixtureQuerySaveOptions()), 'QE14: a new query leaving a same-named target parameter unpassed must be refused');
+    const saveMessage = ParseQuerySaveMessage(refused.LatestResult?.CompleteMessage);
+    AssertEqual(saveMessage.Diagnostics.map(d => `${d.Code} ${d.Message}`).join(' / '), `MJQ_COMPOSITION_IMPLICIT_ARGUMENT ${expected}`, 'QE14: the refusal carries the one Error');
+    AssertEqual(await countRows(ctx, 'MJ: Queries', `CategoryID='${f.Category.ID}' AND Name='${PREFIX} QE14 implicit'`), 0, 'QE14: the refused query was not written');
+    AssertEqual(await countRows(ctx, 'MJ: Query Dependencies', `DependsOnQueryID='${target.ID}'`), 0, 'QE14: no dependency row was written');
+
+    const stored = await saveQuery(ctx, 'QE14 implicit stored', sql, { Override: 'Skip' });
+    const report = await refreshService(ctx).RefreshQuery(stored.ID);
+    AssertEqual(report.ExtractionStatus, 'Warning', `QE14: on refresh the rule is a Warning (${report.Diagnostics.join(' / ')})`);
+    const reloaded = await ReloadQuery(ctx, stored.ID);
+    AssertEqual(reloaded.ExtractionStatus, 'Warning', 'QE14: the refresh records Warning on the query');
+    AssertEqual(ParseQueryDiagnostics(reloaded.ExtractionMessage).map(d => `${d.Code} ${d.Message}`).join(' / '), `MJQ_COMPOSITION_IMPLICIT_ARGUMENT ${expected}`,
+        'QE14: the stored message is exactly the implicit-argument warning');
+    const rows = await ReadQueryRows(ctx, BUNDLE, stored.ID);
+    AssertEqual(rows.Dependencies.map(d => `${NormalizeUUID(d.DependsOnQueryID)}|${d.ParameterMapping ?? 'null'}`).join(','), `${NormalizeUUID(target.ID)}|null`,
+        'QE14: the refresh writes the dependency row, with no argument mapping');
+    AssertEqual(rows.Parameters.map(p => `${p.Name}:${p.Type}:${String(p.IsRequired)}`).join(','), 'RegionID:number:true', 'QE14: the outer RegionID stays the composer\'s own parameter');
+}
+
+/**
+ * Arithmetic and Context-token arguments are recorded in the dependency row's ParameterMapping as
+ * `@{expression}`. The outer parameter an argument reads is a required parameter of the composer
+ * (a composition argument outside every `{% if %}`), listed once; a Context token is never one.
+ * MinScore also has a `sqlNumber` hole, which types it: a parameter read only by an argument
+ * expression has no inferred type, so it would be stored as `string`, and the sample value the
+ * describe renders with would make `MinScore - 1` fail the composed query's number check.
+ */
+async function checkQe15ExpressionArguments(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const target = await saveQuery(ctx, 'QE15 target',
+        'SELECT c.[ID], c.[Name] FROM mjit_extract.[Customer] c WHERE c.[Balance] >= {{ Lo | sqlNumber }} AND c.[JoinedAt] >= {{ Since | sqlDate }}', { Reusable: true });
+    const path = `${FixtureCategoryPath(f.Category)}/${target.Name}`;
+    const composer = await saveQuery(ctx, 'QE15 composer', `SELECT x.[ID], x.[Name] FROM {{query:"${path}(Lo=MinScore - 1, Since=Context.StartOfYear)"}} x WHERE x.[ID] <> {{ MinScore | sqlNumber }}`);
+    AssertEqual(composer.ExtractionStatus, 'OK', `QE15: extraction status (message: ${composer.ExtractionMessage ?? ''})`);
+    const rows = await ReadQueryRows(ctx, BUNDLE, composer.ID);
+    AssertEqual(rows.Dependencies.map(d => `${NormalizeUUID(d.DependsOnQueryID)}|${d.ReferencePath}|${d.ParameterMapping ?? ''}`).join(','),
+        `${NormalizeUUID(target.ID)}|${path}|{"Lo":"@{MinScore - 1}","Since":"@{Context.StartOfYear}"}`,
+        'QE15: the arithmetic and Context-token arguments are recorded as expressions');
+    AssertEqual(rows.Parameters.map(p => `${p.Name}:${p.Type}:${String(p.IsRequired)}:${p.DetectionMethod}`).join(','), 'MinScore:number:true:Parser',
+        'QE15: MinScore is one required parameter of the composer; Context is not a parameter');
+    AssertEqual(rows.Fields.map(x => x.Name).join(','), 'ID,Name', 'QE15: the composer is described through the composed query');
+}
+
 export const QueryExtractionChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.QE1`, Name: 'QE1: a query over tables gets exact field rows: order, base and full type, nullability, computed, schema.object source', Fn: checkQe1TableColumns },
     { Id: `${BUNDLE}.QE2`, Name: 'QE2: a query over a view built on a view keeps the inner types and names the view it reads', Fn: checkQe2ViewOverView },
@@ -425,6 +575,10 @@ export const QueryExtractionChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.QE9`, Name: 'QE9: a query returning two columns with one name is refused at save and writes nothing', Fn: checkQe9DuplicateOutputRefused },
     { Id: `${BUNDLE}.QE10`, Name: 'QE10: ExtractionStatus, ExtractedSQLHash and UsesTemplate are recorded on the query row', Fn: checkQe10ExtractionColumns },
     { Id: `${BUNDLE}.QE11`, Name: 'QE11: a composition must pass every required parameter of its target; its dependency row names the full path', Fn: checkQe11CompositionArguments },
+    { Id: `${BUNDLE}.QE12`, Name: 'QE12: a JSDoc-style header describes parameters and fields (stars, {type}, continuations, quoted names) and beats a trailing comment', Fn: checkQe12HeaderDocComments },
+    { Id: `${BUNDLE}.QE13`, Name: 'QE13: an @param naming no parameter and an unknown @tag are Warnings in ExtractionMessage and write no row', Fn: checkQe13UnknownDocTags },
+    { Id: `${BUNDLE}.QE14`, Name: 'QE14: an unpassed same-named target parameter refuses the save of a new query and is a Warning on refresh', Fn: checkQe14ImplicitArgument },
+    { Id: `${BUNDLE}.QE15`, Name: 'QE15: arithmetic and Context-token arguments are recorded in ParameterMapping, and the composer parameters follow', Fn: checkQe15ExpressionArguments },
 ];
 
 for (const check of QueryExtractionChecks) {

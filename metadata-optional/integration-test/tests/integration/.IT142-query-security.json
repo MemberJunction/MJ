@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT142 - Query Security",
+    "Description": "Tries to make queries write, call forbidden functions, break out of their parameter values and read denied columns, on SQL Server and PostgreSQL, and asserts each attempt is refused with its exact message and that nothing ran or was written. A fixture schema (mjit_security, with a three-row Canary table every write aims at) and a per-run zzz-it142 query category are created and removed by the bundle; after every probe the Canary must hold exactly its seeded rows and the schema exactly that one table. QS1 every write is refused for caller SQL on the ad hoc path (RunQuery with SQL, whose expression validator refuses first with its own wording) and on the execution-spec path TestQuerySQL runs (the read-only check's exact reason): INSERT, UPDATE, DELETE, MERGE, a write in a CTE (DELETE/UPDATE ... RETURNING on PostgreSQL) or after one (SQL Server), SELECT ... INTO, stacked statements (also after a comment), on SQL Server statements written one after another with no separator (SELECT 1 DELETE FROM ...), EXEC/EXECUTE, DO, COPY, PREPARE/EXECUTE, a SET or DECLARE prefix, and DDL. QS2 the same statements are refused when saved as a query (\"was not saved\" with the same reason) and no query row is stored. QS3 stored with extraction skipped, as a row written outside the save rules reaches the database, each is refused when run, with the same reason. QS4 every function a query may not call (SQL Server OPENROWSET, OPENQUERY, OPENDATASOURCE, OPENXML and the audit, trace and extended-event file readers; PostgreSQL the *_to_xml family, ts_stat, ts_rewrite, dblink*, the file, large-object, backend-signalling, WAL and pg_sleep functions) is refused for caller SQL, also spelled in mixed case, with a comment or line break before the parenthesis, quoted, bracketed, schema-qualified or inside a CTE; reads that only name such a function or a write keyword in a string, a comment or a quoted alias run (a MERGE join hint is refused by the ad hoc path's keyword validator, a known false positive, and runs on the spec path). QS5 the forbidden calls are refused at save and, in rows stored past the save, at run time. QS6 hostile string values passed by name to shipped queries (Entity Records By Tag, Tags For Entity Record, ListConversationDetailFeedback) find exactly their own stored fixture rows: a tag whose display name IS the value (' OR 1=1 --, a stacked DROP, a backslash-quote, a trailing backslash, unicode quotes, a concatenated subquery, % and _, template tags {{ }} {% %} {# #}), a tagged item whose RecordID is hostile, and LIKE searches where an inner % or _ is literal (a % at either end is dropped by the filter, as documented); a hostile entity name finds nothing. QS7 a date or number value carrying SQL is refused by parameter validation before any SQL runs (sqlDate, sqlNumber, and a declared number written without a filter), an array element with a quote reaches the database as one literal (a uuid conversion error that shows the quoting held), and caller values for server-set parameters (ExternalChangeDetection) are refused; benign controls run. QS8 the external-data-source read-only screen, called directly (it runs inside each driver after a remote connection is chosen, so no in-process path reaches it) for SQL Server, PostgreSQL, MySQL, Oracle, Snowflake, Databricks and ansi: a write keyword or separator inside a string, dollar/q-quote, comment or quoted name is allowed; a real write, a separator after a comment, MySQL executable comments and backslash escapes, an unseparated T-SQL statement and Oracle INTO are refused with the exact message; // and --1 are judged as each dialect reads them. QS9 field-level security on saved queries, as an in-memory principal holding one fixture role denied MJ: Tags.Description (field security is enabled on MJ: Tags for the check and fully restored afterwards): a query naming the column, using it only in ORDER BY or GROUP BY, or reading whole rows (SELECT DISTINCT t.*, UNION over *, FOR JSON/FOR XML over * on SQL Server, row_to_json(t)/to_jsonb(t) on PostgreSQL) is refused; SELECT * and alias.* over a join run with the column dropped; a query of allowed columns runs; the unrestricted caller runs every query and receives the stored value. QS10 a field-security refusal by ID and by category path and name reads exactly as the refusal of a query that does not exist. Complements IT135 PQ1-PQ4 (SQL Server only) and IT06 RLS12. Self-cleaning.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Unsafe query text is refused before it runs, and query results never carry what the caller may not read."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "query-security"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E186D74C-E149-48B8-A438-0F048A4D26B4"
+  }
+}

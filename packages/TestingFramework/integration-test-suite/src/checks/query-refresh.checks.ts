@@ -1,5 +1,5 @@
 /**
- * query-refresh.checks.ts — the 'query-refresh' bundle (QR1–QR12), deterministic tier (IT139).
+ * query-refresh.checks.ts — the 'query-refresh' bundle (QR1–QR16), deterministic tier (IT139).
  *
  * Drives `QueryExtractionService` and `RebindQueriesForChangedEntities` against fixture queries
  * over a fixture table (`mjit_rebind.Item`) and the core view `__mj.vwCompanies`:
@@ -15,12 +15,24 @@
  *    nothing; dropping or renaming a used column records `Error` with the server's message and
  *    leaves the SQL and the stored fields as they were;
  *  - QR12: queries whose stored dependency rows form a cycle are each refreshed once, and the
- *    cycle is reported once.
+ *    cycle is reported once;
+ *  - QR13: dropping the view a query reads records `Error` with the server's message, SQL and
+ *    fields kept;
+ *  - QR14: a column going NOT NULL with a type change updates `IsNullable` and the type and
+ *    reports both (a stored NULL nullability is corrected too); PostgreSQL's describe reports no
+ *    nullability, so there only the type change is asserted;
+ *  - QR15: deleting the entity field a query field's `SourceEntityFieldID` points at nulls it (the
+ *    foreign key is ON DELETE SET NULL), and a re-bind links it again. A disposable MJ: Entity
+ *    Fields row stands in for the dropped column: a CodeGen column drop is not used, because it
+ *    fails on the (EntityID, Sequence) unique index when it renumbers the remaining fields;
+ *  - QR16: a caller who may read but not update MJ: Queries is refused exactly like one with no
+ *    grant, single (dry run included) and bulk.
  *
  * The checks run in array order: the schema changes come last. For QR4 one MJ: Companies field
  * carries an all-Allow field permission row (field-level security stays off, so nothing is
  * enforced); the row is deleted in a `finally`, and again by Teardown if a check stopped early.
- * Teardown deletes the per-run `zzz-it139` category with its queries and drops `mjit_rebind`.
+ * Teardown deletes the per-run `zzz-it139` category with its queries, the QR15 probe field if a
+ * check stopped early, and drops `mjit_rebind`.
  */
 import { randomUUID } from 'node:crypto';
 import { UserInfo, UserRoleInfo } from '@memberjunction/core';
@@ -44,6 +56,14 @@ const BUNDLE = 'query-refresh';
 const PREFIX = 'zzz-it139';
 const SCHEMA = 'mjit_rebind';
 const TABLE = 'Item';
+/** The fixture view QR13 creates over the table and then drops. */
+const VIEW = 'vwItem';
+/**
+ * The disposable MJ: Entity Fields row QR15 adds to MJ: Companies and deletes again. It names no
+ * real column, so no query binds to it; QR15 points one stored query field at it by hand.
+ */
+const PROBE_FIELD_ID = '7C1E2B9A-4F3D-4E61-9B8A-2D5C6E7F8A91';
+const PROBE_FIELD_NAME = 'zzzIT139ProbeField';
 const NOGRANT_EMAIL = 'it-nogrant@integration.test';
 /** The core entity the re-bind checks change; no shipped query reads it. */
 const REBIND_ENTITY = 'MJ: Companies';
@@ -134,15 +154,16 @@ async function grantDefinerRights(ctx: IntegrationCheckContext, query: MJQueryEn
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
         const platform = PlatformOf(ctx, BUNDLE);
-        await RunFixtureSQL(ctx, BUNDLE, [...DropSchemaStatements(platform, SCHEMA, [], [TABLE]), ...createTableStatements(platform)]);
+        await RunFixtureSQL(ctx, BUNDLE, [...DropSchemaStatements(platform, SCHEMA, [VIEW], [TABLE]), ...createTableStatements(platform)]);
         const category = await CreateFixtureCategory(ctx, `${PREFIX} ${RunStamp()}`);
         fixture = { Platform: platform, Category: category, Queries: new Map(), FieldRuleIDs: [] };
         await createQueries(ctx, fixture);
     },
     Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
         await deleteFieldRules(ctx);
+        await RunFixtureSQLQuietly(ctx, BUNDLE, [deleteProbeFieldStatement(ctx, PlatformOf(ctx, BUNDLE))]);
         await DeleteFixtureCategory(ctx, BUNDLE, fixture?.Category);
-        await RunFixtureSQLQuietly(ctx, BUNDLE, DropSchemaStatements(PlatformOf(ctx, BUNDLE), SCHEMA, [], [TABLE]));
+        await RunFixtureSQLQuietly(ctx, BUNDLE, DropSchemaStatements(PlatformOf(ctx, BUNDLE), SCHEMA, [VIEW], [TABLE]));
         fixture = undefined;
     },
 });
@@ -184,8 +205,8 @@ function requireEntity(ctx: IntegrationCheckContext, name: string): EntityInfo {
 }
 
 /** The stored field rows of one query, every column, as a canonical string. */
-async function fieldRows(ctx: IntegrationCheckContext, key: QueryKey): Promise<string> {
-    const rows = await ReadQueryRows(ctx, BUNDLE, queryOf(key).ID);
+async function fieldRows(ctx: IntegrationCheckContext, queryID: string): Promise<string> {
+    const rows = await ReadQueryRows(ctx, BUNDLE, queryID);
     return CanonicalRows(rows.Fields.map(f => f.GetAll()));
 }
 
@@ -436,24 +457,24 @@ async function checkQr9DroppingUnusedColumnChangesNothing(ctx: IntegrationCheckC
 }
 
 async function checkQr10DroppingUsedColumnRecordsError(ctx: IntegrationCheckContext): Promise<void> {
-    await assertBreakingChangeRecorded(ctx, 'Named', 'Code', (_p, t, c) => `ALTER TABLE ${t} DROP COLUMN ${c('Code')}`, 'QR10');
+    await assertBreakingChangeRecorded(ctx, queryOf('Named'), 'Code', (_p, t, c) => `ALTER TABLE ${t} DROP COLUMN ${c('Code')}`, 'QR10');
 }
 
 async function checkQr11RenamingUsedColumnRecordsError(ctx: IntegrationCheckContext): Promise<void> {
-    await assertBreakingChangeRecorded(ctx, 'Renamed', 'Amount', (p, t, c) => p === 'postgresql'
+    await assertBreakingChangeRecorded(ctx, queryOf('Renamed'), 'Amount', (p, t, c) => p === 'postgresql'
         ? `ALTER TABLE ${t} RENAME COLUMN ${c('Amount')} TO ${c('Total')}`
         : `EXEC sp_rename '${SCHEMA}.${TABLE}.Amount', 'Total', 'COLUMN'`, 'QR11');
 }
 
 /**
  * Applies a schema change that breaks a query's SQL, refreshes it, and asserts the refresh
- * recorded `Error` with the server's message naming the column, kept the SQL, and kept the fields.
+ * recorded `Error` with the server's message naming the column (or object), kept the SQL, and
+ * kept the fields.
  */
-async function assertBreakingChangeRecorded(ctx: IntegrationCheckContext, key: QueryKey, columnName: string,
+async function assertBreakingChangeRecorded(ctx: IntegrationCheckContext, query: MJQueryEntityServer, columnName: string,
     change: (platform: DatabasePlatform, t: string, c: (n: string) => string) => string, label: string): Promise<void> {
-    const query = queryOf(key);
     const sqlBefore = (await ReloadQuery(ctx, query.ID)).SQL;
-    const fieldsBefore = await fieldRows(ctx, key);
+    const fieldsBefore = await fieldRows(ctx, query.ID);
     await alterTable(ctx, change);
     const report = await service(ctx).RefreshQuery(query.ID);
     AssertEqual(report.ExtractionStatus, 'Error', `${label}: the refresh reports Error (${describeReport(report)})`);
@@ -464,7 +485,7 @@ async function assertBreakingChangeRecorded(ctx: IntegrationCheckContext, key: Q
         `${label}: the message carries the server's reason naming ${columnName}, got: ${message}`);
     Assert(message.includes('The stored fields were left as they are.'), `${label}: the message says the fields were kept, got: ${message}`);
     AssertEqual(stored.SQL, sqlBefore, `${label}: the SQL is never edited`);
-    const fieldsAfter = await fieldRows(ctx, key);
+    const fieldsAfter = await fieldRows(ctx, query.ID);
     Assert(fieldsBefore === fieldsAfter, `${label}: the stored fields are kept: ${SnapshotDifference(fieldsBefore, fieldsAfter)}`);
 }
 
@@ -504,6 +525,155 @@ async function storeDependency(ctx: IntegrationCheckContext, queryID: string, de
     return row;
 }
 
+// ─── QR13–QR14: a dropped view, a nullability change ────────────────────────
+
+/** A view over the table is dropped: the query over it records Error with the server's message; SQL and fields are kept. */
+async function checkQr13DroppedViewRecordsError(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const view = ObjectName(f.Platform, SCHEMA, VIEW);
+    const c = (n: string) => ColumnName(f.Platform, n);
+    await RunFixtureSQL(ctx, BUNDLE, [`CREATE VIEW ${view} AS SELECT ${c('ID')}, ${c('Name')} FROM ${table(f.Platform)}`]);
+    const query = await CreateFixtureQuery(ctx, f.Category.ID, {
+        Name: `${PREFIX} OverView`, SQL: ForPlatform(`SELECT v.[ID], v.[Name] FROM mjit_rebind.[${VIEW}] v`, f.Platform),
+    });
+    AssertEqual((await ReadQueryRows(ctx, BUNDLE, query.ID)).Fields.map(x => x.Name).join(','), 'ID,Name', 'QR13: the query over the view is described');
+    await assertBreakingChangeRecorded(ctx, query, VIEW, () => `DROP VIEW ${view}`, 'QR13');
+}
+
+/** `ChangedColumns` of the one update a report holds for field `name`, sorted, or why there is none. */
+function fieldUpdateColumns(report: QueryRefreshReport, name: string): string {
+    const updates = report.Updated.filter(u => u.Collection === 'Fields' && u.Name === name);
+    if (updates.length !== 1) return `(${updates.length} updates of ${name}: ${describeReport(report)})`;
+    return [...updates[0].ChangedColumns].sort().join(',');
+}
+
+/**
+ * A column goes from NULL to NOT NULL and changes type: the refresh updates the field's
+ * IsNullable and SQLFullType and reports both. Then, on SQL Server, a stored IsNullable of NULL
+ * (as written on a platform whose describe does not report nullability) is corrected to `false`
+ * and reported, although the entity's dirty check reads NULL and `false` alike. PostgreSQL's
+ * statement describe reports no nullability (IsNullable stays NULL there), so on PostgreSQL only
+ * the type change is asserted.
+ */
+async function checkQr14NullabilityChange(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const sqlServer = f.Platform !== 'postgresql';
+    const query = await CreateFixtureQuery(ctx, f.Category.ID, { Name: `${PREFIX} Nullability`, SQL: ForPlatform('SELECT i.[ID], i.[Extra] FROM mjit_rebind.[Item] i', f.Platform) });
+    AssertEqual(await extraFacts(ctx, query.ID), `${textType(f.Platform, 60)}:${sqlServer ? 'true' : 'null'}`, 'QR14: Extra before the change');
+    await alterTable(ctx, (p, t, c) => p === 'postgresql'
+        ? `ALTER TABLE ${t} ALTER COLUMN ${c('Extra')} TYPE VARCHAR(80), ALTER COLUMN ${c('Extra')} SET NOT NULL`
+        : `ALTER TABLE ${t} ALTER COLUMN ${c('Extra')} NVARCHAR(80) NOT NULL`);
+    const report = await service(ctx).RefreshQuery(query.ID);
+    AssertEqual(fieldUpdateColumns(report, 'Extra'), sqlServer ? 'IsNullable,SQLFullType' : 'SQLFullType', 'QR14: the report names the changed columns');
+    AssertEqual(await extraFacts(ctx, query.ID), `${textType(f.Platform, 80)}:${sqlServer ? 'false' : 'null'}`, 'QR14: Extra after the change');
+    if (!sqlServer) return;
+    const field = (await ReadQueryRows(ctx, BUNDLE, query.ID)).Fields.find(x => x.Name === 'Extra');
+    await RunFixtureSQL(ctx, BUNDLE, [`UPDATE ${ObjectName(f.Platform, coreSchema(ctx), 'QueryField')} SET IsNullable = NULL WHERE ID = '${field?.ID ?? ''}'`]);
+    const corrected = await service(ctx).RefreshQuery(query.ID);
+    AssertEqual(fieldUpdateColumns(corrected, 'Extra'), 'IsNullable', 'QR14: a stored NULL nullability is corrected to false and reported');
+    AssertEqual(await extraFacts(ctx, query.ID), `${textType(f.Platform, 80)}:false`, 'QR14: Extra after the correction');
+}
+
+/** `SQLFullType:IsNullable` of the stored Extra field. */
+async function extraFacts(ctx: IntegrationCheckContext, queryID: string): Promise<string> {
+    const extra = (await ReadQueryRows(ctx, BUNDLE, queryID)).Fields.find(x => x.Name === 'Extra');
+    return extra ? `${extra.SQLFullType}:${String(extra.IsNullable)}` : '(no Extra field)';
+}
+
+function coreSchema(ctx: IntegrationCheckContext): string {
+    return RequireQueryDb(ctx.Provider, BUNDLE).MJCoreSchemaName;
+}
+
+// ─── QR15: a deleted entity field ───────────────────────────────────────────
+
+function deleteProbeFieldStatement(ctx: IntegrationCheckContext, platform: DatabasePlatform): string {
+    return `DELETE FROM ${ObjectName(platform, coreSchema(ctx), 'EntityField')} WHERE ${ColumnName(platform, 'ID')} = '${PROBE_FIELD_ID}'`;
+}
+
+/** Adds the probe field to `entityID`, at the next free Sequence (computed when the row is written). */
+function insertProbeFieldStatement(ctx: IntegrationCheckContext, platform: DatabasePlatform, entityID: string): string {
+    const t = ObjectName(platform, coreSchema(ctx), 'EntityField');
+    const c = (n: string) => ColumnName(platform, n);
+    return `INSERT INTO ${t} (${c('ID')}, ${c('EntityID')}, ${c('Name')}, ${c('Type')}, ${c('Sequence')}) ` +
+        `SELECT '${PROBE_FIELD_ID}', '${entityID}', '${PROBE_FIELD_NAME}', 'nvarchar', COALESCE(MAX(${c('Sequence')}), 0) + 1 FROM ${t} WHERE ${c('EntityID')} = '${entityID}'`;
+}
+
+/** The delete rule of QueryField's SourceEntityFieldID foreign key, from the catalog: `SET NULL` or what it is. */
+async function sourceFieldDeleteRule(ctx: IntegrationCheckContext, platform: DatabasePlatform): Promise<string> {
+    const sql = platform === 'postgresql'
+        ? `SELECT CASE confdeltype WHEN 'n' THEN 'SET NULL' ELSE confdeltype::text END AS "Rule" FROM pg_constraint WHERE conname = 'FK_QueryField_SourceEntityField'`
+        : `SELECT CASE delete_referential_action WHEN 2 THEN 'SET NULL' ELSE delete_referential_action_desc END AS [Rule] FROM sys.foreign_keys WHERE name = 'FK_QueryField_SourceEntityField'`;
+    const rows = await RequireQueryDb(ctx.Provider, BUNDLE).ExecuteSQL<{ Rule: string }>(sql, undefined, { description: `${BUNDLE} catalog` }, ctx.User);
+    return rows.map(r => r.Rule).join(',');
+}
+
+/**
+ * Deleting the entity field a query field's SourceEntityFieldID points at clears the link (the
+ * foreign key is ON DELETE SET NULL, read from the catalog and seen to act), and a re-bind of the
+ * entity links the field to its source again. A disposable MJ: Entity Fields row stands in for the
+ * dropped column, removed in a `finally` (and by Teardown), so no real metadata changes; the delete
+ * runs as fixture SQL because a CodeGen column drop cannot be used here (it fails on the
+ * (EntityID, Sequence) unique index when it renumbers the remaining fields).
+ */
+async function checkQr15DeletedEntityFieldIsCleared(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const companies = requireEntity(ctx, REBIND_ENTITY);
+    const nameField = companies.Fields.find(x => x.Name === 'Name');
+    Assert(nameField !== undefined, `QR15: ${REBIND_ENTITY}.Name is missing`);
+    AssertEqual(await sourceFieldDeleteRule(ctx, f.Platform), 'SET NULL', 'QR15: FK_QueryField_SourceEntityField is ON DELETE SET NULL');
+    const join = queryOf('Join');
+    const before = (await ReadQueryRows(ctx, BUNDLE, join.ID)).Fields.find(x => x.Name === 'CompanyName');
+    Assert(before !== undefined && UUIDsEqual(before.SourceEntityFieldID, nameField!.ID), 'QR15: CompanyName is bound to MJ: Companies.Name before the change');
+    const queryField = ObjectName(f.Platform, coreSchema(ctx), 'QueryField');
+    const c = (n: string) => ColumnName(f.Platform, n);
+    try {
+        await RunFixtureSQL(ctx, BUNDLE, [insertProbeFieldStatement(ctx, f.Platform, companies.ID),
+            `UPDATE ${queryField} SET ${c('SourceEntityFieldID')} = '${PROBE_FIELD_ID}' WHERE ${c('ID')} = '${before!.ID}'`,
+            deleteProbeFieldStatement(ctx, f.Platform)]);
+    } finally {
+        await RunFixtureSQLQuietly(ctx, BUNDLE, [deleteProbeFieldStatement(ctx, f.Platform)]);
+    }
+    const cleared = (await ReadQueryRows(ctx, BUNDLE, join.ID)).Fields.find(x => x.Name === 'CompanyName');
+    AssertEqual(`${cleared?.SourceEntityFieldID ?? 'null'}:${NormalizeUUID(cleared?.SourceEntityID ?? '')}`, `null:${NormalizeUUID(companies.ID)}`,
+        'QR15: deleting the entity field nulled SourceEntityFieldID and nothing else');
+    const result = await RebindQueriesForChangedEntities(refreshContext(ctx), [companies.ID]);
+    const report = result.Run.Reports.find(r => UUIDsEqual(r.QueryID, join.ID));
+    Assert(report !== undefined, 'QR15: the re-bind did not refresh the Join query');
+    AssertEqual(fieldUpdateColumns(report!, 'CompanyName'), 'SourceEntityFieldID', 'QR15: the re-bind reports the re-linked source');
+    const relinked = (await ReadQueryRows(ctx, BUNDLE, join.ID)).Fields.find(x => x.Name === 'CompanyName');
+    Assert(relinked !== undefined && UUIDsEqual(relinked.SourceEntityFieldID, nameField!.ID), 'QR15: CompanyName is bound to MJ: Companies.Name again');
+}
+
+// ─── QR16: partial CRUD is refused like no grant ────────────────────────────
+
+/**
+ * A caller who may read MJ: Queries but not update it (the UI role) is refused exactly like a
+ * caller with no grant: a single refresh, dry run included, reads like a missing query's refusal;
+ * a bulk run reports the query NotPermitted and a missing ID Unavailable. Nothing is written.
+ */
+async function checkQr16ReadOnlyCallerIsRefused(ctx: IntegrationCheckContext): Promise<void> {
+    const reader = readOnlyUser(ctx, noGrantUser());
+    const queries = requireEntity(ctx, 'MJ: Queries').GetUserPermisions(reader);
+    AssertEqual(`${String(queries?.CanRead)}:${String(queries?.CanUpdate)}`, 'true:false', 'QR16: the reader may read MJ: Queries but not update it');
+    const star = queryOf('Star');
+    const missingID = randomUUID().toUpperCase();
+    const before = await SnapshotQueryRows(ctx, BUNDLE, [star.ID]);
+    for (const dryRun of [false, true]) {
+        const label = `QR16${dryRun ? ' (dry run)' : ''}`;
+        const existing = await service(ctx, reader).RefreshQuery(star.ID, { DryRun: dryRun });
+        const missing = await service(ctx, reader).RefreshQuery(missingID, { DryRun: dryRun });
+        AssertEqual(`${existing.Outcome}:${existing.QueryName}:${existing.Diagnostics.join(' / ')}`, `Unavailable::${QueryRefreshUnavailableMessage(star.ID)}`,
+            `${label}: the refusal is the not-found wording`);
+        AssertEqual(refusalTemplate(existing, star.ID), refusalTemplate(missing, missingID), `${label}: an existing query's refusal must read exactly like a missing query's`);
+    }
+    const bulk = await service(ctx, reader).RefreshQueries({ QueryIDs: [star.ID, missingID] });
+    AssertEqual(bulk.Reports.map(r => `${r.QueryName}:${r.Outcome}:${r.Diagnostics.join('/')}`).sort().join(' | '),
+        [`:Unavailable:${QueryRefreshUnavailableMessage(missingID)}`, `${star.Name}:NotPermitted:Skipped: not permitted.`].sort().join(' | '),
+        'QR16: in bulk the readable query is NotPermitted with no reason, and the missing ID is Unavailable');
+    const after = await SnapshotQueryRows(ctx, BUNDLE, [star.ID]);
+    Assert(before === after, `QR16: a refused refresh wrote rows: ${SnapshotDifference(before, after)}`);
+}
+
 export const QueryRefreshChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.QR1`, Name: 'QR1: refreshing queries whose facts match is Unchanged and writes no row', Fn: checkQr1UnchangedRefreshWritesNothing },
     { Id: `${BUNDLE}.QR2`, Name: 'QR2: a bulk refresh refreshes a composed query before the queries composing it', Fn: checkQr2DependenciesFirst },
@@ -517,6 +687,10 @@ export const QueryRefreshChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.QR10`, Name: "QR10: dropping a used column records Error with the server's message and keeps the SQL and fields", Fn: checkQr10DroppingUsedColumnRecordsError },
     { Id: `${BUNDLE}.QR11`, Name: "QR11: renaming a used column records Error with the server's message and keeps the SQL and fields", Fn: checkQr11RenamingUsedColumnRecordsError },
     { Id: `${BUNDLE}.QR12`, Name: 'QR12: queries whose stored dependencies form a cycle are each refreshed once, and the cycle is reported once', Fn: checkQr12CycleReportedOnce },
+    { Id: `${BUNDLE}.QR13`, Name: "QR13: dropping the view a query reads records Error with the server's message and keeps the SQL and fields", Fn: checkQr13DroppedViewRecordsError },
+    { Id: `${BUNDLE}.QR14`, Name: 'QR14: a column going NOT NULL with a type change updates IsNullable and the type, and reports both', Fn: checkQr14NullabilityChange },
+    { Id: `${BUNDLE}.QR15`, Name: 'QR15: deleting the entity field a query field points at nulls the link (ON DELETE SET NULL); a re-bind re-links it', Fn: checkQr15DeletedEntityFieldIsCleared },
+    { Id: `${BUNDLE}.QR16`, Name: 'QR16: a caller who may read but not update MJ: Queries is refused like a caller with no grant, single and bulk', Fn: checkQr16ReadOnlyCallerIsRefused },
 ];
 
 for (const check of QueryRefreshChecks) {

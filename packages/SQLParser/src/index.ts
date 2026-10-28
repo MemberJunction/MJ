@@ -8,7 +8,7 @@ export type { OrderByAnalysis } from './orderByAnalyzer.js';
 // Token-level SQL reading that works on any statement, including SQL the AST parser rejects
 export { LexSQL, SignificantTokens, IsKeyword } from './sqlLexer.js';
 export type { SQLLexToken, SQLLexTokenKind, LexDialect } from './sqlLexer.js';
-export { SplitLeadingCTEs, IsReadOnlyQuery } from './sqlShape.js';
+export { SplitLeadingCTEs, IsReadOnlyQuery, UNREADABLE_WITH_CLAUSE_REASON } from './sqlShape.js';
 export type { LeadingCTEs, LeadingCTEDefinition, ReadOnlyQueryCheck } from './sqlShape.js';
 export { IsBalancedSQLFragment, SplitTopLevelAndTerms } from './balancedFragment.js';
 export type { BalancedFragmentCheck, BalancedFragmentOptions } from './balancedFragment.js';
@@ -97,6 +97,8 @@ export type {
     NameExpression,
     ContextExpression,
     LoopMemberExpression,
+    LengthExpression,
+    InlineIfExpression,
     LiteralExpression,
     UnaryExpression,
     BinaryExpression,

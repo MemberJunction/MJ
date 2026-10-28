@@ -545,7 +545,7 @@ export const RlsIsolationChecks: NamedCheck[] = [
     },
     {
         Id: 'rls-isolation.RLS12',
-        Name: 'RLS12: a user holding two Read RLS filters loads one record by ID and gets exactly that record (role clause, single-record resolver, BaseEntity.Load)',
+        Name: 'RLS12: a user holding two Read RLS filters loads one record by ID and gets exactly that record (role clause, single-record resolver, BaseEntity.Load), and list reads return exactly the rows either filter admits',
         Fn: CheckRls12TwoFilterLoadById
     }
 ];

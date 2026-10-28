@@ -637,6 +637,19 @@ describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing',
     expect(result.processedSQL).toContain('SELECT * FROM T');
   });
 
+  it('treats a null value of a declared parameter as no value when force-processing, so default() applies', () => {
+    const query = {
+      SQL: 'SELECT * FROM T WHERE S >= {{ Lo | default(30) | sqlNumber }}',
+      UsesTemplate: true,
+      Parameters: [{ Name: 'Lo', Type: 'number', IsRequired: false, IsServerSet: false, ValidationFilters: null }],
+    };
+    const forced = QueryParameterProcessor.processQueryTemplate(query as never, { Lo: null }, undefined, true);
+    const plain = QueryParameterProcessor.processQueryTemplate(query as never, { Lo: null }, undefined, false);
+    expect(forced.success).toBe(true);
+    expect(forced.processedSQL).toBe('SELECT * FROM T WHERE S >= 30');
+    expect(plain.processedSQL).toBe(forced.processedSQL);
+  });
+
   it('should merge extra params not in query.Parameters into render context', () => {
     // The query defines no parameters, but the caller provides one that
     // exists as a Nunjucks token from a dependency

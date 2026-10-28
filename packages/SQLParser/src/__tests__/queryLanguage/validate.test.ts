@@ -50,8 +50,7 @@ const CASES: readonly RuleCase[] = [
     { Code: 'MJQ_UNSUPPORTED_TAG', Bad: '{% include "x.sql" %}SELECT 1', Good: 'SELECT 1' },
     { Code: 'MJQ_FUNCTION_CALL', Bad: 'SELECT 1 {% if range(3) %}x{% endif %}', Good: 'SELECT 1 {% if a %}x{% endif %}' },
     { Code: 'MJQ_SUBSCRIPT', Bad: 'SELECT {{ a[0] | sqlString }}', Good: 'SELECT {{ a | sqlString }}' },
-    { Code: 'MJQ_INLINE_IF', Bad: "SELECT {{ 'x' if a else 'y' }}", Good: "SELECT {% if a %}'x'{% else %}'y'{% endif %}" },
-    { Code: 'MJQ_MEMBER_ACCESS', Bad: 'SELECT 1 {% if a.length > 0 %}x{% endif %}', Good: 'SELECT 1 {% if a %}x{% endif %}' },
+    { Code: 'MJQ_MEMBER_ACCESS', Bad: 'SELECT 1 {% if a.size > 0 %}x{% endif %}', Good: 'SELECT 1 {% if a and a.length > 0 %}x{% endif %}' },
     { Code: 'MJQ_UNSUPPORTED_OPERATOR', Bad: "SELECT 1 {% if a in ['x'] %}x{% endif %}", Good: "SELECT 1 {% if a == 'x' %}x{% endif %}" },
     { Code: 'MJQ_ARITHMETIC_IN_HOLE', Bad: 'SELECT {{ Year - 1 }}', Good: 'SELECT {{ Year | sqlNumber }} - 1' },
     { Code: 'MJQ_HOLE_NOT_A_VALUE', Bad: "SELECT {{ 'fixed' }}", Good: "SELECT 'fixed'" },
@@ -105,7 +104,8 @@ describe('QueryTemplate.Validate: one case per rule', () => {
 
     it('covers every code Validate can report', () => {
         const covered = new Set(CASES.map(c => c.Code));
-        const validateCodes = Object.values(MJQueryDiagnosticCodes).filter(c => !c.startsWith('MJQ_DOC_'));
+        const retired: readonly string[] = [MJQueryDiagnosticCodes.InlineIf];
+        const validateCodes = Object.values(MJQueryDiagnosticCodes).filter(c => !c.startsWith('MJQ_DOC_') && !retired.includes(c));
         expect(validateCodes.filter(c => !covered.has(c))).toEqual([]);
     });
 

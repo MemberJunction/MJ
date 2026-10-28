@@ -40,8 +40,7 @@ const MAX_DEPTH = 100;
 const CONSTRUCT_RULES: Readonly<Record<UnsupportedConstruct, { Code: string; Message: string; Hint: string | null }>> = {
     FunctionCall: { Code: MJQueryDiagnosticCodes.FunctionCall, Message: 'Function and method calls are not part of the MJ Query language.', Hint: 'Compute the value in SQL, or pass it as a parameter.' },
     Subscript: { Code: MJQueryDiagnosticCodes.Subscript, Message: 'Subscripts (x[0], x["key"]) are not part of the MJ Query language.', Hint: 'Pass the value as its own parameter, or loop over an array with {% for %}.' },
-    InlineIf: { Code: MJQueryDiagnosticCodes.InlineIf, Message: 'Inline "a if b else c" expressions are not part of the MJ Query language.', Hint: 'Use an {% if %} … {% else %} … {% endif %} block.' },
-    MemberAccess: { Code: MJQueryDiagnosticCodes.MemberAccess, Message: 'Attribute access is allowed only as Context.<Token> or loop.<member>.', Hint: 'Pass the value as its own parameter.' },
+    MemberAccess: { Code: MJQueryDiagnosticCodes.MemberAccess, Message: 'Attribute access is allowed only as Context.<Token>, loop.<member> or <name>.length.', Hint: 'Pass the value as its own parameter.' },
     Operator: { Code: MJQueryDiagnosticCodes.UnsupportedOperator, Message: 'This operator or literal form is not part of the MJ Query language.', Hint: 'Use + - * / %, == != < > <= >=, and, or, not, and parentheses.' },
     Syntax: { Code: MJQueryDiagnosticCodes.Syntax, Message: 'This expression does not parse.', Hint: null },
 };
@@ -50,7 +49,7 @@ const CONSTRUCT_RULES: Readonly<Record<UnsupportedConstruct, { Code: string; Mes
  * The MJ Query expression grammar, a small recursive-descent parser:
  *
  * ```
- * expression := or ["if" or ["else" or]]          (inline if: refused)
+ * expression := or ["if" or ["else" or]]          (inline if: body if condition else otherwise)
  * or         := and ("or" and)*
  * and        := not ("and" not)*
  * not        := "not" not | compare
@@ -62,8 +61,11 @@ const CONSTRUCT_RULES: Readonly<Record<UnsupportedConstruct, { Code: string; Mes
  * primary    := name | number | string | true | false | null | "(" expression ")"
  * ```
  *
- * Filters bind tighter than every binary operator, as in Nunjucks. Constructs outside the
- * grammar parse into `Unsupported` nodes with a diagnostic; parsing never throws.
+ * Filters bind tighter than every binary operator, and every binary operator tighter than the
+ * inline if, as in Nunjucks: `x | sqlNumber if x else 12` is `(x | sqlNumber) if x else 12`. Of
+ * the postfix forms only `Context.<Token>`, `loop.<member>` and `<name>.length` are in the
+ * language. Constructs outside the grammar parse into `Unsupported` nodes with a diagnostic;
+ * parsing never throws.
  */
 export class TemplateExpressionParser {
     private readonly tokens: ExpressionToken[];
@@ -135,13 +137,24 @@ export class TemplateExpressionParser {
 
     private parseExpression(): TemplateExpression {
         if (++this.depth > MAX_DEPTH) return this.bailOut();
-        const condition = this.parseOr();
+        const body = this.parseOr();
         this.depth--;
-        if (!this.isKeyword('if')) return condition;
+        return this.isKeyword('if') ? this.parseInlineIf(body) : body;
+    }
+
+    /**
+     * `if condition [else otherwise]` after the body. Each part is read at the `or` level, as in
+     * Nunjucks, so a nested inline if needs parentheses.
+     */
+    private parseInlineIf(body: TemplateExpression): TemplateExpression {
         this.advance();
-        const parts = [condition, this.parseOr()];
-        if (this.isKeyword('else')) { this.advance(); parts.push(this.parseOr()); }
-        return this.unsupported('InlineIf', condition.Span.Start, this.lastEnd, parts);
+        const condition = this.parseOr();
+        let otherwise: TemplateExpression | null = null;
+        if (this.isKeyword('else')) {
+            this.advance();
+            otherwise = this.parseOr();
+        }
+        return { Kind: 'InlineIf', Body: body, Condition: condition, Else: otherwise, Span: { Start: body.Span.Start, End: this.lastEnd } };
     }
 
     private parseOr(): TemplateExpression {
@@ -265,6 +278,7 @@ export class TemplateExpressionParser {
             return { Kind: 'Context', Token: name.Text, FullName: `Context.${name.Text}`, Span: span };
         }
         if (object.Kind === 'Name' && object.Name === 'loop') return { Kind: 'LoopMember', Member: name.Text, Span: span };
+        if (object.Kind === 'Name' && name.Text === 'length') return { Kind: 'Length', Object: object, Span: span };
         return this.unsupported('MemberAccess', span.Start, span.End, [object]);
     }
 

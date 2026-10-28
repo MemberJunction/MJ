@@ -1,5 +1,5 @@
 /**
- * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ9), deterministic
+ * metadata-sync-queries.checks.ts — the 'metadata-sync-queries' bundle (MSQ1–MSQ10), deterministic
  * tier (IT140).
  *
  * `mj sync push`, through `PushService`, of scratch `MJ: Queries` trees, and the child rows that
@@ -20,7 +20,12 @@
  *  - MSQ8: one push creates a reusable query and a query composing it: the composed query is found
  *    in the push's own transaction, before the shared query cache has heard of it;
  *  - MSQ9: a declared field that carries only its name and annotations gets its facts (sequence,
- *    types, source) from extraction when it is first written.
+ *    types, source) from extraction when it is first written;
+ *  - MSQ10: `mj sync pull`, through `PullService`, of a query whose rows all came from extraction
+ *    writes them under `collections` with their IDs, and pushing the pulled file back writes no row.
+ *
+ * MSQ7 is also the fresh-install no-op: a fresh install's first push is the same push of the
+ * shipped tree onto rows the release migrations wrote, so a separate case would repeat it.
  *
  * Query text is looked up per platform (the SQL dialect by `PlatformKey`). Every query lives in a
  * per-run `zzz-it140` category; Teardown deletes it with its queries and removes the scratch trees.
@@ -31,9 +36,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { BaseEngineRegistry, BaseEntity } from '@memberjunction/core';
 import type { DatabasePlatform, UserInfo } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
-import { PushService, SyncEngine } from '@memberjunction/metadata-sync';
+import { PullService, PushService, SyncEngine } from '@memberjunction/metadata-sync';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
@@ -429,6 +435,111 @@ async function checkMsq9FactlessDeclaredFieldGetsFacts(ctx: IntegrationCheckCont
     AssertEqual(NormalizeUUID(name!.SourceEntityID ?? ''), NormalizeUUID(f.VendorEntityID), 'MSQ9: the declared field takes its source entity from the describe');
 }
 
+// ─── MSQ10: pull after auto extraction ──────────────────────────────────────
+
+/** The query child entities a pull writes, as the parent's declared collection names. */
+const PULLED_COLLECTIONS: ReadonlyArray<[string, string]> = [
+    ['MJ: Query Fields', 'Fields'], ['MJ: Query Parameters', 'Parameters'], ['MJ: Query Entities', 'Entities'], ['MJ: Query Dependencies', 'Dependencies'],
+];
+
+/** An empty push/pull tree whose `queries` folder pulls `MJ: Queries` with every derived child entity. */
+function writePullTree(dir: string): string {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(path.join(dir, 'queries'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.mj-sync.json'), JSON.stringify({ version: '1.0.0', push: { autoCreateMissingRecords: true }, directoryOrder: ['queries'] }, null, 2));
+    const relatedEntities: { [key: string]: JsonValue } = {};
+    for (const [entity] of PULLED_COLLECTIONS) relatedEntities[entity] = { entity, foreignKey: 'QueryID' };
+    fs.writeFileSync(path.join(dir, 'queries', '.mj-sync.json'), JSON.stringify({
+        entity: 'MJ: Queries', filePattern: '**/.*.json',
+        pull: {
+            createNewFileIfNotFound: true, newFileName: '.queries.json', appendRecordsToExistingFile: true, updateExistingRecords: true,
+            mergeStrategy: 'merge', backupBeforeUpdate: false, ignoreNullFields: true, ignoreVirtualFields: true, relatedEntities,
+        },
+    }, null, 2));
+    return dir;
+}
+
+/** Pulls the one query into `dir/queries`. A pull changes the working directory, so it is restored afterwards. */
+async function runPull(user: UserInfo, dir: string, queryID: string): Promise<void> {
+    const cwd = process.cwd();
+    const engine = new SyncEngine(user);
+    await engine.initialize();
+    try {
+        await new PullService(engine, user).Pull({ entity: 'MJ: Queries', targetDir: path.join(dir, 'queries'), filter: `ID='${queryID}'`, noValidate: true });
+    } catch (error) {
+        throw new Error(`pull into ${path.basename(dir)} failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+        process.chdir(cwd);
+    }
+}
+
+/** A pulled record as the file holds it. */
+interface PulledRecord {
+    primaryKey?: { ID?: string };
+    fields?: { [key: string]: JsonValue };
+    collections?: { [key: string]: ChildRecord[] };
+    relatedEntities?: { [key: string]: JsonValue };
+}
+
+function readPulledRecord(dir: string, queryID: string): PulledRecord {
+    const file = path.join(dir, 'queries', '.queries.json');
+    if (!fs.existsSync(file)) throw new Error(`MSQ10: the pull wrote no ${file}`);
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const records = (Array.isArray(parsed) ? parsed : [parsed]) as PulledRecord[];
+    const record = records.find(r => NormalizeUUID(r.primaryKey?.ID ?? '') === NormalizeUUID(queryID));
+    if (!record) throw new Error(`MSQ10: the pulled file holds no record for the query (${records.length} records)`);
+    return record;
+}
+
+/** `ID:Name-or-EntityID:DetectionMethod` per child row, sorted, from the file or from the stored rows. */
+function pulledChildLines(items: readonly ChildRecord[]): string {
+    const key = (i: ChildRecord) => typeof i.fields.EntityID === 'string' ? NormalizeUUID(i.fields.EntityID) : String(i.fields.Name ?? '');
+    return items.map(i => `${NormalizeUUID(i.primaryKey.ID)}:${key(i)}:${String(i.fields.DetectionMethod ?? '')}`).sort().join(' | ');
+}
+
+function storedChildLines(rows: StoredQueryRows): { [collection: string]: string } {
+    const line = (id: string, key: string, method: string) => `${NormalizeUUID(id)}:${key}:${method}`;
+    return {
+        Fields: rows.Fields.map(r => line(r.ID, r.Name, r.DetectionMethod)).sort().join(' | '),
+        Parameters: rows.Parameters.map(r => line(r.ID, r.Name, r.DetectionMethod)).sort().join(' | '),
+        Entities: rows.Entities.map(r => line(r.ID, NormalizeUUID(r.EntityID), r.DetectionMethod)).sort().join(' | '),
+    };
+}
+
+/**
+ * A query whose child rows all came from extraction is pulled: the file holds each stored row
+ * under the query's `collections` (not `relatedEntities`), with its own ID and detection method
+ * and no parent key, and pushing that file back writes no row.
+ */
+async function checkMsq10PullAfterAutoExtraction(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const [queryID] = ids(1);
+    await pushQueries(ctx, 'msq10-auto', [queryRecord(f, { ID: queryID, Name: 'MSQ10 pulled', SQL: vendorSQL(f.Platform) })], queryID);
+    const stored = await ReadQueryRows(ctx, BUNDLE, queryID);
+    AssertEqual(`${fieldLines(stored)} / ${stored.Parameters.length} / ${stored.Entities.length}`, 'ID:Database | Name:Database / 1 / 1', 'MSQ10: the pushed query has extracted rows');
+
+    const dir = writePullTree(path.join(f.Root, 'msq10-pull'));
+    await runPull(ctx.User, dir, queryID);
+    const record = readPulledRecord(dir, queryID);
+    AssertEqual(Object.keys(record.relatedEntities ?? {}).join(','), '', 'MSQ10: no child row is pulled under relatedEntities');
+    AssertEqual(Object.keys(record.collections ?? {}).sort().join(','), 'Entities,Fields,Parameters', 'MSQ10: the pulled collections (the query composes nothing)');
+    const expected = storedChildLines(stored);
+    for (const collection of ['Fields', 'Parameters', 'Entities']) {
+        const items = record.collections?.[collection] ?? [];
+        AssertEqual(pulledChildLines(items), expected[collection], `MSQ10: the pulled ${collection} are the stored rows, by ID`);
+        AssertEqual(items.filter(i => i.fields.QueryID !== undefined).length, 0, `MSQ10: pulled ${collection} carry no parent key`);
+    }
+
+    // A push compares the file with the engine caches of this process. The query row was last
+    // written by the post-commit description pass, whose write this process's QueryEngine cache
+    // does not pick up, so the caches are reloaded first: the state a fresh `mj sync push` starts from.
+    await QueryEngine.Instance.Config(true, ctx.User, ctx.Provider);
+    const before = await SnapshotQueryRows(ctx, BUNDLE, [queryID]);
+    await runPush(ctx.User, dir);
+    const after = await SnapshotQueryRows(ctx, BUNDLE, [queryID]);
+    Assert(before === after, `MSQ10: pushing the pulled file back wrote rows: ${SnapshotDifference(before, after)}`);
+}
+
 export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ1`, Name: 'MSQ1: declared collections are stored as declared on a new query and updated in place', Fn: checkMsq1DeclaredCollections },
     { Id: `${BUNDLE}.MSQ2`, Name: 'MSQ2: the legacy relatedEntities format is promoted, so each declared row is stored once under its own ID', Fn: checkMsq2LegacyRelatedEntitiesPromoted },
@@ -439,6 +550,7 @@ export const MetadataSyncQueriesChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.MSQ7`, Name: 'MSQ7: pushing a copy of the shipped metadata/queries tree changes no query or child row', Fn: checkMsq7ShippedQueriesPushIsANoOp },
     { Id: `${BUNDLE}.MSQ8`, Name: 'MSQ8: one push creates a reusable query and a query composing it', Fn: checkMsq8ComposedInSamePush },
     { Id: `${BUNDLE}.MSQ9`, Name: 'MSQ9: a declared field with only its name and annotations gets its facts from extraction', Fn: checkMsq9FactlessDeclaredFieldGetsFacts },
+    { Id: `${BUNDLE}.MSQ10`, Name: 'MSQ10: a pull after auto extraction writes the child rows as collections, and pushing it back writes nothing', Fn: checkMsq10PullAfterAutoExtraction },
 ];
 
 for (const check of MetadataSyncQueriesChecks) {

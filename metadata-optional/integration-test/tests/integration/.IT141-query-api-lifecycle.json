@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT141 - Query API Lifecycle over GraphQL",
+    "Description": "Drives a saved query's whole life through MJAPI's GraphQL API, as an API caller does, and reads every row back over GraphQL, on SQL Server and PostgreSQL. Setup creates a per-run zzz-it141 category and a Reusable query over __mj.vwRoles with the generic CreateMJQuery mutation. QAL1 CreateQueryExtended creates a query whose SQL has a header doc comment, a trailing --: description, required and optional parameters with different filters, a default, a CTE, core MJ views and a composition of the Reusable query with an explicit argument, shared with a role; the rows the mutation returns agree column by column with the stored rows. QAL2 the query row records its SQL, ExtractionStatus OK, no ExtractionMessage, ExtractedSQLHash (SHA-256 of the dialect key and the SQL) and UsesTemplate. QAL3 every column of every MJ: Query Fields row: order, base and full type per platform, nullability (SQL Server reports it; PostgreSQL's describe does not), computed, the MJ: Users / MJ: Roles entity field each column binds to (one through the composition), descriptions from the doc comments, DetectionMethod. QAL4 every column of every MJ: Query Parameters row: type from its filter (or from the composed query's parameter it feeds), required only with a use outside every if, the default, the sample from ParameterHints, doc-comment descriptions, DetectionMethod Parser, IsServerSet and ValidationFilters. QAL5 every column of the MJ: Query Entities rows (the entities the query's own SQL reads, the CTE body included) and of the MJ: Query Dependencies row (full path, alias, argument mapping), and every row of the composed query. QAL6 UpdateQueryExtended with new SQL (a column dropped, one added, a filter changed from sqlString to sqlDate, a required parameter made optional) corrects the rows: kept rows keep their IDs and the annotations set by hand over GraphQL, the dropped field is deleted, the new one added. QAL7 and QAL8 a create and an update whose SQL puts a tag inside a string literal are refused with the diagnostic line (MJQ_TAG_IN_STRING_LITERAL at line L, column C: Message Fix: Hint) and write nothing. QAL9 the Query.RefreshExtraction remote operation run over the wire for the category refreshes the composed query first, reports both Unchanged, streams one progress event per query and writes nothing (every column, timestamps included). QAL10 after a stored field's SQLFullType and IsNullable are tampered with over GraphQL, a dry run reports that field with both columns changed and writes nothing. QAL11 the real refresh corrects both columns of that row only; a refresh after it is Unchanged and leaves __mj_UpdatedAt where it was. QAL12 a refresh of a query ID that does not exist is Unavailable with the non-disclosing message, and a request with no selector is refused. Self-cleaning: Teardown deletes the permissions, the queries (the composing query first) and the category.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Queries created, edited and refreshed over GraphQL store exactly the child rows their SQL establishes."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "query-api-lifecycle"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C418600E-B722-4CEC-A2AE-397924878A5D"
+  }
+}

@@ -58,6 +58,13 @@ export interface DialectGrammar {
      * server, or pause the query.
      */
     readonly CallerSQLForbiddenFunctions: readonly string[];
+    /**
+     * Upper-case keywords that start a new statement wherever they appear as a bare word at the top
+     * level of another one, for a dialect that needs no separator between statements (T-SQL runs
+     * `SELECT 1 DELETE FROM t` as two statements). Empty or absent when statements must be separated.
+     * Such a keyword directly followed by `JOIN` is a join hint (`INNER MERGE JOIN`), not a statement.
+     */
+    readonly UnseparatedStatementKeywords?: readonly string[];
     /** The ORDER BY expression used to page a query that has none. */
     readonly DefaultPagingOrderBy: string;
     /**

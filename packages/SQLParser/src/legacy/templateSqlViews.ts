@@ -6,7 +6,7 @@ import { BranchEvaluator } from '../template/branchEvaluator.js';
 import type { BranchLookup, LoopMemberLookup } from '../template/branchEvaluator.js';
 import { BranchVariantValues } from '../template/branchVariants.js';
 import type { BranchVariant, BranchVariantSet } from '../template/branchVariants.js';
-import type { TemplateLiteralValue } from '../template/expressionTypes.js';
+import type { TemplateExpression, TemplateLiteralValue } from '../template/expressionTypes.js';
 import { FindSqlFilter } from '../template/queryLanguage.js';
 import { AllNodes } from '../template/templateNodes.js';
 import type { CompositionNode, ExpressionNode, IfNode, TemplateNode } from '../template/templateNodes.js';
@@ -83,6 +83,13 @@ function isDot(token: SqlToken | undefined): boolean {
     return token !== undefined && token.Kind === 'Punctuation' && token.Text === '.';
 }
 
+/** The filter names on the value a hole writes, innermost first; for an inline if, those on its body. */
+function writtenFilters(expression: TemplateExpression): string[] {
+    const { Base, Filters } = UnwrapFilters(expression);
+    const own = Filters.map(f => f.Name);
+    return Base.Kind === 'InlineIf' ? [...writtenFilters(Base.Body), ...own] : own;
+}
+
 function lookupFor(set: BranchVariantSet, variant: BranchVariant | undefined): BranchLookup {
     const values = variant === undefined ? set.Base : BranchVariantValues(set, variant);
     return name => values[name];
@@ -150,7 +157,7 @@ class SkeletonRenderer {
     /** A placeholder of the kind the hole's last SQL filter writes; bare text inside a literal or quoted name. */
     private expressionPlaceholder(node: ExpressionNode): string {
         if (node.SqlContext !== 'Code') return `__MJT_${this.next('string')}__`;
-        const filters = UnwrapFilters(node.Expression).Filters.map(f => f.Name);
+        const filters = writtenFilters(node.Expression);
         const sqlFilter = [...filters].reverse().find(name => FindSqlFilter(name) !== undefined);
         switch (sqlFilter) {
             case 'sqlNumber': return String(42000 + this.counters.number++ + 1);

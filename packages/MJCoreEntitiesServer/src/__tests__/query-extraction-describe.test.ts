@@ -175,6 +175,39 @@ describe('ComputeQueryExtraction — branch renders (D3)', () => {
     });
 });
 
+describe('ComputeQueryExtraction — statement semicolons', () => {
+    it('describes a statement written with a leading or trailing semicolon without them, template or not', async () => {
+        for (const platform of ['sqlserver', 'postgresql'] as const) {
+            const { describe, asked } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+            await ComputeQueryExtraction(input(';SELECT u.ID, u.Name FROM __mj.vwUsers u WHERE u.Name = {{ N | sqlString }};', { Describe: describe, Platform: platform }));
+            await ComputeQueryExtraction(input(';SELECT u.ID, u.Name FROM __mj.vwUsers u;', { Describe: describe, Platform: platform }));
+            expect(asked.filter(sql => sql.trim().startsWith(';') || sql.trim().endsWith(';'))).toEqual([]);
+        }
+    });
+});
+
+describe('ComputeQueryExtraction — samples for parameters of unknown type', () => {
+    it('renders an untyped parameter used in {% set %} arithmetic with a numeric sample, so the render is valid SQL', async () => {
+        const { describe, asked } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const result = await ComputeQueryExtraction(input('{% set Cut = MinScore - 1 %}SELECT u.ID, u.Name FROM __mj.vwUsers u WHERE LEN(u.Name) > {{ Cut }}', { Describe: describe }));
+
+        expect(result.Status).toBe('OK');
+        expect(asked[0]).not.toContain('NaN');
+    });
+
+    it('renders an array whose loop variable feeds a number argument of a composed query', async () => {
+        const target = { Name: 'Lo', IsRequired: true, IsServerSet: false, Type: 'number' } as Pick<MJQueryParameterEntity, 'Name' | 'IsRequired' | 'IsServerSet' | 'Type'> as MJQueryParameterEntity;
+        const shape: ComposedShape = { ID: 'dep-Range', Name: 'Range', CategoryPath: 'Shared', Reusable: true, QueryParameters: [target], QueryDependencies: [] };
+        const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const sql = 'SELECT r.ID, r.Name FROM ({% for L in Floors %}SELECT x.ID, x.Name FROM {{query:"Shared/Range(Lo=L)"}} x{% endfor %}) r';
+        const result = await ComputeQueryExtraction(input(sql, { Describe: describe, Queries: [shape as MJQueryEntityExtended],
+            CompositionDependencies: [{ ID: 'dep-Range', Name: 'Range', CategoryPath: 'Shared', SQL: 'SELECT ID, Name FROM __mj.vwUsers WHERE 1 > {{ Lo | sqlNumber }}', UsesTemplate: true, Parameters: [{ Name: 'Lo', Type: 'number', IsRequired: true }] }] }));
+
+        expect(result.Messages.join(' ')).toBe('');
+        expect(result.Status).toBe('OK');
+    });
+});
+
 describe('ComputeQueryExtraction — what is not described (D4, D5)', () => {
     it('D4: skips the describe for an external-data-source query and leaves fields and entities as they are', async () => {
         const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
@@ -312,6 +345,30 @@ describe('ComputeQueryExtraction — refusals (R10, save-time rules)', () => {
         expect(finding?.FixHint).toBeTruthy();
     });
 
+    it('lets an edit change the filter of a parameter whose stored row was auto-detected: that row declares no type', async () => {
+        const known: KnownQueryParameter[] = [{ Name: 'Since', Type: 'string', IsRequired: false, IsServerSet: false, SampleValue: '2024-01-01', DefaultValue: null, ValidationFilters: null, IsAuthored: false }];
+        const sql = 'SELECT u.ID FROM __mj.vwUsers u WHERE 1 = 1 {% if Since %}AND u.CreatedAt >= {{ Since | sqlDate }}{% endif %}';
+        const result = await ComputeQueryExtraction(input(sql, { KnownParameters: known }));
+
+        expect(result.Refusal).toBeNull();
+        expect(result.Parameters.map(p => [p.Name, p.Type])).toEqual([['Since', 'date']]);
+    });
+
+    it('still refuses a filter that does not fit the type an authored parameter row declares', async () => {
+        const known: KnownQueryParameter[] = [{ Name: 'Since', Type: 'string', IsRequired: false, IsServerSet: false, SampleValue: null, DefaultValue: null, ValidationFilters: null, IsAuthored: true }];
+        const sql = 'SELECT u.ID FROM __mj.vwUsers u WHERE 1 = 1 {% if Since %}AND u.CreatedAt >= {{ Since | sqlDate }}{% endif %}';
+        const result = await ComputeQueryExtraction(input(sql, { KnownParameters: known }));
+
+        expect(result.Refusal).toContain('MJQ_FILTER_TYPE_MISMATCH');
+    });
+
+    it('lets a server-set parameter row go unfiltered whether or not a person wrote the row', async () => {
+        const known: KnownQueryParameter[] = [{ Name: 'OwnerID', Type: 'string', IsRequired: true, IsServerSet: true, SampleValue: null, DefaultValue: null, ValidationFilters: null, IsAuthored: false }];
+        const result = await ComputeQueryExtraction(input('SELECT u.ID FROM __mj.vwUsers u WHERE u.OwnerID = {{ OwnerID }}', { KnownParameters: known }));
+
+        expect(result.Refusal).toBeNull();
+    });
+
     it('requires an argument for a required parameter of a composed query, unless the server sets it', async () => {
         const sql = 'SELECT c.N FROM {{query:"Shared/Chapters"}} c';
         const plain = await ComputeQueryExtraction(input(sql, { Queries: [composed('Chapters', false)] }));
@@ -320,6 +377,14 @@ describe('ComputeQueryExtraction — refusals (R10, save-time rules)', () => {
         expect(plain.Refusal).toContain('MJQ_COMPOSITION_MISSING_ARGUMENT');
         expect(serverSet.Refusal).toBeNull();
         expect(serverSet.Dependencies).toEqual([{ DependsOnQueryID: 'dep-Chapters', ReferencePath: 'Shared/Chapters', Alias: 'c', ParameterMapping: null }]);
+    });
+
+    it('types an outer parameter read only by an arithmetic argument from the composed parameter it feeds', async () => {
+        const target = { Name: 'Lo', IsRequired: true, IsServerSet: false, Type: 'number' } as Pick<MJQueryParameterEntity, 'Name' | 'IsRequired' | 'IsServerSet' | 'Type'> as MJQueryParameterEntity;
+        const shape: ComposedShape = { ID: 'dep-Range', Name: 'Range', CategoryPath: 'Shared', Reusable: true, QueryParameters: [target], QueryDependencies: [] };
+        const result = await ComputeQueryExtraction(input('SELECT r.N FROM {{query:"Shared/Range(Lo=Floor + 4)"}} r', { Queries: [shape as MJQueryEntityExtended] }));
+
+        expect(result.Parameters.map(p => [p.Name, p.Type, p.IsRequired])).toEqual([['Floor', 'number', true]]);
     });
 
     it('refuses a composition that names no query', async () => {
@@ -332,5 +397,61 @@ describe('ComputeQueryExtraction — refusals (R10, save-time rules)', () => {
         const result = await ComputeQueryExtraction(input('SELECT 1 AS One -- {{ not a tag }}'));
 
         expect(result.UsesTemplate).toBe(false);
+    });
+});
+
+/**
+ * A new or edited query must be a single read query that calls no forbidden function, judged on
+ * each render as the run would judge it: a save of one that is not is refused, and nothing is
+ * described (the server is never handed the statement). On a refresh it is recorded as an error.
+ */
+describe('ComputeQueryExtraction — the read-only and forbidden-function rules at save', () => {
+    const NOT_A_READ = 'RenderPipeline: only a single read query may be run here, and this SQL is not one:';
+    const cases: Array<[string, string, string]> = [
+        ['a DELETE', 'DELETE FROM __mj.vwUsers', `${NOT_A_READ} it starts with DELETE, not SELECT or WITH.`],
+        ['a SELECT … INTO', 'SELECT * INTO copy_of_users FROM __mj.vwUsers', `${NOT_A_READ} it writes its result into a table (SELECT … INTO).`],
+        ['stacked statements', 'SELECT u.ID FROM __mj.vwUsers u; DROP TABLE t', `${NOT_A_READ} it contains more than one statement.`],
+        ['an unseparated T-SQL write after a read', 'SELECT u.ID FROM __mj.vwUsers u DELETE FROM t', `${NOT_A_READ} it contains more than one statement.`],
+        ['a forbidden function call', "SELECT * FROM OPENROWSET(BULK 'x', SINGLE_CLOB) AS r", 'RenderPipeline: a query may not call openrowset.'],
+        ['a write in one template branch', 'SELECT u.ID FROM __mj.vwUsers u {% if Purge %} DELETE FROM t {% endif %}', `${NOT_A_READ} it contains more than one statement.`],
+    ];
+    for (const [label, sql, reason] of cases) {
+        it(`refuses ${label} at save without describing it`, async () => {
+            const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+            const result = await ComputeQueryExtraction(input(sql, { Describe: describe }));
+
+            expect(result.Refusal).toContain('Query "Test Query" was not saved:');
+            expect(result.Refusal).toContain(reason);
+            expect(describe).not.toHaveBeenCalled();
+        });
+    }
+
+    it('records the refusal as an error on a refresh, without refusing or describing', async () => {
+        const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const result = await ComputeQueryExtraction(input('DELETE FROM __mj.vwUsers', { Mode: 'Refresh', Describe: describe }));
+
+        expect(result.Refusal).toBeNull();
+        expect(result.Status).toBe('Error');
+        expect(result.Messages.join('\n')).toContain(`${NOT_A_READ} it starts with DELETE, not SELECT or WITH.`);
+        expect(describe).not.toHaveBeenCalled();
+    });
+
+    // A query's base SQL may be written for another platform, with this platform's variant saved
+    // after it (a metadata push saves the query, then its Query SQL rows). T-SQL bracket CTE names
+    // cannot be split by the PostgreSQL lexer: that is uncertainty, not a detected write, so the save
+    // records it and the run-time gate, which fails closed on it, decides at run.
+    it('records, without refusing, a WITH clause the platform dialect cannot read', async () => {
+        const result = await ComputeQueryExtraction(input('WITH [First Set] AS (SELECT u.ID FROM __mj.vwUsers u) SELECT ID FROM [First Set]', { Platform: 'postgresql' }));
+
+        expect(result.Refusal).toBeNull();
+        expect(result.Status).toBe('Error');
+    });
+
+    it('saves a read that only names a write keyword or a forbidden function in a string or a comment', async () => {
+        const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const result = await ComputeQueryExtraction(input("SELECT u.ID, 'DELETE; OPENROWSET(x)' AS Note FROM __mj.vwUsers u /* DROP TABLE t */", { Describe: describe }));
+
+        expect(result.Refusal).toBeNull();
+        expect(describe).toHaveBeenCalledTimes(1);
     });
 });

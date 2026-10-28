@@ -21,6 +21,12 @@
  *     `AND` prefix, as the generated `MJAIAgentSession(ID)` resolver builds it) returns one row;
  *   - `BaseEntity.Load` as the principal loads exactly that record, and loads a conversation
  *     session by its own ID.
+ *
+ * Then list reads (`RunView` with an `ExtraFilter`, which the provider ANDs beside the OR'd
+ * clause): two more sessions belong to another user, one in the conversation (filter B alone
+ * admits it) and one outside it (neither filter admits it). A read of all five returns exactly the
+ * four the filters admit, a read of the unadmitted one returns nothing, and a read of the user's
+ * own returns only that one: never the unfiltered set, never a row B admits beside a key A names.
  */
 import { DatabaseProviderBase, EntityPermissionType, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { EntityInfo, RoleInfo } from '@memberjunction/core';
@@ -68,12 +74,12 @@ async function createConversation(ctx: IntegrationCheckContext, externalID: stri
     return conversation;
 }
 
-/** Creates one fixture session owned by the run's user, optionally in a conversation. */
-async function createSession(ctx: IntegrationCheckContext, agentID: string, conversationID: string | null): Promise<MJAIAgentSessionEntity> {
+/** Creates one fixture session owned by `ownerID` (the run's user by default), optionally in a conversation. */
+async function createSession(ctx: IntegrationCheckContext, agentID: string, conversationID: string | null, ownerID = ctx.User.ID): Promise<MJAIAgentSessionEntity> {
     const session = await ctx.Provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, ctx.User);
     session.NewRecord();
     session.AgentID = agentID;
-    session.UserID = ctx.User.ID;
+    session.UserID = ownerID;
     session.ConversationID = conversationID;
     Assert(await session.Save(), `RLS12 session save failed: ${session.LatestResult?.CompleteMessage ?? 'no message'}`);
     return session;
@@ -111,6 +117,34 @@ async function assertKeyedReads(db: DatabaseProviderBase, entity: EntityInfo, pr
     Assert(UUIDsEqual(viaResolver[0], targetID), 'RLS12: the single-record resolver statement read a different record');
 }
 
+/** Another user's ID, to own the sessions only filter B, or no filter, admits. */
+async function otherUserID(db: DatabaseProviderBase, ctx: IntegrationCheckContext): Promise<string | null> {
+    const result = await db.RunView<{ ID: string }>({ EntityName: 'MJ: Users', Fields: ['ID'], ExtraFilter: `ID <> '${ctx.User.ID}'`, MaxRows: 1, ResultType: 'simple' }, ctx.User);
+    return result.Success && result.Results.length > 0 ? result.Results[0].ID : null;
+}
+
+/** The session IDs a list read as `principal` returns for `filter`, upper case and sorted. */
+async function listRead(db: DatabaseProviderBase, principal: UserInfo, filter: string): Promise<string[]> {
+    const result = await db.RunView<{ ID: string }>({ EntityName: SESSION_ENTITY, Fields: ['ID'], ExtraFilter: filter, ResultType: 'simple', BypassCache: true }, principal);
+    Assert(result.Success, `RLS12: the list read failed: ${result.ErrorMessage}`);
+    return result.Results.map((r) => String(r.ID).toUpperCase()).sort();
+}
+
+/**
+ * List reads beside the OR'd clause: of `admitted` (filter A or B) and `unadmitted` (neither),
+ * exactly the admitted come back, whichever key the filter names.
+ */
+async function assertListReads(db: DatabaseProviderBase, principal: UserInfo, admitted: string[], unadmitted: string, own: string): Promise<void> {
+    const list = (ids: string[]) => `ID IN (${ids.map((id) => `'${id}'`).join(', ')})`;
+    const expected = admitted.map((id) => id.toUpperCase()).sort();
+    AssertEqual((await listRead(db, principal, list([...admitted, unadmitted]))).join(','), expected.join(','),
+        'RLS12: a list read of the fixture sessions must return exactly those filter A or filter B admits');
+    AssertEqual((await listRead(db, principal, list([unadmitted]))).length, 0,
+        'RLS12: a list read by the key of a session neither filter admits must return nothing (an ungrouped OR returns every row B admits)');
+    AssertEqual((await listRead(db, principal, list([own]))).join(','), own.toUpperCase(),
+        'RLS12: a list read by the key of the user\'s own session must return only that session');
+}
+
 /** `BaseEntity.Load` as the principal returns exactly the record asked for. */
 async function assertLoadReturns(ctx: IntegrationCheckContext, principal: UserInfo, id: string, label: string): Promise<void> {
     const loaded = await ctx.Provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, principal);
@@ -138,8 +172,9 @@ export async function CheckRls12TwoFilterLoadById(ctx: IntegrationCheckContext):
     }
     const db = ctx.Provider;
     const agentID = await anyAgentID(db, ctx);
-    if (!agentID) {
-        skipNote('no AI agent exists to own the fixture sessions.');
+    const otherID = await otherUserID(db, ctx);
+    if (!agentID || !otherID) {
+        skipNote(!agentID ? 'no AI agent exists to own the fixture sessions.' : 'no second user exists to own the sessions only one filter admits.');
         return;
     }
     const tag = `rls12-${Date.now()}`;
@@ -151,10 +186,17 @@ export async function CheckRls12TwoFilterLoadById(ctx: IntegrationCheckContext):
         fixture.Sessions.push(await createSession(ctx, agentID, fixture.Conversation.ID));
         fixture.Sessions.push(await createSession(ctx, agentID, fixture.Conversation.ID));
 
+        const onlyB = await createSession(ctx, agentID, fixture.Conversation.ID, otherID);
+        fixture.Sessions.push(onlyB);
+        const neither = await createSession(ctx, agentID, null, otherID);
+        fixture.Sessions.push(neither);
+
         const principal = buildPrincipal(ctx.User, roles, tag);
         await assertKeyedReads(db, entity, principal, own.ID);
         await assertLoadReturns(ctx, principal, own.ID, 'the user-owned session');
         await assertLoadReturns(ctx, principal, fixture.Sessions[1].ID, 'a conversation-scoped session');
+        await assertLoadReturns(ctx, principal, onlyB.ID, 'another user\'s session in the conversation (filter B alone)');
+        await assertListReads(db, principal, fixture.Sessions.slice(0, 4).map((x) => x.ID), neither.ID, own.ID);
     } finally {
         await removeFixture(fixture);
     }

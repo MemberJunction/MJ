@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT144 - SQL Pipeline Extraction Fixtures",
+    "Description": "Forty fixture queries (EF01–EF40), each with hand-written expected metadata on SQL Server and PostgreSQL, saved with extraction on and compared exactly: parameter rows (name, type, required, default, description), field rows in order (base and full type per platform, nullability on SQL Server, computed, source as a mock-schema object, an MJ entity field, or none), Query Entities and Query Dependencies (path, alias, argument mapping). Cases: every column type of a mock table; a view over a view; aliases; computed expressions (decimal scale, cast, functions); aggregates; LEFT JOIN nullability; names with spaces; a table-valued / set-returning function (PostgreSQL results carry no source or length); CTEs, recursive CTEs, UNION ALL, VALUES, window functions, DISTINCT / derived / EXISTS, own caps; SQL Server-only TRY_CAST, FOR JSON, STRING_AGG with OPTION, TOP PERCENT WITH TIES (skipped on PostgreSQL); required / optional / defaulted parameters, header and trailing doc comments, arrays, dates and booleans, set variables and Context tokens, one parameter in if / elif / outside, .length guards and inline if, branch-only columns; static, pass-through (inherited type and description), arithmetic and Context-token composition arguments; core user / role views with entity field binding, entities read only in a CTE, an IN subquery or an EXISTS, a CTE named like an entity view. Builds and drops the mock schema mjit_sqlpipe and a per-run zzz-it144 category.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Extraction writes exactly the hand-written expected metadata for every fixture query."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "sqlpipe-extraction-fixtures"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0D41C7B1-C02C-4ECB-9CD7-599E83265C2F"
+  }
+}

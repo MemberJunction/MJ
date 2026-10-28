@@ -1,5 +1,32 @@
 import type { SQLDialect } from '@memberjunction/sql-dialect';
-import { FindForbiddenFunctionCalls, IsReadOnlyQuery, LexSQL, SignificantTokens } from '@memberjunction/sql-parser';
+import { FindForbiddenFunctionCalls, IsReadOnlyQuery, LexSQL, SignificantTokens, UNREADABLE_WITH_CLAUSE_REASON } from '@memberjunction/sql-parser';
+
+/**
+ * The refusal {@link SafetyGate} throws: the SQL is not a single read query, or it calls a
+ * forbidden function. A caller that renders SQL for another purpose (a save describing the query)
+ * tells this refusal from any other render failure by its type ({@link IsQuerySafetyError}).
+ */
+export class QuerySafetyError extends Error {
+    /**
+     * Whether the SQL was refused because its structure could not be read (a WITH clause the
+     * dialect's lexer cannot split), rather than because a write or a forbidden call was found.
+     */
+    public readonly Unreadable: boolean;
+
+    constructor(message: string, unreadable = false) {
+        super(message);
+        this.name = 'QuerySafetyError';
+        this.Unreadable = unreadable;
+    }
+}
+
+/**
+ * Whether `error` is a {@link QuerySafetyError}. Matched by name as well as by class, so a refusal
+ * thrown from a second loaded copy of this module is still recognised.
+ */
+export function IsQuerySafetyError(error: unknown): error is QuerySafetyError {
+    return error instanceof QuerySafetyError || (error instanceof Error && error.name === 'QuerySafetyError');
+}
 
 /**
  * The safety stage every rendered statement passes before it can run, on every path (saved
@@ -21,17 +48,18 @@ import { FindForbiddenFunctionCalls, IsReadOnlyQuery, LexSQL, SignificantTokens 
 export class SafetyGate {
     /**
      * @param refuseEmpty - Whether SQL with no statement is refused too.
-     * @throws Error saying why `sql` may not run.
+     * @throws QuerySafetyError saying why `sql` may not run.
      */
     static AssertSafeToExecute(sql: string, dialect: SQLDialect, refuseEmpty: boolean): void {
         if (!refuseEmpty && SafetyGate.IsEmpty(sql, dialect)) return;
         const check = IsReadOnlyQuery(sql, dialect);
         if (!check.IsReadOnly) {
-            throw new Error(`RenderPipeline: only a single read query may be run here, and this SQL is not one: ${check.Reason}.`);
+            throw new QuerySafetyError(`RenderPipeline: only a single read query may be run here, and this SQL is not one: ${check.Reason}.`,
+                check.Reason === UNREADABLE_WITH_CLAUSE_REASON);
         }
         const forbidden = FindForbiddenFunctionCalls(sql, dialect);
         if (forbidden.length > 0) {
-            throw new Error(
+            throw new QuerySafetyError(
                 `RenderPipeline: a query may not call ${forbidden.join(', ')}. These functions run SQL ` +
                 'given as a string, or read files or other databases, so what they read cannot be checked.',
             );

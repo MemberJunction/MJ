@@ -11,12 +11,11 @@ export type TemplateUnaryOperator = 'not' | '-' | '+';
  *
  * - `FunctionCall`: `f(x)` or `x.method()`.
  * - `Subscript`: `x[0]`.
- * - `InlineIf`: `a if b else c`.
- * - `MemberAccess`: `x.y`, other than `Context.<Token>` and `loop.<member>`.
+ * - `MemberAccess`: `x.y`, other than `Context.<Token>`, `loop.<member>` and `<name>.length`.
  * - `Operator`: an operator or literal form the grammar leaves out (`in`, `is`, `~`, `**`, `//`, `===`, lists, objects).
  * - `Syntax`: text that does not parse at all.
  */
-export type UnsupportedConstruct = 'FunctionCall' | 'Subscript' | 'InlineIf' | 'MemberAccess' | 'Operator' | 'Syntax';
+export type UnsupportedConstruct = 'FunctionCall' | 'Subscript' | 'MemberAccess' | 'Operator' | 'Syntax';
 
 /** The value of a literal. */
 export type TemplateLiteralValue = string | number | boolean | null;
@@ -43,6 +42,29 @@ export interface LoopMemberExpression {
     readonly Kind: 'LoopMember';
     readonly Span: Span;
     readonly Member: string;
+}
+
+/**
+ * `<name>.length`: the length of the array or string a name holds. Like the template engine, a
+ * name with no value, or a value with no length, gives `undefined`.
+ */
+export interface LengthExpression {
+    readonly Kind: 'Length';
+    readonly Span: Span;
+    /** The name whose value's length is read. */
+    readonly Object: NameExpression;
+}
+
+/**
+ * `body if condition else otherwise`, or `body if condition`: `body` when the condition is
+ * truthy, otherwise `otherwise`, or the empty string when there is no `else`.
+ */
+export interface InlineIfExpression {
+    readonly Kind: 'InlineIf';
+    readonly Span: Span;
+    readonly Body: TemplateExpression;
+    readonly Condition: TemplateExpression;
+    readonly Else: TemplateExpression | null;
 }
 
 /** A string, number, boolean or null literal. */
@@ -100,6 +122,8 @@ export type TemplateExpression =
     | NameExpression
     | ContextExpression
     | LoopMemberExpression
+    | LengthExpression
+    | InlineIfExpression
     | LiteralExpression
     | UnaryExpression
     | BinaryExpression
@@ -109,6 +133,8 @@ export type TemplateExpression =
 /** The sub-expressions of an expression, in source order. */
 export function ExpressionChildren(expression: TemplateExpression): readonly TemplateExpression[] {
     switch (expression.Kind) {
+        case 'Length': return [expression.Object];
+        case 'InlineIf': return expression.Else === null ? [expression.Body, expression.Condition] : [expression.Body, expression.Condition, expression.Else];
         case 'Unary': return [expression.Operand];
         case 'Binary': return [expression.Left, expression.Right];
         case 'Filter': return [expression.Input, ...expression.Arguments];

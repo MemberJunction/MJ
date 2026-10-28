@@ -14,6 +14,7 @@ import type {
     CompositionArgument,
     CompositionReference,
     CompositionTarget,
+    DeclaredTemplateParameter,
     Diagnostic,
     TableReference,
     TemplateParameter,
@@ -25,6 +26,7 @@ import { BindTableReferences, EntityObjectIndex } from "./sourceBinding";
 import type {
     QueryDependencyFact,
     QueryEntityFact,
+    KnownQueryParameter,
     QueryExtractionInput,
     QueryParameterFact,
     QueryParameterType,
@@ -72,7 +74,7 @@ export function AnalyzeQueryTemplate(input: QueryExtractionInput): TemplateAnaly
     const template = QueryTemplate.Parse(input.SQL, dialect);
     const validation = template.Validate({
         Mode: input.Mode,
-        DeclaredParameters: input.KnownParameters.map(p => ({ Name: p.Name, Type: p.Type, IsServerSet: p.IsServerSet })),
+        DeclaredParameters: DeclaredTemplateParameters(input.KnownParameters),
         QueryPath: input.QueryPath,
         ResolveComposition: path => resolveTarget(path, input.Queries),
     });
@@ -93,6 +95,16 @@ export function AnalyzeQueryTemplate(input: QueryExtractionInput): TemplateAnaly
         Warnings: diagnostics.filter(d => d.Severity === 'Warning'),
         Notes: [...resolved.Notes, ...structure.Notes],
     };
+}
+
+/**
+ * The parameter rows that declare a type to the save-time rules: the rows a person wrote
+ * (`DetectionMethod` `Manual`), and the server-set rows, whose flag only a person sets. A row
+ * extraction detected records what the previous SQL implied, so it declares nothing: the SQL may
+ * change that parameter's filter, and the row then follows the new type.
+ */
+export function DeclaredTemplateParameters(known: readonly KnownQueryParameter[]): DeclaredTemplateParameter[] {
+    return known.filter(p => p.IsAuthored || p.IsServerSet).map(p => ({ Name: p.Name, Type: p.Type, IsServerSet: p.IsServerSet }));
 }
 
 /**
@@ -192,7 +204,7 @@ function parameterFacts(template: QueryTemplate, references: readonly ResolvedRe
         const fed = passThroughTarget(p.Name, references);
         return {
             Name: p.Name,
-            Type: inferredType(p) ?? (fed ? fed.Type : null),
+            Type: inferredType(p) ?? (fed ? fed.Type : arithmeticTargetType(p.Name, references)),
             IsRequired: p.IsRequired,
             DefaultValue: p.DefaultValue === null ? null : String(p.DefaultValue),
             SampleValue: hintFor(p.Name, hints) ?? fed?.SampleValue ?? null,
@@ -219,6 +231,27 @@ function passThroughTarget(name: string, references: readonly ResolvedReference[
         if (parameter) return parameter;
     }
     return undefined;
+}
+
+const ARITHMETIC_OPERATORS = new Set(['+', '-', '*', '/', '%']);
+
+/**
+ * `number` when `name` is read by an arithmetic composition argument (`Lo=Floor + 4`) that feeds a
+ * number parameter of the composed query: the outer value must be a number for the arithmetic to
+ * mean what it says (a string value would be concatenated by `+`). Otherwise no type.
+ */
+function arithmeticTargetType(name: string, references: readonly ResolvedReference[]): QueryParameterType | null {
+    const wanted = name.toLowerCase();
+    for (const { Reference, Target } of references) {
+        for (const argument of Reference.Arguments) {
+            const expression = argument.Expression;
+            if (expression.Kind !== 'Binary' || !ARITHMETIC_OPERATORS.has(expression.Operator)) continue;
+            if (!argument.ReferencedNames.some(n => n.toLowerCase() === wanted)) continue;
+            const parameter = Target.QueryParameters.find(tp => tp.Name.toLowerCase() === argument.Name.toLowerCase());
+            if (parameter?.Type === 'number') return 'number';
+        }
+    }
+    return null;
 }
 
 function inheritedDescription(parameter: CompositionCandidateParameter): string | null {

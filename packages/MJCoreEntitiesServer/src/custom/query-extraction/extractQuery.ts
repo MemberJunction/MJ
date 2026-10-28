@@ -3,7 +3,7 @@ import type { DatabasePlatform } from "@memberjunction/core";
 import type { DescribedColumn } from "@memberjunction/generic-database-provider";
 import { AnalyzeQueryTemplate, DescribeDiagnostic } from "./templateFacts";
 import type { TemplateAnalysis } from "./templateFacts";
-import { DescribeQueryOutput } from "./describeFacts";
+import { DescribeQueryOutput, FindUnsafeRender } from "./describeFacts";
 import type { DescribedOutput } from "./describeFacts";
 import { BindColumnSource, EntityObjectIndex } from "./sourceBinding";
 import type {
@@ -40,6 +40,8 @@ export async function ComputeQueryExtraction(input: QueryExtractionInput): Promi
     const refusal = saveRefusal(input, analysis.Errors.map(d => DescribeDiagnostic(d, input.SQL)), analysis.DuplicateOutputNames);
     if (refusal) return resultOf(input, analysis, null, findings, refusal);
     recordAnalysis(input, analysis, findings);
+    const unsafe = input.IsExternal ? null : FindUnsafeRender(input, analysis.Template, analysis.Parameters);
+    if (unsafe !== null) return unsafeResult(input, analysis, findings, unsafe);
     if (input.IsExternal) {
         return { ...resultOf(input, analysis, null, findings, null), Entities: null, Status: 'Skipped',
             Messages: ['The query reads an external data source, which the database server cannot describe; its fields and entities were left as they are.', ...messagesOf(findings)] };
@@ -66,6 +68,18 @@ export const PARAMETER_NAMED_SOURCE_NOTE = 'The query reads a table or view name
  */
 export function ExtractionSQLHash(sql: string, platform: DatabasePlatform): string {
     return createHash('sha256').update(`${platform}\n${sql}`).digest('hex');
+}
+
+/**
+ * A query a render of which may not run: a new or edited one is refused; a refresh records the
+ * reason as an error and keeps the stored fields. Nothing is described, so the database server is
+ * never handed the statement.
+ */
+function unsafeResult(input: QueryExtractionInput, analysis: TemplateAnalysis, findings: Findings, reason: string): QueryExtractionResult {
+    const refusal = saveRefusal(input, [reason], []);
+    if (refusal) return resultOf(input, analysis, null, findings, refusal);
+    findings.Errors.push(`${reason} The stored fields were left as they are.`);
+    return resultOf(input, analysis, null, findings, null);
 }
 
 /** Why a new or edited query must be refused; `null` when it may be saved or this is a refresh. */

@@ -17,8 +17,8 @@ export const COMPOSITION_RECORDER_NAME = '__mjComposition';
  * saved before the language existed may rely on. A save refuses them and a refresh reports them;
  * a run of an existing query does not stop for them (DISCUSSION §6: "existing queries keep
  * running"). Every other error stops a run, so a construct outside the language (an unsupported
- * tag, a function call, attribute or subscript access, an unknown filter, a malformed tag) never
- * reaches Nunjucks. A code added later stops a run until it is listed here.
+ * tag, a function call, attribute access other than `.length`, a subscript, an unknown filter, a
+ * malformed tag) never reaches Nunjucks. A code added later stops a run until it is listed here.
  */
 export const SAVE_TIME_ONLY_RULES: ReadonlySet<string> = new Set([
     MJQueryDiagnosticCodes.TagInStringLiteral,
@@ -141,6 +141,13 @@ export function ToNunjucksExpression(expression: TemplateExpression, argumentNam
         case 'Name': return identifier(expression.Name, argumentName);
         case 'Context': return `Context.${identifier(expression.Token, argumentName)}`;
         case 'LoopMember': return `loop.${identifier(expression.Member, argumentName)}`;
+        case 'Length': return `(${identifier(expression.Object.Name, argumentName)}.length)`;
+        case 'InlineIf': {
+            const body = ToNunjucksExpression(expression.Body, argumentName);
+            const condition = ToNunjucksExpression(expression.Condition, argumentName);
+            const otherwise = expression.Else === null ? '' : ` else ${ToNunjucksExpression(expression.Else, argumentName)}`;
+            return `(${body} if ${condition}${otherwise})`;
+        }
         case 'Literal': return literal(expression.Value);
         case 'Unary': return `(${expression.Operator === 'not' ? 'not ' : expression.Operator}${ToNunjucksExpression(expression.Operand, argumentName)})`;
         case 'Binary': return `(${ToNunjucksExpression(expression.Left, argumentName)} ${expression.Operator} ${ToNunjucksExpression(expression.Right, argumentName)})`;

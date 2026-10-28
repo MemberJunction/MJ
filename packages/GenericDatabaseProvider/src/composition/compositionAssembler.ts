@@ -64,7 +64,7 @@ export class CompositionAssembler {
             recursive = recursive || parts.Recursive;
             assembled.push({ Instance: instance, OrderByStripped: parts.OrderByStripped, InnerCTEsHoisted: parts.Definitions.length });
         }
-        const outer = outerParts(outerSQL, distinctHints(hints), dialect);
+        const outer = outerParts(withoutLeadingSemicolons(outerSQL, dialect), distinctHints(hints), dialect);
         const keyword = (recursive || outer.Recursive) && dialect.Grammar.RecursiveKeyword ? `WITH ${dialect.Grammar.RecursiveKeyword}` : 'WITH';
         return { SQL: `${keyword} ${[...definitions, ...outer.Definitions].join(',\n')}\n${outer.Main}`, Instances: assembled };
     }
@@ -299,6 +299,19 @@ function withoutStatementSemicolons(sql: string, dialect: SQLDialect): string {
     let last = tokens.length - 1;
     while (tokens[last].Kind === 'semicolon') last--;
     return sql.substring(tokens[first].Start, tokens[last].End);
+}
+
+/**
+ * The outer statement without the semicolons before it (`;SELECT …`): the assembled WITH clause is
+ * written in front of the statement, and a semicolon between the two would end the statement there.
+ * Text before the semicolons (comments) is kept.
+ */
+function withoutLeadingSemicolons(sql: string, dialect: SQLDialect): string {
+    const tokens = SignificantTokens(LexSQL(sql, dialect));
+    let index = 0;
+    while (index < tokens.length && tokens[index].Kind === 'semicolon') index++;
+    if (index === 0 || index === tokens.length) return sql;
+    return sql.substring(0, tokens[0].Start) + sql.substring(tokens[index].Start);
 }
 
 /** A name without its surrounding brackets or double quotes. */

@@ -105,7 +105,7 @@ composition arguments.
 ### Grammar
 
 ```
-expression := or ["if" or ["else" or]]          (inline if: refused)
+expression := or ["if" or ["else" or]]          (inline if: body if condition else otherwise)
 or         := and ("or" and)*
 and        := not ("and" not)*
 not        := "not" not | compare
@@ -117,8 +117,34 @@ postfix    := primary ("." name | "(" args ")" | "[" expression "]")*
 primary    := name | number | string | true | false | null | "(" expression ")"
 ```
 
-Only two `postfix` forms are accepted: `Context.<Token>` and `loop.<member>`. Calls and subscripts are parsed so they
-can be reported, then refused.
+Only three `postfix` forms are accepted: `Context.<Token>`, `loop.<member>` and `<name>.length`. Calls, subscripts and
+any other attribute are parsed so they can be reported, then refused.
+
+### `.length`
+
+`<name>.length` is the length of the array or string a name (a parameter, loop variable or `{% set %}` variable)
+holds. It is the only attribute a name has. As in Nunjucks, a name with no value, a `null` value, or a value with no
+length (a number, a boolean) gives `undefined`, and every comparison with `undefined` but `!=` is false:
+
+```sql
+{% if Codes and Codes.length > 0 %} AND Code IN {{ Codes | sqlIn }} {% endif %}
+```
+
+An empty array is truthy on its own, so `{% if Codes %}` alone takes the branch for `[]`; `Codes.length > 0` does not.
+`.length` takes no further postfix: `x.length.length`, `x.length()` and `x['length']` are refused, as is `.length` on
+anything but a plain name (`Context.UserID.length`, `'abc'.length`). In a hole, `.length` is a number and takes
+`sqlNumber`: `{{ Codes.length | sqlNumber }}`.
+
+### Inline if
+
+`body if condition else otherwise` is `body` when the condition is truthy, otherwise `otherwise`. Without `else`
+(`body if condition`) a false condition gives the empty string. It is an expression, allowed wherever an expression
+is: in a hole, a condition, a `{% set %}` value or a composition argument. Each part is read at the `or` level, so a
+nested inline if needs parentheses: `a if b else (c if d else e)`.
+
+```sql
+SELECT TOP {{ MaxRows | sqlNumber if MaxRows else 12 }} …
+```
 
 ### Precedence (tightest first)
 
@@ -132,9 +158,12 @@ can be reported, then refused.
 | 6 | `not` |
 | 7 | `and` |
 | 8 | `or` |
+| 9 | Inline `if` … `else` |
 
 **Filters bind tighter than every binary operator**, as in Nunjucks. `Year - 1 | sqlNumber` means
-`Year - (1 | sqlNumber)`. A unary sign binds tighter than a filter: `-x | f` means `(-x) | f`.
+`Year - (1 | sqlNumber)`. A unary sign binds tighter than a filter: `-x | f` means `(-x) | f`. **Every operator binds
+tighter than the inline if**: `x | sqlNumber if x else 12` means `(x | sqlNumber) if x else 12`, so the filter applies
+to the body only; `(x if x else 12) | sqlNumber` filters both branches.
 
 ### Literals and names
 
@@ -147,6 +176,7 @@ can be reported, then refused.
 | Name | A letter or `_`, then letters, digits or `_`. The words `and`, `or`, `not`, `if`, `else`, `in`, `is` are not names. |
 | Context token | `Context.<Token>`: one of the nine tokens in [Context tokens](#5-context-tokens). |
 | Loop member | `loop.<member>`, inside a `{% for %}` body only. |
+| Length | `<name>.length`: see [`.length`](#length). |
 
 ### What is refused
 
@@ -154,8 +184,7 @@ can be reported, then refused.
 |---|---|---|
 | Function or method call | `upper(x)`, `x.upper()` | `MJQ_FUNCTION_CALL` |
 | Subscript | `x[0]`, `x['key']` | `MJQ_SUBSCRIPT` |
-| Inline if | `a if b else c` | `MJQ_INLINE_IF` |
-| Attribute access other than `Context.` / `loop.` | `x.Name`, `Context.UserID.Length` | `MJQ_MEMBER_ACCESS` |
+| Attribute access other than `Context.`, `loop.` and `<name>.length` | `x.Name`, `x.constructor`, `Context.UserID.length` | `MJQ_MEMBER_ACCESS` |
 | `in`, `not in`, `is`, `~`, `**`, `//`, `===`, `!==` | `x in Items`, `x is defined` | `MJQ_UNSUPPORTED_OPERATOR` |
 | List or object literal | `[1, 2]`, `{a: 1}` | `MJQ_UNSUPPORTED_OPERATOR` |
 | Anything else that does not parse | `!x`, an empty tag, an unclosed string | `MJQ_SYNTAX` |
@@ -170,7 +199,14 @@ A hole `{{ }}` writes **one value** into the SQL:
 {{ value [| default(literal)] [| sqlFilter] }}
 ```
 
-`value` is a parameter, a `Context` token, a loop variable, a `{% set %}` variable or a loop member. Filters follow.
+`value` is a parameter, a `Context` token, a loop variable, a `{% set %}` variable, a loop member or `<name>.length`.
+Filters follow.
+
+A hole may also be an inline if, `{{ value if condition else value }}`. Each branch is checked as the value of a
+hole, with its own filters and the filters written after the whole inline if:
+`{{ MaxRows | sqlNumber if MaxRows else 12 }}` and `{{ (A if A else B) | sqlNumber }}` both filter every
+parameter they write. A branch may be a literal (the author wrote it); the condition is not written into the SQL, so
+it needs no filter.
 
 - **No operators inside a hole** (`MJQ_ARITHMETIC_IN_HOLE`). Do the arithmetic in SQL around the hole, or in a
   `{% set %}`:
@@ -182,7 +218,8 @@ A hole `{{ }}` writes **one value** into the SQL:
   ```
 
   Parentheses do not help: `{{ (Year - 1) | sqlNumber }}` is still refused.
-- **A literal is not a value** (`MJQ_HOLE_NOT_A_VALUE`): write `'abc'` in the SQL, not `{{ 'abc' }}`.
+- **A literal is not a value** (`MJQ_HOLE_NOT_A_VALUE`): write `'abc'` in the SQL, not `{{ 'abc' }}`. A branch of an
+  inline if may be a literal.
 - Arithmetic and comparisons **are** allowed in `{% if %}` conditions, `{% set %}` values and composition arguments.
 
 ---
@@ -319,11 +356,14 @@ Uses are counted in holes (and their filter arguments), `{% if %}` / `{% elif %}
 
 ### Required or optional
 
-> A parameter is **required** when at least one of its uses sits outside every `{% if %}` block and has no
-> `default(…)`. Otherwise it is **optional**.
+> A parameter is **required** when at least one of its uses sits outside every `{% if %}` block and every inline if,
+> and has no `default(…)`. Otherwise it is **optional**.
 
 - A use inside any branch of an `{% if %}` (including `elif` and `else`) is conditional.
 - A use in an `{% if %}` or `{% elif %}` condition is conditional.
+- `<name>.length` is a use of the name, like any other: `{% if X and X.length > 0 %}` leaves `X` optional.
+- Any use in an inline if is conditional: its condition (a `Condition` use) and its branches. A parameter used in an
+  inline if is required only when it is also used unconditionally elsewhere.
 - A `{% for %}` body is **not** conditional. A loop at the top level makes its iterable required.
 - `default(…)` makes only the hole it sits in optional. Only a hole has filters, so a use in a `{% set %}` value or a
   composition argument outside every `{% if %}` is required.
@@ -335,19 +375,26 @@ Uses are counted in holes (and their filter arguments), `{% if %}` / `{% elif %}
 | `WHERE r = {{ Region \| default('WEST') \| sqlString }}` | optional | |
 | `{% if Region %}…{% endif %} WHERE r = {{ Region \| sqlString }}` | required (the second use) | |
 | `{% for R in Regions %}…{% endfor %}` at the top level | `Regions` required | |
+| `{% if Search and Search.length > 2 %}…{% endif %}` | | optional |
+| `TOP {{ Region \| sqlNumber if Region else 12 }}` | optional | |
 
 ### Inferred type
 
 - A hole's type is the type of its **last SQL filter** (`default` does not count). `{{ x | sqlNumber }}` makes `x` a
   number.
 - A `{% for %}` iterable is an `array`.
+- A branch of an inline if in a hole is typed like a hole, by its last SQL filter (its own or one written after the
+  inline if).
+- `<name>.length` implies no type: arrays and strings both have a length. When another use types the parameter a
+  `number` or `boolean`, which has no length, the `.length` use is `MJQ_PARAMETER_TYPE_CONFLICT` (a warning).
 - The first use that implies a type sets it. A later use that implies a different type is
   `MJQ_PARAMETER_TYPE_CONFLICT` (a warning); the first type is kept.
 - With no typed use the type is `unknown`.
 
 `Parameters()` reports, for each parameter: `Name`, `Filters` (every filter name, in order of first appearance),
 `InferredType`, `IsRequired`, `DefaultValue` (the literal of its first `default(…)`, or `null`) and `Uses` (each with
-its role, position, filters, whether it is conditional, whether it has a default, and its SQL context).
+its role, position, filters, whether it is conditional, whether it reads `.length`, whether it has a default, and its
+SQL context).
 
 ### Unfiltered values
 
@@ -366,6 +413,7 @@ query's metadata declares the parameter, otherwise the inferred type.
 | A `{% set %}` variable whose value is a `-`, `*`, `/` or `%` expression | Allowed: the result is a number. |
 | Any other `{% set %}` variable (for example `{% set Nm = Name %}`, or `Name + ''`) | `MJQ_UNFILTERED_VALUE` (error): it carries a caller's value. |
 | A loop member (`loop.index`, …) | Allowed. |
+| `<name>.length` | `MJQ_UNFILTERED_VALUE` (error): pipe it through `sqlNumber`. Any other SQL filter is `MJQ_FILTER_TYPE_MISMATCH`. |
 
 ---
 
@@ -514,6 +562,12 @@ the base) and `Satisfiable`. `Satisfiable` is `false` when parameter values alon
 branch, for example a condition on `loop.first` or a comparison of a `Context` token. Such a variant repeats the base
 values.
 
+Conditions are evaluated as Nunjucks would. `<name>.length` of a `Sample` is a whole number of at least 1, so
+`X.length > 0` is true and `X.length == 0` false for it, while `X.length > 5` cannot be known; of an `Absent` value it
+is `undefined`. An inline if in a condition takes the branch its own condition picks, and a comparison with an inline
+if tries the literals compared against each of its branches. An inline if in a hole adds no variant: both branches
+write a value at the same place.
+
 **Why:** when MJ extracts a query's output fields, it describes each render with the database and takes the union of
 the output columns. Describing one sample render would miss columns that only some branches produce.
 
@@ -556,8 +610,8 @@ reported. **Info** is a note.
 | `MJQ_UNSUPPORTED_TAG` | Error | A block tag outside the allow-list; `for … else`; block `set` | Use only if / elif / else / endif, for / endfor, set. |
 | `MJQ_FUNCTION_CALL` | Error | A function or method call | Compute in SQL, or pass a parameter. |
 | `MJQ_SUBSCRIPT` | Error | `x[0]`, `x['k']` | Pass the value as its own parameter, or loop with `for`. |
-| `MJQ_INLINE_IF` | Error | `a if b else c` | Use an `{% if %}` block. |
-| `MJQ_MEMBER_ACCESS` | Error | `x.y` other than `Context.<Token>` / `loop.<member>` | Pass the value as its own parameter. |
+| `MJQ_INLINE_IF` | — | No longer reported: the inline if is part of the language. The code is kept and never reused. | — |
+| `MJQ_MEMBER_ACCESS` | Error | `x.y` other than `Context.<Token>`, `loop.<member>` and `<name>.length` | Pass the value as its own parameter. |
 | `MJQ_UNSUPPORTED_OPERATOR` | Error | `in`, `is`, `~`, `**`, `//`, `===`, `!==`, list or object literals | Use `+ - * / %`, `== != < > <= >=`, `and`, `or`, `not`, parentheses. |
 | `MJQ_ARITHMETIC_IN_HOLE` | Error | An operator inside a `{{ }}` hole | Do the arithmetic in SQL around the hole, or in a `{% set %}`. |
 | `MJQ_HOLE_NOT_A_VALUE` | Error | A hole that starts from a literal | Write the literal into the SQL. |
@@ -629,13 +683,11 @@ UPPER({{ Name | sqlString }})
 {{ Regions[0] | sqlString }}
 {{ FirstRegion | sqlString }}
 
--- MJQ_INLINE_IF
-{{ (Mode if Mode else 'All') | sqlString }}
-{{ Mode | default('All') | sqlString }}
-
 -- MJQ_MEMBER_ACCESS
 {{ Filter.Region | sqlString }}
 {{ Region | sqlString }}
+{% if Regions.size > 0 %}…{% endif %}
+{% if Regions and Regions.length > 0 %}…{% endif %}
 
 -- MJQ_UNSUPPORTED_OPERATOR
 {% if Status in ['Open', 'Held'] %}…{% endif %}

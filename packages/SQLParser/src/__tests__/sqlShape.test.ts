@@ -105,4 +105,42 @@ describe('IsReadOnlyQuery', () => {
             expect(check.Reason).toMatch(reason);
         });
     }
+
+    // T-SQL needs no separator between statements, so a statement keyword written after a read
+    // at its top level starts a second statement that runs in the same batch.
+    const unseparated: string[] = [
+        'SELECT 1 AS a DELETE FROM t',
+        "SELECT a FROM t UPDATE t SET a = 'x'",
+        'SELECT 1 AS a INSERT t (a) VALUES (1)',
+        "SELECT 1 AS a EXEC('DELETE FROM t')",
+        'SELECT 1 AS a\nDROP TABLE t',
+        'WITH x AS (SELECT 1 AS a) SELECT a FROM x DROP TABLE t',
+        'SELECT 1 AS a MERGE t USING s ON t.a = s.a WHEN MATCHED THEN DELETE;',
+        'SELECT 1 AS a SET LOCK_TIMEOUT 0',
+        'SELECT 1 AS a DECLARE @x INT',
+        "SELECT 1 AS a WAITFOR DELAY '00:00:10'",
+        'SELECT a FROM t WHERE a = 1 TRUNCATE TABLE t',
+    ];
+    for (const sql of unseparated) {
+        it(`refuses the unseparated T-SQL batch ${sql.replace(/\s+/g, ' ')}`, () => {
+            expect(IsReadOnlyQuery(sql, ss)).toEqual({ IsReadOnly: false, Reason: 'it contains more than one statement' });
+        });
+    }
+
+    const tsqlReadsWithStatementWords: string[] = [
+        'SELECT a.x FROM t a INNER MERGE JOIN u b ON b.x = a.x',
+        'SELECT a.x FROM t a JOIN u b ON b.x = a.x OPTION (MERGE JOIN)',
+        'SELECT [DELETE], [Update] FROM t',
+        "SELECT 'x; DELETE FROM t' AS a /* DROP TABLE t */",
+        'SELECT a FROM t WITH (NOLOCK) ORDER BY a OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY',
+    ];
+    for (const sql of tsqlReadsWithStatementWords) {
+        it(`accepts the T-SQL read ${sql}`, () => {
+            expect(IsReadOnlyQuery(sql, ss)).toEqual({ IsReadOnly: true, Reason: null });
+        });
+    }
+
+    it('accepts a PostgreSQL read whose column is named like a statement keyword (statements there need a separator)', () => {
+        expect(IsReadOnlyQuery('SELECT delete, update FROM t', pg)).toEqual({ IsReadOnly: true, Reason: null });
+    });
 });

@@ -12,7 +12,7 @@
  * - M6: a dialect variant's save re-extracts the parent read from the database, from the variant's SQL.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DatabaseProviderBase } from '@memberjunction/core';
+import { DatabaseProviderBase, ProviderBase } from '@memberjunction/core';
 import type { DatabasePlatform } from '@memberjunction/core';
 
 const h = vi.hoisted(() => ({
@@ -150,6 +150,17 @@ describe('MJQueryEntityServer Save — extraction', () => {
         h.dbPlatform = 'postgresql';
         await createQuery().Save();
         expect(h.computed[0].Platform).toBe('sqlserver');
+    });
+
+    it('saves through a network (client) provider as a plain save: the server it reaches extracts', async () => {
+        const query = createQuery();
+        const network: ProviderBase = Object.create(ProviderBase.prototype);
+        Object.defineProperty(network, 'ProviderType', { get: () => 'Network' });
+        query.Provider = network;
+        expect(await query.Save()).toBe(true);
+        expect(h.writes.length).toBe(1);
+        expect(h.computed).toEqual([]);
+        expect(h.written).toEqual([]);
     });
 
     it('writes the query row once, with the Extraction columns set, then the child rows as the system user', async () => {

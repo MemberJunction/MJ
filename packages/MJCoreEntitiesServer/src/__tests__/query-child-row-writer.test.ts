@@ -289,6 +289,27 @@ describe('WriteExtractedChildRows — dry run and the change list', () => {
         expect(ops).toEqual([]);
     });
 
+    it('reports a nullability change from unknown to known among the changed columns', async () => {
+        stored.set('MJ: Query Fields', [{ ID: 'F1', QueryID: QUERY_ID, Name: 'Email', Sequence: 1, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(50)', IsNullable: null, IsComputed: false,
+            SourceEntityID: null, SourceEntityFieldID: null, SourceFieldName: 'Email', SourceObjectName: '__mj.vwThings', DetectionMethod: 'Database' }]);
+        const summary = await WriteExtractedChildRows(dryContext(), result({ Fields: [field('Email', 1, { SourceFieldName: 'Email' })] }));
+
+        expect(summary.Changes.find(c => c.Name === 'Email')?.ChangedColumns).toEqual(['SQLFullType', 'IsNullable']);
+    });
+
+    it('writes and reports a field whose only change is its nullability, in either direction between unknown and false', async () => {
+        const base = { QueryID: QUERY_ID, Sequence: 1, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', IsComputed: false,
+            SourceEntityID: null, SourceEntityFieldID: null, SourceObjectName: '__mj.vwThings', DetectionMethod: 'Database' };
+        stored.set('MJ: Query Fields', [
+            { ...base, ID: 'F1', Name: 'Known', SourceFieldName: 'Known', IsNullable: null },
+            { ...base, ID: 'F2', Name: 'Unknown', SourceFieldName: 'Unknown', Sequence: 2, IsNullable: false },
+        ]);
+        const summary = await WriteExtractedChildRows(context(), result({ Fields: [field('Known', 1), field('Unknown', 2, { IsNullable: null })] }));
+
+        expect(summary.Changes.map(c => `${c.Action} ${c.Name} [${c.ChangedColumns.join(',')}]`)).toEqual(['Updated Known [IsNullable]', 'Updated Unknown [IsNullable]']);
+        expect(ops.sort()).toEqual(['update MJ: Query Fields:Known', 'update MJ: Query Fields:Unknown']);
+    });
+
     it('records the same changes when it writes', async () => {
         const summary = await WriteExtractedChildRows(context(), result({ Fields: [field('New', 1)] }));
 

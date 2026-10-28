@@ -110,12 +110,12 @@ export interface ReadOnlyQueryCheck {
  */
 export function IsReadOnlyQuery(sql: string, dialect: SQLParserDialect): ReadOnlyQueryCheck {
     const { Statement: statement, Stacked: stacked } = firstStatement(WithoutLeadingSemicolons(SignificantTokens(LexSQL(sql, dialect))));
-    if (stacked) return refuse('it contains more than one statement');
+    if (stacked) return refuse(STACKED_REASON);
     if (statement.length === 0) return refuse('it is empty');
     const lead = firstWord(statement);
     if (IsKeyword(lead, 'WITH')) return checkWithStatement(sql, dialect);
     if (!IsKeyword(lead, 'SELECT')) return refuse(`it starts with ${lead ? lead.Text.toUpperCase() : 'no keyword'}, not SELECT or WITH`);
-    return checkSelect(statement);
+    return checkSelect(statement, dialect);
 }
 
 function refuse(reason: string): ReadOnlyQueryCheck {
@@ -123,6 +123,12 @@ function refuse(reason: string): ReadOnlyQueryCheck {
 }
 
 const ACCEPT: ReadOnlyQueryCheck = { IsReadOnly: true, Reason: null };
+
+/**
+ * The {@link ReadOnlyQueryCheck.Reason} of SQL whose WITH clause the dialect's lexer cannot split
+ * into CTEs: it is refused because it cannot be read, not because a write was found in it.
+ */
+export const UNREADABLE_WITH_CLAUSE_REASON = 'its WITH clause could not be read';
 
 /** The tokens before the first semicolon, and whether anything but semicolons follows it. */
 function firstStatement(tokens: SQLLexToken[]): { Statement: SQLLexToken[]; Stacked: boolean } {
@@ -141,26 +147,72 @@ function firstWord(tokens: SQLLexToken[]): SQLLexToken | undefined {
 
 function checkWithStatement(sql: string, dialect: SQLParserDialect): ReadOnlyQueryCheck {
     const ctes = SplitLeadingCTEs(sql, dialect);
-    if (!ctes) return refuse('its WITH clause could not be read');
+    if (!ctes) return refuse(UNREADABLE_WITH_CLAUSE_REASON);
     for (const definition of ctes.Definitions) {
         const body = SignificantTokens(LexSQL(definition.Body, dialect));
         const lead = firstWord(body);
         if (!IsKeyword(lead, 'SELECT') && !IsKeyword(lead, 'WITH') && !IsKeyword(lead, 'VALUES')) {
             return refuse(`its CTE ${definition.Name} is a ${lead ? lead.Text.toUpperCase() : 'empty'} statement, not a read`);
         }
-        if (!checkSelect(body).IsReadOnly) return refuse(`its CTE ${definition.Name} writes its result into a table (SELECT … INTO)`);
+        const bodyCheck = checkSelect(body, dialect);
+        if (!bodyCheck.IsReadOnly) {
+            return refuse(`its CTE ${definition.Name} ${bodyCheck.Reason === SELECT_INTO_REASON ? 'writes its result into a table (SELECT … INTO)' : 'holds more than one statement'}`);
+        }
     }
     const main = SignificantTokens(LexSQL(ctes.Main, dialect)).filter(t => t.Kind !== 'semicolon');
     if (!IsKeyword(firstWord(main), 'SELECT')) {
         const lead = firstWord(main);
         return refuse(`the statement after its WITH clause starts with ${lead ? lead.Text.toUpperCase() : 'nothing'}, not SELECT`);
     }
-    return checkSelect(main);
+    return checkSelect(main, dialect);
 }
 
-/** A SELECT is a read unless it writes its rows into a table with a top-level `INTO`. */
-function checkSelect(statement: SQLLexToken[]): ReadOnlyQueryCheck {
+const SELECT_INTO_REASON = 'it writes its result into a table (SELECT … INTO)';
+const STACKED_REASON = 'it contains more than one statement';
+
+/**
+ * A SELECT is a read unless it writes its rows into a table with a top-level `INTO`, or, on a
+ * dialect that needs no separator between statements, a statement keyword at its top level starts
+ * a second statement ({@link SQLParserDialect.UnseparatedStatementKeywords}).
+ */
+function checkSelect(statement: SQLLexToken[], dialect: SQLParserDialect): ReadOnlyQueryCheck {
     const outerDepth = statement.reduce((lowest, t) => Math.min(lowest, t.Depth), Number.POSITIVE_INFINITY);
+    if (startsAnotherStatement(statement, outerDepth, dialect)) return refuse(STACKED_REASON);
     const into = statement.find(t => t.Depth === outerDepth && IsKeyword(t, 'INTO'));
-    return into ? refuse('it writes its result into a table (SELECT … INTO)') : ACCEPT;
+    return into ? refuse(SELECT_INTO_REASON) : ACCEPT;
+}
+
+/**
+ * Whether a bare statement keyword stands at the statement's top level after its first word. A
+ * keyword directly followed by `JOIN` is a join hint (`INNER MERGE JOIN`), and a word inside an
+ * unrendered template tag (`{% if x %}`) is the template's, not SQL.
+ */
+function startsAnotherStatement(statement: SQLLexToken[], outerDepth: number, dialect: SQLParserDialect): boolean {
+    const keywords = dialect.UnseparatedStatementKeywords ?? [];
+    if (keywords.length === 0) return false;
+    const starters = new Set(keywords);
+    const lead = statement.findIndex(t => t.Kind !== 'open');
+    const inTags = templateTagTokens(statement);
+    return statement.some((t, i) => i > lead && t.Kind === 'word' && t.Depth === outerDepth && !inTags.has(i)
+        && starters.has(t.Text.toUpperCase()) && !IsKeyword(statement[i + 1], 'JOIN'));
+}
+
+/** Template tag openers (`{%`, `{{`, `{#`) and the closer each needs (`%}`, `}}`, `#}`). */
+const TEMPLATE_TAG_CLOSERS: Readonly<Record<string, string>> = { '%': '%', '{': '}', '#': '#' };
+
+/** The indexes of the tokens inside template tags: a `{` directly followed by `%`, `{` or `#`, up to its closer. */
+function templateTagTokens(tokens: SQLLexToken[]): Set<number> {
+    const inside = new Set<number>();
+    let closer: string | null = null;
+    for (let i = 0; i < tokens.length; i++) {
+        const next = tokens[i + 1];
+        const adjacent = next !== undefined && next.Start === tokens[i].End;
+        if (closer === null && tokens[i].Text === '{' && adjacent && next.Text in TEMPLATE_TAG_CLOSERS) {
+            closer = TEMPLATE_TAG_CLOSERS[next.Text];
+        } else if (closer !== null && tokens[i].Text === closer && adjacent && next.Text === '}') {
+            closer = null;
+        }
+        if (closer !== null) inside.add(i);
+    }
+    return inside;
 }
