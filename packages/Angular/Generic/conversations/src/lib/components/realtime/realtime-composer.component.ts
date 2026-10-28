@@ -55,6 +55,26 @@ export class RealtimeComposerComponent {
    */
   @Input() Compact = false;
 
+  /**
+   * Whether the Type buttons render (the strip's Type control and the lean dock's "Type" entry
+   * in the "•••" sheet). The overlay binds its resolved `allowTyping`. Only the controls that
+   * OPEN the typed-input dock are gated: an already-open dock keeps its hide control and Send.
+   * Default `true`.
+   */
+  @Input() AllowTyping = true;
+
+  /**
+   * Whether the End-call button renders in every layout. The overlay binds its resolved
+   * end-control switch; a host that ends the call elsewhere turns it off. Default `true`.
+   */
+  @Input() ShowEnd = true;
+
+  /**
+   * Whether the Captions toggle renders in every layout. This hides the control only; the
+   * caption state itself (`CaptionsOn`) is unaffected. Default `true`.
+   */
+  @Input() ShowCaptionsControl = true;
+
   /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
   @Output() OpenChanged = new EventEmitter<boolean>();
 

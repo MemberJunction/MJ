@@ -23,11 +23,13 @@
                        (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
     <!-- Captions: first-class in the lean dock (the overlay's only text toggle now). -->
-    <button type="button" mjButton Shape="circle" [Toggleable]="true" [Selected]="CaptionsOn"
-            AriaLabel="Captions" [title]="CaptionsTitle"
-            (click)="ToggleCaptions()">
-      <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-    </button>
+    @if (ShowCaptionsControl) {
+      <button type="button" mjButton Shape="circle" [Toggleable]="true" [Selected]="CaptionsOn"
+              AriaLabel="Captions" [title]="CaptionsTitle"
+              (click)="ToggleCaptions()">
+        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+      </button>
+    }
 
     <div class="lean-more" [class.lean-more--open]="MoreOpen">
       <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls">
@@ -54,12 +56,14 @@
             <small>Details</small>
           </button>
         }
-        <button type="button" class="lean-sheet__btn"
-                (click)="OpenChanged.emit(true); MoreOpen = false"
-                title="Type into the live session" aria-label="Open the typed-input composer">
-          <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
-          <small>Type</small>
-        </button>
+        @if (AllowTyping) {
+          <button type="button" class="lean-sheet__btn"
+                  (click)="OpenChanged.emit(true); MoreOpen = false"
+                  title="Type into the live session" aria-label="Open the typed-input composer">
+            <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
+            <small>Type</small>
+          </button>
+        }
       </div>
       <button type="button" mjButton Shape="circle" [Variant]="MoreOpen ? 'primary' : 'secondary'"
               AriaLabel="More call controls" title="More controls"
@@ -69,10 +73,12 @@
       </button>
     </div>
 
-    <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
-            AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
-      <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-    </button>
+    @if (ShowEnd) {
+      <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
+              AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
+        <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+      </button>
+    }
   </div>
 } @else if (StripMode) {
   <!-- Levels 0–1: phone-call strip — big labelled circles: the call's media controls (the microphone with its device
@@ -99,14 +105,16 @@
                        (StopShareRequested)="StopShareRequested.emit()"
                        (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
-    <div class="ctrl-group">
-      <button type="button" mjButton Shape="circle" Size="lg" [Toggleable]="true" [Selected]="CaptionsOn"
-              AriaLabel="Captions" [title]="CaptionsTitle"
-              (click)="ToggleCaptions()">
-        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-      </button>
-      <span class="ctrl-label" aria-hidden="true">Captions</span>
-    </div>
+    @if (ShowCaptionsControl) {
+      <div class="ctrl-group">
+        <button type="button" mjButton Shape="circle" Size="lg" [Toggleable]="true" [Selected]="CaptionsOn"
+                AriaLabel="Captions" [title]="CaptionsTitle"
+                (click)="ToggleCaptions()">
+          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+        </button>
+        <span class="ctrl-label" aria-hidden="true">Captions</span>
+      </div>
+    }
 
     @if (ShowDetails) {
       <div class="ctrl-group">
@@ -119,22 +127,26 @@
       </div>
     }
 
-    <div class="ctrl-group">
-      <button type="button" mjButton Shape="circle" Size="lg"
-              AriaLabel="Open the typed-input composer" title="Type into the live session"
-              (click)="OpenChanged.emit(true)">
-        <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
-      </button>
-      <span class="ctrl-label" aria-hidden="true">Type</span>
-    </div>
+    @if (AllowTyping) {
+      <div class="ctrl-group">
+        <button type="button" mjButton Shape="circle" Size="lg"
+                AriaLabel="Open the typed-input composer" title="Type into the live session"
+                (click)="OpenChanged.emit(true)">
+          <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
+        </button>
+        <span class="ctrl-label" aria-hidden="true">Type</span>
+      </div>
+    }
 
-    <div class="ctrl-group">
-      <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
-              AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
-        <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-      </button>
-      <span class="ctrl-label ctrl-label--end" aria-hidden="true">End call</span>
-    </div>
+    @if (ShowEnd) {
+      <div class="ctrl-group">
+        <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
+                AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
+          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+        </button>
+        <span class="ctrl-label ctrl-label--end" aria-hidden="true">End call</span>
+      </div>
+    }
   </div>
 } @else {
   <!-- Level 2+: the fused dock — small circles and the in-call composer in ONE bottom bar. -->
@@ -154,11 +166,13 @@
                          (CameraToggled)="CameraToggled.emit($event)"
                          (ShareRequested)="ShareRequested.emit($event)"
                          (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
-      <button type="button" mjButton Shape="circle" Size="sm" [Toggleable]="true" [Selected]="CaptionsOn"
-              AriaLabel="Captions" [title]="CaptionsTitle"
-              (click)="ToggleCaptions()">
-        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-      </button>
+      @if (ShowCaptionsControl) {
+        <button type="button" mjButton Shape="circle" Size="sm" [Toggleable]="true" [Selected]="CaptionsOn"
+                AriaLabel="Captions" [title]="CaptionsTitle"
+                (click)="ToggleCaptions()">
+          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+        </button>
+      }
       @if (ShowDetails) {
         <button type="button" mjButton Shape="circle" Size="sm" [Toggleable]="true" [Selected]="DetailsOn"
                 AriaLabel="Details" [title]="DetailsOn ? 'Hide the session panels' : 'Show the session panels'"
@@ -193,9 +207,11 @@
             (click)="OpenChanged.emit(false)">
       <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
     </button>
-    <button type="button" mjButton Shape="circle" Size="sm" Variant="danger"
-            AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
-      <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-    </button>
+    @if (ShowEnd) {
+      <button type="button" mjButton Shape="circle" Size="sm" Variant="danger"
+              AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
+        <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+      </button>
+    }
   </div>
 }

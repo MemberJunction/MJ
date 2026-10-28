@@ -294,4 +294,45 @@ describe('RealtimeComposerComponent (DOM)', () => {
     expect(query(f, '.lean__media button[title="Turn off camera"]')).not.toBeNull();
     expect(query(f, '.lean-sheet button[title="Turn on camera"]')).toBeNull();
   });
+
+  describe('host switches (#6101)', () => {
+    const TYPE = '[aria-label="Open the typed-input composer"]';
+    const END = '[aria-label="End call"]';
+    const CAPTIONS = '[aria-label="Captions"]';
+    const layouts: Array<[string, Record<string, unknown>]> = [
+      ['the strip', {}],
+      ['the lean dock', { Compact: true }],
+    ];
+    const allLayouts: Array<[string, Record<string, unknown>]> = [...layouts, ['the fused dock', { Open: true }]];
+
+    // The lean dock's sheet is always in the DOM (CSS hides it until "•••"), so no click is needed to see its Type button.
+    it.each(layouts)('hides every Type button in %s when AllowTyping is false, and keeps mute, Captions and End', (_name, inputs) => {
+      const f = render({ ...inputs, AllowTyping: false });
+      expect(queryAll(f, TYPE)).toHaveLength(0);
+      expect(query(f, CAPTIONS)).not.toBeNull();
+      expect(query(f, END)).not.toBeNull();
+      expect(query(f, 'mj-media-controls')).not.toBeNull();
+    });
+
+    it.each(allLayouts)('hides End in %s when ShowEnd is false', (_name, inputs) => {
+      expect(queryAll(render({ ...inputs, ShowEnd: false }), END)).toHaveLength(0);
+    });
+
+    it.each(allLayouts)('hides Captions in %s when ShowCaptionsControl is false', (_name, inputs) => {
+      expect(queryAll(render({ ...inputs, ShowCaptionsControl: false }), CAPTIONS)).toHaveLength(0);
+    });
+
+    it.each(layouts)('renders Type, End and Captions in %s by default', (_name, inputs) => {
+      const f = render(inputs);
+      expect(queryAll(f, TYPE).length).toBeGreaterThan(0);
+      expect(query(f, END)).not.toBeNull();
+      expect(query(f, CAPTIONS)).not.toBeNull();
+    });
+
+    it('keeps the dock hide control and Send when AllowTyping is false and the dock is already open', () => {
+      const f = render({ Open: true, AllowTyping: false });
+      expect(query(f, '[aria-label="Close the typed-input composer"]')).not.toBeNull();
+      expect(query(f, '.dock__send')).not.toBeNull();
+    });
+  });
 });
