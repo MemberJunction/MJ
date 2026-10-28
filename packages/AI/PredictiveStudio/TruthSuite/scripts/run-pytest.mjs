@@ -31,7 +31,7 @@ if (process.platform === 'darwin') {
 }
 
 // The sidecar's trainer contract, its column encoding, its snapshot loading, its inner-validation folds, its estimator
-// factories, its proper scores and secondary metrics, holdout intervals, calibration, candidate selection and selection stage, its CodeVersion, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
+// factories, its proper scores and secondary metrics, holdout intervals, the publishing gate, calibration, candidate selection and selection stage, its CodeVersion, and test fixtures: type-checked here under the same strict configuration (the sidecar's own venv carries no mypy).
 const SIDECAR_TYPED_MODULES = [
   'app/trainer_schemas.py',
   'app/failures.py',
@@ -43,6 +43,7 @@ const SIDECAR_TYPED_MODULES = [
   'app/array_types.py',
   'app/scores.py',
   'app/intervals.py',
+  'app/gate.py',
   'app/calibration.py',
   'app/selection.py',
   'app/trainer.py',
