@@ -230,6 +230,22 @@ describe('CRUD self-heal clears the SQL-pass failure only for what it repaired',
         expect(run.Failures.map((f) => f.context)).toEqual(['SQL_PASS']);
     });
 
+    it('quotes the first recorded failure in the SQL_PASS summary (#3975)', async () => {
+        arrange({
+            sqlPassFailures: [
+                { Step: 'Executing entity SQL files', EntityName: 'Gadgets', Message: "CREATE VIEW [app].[vwGadgets]: Invalid column name 'Size'." },
+                { Step: 'Applying permissions', EntityName: null, Message: 'One or more permissions files failed' },
+            ],
+            missingBefore: [],
+            missingAfter: [],
+        });
+        const run = new TestRunCodeGen();
+
+        expect(await run.RunPipeline()).toBe(false);
+        expect(run.Failures.map((f) => f.context)).toEqual(['SQL_PASS']);
+        expect(run.Failures[0].message).toContain("First failure: [Executing entity SQL files] Gadgets: CREATE VIEW [app].[vwGadgets]: Invalid column name 'Size'.");
+    });
+
     it('keeps the failure when the SQL pass failed without recording why', async () => {
         arrange({ sqlPassFailures: [], missingBefore: [WIDGETS_CREATE_MISSING], missingAfter: [] });
         vi.spyOn(SQLCodeGenBase.prototype, 'ManageSQLScriptsAndExecution').mockResolvedValue(false);

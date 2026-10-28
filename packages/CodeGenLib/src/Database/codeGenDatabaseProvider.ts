@@ -2,6 +2,7 @@ import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseV
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
+import type { SQLObjectFailure } from './sqlPassFailures';
 
 /**
  * Topologically orders an entity's alternate base views by `ParentID` so parent
@@ -1948,12 +1949,32 @@ export abstract class CodeGenDatabaseProvider {
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
+    /** Object-level failures recorded by {@link executeSQLFileViaShell} since the last {@link ClearSQLObjectFailures}. */
+    protected sqlObjectFailures: SQLObjectFailure[] = [];
+
+    /**
+     * The failed batches {@link executeSQLFileViaShell} recorded since the last
+     * {@link ClearSQLObjectFailures}, each named by the object it acts on. Empty for a provider
+     * that does not record them.
+     */
+    public get SQLObjectFailures(): ReadonlyArray<SQLObjectFailure> {
+        return this.sqlObjectFailures;
+    }
+
+    /** Forgets the recorded object-level failures, so a caller can scope them to one step. */
+    public ClearSQLObjectFailures(): void {
+        this.sqlObjectFailures = [];
+    }
+
     /**
      * Executes a SQL file using the platform's native CLI tool (sqlcmd/psql).
      * The implementation is responsible for reading connection configuration
      * from the environment or config objects.
      *
      * @param filePath Path to the SQL file to execute.
+     * A provider that runs the file batch by batch should also add each failed batch to
+     * {@link SQLObjectFailures}.
+     *
      * @returns True if execution succeeded, false otherwise.
      */
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to

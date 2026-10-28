@@ -9,7 +9,7 @@
 
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
-import { UnhealedSQLPassFailures } from './Database/sqlPassFailures';
+import { SQLPassFailureSummary, UnhealedSQLPassFailures } from './Database/sqlPassFailures';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { ApplyIncludeSchemaScope } from './Database/schema-scope';
@@ -358,7 +358,7 @@ export class RunCodeGenBase {
           );
           if (!sqlSuccess) {
             FailSpinner('Error managing SQL scripts and execution');
-            this.RecordStepFailure(SQL_PASS_FAILURE_CONTEXT, 'SQL generation/execution reported a failure; see the errors logged above');
+            this.RecordStepFailure(SQL_PASS_FAILURE_CONTEXT, SQLPassFailureSummary(sqlCodeGenObject.SQLPassFailures));
             sqlGenerationSucceeded = false;
             pipelineSuccess = false;
           } else {
