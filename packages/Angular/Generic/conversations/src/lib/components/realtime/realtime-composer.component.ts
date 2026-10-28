@@ -171,10 +171,19 @@ export class RealtimeComposerComponent {
   }
 
   /**
-   * Whether the compact "•••" overflow sheet (Captions / Details / Type) is open. Only used
-   * in {@link Compact} strip mode; any outside click or action selection closes it.
+   * Whether the compact "•••" overflow sheet (inactive Camera / Share, Details, Type) is open. Only
+   * used in {@link Compact} strip mode; any outside click or action selection closes it.
    */
   public MoreOpen = false;
+
+  /**
+   * Whether the compact "•••" sheet has anything to hold: an inactive camera or share, Details, or
+   * Type. When the host switches all of them off, the "•••" itself goes, so it never opens an empty
+   * sheet. Mirrors the sheet's own `@if` blocks in the template, so keep the two in step.
+   */
+  public get HasMoreItems(): boolean {
+    return this.AllowTyping || this.ShowDetails || (this.ShowCamera && !this.CameraOn) || (this.ShowShare && !this.Sharing);
+  }
 
   /** Open/close the compact overflow sheet (stops propagation so the outside-click close skips it). */
   public ToggleMore(event: MouseEvent): void {

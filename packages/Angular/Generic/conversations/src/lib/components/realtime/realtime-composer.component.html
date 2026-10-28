@@ -31,47 +31,49 @@
       </button>
     }
 
-    <div class="lean-more" [class.lean-more--open]="MoreOpen">
-      <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls">
-        @if ((ShowCamera && !CameraOn) || (ShowShare && !Sharing)) {
-          <mj-media-controls class="lean-sheet__media"
-                             Size="md"
-                             [ShowMicrophone]="false"
-                             [ShowCamera]="ShowCamera && !CameraOn"
-                             [ShowShare]="ShowShare && !Sharing"
-                             [CameraOn]="CameraOn"
-                             [Sharing]="Sharing"
-                             [SharePanels]="SharePanels"
-                             [CameraOptional]="true"
-                             (CameraToggled)="CameraToggled.emit($event); MoreOpen = false"
-                             (ShareRequested)="ShareRequested.emit($event); MoreOpen = false"
-                             (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
-        }
-        @if (ShowDetails) {
-          <button type="button" class="lean-sheet__btn" [class.lean-sheet__btn--on]="DetailsOn"
-                  (click)="DetailsToggled.emit(); MoreOpen = false"
-                  [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
-                  [attr.aria-pressed]="DetailsOn">
-            <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
-            <small>Details</small>
-          </button>
-        }
-        @if (AllowTyping) {
-          <button type="button" class="lean-sheet__btn"
-                  (click)="OpenChanged.emit(true); MoreOpen = false"
-                  title="Type into the live session" aria-label="Open the typed-input composer">
-            <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
-            <small>Type</small>
-          </button>
-        }
+    @if (HasMoreItems) {
+      <div class="lean-more" [class.lean-more--open]="MoreOpen">
+        <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls">
+          @if ((ShowCamera && !CameraOn) || (ShowShare && !Sharing)) {
+            <mj-media-controls class="lean-sheet__media"
+                               Size="md"
+                               [ShowMicrophone]="false"
+                               [ShowCamera]="ShowCamera && !CameraOn"
+                               [ShowShare]="ShowShare && !Sharing"
+                               [CameraOn]="CameraOn"
+                               [Sharing]="Sharing"
+                               [SharePanels]="SharePanels"
+                               [CameraOptional]="true"
+                               (CameraToggled)="CameraToggled.emit($event); MoreOpen = false"
+                               (ShareRequested)="ShareRequested.emit($event); MoreOpen = false"
+                               (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
+          }
+          @if (ShowDetails) {
+            <button type="button" class="lean-sheet__btn" [class.lean-sheet__btn--on]="DetailsOn"
+                    (click)="DetailsToggled.emit(); MoreOpen = false"
+                    [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
+                    [attr.aria-pressed]="DetailsOn">
+              <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+              <small>Details</small>
+            </button>
+          }
+          @if (AllowTyping) {
+            <button type="button" class="lean-sheet__btn"
+                    (click)="OpenChanged.emit(true); MoreOpen = false"
+                    title="Type into the live session" aria-label="Open the typed-input composer">
+              <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
+              <small>Type</small>
+            </button>
+          }
+        </div>
+        <button type="button" mjButton Shape="circle" [Variant]="MoreOpen ? 'primary' : 'secondary'"
+                AriaLabel="More call controls" title="More controls"
+                [attr.aria-expanded]="MoreOpen"
+                (click)="ToggleMore($event)">
+          <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+        </button>
       </div>
-      <button type="button" mjButton Shape="circle" [Variant]="MoreOpen ? 'primary' : 'secondary'"
-              AriaLabel="More call controls" title="More controls"
-              [attr.aria-expanded]="MoreOpen"
-              (click)="ToggleMore($event)">
-        <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
-      </button>
-    </div>
+    }
 
     @if (ShowEnd) {
       <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"

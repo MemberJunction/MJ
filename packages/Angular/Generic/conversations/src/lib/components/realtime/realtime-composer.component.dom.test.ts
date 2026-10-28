@@ -329,6 +329,34 @@ describe('RealtimeComposerComponent (DOM)', () => {
       expect(query(f, CAPTIONS)).not.toBeNull();
     });
 
+    describe('the lean dock "•••"', () => {
+      const MORE = '[aria-label="More call controls"]';
+      const NOTHING_TO_TUCK = { Compact: true, AllowTyping: false, ShowDetails: false, ShowCamera: false, ShowShare: false };
+
+      it('is absent when its sheet would be empty', () => {
+        const f = render(NOTHING_TO_TUCK);
+        expect(query(f, MORE)).toBeNull();
+        expect(query(f, '.lean-sheet')).toBeNull();
+        expect(f.componentInstance.HasMoreItems).toBe(false);
+      });
+
+      it.each<[string, Record<string, unknown>]>([
+        ['Details', { ShowDetails: true }],
+        ['Type', { AllowTyping: true }],
+        ['an inactive camera', { ShowCamera: true, CameraOn: false }],
+        ['an inactive share', { ShowShare: true, Sharing: false }],
+      ])('is present when the sheet holds %s', (_name, inputs) => {
+        const f = render({ ...NOTHING_TO_TUCK, ...inputs });
+        expect(query(f, MORE)).not.toBeNull();
+        expect(query(f, '.lean-sheet')).not.toBeNull();
+      });
+
+      it('is absent when the camera and share are already on (they ride the main bar)', () => {
+        const f = render({ ...NOTHING_TO_TUCK, ShowCamera: true, CameraOn: true, ShowShare: true, Sharing: true });
+        expect(query(f, MORE)).toBeNull();
+      });
+    });
+
     it('keeps the dock hide control and Send when AllowTyping is false and the dock is already open', () => {
       const f = render({ Open: true, AllowTyping: false });
       expect(query(f, '[aria-label="Close the typed-input composer"]')).not.toBeNull();

@@ -1548,11 +1548,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * Whether the active-channels strip renders. Preserves the historical disclosure gate
-   * (level 2+, {@link RealtimeDisclosureModel.ShowComposer}) AND honours the host's
-   * `[ShowChannels]` input + the resolver's focus rule: a host that sets `[ShowChannels]`
-   * false hard-disables the strip, and channel-focus mode hides it. The strip component
-   * itself self-hides when no channels are active, so this stays decluttered.
+   * Whether the active-channels strip renders: the resolved {@link Ui.showChannelStrip}, which
+   * honours the host's `[ShowChannels]` input (false hard-disables the strip), needs an active
+   * channel and console chrome, and hides it in channel-focus mode. The strip component itself
+   * self-hides when no channels are active, so this stays decluttered.
    */
   public get ChannelStripVisible(): boolean {
     // Reads the RESOLVED Ui.showChannelStrip flag — which already ANDs the host's

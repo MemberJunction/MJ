@@ -15,7 +15,7 @@ A self-contained, embeddable live‑voice agent surface. It renders a calm ambie
 |---|---|
 | `'auto'` *(default)* | Start as an **orb**. Graduate to a **console** only when the container is ≥ `[ConsoleBreakpointPx]` **and** the user has revealed text (or we're reviewing a recording). **Wider alone is not enough — no text intent ⇒ stay an orb.** |
 | `'orb'` | Always the ambient orb. |
-| `'console'` | Always the structured console. |
+| `'console'` | Always the structured console chrome. With `[AllowTextReveal]="false"` the console shows the orb hero instead of the thread. |
 
 This is exactly the behaviour the design review landed on: *Calm Orb for the overlay; flip to Command Console past a certain size — but keep the orb if the user hasn't asked to see text.*
 
@@ -31,7 +31,7 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[ConsoleBreakpointPx]` | `number` | `560` | Width at/above which `auto` may become a console. |
 | `[Compact]` | `boolean` | `false` | Force dense spacing/type (else inferred from width). |
 | `[AutoHideControls]` | `boolean` | `true` | Deprecated no‑op (the fade was never implemented). |
-| `[AllowTextReveal]` | `boolean` | `true` | Can the user open the transcript? `false` ⇒ pure voice, never consoles. |
+| `[AllowTextReveal]` | `boolean` | `true` | Can the user open the transcript? `false` ⇒ pure voice: `'auto'` never graduates to a console, and a forced `'console'` shows the orb hero. Review still shows the thread. |
 | `[AllowTyping]` | `boolean` | `true` | Typing into the session (strip and lean‑sheet Type, hotkey, programmatic open). `false` when `AllowTextReveal` is `false`. |
 | `[ShowCaptionsControl]` | `boolean` | `true` | Captions toggle. |
 | `[ShowDensityPicker]` | `boolean` | `true` | Density picker (in the gear). |
@@ -92,7 +92,7 @@ this.voice.EndSession();             // tear down
 | `SetChrome(mode)` | Override `[Chrome]` at runtime. |
 | `RevealText()` | Reveal the transcript (raises disclosure, emits `TextRevealed`). |
 | `SetMuted(b)` / `ToggleMute()` | Mic mute. |
-| `SetCaptions(b)` / `ToggleCaptions()` | Captions on/off. |
+| `SetCaptions(b)` / `ToggleCaptions()` | Captions on/off. Under `[AllowTextReveal]="false"` turning captions on is refused, but turning a saved "on" preference off still changes and saves the user's caption preference. |
 | `SetDensity(d)` | Set UX density. |
 | `OpenSurfacePanel(channelId?)` / `CollapseSurfacePanel()` | Show/hide the surface panel. |
 | `Minimize()` | Collapse without ending. |

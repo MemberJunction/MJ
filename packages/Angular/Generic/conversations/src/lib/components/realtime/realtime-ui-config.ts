@@ -309,6 +309,32 @@ export const DEFAULT_REALTIME_UI_SIGNALS: RealtimeUiSignals = {
 };
 
 /**
+ * The host's inputs laid over {@link DEFAULT_REALTIME_UI_INPUTS}. An explicit `undefined` ("not set") falls back to
+ * the default, which a plain spread would overwrite with `undefined`.
+ */
+function withDefaults(inputs: RealtimeUiInputs | null | undefined): Required<RealtimeUiInputs> {
+  const cfg: Required<RealtimeUiInputs> = { ...DEFAULT_REALTIME_UI_INPUTS };
+  if (inputs) {
+    for (const key of Object.keys(inputs) as Array<keyof RealtimeUiInputs>) {
+      assignDefined(cfg, inputs, key);
+    }
+  }
+  return cfg;
+}
+
+/**
+ * Copies one input onto the resolved config when the host set it. The target is typed as the optional shape
+ * because TypeScript cannot write a generic key into a `Required<>`; only a defined value is ever written, so
+ * the config stays complete.
+ */
+function assignDefined<K extends keyof RealtimeUiInputs>(target: RealtimeUiInputs, inputs: RealtimeUiInputs, key: K): void {
+  const value = inputs[key];
+  if (value !== undefined) {
+    target[key] = value;
+  }
+}
+
+/**
  * Resolve the consumer config + live signals into a render-ready view-model.
  *
  * Pure and deterministic: same inputs ⇒ same output, no side effects, no clock,
@@ -340,9 +366,7 @@ export function ResolveRealtimeUi(
   inputs: RealtimeUiInputs | null | undefined,
   signals: RealtimeUiSignals,
 ): ResolvedRealtimeUi {
-  // An explicit `undefined` ("not set") must fall back to the default, which a plain spread would overwrite.
-  const defined = Object.fromEntries(Object.entries(inputs ?? {}).filter(([, value]) => value !== undefined));
-  const cfg: Required<RealtimeUiInputs> = { ...DEFAULT_REALTIME_UI_INPUTS, ...defined };
+  const cfg = withDefaults(inputs);
 
   const allowTextReveal = cfg.allowTextReveal;
   const chrome = resolveChrome(cfg, signals, allowTextReveal);

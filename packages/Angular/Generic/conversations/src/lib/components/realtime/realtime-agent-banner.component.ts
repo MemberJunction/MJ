@@ -96,8 +96,9 @@ export class RealtimeAgentBannerComponent {
   /**
    * Whether the interface-density segmented control renders inside the gear popover.
    * Default `true` (historical behaviour); a host may hide it via the overlay's
-   * `[ShowDensityPicker]` input. The gear itself (and its developer-links toggle) still
-   * renders when {@link ShowGear} is true even if the density picker is hidden.
+   * `[ShowDensityPicker]` input. The gear itself still renders when {@link ShowGear} is true
+   * even if the density picker is hidden; its developer-links toggle renders only when
+   * {@link AllowDevLinks} is also true.
    */
   @Input() ShowDensityPicker = true;
 
