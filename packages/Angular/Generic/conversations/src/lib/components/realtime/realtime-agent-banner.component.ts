@@ -101,6 +101,12 @@ export class RealtimeAgentBannerComponent {
    */
   @Input() ShowDensityPicker = true;
 
+  /**
+   * Host ceiling for developer links: `false` removes the gear's "Developer links" toggle.
+   * Per-session {@link DevMode} still decides whether links render when allowed.
+   */
+  @Input() AllowDevLinks = true;
+
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
 
