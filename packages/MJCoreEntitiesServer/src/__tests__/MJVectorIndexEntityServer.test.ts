@@ -334,6 +334,32 @@ describe('MJVectorIndexEntityServer.Save', () => {
         expect(logged(/NOT created/)).toBe(false);
     });
 
+    it('adopts the provider index a new record names through ExternalID, and creates nothing', async () => {
+        // An Open App ships its index row with ExternalID set (More Cheese: morecheese-duplicates).
+        // Creating one from Name would leave an empty index behind and repoint the row at it.
+        const index = makeNewIndex();
+        index.ExternalID = 'morecheese-duplicates';
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('adopted'));
+
+        expect(createIndexMock).not.toHaveBeenCalled();
+        expect(index.ExternalID).toBe('morecheese-duplicates');
+        expect(String(providerConfigOf(index)['provisionMessage'])).toMatch(/"morecheese-duplicates" names an existing provider index/);
+        expect(logged(/NOT created/)).toBe(false);
+    });
+
+    it('provisions as before when ExternalID is blank', async () => {
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        const index = makeNewIndex();
+        index.ExternalID = '   ';
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('provisioned'));
+
+        expect(createIndexMock).toHaveBeenCalledTimes(1);
+    });
+
     it('records unprovisioned when no driver instance could be built in this process', async () => {
         createInstanceMock.mockReturnValue(null);
         const index = makeNewIndex();
@@ -524,6 +550,17 @@ describe('MJVectorIndexEntityServer.Delete', () => {
         await expect(index.Delete()).resolves.toBe(true);
 
         expect(deleteIndexMock).toHaveBeenCalledWith({ id: 'my-index' });
+        expect(superDeleteMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves an adopted provider index in place: MJ never created it', async () => {
+        const index = makeNewIndex();
+        index.ExternalID = 'morecheese-duplicates';
+        index.ProviderConfig = JSON.stringify({ provisionState: 'adopted' });
+
+        await expect(index.Delete()).resolves.toBe(true);
+
+        expect(deleteIndexMock).not.toHaveBeenCalled();
         expect(superDeleteMock).toHaveBeenCalledTimes(1);
     });
 

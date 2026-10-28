@@ -155,8 +155,8 @@ export class AgentMemoryContextBuilder {
 
         // Format and inject memory context into conversation messages
         if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
-            const notesText = injector.FormatNotesForInjection(notes);
-            const examplesText = injector.FormatExamplesForInjection(examples);
+            const notesText = injector.FormatNotesForInjection(notes, true, contextUser);
+            const examplesText = injector.FormatExamplesForInjection(examples, contextUser);
 
             let memoryContext = '';
             if (notesText) memoryContext += notesText + '\n\n';

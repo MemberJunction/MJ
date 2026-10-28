@@ -49,6 +49,7 @@ import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
 import { EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TransactionFrameTracker } from '../TransactionFrameTracker';
+import { SystemUserID } from '../systemUser';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
@@ -98,8 +99,18 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
         return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
     }
-    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized' }): string {
+    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized'; AlternateBaseView?: string }): string {
         return this.GetEffectiveBaseView(entityInfo, params as unknown as RunViewParams);
+    }
+    public async testResolveEffectiveBaseViewTarget(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        user?: UserInfo
+    ): Promise<{ schemaName: string; viewName: string }> {
+        return this.resolveEffectiveBaseViewTarget(entityInfo, params, user);
+    }
+    public testAssertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        this.assertExternalRunViewParamsSupported(params, entityName);
     }
 
     // Expose protected methods for testing
@@ -393,6 +404,64 @@ describe('GenericDatabaseProvider', () => {
             // Regression: previously derived materialized_vw<CodeName> (= materialized_vwMJE2ESalesByRegion),
             // which does not exist — the minted CodeName differs from the query-derived view name.
             expect(provider.testGetEffectiveBaseView(queryMatEntity, { DataSource: 'Materialized' })).toBe('materialized_vwE2E_Sales_By_Region');
+        });
+
+        it('AlternateBaseView routes to the registered alternate view (including custom schema) and rejects Disabled/Materialized', async () => {
+            const abvEntity = new EntityInfo({
+                ID: '11111111-1111-4111-8111-111111111111',
+                Name: 'Customers',
+                SchemaName: '__mj',
+                BaseTable: 'Customer',
+                BaseView: 'vwCustomers',
+                EntityAlternateBaseViews: [
+                    {
+                        ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                        EntityID: '11111111-1111-4111-8111-111111111111',
+                        Name: 'Active',
+                        ViewName: 'vwActiveCustomers',
+                        SchemaName: 'crm_ext',
+                        Description: 'Active customers only',
+                        Status: 'Active',
+                        CachePolicy: 'Default',
+                        Sequence: 1,
+                    },
+                    {
+                        ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                        EntityID: '11111111-1111-4111-8111-111111111111',
+                        Name: 'Legacy',
+                        ViewName: 'vwLegacyCustomers',
+                        SchemaName: null,
+                        Description: 'Disabled legacy view',
+                        Status: 'Disabled',
+                        CachePolicy: 'Default',
+                        Sequence: 2,
+                    },
+                ],
+            });
+
+            expect(provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Active' })).toBe('vwActiveCustomers');
+
+            const target = await provider.testResolveEffectiveBaseViewTarget(abvEntity, {
+                EntityName: 'Customers',
+                AlternateBaseView: 'active',
+            });
+            expect(target).toEqual({ schemaName: 'crm_ext', viewName: 'vwActiveCustomers' });
+
+            // Disabled fails loudly
+            expect(() => provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Legacy' })).toThrow(/disabled/i);
+
+            // Materialized + AlternateBaseView fails loudly
+            expect(() =>
+                provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Active', DataSource: 'Materialized' })
+            ).toThrow(/Materialized/);
+
+            // External data source rejects AlternateBaseView
+            expect(() =>
+                provider.testAssertExternalRunViewParamsSupported(
+                    { EntityName: 'Customers', AlternateBaseView: 'Active' },
+                    'Customers'
+                )
+            ).toThrow(/AlternateBaseView is not supported for external-data-source/);
         });
     });
 
@@ -1774,6 +1843,9 @@ describe('SqlLoggingSessionImpl', () => {
 
 describe('RenderedSQL in ExecuteQueryFromSpec', () => {
     let provider: TestGenericProvider;
+    // These tests cover rendering, over views that are not seeded entities, so they run as the
+    // system user; what a caller may read through this path is covered in adhocSQL.executedRender.test.ts.
+    const specRunner = { ...mockUser, ID: SystemUserID } as UserInfo;
 
     beforeEach(() => {
         provider = new TestGenericProvider();
@@ -1791,7 +1863,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             SQL: 'SELECT ID FROM [dbo].[vwMembers]',
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(true);
         expect(result.RenderedSQL).toBeDefined();
@@ -1808,7 +1880,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             Parameters: { Status: 'Active' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(true);
         expect(result.RenderedSQL).toBeDefined();
@@ -1831,7 +1903,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             Parameters: { Status: 'Active' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('ORDER BY');
@@ -1861,7 +1933,7 @@ ORDER BY Cnt DESC`,
             Parameters: { StartDate: '2024-01-01' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         // RenderedSQL reveals the cap transformation that the error message alone cannot
@@ -1883,7 +1955,7 @@ ORDER BY Cnt DESC`,
             SQL: `SELECT * FROM {{query:"NonExistent/Query"}}`,
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toBeTruthy();
@@ -3270,5 +3342,84 @@ describe('GenericDatabaseProvider RunViewCore single-batch execution (MJ-CORE-6)
         expect(singleResult.Results).toHaveLength(1);
         expect(singleSpy).toHaveBeenCalledTimes(1);
         expect(batchSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('GenericDatabaseProvider AlternateBaseView resolution and ClientClauseScreen collisions', () => {
+    it('resolves AlternateBaseView target, honors "" BaseView override over ViewEntity pin, and rejects Materialized + AlternateBaseView', async () => {
+        const p = new TestGenericProvider();
+        const entityInfo = new EntityInfo({
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Widgets',
+            CodeName: 'Widgets',
+            SchemaName: '__mj',
+            BaseView: 'vwWidgets',
+            BaseTable: 'Widget',
+            Status: 'Active',
+            EntityAlternateBaseViews: [
+                {
+                    ID: '22222222-2222-4222-8222-222222222222',
+                    EntityID: '11111111-1111-4111-8111-111111111111',
+                    Name: 'Active',
+                    ViewName: 'vwWidgetsActive',
+                    SchemaName: 'analytics',
+                    CachePolicy: 'Default',
+                    Status: 'Active',
+                    Sequence: 10,
+                },
+                {
+                    ID: '33333333-3333-4333-8333-333333333333',
+                    EntityID: '11111111-1111-4111-8111-111111111111',
+                    Name: 'Archived',
+                    ViewName: 'vwWidgetsArchived',
+                    SchemaName: null,
+                    CachePolicy: 'Default',
+                    Status: 'Disabled',
+                    Sequence: 20,
+                },
+            ],
+        });
+
+        const resolveTarget = (params: RunViewParams) =>
+            (
+                p as unknown as {
+                    resolveEffectiveBaseViewTarget: (
+                        e: EntityInfo,
+                        prm: RunViewParams,
+                        u?: UserInfo,
+                    ) => Promise<{ schemaName: string; viewName: string }>;
+                }
+            ).resolveEffectiveBaseViewTarget(entityInfo, params, mockUser);
+
+        // 1. Explicit AlternateBaseView with custom SchemaName
+        await expect(resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Active' })).resolves.toEqual({
+            schemaName: 'analytics',
+            viewName: 'vwWidgetsActive',
+        });
+
+        // 2. Pinned ViewEntity DisplayState vs explicit "" override back to BaseView
+        const pinnedViewEntity = {
+            AlternateBaseView: 'Active',
+            Get: (f: string) => (f === 'DisplayState' ? JSON.stringify({ alternateBaseView: 'Active' }) : null),
+        } as unknown as RunViewParams['ViewEntity'];
+
+        await expect(resolveTarget({ EntityName: 'Widgets', ViewEntity: pinnedViewEntity })).resolves.toEqual({
+            schemaName: 'analytics',
+            viewName: 'vwWidgetsActive',
+        });
+        await expect(
+            resolveTarget({ EntityName: 'Widgets', ViewEntity: pinnedViewEntity, AlternateBaseView: '' }),
+        ).resolves.toEqual({
+            schemaName: '__mj',
+            viewName: 'vwWidgets',
+        });
+
+        // 3. Disabled or Materialized + AlternateBaseView throws
+        await expect(resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Archived' })).rejects.toThrow(
+            /is disabled and cannot be used/,
+        );
+        await expect(
+            resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Active', DataSource: 'Materialized' }),
+        ).rejects.toThrow(/cannot be combined with DataSource: 'Materialized'/);
     });
 });

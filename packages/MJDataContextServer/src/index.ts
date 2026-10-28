@@ -5,7 +5,8 @@ import { DataContextItem } from "@memberjunction/data-context";
 
 /**
  * Server-side DataContextItem. Runs the SQL of a `sql` item through a query provider's ad-hoc path,
- * which accepts only a single read statement.
+ * which accepts only a single read statement over entity views the context user may read in full
+ * (no row-level filter and no denied field); the system user is not limited to entity views.
  */
 @RegisterClass(DataContextItem, undefined, undefined, true)
 export class DataContextItemServer extends DataContextItem {

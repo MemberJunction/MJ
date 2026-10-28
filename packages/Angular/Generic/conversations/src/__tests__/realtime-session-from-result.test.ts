@@ -3,7 +3,7 @@ import { IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { CHANNEL_INBOUND_VIDEO_TRACK, ClientRealtimeSessionConfig, RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
-import { RealtimeConnectionState, StartRealtimeClientSessionResult } from '@memberjunction/realtime-runtime';
+import { RealtimeConnectionState, RealtimeSessionAlreadyActiveError, StartRealtimeClientSessionResult } from '@memberjunction/realtime-runtime';
 import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
@@ -265,9 +265,11 @@ describe('RealtimeSessionService — mint/run split (StartRealtimeSessionFromRes
     expect(internals(service).sessionConversationId).toBe('conv-existing');
   });
 
-  it('ignores a duplicate start while a session is already running (the IsActive guard)', async () => {
+  it('refuses a duplicate start while a session is already running, and leaves the live one alone', async () => {
     await service.StartRealtimeSessionFromResult(mintedResult());
-    await service.StartRealtimeSessionFromResult(mintedResult({ AgentSessionId: 'host-session-2' }));
+    await expect(service.StartRealtimeSessionFromResult(mintedResult({ AgentSessionId: 'host-session-2' }))).rejects.toBeInstanceOf(
+      RealtimeSessionAlreadyActiveError
+    );
 
     expect(FakeRealtimeDriver.Connects).toHaveLength(1);
     expect(service.CurrentAgentSessionId).toBe('host-session-1');
@@ -328,7 +330,7 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
     expect(states).toEqual(['closed', 'connecting']); // same order, no extra emissions
   });
 
-  it('goes live BEFORE the mint resolves, so a second start during minting is suppressed', async () => {
+  it('goes live BEFORE the mint resolves, so a second start during minting is refused without a second mint', async () => {
     let releaseMint: (value: typeof MINT_REPLY) => void = () => undefined;
     executeGQL.mockImplementationOnce(
       () => new Promise<typeof MINT_REPLY>(resolve => (releaseMint = resolve))
@@ -341,7 +343,8 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
 
     // The mint lands one tick later (startChannels runs first) — wait for it to be in flight.
     await vi.waitFor(() => expect(executeGQL).toHaveBeenCalled());
-    await service.StartRealtimeSession('agent-2'); // duplicate — must be a no-op
+    // Duplicate: refused out loud, and it must not mint or connect anything.
+    await expect(service.StartRealtimeSession('agent-2')).rejects.toBeInstanceOf(RealtimeSessionAlreadyActiveError);
     releaseMint(MINT_REPLY);
     await started;
 

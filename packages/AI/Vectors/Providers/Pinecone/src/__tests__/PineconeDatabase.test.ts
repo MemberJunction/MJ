@@ -570,4 +570,49 @@ describe('PineconeDatabase', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  /* ---- Update / delete routing (content pipeline round 2) ---- */
+  describe('UpdateRecords', () => {
+    const namespaced = { update: vi.fn(), deleteMany: vi.fn(), deleteOne: vi.fn() };
+
+    beforeEach(() => {
+      namespaced.update.mockReset().mockResolvedValue(undefined);
+      namespaced.deleteMany.mockReset().mockResolvedValue(undefined);
+      mockIndexInstance.namespace.mockReturnValue(namespaced);
+    });
+
+    it('AWAITS a metadata-only update and sends no values, so the stored vector is untouched', async () => {
+      const result = await db.UpdateRecords([{ id: 'v1', metadata: { Title: 'New' } }], 'idx');
+      expect(result.success).toBe(true);
+      expect(mockIndexInstance.update).toHaveBeenCalledWith({ id: 'v1', metadata: { Title: 'New' } });
+    });
+
+    it('routes each record to its own namespace and strips the directives', async () => {
+      await db.UpdateRecords(
+        [{ id: 'v1', metadata: { Title: 'A' }, providerTemporaryDirectives: { namespace: 'org-1' } }],
+        'idx',
+      );
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-1');
+      expect(namespaced.update).toHaveBeenCalledWith({ id: 'v1', metadata: { Title: 'A' } });
+    });
+
+    it('falls back to the configured namespace, the same one CreateRecords writes to', async () => {
+      await db.UpdateRecords([{ id: 'v1', metadata: {} }], 'idx', { namespace: 'shared' });
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('shared');
+    });
+
+    it('reports a failure rather than swallowing it', async () => {
+      mockIndexInstance.update.mockRejectedValueOnce(new Error('dimension mismatch'));
+      const result = await db.UpdateRecord({ id: 'v1', metadata: {} });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('dimension mismatch');
+    });
+
+    it('deletes within the configured namespace when records carry no directive', async () => {
+      await db.DeleteRecords([{ id: 'r1' }] as never, 'idx', { namespace: 'shared' });
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('shared');
+      expect(namespaced.deleteMany).toHaveBeenCalledWith(['r1']);
+    });
+  });
 });
+
