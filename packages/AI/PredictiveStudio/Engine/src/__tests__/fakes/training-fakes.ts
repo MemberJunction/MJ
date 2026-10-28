@@ -117,6 +117,8 @@ export class FakeTrainingSnapshot extends FakeEntity {
   public ManifestRowCount = 0;
   public HoldoutRowCount = 0;
   public CensoredRowsExcluded = 0;
+  /** The data cutoff day at UTC midnight (the builder sets it). */
+  public DataCutoff = new Date(0);
 
   public override async Save(): Promise<boolean> {
     const ok = await super.Save();

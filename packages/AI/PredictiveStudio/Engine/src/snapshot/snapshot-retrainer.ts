@@ -16,6 +16,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import { LockedHoldoutSplitter, type LockedHoldoutSplit } from '../training/locked-holdout';
 import { TrainRequestBuilder } from '../training/train-request';
+import { UtcDay } from '../prediction-unit/utc-day';
 import type { ISidecarTrainer, TrainingDeps } from '../training/types';
 import { SnapshotFiles, type SnapshotContent } from './snapshot-serialization';
 import { SnapshotHash } from './snapshot-hash';
@@ -93,7 +94,7 @@ export interface SnapshotTraining {
  */
 export class SnapshotRetrainer {
   /** The default largest holdout-metric difference a retraining may show and still reproduce its run. */
-  public static readonly DEFAULT_TOLERANCE = 1e-9;
+  public static readonly DefaultTolerance = 1e-9;
 
   /**
    * Re-runs a completed unit run from its snapshot files and logged request. The run and snapshot are read through
@@ -106,7 +107,7 @@ export class SnapshotRetrainer {
    * @returns both metric sets, their largest difference and whether the run reproduced
    * @throws SnapshotIntegrityError when a stored file or the content hash does not match the snapshot row
    */
-  public async Retrain(trainingRunId: string, deps: TrainingDeps, tolerance: number = SnapshotRetrainer.DEFAULT_TOLERANCE): Promise<RetrainResult> {
+  public async Retrain(trainingRunId: string, deps: TrainingDeps, tolerance: number = SnapshotRetrainer.DefaultTolerance): Promise<RetrainResult> {
     const store = this.SnapshotStore(deps);
     const run = await store.LoadRun(trainingRunId);
     if (!run) throw new Error(`Training run ${trainingRunId} not found`);
@@ -171,7 +172,7 @@ export class SnapshotRetrainer {
       FeatureSpecVersion: snapshot.FeatureSpecVersion,
       EvaluationProtocolID: snapshot.EvaluationProtocolID,
       // The column holds the cutoff day at UTC midnight (the builder writes it so), so its UTC date is the day hashed.
-      DataCutoff: snapshot.DataCutoff.toISOString().slice(0, 10),
+      DataCutoff: UtcDay.UtcDayIso(snapshot.DataCutoff),
     });
     if (contentHash !== snapshot.ContentHash) throw new SnapshotIntegrityError('content', snapshot.ContentHash, contentHash);
     return SnapshotFiles.ParseSnapshotFiles(matrix, manifest, provenance);
