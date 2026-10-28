@@ -174,6 +174,13 @@ jobs:
             # that can introduce an inversion — never runs the guard.
             .github/scripts/check-ai-model-ranks.mjs
             metadata/ai-models/**
+            # Same for the prompt-model route guard (guards job): it reads the prompt-model rows in
+            # metadata/prompts, the routes in metadata/ai-models (above) and metadata/ai-vendors, and
+            # its baseline sits next to the script. A PR that edits only a prompt must run it.
+            .github/scripts/check-prompt-model-routes.mjs
+            .github/scripts/prompt-model-routes-baseline.json
+            metadata/prompts/**
+            metadata/ai-vendors/**
             # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
             # remote-cache configuration"), and its own suite lives in __tests__ above.
             .github/scripts/check-turbo-cache-env.mjs
@@ -323,6 +330,15 @@ jobs:
       - name: AI model rank-lineage guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-ai-model-ranks.mjs
+
+      # Every active AI Prompt Model row must point at an active model with an active Inference
+      # Provider route for its vendor, or the prompt silently falls back to another candidate
+      # (MJ#4915). Rows failing when the guard landed are listed in
+      # prompt-model-routes-baseline.json; a new failure, or a baseline entry that no longer
+      # fails, fails the step. Reads metadata/ only — no DB, no build.
+      - name: AI prompt-model route guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-prompt-model-routes.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here

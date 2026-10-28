@@ -1,0 +1,125 @@
+{
+    "description": "AI Prompt Model rows that failed check-prompt-model-routes.mjs when it was introduced (MJ#4915). Vendor choices belong to the AI catalog owner; remove an entry once its row is fixed. The guard fails on any failure not listed here and on any entry here that no longer fails.",
+    "entries": [
+        {
+            "key": "7117EEA7-F416-441D-A2F3-68A1F7A3A2E5",
+            "file": "metadata/prompts/.computer-use-prompts.json",
+            "prompt": "Computer Use - Controller",
+            "model": "GPT 5.5 Instant",
+            "vendor": "Azure",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "695CBBE3-4651-4202-9E50-E3A7F4AB2802",
+            "file": "metadata/prompts/.computer-use-prompts.json",
+            "prompt": "Computer Use - Judge",
+            "model": "GPT 5.5 Instant",
+            "vendor": "Azure",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "3E476075-2A4E-4282-B867-6E1F600251B8",
+            "file": "metadata/prompts/.default-image-generation-prompt.json",
+            "prompt": "Default Image Generation",
+            "model": "GPT-4o Image 1.0",
+            "vendor": "OpenAI",
+            "reason": "model is inactive"
+        },
+        {
+            "key": "17DC3AA9-138C-4E82-A536-3FE06160318E",
+            "file": "metadata/prompts/.prompts.json",
+            "prompt": "Sage - System Prompt",
+            "model": "Gemma 4 31B Instruct",
+            "vendor": "Cerebras",
+            "reason": "Inference Provider route is Inactive"
+        },
+        {
+            "key": "D006C7CD-22FB-47FB-A5E1-96E1AF910BB9",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Business Question Generator",
+            "model": "Kimi K2",
+            "vendor": "Groq",
+            "reason": "Inference Provider route is Deprecated"
+        },
+        {
+            "key": "AC5FC85E-F004-4D28-BF04-306BFFDC968D",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Business Question Generator",
+            "model": "Kimi K2",
+            "vendor": "Cerebras",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "AE827650-26B6-4A34-8D68-00632F3F62DF",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "SQL Query Writer",
+            "model": "Kimi K2",
+            "vendor": "Groq",
+            "reason": "Inference Provider route is Deprecated"
+        },
+        {
+            "key": "8070A33D-401B-4F21-9D36-5B499D1D9800",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "SQL Query Writer",
+            "model": "Kimi K2",
+            "vendor": "Cerebras",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "F8842C6D-3E48-4F9E-8C33-247643C034BF",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "SQL Query Fixer",
+            "model": "Kimi K2",
+            "vendor": "Groq",
+            "reason": "Inference Provider route is Deprecated"
+        },
+        {
+            "key": "277CBCE0-6C76-4B90-8B85-F2D698945DA3",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "SQL Query Fixer",
+            "model": "Kimi K2",
+            "vendor": "Cerebras",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "A41CF2A5-0C5C-4392-AAA5-33FFB54A39EF",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Query Result Evaluator",
+            "model": "Kimi K2",
+            "vendor": "Groq",
+            "reason": "Inference Provider route is Deprecated"
+        },
+        {
+            "key": "635A111F-0F07-4F05-A585-5C67F379477D",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Query Result Evaluator",
+            "model": "Kimi K2",
+            "vendor": "Cerebras",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "9651D2F1-180F-4C00-AB24-E0C75CBFFFCB",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Query Refiner",
+            "model": "Kimi K2",
+            "vendor": "Groq",
+            "reason": "Inference Provider route is Deprecated"
+        },
+        {
+            "key": "534C700C-3391-41C7-9F4C-CF6434C43BD8",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Query Refiner",
+            "model": "Kimi K2",
+            "vendor": "Cerebras",
+            "reason": "model has no route for this vendor"
+        },
+        {
+            "key": "3A991D72-53DD-4788-AB09-42F5835CB54C",
+            "file": "metadata/prompts/.query-gen-prompts.json",
+            "prompt": "Entity Group Generator",
+            "model": "Kimi K2",
+            "vendor": "Groq",
+            "reason": "Inference Provider route is Deprecated"
+        }
+    ]
+}
