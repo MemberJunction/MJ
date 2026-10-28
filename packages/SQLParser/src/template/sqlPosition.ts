@@ -18,11 +18,43 @@ function isSkippable(token: SqlToken): boolean {
     return token.Kind === 'Whitespace' || token.Kind === 'Comment' || token.Kind === 'TemplateComment' || token.Kind === 'TemplateBlock';
 }
 
-/** The index of the nearest token before `index` that renders SQL, or -1. */
+/**
+ * The index of the nearest token before `index` that renders SQL, or -1. Crossing an
+ * `{% else %}` or `{% elif %}` backwards jumps to its `{% if %}`: the branches are alternatives,
+ * so what precedes a branch is what precedes the whole block, not the end of the branch before it.
+ */
 export function PrecedingSignificantIndex(tokens: SqlTokens, index: number): number {
     let i = index - 1;
-    while (i >= 0 && isSkippable(tokens.Tokens[i])) i--;
-    return i;
+    while (i >= 0) {
+        const token = tokens.Tokens[i];
+        if (!isSkippable(token)) return i;
+        if (token.Kind === 'TemplateBlock' && isBranchTag(token)) i = matchingIfIndex(tokens, i);
+        i--;
+    }
+    return -1;
+}
+
+/** The first word of a block tag's body, lower case (`if`, `else`, `endif`, …). */
+function blockKeyword(token: SqlToken): string {
+    return (token.Template?.Body.trim().split(/\s+/)[0] ?? '').toLowerCase();
+}
+
+function isBranchTag(token: SqlToken): boolean {
+    const keyword = blockKeyword(token);
+    return keyword === 'else' || keyword === 'elif' || keyword === 'elseif';
+}
+
+/** The index of the `{% if %}` an `{% else %}` / `{% elif %}` at `index` belongs to; `index` when there is none. */
+function matchingIfIndex(tokens: SqlTokens, index: number): number {
+    let depth = 0;
+    for (let j = index - 1; j >= 0; j--) {
+        const token = tokens.Tokens[j];
+        if (token.Kind !== 'TemplateBlock') continue;
+        const keyword = blockKeyword(token);
+        if (keyword === 'endif') depth++;
+        else if (keyword === 'if' && depth-- === 0) return j;
+    }
+    return index;
 }
 
 /** The upper-case keyword of a word token, or `null`. */

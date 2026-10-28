@@ -414,7 +414,9 @@ ORDER BY JoinYear`,
             const outerQuery = makeQueryInfo({
                 ID: 'outer-1',
                 Name: 'Growth Report',
-                SQL: 'WITH mg AS (SELECT * FROM {{query:"Reports/Membership Growth By Period"}}) SELECT * FROM mg',
+                // Arguments are explicit (DISCUSSION §6, 2026-10-27): the outer value reaches the dependency only
+                // because the composition passes it. Was an implicit same-name flow.
+                SQL: 'WITH mg AS (SELECT * FROM {{query:"Reports/Membership Growth By Period(StartDate=StartDate)"}}) SELECT * FROM mg',
                 UsesTemplate: false,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
@@ -509,7 +511,8 @@ WHERE m.Region = '{{ Region }}'
             const outerQuery = makeQueryInfo({
                 ID: 'outer-both',
                 Name: 'Member Summary',
-                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Filtered Members"}} {% if Limit %}LIMIT {{ Limit }}{% endif %}',
+                // Arguments are explicit (DISCUSSION §6, 2026-10-27); was an implicit same-name flow of Region.
+                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Filtered Members(Region=Region)"}} {% if Limit %}LIMIT {{ Limit }}{% endif %}',
                 UsesTemplate: true,
             });
             outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);

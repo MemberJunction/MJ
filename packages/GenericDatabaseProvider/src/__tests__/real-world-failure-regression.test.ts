@@ -29,6 +29,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { QueryCompositionEngine } from '../queryCompositionEngine';
+import { RenderPipeline } from '../renderPipeline';
 import { Metadata, UserInfo, QueryDependencySpec } from '@memberjunction/core';
 
 const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
@@ -50,6 +51,15 @@ function countOccurrences(haystack: string, needle: string): number {
         pos += needle.length;
     }
     return count;
+}
+
+/**
+ * Composes through the render pipeline, the way a run does. These compositions pass outer values
+ * through, which only a render can supply (compose-only resolution takes static arguments only).
+ */
+function compose(outerSQL: string, deps: QueryDependencySpec[], parameters: Record<string, string>): { HasCompositions: boolean; ResolvedSQL: string; CTEs: unknown[] } {
+    const result = RenderPipeline.Run(outerSQL, { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps, UsesTemplate: true, Parameters: parameters });
+    return { HasCompositions: result.HasCompositions, ResolvedSQL: result.FinalSQL, CTEs: result.CTEs };
 }
 
 function setupNoMetadata(): QueryCompositionEngine {
@@ -129,13 +139,7 @@ LEFT JOIN [MEL_Eng] AS [mel] ON [t].[OrganizationName] = [mel].[EmployerName]
         const outerSQL = `SELECT [qei].[OrganizationID]
 FROM {{query:"Golden-Queries/Engagement and Outreach/QEIPatronEngagementActivitySummary(MemberTypes=MemberTypes, DaysBack=DaysBack)"}} AS [qei]`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { MemberTypes: '["QEI"]', DaysBack: '30' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -212,13 +216,7 @@ WHERE 1 = 1
         const outerSQL = `SELECT ctx.[ExecCompID]
 FROM {{query:"Golden-Queries/Financial Analysis/ExecCompWithMemberContext(Region=Region)"}} ctx`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { Region: 'West' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -420,13 +418,7 @@ LEFT JOIN (
 ) AS [pr]
     ON [pr].[ResolvedMemberID] = [pmas].[MemberID]`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { MemberTypes: '["Pool"]', StartDate: '2024-01-01' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -555,13 +547,7 @@ ORDER BY TotalActivityCount DESC`,
 FROM {{query:"Golden-Queries/Analytics/MemberActivityCounts(MembershipType=MembershipType)"}} [mac]
 ORDER BY [mac].[TotalActivityCount] DESC`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { MembershipType: 'Gold' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -609,13 +595,7 @@ ORDER BY [Name] ASC`,
 
         const outerSQL = `SELECT [r].[ID] FROM {{query:"Test/FilteredRecords(StatusFilter=StatusFilter)"}} [r]`;
 
-        const result = engine.ResolveComposition(
-            outerSQL,
-            'sqlserver',
-            mockUser,
-            {},
-            inlineDeps
-        );
+        const result = compose(outerSQL, inlineDeps, { StatusFilter: 'Active' });
 
         expect(result.HasCompositions).toBe(true);
 
@@ -626,8 +606,9 @@ ORDER BY [Name] ASC`,
 
         // CTE body must be intact
         expect(result.ResolvedSQL).toContain('[data].[vwRecords]');
-        // The pass-through rename may normalize spacing inside braces
-        expect(result.ResolvedSQL).toMatch(/'[{]{2}\s*StatusFilter\s*[}]{2}'/);
+        // The dependency is rendered with the value passed to it (render-then-compose), so the
+        // template expression inside the literal is its value, not a renamed tag.
+        expect(result.ResolvedSQL).toContain("[Status] = 'Active'");
 
     });
 

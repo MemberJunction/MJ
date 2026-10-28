@@ -1,7 +1,13 @@
-import { RunQuerySQLFilterManager, DatabasePlatform, LogError, QUERY_CONTEXT_NAME } from '@memberjunction/core';
+import { RunQuerySQLFilterManager, LogError, QUERY_CONTEXT_NAME } from '@memberjunction/core';
 import type { QueryTemplateContext } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import nunjucks from 'nunjucks';
+
+/**
+ * The fields of a parameter definition the processor reads. Both `MJQueryParameterEntity` (saved
+ * queries) and `QueryParameterInfo` (transient specs and inline dependencies) satisfy it.
+ */
+export type QueryParameterDefinition = Pick<MJQueryParameterEntity, 'Name' | 'Type' | 'IsRequired' | 'IsServerSet' | 'ValidationFilters'>;
 
 /**
  * Minimal interface for the query metadata needed by processQueryTemplate.
@@ -14,7 +20,7 @@ export interface QueryTemplateInput {
     /** Whether this query uses Nunjucks template syntax */
     UsesTemplate: boolean;
     /** Parameter definitions for validation and type conversion */
-    Parameters: MJQueryParameterEntity[];
+    Parameters: ReadonlyArray<QueryParameterDefinition>;
 }
 
 /**
@@ -31,6 +37,25 @@ export interface QueryServerValues {
     ProtectedNames?: ReadonlyArray<string>;
     /** The reserved `Context` object, rendered as `Context` (`BuildQueryTemplateContext`). */
     Context?: QueryTemplateContext;
+}
+
+/**
+ * How one render is done, beside its values. Every member is optional; a render without options
+ * behaves as before this type existed.
+ */
+export interface QueryRenderOptions {
+    /**
+     * The key of the dialect the SQL is written in (`'sqlserver'`, `'postgresql'`, or an External
+     * Data Source dialect such as `'mysql'`). The SQL filters and boolean values follow it. When
+     * omitted, the process-wide default platform of `RunQuerySQLFilterManager` is used, which is
+     * only right for a process that talks to one kind of database.
+     */
+    DialectKey?: string;
+    /**
+     * Names added to this render's scope only, such as a callback the template calls. They win
+     * over parameter values; `Context` still wins over them. Nothing is kept between renders.
+     */
+    Scope?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -82,8 +107,9 @@ export interface QueryProcessingResult {
  * Handles parameter validation and query template processing for parameterized queries.
  * Provides type conversion, validation, and secure template processing using Nunjucks.
  *
- * Platform-aware: reads the current platform from RunQuerySQLFilterManager to handle
- * boolean conversion correctly (SQL Server BIT 1/0 vs PostgreSQL true/false).
+ * Dialect-aware: each render names the dialect it renders for (`QueryRenderOptions.DialectKey`),
+ * which decides the SQL filters and boolean values (SQL Server BIT 1/0 vs PostgreSQL true/false).
+ * A render that names none uses the process-wide default platform of RunQuerySQLFilterManager.
  *
  * Shared between SQL Server and PostgreSQL data providers.
  */
@@ -98,37 +124,33 @@ interface ValidationFilterDef {
 }
 
 export class QueryParameterProcessor {
-    private static _nunjucksEnv: nunjucks.Environment | null = null;
-    private static _envPlatform: DatabasePlatform | null = null;
+    /** One Nunjucks environment per dialect key: the dialect's SQL filters are baked in when it is built. */
+    private static readonly environments = new Map<string, nunjucks.Environment>();
 
-    /**
-     * Gets or creates the Nunjucks environment with custom SQL-safe filters.
-     * Recreates the environment if the platform has changed since last creation,
-     * because filters (sqlBoolean, sqlIdentifier) are baked in at creation time.
-     */
-    private static get nunjucksEnv(): nunjucks.Environment {
-        const currentPlatform = RunQuerySQLFilterManager.Instance.Platform;
-        if (!this._nunjucksEnv || this._envPlatform !== currentPlatform) {
-            this._nunjucksEnv = new nunjucks.Environment(null, {
+    /** The dialect key a render uses: the one asked for, else the process-wide default platform. */
+    private static dialectKeyOf(options: QueryRenderOptions | undefined): string {
+        return options?.DialectKey ?? RunQuerySQLFilterManager.Instance.Platform;
+    }
+
+    /** The Nunjucks environment with the SQL filters of `dialectKey`, built on first use and kept. */
+    private static environmentFor(dialectKey: string): nunjucks.Environment {
+        let env = this.environments.get(dialectKey);
+        if (!env) {
+            env = new nunjucks.Environment(null, {
                 autoescape: false,
                 throwOnUndefined: true,
                 trimBlocks: true,
                 lstripBlocks: true
             });
-
-            // Add custom SQL-safe filters from the RunQuerySQLFilterManager
-            const filterManager = RunQuerySQLFilterManager.Instance;
-            const filters = filterManager.getAllFilters();
-
-            for (const filter of filters) {
+            for (const filter of RunQuerySQLFilterManager.Instance.GetFiltersForDialect(dialectKey)) {
                 if (filter.implementation) {
-                    this._nunjucksEnv.addFilter(filter.name, filter.implementation);
+                    env.addFilter(filter.name, filter.implementation);
                 }
             }
-            this.removeNonDeterministicFilters(this._nunjucksEnv);
-            this._envPlatform = currentPlatform;
+            this.removeNonDeterministicFilters(env);
+            this.environments.set(dialectKey, env);
         }
-        return this._nunjucksEnv;
+        return env;
     }
 
     /**
@@ -315,8 +337,9 @@ export class QueryParameterProcessor {
 
     /**
      * Validates parameters against their definitions.
-     * Boolean values are bound the way the current platform's dialect expects
-     * (`BooleanParameterValue`): 1/0 on SQL Server, true/false on PostgreSQL.
+     * Boolean values are bound the way the dialect expects (`BooleanParameterValue`): 1/0 on SQL
+     * Server, true/false on PostgreSQL. The dialect is `options.DialectKey`, or the process-wide
+     * default platform when omitted; a dialect with no binding rules keeps the boolean.
      *
      * Server-set values: a caller value (`parameters`) for a parameter marked `IsServerSet`, for a
      * name in `serverValues.ProtectedNames`, or for the reserved name `Context` is refused and
@@ -325,13 +348,14 @@ export class QueryParameterProcessor {
      */
     public static ValidateParameters(
         parameters: Record<string, unknown> | undefined,
-        parameterDefinitions: MJQueryParameterEntity[],
+        parameterDefinitions: ReadonlyArray<QueryParameterDefinition>,
         skipUnknownParameterCheck?: boolean,
-        serverValues?: QueryServerValues
+        serverValues?: QueryServerValues,
+        options?: QueryRenderOptions
     ): ParameterValidationResult {
         const errors: string[] = QueryParameterProcessor.refuseCallerServerValues(parameters, parameterDefinitions, serverValues?.ProtectedNames);
         const validatedParams: Record<string, unknown> = {};
-        const dialect = RunQuerySQLFilterManager.Instance.Dialect;
+        const binding = RunQuerySQLFilterManager.Instance.DialectFor(options?.DialectKey).Binding;
         const values = QueryParameterProcessor.mergeServerValues(parameters, serverValues);
 
         // Process each defined parameter
@@ -386,7 +410,7 @@ export class QueryParameterProcessor {
                                 ? finalValue
                                 : String(finalValue).toLowerCase() === 'true';
 
-                            validatedParams[paramDef.Name] = dialect.BooleanParameterValue(boolValue);
+                            validatedParams[paramDef.Name] = binding ? binding.BooleanParameterValue(boolValue) : boolValue;
                             break;
                         }
                         case 'array':
@@ -456,7 +480,7 @@ export class QueryParameterProcessor {
      */
     private static refuseCallerServerValues(
         parameters: Record<string, unknown> | undefined,
-        parameterDefinitions: MJQueryParameterEntity[],
+        parameterDefinitions: ReadonlyArray<QueryParameterDefinition>,
         protectedNames: ReadonlyArray<string> | undefined
     ): string[] {
         if (!parameters) {
@@ -490,11 +514,12 @@ export class QueryParameterProcessor {
     /** @deprecated Use {@link ValidateParameters}. */
     public static validateParameters(
         parameters: Record<string, unknown> | undefined,
-        parameterDefinitions: MJQueryParameterEntity[],
+        parameterDefinitions: ReadonlyArray<QueryParameterDefinition>,
         skipUnknownParameterCheck?: boolean,
-        serverValues?: QueryServerValues
+        serverValues?: QueryServerValues,
+        options?: QueryRenderOptions
     ): ParameterValidationResult {
-        return this.ValidateParameters(parameters, parameterDefinitions, skipUnknownParameterCheck, serverValues);
+        return this.ValidateParameters(parameters, parameterDefinitions, skipUnknownParameterCheck, serverValues, options);
     }
 
     /**
@@ -517,13 +542,16 @@ export class QueryParameterProcessor {
      * @param serverValues What the server sets: `ServerParameters` for server-set parameters, the
      *        names composed queries protect, and the reserved `Context` object. A template that
      *        never reads `Context` renders exactly as without it.
+     * @param options The dialect to render for and names added to this render's scope. Without a
+     *        dialect, the process-wide default platform's filters are used.
      */
     public static ProcessQueryTemplate(
         query: QueryTemplateInput,
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
         forceTemplateProcessing?: boolean,
-        serverValues?: QueryServerValues
+        serverValues?: QueryServerValues,
+        options?: QueryRenderOptions
     ): QueryProcessingResult {
         try {
             const sql = sqlOverride ?? query.SQL;
@@ -540,7 +568,7 @@ export class QueryParameterProcessor {
             // Validate parameters against known definitions.
             // When force-processing for transitive templates, the outer query may not define
             // all parameters used by dependencies, so we skip the "unknown parameter" check.
-            const validation = this.ValidateParameters(parameters, query.Parameters, forceTemplateProcessing, serverValues);
+            const validation = this.ValidateParameters(parameters, query.Parameters, forceTemplateProcessing, serverValues, options);
             if (!validation.success) {
                 return {
                     success: false,
@@ -551,7 +579,7 @@ export class QueryParameterProcessor {
             }
 
             const renderParams = this.buildRenderParams(validation.validatedParameters, parameters, forceTemplateProcessing, serverValues);
-            return this.renderTemplate(sql, renderParams, serverValues);
+            return this.renderTemplate(sql, renderParams, serverValues, options);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             return {
@@ -586,20 +614,23 @@ export class QueryParameterProcessor {
     }
 
     /**
-     * Renders the template. `Context` joins the render context last, so nothing else can replace
-     * it. Values the server set are left out of `appliedParameters`, which callers see.
+     * Renders the template. The options' scope joins after the parameters, and `Context` last, so
+     * nothing else can replace it. Values the server set are left out of `appliedParameters`,
+     * which callers see.
      */
     private static renderTemplate(
         sql: string,
         renderParams: Record<string, unknown>,
-        serverValues: QueryServerValues | undefined
+        serverValues: QueryServerValues | undefined,
+        options: QueryRenderOptions | undefined
     ): QueryProcessingResult {
         const applied = { ...renderParams };
         Object.keys(serverValues?.ServerParameters ?? {}).forEach(name => delete applied[name]);
         const context = serverValues?.Context;
         try {
-            const renderContext = context ? { ...renderParams, [QUERY_CONTEXT_NAME]: context.Context } : renderParams;
-            const processedSQL = this.nunjucksEnv.renderString(sql, renderContext);
+            const scoped = options?.Scope ? { ...renderParams, ...options.Scope } : renderParams;
+            const renderContext = context ? { ...scoped, [QUERY_CONTEXT_NAME]: context.Context } : scoped;
+            const processedSQL = this.environmentFor(this.dialectKeyOf(options)).renderString(sql, renderContext);
             const result: QueryProcessingResult = { success: true, processedSQL, appliedParameters: applied };
             if (context) {
                 result.contextValues = context.ReadValues();
@@ -622,8 +653,9 @@ export class QueryParameterProcessor {
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
         forceTemplateProcessing?: boolean,
-        serverValues?: QueryServerValues
+        serverValues?: QueryServerValues,
+        options?: QueryRenderOptions
     ): QueryProcessingResult {
-        return this.ProcessQueryTemplate(query, parameters, sqlOverride, forceTemplateProcessing, serverValues);
+        return this.ProcessQueryTemplate(query, parameters, sqlOverride, forceTemplateProcessing, serverValues, options);
     }
 }

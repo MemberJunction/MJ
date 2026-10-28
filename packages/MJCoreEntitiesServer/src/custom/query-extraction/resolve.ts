@@ -89,8 +89,10 @@ export function ResolveCompositionReferences(
 }
 
 /**
- * Resolves a query by name and optional category path segments from the metadata cache.
- * Tries category-qualified lookup first, then falls back to name-only (if unambiguous).
+ * Resolves a query by its full category path and name, the way a composition reference names it.
+ * Both must match (names and path segments compared ignoring case and surrounding spaces); there
+ * is no name-only fallback, so a reference with a wrong or partial path resolves to nothing even
+ * when its name alone is unique. Category path + name is unique, so at most one query matches.
  */
 export function ResolveQueryByNameAndCategory(
     queryName: string,
@@ -98,18 +100,16 @@ export function ResolveQueryByNameAndCategory(
     allQueries: MJQueryEntityExtended[]
 ): MJQueryEntityExtended | undefined {
     const queryNameLower = queryName.toLowerCase();
+    const expectedPath = normalizeCategoryPath(categorySegments.join('/'));
+    const matches = allQueries.filter(q =>
+        q.Name.toLowerCase() === queryNameLower && normalizeCategoryPath(q.CategoryPath) === expectedPath
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+}
 
-    if (categorySegments.length > 0) {
-        const expectedPath = `/${categorySegments.join('/')}/`;
-        const match = allQueries.find(q =>
-            q.Name.toLowerCase() === queryNameLower &&
-            q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
-        );
-        if (match) return match;
-    }
-
-    const nameMatches = allQueries.filter(q => q.Name.toLowerCase() === queryNameLower);
-    return nameMatches.length === 1 ? nameMatches[0] : undefined;
+/** A category path in comparable form: segments trimmed, empty ones dropped, joined by `/`, lower case. */
+function normalizeCategoryPath(path: string | null | undefined): string {
+    return (path ?? '').split('/').map(s => s.trim()).filter(s => s.length > 0).join('/').toLowerCase();
 }
 
 /**

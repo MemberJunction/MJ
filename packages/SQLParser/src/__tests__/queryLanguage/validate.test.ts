@@ -207,3 +207,21 @@ describe('QueryTemplate.Validate: details', () => {
         expect(starts).toEqual([...starts].sort((a, b) => a - b));
     });
 });
+
+describe('composition position across {% if %} branches', () => {
+    const positionErrors = (sql: string): string[] =>
+        Codes(QueryTemplate.Parse(sql, SS).Validate(RESOLVE).Diagnostics).filter(c => c === MJQueryDiagnosticCodes.CompositionPosition);
+
+    it('accepts a composition in each branch of an if / else after FROM', () => {
+        expect(positionErrors('SELECT * FROM {% if a %}{{query:"Plain/List"}}{% else %}{{query:"Plain/List"}}{% endif %} x')).toEqual([]);
+    });
+
+    it('accepts a composition in an elif branch after JOIN, with a nested if in the branch before it', () => {
+        const sql = 'SELECT * FROM t JOIN {% if a %}{% if b %}{{query:"Plain/List"}}{% endif %}{% elif c %}{{query:"Plain/List"}}{% endif %} x ON 1 = 1';
+        expect(positionErrors(sql)).toEqual([]);
+    });
+
+    it('still refuses a composition in an else branch that is not a table source', () => {
+        expect(positionErrors('SELECT {% if a %}1{% else %}{{query:"Plain/List"}}{% endif %}')).toHaveLength(1);
+    });
+});

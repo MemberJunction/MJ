@@ -95,6 +95,7 @@ describe('IsReadOnlyQuery', () => {
         ['SELECT * INTO copy_of_t FROM t', ss, /SELECT … INTO/],
         ['WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d', pg, /CTE d is a DELETE/],
         ['WITH a AS (SELECT 1 AS x) UPDATE t SET y = 1', ss, /starts with UPDATE, not SELECT/],
+        ['WITH w AS (SELECT a INTO newtable FROM t) SELECT * FROM w', ss, /CTE w writes its result into a table/],
         ['', ss, /empty/]
     ];
     for (const [sql, dialect, reason] of writes) {

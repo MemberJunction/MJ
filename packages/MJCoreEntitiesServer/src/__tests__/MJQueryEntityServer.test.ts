@@ -946,10 +946,15 @@ describe('Passthrough Parameter Extraction', () => {
     });
 
     describe('ResolveQueryByNameAndCategory', () => {
-        it('should resolve a query by unique name when no category segments given', () => {
+        // References resolve by full category path + name only (DISCUSSION §6, 2026-10-27: "Category path + query
+        // name must be unique"; COMPAT-MAP B21), so a bare name no longer finds a query that sits in a category.
+        // Was: 'should resolve a query by unique name when no category segments given'.
+        it('should not resolve a bare name to a query in a category, and resolves a query with no category', () => {
             const q = stubQuery({ name: 'Sales Summary', categoryPath: 'Reports' });
-            expect(ResolveQueryByNameAndCategory('Sales Summary', [], [q])).toBe(q);
-            expect(ResolveQueryByNameAndCategory('sales summary', [], [q])).toBe(q); // case-insensitive
+            expect(ResolveQueryByNameAndCategory('Sales Summary', [], [q])).toBeUndefined();
+            expect(ResolveQueryByNameAndCategory('sales summary', ['reports'], [q])).toBe(q); // case-insensitive
+            const uncategorized = stubQuery({ name: 'Loose', categoryPath: '' });
+            expect(ResolveQueryByNameAndCategory('Loose', [], [uncategorized])).toBe(uncategorized);
         });
 
         it('should return undefined for an ambiguous name without category disambiguation', () => {
@@ -958,24 +963,17 @@ describe('Passthrough Parameter Extraction', () => {
             expect(ResolveQueryByNameAndCategory('Report', [], [q1, q2])).toBeUndefined();
         });
 
-        // NOTE (real behavior): the category-qualified branch compares against
-        // "/Segments/" (leading + trailing slashes), but MJQueryEntityExtended.CategoryPath
-        // is built WITHOUT surrounding slashes ("Segments"), so the qualified branch never
-        // matches real metadata and resolution succeeds only via the name-only fallback.
-        // Pinned: composition resolves by full category path + name only; no name-only fallback
-        // (DISCUSSION §6, 2026-10-27: "Category path + query name must be unique"). CR1.
+        // Composition resolves by full category path + name only; no name-only fallback
+        // (DISCUSSION §6, 2026-10-27: "Category path + query name must be unique"). CR1 (was pinned).
         // Inverted from "should fall back to name-only matching when the category-qualified branch does not match".
-        // Observed today: the reference "Other/Sales Summary" resolves to the query in "Reports" through the
-        // name-only fallback (expected undefined, received the stub query object).
-        it.fails('should not fall back to name-only matching when the category path does not match', () => {
+        it('should not fall back to name-only matching when the category path does not match', () => {
             const q = stubQuery({ name: 'Sales Summary', categoryPath: 'Reports' });
             expect(ResolveQueryByNameAndCategory('Sales Summary', ['Other'], [q])).toBeUndefined();
         });
 
-        // Pinned: composition resolves by full category path + name (DISCUSSION §6, 2026-10-27). CR1.
-        // Observed today: undefined — the qualified branch never matches "/Finance/" against "Finance",
-        // and the name-only fallback refuses the ambiguous name.
-        it.fails('should resolve the same-named query in the referenced category path', () => {
+        // Composition resolves by full category path + name (DISCUSSION §6, 2026-10-27). CR1 (was pinned: the
+        // qualified branch compared "/Finance/" against "Finance" and never matched).
+        it('should resolve the same-named query in the referenced category path', () => {
             const sales = stubQuery({ id: 'q-sales', name: 'Report', categoryPath: 'Golden/Sales' });
             const finance = stubQuery({ id: 'q-finance', name: 'Report', categoryPath: 'Golden/Finance' });
             expect(ResolveQueryByNameAndCategory('Report', ['Golden', 'Finance'], [sales, finance])).toBe(finance);

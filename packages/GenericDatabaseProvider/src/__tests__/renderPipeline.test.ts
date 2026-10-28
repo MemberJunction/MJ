@@ -492,10 +492,10 @@ describe('MaxRows row cap — outer wrap', () => {
 
 describe('MaxRows row cap — incompatible shapes left alone', () => {
 
-    // Pinned: the lexer read-only check runs on every path, so SELECT … INTO is refused on the saved path (DISCUSSION §6, 2026-10-27). W3.
+    // The lexer read-only check runs on every path, so SELECT … INTO is refused on the saved path (DISCUSSION §6, 2026-10-27). W3.
     // Was: 'does not modify a SELECT … INTO statement (write op, validator should block)', which asserted the
-    // statement passed through uncapped. Observed today: no error; FinalSQL is 'SELECT * INTO #temp FROM Users'.
-    it.fails('refuses a SELECT … INTO statement on the saved-query path (it writes a table)', () => {
+    // statement passed through uncapped.
+    it('refuses a SELECT … INTO statement on the saved-query path (it writes a table)', () => {
         stubMetadata();
         const sql = 'SELECT * INTO #temp FROM Users';
         expect(() => RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 })).toThrow(/read query|write statement/i);
@@ -805,9 +805,12 @@ describe('RequireReadStatement — caller-supplied SQL must be a single read que
         expect(result.FinalSQL).toContain('TRY_CAST');
     });
 
-    it('leaves saved-query rendering alone when the flag is not set', () => {
+    // Changed with the token-based gate on every path (DISCUSSION §6, 2026-10-27; COMPAT-MAP B5): a saved
+    // query is held to the same single-read-query rule as caller SQL, so a DECLARE prefix is refused there too.
+    // Was: 'leaves saved-query rendering alone when the flag is not set'.
+    it('refuses a DECLARE prefix on the saved-query path as well (the flag is not needed)', () => {
         stubMetadata();
-        expect(() => RenderPipeline.Run('DECLARE @x INT = 1 SELECT @x', { Platform: 'sqlserver' })).not.toThrow();
+        expect(() => RenderPipeline.Run('DECLARE @x INT = 1 SELECT @x', { Platform: 'sqlserver' })).toThrow(/only a single read query/i);
     });
 });
 
@@ -815,75 +818,78 @@ describe('RequireReadStatement — caller-supplied SQL must be a single read que
 // Safety guard — mutation rejection
 // ════════════════════════════════════════════════════════════════════
 
+// One token-based gate on every path refuses these (DISCUSSION §6, 2026-10-27: node-sql-parser never decides
+// safety). Its message names the reason, so the expectations match it instead of the old AST check's
+// "write statement" / "multiple statements" wording.
 describe('safety guard — write-statement rejection', () => {
     // ── Single write statements (DML) ─────────────────────────────────
     it('throws when the rendered query is a DELETE', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('DELETE FROM Users WHERE ID = 1', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws when the rendered query is an UPDATE', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('UPDATE Users SET Active = 1', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws when the rendered query is an INSERT', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("INSERT INTO Users (Name) VALUES ('x')", { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     // ── Single DDL (StatementKind 'other' — missed by the old mutation-only guard) ──
     it('throws when the rendered query is a DROP (DDL)', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('DROP TABLE Users', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     // ── Stacked-statement injection (second layer) ────────────────────
     it('throws on a stacked SELECT; DELETE injection', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SELECT 1 AS x; DELETE FROM Users', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws on a stacked SELECT; DROP injection', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE Users', { Platform: 'sqlserver' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     it('throws on a stacked injection on PostgreSQL', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SELECT 1 AS x; DROP TABLE users', { Platform: 'postgresql' }))
-            .toThrow(/write statement/i);
+            .toThrow(/only a single read query/i);
     });
 
     // ── Stacked payloads that DON'T parse (the AST write check can't see them) ──
     it('throws on a stacked SELECT; EXEC xp_cmdshell payload (unparseable)', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("SELECT 1 AS x; EXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     it('throws on a stacked SELECT; WAITFOR DELAY time-based payload (unparseable)', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("SELECT 1 AS x; WAITFOR DELAY '00:00:05'", { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     it('throws on a stacked statement separated only by a comment', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run("SELECT 1 AS x; -- c\nEXEC xp_cmdshell 'dir'", { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     it('rejects an otherwise-benign SET NOCOUNT ON; SELECT — a rendered query must be a single statement', () => {
         stubMetadata();
         expect(() => RenderPipeline.Run('SET NOCOUNT ON; SELECT * FROM Users', { Platform: 'sqlserver' }))
-            .toThrow(/multiple statements/i);
+            .toThrow(/more than one statement/i);
     });
 
     // ── Legitimate single reads must still pass ───────────────────────
@@ -1052,11 +1058,15 @@ describe('RenderTrace', () => {
         expect(result.Trace.AfterComposition).toBe(sql);
     });
 
-    it('AfterComposition still contains line comments (stripping happens after composition)', () => {
+    // Changed by render-then-compose (DISCUSSION §6, 2026-10-27; C16): comments are removed before the
+    // template renders, and AfterComposition is the assembled SQL, so it holds no comment.
+    // Was: 'AfterComposition still contains line comments (stripping happens after composition)'.
+    it('AfterComposition holds no comments (they are removed before rendering)', () => {
         stubMetadata();
-        const sql = `SELECT * FROM t -- this comment survives composition\n`;
+        const sql = `SELECT * FROM t -- this comment does not survive\n`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver' });
-        expect(result.Trace.AfterComposition).toContain('-- this comment survives composition');
+        expect(result.Trace.AfterComposition).not.toContain('-- this comment');
+        expect(result.Trace.AfterComposition).toContain('SELECT * FROM t');
     });
 
     it('AfterTemplates does NOT contain comments', () => {
@@ -1109,10 +1119,10 @@ describe('RenderTrace', () => {
 
 describe('RenderTrace — pipeline stage visibility', () => {
 
-    // Pinned: render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
+    // Render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
     // Was: 'AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', which asserted the token
-    // survived. Observed today: AfterComposition still contains '{{ Status | sqlString }}' (compose runs before render).
-    it.fails('AfterComposition is the assembled SQL with values rendered, no Nunjucks tokens left', () => {
+    // survived.
+    it('AfterComposition is the assembled SQL with values rendered, no Nunjucks tokens left', () => {
         stubMetadata();
         const sql = `SELECT * FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`;
         const result = RenderPipeline.Run(sql, {
@@ -1164,11 +1174,11 @@ ORDER BY Cnt DESC`;
         expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
     });
 
-    // Pinned: render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
+    // Render-then-compose; Trace.AfterComposition is the assembled SQL, after templates (DISCUSSION §6, 2026-10-27). C16.
     // Was: 'trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', which asserted
     // AfterComposition still held '{{ StartDate | sqlDate }}'. The stage assertions that do not depend on that
-    // are kept in the test above. Observed today: AfterComposition contains '{{ StartDate | sqlDate }}'.
-    it.fails('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case), AfterComposition already rendered', () => {
+    // are kept in the test above.
+    it('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case), AfterComposition already rendered', () => {
         stubMetadata();
         const sql = skipFailureCaseSQL;
         const result = RenderPipeline.Run(sql, {
@@ -2190,7 +2200,6 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'FOR JSON AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
         { name: 'FOR XML AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR XML AUTO` },
         { name: 'OPTION RECOMPILE', path: 'ast', sql: `SELECT [ID] FROM [Members] OPTION (RECOMPILE)` },
-        { name: 'SELECT INTO temp', path: 'passthrough', sql: `SELECT * INTO #t FROM [Members]` },
         { name: 'self-join', path: 'ast', sql: `SELECT a.[ID] FROM [Members] a JOIN [Members] b ON a.[ReferredBy]=b.[ID]` },
         { name: 'GROUP BY ROLLUP', path: 'ast', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY ROLLUP([ChapterID])` },
         { name: 'string with FOR JSON', path: 'ast', sql: `SELECT [Name] FROM [Members] WHERE [Note]='FOR JSON inside string'` },
@@ -2209,6 +2218,14 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
             assertPathTaken(sql, result.FinalSQL, CAP, path);
         });
     }
+
+    // Was a 'passthrough' row: SELECT … INTO went through uncapped on the saved path. The read-only gate now
+    // runs on every path (W3; DISCUSSION §6, 2026-10-27), so it is refused before any cap is applied.
+    it('refuses SELECT INTO temp before capping it', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run(`SELECT * INTO #t FROM [Members]`, { Platform: 'sqlserver', MaxRows: CAP }))
+            .toThrow(/SELECT … INTO/);
+    });
 
     // The same shapes on PostgreSQL where applicable (no [brackets], no TOP).
     const pgCorpus: { name: string; sql: string; path: ExpectedPath }[] = [
@@ -2238,14 +2255,16 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
     }
 });
 
-describe('forbidden functions are refused only for caller-supplied SQL', () => {
+// Forbidden-function screening applies to saved queries too (IMPLEMENTATION-PLAN §5.5; DISCUSSION §6, 2026-10-27).
+describe('forbidden functions are refused on every path', () => {
     it('refuses pg_read_file when a read statement is required', () => {
         expect(() => RenderPipeline.Run(`SELECT pg_read_file('/etc/hostname') AS f`, { Platform: 'postgresql', RequireReadStatement: true }))
             .toThrow(/may not call pg_read_file/);
     });
 
-    it('leaves a saved query that calls one alone', () => {
-        const result = RenderPipeline.Run(`SELECT CAST(query_to_xml('SELECT 1', true, false, '') AS text) AS x`, { Platform: 'postgresql' });
-        expect(result.FinalSQL).toContain('query_to_xml');
+    // Was: 'leaves a saved query that calls one alone'.
+    it('refuses a saved query that calls one', () => {
+        expect(() => RenderPipeline.Run(`SELECT CAST(query_to_xml('SELECT 1', true, false, '') AS text) AS x`, { Platform: 'postgresql' }))
+            .toThrow(/may not call query_to_xml/);
     });
 });

@@ -4,10 +4,11 @@
  * Desired rule (DISCUSSION §6, 2026-10-27: "per-request rendering platform"; objective O1): the
  * Nunjucks environment and its SQL filters come from the request's provider, read from
  * `RenderContext.Platform`, so a SQL Server provider and a PostgreSQL provider in one process each
- * render with their own dialect. Today the filters come from the process-global
+ * render with their own dialect. Before, the filters came from the process-global
  * `RunQuerySQLFilterManager`, whose platform is whatever the last `SetPlatform` call left
  * (`PostgreSQLDataProvider.Config` / `ConfigWithSharedPool` call it; the SQL Server provider
- * never does), so one provider's render gets the other's filters.
+ * never does), so one provider's render got the other's filters; the two cases below were pinned
+ * with `it.fails` until the render passed its own dialect.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Metadata, DatabasePlatform, RunQuerySQLFilterManager } from '@memberjunction/core';
@@ -63,11 +64,8 @@ describe('per-request rendering platform', () => {
         expect(render('postgresql')).toBe(expectedSQL('postgresql'));
     });
 
-    // Pinned: per-request rendering platform (DISCUSSION §6, 2026-10-27). R1 / O1.
-    // Observed today: the SQL Server render gets PostgreSQL's filters, because configuring the
-    // PostgreSQL provider flipped the process-global filter manager:
-    // 'SELECT "Name" AS c FROM t WHERE flag = true AND n = '日本'' instead of 'SELECT [Name] AS c FROM t WHERE flag = 1 AND n = N'日本''.
-    it.fails('interleaved renders on a SQL Server and a PostgreSQL provider each use their own dialect', async () => {
+    // Was pinned: per-request rendering platform (DISCUSSION §6, 2026-10-27). R1 / O1.
+    it('interleaved renders on a SQL Server and a PostgreSQL provider each use their own dialect', async () => {
         stubMetadata();
         const sqlServerRequest = async (): Promise<string> => {
             await tick();
@@ -83,10 +81,8 @@ describe('per-request rendering platform', () => {
         expect(sqlServerSQL).toBe(expectedSQL('sqlserver'));
     });
 
-    // Pinned: per-request rendering platform (DISCUSSION §6, 2026-10-27). R1 / O1.
-    // Observed today: a PostgreSQL render while the global filter manager is on SQL Server gets
-    // SQL Server's filters: '[Name]', '1' and N'日本' instead of '"Name"', 'true' and '日本'.
-    it.fails('a PostgreSQL render does not depend on which provider set the global platform last', () => {
+    // Was pinned: per-request rendering platform (DISCUSSION §6, 2026-10-27). R1 / O1.
+    it('a PostgreSQL render does not depend on which provider set the global platform last', () => {
         stubMetadata();
         RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
         expect(render('postgresql')).toBe(expectedSQL('postgresql'));

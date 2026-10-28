@@ -6229,6 +6229,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             query.GetPlatformSQL(this.PlatformKey),
             {
                 Platform: this.PlatformKey as DatabasePlatform,
+                QueryID: query.ID,
                 ContextUser: contextUser ?? this.CurrentUser,
                 Parameters: parameters,
                 ServerParameters: serverSet?.ServerParameters,

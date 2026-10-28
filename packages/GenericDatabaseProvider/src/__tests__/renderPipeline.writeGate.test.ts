@@ -1,11 +1,13 @@
 /**
  * The read-only gate in front of every rendered query.
  *
- * Desired rule: every path that renders SQL for execution runs the token-based read-only check
- * (`IsReadOnlyQuery`), so a write is refused whether or not node-sql-parser can read it. Today the
- * saved-query path (`GenericDatabaseProvider.processQueryParameters`, which does not set
- * `RequireReadStatement`) relies on `SQLParser.HasWriteStatement`, which is false for SQL the AST
- * parser cannot read and does not treat `SELECT … INTO` as a write.
+ * Rule: every path that renders SQL for execution runs the token-based read-only check
+ * (`IsReadOnlyQuery`), so a write is refused whether or not node-sql-parser can read it
+ * (DISCUSSION §6, 2026-10-27; W1–W4). Before, the saved-query path
+ * (`GenericDatabaseProvider.processQueryParameters`, which does not set `RequireReadStatement`)
+ * relied on `SQLParser.HasWriteStatement`, which is false for SQL the AST parser cannot read and
+ * does not treat `SELECT … INTO` as a write; these cases were pinned with `it.fails` until the
+ * gate moved.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Metadata, DatabasePlatform, QueryDependencySpec, UserInfo } from '@memberjunction/core';
@@ -43,34 +45,28 @@ describe('saved-query path refuses writes the AST parser cannot classify', () =>
         expect(renderSaved('SELECT a FROM t')).toBe('SELECT a FROM t');
     });
 
-    // Pinned: the lexer read-only check runs on every path; node-sql-parser never decides safety (DISCUSSION §6, 2026-10-27). W1.
-    // Observed today: no error. HasWriteStatement is false because node-sql-parser cannot read TRY_CAST,
-    // and the saved path does not run IsReadOnlyQuery, so the UPDATE is rendered for execution.
-    it.fails('refuses UPDATE t SET a = TRY_CAST(b AS INT)', () => {
+    // Was pinned: the lexer read-only check runs on every path; node-sql-parser never decides safety (DISCUSSION §6, 2026-10-27). W1.
+    it('refuses UPDATE t SET a = TRY_CAST(b AS INT)', () => {
         expect(() => renderSaved(UPDATE_TRY_CAST)).toThrow(REFUSED);
     });
 
-    // Pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W2.
-    // Observed today: no error on SQL Server. The MERGE is rendered for execution.
-    it.fails('refuses MERGE … WHEN MATCHED THEN DELETE on SQL Server', () => {
+    // Was pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W2.
+    it('refuses MERGE … WHEN MATCHED THEN DELETE on SQL Server', () => {
         expect(() => renderSaved(MERGE_DELETE, 'sqlserver')).toThrow(REFUSED);
     });
 
-    // Pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W2 (PG 15+ MERGE).
-    // Observed today: no error on PostgreSQL. The MERGE is rendered for execution.
-    it.fails('refuses MERGE … WHEN MATCHED THEN DELETE on PostgreSQL', () => {
+    // Was pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W2 (PG 15+ MERGE).
+    it('refuses MERGE … WHEN MATCHED THEN DELETE on PostgreSQL', () => {
         expect(() => renderSaved(MERGE_DELETE, 'postgresql')).toThrow(REFUSED);
     });
 
-    // Pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W3.
-    // Observed today: no error. SELECT … INTO creates a table, but HasWriteStatement reads it as a SELECT.
-    it.fails('refuses SELECT a INTO newtable FROM t on SQL Server', () => {
+    // Was pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W3.
+    it('refuses SELECT a INTO newtable FROM t on SQL Server', () => {
         expect(() => renderSaved(SELECT_INTO, 'sqlserver')).toThrow(REFUSED);
     });
 
-    // Pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W3.
-    // Observed today: no error on PostgreSQL either.
-    it.fails('refuses SELECT a INTO newtable FROM t on PostgreSQL', () => {
+    // Was pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W3.
+    it('refuses SELECT a INTO newtable FROM t on PostgreSQL', () => {
         expect(() => renderSaved(SELECT_INTO, 'postgresql')).toThrow(REFUSED);
     });
 });
@@ -83,20 +79,16 @@ describe('saved-query path refuses writes the AST parser cannot classify', () =>
  */
 interface EntryPoint {
     Name: string;
-    /** Whether the path already runs the read-only check today (protect) or not (pin). */
-    GatedToday: boolean;
     Render: (sql: string) => void;
 }
 
 const entryPoints: EntryPoint[] = [
     {
         Name: 'saved query (processQueryParameters)',
-        GatedToday: false,
         Render: sql => { RenderPipeline.Run(sql, { Platform: 'sqlserver' }); },
     },
     {
         Name: 'saved query that uses templates (processQueryParameters, UsesTemplate)',
-        GatedToday: false,
         Render: sql => {
             const ctx: RenderContext = {
                 Platform: 'sqlserver',
@@ -109,7 +101,6 @@ const entryPoints: EntryPoint[] = [
     },
     {
         Name: 'saved query whose write is in a composed dependency',
-        GatedToday: false,
         Render: sql => {
             const deps: QueryDependencySpec[] = [{ Name: 'Writer', CategoryPath: '/Test/', SQL: sql }];
             RenderPipeline.Run('SELECT * FROM {{query:"Test/Writer"}} [w]', {
@@ -119,12 +110,10 @@ const entryPoints: EntryPoint[] = [
     },
     {
         Name: 'ad hoc SQL (runAdhocSQL, RequireReadStatement)',
-        GatedToday: true,
         Render: sql => { RenderPipeline.Run(sql, { Platform: 'sqlserver', RequireReadStatement: true }); },
     },
     {
         Name: 'query execution spec / TestQuerySQL (resolveSpecParameters, RequireReadStatement)',
-        GatedToday: true,
         Render: sql => {
             RenderPipeline.Run(sql, {
                 Platform: 'sqlserver', ContextUser: mockUser, OriginalSQL: sql, MaxRows: 10, RequireReadStatement: true,
@@ -147,22 +136,32 @@ describe('W4 — the read-only check runs on every rendering path', () => {
         });
 
         for (const probe of probes) {
-            const name = `${entry.Name}: refuses ${probe.SQL}`;
-            if (entry.GatedToday) {
-                // Protect: this path already runs IsReadOnlyQuery (W4).
-                it(name, () => {
-                    stubMetadata();
-                    expect(() => entry.Render(probe.SQL)).toThrow(REFUSED);
-                });
-            } else {
-                // Pinned: the lexer read-only check runs on every path (DISCUSSION §6, 2026-10-27). W4 / ${probe.Id}.
-                // Observed today: no error; the write is rendered for execution (the composed row
-                // emits it as a CTE body, `WITH [__cte_Writer_…] AS (MERGE …)`).
-                it.fails(name, () => {
-                    stubMetadata();
-                    expect(() => entry.Render(probe.SQL)).toThrow(REFUSED);
-                });
-            }
+            // W4 / probe.Id: every path runs the token-based read-only check (DISCUSSION §6, 2026-10-27).
+            it(`${entry.Name}: refuses ${probe.SQL}`, () => {
+                stubMetadata();
+                expect(() => entry.Render(probe.SQL)).toThrow(REFUSED);
+            });
         }
     }
+});
+
+// The gate works from tokens: constructs the structural parser reads as Unknown still run (DISCUSSION §6,
+// 2026-10-27, "never complete structural parse required").
+describe('the read-only gate does not need a complete structural parse', () => {
+    it('runs a saved T-SQL query with nested JOIN … JOIN … ON … ON', () => {
+        const sql = 'SELECT a.ID FROM A a JOIN B b JOIN C c ON c.BID = b.ID ON b.AID = a.ID';
+        expect(renderSaved(sql)).toBe(sql);
+    });
+
+    it('runs a saved T-SQL query with a bare (NOLOCK) table hint', () => {
+        const sql = 'SELECT a.ID FROM dbo.A a (NOLOCK) WHERE a.ID > 0';
+        expect(renderSaved(sql)).toBe(sql);
+    });
+
+    it('refuses a SELECT … INTO inside a composed dependency (CTE body)', () => {
+        stubMetadata();
+        const deps: QueryDependencySpec[] = [{ Name: 'Into', CategoryPath: '/Test/', SQL: SELECT_INTO }];
+        expect(() => RenderPipeline.Run('SELECT * FROM {{query:"Test/Into"}} [w]', { Platform: 'sqlserver', ContextUser: mockUser, Dependencies: deps }))
+            .toThrow(/writes its result into a table/);
+    });
 });

@@ -10,8 +10,8 @@
 import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
-import { GetDialect } from '@memberjunction/sql-dialect';
-import type { SQLDialect } from '@memberjunction/sql-dialect';
+import { GetDialect, GetQueryDialect } from '@memberjunction/sql-dialect';
+import type { DialectKey, QueryDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Dangerous SQL keywords that should be blocked in expressions
@@ -224,10 +224,11 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
 
 /**
  * The filters whose output depends on the database, rendered for one dialect: string and IN-list
- * literals, booleans, identifiers and the three LIKE filters. Every platform difference comes
- * from the dialect, so a new platform needs no change here.
+ * literals, booleans, identifiers and the three LIKE filters. Every difference comes from the
+ * dialect's writer, so a new dialect needs no change here.
  */
-function dialectFilterImplementations(dialect: SQLDialect): Record<string, (value: unknown) => unknown> {
+function dialectFilterImplementations(dialect: Pick<QueryDialect, 'Writer'>): Record<string, (value: unknown) => unknown> {
+    const writer = dialect.Writer;
     return {
         sqlString: (value: unknown) => (value === null || value === undefined ? 'NULL' : textLiteral(value, dialect)),
         sqlIn: (values: unknown) => {
@@ -237,14 +238,14 @@ function dialectFilterImplementations(dialect: SQLDialect): Record<string, (valu
             const items = values.map(v => typeof v === 'number' ? String(v) : v === null || v === undefined ? 'NULL' : textLiteral(v, dialect));
             return `(${items.join(', ')})`;
         },
-        sqlBoolean: (value: unknown) => dialect.BooleanLiteral(Boolean(value)),
+        sqlBoolean: (value: unknown) => writer.BooleanLiteral(Boolean(value)),
         sqlIdentifier: (value: unknown) => {
             if (!value) throw new Error('Identifier cannot be empty');
             const identifier = String(value);
             if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
                 throw new Error(`Invalid SQL identifier: ${identifier}`);
             }
-            return dialect.QuoteIdentifier(identifier);
+            return writer.QuoteIdentifier(identifier);
         },
         sqlLikeContains: (value: unknown) => likeLiteral(value, 'both', dialect),
         sqlLikeBegins: (value: unknown) => likeLiteral(value, 'trailing', dialect),
@@ -277,24 +278,29 @@ function stripBoundaryWildcards(value: string, side: 'leading' | 'trailing' | 'b
  * those sides is dropped first, and every other character LIKE treats specially is escaped by
  * the dialect.
  */
-function likeLiteral(value: unknown, wildcardSide: 'leading' | 'trailing' | 'both', dialect: SQLDialect): string {
+function likeLiteral(value: unknown, wildcardSide: 'leading' | 'trailing' | 'both', dialect: Pick<QueryDialect, 'Writer'>): string {
     if (value === null || value === undefined) return 'NULL';
     const stripped = stripBoundaryWildcards(String(value), wildcardSide);
-    const pattern = dialect.EscapeLikePattern(stripped.replace(/'/g, "''"));
+    const pattern = dialect.Writer.EscapeLikePattern(stripped.replace(/'/g, "''"));
     const before = wildcardSide === 'trailing' ? '' : '%';
     const after = wildcardSide === 'leading' ? '' : '%';
-    return `${dialect.StringLiteralPrefix(stripped)}'${before}${pattern}${after}'`;
+    return `${dialect.Writer.StringLiteralPrefix(stripped)}'${before}${pattern}${after}'`;
 }
 
 /** A string literal for `value` with the dialect's prefix, quotes escaped. */
-function textLiteral(value: unknown, dialect: SQLDialect): string {
+function textLiteral(value: unknown, dialect: Pick<QueryDialect, 'Writer'>): string {
     const text = String(value);
-    return `${dialect.StringLiteralPrefix(text)}'${EscapeSQLString(text)}'`;
+    return `${dialect.Writer.StringLiteralPrefix(text)}'${EscapeSQLString(text)}'`;
 }
 
 /**
  * Singleton class for managing RunQuery SQL filters with implementations.
- * Supports platform-specific filter behavior via SetPlatform().
+ *
+ * Filters whose output depends on the database are rendered for a dialect. A caller that knows
+ * the dialect of the request it renders for asks for that dialect's filters
+ * ({@link GetFiltersForDialect}), so two providers on different platforms in one process each
+ * render with their own. The process-wide platform ({@link SetPlatform}) is only the default for
+ * callers that do not name a dialect.
  *
  * Uses BaseSingleton to guarantee a single instance across the entire process,
  * even if bundlers duplicate this module across multiple execution paths.
@@ -302,6 +308,7 @@ function textLiteral(value: unknown, dialect: SQLDialect): string {
 export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterManager> {
     private _filters: Map<string, RunQuerySQLFilter> = new Map();
     private _platform: DatabasePlatform = DEFAULT_FILTER_PLATFORM;
+    private readonly _dialectFilters: Map<string, ReadonlyMap<string, RunQuerySQLFilter>> = new Map();
 
     /**
      * Use RunQuerySQLFilterManager.Instance to get the singleton instance.
@@ -360,8 +367,21 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
     }
 
     /**
-     * Sets the database platform, updating platform-sensitive filters accordingly.
-     * Call this during provider initialization to match the active database platform.
+     * The dialect filters render for: the one under `dialectKey`, or the process-wide default
+     * platform's when omitted. Callers that render values the way the filters do (the value bound
+     * for a boolean parameter) read it here, so they follow the same dialect.
+     * @throws Error when no dialect is registered under the key.
+     */
+    public DialectFor(dialectKey?: DialectKey): QueryDialect {
+        return dialectKey === undefined ? this.Dialect : GetQueryDialect(dialectKey);
+    }
+
+    /**
+     * Sets the process-wide default platform, updating platform-sensitive filters accordingly.
+     *
+     * @deprecated The default applies only to callers that render without naming a dialect. A
+     * render for a known provider passes its dialect key ({@link GetFiltersForDialect}), so two
+     * providers on different platforms in one process each get their own filters.
      */
     public SetPlatform(platform: DatabasePlatform): void {
         if (this._platform !== platform) {
@@ -371,12 +391,36 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
     }
 
     /**
+     * The filters rendered for one dialect, every filter with its implementation. Built once per
+     * dialect key and kept; the process-wide platform plays no part.
+     * @param dialectKey The dialect the SQL is written in, such as `'sqlserver'` or `'postgresql'`.
+     * @throws Error when no dialect is registered under the key.
+     */
+    public GetFiltersForDialect(dialectKey: DialectKey): RunQuerySQLFilter[] {
+        return Array.from(this.dialectFilterMap(dialectKey).values());
+    }
+
+    /** The filters for `dialectKey`, built on first use. */
+    private dialectFilterMap(dialectKey: DialectKey): ReadonlyMap<string, RunQuerySQLFilter> {
+        let filters = this._dialectFilters.get(dialectKey);
+        if (!filters) {
+            const overrides = dialectFilterImplementations(GetQueryDialect(dialectKey));
+            filters = new Map(RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS
+                .filter(filter => filter.implementation)
+                .map((filter): [string, RunQuerySQLFilter] => [filter.name, { ...filter, implementation: overrides[filter.name] ?? filter.implementation }]));
+            this._dialectFilters.set(dialectKey, filters);
+        }
+        return filters;
+    }
+
+    /**
      * Gets a filter by name
      * @param name The filter name
+     * @param dialectKey The dialect to render for; the process-wide default platform when omitted.
      * @returns The filter with implementation or undefined if not found
      */
-    public GetFilter(name: string): RunQuerySQLFilter | undefined {
-        return this._filters.get(name);
+    public GetFilter(name: string, dialectKey?: DialectKey): RunQuerySQLFilter | undefined {
+        return dialectKey === undefined ? this._filters.get(name) : this.dialectFilterMap(dialectKey).get(name);
     }
 
     /** @deprecated Use {@link GetFilter}. */
@@ -414,11 +458,12 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
      * Executes a filter function by name
      * @param filterName The name of the filter to execute
      * @param value The value to filter
+     * @param dialectKey The dialect to render for; the process-wide default platform when omitted.
      * @returns The filtered result
      * @throws Error if filter is not found or execution fails
      */
-    public ExecuteFilter(filterName: string, value: unknown): unknown {
-        const filter = this._filters.get(filterName);
+    public ExecuteFilter(filterName: string, value: unknown, dialectKey?: DialectKey): unknown {
+        const filter = this.GetFilter(filterName, dialectKey);
         if (!filter || !filter.implementation) {
             throw new Error(`Filter '${filterName}' not found or has no implementation`);
         }

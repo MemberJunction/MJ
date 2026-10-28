@@ -610,8 +610,11 @@ ORDER BY [LogCount] DESC`,
 
         expect(result.HasCompositions).toBe(true);
 
-        // Static param ResolvedOnly='1' should have been substituted
-        expect(result.Trace.AfterComposition).toContain("'1'");
+        // The static argument ResolvedOnly='1' reached the dependency's {% if %}. Render-then-compose evaluates
+        // it there instead of substituting the literal into the dependency's template text (C16), so the
+        // branch it selects is in the assembled SQL and the evaluated argument is in the instance trace.
+        expect(result.Trace.AfterComposition).toContain('[mel].[ResolvedMemberID] IS NOT NULL');
+        expect(result.Trace.Instances[0].Arguments).toEqual({ ResolvedOnly: '1', StartDate: '2024-01-01' });
 
         // After templates: no {{ }} tokens remain
         expect(result.FinalSQL).not.toMatch(/\{\{[^}]*\}\}/);
@@ -620,11 +623,10 @@ ORDER BY [LogCount] DESC`,
         expect(result.FinalSQL).toContain('ORDER BY');
     });
 
-    // Pinned: render-then-compose; Trace.AfterComposition is the assembled SQL, each instance rendered
-    // before it is composed (DISCUSSION §6, 2026-10-27; Topic 2c/2d). C16.
-    // Observed today: AfterComposition holds the dependency's unrendered '{{ Region | sqlString }}' and
-    // '{% if Region %}' (compose runs before render); the rendered value appears only in AfterTemplates.
-    it.fails('AfterComposition of a composed, templated query is the assembled SQL with no template tags', () => {
+    // Render-then-compose; Trace.AfterComposition is the assembled SQL, each instance rendered before it is
+    // composed (DISCUSSION §6, 2026-10-27; Topic 2c/2d). C16. Was pinned with it.fails while composition ran
+    // before rendering.
+    it('AfterComposition of a composed, templated query is the assembled SQL with no template tags', () => {
         setupNoMetadata();
         const deps: QueryDependencySpec[] = [{
             Name: 'Conditional', CategoryPath: '/Test/', UsesTemplate: true, SQL:

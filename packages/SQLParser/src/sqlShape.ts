@@ -148,6 +148,7 @@ function checkWithStatement(sql: string, dialect: SQLParserDialect): ReadOnlyQue
         if (!IsKeyword(lead, 'SELECT') && !IsKeyword(lead, 'WITH') && !IsKeyword(lead, 'VALUES')) {
             return refuse(`its CTE ${definition.Name} is a ${lead ? lead.Text.toUpperCase() : 'empty'} statement, not a read`);
         }
+        if (!checkSelect(body).IsReadOnly) return refuse(`its CTE ${definition.Name} writes its result into a table (SELECT … INTO)`);
     }
     const main = SignificantTokens(LexSQL(ctes.Main, dialect)).filter(t => t.Kind !== 'semicolon');
     if (!IsKeyword(firstWord(main), 'SELECT')) {
