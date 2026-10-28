@@ -1206,7 +1206,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // only asking for the conversation opens the thread.
       TextRevealed: this.ShowCaptions && (this.conversationShown || !this.PresenterOnStage),
       DisclosureShowThread: disclosure.ShowThread,
-      DisclosureShowComposer: disclosure.ShowComposer,
       DisclosureShowPanel: disclosure.ShowPanel,
       DisclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
