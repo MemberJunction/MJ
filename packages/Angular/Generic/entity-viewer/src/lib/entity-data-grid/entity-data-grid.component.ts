@@ -226,6 +226,25 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._params;
   }
 
+  private _alternateBaseView: string | null = null;
+  /**
+   * Optional semantic `Name` of a registered alternate base view on the entity (`MJ: Entity Alternate Base Views.Name`).
+   * Overrides `Params.AlternateBaseView` when set.
+   */
+  @Input()
+  set AlternateBaseView(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized !== this._alternateBaseView) {
+      this._alternateBaseView = normalized;
+      if (this._params) {
+        this.onParamsChanged();
+      }
+    }
+  }
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
+  }
+
   private _allowLoad: boolean = true;
   /**
    * Controls whether data loading is allowed.
@@ -2684,10 +2703,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         extraFilter = this._viewEntity.WhereClause;
       }
 
+      const alternateBaseView =
+        this._alternateBaseView ||
+        this._params?.AlternateBaseView ||
+        this._viewEntity?.AlternateBaseView ||
+        undefined;
+
       const result = await rv.RunView({
         EntityName: this._entityInfo.Name,
         MaxRows: 0, // Only get aggregates, no row data
         ExtraFilter: extraFilter,
+        AlternateBaseView: alternateBaseView,
         Aggregates: aggregateExpressions
       });
 
@@ -4071,6 +4097,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
 
     const params: RunViewParams = { ...this._params };
+    if (this._alternateBaseView) {
+      params.AlternateBaseView = this._alternateBaseView;
+    }
 
     // Apply sort state (may be modified by user interactions)
     const orderBy = this.buildOrderByClause();

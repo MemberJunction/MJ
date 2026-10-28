@@ -327,6 +327,15 @@ describe('AssemblyAIRealtimeClient', () => {
             expect(states).toEqual([]); // narration waits for the first model output
         });
 
+        it('RequestSpokenTurn sends the same reply.create but keeps the reply a NORMAL turn (MJ#4591)', () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Greet the participant.');
+            expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'reply.create', instructions: 'Greet the participant.' });
+            expect(client.IsBusy).toBe(true);
+            client.Emit({ type: 'transcript.agent', text: 'Hello, welcome.', reply_id: 'r1' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello, welcome.', IsFinal: true, Kind: 'normal' }]);
+        });
+
         it('should tag the NEXT agent transcript as narration, then reset to normal (stamp-at-send)', () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('progress update');

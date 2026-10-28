@@ -1,0 +1,38 @@
+{
+  "id": "D2",
+  "namespace": "cbb0d52f-d554-47a0-80ba-d893cd2ac443",
+  "seed": 2214,
+  "description": "Planted covariate shift (P11 Ruling Q23): D1c's classification design with no intercept shift; EngagementZ's mean moves by +0.1 SD from period 3 onward and Target follows the unchanged true model.",
+  "kind": "binary",
+  "nEntities": 4000,
+  "periodsPerEntity": 6,
+  "startYear": 2019,
+  "covariateShift": {
+    "feature": "EngagementZ",
+    "deltaMean": 0.1,
+    "fromPeriod": 3
+  },
+  "features": {
+    "EngagementZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "TenureZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "AutoRenew": {
+      "dist": "bernoulli",
+      "p": 0.35
+    }
+  },
+  "betas": {
+    "EngagementZ": 0.9,
+    "TenureZ": 0.4,
+    "AutoRenew": 0.8
+  },
+  "intercept": -0.5,
+  "sizingNote": "4,000 entities x 6 periods = 24,000 rows, as D1c. Monitor procedure M (evidence/P11-roadmap.md Phase 6; evidence/logs/P11/D2/d2_power.py): periods 0-2 are the reference (12,000 rows); looks at periods 3, 4 and 5; per look, each input's z against the reference with a p-value from no-drift D1c-design replays, and Benjamini-Hochberg across the 3 inputs at q(3) = 0.0171, the level at which the chance of any alarm over the 3 looks on no-drift replays is 0.05 (independently checked any-alarm rate 0.0498, evidence/P11-roadmap.md:349-350). The +0.1 SD shift is 5.48 SE (SE = sqrt(1/4000 + 1/12000) = 0.0183); under M the period-3 look detects it with power 0.9964 and the period-3 or period-4 look with 1.0000 (20,000 seeds), with mean false-discovery proportion 0.0174 over the union of flags. The labels move only through beta 0.9: the logit shifts by 0.09 on average, so D2 is an input-drift scenario, not an outcome-drift one (D1c is the latter)."
+}

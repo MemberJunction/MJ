@@ -442,15 +442,30 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * rule lives — see that method for why the caller's direction is never sent on its own.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same response.create as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: same skip rule, same
+     * frame. `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (!this.canSendEvents()) {
             return;
         }
         if (this.responseActive) {
-            console.debug(`[${this.providerDebugLabel}] RequestSpokenUpdate skipped — a response is already in flight (narration is disposable).`);
+            const method = kind === 'narration' ? 'RequestSpokenUpdate' : 'RequestSpokenTurn';
+            const why = kind === 'narration' ? ' (narration is disposable)' : '';
+            console.debug(`[${this.providerDebugLabel}] ${method} skipped — a response is already in flight${why}.`);
             return;
         }
         this.responseActive = true;
-        this.pendingNarrationKind = true;
+        this.pendingNarrationKind = kind === 'narration';
         this.pendingLocalResponseCreates++;
         this.sendEvent(this.buildSpokenUpdateEvent(instructions));
     }

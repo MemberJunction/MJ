@@ -1,6 +1,6 @@
 // Reflect.metadata polyfill at import time.
 import 'reflect-metadata';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { BaseEntity, EntityFieldTSType, EntityInfo, UserInfo, type EntityFieldInfo, type IMetadataProvider } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -97,6 +97,11 @@ describe('ResolverBase.MustLoadTruthFromDatabase & hasCompleteOldValues', () => 
         expect(probe.MustLoad({ Name: ' mj: conversation details ', TrackRecordChanges: false }, true)).toBe(true);
     });
 
+    it("always loads a conversation and an agent session, so client OldValues cannot hide a change to the anonymous ownership key (#4931)", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Conversations', TrackRecordChanges: false }, true)).toBe(true);
+        expect(probe.MustLoad({ Name: 'MJ: AI Agent Sessions', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
     it('still trusts OldValues on other untracked entities without field security when OldValues___ covers all writable fields', () => {
         const fields = buildTagEntityFields();
         const completeOldValues = [
@@ -149,15 +154,16 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         EntityFields: buildTagEntityFields(),
     });
 
-    function createLoadedTagEntity(errorLogSaves: Array<Record<string, unknown>> = []): { entity: BaseEntity; user: UserInfo } {
+    function createLoadedTagEntity(errorLogSaves: Array<Record<string, unknown>> = [], failSaveWith?: string): { entity: BaseEntity; user: UserInfo } {
         const fakeProvider = {
             Entities: [tagEntityInfo],
             GetEntityObject: async () => {
                 const errEntity: Record<string, unknown> = {
                     Save: async () => {
                         errorLogSaves.push({ ...errEntity });
-                        return true;
+                        return failSaveWith === undefined;
                     },
+                    LatestResult: failSaveWith === undefined ? null : { CompleteMessage: failSaveWith },
                 };
                 return errEntity;
             },
@@ -222,10 +228,37 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
 
         // Warning is logged to ErrorLog, and save still applies the new value
         expect(errorLogSaves).toHaveLength(1);
-        expect(errorLogSaves[0].Code).toBe('ENTITY_SAVE_INCONSISTENCY');
+        expect(errorLogSaves[0].Code).toBe('SAVE_INCONSISTENCY');
+        // ErrorLog.Code is NCHAR(20)
+        expect(String(errorLogSaves[0].Code).length).toBeLessThanOrEqual(20);
         expect(String(errorLogSaves[0].Message)).toContain('Display_Name');
         expect(entity.Get('Display Name')).toBe('Client New Display');
         expect(entity.Get('Description')).toBe('Untouched DB Description');
+    });
+
+    it('reports the entity name and the reason when the ErrorLog save fails', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { entity, user } = createLoadedTagEntity([], 'value too long for Code');
+        try {
+            await probe.TestAndSet(
+                entity,
+                {
+                    ID: '11111111-2222-3333-4444-555555555555',
+                    Display_Name: 'Client New Display',
+                    OldValues___: [
+                        { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                        { Key: 'Display_Name', Value: 'Stale Client Display' },
+                    ],
+                },
+                user
+            );
+            const message = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(message).toContain('Failed to save ErrorLog record');
+            expect(message).toContain('value too long for Code');
+            expect(message).toContain(entity.EntityInfo.Name);
+        } finally {
+            errorSpy.mockRestore();
+        }
     });
 
     it('does not false-positive when a non-overlapping field differs in the DB', async () => {

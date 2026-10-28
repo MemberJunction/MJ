@@ -370,6 +370,36 @@ BEGIN
   INSERT INTO _uef_uk SELECT * FROM __mj."vwTableUniqueKeys";
   ANALYZE _uef_uk;
 
+  -- Orphan-tolerant renumber (#4050): an EntityField row whose column is no longer in the base
+  -- view never joins _uef_cols below, so it is never renumbered and keeps its old Sequence. When
+  -- that slot is inside the live column range, the live field that must move onto it collides on
+  -- UQ_EntityField_EntityID_Sequence and the whole metadata pass fails. Park such orphans above
+  -- the entity's current maximum first; the prune step deletes them later. Orphans already above
+  -- the live range are left alone, so repeated runs do not keep moving them.
+  UPDATE __mj."EntityField" tgt SET
+    "Sequence" = mx.max_sequence + o.rn
+  FROM (
+    SELECT ef."ID" AS field_id, ef."EntityID" AS entity_id,
+           ROW_NUMBER() OVER (PARTITION BY ef."EntityID" ORDER BY ef."Sequence", ef."Name") AS rn
+    FROM __mj."EntityField" ef
+    INNER JOIN __mj."Entity" e ON e."ID" = ef."EntityID"
+    INNER JOIN (SELECT c."EntityID", MAX(c."Sequence") AS live_max FROM _uef_cols c GROUP BY c."EntityID") lm
+      ON lm."EntityID" = ef."EntityID"
+    LEFT JOIN _uef_excluded ex ON e."SchemaName"::text = ex.schema_name
+    WHERE e."VirtualEntity" = FALSE
+      AND ex.schema_name IS NULL
+      AND (NOT v_has_include OR e."SchemaName"::text IN (SELECT i.schema_name FROM _uef_included i))
+      AND (NOT v_is_scoped OR e."ID" IN (SELECT s.entity_id FROM _uef_scope s))
+      AND ef."Sequence" <= lm.live_max
+      AND NOT EXISTS (
+        SELECT 1 FROM _uef_cols c
+        WHERE c."EntityID" = ef."EntityID" AND c."FieldName"::text = ef."Name"::text
+      )
+  ) o
+  INNER JOIN (SELECT f."EntityID", MAX(f."Sequence") AS max_sequence FROM __mj."EntityField" f GROUP BY f."EntityID") mx
+    ON mx."EntityID" = o.entity_id
+  WHERE tgt."ID" = o.field_id;
+
   -- _uef_filtered is the one temp table whose shape cannot be derived from a
   -- view, so it is declared explicitly rather than duplicating the ~110-line
   -- projection below purely to get its column types. The column list here is
@@ -398,6 +428,7 @@ BEGIN
     related_entity_field_name TEXT,
     new_is_primary_key        BOOLEAN,
     new_is_unique             BOOLEAN,
+    is_isa_inherited          BOOLEAN,
     is_material_change        BOOLEAN,
     change_reasons            TEXT,
     is_sequence_change        BOOLEAN
@@ -430,6 +461,11 @@ BEGIN
     fk."referenced_column"::text AS related_entity_field_name,
     (pk."ColumnName" IS NOT NULL) AS new_is_primary_key,
     (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique,
+    -- IS-A inherited row (#4569): a virtual, updatable field on a child entity, copied from its
+    -- parent by manageParentEntityFields. The column lives in the parent's table, so the FK lookup
+    -- above (keyed on the child's table) finds nothing; its RelatedEntity* values come from the
+    -- parent field and must not be overwritten with NULL here.
+    (e."ParentID" IS NOT NULL AND ef."IsVirtual" AND ef."AllowUpdateAPI") AS is_isa_inherited,
     -- is_material_change = a change that actually affects the generated view/sproc SQL. This is the
     -- SINGLE definition of "material" — the row filter (outer WHERE) and the modified-entity RETURN
     -- both derive from it, so there is no duplicated predicate to keep in sync. A pure Sequence
@@ -449,8 +485,10 @@ BEGIN
       OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
       OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
       OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
-      -- Soft-FK guard: preserve soft FKs and respect AutoUpdateRelatedEntityInfo
-      OR (ef."AutoUpdateRelatedEntityInfo" AND NOT ef."IsSoftForeignKey" AND (
+      -- Soft-FK guard: preserve soft FKs and respect AutoUpdateRelatedEntityInfo; IS-A inherited
+      -- rows keep the relationship copied from the parent field
+      OR (ef."AutoUpdateRelatedEntityInfo" AND NOT ef."IsSoftForeignKey"
+          AND NOT (e."ParentID" IS NOT NULL AND ef."IsVirtual" AND ef."AllowUpdateAPI") AND (
             COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
             COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
          OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
@@ -474,8 +512,10 @@ BEGIN
       CASE WHEN ef."AutoIncrement" <> (sq."AutoIncrement" <> 0) THEN 'AutoIncrement' END,
       CASE WHEN ef."IsVirtual" <> (sq."IsVirtual" <> 0) THEN 'IsVirtual' END,
       CASE WHEN ef."IsComputed" <> (sq."IsComputed" <> 0) THEN 'IsComputed' END,
-      CASE WHEN COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <> COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid) THEN 'RelatedEntityID' END,
-      CASE WHEN COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '') THEN 'RelatedEntityFieldName' END,
+      CASE WHEN NOT (e."ParentID" IS NOT NULL AND ef."IsVirtual" AND ef."AllowUpdateAPI")
+                AND COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <> COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid) THEN 'RelatedEntityID' END,
+      CASE WHEN NOT (e."ParentID" IS NOT NULL AND ef."IsVirtual" AND ef."AllowUpdateAPI")
+                AND COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '') THEN 'RelatedEntityFieldName' END,
       CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)) THEN 'IsPrimaryKey' END,
       CASE WHEN (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)) THEN 'IsUnique' END,
       CASE WHEN (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE) THEN 'AllowUpdateAPI' END,
@@ -533,8 +573,8 @@ BEGIN
     "IsVirtual"     = fr.new_is_virtual,
     "IsComputed"    = fr.new_is_computed,
     "Sequence"      = fr.new_sequence,
-    "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" AND NOT tgt."IsSoftForeignKey" THEN fr.related_entity_id ELSE tgt."RelatedEntityID" END,
-    "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" AND NOT tgt."IsSoftForeignKey" THEN fr.related_entity_field_name ELSE tgt."RelatedEntityFieldName" END,
+    "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" AND NOT tgt."IsSoftForeignKey" AND NOT fr.is_isa_inherited THEN fr.related_entity_id ELSE tgt."RelatedEntityID" END,
+    "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" AND NOT tgt."IsSoftForeignKey" AND NOT fr.is_isa_inherited THEN fr.related_entity_field_name ELSE tgt."RelatedEntityFieldName" END,
     -- U2 — soft-PK guard: never let the physical-schema sync wipe a soft PK's flags
     "IsPrimaryKey"  = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsPrimaryKey" ELSE fr.new_is_primary_key END,
     "IsUnique"      = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsUnique"     ELSE fr.new_is_unique     END,

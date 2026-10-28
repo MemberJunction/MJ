@@ -311,7 +311,9 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
             const projEnd = body.indexOf('\n  ) chg', projStart);
             const projected = [...body.slice(projStart, projEnd).matchAll(/\bAS\s+([a-z_]+),?\s*$/gm)].map((m) => m[1]);
 
-            expect(declared.length).toBe(24);
+            // 25 since next's orphan-tolerant renumber (#4050) added is_isa_inherited to the
+            // projection. A count change here must come WITH the DDL change, never alone.
+            expect(declared.length).toBe(25);
             expect(declared).toEqual(projected);
         });
 

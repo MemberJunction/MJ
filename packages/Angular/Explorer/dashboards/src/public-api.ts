@@ -255,3 +255,10 @@ export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.co
 
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';
+
+// Chief of Staff Executive Cockpit
+export {
+    ChiefOfStaffDashboardComponent,
+    LoadChiefOfStaffDashboard,
+} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+export * from './ChiefOfStaff/chief-of-staff-agent-context';

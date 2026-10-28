@@ -46,6 +46,7 @@ interface RacyDetail {
     Message?: string;
     LatestResult: null;
     Persisted: { Status?: string; Message?: string };
+    MarkServerAuthoredReply: () => void;
     Save: () => Promise<boolean>;
     Load: () => Promise<boolean>;
     EnsureSaveComplete: () => Promise<void>;
@@ -64,6 +65,7 @@ function makeRacyDetail(id: string): RacyDetail {
         ID: id,
         LatestResult: null,
         Persisted: {},
+        MarkServerAuthoredReply: () => undefined,
         Save: () => {
             if (inFlight) return inFlight;
             const written = { Status: detail.Status, Message: detail.Message };

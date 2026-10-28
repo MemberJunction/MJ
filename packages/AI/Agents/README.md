@@ -409,6 +409,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Bound Action Parameters
+
+A host can fix some of an action's input parameters for the run, so the model can neither see nor change them. A bound parameter is left out of the action's description in the prompt, out of its native tool schema, out of the result echoed to the model and out of what Find Candidate Actions / Find Best Action report; at dispatch the bound value replaces whatever the model sent under that name, the override is logged with the run and step IDs, and the action's execution log marks the parameter `Bound`. Bindings reach every sub-agent run. A required parameter bound to nothing, or a binding that names a parameter the action does not have, refuses the action before it runs: the model is told only that the action is unavailable, and the action is locked out for the rest of the run. A binding keyed by anything other than a known Action ID fails the run at its start.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: spaceAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    // Action ID → parameter name → value. The model is never told ChapterID exists.
+    boundActionParams: {
+        [listMembersActionId]: { ChapterID: space.ChapterID }
+    }
+});
+```
+
+**Limits.** Bindings are server-side only (no GraphQL input reaches them). A run with bindings has task graphs withheld, because a graph's action nodes are dispatched outside the agent's binding gate. A run stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another (`lastRunId`, including a resume from a stored request) applies them when its caller passes none; a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do not parse to an object) fails the continuing run. `actionChanges` are not persisted, so a resumed run starts without them. Bindings hide a value from the model; they are not a boundary against the user, who can start an unbound run. The realtime client-direct action path and the `Execute Agent` action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that refuses them) dispatch without forwarding `boundActionParams`, so do not grant them to a bound agent. An action's own message text may mention a bound value. The rules are exported for hosts that dispatch actions themselves: `BindingsForAction`, `UnboundParams`, `IsBoundParamName`, `ApplyBoundActionParams`.
+
 ### With Memory Scope (Multi-Tenant)
 
 Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
@@ -603,6 +621,48 @@ const result = await runner.RunAgent({
     maxTreeDurationMs: 120_000
 });
 ```
+
+## Event-Driven Agent Wakes (`AgentWakeTriggerService`)
+
+Self-scheduling agents such as the Chief of Staff normally wake on a cron or adaptive `MJ: User Routines` schedule guarded by the 3-tier wake gate (see [Built-In Agents Guide](../../../guides/BUILT_IN_AGENTS_GUIDE.md)). `AgentWakeTriggerService` (a `BaseSingleton`, exported from this package) adds the event-driven complement: when something happens that an agent should react to now, it writes a one-shot `AgentWake` routine for the right user so the agent runs on the dispatcher's next sweep instead of waiting for its next scheduled slot.
+
+**Delivery is a routine row, not a direct agent invocation.** Every trigger ends in `upsertImmediateWakeRoutine`, which finds (by `UserID` + `TargetID` + `WakeConfigurationObject.workstreamKey`) or creates an `MJ: User Routines` row with `RoutineType = 'AgentWake'`, `TargetType = 'Agent'`, `ScheduleMode = 'OneShot'`, `Status = 'Active'`, `NextRunAt = now`, and stores `{ workstreamKey, wakeReason, resumeState }` in `WakeConfigurationObject` (also mirrored into `StartingPayload` and `InitialMessage`). `resumeState` carries the latest event at its top level **and** every event since the last dispatcher claim in `resumeState.pendingEvents`: while the routine is still waiting (`Status = 'Active'` with a `NextRunAt`), a new event is appended rather than replacing the previous one, so two approvals clicked within one sweep both reach the agent; once the dispatcher has claimed the routine the list starts over. The same request in the same status is queued once. With more than one pending event, `wakeReason` / `InitialMessage` enumerate them. `UserRoutineDispatcherDriver` sweeps due routines once a minute, so "immediate" means **on the next sweep, within about a minute**. The dispatcher hands the agent `payload._wakeContext.resumeState` and runs it with `compactAfterRun: true`. A freshly created event routine carries no tier configuration, so `WakeGateEvaluator` fails open; an existing routine for the same workstream keeps whatever gate it already had.
+
+| Trigger | Fired by | Whose agent wakes | `workstreamKey` | `resumeState.triggerType` |
+|---|---|---|---|---|
+| `TriggerWakeOnAgentRequestResolution` | `MJAIAgentRequestEntityServer.Save()` when an action-created `MJ: AI Agent Requests` row (`OriginatingAgentRunID` and `OriginatingTaskID` both null) moves from `Requested` to `Approved`, `Rejected` or `Responded` | The request owner (`RequestForUserID`) and `AgentID` | `approval-resolution` | `AgentRequestResolution` — `requestID`, `status`, `request`, `response`, parsed `responseData` and `commentsData`, `respondedByUserID`, `respondedAt` |
+| Same method, inter-agent envelope | The resolved request's `Comments` is a `Send Inter-Agent Request` envelope (`interAgentCoordination: true`) | The **sender** user (`envelope.senderUserID`) and `senderAgentID` | envelope `workstreamKey`, else `inter-agent-resolution` | `InterAgentRequestResolved` — `requestID`, `status`, `subject`, `response`, `responseData`, `respondedByUserID`, `respondedAt`, `targetUserID`, `targetUserName` |
+| `TriggerWakeOnIncomingInterAgentRequest` | `MJAIAgentRequestEntityServer.Save()` on a **new** `Requested` row whose `Comments` is an inter-agent envelope (`interAgentCoordination: true`) | The **target** user (`envelope.targetUserID`) and the request's `AgentID` | envelope `workstreamKey`, else `inter-agent-inbox` | `InterAgentRequestReceived` — `requestID`, `senderUserID`, `senderUserName`, `senderAgentID`, `subject`, `messageBody` |
+| `RouteInboundUtilityMailboxWake` | An inbound-email ingestion path (none wired yet) passing an `InboundUtilityMailboxEmailInput` | The verified internal sender (`fromAddress` matches an active `MJ: Users` row) and the `AgentID` of the matching `MJ: AI Bridge Agent Identities` row (`IdentityType = 'Email'`, `IsActive`) | input `workstreamKey`, else identity `Configuration.defaultWorkstreamKey`, else `inbound-utility-mailbox` | `InboundUtilityMailboxEmail` — `identityID`, `utilityMailboxAddress`, `senderUserID`, `senderEmail`, `messageID`, `subject`, `bodyPreview`, `receivedAt` |
+
+Every `resumeState` also repeats the `workstreamKey`. Requests that carry `OriginatingAgentRunID` (a paused run) or `OriginatingTaskID` (a task graph) are skipped — those resume through the existing `lastRunId` path and the task dispatcher, not through a wake.
+
+**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; the mailbox trigger also refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
+
+**Result.** Each method returns an `AgentWakeTriggerResult` — `{ triggered, resultCode, reason, routineID, targetUserID, targetAgentID, workstreamKey, nextRunAtISO }` — and never throws for business outcomes. `resultCode` is one of `WAKE_SCHEDULED`, `SKIPPED_NOT_APPLICABLE`, `POLICY_DENIED`, `IDENTITY_NOT_FOUND`, `UNVERIFIED_EXTERNAL_SENDER`, `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`, `SAVE_FAILED`.
+
+```typescript
+import { LogStatus } from '@memberjunction/core';
+import { AgentWakeTriggerService } from '@memberjunction/ai-agents';
+
+// Inside a server-side entity subclass or resolver, after the request has saved:
+const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+    request,                // MJAIAgentRequestEntity, Status already Approved/Rejected/Responded
+    contextUser,            // UserInfo the save ran under
+    this.ProviderToUse      // IMetadataProvider; defaults to Metadata.Provider when omitted
+);
+if (!result.triggered) {
+    LogStatus(`No wake scheduled (${result.resultCode}): ${result.reason}`);
+}
+```
+
+**Current limitations**
+
+- Routines are private to their owner (`MJUserRoutineEntityServer.validateOwnership`, plus row-level security on the lookup). A wake for the caller's own agent is saved in the caller's scope; a wake for another user (inter-agent arrival, or a resolution that wakes the sender) is saved as the scheduler's **system user** from `UserCache`, which the ownership gate exempts. If no system user is cached (unit tests, unusual hosts) the service falls back to the caller and logs that the save may be rejected.
+- The service's `InterAgentCoordinationEnvelopeShape` accepts both the `InterAgentCoordinationEnvelope` field names the action writes (`protocolVersion`, `message`) and the older `envelopeVersion` / `messageBody` names. The two shapes are still declared separately because `@memberjunction/core-actions` depends on this package, not the reverse.
+- Wakes are keyed by `UserID` + `TargetID` + `workstreamKey`; events for the same workstream that land between sweeps are queued in `resumeState.pendingEvents` (see above). The queue is at-least-once: an event that lands between the dispatcher's claim save and the service's save can be delivered twice, so the agent should treat `requestID` as idempotent and re-check the request's current status.
+- `RouteInboundUtilityMailboxWake` has no production caller. Wiring it needs an inbound-email ingestion path (mailbox poller or provider webhook) that does not exist yet, and `resolveVerifiedInternalSender` should then resolve the sender through `UserCache` rather than building a role-less `UserInfo`. Deferred to a follow-up by decision.
+- The wake is a `OneShot` `MJ: User Routines` row picked up by the dispatcher, not a direct `AgentRunner` call, so delivery latency is bounded by the sweep interval and the dispatcher's concurrency limit.
 
 ## Documentation
 

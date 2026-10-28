@@ -17,6 +17,7 @@ import {
     ElevenLabsServerEvent,
     ELEVENLABS_SUPPORTED_TURN_SETTINGS,
     MapTurnEagerness,
+    ElevenLabsManagedAgentCache,
 } from '../elevenLabsRealtime';
 
 /* ------------------------------------------------------------------ */
@@ -289,6 +290,11 @@ function collect(session: IRealtimeSession): {
 /*  Managed-agent ensure flow                                          */
 /* ------------------------------------------------------------------ */
 
+// The ensure cache is process-wide (MJ#4803): every test in this file starts from an empty one.
+beforeEach(() => {
+    ElevenLabsManagedAgentCache.Instance.Clear();
+});
+
 describe('ElevenLabsRealtime managed-agent ensure flow', () => {
     let driver: TestElevenLabsRealtime;
 
@@ -457,6 +463,8 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(paths.length).toBeGreaterThan(1); // prompt + voice at minimum
 
         for (const path of paths) {
+            // A fresh PROCESS, not just a fresh driver: the ensure cache is shared across instances.
+            ElevenLabsManagedAgentCache.Instance.Clear();
             const fresh = new TestElevenLabsRealtime('fake-api-key');
             const stale = makeAgentDetail({ agentId: 'agent_x', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
             stale.platformSettings = {
@@ -683,6 +691,67 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
 
         expect(cfg.SessionConfig['agentId']).toBe('agent_older');
         expect(driver.CreateBodies).toEqual([]);
+    });
+
+    it('serves a later session on a NEW driver instance from the cache: only the signed URL is fetched (MJ#4803)', async () => {
+        // The session service builds a fresh driver per session, so a per-instance cache never hit and every
+        // voice session start paid list → get (→ PATCH) → signed URL, about 3.8 s, before it could connect.
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.ListCalls).toHaveLength(1);
+
+        const nextSession = new TestElevenLabsRealtime('fake-api-key');
+        nextSession.Agents = driver.Agents;
+        await nextSession.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(nextSession.ListCalls).toEqual([]);
+        expect(nextSession.GetCalls).toEqual([]);
+        expect(nextSession.UpdateCalls).toEqual([]);
+        expect(nextSession.SignedUrlMints).toEqual(['agent_existing_7']);
+    });
+
+    it('re-runs the ensure once a cache entry is older than the TTL, so drift made elsewhere is repaired', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+            driver.Agents = [
+                makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+            ];
+            await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+            expect(driver.ListCalls).toHaveLength(1);
+
+            // Inside the TTL a new driver instance is still served from the cache.
+            vi.setSystemTime(new Date('2026-01-01T00:09:59Z'));
+            const withinTtl = new TestElevenLabsRealtime('fake-api-key');
+            withinTtl.Agents = driver.Agents;
+            await withinTtl.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+            expect(withinTtl.ListCalls).toEqual([]);
+
+            // Past the TTL the next start re-verifies the agent.
+            vi.setSystemTime(new Date('2026-01-01T00:10:01Z'));
+            const afterTtl = new TestElevenLabsRealtime('fake-api-key');
+            afterTtl.Agents = driver.Agents;
+            await afterTtl.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+            expect(afterTtl.ListCalls).toHaveLength(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('keeps the cache per API key: another account runs its own ensure (MJ#4803)', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        const otherAccount = new TestElevenLabsRealtime('another-api-key');
+        otherAccount.Agents = [
+            makeAgentDetail({ agentId: 'agent_other_1', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await otherAccount.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(otherAccount.ListCalls).toHaveLength(1);
+        expect(otherAccount.SignedUrlMints).toEqual(['agent_other_1']);
     });
 
     it('caches the ensure result per name + tool fingerprint (no repeat REST round-trips)', async () => {
@@ -1144,7 +1213,7 @@ describe('ElevenLabsRealtime server-bridged session (StartSession)', () => {
             }
         });
 
-        it('completes the tool round-trip: client_tool_call → client_tool_result with parsed JSON', async () => {
+        it('completes the tool round-trip: client_tool_call → client_tool_result carrying the JSON string unchanged (MJ#4806)', async () => {
             driver.Emit({
                 type: 'client_tool_call',
                 client_tool_call: { tool_name: 'get_weather', tool_call_id: 'call-1', parameters: { city: 'NYC' } },
@@ -1155,7 +1224,8 @@ describe('ElevenLabsRealtime server-bridged session (StartSession)', () => {
             expect(driver.Socket.SentFrames().at(-1)).toEqual({
                 type: 'client_tool_result',
                 tool_call_id: 'call-1',
-                result: { tempF: 72 },
+                // A string, not an object: ElevenLabs closes the conversation on an object result (MJ#4806).
+                result: '{"tempF":72}',
                 is_error: false,
             });
         });

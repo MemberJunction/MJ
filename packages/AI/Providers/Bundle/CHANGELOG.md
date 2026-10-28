@@ -1,5 +1,48 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [35012c0]
+- Updated dependencies [1090caa]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [1141164]
+- Updated dependencies [cc9fa3c]
+  - @memberjunction/ai-anthropic@6.2.0-edge.6
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.6
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.6
+  - @memberjunction/ai-gemini@6.2.0-edge.6
+  - @memberjunction/ai-openai@6.2.0-edge.6
+  - @memberjunction/ai-groq@6.2.0-edge.6
+  - @memberjunction/ai-cerebras@6.2.0-edge.6
+  - @memberjunction/ai-openrouter@6.2.0-edge.6
+  - @memberjunction/ai-assemblyai@6.2.0-edge.6
+  - @memberjunction/ai-azure@6.2.0-edge.6
+  - @memberjunction/ai-bedrock@6.2.0-edge.6
+  - @memberjunction/ai-betty-bot@6.2.0-edge.6
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.6
+  - @memberjunction/ai-cloudflare@6.2.0-edge.6
+  - @memberjunction/ai-cohere@6.2.0-edge.6
+  - @memberjunction/ai-deepinfra@6.2.0-edge.6
+  - @memberjunction/ai-fireworks@6.2.0-edge.6
+  - @memberjunction/ai-heygen@6.2.0-edge.6
+  - @memberjunction/ai-inception@6.2.0-edge.6
+  - @memberjunction/ai-inworld@6.2.0-edge.6
+  - @memberjunction/ai-lmstudio@6.2.0-edge.6
+  - @memberjunction/ai-llamacpp@6.2.0-edge.6
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.6
+  - @memberjunction/ai-minimax@6.2.0-edge.6
+  - @memberjunction/ai-mistral@6.2.0-edge.6
+  - @memberjunction/ai-ollama@6.2.0-edge.6
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.6
+  - @memberjunction/ai-siliconflow@6.2.0-edge.6
+  - @memberjunction/ai-systemone@6.2.0-edge.6
+  - @memberjunction/ai-vertex@6.2.0-edge.6
+  - @memberjunction/ai-zhipu@6.2.0-edge.6
+  - @memberjunction/ai-xai@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

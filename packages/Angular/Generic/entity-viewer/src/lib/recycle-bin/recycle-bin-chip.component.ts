@@ -63,6 +63,7 @@ import {
       </button>
 
       <mj-recycle-bin
+        [Provider]="Provider"
         [Visible]="PanelVisible"
         [EntityName]="EntityName"
         [ContextUser]="ContextUser"
