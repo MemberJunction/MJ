@@ -189,6 +189,7 @@ export class UserViewResource extends BaseResourceComponent {
       this.ViewEntity = value;
     }
     public GridState: ViewGridState | null = null;
+    public AlternateBaseView: string | null = null;
 
     /** @deprecated Use {@link GridState}. */
     public get gridState(): ViewGridState | null {
@@ -292,21 +293,24 @@ export class UserViewResource extends BaseResourceComponent {
     override set Data(value: ResourceData) {
         const previousRecordId = super.Data?.ResourceRecordID;
         const previousEntity = super.Data?.Configuration?.Entity;
+        const previousAbv = super.Data?.Configuration?.AlternateBaseView;
         super.Data = value;
 
         const newRecordId = value?.ResourceRecordID;
         const newEntity = value?.Configuration?.Entity;
+        const newAbv = value?.Configuration?.AlternateBaseView;
 
         // View-type (grid/cards/timeline/map) and per-view-type config are now resolved
         // internally by mj-entity-viewer from the saved view's ViewTypeID — nothing to read here.
 
-        // Load on first set, or when the view/entity has changed
-        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
+        // Load on first set, or when the view/entity/alternateBaseView has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity || newAbv !== previousAbv) {
             this.dataLoaded = true;
             // Reset state before loading new view
             this.EntityInfo = null;
             this.ViewEntity = null;
             this.GridState = null;
+            this.AlternateBaseView = null;
             this.errorMessage = null;
             this.ShowNewInStandardForm = false;
             this.loadView();
@@ -346,7 +350,8 @@ export class UserViewResource extends BaseResourceComponent {
             else if (data.Configuration?.Entity) {
                 await this.loadDynamicView(
                     data.Configuration.Entity as string,
-                    data.Configuration.ExtraFilter as string | undefined
+                    data.Configuration.ExtraFilter as string | undefined,
+                    data.Configuration.AlternateBaseView as string | undefined
                 );
             }
             else {
@@ -412,9 +417,9 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     /**
-     * Load a dynamic view (no saved view, just entity + filter)
+     * Load a dynamic view (no saved view, just entity + filter + optional alternate base view)
      */
-    private async loadDynamicView(entityName: string, _extraFilter?: string): Promise<void> {
+    private async loadDynamicView(entityName: string, _extraFilter?: string, alternateBaseView?: string): Promise<void> {
         const entity = this.metadata.Entities.find(
             e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase()
         );
@@ -426,6 +431,7 @@ export class UserViewResource extends BaseResourceComponent {
         this.EntityInfo = entity;
         this.ViewEntity = null;
         this.GridState = null;
+        this.AlternateBaseView = alternateBaseView || null;
 
         // For dynamic views, we could create a synthetic viewEntity with just the WhereClause
         // but for now, we'll rely on the entity-viewer's default behavior

@@ -12,7 +12,7 @@
  * @module @memberjunction/server/widget
  */
 
-import { BuildSessionClaims } from '../auth/magicLink/magicLinkCore.js';
+import { BuildSessionClaims, IsRoleGrantable } from '../auth/magicLink/magicLinkCore.js';
 import type { MagicLinkJWTClaims } from '../auth/magicLink/types.js';
 
 /**
@@ -31,7 +31,28 @@ export type WidgetMintErrorCode =
     | 'host_assertion_invalid'
     | 'upgrade_not_enabled'
     | 'invalid_email'
+    | 'guest_role_not_isolated'
     | 'server_error';
+
+/**
+ * The one stock role whose row filters key on the per-visitor scope id (`{{ScopeResourceID}}`) rather than on
+ * `UserID`. Every anonymous widget guest authenticates as the ONE shared Anonymous user, so a role whose filters
+ * compare `UserID` (the stock `UI` role, for instance) lets every guest read and update every other guest's rows
+ * through the generic API (MJ#6043). A widget may therefore grant only this role, or a role the deployment has
+ * explicitly listed as safe for anonymous visitors — the same opt-in list magic-link invites use.
+ */
+export const WIDGET_GUEST_ROLE_NAME = 'Widget Guest';
+
+/** Which roles, beyond {@link WIDGET_GUEST_ROLE_NAME}, a deployment allows a widget to hand to an anonymous guest. */
+export interface GuestRolePolicy {
+  /** Role names (case-insensitive) the deployment has opted in, normally `magicLink.grantableRoleNames`. */
+  GrantableRoleNames: readonly string[];
+}
+
+/** Pure check: may a widget grant `roleName` to an anonymous guest under `policy`? See {@link WIDGET_GUEST_ROLE_NAME}. */
+export function IsIsolatedGuestRole(roleName: string | null | undefined, policy: GuestRolePolicy): boolean {
+  return IsRoleGrantable(roleName, WIDGET_GUEST_ROLE_NAME, policy.GrantableRoleNames);
+}
 
 /** The minimal widget-instance shape the pure validators need (a subset of the entity). */
 export interface WidgetInstanceEligibilityInput {
@@ -206,6 +227,10 @@ export function BuildWidgetGuestClaims(args: {
   guestRoleName: string;
   nowSeconds: number;
   ttlSeconds: number;
+  /** When `sessionId` was first minted (`mj_sid_iat`); a refresh passes the original. Defaults to `nowSeconds`. */
+  sessionStartedAtSeconds?: number;
+  /** Thumbprint of the widget's proof key (`cnf.jkt`). Without it the token cannot be refreshed. */
+  proofKeyThumbprint?: string;
   /**
    * Host-asserted identity for a `host-identity` session. Its email/name are carried as
    * INFORMATIONAL claims only — the principal-resolving `email`/`sub` remain the shared
@@ -248,6 +273,10 @@ export function BuildWidgetGuestClaims(args: {
   });
   // Additive widget claim — lets the synthesized principal be bound to one widget.
   claims.mj_widget_id = args.widgetId;
+  claims.mj_sid_iat = args.sessionStartedAtSeconds ?? args.nowSeconds;
+  if (args.proofKeyThumbprint) {
+    claims.cnf = { jkt: args.proofKeyThumbprint };
+  }
   if (args.hostIdentity) {
     claims.given_name = args.hostIdentity.firstName ?? claims.given_name;
     claims.family_name = args.hostIdentity.lastName ?? claims.family_name;

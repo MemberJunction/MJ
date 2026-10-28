@@ -41,6 +41,9 @@ vi.mock('@memberjunction/api-keys', async (importOriginal) => ({
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
+        async CreateAgentReplyDetail() {
+            return { ID: 'reply-1', __mj_CreatedAt: new Date() };
+        }
         RunAgentInConversation(...args: unknown[]) {
             return hoisted.runAgentInConversation(...args);
         }
@@ -72,7 +75,10 @@ const CLIENT_DATA = JSON.stringify({
 
 const USER = { ID: 'user-1', Email: 'browser.user@example.com' };
 const SYSTEM_USER = { ID: 'system-user', Email: 'system@example.com' };
-const GUEST = { ID: 'guest-1', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true };
+// A widget guest always carries its per-visitor scope id (mj_sid) as its MagicLinkScope.ResourceID, and its
+// conversation is stamped with the same value as ExternalID: that stamp is what tells one guest from another
+// under the shared Anonymous user (MJ#6032), so the fake conversation below carries it.
+const GUEST = { ID: 'guest-1', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-1', MagicLinkScope: { ResourceID: 'sid-1' } };
 
 type Fn = ReturnType<typeof vi.fn>;
 
@@ -100,7 +106,7 @@ function makeResolver(): { resolver: RunAIAgentResolver; seams: ResolverSeams } 
 
 function makeContext(userPayload: Partial<UserPayload>): AppContext {
     const provider = {
-        GetEntityObject: vi.fn().mockResolvedValue({ ConversationID: 'conv-1', Load: vi.fn().mockResolvedValue(true) }),
+        GetEntityObject: vi.fn().mockResolvedValue({ ConversationID: 'conv-1', UserID: GUEST.ID, ExternalID: 'sid-1', Load: vi.fn().mockResolvedValue(true) }),
     };
     return {
         userPayload: { sessionId: 'session-1', email: USER.Email, userRecord: USER, ...userPayload } as UserPayload,

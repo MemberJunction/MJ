@@ -60,4 +60,15 @@ describe('RunViewsWithCacheCheck resolver — param forwarding', () => {
         expect(forwarded.DataSource).toBe('Materialized');
         expect(forwarded.Aggregates).toEqual([{ expression: 'COUNT(*)', alias: 'total' }]);
     });
+
+    it('forwards AlternateBaseView (including empty-string override) and leaves it undefined when unset', async () => {
+        const withNamed = await forwardedParams({ EntityName: 'Customers', AlternateBaseView: 'Active Customers' });
+        expect(withNamed.AlternateBaseView).toBe('Active Customers');
+
+        const withEmptyOverride = await forwardedParams({ EntityName: 'Customers', AlternateBaseView: '' });
+        expect(withEmptyOverride.AlternateBaseView).toBe('');
+
+        const unset = await forwardedParams({ EntityName: 'Customers' });
+        expect(unset.AlternateBaseView).toBeUndefined();
+    });
 });

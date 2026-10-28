@@ -34,12 +34,21 @@ import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../
 import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 import { BuildAutoVectorIndexName, FindMatchingVectorIndex } from './vector-index-auto';
 import {
+    ChosenIndexForSave,
+    IndexesForSelection,
+    SelectDatabase,
+    SelectEmbeddingModel,
+    SelectIndex,
+    VectorIndexOption,
+    VectorStoreSelection,
+} from './vector-store-selection';
+import {
     BuildVectorAgentContext,
     ResolveSyncRow,
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
 import { ValidateStringParam } from '../../../shared/agent-tool-validation';
-import { WithoutSensitiveFields, SensitiveFieldsInTemplate } from './sensitive-fields';
+import { WithoutSensitiveFields, SensitiveFieldsInTemplate, VectorFieldPurpose } from './sensitive-fields';
 import {
     ENTITY_DOCUMENT_TYPE_BY_USE_CASE,
     MAX_TEMPLATE_FIELDS,
@@ -47,6 +56,7 @@ import {
     EntityDocumentTypeForUseCase,
     SuggestionUseCaseForDocumentType,
     IsVectorizableEntity,
+    SuggestedMatchThresholds,
     TemplateFieldCapRefusal,
 } from './vector-document-rules';
 
@@ -94,6 +104,12 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
+
+    /**
+     * How long a sync may go without a progress event before the tab stops waiting. Reaching it does
+     * not mean the sync finished (see subscribeToPipelineProgress).
+     */
+    private static readonly SYNC_SILENCE_LIMIT_MS = 2 * 60 * 1000;
 
     /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
      *  'operations' = Option C (operations monitoring with real-time sync status) */
@@ -228,8 +244,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             doc.AIModelID = aiModelID;
             // "Auto (create/find matching index)" resolves to a real index for this DB + model, so the
             // syncer always has one to write into; without both parts there is nothing to match.
-            doc.VectorIndexID = this.EditDocVectorIndexID
-                ? this.EditDocVectorIndexID
+            // A chosen index counts only when it matches the database and model shown.
+            const chosenIndex = ChosenIndexForSave(this.editSelection, this.AvailableVectorIndexes);
+            doc.VectorIndexID = chosenIndex
+                ? chosenIndex.ID
                 : (vectorDatabaseID && aiModelID
                     ? await this.resolveOrCreateVectorIndex(vectorDatabaseID, aiModelID, this.EditDocEntityName)
                     : null);
@@ -486,17 +504,67 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     /** Selected vector index ID — if user picks an existing one */
     public SelectedVectorIndexID = '';
 
-    /** Indexes filtered by the currently selected vector DB (for create/edit forms) */
-    public get FilteredIndexesForSelectedDB(): { ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string }[] {
-        const dbId = this.SelectedVectorDBID || this.EditDocVectorDBID;
-        if (!dbId) return this.AvailableVectorIndexes;
-        return this.AvailableVectorIndexes.filter(i => i.VectorDatabaseID === dbId);
+    /**
+     * The indexes the suggestion panel offers: those in the selected database built with the selected
+     * embedding model, so a chosen index can never store a different model than the one shown.
+     */
+    public get FilteredIndexesForSelectedDB(): VectorIndexOption[] {
+        return IndexesForSelection(this.AvailableVectorIndexes, this.SelectedVectorDBID, this.SelectedEmbeddingModelID);
     }
 
-    /** Indexes filtered by the edit panel's selected vector DB */
-    public get EditFilteredIndexes(): { ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string }[] {
-        if (!this.EditDocVectorDBID) return this.AvailableVectorIndexes;
-        return this.AvailableVectorIndexes.filter(i => i.VectorDatabaseID === this.EditDocVectorDBID);
+    /** The indexes the edit panel offers, matched to its database and embedding model the same way. */
+    public get EditFilteredIndexes(): VectorIndexOption[] {
+        return IndexesForSelection(this.AvailableVectorIndexes, this.EditDocVectorDBID, this.EditDocAIModelID);
+    }
+
+    /** Suggestion panel: picking an index moves the model and database dropdowns to its values. */
+    public OnSuggestVectorIndexChange(indexID: string): void {
+        this.applySuggestSelection(SelectIndex(this.suggestSelection, this.AvailableVectorIndexes, indexID));
+    }
+
+    /** Suggestion panel: a chosen index from another database goes back to Auto. */
+    public OnSuggestVectorDBChange(databaseID: string): void {
+        this.applySuggestSelection(SelectDatabase(this.suggestSelection, this.AvailableVectorIndexes, databaseID));
+    }
+
+    /** Suggestion panel: a chosen index built with another model goes back to Auto. */
+    public OnSuggestEmbeddingModelChange(embeddingModelID: string): void {
+        this.applySuggestSelection(SelectEmbeddingModel(this.suggestSelection, this.AvailableVectorIndexes, embeddingModelID));
+    }
+
+    /** Edit panel: picking an index moves the model and database dropdowns to its values. */
+    public OnEditVectorIndexChange(indexID: string): void {
+        this.applyEditSelection(SelectIndex(this.editSelection, this.AvailableVectorIndexes, indexID));
+    }
+
+    /** Edit panel: a chosen index from another database goes back to Auto. */
+    public OnEditVectorDBChange(databaseID: string): void {
+        this.applyEditSelection(SelectDatabase(this.editSelection, this.AvailableVectorIndexes, databaseID));
+    }
+
+    /** Edit panel: a chosen index built with another model goes back to Auto. */
+    public OnEditEmbeddingModelChange(embeddingModelID: string): void {
+        this.applyEditSelection(SelectEmbeddingModel(this.editSelection, this.AvailableVectorIndexes, embeddingModelID));
+    }
+
+    private get suggestSelection(): VectorStoreSelection {
+        return { EmbeddingModelID: this.SelectedEmbeddingModelID, VectorDatabaseID: this.SelectedVectorDBID, VectorIndexID: this.SelectedVectorIndexID };
+    }
+
+    private applySuggestSelection(selection: VectorStoreSelection): void {
+        this.SelectedEmbeddingModelID = selection.EmbeddingModelID;
+        this.SelectedVectorDBID = selection.VectorDatabaseID;
+        this.SelectedVectorIndexID = selection.VectorIndexID;
+    }
+
+    private get editSelection(): VectorStoreSelection {
+        return { EmbeddingModelID: this.EditDocAIModelID, VectorDatabaseID: this.EditDocVectorDBID, VectorIndexID: this.EditDocVectorIndexID };
+    }
+
+    private applyEditSelection(selection: VectorStoreSelection): void {
+        this.EditDocAIModelID = selection.EmbeddingModelID;
+        this.EditDocVectorDBID = selection.VectorDatabaseID;
+        this.EditDocVectorIndexID = selection.VectorIndexID;
     }
 
     /** Grouped entity list for the suggestion panel — schemas as groups, entities as items */
@@ -810,11 +878,19 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         let idleTimer: ReturnType<typeof setTimeout> | null = null;
         const activityID = this.activityService.Start('Vector sync', { icon: 'fa-solid fa-cubes', detail: entityName, progress: 0 });
 
-        const finishSync = (success: boolean) => {
+        /**
+         * 'success' and 'error' come only from the server's own complete / error events.
+         * 'unconfirmed' is a long silence (a dropped connection, say): the row is refreshed from the
+         * database, but nothing claims the run finished, because the server may still be working.
+         */
+        const finishSync = (outcome: 'success' | 'error' | 'unconfirmed') => {
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
+            const success = outcome !== 'error';
             this.activityService.Complete(activityID, success ? 'success' : 'error',
-                success ? `${entityName} vectorized` : `Failed for ${entityName}`);
+                outcome === 'success' ? `${entityName} vectorized`
+                    : outcome === 'error' ? `Failed for ${entityName}`
+                    : `${entityName}: no progress received`);
 
             // Use setTimeout to defer state changes to the next macrotask,
             // avoiding ExpressionChangedAfterItHasBeenCheckedError.
@@ -824,10 +900,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 try {
                     this.removeSyncingId(entityDocumentId);
 
-                    if (success) {
+                    if (outcome === 'success') {
                         MJNotificationService.Instance.CreateSimpleNotification(
                             `Vectorization complete for ${entityName}`,
                             'success', 3000
+                        );
+                        await this.refreshSyncRow(entityDocumentId);
+                    } else if (outcome === 'unconfirmed') {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `No progress received for ${entityName} in ${VectorManagementResourceComponent.SYNC_SILENCE_LIMIT_MS / 60000} minutes, ` +
+                            `so the result can't be confirmed. The vector count shown is what is stored now; refresh later to check.`,
+                            'warning', 8000
                         );
                         await this.refreshSyncRow(entityDocumentId);
                     } else {
@@ -847,15 +930,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             });
         };
 
-        // Reset idle timer on every event. When no events arrive for 5s,
-        // assume the pipeline is done (handles missing 'complete' event).
+        // Reset on every event. Silence is not success: the server reports progress in 5% steps,
+        // and with a remote embedding model one step can take far longer than a few seconds, so a
+        // short silence routinely reported "Synced" while most records were still being embedded.
         const resetIdleTimer = () => {
             if (idleTimer) clearTimeout(idleTimer);
             idleTimer = setTimeout(() => {
                 if (this.IsSyncing(entityDocumentId)) {
-                    finishSync(true);
+                    finishSync('unconfirmed');
                 }
-            }, 5000);
+            }, VectorManagementResourceComponent.SYNC_SILENCE_LIMIT_MS);
         };
 
         // Start the idle timer immediately in case no events ever arrive
@@ -874,9 +958,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 this.cdr.detectChanges();
 
                 if (stage === 'complete') {
-                    finishSync(true);
+                    finishSync('success');
                 } else if (stage === 'error') {
-                    finishSync(false);
+                    finishSync('error');
                 } else {
                     // Got a progress event — reset idle timer
                     resetIdleTimer();
@@ -884,7 +968,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             },
             error: (err: unknown) => {
                 console.error(`[VectorManagement] Pipeline subscription error:`, err);
-                finishSync(false);
+                finishSync('error');
             }
         });
     }
@@ -1154,6 +1238,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             // Populate required FK fields from existing data
             await this.populateEntityDocumentFKs(entityDoc);
 
+            // The panel shows the model's match thresholds; store them rather than leaving the defaults.
+            const thresholds = SuggestedMatchThresholds(
+                this.SuggestionResult.potentialMatchThreshold,
+                this.SuggestionResult.absoluteMatchThreshold
+            );
+            if (thresholds) {
+                entityDoc.PotentialMatchThreshold = thresholds.Potential;
+                entityDoc.AbsoluteMatchThreshold = thresholds.Absolute;
+            }
+
             const saved = await entityDoc.Save();
             if (saved) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -1261,8 +1355,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.vectorIndexes = [...AIEngineBase.Instance.VectorIndexes];
 
         // Build per-EntityDocument aggregate stats (vector count + last synced).
-        // Each query fetches only the most recent row (MaxRows: 1) and uses
-        // TotalRowCount for the actual vector count — avoids loading all rows.
+        // Each query fetches the two most recent rows and uses TotalRowCount for the
+        // vector count, which avoids loading all rows. MaxRows is 2, not 1: a full
+        // `MaxRows: 1` read skips the total count (#4450), so TotalRowCount would be 1.
+        // With 2, a full page triggers the count, and a short page is itself the total.
         // AI Models come from a different domain — fetched in the same batch.
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const erdQueries = this.entityDocuments.map(doc => ({
@@ -1271,7 +1367,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             ResultType: 'simple' as const,
             Fields: ['__mj_UpdatedAt'],
             OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 1,
+            MaxRows: 2,
             BypassCache: forceRefresh,
         }));
         const allQueries = [
@@ -1462,10 +1558,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             VectorDatabaseID: vi.VectorDatabaseID,
             EmbeddingModelID: vi.EmbeddingModelID
         }));
-        // Pre-select first index if available
-        if (this.AvailableVectorIndexes.length > 0 && !this.SelectedVectorIndexID) {
-            this.SelectedVectorIndexID = this.AvailableVectorIndexes[0].ID;
-        }
+        // No index is pre-selected: the first index is whatever happens to sort first (here, another
+        // feature's shared index), and a chosen index decides the database and model Save stores.
+        // Auto finds or creates the index for the database and model shown.
     }
 
     /** Find the best embedding model from loaded AI models */
@@ -1529,9 +1624,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // An explicitly chosen index fixes the DB + model. "Auto (create/find matching index)" resolves
         // (or creates) the index for the chosen DB + model, so the syncer always has a VectorIndexID:
         // it refuses to run without one, which made the Auto choice a dead end before.
-        const chosen = this.SelectedVectorIndexID
-            ? this.AvailableVectorIndexes.find(i => UUIDsEqual(i.ID, this.SelectedVectorIndexID))
-            : undefined;
+        // Only an index that matches the database and model shown counts as chosen, so the stored
+        // database and model are always the ones the dropdowns displayed.
+        const chosen = ChosenIndexForSave(this.suggestSelection, this.AvailableVectorIndexes);
         if (chosen) {
             entityDoc.VectorDatabaseID = chosen.VectorDatabaseID;
             entityDoc.AIModelID = chosen.EmbeddingModelID;
@@ -1599,7 +1694,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // a field the picker never offered. Refuse before anything is written — once values
         // reach the vector index they are retrievable by similarity search, outside the
         // entity permissions that guard the source column, and not fully reversible.
-        const sensitive = SensitiveFieldsInTemplate(templateText);
+        const sensitive = SensitiveFieldsInTemplate(templateText, this.vectorFieldPurpose(this.SuggestUseCase));
         if (sensitive.length > 0) {
             throw new Error(
                 `This template references ${sensitive.length === 1 ? 'a field' : 'fields'} that must not be ` +
@@ -1933,11 +2028,20 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         return prompt;
     }
 
+    /**
+     * What a document for this use case embeds its fields for. Only a duplicate-detection document
+     * may embed a date of birth (see sensitive-fields.ts).
+     */
+    private vectorFieldPurpose(useCase: string): VectorFieldPurpose {
+        return EntityDocumentTypeForUseCase(useCase) === 'Record Duplicate' ? 'duplicate-detection' : 'other';
+    }
+
     /** Build the data payload for the suggestion prompt */
     private buildPromptData(entity: EntityInfo, useCase: string): Record<string, unknown> {
         // LAYER 1 of the sensitive-field refusal: the model never sees these columns, so it
         // cannot suggest them. See sensitive-fields.ts for why this cannot live in the prompt.
-        const fields = WithoutSensitiveFields(entity.Fields).map(f => ({
+        const purpose = this.vectorFieldPurpose(useCase);
+        const fields = WithoutSensitiveFields(entity.Fields, purpose).map(f => ({
             Name: f.Name,
             Type: f.Type,
             IsPrimaryKey: f.IsPrimaryKey,
@@ -1955,7 +2059,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 const relatedEntity = md.Entities.find(e => e.Name === r.RelatedEntity);
                 // Layer 1 covers related entities too: their fields reach the model here.
                 const relFields = relatedEntity
-                    ? WithoutSensitiveFields(relatedEntity.Fields)
+                    ? WithoutSensitiveFields(relatedEntity.Fields, purpose)
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')
                         .map(f => f.Name)
                     : [];

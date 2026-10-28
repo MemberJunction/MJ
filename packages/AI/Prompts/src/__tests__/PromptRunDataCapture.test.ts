@@ -84,6 +84,17 @@ describe('BuildTemplateDataObjectShape', () => {
         expect(BuildTemplateDataObjectShape('abc')).toEqual(noKeys(5));
         expect(BuildTemplateDataObjectShape(10n)).toEqual(noKeys(-1));
     });
+    it('recomputes accurate byte length when a reused conversation array grows between turns', () => {
+        const conversationHistory: Array<{ role: string; content: string }> = [
+            { role: 'user', content: 'turn one' },
+        ];
+        const firstShape = BuildTemplateDataObjectShape({ conversationHistory });
+        conversationHistory.push({ role: 'assistant', content: 'turn two with more tokens' });
+        const secondShape = BuildTemplateDataObjectShape({ conversationHistory });
+
+        expect(secondShape.keys.conversationHistory).toBeGreaterThan(firstShape.keys.conversationHistory);
+        expect(secondShape.keys.conversationHistory).toBe(Buffer.byteLength(JSON.stringify(conversationHistory), 'utf8'));
+    });
 });
 
 describe('BuildStoredPromptRunMessages', () => {

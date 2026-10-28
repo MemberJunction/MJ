@@ -22,6 +22,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+    ObjectChangedAttributes,
     ObjectsWithWatermarkFieldChange,
     WATERMARK_INVALIDATING_ATTRIBUTES,
     decideSemanticOverlay,
@@ -165,11 +166,43 @@ describe('the persist layer RETURNS what it detects', () => {
         expect(SRC).toMatch(/changes\.push\('IncrementalWatermarkField'\)/);
     });
 
-    it('and hands that same array out as ChangedAttributes, instead of only logging it', () => {
-        expect(SRC).toMatch(/Updated: true, EffectiveSource: 'Declared', ChangedAttributes: changes/);
+    it('and hands it out as ChangedAttributes, instead of only logging it', () => {
+        // Built from that same array (and the declaration rebase) by ObjectChangedAttributes, below.
+        expect(SRC).toMatch(/ObjectChangedAttributes\(rebased, changes, watermarkBefore, existing\.IncrementalWatermarkField \?\? null\)/);
+        expect(SRC).toMatch(/EffectiveSource: 'Declared', ChangedAttributes: changedAttributes/);
     });
 
     it('carries it onto the per-object merge log the caller reads', () => {
         expect(SRC).toMatch(/ChangedAttributes: r\.ChangedAttributes/);
+    });
+});
+
+/**
+ * On a per-connection row the upsert first REBASES the row from its declaration (which can move the
+ * watermark column) and then overlays discovery (which can move it back). Both steps are logged, so
+ * the step list can show a watermark "change" that left the row exactly as it was, or record a real
+ * one only under its `rebased:` summary. ChangedAttributes nets it instead.
+ */
+describe('ObjectChangedAttributes — the watermark counts on its NET change', () => {
+    it('a declaration that moves the cursor column IS a change, so the stored cursor gets reset', () => {
+        const changed = ObjectChangedAttributes(['APIPath', 'IncrementalWatermarkField'], ['rebased:APIPath/IncrementalWatermarkField'], 'created_at', 'updated_at');
+        expect(changed).toContain('IncrementalWatermarkField');
+        expect(ObjectsWithWatermarkFieldChange([entry({ ObjectName: 'Invoice', Updated: true, ChangedAttributes: changed })])).toEqual(['Invoice']);
+    });
+
+    it('a rebase the overlay undoes is NOT a change, so a refresh does not re-fetch the object in full', () => {
+        // Declared says created_at, discovery keeps reporting updated_at: the rebase moves it, the overlay moves it back.
+        const changed = ObjectChangedAttributes(['IncrementalWatermarkField'], ['rebased:IncrementalWatermarkField', 'IncrementalWatermarkField'], 'updated_at', 'updated_at');
+        expect(changed).not.toContain('IncrementalWatermarkField');
+        expect(ObjectsWithWatermarkFieldChange([entry({ ObjectName: 'Invoice', Updated: true, ChangedAttributes: changed })])).toEqual([]);
+    });
+
+    it('a discovery-only cursor swap is still a change, exactly as on the shared catalog', () => {
+        expect(ObjectChangedAttributes([], ['IncrementalWatermarkField'], 'created_at', 'updated_at')).toEqual(['IncrementalWatermarkField']);
+    });
+
+    it('names the rebased columns themselves, not the `rebased:` summary', () => {
+        expect(ObjectChangedAttributes(['APIPath', 'DefaultPageSize'], ['rebased:APIPath/DefaultPageSize', 'Description'], 'id', 'id'))
+            .toEqual(['APIPath', 'DefaultPageSize', 'Description']);
     });
 });

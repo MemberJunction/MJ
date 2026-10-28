@@ -12,6 +12,7 @@ interface Row {
     UserID?: string;
     AgentID?: string;
     NewRecord: () => void;
+    MarkServerAuthoredReply: () => void;
     Save: () => Promise<boolean>;
     LatestResult?: { CompleteMessage: string };
 }
@@ -25,6 +26,7 @@ function makeProvider(saveResults: boolean[] = []) {
             const index = rows.length;
             const row: Row = {
                 NewRecord: () => {},
+                MarkServerAuthoredReply: vi.fn(),
                 Save: async () => saveResults[index] ?? true,
                 LatestResult: { CompleteMessage: 'denied' },
             };

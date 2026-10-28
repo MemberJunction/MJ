@@ -107,14 +107,19 @@ describe('ViewOperationsHandler.runView', () => {
     });
 
     describe('parameter sanitization', () => {
-        it('defaults ResultType to "simple" when unset and preserves an explicit one', async () => {
+        it('defaults ResultType to "simple" when unset, forces "simple" over "entity_object", and keeps "count_only"', async () => {
             const defaulted: RunViewParams = { EntityName: 'Customers' };
             await ViewOperationsHandler.runView(defaulted, makeUser());
             expect((mockRunViewFn.mock.calls[0][0] as RunViewParams).ResultType).toBe('simple');
 
+            // Entity objects cannot cross the wire: serializing one sends its internal state, not its fields.
             const explicit: RunViewParams = { EntityName: 'Customers', ResultType: 'entity_object' };
             await ViewOperationsHandler.runView(explicit, makeUser());
-            expect((mockRunViewFn.mock.calls[1][0] as RunViewParams).ResultType).toBe('entity_object');
+            expect((mockRunViewFn.mock.calls[1][0] as RunViewParams).ResultType).toBe('simple');
+
+            const countOnly: RunViewParams = { EntityName: 'Customers', ResultType: 'count_only' };
+            await ViewOperationsHandler.runView(countOnly, makeUser());
+            expect((mockRunViewFn.mock.calls[2][0] as RunViewParams).ResultType).toBe('count_only');
         });
 
         it('splits comma-separated Fields strings and coerces numeric strings for MaxRows/StartRow', async () => {

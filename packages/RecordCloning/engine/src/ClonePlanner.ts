@@ -63,7 +63,7 @@ interface CompositeKeyLike {
  * The mapper leaves them out, so a clone never copies a value its user couldn't see or set.
  */
 function fieldLevelDenials(entity: EntityInfo, user: UserInfo): { DeniedReadFields: string[]; DeniedCreateFields: string[] } | undefined {
-    if (!entity.EnableFieldLevelSecurity) return undefined;
+    if (!entity.FieldLevelSecurityApplies) return undefined;
     const deniedRead = entity.GetDeniedReadFields(user);
     const deniedCreate = entity.GetDeniedCreateFields(user);
     const names = (denied: Set<string>) => entity.Fields.filter((f) => denied.has(f.Name.toLowerCase())).map((f) => f.Name);

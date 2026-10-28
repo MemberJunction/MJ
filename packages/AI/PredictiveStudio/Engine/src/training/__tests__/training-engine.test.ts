@@ -5,19 +5,24 @@ import type {
   MJMLModelEntity,
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
-import type {
-  TrainRequest,
-  TrainResponse,
-  MatrixData,
-  FeatureStepGraph,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ValidationStrategy,
+import {
+  EvaluationLineage,
+  InvalidMajorityBaselineRuleError,
+  TrustVerdicts,
+  type TrainRequest,
+  type TrainResponse,
+  type MatrixData,
+  type FeatureStepGraph,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ValidationStrategy,
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training-engine';
+import { AsOfSettingHasNoEffectError } from '../as-of-refusal';
 import { InMemoryArtifactStore } from '../artifact-store';
+import { DEFAULT_SPLIT_SEED } from '../locked-holdout';
 import type {
   IEntityFactory,
   IRecordLoader,
@@ -199,12 +204,16 @@ class FakeSidecar implements ISidecarTrainer {
   }
 }
 
-/** In-memory feature data access backing the assembler (no DB). */
+/** In-memory feature data access backing the assembler (no DB); records every read so tests can check its ORDER BY. */
 class InMemoryDataAccess implements IFeatureDataAccess {
+  public readonly Reads: FetchRowsParams[] = [];
   constructor(private readonly rowsByEntity: Record<string, SourceRow[]>) {}
   async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
+    this.Reads.push(params);
     const rows = this.rowsByEntity[params.EntityName];
-    return rows ? { Success: true, Rows: rows } : { Success: false, Rows: [], ErrorMessage: `no fixture ${params.EntityName}` };
+    return rows
+      ? { Success: true, Rows: rows, TotalRowCount: rows.length }
+      : { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `no fixture ${params.EntityName}` };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;
@@ -231,14 +240,24 @@ const cleanResponse: TrainResponse = {
   fitted_preprocessing: { 'standardize.tenure': { mean: 5, std: 2.5 } },
   metrics: { auc: 0.82, f1: 0.78 },
   feature_importance: { tenure: 0.3, events_at_signup: 0.25, city: 0.2, emb_0: 0.25 },
+  feature_importance_kind: 'split_or_impurity',
   training_row_count: 8,
   duration_sec: 1.4,
   holdout_metrics: { auc: 0.79 },
+  validation_out_of_sample: true,
 };
 
+/**
+ * The provider slice training uses: `EntityByName` for the target's primary key (the training read is ordered by it).
+ * Handed to the engine through one deliberate test-double cast at the seam boundary.
+ */
+const fakeProvider = {
+  EntityByName: (name: string) => (name === 'Members' ? { PrimaryKeys: [{ Name: 'ID' }] } : undefined),
+} as unknown as IMetadataProvider;
+const fakeUser = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
+
 /** Build a TrainingEngine wired to an assembler over the given member rows. */
-function buildEngine(): TrainingEngine {
-  const dataAccess = new InMemoryDataAccess({ Members: syntheticMembers() });
+function buildEngine(dataAccess: InMemoryDataAccess = new InMemoryDataAccess({ Members: syntheticMembers() })): TrainingEngine {
   // Inject the data-access into the assembler by wrapping assemble defaults:
   // FeatureAssemblyExecutor reads dataAccess from params, so we pass it via a
   // subclass that always supplies our in-memory access.
@@ -265,7 +284,8 @@ function buildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeli
     recordLoader: new FakeRecordLoader(pipeline),
     sidecar,
     artifactStore: store,
-    contextUser: undefined,
+    contextUser: fakeUser,
+    provider: fakeProvider,
   };
   return { deps, factory, sidecar, store };
 }
@@ -321,7 +341,8 @@ describe('TrainingEngine.trainModel — happy path', () => {
     expect(req.problem_type).toBe('classification');
     expect(req.target).toBe('Renewed');
     expect(req.hyperparameters).toEqual({ max_depth: 4 });
-    expect(req.validation).toEqual({ strategy: 'train_test_split', test_size: 0.2, k: undefined });
+    // The split seed is sent explicitly so the sidecar's splits share the locked-holdout carve's seed.
+    expect(req.validation).toEqual({ strategy: 'train_test_split', test_size: 0.2, k: undefined, random_state: DEFAULT_SPLIT_SEED });
     // preprocessing ops carried through (impute/standardize/onehot)
     expect(req.preprocessing).toEqual([
       { op: 'impute', col: 'tenure', strategy: 'mean', fillValue: undefined },
@@ -349,16 +370,16 @@ describe('TrainingEngine.trainModel — locked holdout (§8.2)', () => {
     const holdoutRows = sidecar.LastHoldout!.rows;
     expect(trainRows.length + holdoutRows.length).toBe(10);
 
-    // The holdout rows are the trailing slice and are DISJOINT from training:
-    // synthetic `tenure` is 1..10 in row order, so training holds 1..8 and the
-    // locked holdout holds 9..10 — no overlap (the holdout never leaks into train).
+    // The holdout rows are DISJOINT from training (synthetic `tenure` is unique per row) — the holdout never leaks
+    // into train — and the seeded stratified carve keeps both Renewed classes in the 2-row holdout.
     const trainTenures = new Set(trainRows.map((r) => r[0]));
     for (const hr of holdoutRows) {
       expect(trainTenures.has(hr[0])).toBe(false);
     }
     expect(trainRows.length).toBe(8);
     expect(holdoutRows.length).toBe(2);
-    expect(holdoutRows.map((r) => Number(r[0])).sort((a, b) => a - b)).toEqual([9, 10]); // trailing rows
+    const renewedIdx = sidecar.LastHoldout!.columns.indexOf('Renewed');
+    expect(new Set(holdoutRows.map((r) => r[renewedIdx]))).toEqual(new Set([0, 1]));
 
     // HoldoutMetrics scored exactly once (from the single sidecar response).
     expect(JSON.parse(model.HoldoutMetrics!)).toEqual({ auc: 0.79 });
@@ -414,5 +435,129 @@ describe('TrainingEngine.trainModel — experiment session iteration linkage (§
     const { deps, factory } = buildDeps();
     await engine.trainModel({ pipelineId: 'pipe-1', experimentSessionIterationId: 'iter-7' }, deps);
     expect(factory.Runs[0].ExperimentSessionIterationID).toBe('iter-7');
+  });
+});
+
+describe('TrainingEngine.trainModel — as-of settings that change nothing are refused (W4 → S2.1, F-PIT-3)', () => {
+  const ignored: ReadonlyArray<AsOfStrategy> = [{ Mode: 'column', Column: 'StartDate' }, { Mode: 'offset', OffsetDays: 30 }];
+  for (const asOf of ignored) {
+    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' before any row is written`, async () => {
+      const pipeline = new FakeMLPipeline();
+      pipeline.AsOfStrategy = JSON.stringify(asOf);
+      const { deps, factory, sidecar } = buildDeps({ pipeline });
+      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(AsOfSettingHasNoEffectError);
+      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toMatchObject({ Source: 'pipeline', Mode: asOf.Mode });
+      expect(factory.Runs).toHaveLength(0);
+      expect(factory.Models).toHaveLength(0);
+      expect(sidecar.LastRequest).toBeNull();
+    });
+  }
+
+  it('names the setting to change: the pipeline for a pipeline refusal, the Train input for a train-input refusal', () => {
+    expect(new AsOfSettingHasNoEffectError('pipeline', 'column', 'p1').message).toMatch(/Set the pipeline's AsOfStrategy to \{"Mode":"none"\} \(pipeline p1\)\.$/);
+    const trainInput = new AsOfSettingHasNoEffectError('train-input', 'column', 'p1').message;
+    expect(trainInput).toMatch(/Remove the asOf input from the Train request \(pipeline p1\)\.$/);
+    expect(trainInput).not.toContain("Set the pipeline's AsOfStrategy");
+  });
+
+  it("still trains Mode='none'", async () => {
+    const { deps } = buildDeps();
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(model.Status).toBe('Draft');
+  });
+
+  it("trains a stored AsOfStrategy of {} as Mode='none'", async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.AsOfStrategy = '{}';
+    const { deps } = buildDeps({ pipeline });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(model.Status).toBe('Draft');
+    expect(JSON.parse(model.Lineage!).asOfStrategy).toEqual({ Mode: 'none' });
+  });
+});
+
+describe('TrainingEngine — evaluation record and the time-index containment (T4 → S6.5, F-SCN-1)', () => {
+  it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
+    const { deps } = buildDeps();
+    const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: 'split_or_impurity' });
+    expect(run.Notes).not.toContain('Trust withheld');
+  });
+
+  it("records the pipeline's majority-baseline rule in Lineage.evaluation (D2-C5d)", async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' });
+    const { deps } = buildDeps({ pipeline });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)?.MajorityBaselineRule).toBe('warn');
+  });
+
+  it('refuses an unknown majority-baseline rule before any row is written', async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'off' });
+    const { deps, factory, sidecar } = buildDeps({ pipeline });
+    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(InvalidMajorityBaselineRuleError);
+    expect(factory.Runs).toHaveLength(0);
+    expect(factory.Models).toHaveLength(0);
+    expect(sidecar.LastRequest).toBeNull();
+  });
+
+  it('withholds trust for a pipeline that declares a time index, and stores the reason on the model and the run', async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
+    const { deps } = buildDeps({ pipeline });
+    const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
+    expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
+    expect(TrustVerdicts.DeriveTrustVerdict(model)).toMatchObject({ grade: 'Poor', canAct: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast });
+  });
+
+  it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {
+    const legacySidecarResponse: TrainResponse = { ...cleanResponse, validation_out_of_sample: undefined };
+    const { deps } = buildDeps({ response: legacySidecarResponse });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)?.ValidationOutOfSample).toBe(false);
+  });
+});
+
+describe('TrainingEngine — deterministic training read and locked holdout (I1)', () => {
+  it("orders the target read by the entity's primary key, with or without maxRows", async () => {
+    for (const maxRows of [undefined, 1000]) {
+      const dataAccess = new InMemoryDataAccess({ Members: syntheticMembers() });
+      const { deps } = buildDeps();
+      await buildEngine(dataAccess).trainModel({ pipelineId: 'pipe-1', maxRows }, deps);
+      expect(dataAccess.Reads[0]).toMatchObject({ EntityName: 'Members', OrderBy: 'ID', MaxRows: maxRows });
+    }
+  });
+
+  it('refuses before reading when the target entity has no primary key in metadata', async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.TargetEntity = 'Unknown Entity';
+    const { deps } = buildDeps({ pipeline });
+    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/no primary key/);
+  });
+
+  it('holds out the same rows on every run of the same data', async () => {
+    const first = buildDeps();
+    const second = buildDeps();
+    await buildEngine().trainModel({ pipelineId: 'pipe-1' }, first.deps);
+    await buildEngine().trainModel({ pipelineId: 'pipe-1' }, second.deps);
+    expect(second.sidecar.LastHoldout!.rows).toEqual(first.sidecar.LastHoldout!.rows);
+  });
+
+  it('writes the locked holdout class counts into the model Lineage next to lockedHoldoutRowCount', async () => {
+    const { deps } = buildDeps();
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    const lineage = JSON.parse(model.Lineage!);
+    expect(lineage.lockedHoldoutRowCount).toBe(2);
+    expect(lineage.lockedHoldoutClassCounts).toEqual({ '0': 1, '1': 1 });
+  });
+
+  it('writes empty locked holdout class counts for a regression model', async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ProblemType = 'regression';
+    const { deps } = buildDeps({ pipeline });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(JSON.parse(model.Lineage!).lockedHoldoutClassCounts).toEqual({});
   });
 });

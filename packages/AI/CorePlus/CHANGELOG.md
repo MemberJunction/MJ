@@ -1,5 +1,193 @@
 # @memberjunction/ai-core-plus
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 5b41d48: fix: the SQL a prompt is asked to write, and the connection its result is re-executed on, are both chosen from `provider.PlatformKey`
+
+  MemberJunction assumed SQL Server wherever an agent touched SQL. Two faces of the same problem, fixed together.
+
+  **The prompts taught T-SQL unconditionally.** `sql-query-writer` opened with "you are the world's greatest expert in Microsoft SQL Server and T-SQL"; the shipped query-generation prompts taught `ISNULL`, `DATEADD`, `GETDATE` and `[bracketed]` identifiers with no dialect token anywhere under `metadata/prompts`. A PostgreSQL tenant's agent burned LLM turns writing T-SQL, failing, retrying and failing again.
+
+  The dialect now reaches templates as a **system placeholder**, not a registry of TemplateIDs: `_SQL_DIALECT`, `_SQL_DIALECT_NAME` and `_SQL_DIALECT_RULES` resolve on every prompt render from the request's own provider (falling back to `Metadata.Provider`, then to SQL Server). Any template that references them is parameterised — nothing has to be registered, so a template added later cannot be left off a list. `_SQL_DIALECT_RULES` is composed by `SQLDialect.PromptGuidance` from the dialect's own primitives (`QuoteIdentifier`, `LimitClause`, `IsNull`, `DateAddExpression`, `NewUUID`, …), so implementing a dialect is sufficient to get correct guidance — there is no second per-dialect prose table to maintain.
+
+  **The ad-hoc read-only path reached for an mssql pool.** `AdhocQueryResolver.ExecuteAdhocQuery` required a SQL Server `ConnectionPool` from `context.dataSources` before it would run anything. A PostgreSQL provider never populates one, so every ad-hoc query on PG returned "No read-only data source available for ad-hoc query execution" — rendered downstream as "Showing cached data" — even though the `GetReadOnlyProvider` call directly beneath it already knew the tenant was PostgreSQL. Both questions (which dialect to render, and what to execute on) now come from the same read-only provider, and execution goes through `provider.ExecuteSQL`, which every platform implements.
+
+  Also fixed: `Run Ad-hoc Query` resolved `{{query:"..."}}` composition macros against a hardcoded `'sqlserver'`, and `QueryBuilderAgent` re-formatted every tenant's SQL with `sql-formatter`'s `tsql` language.
+
+  **The SQL safety allowlists were T-SQL vocabularies.** `ALLOWED_SQL_FUNCTIONS` (`@memberjunction/global`) and `ALLOWED_SQL_KEYWORDS` (`@memberjunction/core`) listed only SQL Server's read-only names, so an ordinary PostgreSQL expression was refused before it ever reached a database that would have run it: `DATE_TRUNC('month', CreatedAt)` came back as "Function 'DATE_TRUNC' is not allowed", and `ARRAY_AGG(Name)` failed both the function allowlist and the "an aggregate context must contain an aggregate" rule. Both lists now carry the UNION of the supported dialects' read-only vocabulary — deliberately, and documented in the code: these are deny-by-default SAFETY screens, not dialect grammars, and a PostgreSQL name that reaches a SQL Server tenant is rejected by the SQL Server parser on its own. Nothing that writes, escalates, or reaches outside the statement was added, and `DANGEROUS_SQL_KEYWORDS` is still checked first, so a name on the allowlist can never unblock one that is denied.
+
+  **The row cap's safety net still emitted `TOP`.** `ensureRowLimit`'s AST path (`QueryPagingEngine.WrapWithMaxRows`) was already dialect-aware, but the `catch` arm beneath it rewrote `SELECT` to `SELECT TOP n` unconditionally. That arm is reached precisely when the AST path could not understand the SQL — so on a PostgreSQL tenant a query that merely confused the parser came back as SQL that could not parse at all. The fallback now asks the same `resolvePlatform()` seam as the rest of the action, appends `LIMIT n` on PostgreSQL, and treats an existing `LIMIT` as already capped.
+
+  New in `@memberjunction/core`: `ResolvePlatformKey`, `DEFAULT_DATABASE_PLATFORM`, `DescribeSQLDialectForPrompt`, `DescribeSQLDialectName`, `ResolveSQLFormatterLanguage`. New in `@memberjunction/sql-dialect`: `SQLDialect.DisplayName`, `SQLDialect.FormatterLanguage`, `SQLDialect.PromptGuidance`, `IsSupportedPlatform`, `SupportedPlatforms`.
+
+  Behaviour on SQL Server tenants is unchanged: every fallback resolves to `sqlserver`, the historical default.
+
+### Patch Changes
+
+- 622f166: An agent run can fix some of an action's input parameters so the model can neither see nor change them (`ExecuteAgentParams.boundActionParams`, A16 of #4789).
+  - **`boundActionParams`** is `Record<actionID, Record<parameterName, value>>`. A bound parameter is left out of the action's description in the prompt catalog (including a narrowed catalog), out of its native tool schema, out of the result echoed to the model, out of the model-facing invocation record, and out of what Find Candidate Actions / Find Best Action report (they read the bindings from the action `Context` as `BoundActionParams`). At dispatch the bound value replaces whatever the model (or a Flow step's input mapping) sent under that name; the override is logged with the run and step IDs, and the model's value is never passed on. Bindings reach every sub-agent run and the realtime delegation target, as `actionChanges` do.
+  - **Refusals.** A required parameter bound to `null`/`undefined`, or a binding that names no input parameter of the action, refuses the call before it reaches the engine: the reason is logged for the operator, the model is told only that the action is unavailable, and the action is locked out for the rest of the run like a fatal configuration failure (the circuit breaker short-circuits later calls). A binding keyed by anything other than a known Action ID fails the run at its start. An optional parameter bound to nothing is hidden and the action receives no value for it.
+  - **Fail closed.** A run with bindings has task graphs withheld (`enableTaskGraphs` is ignored and a graph the model emits anyway fails the step), because a graph's action nodes are dispatched outside the agent's binding gate.
+  - **Audit.** `ActionParam` gains an optional `Bound` marker that the action execution log's `Params` keeps (through redaction too), and the agent run step's `InputData` lists the bound names.
+  - **Nothing changes without bindings:** the catalog, the tool schema, the dispatched parameters and the action context are byte-for-byte what they were. `ExecuteSingleActionOptions.StepID` is new and optional.
+  - **Limits, documented on the field:** a run stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another (`lastRunId`, including a resume from a stored request) applies them when its caller passes none (`actionChanges` are not persisted, so a resumed run starts without them); the realtime client-direct action path and the `Execute Agent` action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that refuses them) dispatch without forwarding `boundActionParams`; an action's own message text may mention a bound value.
+  - Two deterministic integration checks (`agent-loop-standin` ALS12, ALS13) cover the dispatched bound value with its `Bound` log marker and the refusal lockout.
+
+  New exports from `@memberjunction/ai-agents`: `BindingsForAction`, `UnboundParams`, `IsBoundParamName`, `ApplyBoundActionParams`, `BoundParamsApplication`, `ActionBindings`. New type in `@memberjunction/ai-core-plus`: `BoundActionParams`.
+
+- a65dfb8: `FailoverMaxAttempts` was read into `failoverConfig.maxAttempts` and then consulted by nobody — its only readers have no callers — so `executeModelWithFailover` walked the FULL priority-ordered candidate list, which for a prompt without `RequireSpecificModels` is every active model of the prompt's type crossed with every active inference vendor (317 entries on a stock tenant), with `executeWithValidationRetries` wrapping the whole walk in `MaxRetries + 1` passes. The cap is now applied where calls are issued: it counts only requests a provider actually saw, so a keyless tail costs nothing, and a non-positive configured value is treated as unconfigured rather than as "no calls allowed".
+
+  The failover budget bounds what a prompt SPENDS, not who it asks. A priority-ordered candidate list is usually the same driver class repeated across vendors and models, so three attempts are three requests to one upstream having one bad minute, and the prompt fails without any other provider being asked. That is the ordinary shape on a tenant fronted by a single metered provider, not an edge case.
+
+  When every attempt so far went to ONE driver class, the walk now continues **without spending** — same-class candidates are skipped, not called — until the first credentialed candidate on a different class, and allows exactly one call there. The extra call adds its own class to the attempted set, so `size === 1` is false at every later candidate: the ceiling is `FailoverMaxAttempts + 1` and never more, the scan issues no requests of its own, the credential skip still applies (a keyless provider is never called to satisfy the rule), and `lastError` semantics are unchanged. A walk that already spread across several providers is unaffected.
+
+  The "no suitable model found" message now names the distinct driver classes behind the candidate list and which of them hold credentials, so a failure reads `101 candidates over 1 driver class (OpenRouterLLM); credentialed: none` instead of a bare candidate count that reads like a misconfigured chain. Candidates the short-circuit never probed are reported as such, so `credentialed: none` is not over-read. `AIModelSelectionInfo.modelsConsidered[]` gains an optional `driverClass`, also persisted in `AIPromptRun.ModelSelection`; the message is unchanged for callers that record none.
+
+  The message builder moved out of `AIPromptRunner` into `no-model-found-message.ts`. As a private method its only coverage was a re-implementation of it inside the test file, which asserted against its own copy — those tests now import the production function.
+
+- 1141164: Native tool calling: run the Loop agent as a provider-native tool loop.
+  - **History ordering.** A generic Retry on a native tool-call turn answers each call with an `is_error` tool result carrying the reason instead of a "Retrying due to" user message, and `reconcileUnansweredToolCalls` inserts its synthetic results directly after the call turn. Anthropic and OpenAI rejected the old call → user message → result order with a 400.
+  - **Replayed thinking stays valid on Claude 5.x.** A native run on a driver whose replayed reasoning needs the history before it unchanged (`BaseLLM.ReplayedReasoningRequiresStablePrefix`, true for Anthropic) keeps its runtime-state fragments (append-only), so a thinking block is never replayed behind a history that dropped the fragment it was made with. When an earlier message is rewritten anyway (expiry, compaction, message expansion, context recovery), the reasoning of every call turn after it is dropped instead of replayed; when the system prompt or tools change (a skill activating mid-run), the prompt runner sends the request without replayed reasoning (`AIPromptParams.ReplayedReasoningPrefix`, `GetSentPrefixFingerprint`). A compacted message is not compacted again on later turns. An expired native tool turn is compacted in its action's own mode, AI summary included.
+  - **Thinking across tool turns.** `ChatMessage.reasoning` / `ChatCompletionMessage.reasoning` carry provider reasoning blocks. Anthropic captures every `thinking` (with signature) and `redacted_thinking` block, replays them ahead of the `tool_use` blocks, and sends the interleaved-thinking beta for budget-form thinking with tools. Gemini keeps thought parts and signed text parts and replays them in order. The Loop agent carries reasoning onto the replayed call turn.
+  - **Per-agent native control** in `TypeConfiguration.NativeControl`: turn off `payload_change_request` or `ask_user`, end the run in plain text (`Terminal: 'text'`, final turn `toolChoice: 'none'`), declare `complete_task.payloadChangeRequest` as an object, opt into the tools-only prompt (`NativeOnly`) and into compaction of older tool-call arguments (`CompactToolArguments`).
+  - **Agent-local tools.** `BaseAgent.GetAgentTools` declares tools that read and write the agent's own state. Calls run in order as `Tool` run steps, their `PayloadChange` is applied through PayloadManager under `PayloadSelfWritePaths`, and errors return as `is_error` results.
+  - **One control plane (opt-in).** Under `NativeOnly` the Loop system prompt teaches tools only, and the scratchpad, durable memory, artifact tools, conversation-history tools and decisions are native tools answered on the same turn. Envelope and hybrid prompts render byte-identically to before.
+  - **Turn shapes.** By default each control call is alone on its turn, as before; the agent's own tools ride along with Actions or a delegation. `NativeControl.RelaxedTurnShapes` opts in to mixed turns: several `payload_change_request` calls apply in order, writes then `ask_user` or `complete_task` finish on that turn (a failed write declines them), and a delegation, `ask_user` or `complete_task` beside Actions is answered as not run, to be made again once the Actions' results are read. A `complete_task` refused by validation, unmet minimum executions or a self-check is answered with the feedback, as an error. A Retry never answers a call twice, and every result for a call turn travels in the one tool turn after it. `parallelToolCalls` is left to each provider's default. A failed Action's guidance rides in its own `is_error` result, and `uncrushedActions` exempts named Actions from result crushing.
+  - **Corrective retries match the agent.** The unknown-tool, unreadable-JSON and rejected-call retries name `complete_task` only when it is declared, the envelope only when the agent has one, and only the tools the turn's request carried. Framework tools do not dispatch on a hybrid turn, and the loop reads a turn's tool-calling mode from the chat result.
+  - **Prompt runs record their tool-calling path reliably.** `AIPromptRun.ToolCallingMode` is set inside the run's finalize step, so a model call that returns before the run's initial INSERT completes no longer loses it to the INSERT's reload (it was persisted as NULL, on the prompt run and on the agent run step that copies it).
+  - **Fallback and providers.** The native-to-envelope fallback triggers on a 400/422 or any error not clearly about something else (rate limit, authentication, cancellation, context length) whose text names the tools payload; tool turns encoded as text keep their calls; failover re-renders the prompt and its child prompts when it changes the tool-calling path, on the parallel path too, keeps the original text if the re-render fails, and records what was sent on the prompt run; the tools-stripped retry is sent the envelope prompt; a Strict validation retry never discards a tool-call turn. Gemini `UNEXPECTED_TOOL_CALL` and unparseable OpenAI-compatible arguments are reported as rejected calls with what the model sent, except on a request that declared no tools, and a signature on an empty text part is kept. Gemini now returns every visible text part of a reply, not only the first. OpenAI-compatible `null` arguments read as an empty argument set. Anthropic folds a user message that follows tool results into their turn instead of adding an assistant "OK" (which ended the tool loop and dropped its thinking), turns budget-form thinking off, with a warning, for a request whose open tool loop has no thinking to replay, honours `enableCaching: false`, and puts a cache breakpoint on a request ending in a tool turn.
+
+- 5931f0d: Only the server writes an agent's reply (A19, second half). In `MJ: Conversation Details`, a reply (`Role` `AI` or
+  `Error`, compared trimmed and in any case) is created, and what it says changed (`Message`, `Status`, `Error`, the
+  response form and commands, `AgentID`, attachments and the other authored fields), only on an entity instance server
+  code has marked with `MJConversationDetailEntityExtended.MarkServerAuthoredReply()`. The marker is not a field, so no
+  GraphQL input, `OldValues___` or transaction variable can set it; a person's save of a reply is refused, and so is an
+  unmarked save as the system user. A marked write still needs its user to own the conversation or hold a grant on it.
+  The owner's rating, pinning, hiding and other bookkeeping keep the conversation-level rules.
+
+  **Breaking API changes:**
+  - `RunAIAgentFromConversationDetail` takes `userMessageId` (the person's saved message) in place of
+    `conversationDetailId` (a reply row the caller created). The server creates the reply row (`ParentID` the user's
+    message) before the run and names it in the fire-and-forget acknowledgement, `result` =
+    `{ accepted, fireAndForget, conversationDetailId, createdAt }`; every progress, streaming and partial-result message
+    now carries `conversationDetailId` too. Three optional arguments say where the reply sits: `replyParentId` (a message
+    of the same conversation the caller can read; checked by the server), `announcedByAgentId` (an active agent whose
+    fixed line "Continuing with **{agent}** for refinement..." the server posts first; the ack then names it as
+    `announcementDetailId`), and `replyBranchId` (a fork of the conversation whose path contains the user's message, used
+    when Regenerate or a forked turn runs on a newly created branch while the user's message remains on its original
+    branch). `GraphQLAIClient.RunAIAgentFromConversationDetail` takes `userMessageId`, `onAccepted`, and optional
+    `replyParentId` / `announcedByAgentId` / `replyBranchId`; `AgentClientSession.RunAgentFromConversationDetail` takes
+    `UserMessageId`, `OnAccepted`, and optional `ReplyParentId` / `AnnouncedByAgentId` / `ReplyBranchId`
+    (`RunAgentParams.ConversationDetailId` is now `UserMessageId`); `ConversationAgentRunner.ProcessMessage` drops
+    `conversationDetailId` for `onReplyAccepted` and optional `ReplyBranchID`. `AgentRunner.CreateAgentReplyDetail()`
+    creates a reply row and `RunAgentInConversation` takes it as `agentResponseDetail`. `FireAndForgetHelper` gains an
+    opt-in `deferMessagesUntilAck`.
+  - `RunAIAgent` and `RunAIAgentSystemUser` with a caller-supplied `conversationDetailId` no longer write progress or
+    results into that row: `AgentRunner` only marks reply rows it creates itself, so a write into a caller-named detail ID
+    is refused by the gate with `"Only the server writes an agent's reply."` Callers that want a server-written
+    conversation reply must use `RunAIAgentFromConversationDetail` with `userMessageId` (or, in server code, pass a
+    server-created row via `AgentRunner.CreateAgentReplyDetail()` / `agentResponseDetail`).
+  - `TaskContinuationParams.SubmittedByUserID` (`string | null`) in `@memberjunction/task-graph` is now a **required**
+    member on `TaskContinuationParams`, carrying the user who submitted the task graph so continuation delivery writes as
+    the submitter rather than the conversation's owner.
+
+  MJ's chat no longer creates or saves reply rows: it shows an unsaved "Starting…" placeholder until the
+  acknowledgement, keys the turn's task and completion by the acknowledged ID, starts the reply's timer at the row's
+  server creation time, and reloads the reply the server wrote. A delegate's reply still threads under the manager's
+  reply, and the manager's "Continuing with X for refinement..." line still shows, both now written by the server; a
+  failed reply is shown with the chat's usual `❌ **{agent}** failed` header, formatted when it renders. A delegate's
+  failed first attempt is hidden when its retry takes over. `TaskGraph.Submit` takes an optional `postStatusMessage`:
+  the server then writes the workflow's status bubble under the given reply (only facts it knows: the task count and
+  whether the submission was accepted, never the spec's name or reasoning), binds the graph to it, and returns its ID as
+  `statusConversationDetailID`; MJ's chat uses it in place of its own status row. The realtime
+  session's transcript, tool and anchor rows, the task-graph outcome (now written as the **submitter**, `SubmittedByUserID`,
+  because `TaskGraph.Submit` accepts any conversation detail ID and writing as the conversation owner would let an Edit
+  grantee or non-owner post as the owner; a graph with no resolvable submitter is refused by the conversation gate and
+  logged), the orphaned-reply reconciler, bridge transcripts and realtime agent transcripts all write as marked server
+  code. The web widget and the mobile app stop creating reply rows.
+
+  ### Migration Guide
+  1. **Client conversation turns (`RunAIAgentFromConversationDetail` / `RunAgentFromConversationDetail`):** Stop
+     pre-creating `Role = 'AI'` / `'Error'` `MJ: Conversation Details` rows (which `Validate()` now refuses unless
+     authored on the server with `MarkServerAuthoredReply()`) and pass the saved `Role = 'User'` message ID instead:
+
+  ```ts
+  // Before
+  const aiReply = await md.GetEntityObject<MJConversationDetailEntity>(
+    "MJ: Conversation Details",
+  );
+  aiReply.ConversationID = conversationId;
+  aiReply.ParentID = userMessage.ID;
+  aiReply.Role = "AI";
+  aiReply.Status = "In-Progress";
+  await aiReply.Save();
+
+  const result = await session.RunAgentFromConversationDetail({
+    ConversationDetailId: aiReply.ID,
+    AgentId: agentId,
+  });
+
+  // After
+  const result = await session.RunAgentFromConversationDetail({
+    UserMessageId: userMessage.ID,
+    AgentId: agentId,
+    OnAccepted: ({ ConversationDetailId, CreatedAt }) => {
+      // Key streaming progress and completion tracking by ConversationDetailId
+    },
+  });
+  ```
+
+  2. **`RunAIAgent` / `RunAIAgentSystemUser` callers passing `conversationDetailId`:** Passing a caller-supplied
+     `conversationDetailId` to `RunAIAgent` or `RunAIAgentSystemUser` no longer writes progress or results into that row
+     (refused with `"Only the server writes an agent's reply."`). Use `RunAIAgentFromConversationDetail` with
+     `userMessageId` for client-initiated conversation replies, or in server-side code create the reply with
+     `AgentRunner.CreateAgentReplyDetail()` and pass it as `agentResponseDetail` to `RunAgentInConversation`.
+  3. **Custom `ITaskContinuationDeliverer` / `TaskContinuationParams` callers (`@memberjunction/task-graph`):** Include the
+     required `SubmittedByUserID: string | null` field when constructing `TaskContinuationParams`:
+
+  ```ts
+  const continuationParams: TaskContinuationParams = {
+    // ...existing fields
+    SubmittedByUserID: currentUser.ID,
+  };
+  ```
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/actions-base@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/templates-base-types@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes

@@ -12,6 +12,7 @@ import type { ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 import { ResolveMovedNavItem } from './moved-nav-items';
 import { RecordTabShowsRecord } from './record-delete';
+import { ExtractPrimaryKeyDisplayValue, FormatEntityRecordDisplayTitle, IsRawUUIDString } from './record-tab-title';
 
 /**
  * Event emitted when query params change on a tab (e.g., from browser back/forward).
@@ -588,7 +589,13 @@ export class NavigationService implements OnDestroy {
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
     const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
     const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
-    const initialTitle = cachedRecordName || friendlyEntityName;
+    const keySource = compositeKey?.KeyValuePairs?.length ? compositeKey : recordId;
+    const extractedKey = ExtractPrimaryKeyDisplayValue(keySource);
+    const initialTitle = cachedRecordName
+      ? FormatEntityRecordDisplayTitle(entityInfo, entityName, keySource, cachedRecordName)
+      : IsRawUUIDString(extractedKey)
+        ? FormatEntityRecordDisplayTitle(entityInfo, entityName, keySource, null)
+        : friendlyEntityName;
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -625,8 +632,13 @@ export class NavigationService implements OnDestroy {
     if (!cachedRecordName && typeof md?.GetEntityRecordName === 'function') {
       md.GetEntityRecordName(entityName, compositeKey)
         .then(resolvedName => {
-          if (resolvedName && typeof this.workspaceManager?.GetTab === 'function' && this.workspaceManager.GetTab(tabId)) {
-            this.workspaceManager.UpdateTabTitle?.(tabId, resolvedName);
+          const formattedTitle = resolvedName
+            ? FormatEntityRecordDisplayTitle(entityInfo, entityName, keySource, resolvedName)
+            : IsRawUUIDString(extractedKey)
+              ? FormatEntityRecordDisplayTitle(entityInfo, entityName, keySource, null)
+              : '';
+          if (formattedTitle && typeof this.workspaceManager?.GetTab === 'function' && this.workspaceManager.GetTab(tabId)) {
+            this.workspaceManager.UpdateTabTitle?.(tabId, formattedTitle);
           }
         })
         .catch(() => {
@@ -1148,6 +1160,7 @@ export class NavigationService implements OnDestroy {
         resourceType: 'MJ: User Views',
         Entity: entityName,
         ExtraFilter: extraFilter,
+        AlternateBaseView: options?.alternateBaseView ?? undefined,
         isDynamic: true,
         recordId: 'dynamic'  // Special marker for dynamic views
       },
