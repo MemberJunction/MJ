@@ -30,7 +30,7 @@ Selected = tuple[SN.Snapshot, TR.EncodedLabel, IntArr, IntArr, TR.SelectionOutco
 def _select(req: TrainerRequest) -> Selected:
     """Load the request's snapshot and run the selection stage: (snapshot, encoded label, development rows, holdout
     rows, selection outcome)."""
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, RunClock(600, 600))
     enc = TR.encode_label(req.task, snap.label)
     roles = np.array(snap.roles)
     dev = np.flatnonzero(roles == "development").astype(np.int64)

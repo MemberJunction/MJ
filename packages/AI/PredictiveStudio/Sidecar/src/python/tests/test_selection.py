@@ -70,7 +70,7 @@ def test_one_se_rule_prefers_earliest_within_one_se() -> None:
 
 def test_select_finalist_runs_on_development_rows_only(server: FileServer) -> None:
     req = _req(server, binary_frame())
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, RunClock(600, 600))
     dev = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
     out = _select(req, snap)
     assert set(out.cv) == {"glm_candidate", "lgbm", "xgb"}
@@ -98,7 +98,7 @@ def test_a_primary_score_without_a_proper_definition_is_refused(metric: str, pow
 
 def _folds_for(server: FileServer, inner: JsonObject) -> tuple[SN.Snapshot, TR.IntArr, list[F.Fold]]:
     req = _req(server, binary_frame(), innerValidation=inner)
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, RunClock(600, 600))
     enc = TR.encode_label(req.task, snap.label)
     dev = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
     return snap, dev, TR.build_folds(req.protocol, snap, dev, enc, SN.period_ordinals(snap))
@@ -127,7 +127,7 @@ def test_grouped_kfold_keeps_each_unit_on_one_side(server: FileServer) -> None:
 
 def test_repeated_kfold_on_a_continuous_target_is_unstratified(server: FileServer) -> None:
     req = _req(server, binary_frame(), innerValidation={"kind": "repeated-stratified-kfold", "folds": 5, "repeats": 2})
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, RunClock(600, 600))
     dev = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
     y = np.random.default_rng(1).normal(size=len(snap.roles))
     enc = TR.EncodedLabel(y, "continuous", None, None)
@@ -155,7 +155,7 @@ def _glm_forest_outcome(server: FileServer, df: pd.DataFrame, holdout: list[str]
     m, n = snapshot_files(df, FEATS, holdout, label_map={0: "no", 1: "yes"})
     req = TrainerRequest.model_validate(request(server, m, n, TASK, protocol("binary"), candidates("binary", GLM_AND_FOREST),
                                                 tag=tag))
-    return _select(req, SN.load(req, NOW))
+    return _select(req, SN.load(req, NOW, RunClock(600, 600)))
 
 
 def test_locked_holdout_rows_never_reach_selection(server: FileServer) -> None:
@@ -181,7 +181,7 @@ def test_locked_holdout_rows_never_reach_selection(server: FileServer) -> None:
 
 def test_a_development_index_holding_a_holdout_row_is_refused(server: FileServer) -> None:
     req = _req(server, binary_frame())
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, RunClock(600, 600))
     enc = TR.encode_label(req.task, snap.label)
     roles = np.array(snap.roles)
     dev = np.flatnonzero(roles == "development").astype(np.int64)
@@ -220,7 +220,7 @@ def test_count_and_non_negative_targets_are_scored_by_their_deviance(
                                  ("lgbm", "lightgbm", {"n_estimators": 40})]
     req = TrainerRequest.model_validate(request(server, m, n, task, protocol(kind), candidates(kind, drivers)))
     assert req.protocol.primaryScore.metric == expected_metric
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, RunClock(600, 600))
     enc = TR.encode_label(req.task, snap.label)
     assert enc.family == kind
     out = _select(req, snap)

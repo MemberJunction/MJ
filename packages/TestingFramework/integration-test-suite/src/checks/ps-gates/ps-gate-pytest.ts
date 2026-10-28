@@ -26,7 +26,7 @@ export interface PytestRunResult {
 }
 
 type CaseResult = 'passed' | 'failed' | 'skipped' | 'error';
-interface JUnitCase { readonly NodeId: string; readonly Result: CaseResult }
+interface JUnitCase { readonly NodeID: string; readonly Result: CaseResult }
 
 const TESTCASE = /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g;
 
@@ -56,7 +56,7 @@ export class PsGatePytest {
       const nodeId = classname === '' ? name : `${classname.replace(/\./g, '/')}.py::${name}`;
       if (seen.has(nodeId)) continue;
       seen.add(nodeId);
-      out.push({ NodeId: nodeId, Result: result });
+      out.push({ NodeID: nodeId, Result: result });
     }
     return out;
   }
@@ -64,7 +64,7 @@ export class PsGatePytest {
   /** The pure half of `Run`: count a report's cases against the requested node ids (a node owns its `<id>[…]` cases). */
   public static FromJUnit(nodeIds: readonly string[], xml: string): PytestRunResult {
     const cases = PsGatePytest.parseCases(xml);
-    const owns = (id: string, c: JUnitCase): boolean => c.NodeId === id || c.NodeId.startsWith(`${id}[`);
+    const owns = (id: string, c: JUnitCase): boolean => c.NodeID === id || c.NodeID.startsWith(`${id}[`);
     const owned = cases.filter((c) => nodeIds.some((id) => owns(id, c)));
     return {
       Collected: owned.length,

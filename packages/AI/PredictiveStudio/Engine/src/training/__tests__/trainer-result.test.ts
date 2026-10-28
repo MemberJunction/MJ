@@ -40,6 +40,13 @@ describe('ComputeCostFor / ReadComputeRate', () => {
     expect(ComputePricing.ReadComputeRate({ PS_COMPUTE_USD_PER_SECOND: '0' })).toBe(0);
     expect(ComputePricing.ReadComputeRate({})).toBeNull();
     expect(() => ComputePricing.ReadComputeRate({ PS_COMPUTE_USD_PER_SECOND: '-1' })).toThrow(RangeError);
+    expect(() => ComputePricing.ReadComputeRate({ PS_COMPUTE_USD_PER_SECOND: 'Infinity' })).toThrow(RangeError);
+  });
+
+  it("rounds to the run columns' scales: seconds to 3 places, then the cost of those seconds to 6", () => {
+    expect(ComputePricing.RoundSeconds(3.14159)).toBe(3.142);
+    // 1.23456 s → 1.235 s; 1.235 × 0.1234567 = 0.15246902… → 0.152469
+    expect(ComputePricing.ComputeCostFor(1.23456, 0.1234567)).toBe(0.152469);
   });
 });
 
@@ -69,5 +76,26 @@ describe('ApplyTrainerResultToRun', () => {
       .toThrow(TrainerLineageRefusedError);
     expect(run.Status).toBe('Failed');
     expect(run.ComputeSeconds).toBe(3.5);
+    expect(run.Notes).toBe('Trainer result refused: CodeVersion lacks libraryVersions.numpy, libraryVersions.scikit-learn, libraryVersions.xgboost, libraryVersions.lightgbm');
+    expect(run.CodeVersion).toBeNull();
+  });
+
+  it('names every missing library and a thread count below 1 in the refusal', () => {
+    const run = blankRun();
+    let refusal: TrainerLineageRefusedError | null = null;
+    try {
+      TrainerRunRecorder.ApplyTrainerResultToRun(run, completed({ ...fullVersion, threads: 0, libraryVersions: { ...fullVersion.libraryVersions, xgboost: ' ' } }), null);
+    } catch (err) {
+      if (err instanceof TrainerLineageRefusedError) refusal = err;
+    }
+    expect(refusal?.Gaps).toEqual(['libraryVersions.xgboost', 'threads']);
+    expect(run.Status).toBe('Failed');
+    expect(run.Notes).toBe('Trainer result refused: CodeVersion lacks libraryVersions.xgboost, threads');
+  });
+
+  it("stores the trainer's seconds at the column's scale and prices those seconds", () => {
+    const run = blankRun();
+    TrainerRunRecorder.ApplyTrainerResultToRun(run, { ...failed, computeSeconds: 61.25049 }, 0.01);
+    expect([run.ComputeSeconds, run.ComputeCost]).toEqual([61.25, 0.6125]);
   });
 });

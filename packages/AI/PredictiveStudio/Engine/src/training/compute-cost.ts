@@ -22,8 +22,16 @@ export class ComputePricing {
     return rate;
   }
 
-  /** `seconds × rate`, or null when the rate is unknown. */
+  /** Measured seconds at the scale `ComputeSeconds` stores (3 decimal places), so the run row holds what was priced. */
+  public static RoundSeconds(seconds: number): number {
+    return Math.round(seconds * 1e3) / 1e3;
+  }
+
+  /**
+   * The cost of `seconds` (rounded as {@link RoundSeconds} stores them) at the rate, rounded to the 6 decimal places
+   * `ComputeCost` stores; null when the rate is unknown.
+   */
   public static ComputeCostFor(seconds: number, usdPerSecond: number | null): number | null {
-    return usdPerSecond === null ? null : seconds * usdPerSecond;
+    return usdPerSecond === null ? null : Math.round(ComputePricing.RoundSeconds(seconds) * usdPerSecond * 1e6) / 1e6;
   }
 }

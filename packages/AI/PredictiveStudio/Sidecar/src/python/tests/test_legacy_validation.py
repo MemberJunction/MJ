@@ -17,8 +17,8 @@ client = TestClient(app)
 pytestmark = pytest.mark.filterwarnings("ignore::sklearn.exceptions.ConvergenceWarning")
 
 
-def _noise_request(algorithm: str, strategy: str, k: int | None = None, hp: dict | None = None,
-                   random_state: int = 42) -> dict:
+def _noise_request(algorithm: str, strategy: str, k: int | None = None, hp: dict[str, object] | None = None,
+                   random_state: int = 42) -> dict[str, object]:
     rng = np.random.default_rng(600)
     X = rng.normal(size=(600, 5))
     y = rng.integers(0, 2, 600)
@@ -46,21 +46,22 @@ def test_seed_zero_is_honoured() -> None:
 
 
 def test_request_seed_reaches_every_estimator(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every fold estimator and the final refit are built with the request's seed, not the module constant."""
-    seen: list[int | None] = []
+    """Every fold estimator and the final refit are built with the request's seed, not the module constant: five
+    fold estimators and one refit, six builds, each seeded 7."""
+    seen: list[int] = []
     real = algorithms.build_estimator
 
-    def spy(algorithm: str, problem_type: str, hyperparameters: dict, random_state: int | None = None) -> object:
+    def spy(algorithm: str, problem_type: str, hyperparameters: dict[str, object], random_state: int) -> object:
         seen.append(random_state)
-        return real(algorithm, problem_type, hyperparameters) if random_state is None else real(algorithm, problem_type, hyperparameters, random_state)
+        return real(algorithm, problem_type, hyperparameters, random_state)
 
     monkeypatch.setattr(algorithms, "build_estimator", spy)
     assert client.post("/train", json=_noise_request("random_forest", "kfold", k=5, random_state=7)).status_code == 200
-    assert seen and set(seen) == {7}
+    assert seen == [7] * 6
 
 
 def test_catalog_mlp_default_trains() -> None:
-    hp = {"hidden_layer_sizes": "100", "activation": "relu", "alpha": 0.0001, "learning_rate_init": 0.001, "max_iter": 200}
+    hp: dict[str, object] = {"hidden_layer_sizes": "100", "activation": "relu", "alpha": 0.0001, "learning_rate_init": 0.001, "max_iter": 200}
     assert client.post("/train", json=_noise_request("mlp", "train_test_split", hp=hp)).status_code == 200
 
 

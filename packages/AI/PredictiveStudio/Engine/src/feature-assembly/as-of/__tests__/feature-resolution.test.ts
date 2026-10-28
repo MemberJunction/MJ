@@ -56,6 +56,17 @@ describe('ResolveFeatureColumns', () => {
     expect(FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['Nope'] }] }, unitSpec, years, metadata, { denyFields: [], denySources: [] }))
       .toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'Nope' } });
   });
+  it('refuses a constant fill on a numeric column unless the fill is a finite number, naming the column', () => {
+    const resolve = (FillValue: string | number | undefined) => FeatureResolver.ResolveFeatureColumns({ Steps: [
+      { Id: 's', Kind: 'select', Columns: ['EventsAttended'] },
+      { Id: 'i', Kind: 'impute', Column: 'EventsAttended', Strategy: 'constant', FillValue },
+    ] }, unitSpec, years, metadata, { denyFields: [], denySources: [] });
+    expect(resolve(undefined)).toEqual({ Status: 'refused', Refusal: { kind: 'non-numeric-in-numeric-column', column: 'EventsAttended', sampleValue: '' } });
+    expect(resolve('n/a')).toEqual({ Status: 'refused', Refusal: { kind: 'non-numeric-in-numeric-column', column: 'EventsAttended', sampleValue: 'n/a' } });
+    expect(resolve(Number.NaN)).toEqual({ Status: 'refused', Refusal: { kind: 'non-numeric-in-numeric-column', column: 'EventsAttended', sampleValue: 'NaN' } });
+    const ok = resolve(0);
+    expect(ok.Status === 'resolved' && ok.Columns[0].missing).toEqual({ impute: 'constant', indicator: true, constant: 0 });
+  });
   it('refuses a standardize, one-hot or bin step on a column no feature produces', () => {
     const refusedFor = (step: FeatureStepGraph['Steps'][number]) => FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['EventsAttended'] }, step] }, unitSpec, years, metadata, { denyFields: [], denySources: [] });
     const refusal = { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'TenureDays' } };

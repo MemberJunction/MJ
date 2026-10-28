@@ -54,6 +54,10 @@ class RunClock:
         """Elapsed wall-clock seconds, as the legacy route's `duration_sec` and the run's `computeSeconds` report."""
         return time.perf_counter() - self._start
 
+    def remaining_seconds(self) -> float:
+        """Seconds left before the first of the timeout and the compute budget; 0 or less once either has passed."""
+        return min(self.timeout_seconds, self.max_compute_seconds) - self.compute_seconds()
+
     def check(self, where: str) -> None:
         """Raise `TrainerFailure('timeout')` past the request timeout, else `TrainerFailure('budget-exceeded')` past
         the compute budget; `where` names the step for the message."""

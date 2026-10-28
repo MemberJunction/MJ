@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import numpy as np
@@ -12,13 +15,17 @@ import pytest
 
 from app import snapshot as SN
 from app.encoding import MISSING_TOKEN, CategoricalEncoding, MissingPolicy, NumericEncoding
-from app.failures import SnapshotLoadFailure
+from app.failures import RunClock, SnapshotLoadFailure, TrainerFailure
 from app.trainer_schemas import TrainerRequest
 from tests.tools.trainer_fixture import FileServer, JsonObject, JsonValue, candidates, protocol, request, snapshot_files
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
 NOW = dt.datetime(2026, 10, 12, tzinfo=dt.timezone.utc)
 HASH = "a" * 64
+
+
+def _clock() -> RunClock:
+    return RunClock(600, 600)
 
 
 def _request(srv: FileServer, matrix: bytes, manifest: bytes,
@@ -60,19 +67,19 @@ def test_snapshot_hash_mismatch_fails_load_snapshot(server: FileServer) -> None:
                                         protocol("binary"), candidates("binary"))))
     raw["snapshot"]["matrix"]["sha256"] = "0" * 64
     with pytest.raises(SnapshotLoadFailure) as e:
-        SN.load(TrainerRequest.model_validate(raw), NOW)
+        SN.load(TrainerRequest.model_validate(raw), NOW, _clock())
     assert e.value.stage == "load-snapshot" and e.value.problem == "hash-mismatch"
 
 
 def test_snapshot_expired_url_fails_load_snapshot(server: FileServer) -> None:
     m, n = snapshot_files(binary_frame(60), FEATS, [])
     with pytest.raises(SnapshotLoadFailure) as e:
-        SN.load(_request(server, m, n, expires="2026-10-12T00:00:00Z"), NOW)
+        SN.load(_request(server, m, n, expires="2026-10-12T00:00:00Z"), NOW, _clock())
     assert e.value.stage == "load-snapshot" and e.value.problem == "expired-url"
 
 
 def test_a_url_without_an_expiry_never_expires(server: FileServer) -> None:
-    snap = SN.load(_request(server, *_files(), expires=None), dt.datetime(2999, 1, 1, tzinfo=dt.timezone.utc))
+    snap = SN.load(_request(server, *_files(), expires=None), dt.datetime(2999, 1, 1, tzinfo=dt.timezone.utc), _clock())
     assert len(snap.row_ids) == 60
 
 
@@ -81,7 +88,91 @@ def test_a_file_url_is_read_from_the_local_file_system(server: FileServer) -> No
                                         expires=None)))
     for key, name in (("matrix", "snap-matrix.jsonl"), ("rowManifest", "snap-manifest.jsonl")):
         raw["snapshot"][key]["url"] = Path(server.root / name).as_uri()
-    assert len(SN.load(TrainerRequest.model_validate(raw), NOW).row_ids) == 60
+    assert len(SN.load(TrainerRequest.model_validate(raw), NOW, _clock()).row_ids) == 60
+
+
+def test_an_unreadable_expiry_fails_closed_as_expired(server: FileServer) -> None:
+    m, n = snapshot_files(binary_frame(60), FEATS, [])
+    with pytest.raises(SnapshotLoadFailure) as e:
+        SN.load(_request(server, m, n, expires="not a date"), NOW, _clock())
+    assert e.value.problem == "expired-url" and "unreadable expiry" in e.value.message
+
+
+def test_a_download_larger_than_the_size_cap_is_a_download_failure(server: FileServer) -> None:
+    req = _request(server, *_files())
+    with pytest.raises(SnapshotLoadFailure) as e:
+        SN.fetch_verified(req.snapshot.matrix, NOW, _clock(), max_bytes=1024)
+    assert e.value.problem == "download-failed" and "1024 bytes" in e.value.message
+    assert len(SN.fetch_verified(req.snapshot.matrix, NOW, _clock(), max_bytes=1 << 20)) > 1024
+
+
+def test_a_download_is_bounded_by_the_run_clock(server: FileServer) -> None:
+    req = _request(server, *_files())
+    with pytest.raises(TrainerFailure) as e:
+        SN.fetch_verified(req.snapshot.matrix, NOW, RunClock(timeout_seconds=0.0, max_compute_seconds=600))
+    assert e.value.stage == "timeout" and req.snapshot.matrix.fileId in e.value.message
+
+
+class _RunsOutAfterFirstCheck(RunClock):
+    """A run clock with time left when the download starts that runs out at its next check."""
+
+    def __init__(self) -> None:
+        super().__init__(600, 600)
+        self.checks = 0
+
+    def check(self, where: str) -> None:
+        self.checks += 1
+        if self.checks > 1:
+            raise TrainerFailure("timeout", f"timeout of 600s exceeded during {where}")
+
+
+def test_a_download_stops_when_the_run_clock_runs_out_while_reading(server: FileServer) -> None:
+    req = _request(server, *_files())
+    clock = _RunsOutAfterFirstCheck()
+    with pytest.raises(TrainerFailure) as e:
+        SN.fetch_verified(req.snapshot.matrix, NOW, clock)
+    assert e.value.stage == "timeout" and clock.checks == 2
+
+
+class _Redirect(BaseHTTPRequestHandler):
+    """Answers every GET with a 302 to the URL in the server's `location` attribute."""
+
+    def do_GET(self) -> None:  # noqa: N802 - the stdlib handler names it do_GET
+        self.send_response(302)
+        self.send_header("Location", getattr(self.server, "location"))
+        self.end_headers()
+
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002 - the stdlib signature names it `format`
+        return
+
+
+@pytest.fixture()
+def redirector() -> Iterator[ThreadingHTTPServer]:
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Redirect)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield httpd
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def _redirected(server: FileServer, redirector: ThreadingHTTPServer, location: str) -> TrainerRequest:
+    raw = json.loads(json.dumps(request(server, *_files(), TASK, protocol("binary"), candidates("binary"))))
+    setattr(redirector, "location", location)
+    raw["snapshot"]["matrix"]["url"] = f"http://127.0.0.1:{redirector.server_address[1]}/snap-matrix.jsonl"
+    return TrainerRequest.model_validate(raw)
+
+
+def test_a_redirect_off_http_or_https_is_a_download_failure(server: FileServer,
+                                                            redirector: ThreadingHTTPServer) -> None:
+    req = _redirected(server, redirector, "ftp://127.0.0.1/snap-matrix.jsonl")
+    with pytest.raises(SnapshotLoadFailure) as e:
+        SN.fetch_verified(req.snapshot.matrix, NOW, _clock())
+    assert e.value.problem == "download-failed" and "'ftp'" in e.value.message
+
+
+def test_a_redirect_to_http_is_followed(server: FileServer, redirector: ThreadingHTTPServer) -> None:
+    req = _redirected(server, redirector, f"{server.base}/snap-matrix.jsonl")
+    assert SN.fetch_verified(req.snapshot.matrix, NOW, _clock()).startswith(b"{")
 
 
 @pytest.mark.parametrize("url", ["ftp://127.0.0.1/snap-matrix.jsonl", "file:///nonexistent/ps-snapshot/matrix.jsonl"])
@@ -89,7 +180,7 @@ def test_an_unsupported_or_unreadable_url_is_a_download_failure(server: FileServ
     raw = json.loads(json.dumps(request(server, *_files(), TASK, protocol("binary"), candidates("binary"))))
     raw["snapshot"]["matrix"]["url"] = url
     with pytest.raises(SnapshotLoadFailure) as e:
-        SN.load(TrainerRequest.model_validate(raw), NOW)
+        SN.load(TrainerRequest.model_validate(raw), NOW, _clock())
     assert e.value.problem == "download-failed" and raw["snapshot"]["matrix"]["fileId"] in e.value.message
 
 
@@ -99,7 +190,7 @@ def test_the_snapshot_parses_into_typed_features_label_and_row_keys(server: File
     """Feature columns are typed (numeric float64 with NaN for missing, categorical text), the manifest gives the row
     keys and roles in matrix order, and the feature schema hash is the request's."""
     req = _request(server, *_files())
-    snap = SN.load(req, NOW)
+    snap = SN.load(req, NOW, _clock())
     assert [c.name for c in snap.columns] == ["x1", "x2", "city"]
     assert snap.frame["x1"].dtype == np.float64 and snap.frame["x1"].isna().any()
     assert set(snap.frame["city"]) <= {"NYC", "LA", "SF", "CHI"}
@@ -116,7 +207,7 @@ def test_non_numeric_in_numeric_column_is_refused_by_name(server: FileServer) ->
     df.loc[5, "x2"] = "twelve"
     m, n = snapshot_files(df, FEATS, [])
     with pytest.raises(SnapshotLoadFailure) as e:
-        SN.load(_request(server, m, n), NOW)
+        SN.load(_request(server, m, n), NOW, _clock())
     assert e.value.problem == "non-numeric" and e.value.column == "x2"
     assert "'twelve'" in e.value.message and "'x2'" in e.value.message
 
@@ -269,3 +360,41 @@ def test_period_ordinals_count_whole_decision_periods() -> None:
     snap = SN.parse_snapshot(*_files(), HASH)
     years = [int(d[:4]) for d in snap.decision_dates]
     assert SN.period_ordinals(snap).tolist() == years
+
+
+def _dated(snap: SN.Snapshot, period: SN.DecisionPeriod, dates: list[str],
+           periods: list[str | None] | None = None) -> SN.Snapshot:
+    """`snap` cut to len(dates) rows with those decision dates (and manifest periods) at the decision period."""
+    n = len(dates)
+    return dataclasses.replace(snap, row_ids=snap.row_ids[:n], decision_dates=dates,
+                               periods=periods if periods is not None else [None] * n,
+                               decision=SN.DecisionSpec(None, period))
+
+
+@pytest.mark.parametrize(
+    "period,expected",
+    [
+        ("quarter", [2024 * 4 + 0, 2024 * 4 + 0, 2024 * 4 + 1, 2024 * 4 + 3, 2025 * 4 + 0]),
+        ("month", [2024 * 12 + 0, 2024 * 12 + 2, 2024 * 12 + 3, 2024 * 12 + 11, 2025 * 12 + 0]),
+        ("week", [dt.date(2024, 1, 1).toordinal() // 7, dt.date(2024, 3, 31).toordinal() // 7,
+                  dt.date(2024, 4, 1).toordinal() // 7, dt.date(2024, 12, 31).toordinal() // 7,
+                  dt.date(2025, 1, 1).toordinal() // 7]),
+        ("day", [dt.date(2024, 1, 1).toordinal(), dt.date(2024, 3, 31).toordinal(), dt.date(2024, 4, 1).toordinal(),
+                 dt.date(2024, 12, 31).toordinal(), dt.date(2025, 1, 1).toordinal()]),
+    ],
+)
+def test_period_ordinals_bucket_each_decision_period(period: SN.DecisionPeriod, expected: list[int]) -> None:
+    dates = ["2024-01-01", "2024-03-31", "2024-04-01", "2024-12-31", "2025-01-01"]
+    assert SN.period_ordinals(_dated(SN.parse_snapshot(*_files(), HASH), period, dates)).tolist() == expected
+
+
+def test_the_manifest_period_takes_precedence_over_the_decision_date() -> None:
+    snap = _dated(SN.parse_snapshot(*_files(), HASH), "quarter", ["2024-01-15", "2024-01-15"], ["2024-07-01", None])
+    assert SN.period_ordinals(snap).tolist() == [2024 * 4 + 2, 2024 * 4 + 0]
+
+
+def test_an_empty_manifest_period_is_malformed_not_the_decision_date() -> None:
+    snap = _dated(SN.parse_snapshot(*_files(), HASH), "year", ["2024-01-15"], [""])
+    with pytest.raises(SnapshotLoadFailure) as e:
+        SN.period_ordinals(snap)
+    assert e.value.problem == "malformed" and snap.row_ids[0] in e.value.message

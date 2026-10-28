@@ -209,6 +209,7 @@ export class TrainingEngine {
       });
 
       const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
+      TrainingEngine.recordCompute(run, response, usdPerSecond);
       const evaluation = EvaluationLineage.Build(resolved.validation, {
         ValidationOutOfSample: response.validation_out_of_sample === true,
         ImportanceKind: response.feature_importance_kind || null,
@@ -217,7 +218,7 @@ export class TrainingEngine {
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
       const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, usdPerSecond);
+      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation);
       return { model, run };
     } catch (err) {
       await this.recordRunError(run, err, deps);
@@ -350,6 +351,7 @@ export class TrainingEngine {
   ): Promise<MJMLModelEntity> {
     const request = this.legacyRequestFor(resolved);
     const { Response: response, Split: split } = await SnapshotRetrainer.TrainOnSnapshot(content, request, deps.sidecar);
+    TrainingEngine.recordCompute(run, response, usdPerSecond);
     const schema = { featureSchema: [...content.Header.featureSchema] };
     const evaluation = EvaluationLineage.Build(resolved.validation, {
       ValidationOutOfSample: response.validation_out_of_sample === true,
@@ -358,7 +360,7 @@ export class TrainingEngine {
     });
     const dominance = this.checkLeakage(response, resolved.leakageGuard);
     const model = await this.createModelRow(resolved, input, schema, split, response, evaluation, deps, lineage);
-    await this.finalizeUnitRunSuccess(run, model, schema, resolved, response, dominance, evaluation, counts, split, uncovered, request, usdPerSecond);
+    await this.finalizeUnitRunSuccess(run, model, schema, resolved, response, dominance, evaluation, counts, split, uncovered, request);
     return model;
   }
 
@@ -511,7 +513,6 @@ export class TrainingEngine {
     split: LockedHoldoutSplit,
     uncovered: readonly UncoveredRowsCount[],
     request: LegacyRequestConfig,
-    usdPerSecond: number | null,
   ): Promise<void> {
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts,
@@ -524,7 +525,6 @@ export class TrainingEngine {
     run.ValidationResults = JSON.stringify(results);
     run.Status = 'Completed';
     run.CompletedAt = new Date();
-    TrainingEngine.recordCompute(run, response, usdPerSecond);
     run.Notes = TrainingEngine.withUncoveredNote(this.buildRunNotes(dominance, evaluation), uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
@@ -600,7 +600,6 @@ export class TrainingEngine {
     response: TrainResponse,
     dominance: DominanceResult,
     evaluation: EvaluationRecord,
-    usdPerSecond: number | null,
   ): Promise<void> {
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
@@ -612,17 +611,17 @@ export class TrainingEngine {
     });
     run.Status = 'Completed';
     run.CompletedAt = new Date();
-    TrainingEngine.recordCompute(run, response, usdPerSecond);
     run.Notes = this.buildRunNotes(dominance, evaluation);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
 
   /**
    * Record the compute a run really used: the sidecar's measured wall-clock training seconds, priced at the configured
-   * rate (NULL when no rate is configured), never a constant.
+   * rate (NULL when no rate is configured), never a constant. Called as soon as the sidecar returns, so a run that
+   * fails afterwards (a model row that does not save) still records the compute it spent.
    */
   private static recordCompute(run: MJMLTrainingRunEntity, response: TrainResponse, usdPerSecond: number | null): void {
-    run.ComputeSeconds = response.duration_sec;
+    run.ComputeSeconds = ComputePricing.RoundSeconds(response.duration_sec);
     run.ComputeCost = ComputePricing.ComputeCostFor(response.duration_sec, usdPerSecond);
   }
 

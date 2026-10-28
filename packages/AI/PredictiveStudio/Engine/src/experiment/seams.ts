@@ -117,6 +117,8 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       model,
       run,
       Score: score,
+      // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
+      // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
       TokensUsed: 0,
     };

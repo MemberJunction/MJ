@@ -34,7 +34,7 @@ export class TrainerRunRecorder {
    * marked Failed first, with its compute recorded)
    */
   public static ApplyTrainerResultToRun(run: TrainerRunTarget, result: TrainerResult, usdPerSecond: number | null): void {
-    run.ComputeSeconds = result.computeSeconds;
+    run.ComputeSeconds = ComputePricing.RoundSeconds(result.computeSeconds);
     run.ComputeCost = ComputePricing.ComputeCostFor(result.computeSeconds, usdPerSecond);
     run.CompletedAt = new Date();
     if (result.status === 'failed') {

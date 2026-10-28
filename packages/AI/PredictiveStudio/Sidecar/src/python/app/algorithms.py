@@ -222,10 +222,10 @@ _FIXED_KEYS: FrozenSet[str] = frozenset({
     # seeds, including LightGBM's sub-seeds (each would otherwise replace the one derived from the protocol seed)
     "random_state", "seed", "random_seed",
     "bagging_seed", "feature_fraction_seed", "data_random_seed", "extra_seed", "drop_seed",
-    # thread counts, the deterministic-histogram switches, and the tree method and device (a GPU fit is not
-    # bit-reproducible)
+    # thread counts, the deterministic-histogram switches, and the tree method and device, including XGBoost's older
+    # GPU selectors (a GPU fit is not bit-reproducible)
     "n_jobs", "nthread", "num_threads", "deterministic", "force_row_wise", "force_col_wise",
-    "tree_method", "device", "device_type",
+    "tree_method", "device", "device_type", "gpu_id", "predictor",
 })
 
 

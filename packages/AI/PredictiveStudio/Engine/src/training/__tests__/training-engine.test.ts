@@ -598,6 +598,19 @@ describe('TrainingEngine — compute pricing on the run', () => {
     expect([run.ComputeSeconds, run.ComputeCost]).toEqual([cleanResponse.duration_sec, 0]);
   });
 
+  it('keeps the measured compute on a run that fails after the sidecar returned', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.5');
+    const factory = new FakeEntityFactory(() => {
+      const m = new FakeMLModel('model-x');
+      m.failNextSaveWith('FK violation on PipelineID');
+      return m;
+    });
+    const { deps } = buildDeps({ entityFactory: factory });
+    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/FK violation on PipelineID/);
+    expect(factory.Runs[0].Status).toBe('Failed');
+    expect([factory.Runs[0].ComputeSeconds, factory.Runs[0].ComputeCost]).toEqual([cleanResponse.duration_sec, cleanResponse.duration_sec * 0.5]);
+  });
+
   it('refuses a malformed rate before any row is written or any model is trained', async () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', 'cheap');
     const { deps, factory, sidecar } = buildDeps();

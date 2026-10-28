@@ -1,11 +1,14 @@
-/** Gate G2.27 "W8 → S3.4": the in-fold target encoding of a high-cardinality column scores chance on shuffled labels. */
+/**
+ * Gate G2.27 "W8 → S3.4": the in-fold target encoding of a high-cardinality column scores chance on shuffled labels,
+ * both out of fold on the development rows and on the held-out rows.
+ */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGatePytest } from './ps-gates/ps-gate-pytest';
 
 export const PsGateW8S34Checks: NamedCheck[] = [
   {
-    Id: 'ps-gate-w8-s3-4.G2.27', Name: 'G2.27 W8 → S3.4: shuffled labels give a target-encoded held-out AUC interval covering 0.5', RequiresMutation: true,
+    Id: 'ps-gate-w8-s3-4.G2.27', Name: 'G2.27 W8 → S3.4: shuffled labels give a target-encoded out-of-fold AUC interval not above 0.5 and a held-out AUC interval covering 0.5', RequiresMutation: true,
     Fn: async () => {
       const nodes = ['tests/gates/test_trainer_contract_gates.py::test_W8_S3_4_target_encoding_is_in_fold'] as const;
       const expectedCases = 1;   // one unparametrized node: one case

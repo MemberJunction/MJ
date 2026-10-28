@@ -9785,7 +9785,7 @@ the engine calls it from M6.7. Closes F-SC-2, F-SC-3, F-L4-5. Gates flipped: G2.
 `RollingOriginResult`, `ForecastEvaluation`, `SplitContrast`, `TrainerFailureStage`, `TrainerResult`,
 `TrainerCompleted`, `TrainerFailed`, `REQUIRED_LIBRARIES`, `TrainerContract.CodeVersionGaps(cv: CodeVersion): string[]`.
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 Create `packages/AI/PredictiveStudio/Core/src/__tests__/trainer-contract.test.ts`:
 
@@ -9900,10 +9900,10 @@ describe('ParseEvaluationProtocolRow', () => {
 });
 ```
 
-- [ ] Step 2: Run them — `cd packages/AI/PredictiveStudio/Core && pnpm test -- trainer-contract evaluation-protocol-parse`.
+- [x] Step 2: Run them — `cd packages/AI/PredictiveStudio/Core && pnpm test -- trainer-contract evaluation-protocol-parse`.
   Expected: FAIL, `SyntaxError: The requested module '../index' does not provide an export named 'TrainerContract'` and
   `EvaluationProtocol.ParseEvaluationProtocolRow is not a function` (2 failed files).
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Core/src/gate.ts` (types only; M10.1 adds the gate functions):
 
@@ -10665,10 +10665,10 @@ export * from './gate';
 export * from './trainer-contract';
 ```
 
-- [ ] Step 4: Run `pnpm run build && pnpm test`. Expected: build exit 0; `trainer-contract.test.ts` 3 passed,
+- [x] Step 4: Run `pnpm run build && pnpm test`. Expected: build exit 0; `trainer-contract.test.ts` 3 passed,
   `evaluation-protocol-parse.test.ts` 4 passed, and every earlier Core test still passes (0 failed; record the count in
   §11).
-- [ ] Step 5: Runtime check — none beyond the build (types and a pure parser; M6.7 parses the stored protocol row of a
+- [x] Step 5: Runtime check — none beyond the build (types and a pure parser; M6.7 parses the stored protocol row of a
   live run).
 
 #### Task M5.2: Truth-suite reference assets
@@ -10714,7 +10714,7 @@ Produces:
 - `SeedSetName` gains `'n400'`: a scenario's spec seed then `spec*1000+1 … spec*1000+399` (C2: 2201, 2201001 … 2201399);
   W2-noise s100–s499. `pnpm run truth:data -- --set n400 --only <id>` generates one set (M6.8, M8.3, M10.5 run it).
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 `TS/python/tests/test_paths.py`:
 
@@ -10853,12 +10853,12 @@ Append to `TS/src/data/__tests__/data.test.ts`'s `describe('seed sets', …)`:
   });
 ```
 
-- [ ] Step 2: Run them; expected failures. `cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python` →
+- [x] Step 2: Run them; expected failures. `cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python` →
   collection errors `ModuleNotFoundError: No module named 'truthsuite.paths'` in the three new files (the 7 judge cases
   still pass); `pnpm test -- data` → the new case fails (`expected [ 2201 ] to have a length of 400 but got 1`; vitest
   does not type-check, so the unknown `'n400'` reaches `SeedSet`).
 
-- [ ] Step 3: Implement `truthsuite.paths` and the `n400` set.
+- [x] Step 3: Implement `truthsuite.paths` and the `n400` set.
 
 `TS/python/truthsuite/paths.py`:
 
@@ -10968,7 +10968,7 @@ if (setArg !== 'base' && setArg !== 't2' && setArg !== 'n400') {
 }
 ```
 
-- [ ] Step 4: Port the reference pipeline into `TS/python/truthsuite/refpipe/`.
+- [x] Step 4: Port the reference pipeline into `TS/python/truthsuite/refpipe/`.
 
   ```bash
   cd $MJ/packages/AI/PredictiveStudio/TruthSuite && mkdir -p python/truthsuite/refpipe && : > python/truthsuite/refpipe/__init__.py
@@ -11043,7 +11043,7 @@ if (setArg !== 'base' && setArg !== 't2' && setArg !== 'n400') {
   parity as above);
   `grep -c "^GATE_BRANCHES = (\"a:beats-best-simple\", \"a:Q15-only-model-beats-dummy\", \"b:keep-simple-baseline\", \"c:no-signal\")" python/truthsuite/refpipe/run.py` → `1`.
 
-- [ ] Step 5: The real cases and the golden summary.
+- [x] Step 5: The real cases and the golden summary.
 
   ```bash
   cd $MJ/packages/AI/PredictiveStudio/TruthSuite && mkdir -p fixtures/real fixtures/reference
@@ -11099,11 +11099,11 @@ if (setArg !== 'base' && setArg !== 't2' && setArg !== 'n400') {
   and re-run; never edit the summary by hand. Record the run (the loop's command, the `time` line, the ten ids with their
   `value` and `outcome`) in the §11 entry.
 
-- [ ] Step 6: Run the tests. `cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python` → `15 passed`
+- [x] Step 6: Run the tests. `cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python` → `15 passed`
   (judges 7, paths 5, golden 2, real fixtures 1) and the mypy run → `Success: no issues found in …` (exit 0);
   `pnpm test` → 0 failed (seed sets +1; record the count); `pnpm run build` → exit 0.
 
-- [ ] Step 7: Runtime check.
+- [x] Step 7: Runtime check.
   `$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python -c "import pyarrow, statsmodels; print(pyarrow.__version__, statsmodels.__version__)"`
   → `25.0.1 0.15.0`; `cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:data -- --set n400 --only R1`
   → `scenario/R1: 400 seed(s) in …s` (record the time), then
@@ -11130,7 +11130,7 @@ the planted-truth readers over PR 2's data (§2.4: `spec_seed(sid)`, `scenario_s
 `world_dir(name, seed)`, `scenario(sid, seed=None)`, `scenario_manifest(sid, seed=None)`, `person_years()`), `refpipe(ref_id)`
 (full reference result, checked against M5.2's `fixtures/reference/p5-golden.json`), `refpipe_carve(df)` and a CLI used by runtime checks.
 
-- [ ] Step 1: Write the failing test and the fixture module it uses.
+- [x] Step 1: Write the failing test and the fixture module it uses.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/tools/trainer_fixture.py`:
 
@@ -11553,10 +11553,10 @@ def test_timeout_raises_timeout() -> None:
     assert e.value.stage == "timeout"
 ```
 
-- [ ] Step 2: Run `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- -p no:cacheprovider
+- [x] Step 2: Run `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- -p no:cacheprovider
   tests/test_trainer_contract.py`. Expected: 1 error during collection, `ModuleNotFoundError: No module named
   'app.failures'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/failures.py`:
 
@@ -12307,8 +12307,8 @@ threadpoolctl==3.7.0
 
 (keep PR 2's `scipy==1.17.1` line where PR 2 put it).
 
-- [ ] Step 4: `pnpm run setup:python` (installs the new pin), then rerun Step 2. Expected: 3 passed.
-- [ ] Step 5: Runtime check — `.venv/bin/python -c "import scipy, threadpoolctl; print(scipy.__version__,
+- [x] Step 4: `pnpm run setup:python` (installs the new pin), then rerun Step 2. Expected: 3 passed.
+- [x] Step 5: Runtime check — `.venv/bin/python -c "import scipy, threadpoolctl; print(scipy.__version__,
   threadpoolctl.__version__)"` → `1.17.1 3.7.0`.
 
 #### Task M5.4: In-fold, typed column encoding with capped high-cardinality columns (F-L4-5)
@@ -12321,7 +12321,7 @@ threadpoolctl==3.7.0
 fitted on one fold's training rows), `normalize(columns, X) -> DataFrame` (the one typed view used by every fit and
 predict), `used_columns(columns) -> list[str]`, `source_map(columns) -> dict[str, list[str]]`, `HashBucketEncoder`.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_encoding.py`:
 
@@ -12358,9 +12358,9 @@ def test_identifier_columns_are_excluded() -> None:
     assert E.used_columns(cols) == ["x"]
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_encoding.py`. Expected: collection error,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_encoding.py`. Expected: collection error,
   `ModuleNotFoundError: No module named 'app.encoding'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/encoding.py`:
 
@@ -12515,8 +12515,8 @@ def normalize(columns: Sequence[ColumnSpec], X: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out, index=X.index)
 ```
 
-- [ ] Step 4: Rerun. Expected: 3 passed.
-- [ ] Step 5: Runtime check — covered by Task M5.12's W8 run (memory and time of a capped 400-level column).
+- [x] Step 4: Rerun. Expected: 3 passed.
+- [x] Step 5: Runtime check — covered by Task M5.12's W8 run (memory and time of a capped 400-level column).
 
 #### Task M5.5: Snapshot download, SHA-256 verification and typed parsing
 
@@ -12531,7 +12531,7 @@ Every failure is a `SnapshotLoadFailure` (a `TrainerFailure` at stage `load-snap
 `problem` (`expired-url`, `download-failed`, `hash-mismatch`, `malformed`, `non-numeric`, `infinite`) and, for a cell
 problem, the `column`; its message names the file or column for the run's notes.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_snapshot.py`:
 
@@ -12610,9 +12610,9 @@ def test_non_numeric_in_numeric_column_is_refused_by_name(server: FileServer) ->
     assert e.value.problem == "non-numeric" and e.value.column == "x2"
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_snapshot.py`. Expected: collection error,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_snapshot.py`. Expected: collection error,
   `ModuleNotFoundError: No module named 'app.snapshot'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/snapshot.py`:
 
@@ -12846,9 +12846,9 @@ def period_ordinals(snap: Snapshot) -> npt.NDArray[np.int64]:
     return out
 ```
 
-- [ ] Step 4: Rerun. Expected: 3 passed (hash mismatch, expired URL, `non-numeric value 'twelve' in numeric column
+- [x] Step 4: Rerun. Expected: 3 passed (hash mismatch, expired URL, `non-numeric value 'twelve' in numeric column
   'x2'`).
-- [ ] Step 5: Runtime check — part of Task M5.12.
+- [x] Step 5: Runtime check — part of Task M5.12.
 
 #### Task M5.6: Inner-validation folds over development rows
 
@@ -12860,7 +12860,7 @@ list[Fold]`, `blocked_time(period_ordinals, groups | None, folds, gap_periods, s
 `trailing_cutoff_index(period_ordinals, max_share=0.25) -> int`, `shared_groups(fold, groups) -> int`. The random
 assignment is refpipe's (`splits.py:118-152`), so the leakage audit (M7) reproduces refpipe's numbers.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_folds.py`:
 
@@ -12898,9 +12898,9 @@ def test_stratified_folds_keep_class_balance() -> None:
         assert int(y[f.valid].sum()) == 10
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_folds.py`. Expected: collection error,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_folds.py`. Expected: collection error,
   `ModuleNotFoundError: No module named 'app.folds'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/folds.py`:
 
@@ -13027,8 +13027,8 @@ def shared_groups(fold: Fold, groups: Sequence[str]) -> int:
     return len({g[int(i)] for i in fold.train} & {g[int(i)] for i in fold.valid})
 ```
 
-- [ ] Step 4: Rerun. Expected: 3 passed.
-- [ ] Step 5: Runtime check — none (pure function); exercised end to end in Task M5.12.
+- [x] Step 4: Rerun. Expected: 3 passed.
+- [x] Step 5: Runtime check — none (pure function); exercised end to end in Task M5.12.
 
 #### Task M5.7: Deterministic estimators, the MLP default, task-fixed objectives (F-SC-2, F-SC-3, FM-8)
 
@@ -13044,7 +13044,7 @@ legacy factory with the module constant `DEFAULT_RANDOM_STATE = 0` (F-SC-2's uns
 PR 2's `tests/test_determinism.py` pins that a seedless `build_estimator` call uses the constant); this task keeps the
 constant as the parameter's default (D3-69).
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_trainer_algorithms.py`:
 
@@ -13086,9 +13086,9 @@ def test_objective_override_is_refused() -> None:
         algorithms.tabular_estimator("lightgbm", "non-negative", {"objective": "regression"}, 0, 1, 1.5)
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_trainer_algorithms.py`. Expected: 6 failed,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_trainer_algorithms.py`. Expected: 6 failed,
   `AttributeError: module 'app.algorithms' has no attribute 'tabular_estimator'` (and `parse_hidden_layer_sizes`).
-- [ ] Step 3: Implement — replace the file with (PR 2's legacy section kept, with the seed made a parameter):
+- [x] Step 3: Implement — replace the file with (PR 2's legacy section kept, with the seed made a parameter):
 
 ```python
 """Algorithm driver registry.
@@ -13383,10 +13383,10 @@ _TABULAR_BUILDERS: Dict[str, TabularBuilder] = {
 }
 ```
 
-- [ ] Step 4: Rerun. Expected: 6 passed; `pnpm run test:python -- -p no:cacheprovider tests/test_train_predict.py
+- [x] Step 4: Rerun. Expected: 6 passed; `pnpm run test:python -- -p no:cacheprovider tests/test_train_predict.py
   tests/test_artifact_unpickle_guard.py tests/test_determinism.py tests/test_importance_kind.py` → 0 failed (PR 2's
   seeded-factory pins hold: a seedless `build_estimator` still uses `DEFAULT_RANDOM_STATE`; record the counts in §11).
-- [ ] Step 5: Runtime check — in Task M5.10's live `/train` calls (two RF and two MLP retrains return identical metrics).
+- [x] Step 5: Runtime check — in Task M5.10's live `/train` calls (two RF and two MLP retrains return identical metrics).
 
 #### Task M5.8: Primary proper scores, inner-CV intervals, the 1-SE rule and the selection stage (S5.2, S5.3, S2.5)
 
@@ -13406,7 +13406,7 @@ _TABULAR_BUILDERS: Dict[str, TabularBuilder] = {
   folds, validated)`; `TrainedPredictor.predict(X) -> NDArray` (P(classOrder[1]) / (n, K) probabilities / mean) and a
   `calibrator: CalibrationMap | None` slot filled in M6.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_selection.py`:
 
@@ -13500,9 +13500,9 @@ def test_in_fold_undersampling_never_touches_validation_rows() -> None:
     assert int(np.sum(y[out] == 1)) == int(np.sum(y[out] == 0)) == 20
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_selection.py`. Expected: collection error,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_selection.py`. Expected: collection error,
   `ModuleNotFoundError: No module named 'app.selection'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/scores.py`:
 
@@ -13960,10 +13960,10 @@ def _cross_validate(spec: CandidateSpec, columns: Sequence[encoding.ColumnSpec],
                        InnerScore(spec.name, mean, lo, hi, len(fold_scores), len(validated)))
 ```
 
-- [ ] Step 4: Rerun. Expected: 4 passed. Then the whole M5 unit set:
+- [x] Step 4: Rerun. Expected: 4 passed. Then the whole M5 unit set:
   `pnpm run test:python -- -p no:cacheprovider tests/test_trainer_contract.py tests/test_encoding.py tests/test_snapshot.py
   tests/test_folds.py tests/test_trainer_algorithms.py tests/test_selection.py` → 22 passed.
-- [ ] Step 5: Runtime check — Task M5.12 runs the selection stage on W1 and W8 from the snapshot files over HTTP.
+- [x] Step 5: Runtime check — Task M5.12 runs the selection stage on W1 and W8 from the snapshot files over HTTP.
 
 #### Task M5.9: CodeVersion on every run (S5.4 logging half)
 
@@ -13976,11 +13976,11 @@ package.json version), `code_version(threads: int, seed: int) -> CodeVersion`. `
 `PS_GIT_SHA` when set (the deployment sets it; the same variable M4.2's `CodeVersionInfo.AssemblyCodeVersion` reads), else `"unrecorded"` (M4.2's spelling); the gate requires only library
 versions and threads.
 
-- [ ] Step 1: Write the failing test — create `tests/gates/__init__.py` (empty), the M5 `tests/gates/conftest.py` and
+- [x] Step 1: Write the failing test — create `tests/gates/__init__.py` (empty), the M5 `tests/gates/conftest.py` and
   `tests/gates/test_trainer_contract_gates.py` exactly as in Task M5.12 Step 1.
-- [ ] Step 2: `pnpm run test:python -- -p no:cacheprovider "tests/gates/test_trainer_contract_gates.py::test_W1_S5_4_3_versions_and_threads_logged"`.
+- [x] Step 2: `pnpm run test:python -- -p no:cacheprovider "tests/gates/test_trainer_contract_gates.py::test_W1_S5_4_3_versions_and_threads_logged"`.
   Expected: collection error, `ImportError: cannot import name 'code_version' from 'app'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/code_version.py`:
 
@@ -14030,8 +14030,8 @@ def code_version(threads: int, seed: int) -> CodeVersion:
                        libraryVersions=library_versions(), threads=threads, seed=seed)
 ```
 
-- [ ] Step 4: Rerun. Expected: 1 passed.
-- [ ] Step 5: Runtime check — `.venv/bin/python -c "from app.code_version import code_version; print(code_version(1, 0).model_dump_json())"`
+- [x] Step 4: Rerun. Expected: 1 passed.
+- [x] Step 5: Runtime check — `.venv/bin/python -c "from app.code_version import code_version; print(code_version(1, 0).model_dump_json())"`
   (from `src/python`) prints the ten library versions, `"threads":1`, `"seed":0`.
 
 #### Task M5.10: Legacy `/train` — seeded RF/MLP and the catalog MLP default (F-SC-2, F-SC-3)
@@ -14053,7 +14053,7 @@ seed to every factory, so PR 2's k-fold path (which calls the same `build` throu
 PR 2's `rng = 42 if req.validation.random_state is None else req.validation.random_state` (anchor `c4-seed`) already
 honours a request seed of 0 and stays.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_legacy_validation.py`:
 
@@ -14128,12 +14128,12 @@ def test_validation_stays_out_of_sample(strategy: str) -> None:
     assert resp.json()["metrics"]["auc"] < 0.62
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_legacy_validation.py`. Expected: 1 failed —
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_legacy_validation.py`. Expected: 1 failed —
   `test_request_seed_reaches_every_estimator` sees `{None}` (PR 2's `build()` passes no seed, so every estimator takes
   the module constant); 8 passed (PR 2 seeds every factory with `DEFAULT_RANDOM_STATE` and honours a request seed of 0
   in the splits; M5.7 parses `"100"`; PR 2 keeps validation out of sample). The edit below makes the estimators use
   the request's seed instead of the constant default.
-- [ ] Step 3: Implement — one edit (PR 2 already made the `rng` change this task used to carry).
+- [x] Step 3: Implement — one edit (PR 2 already made the `rng` change this task used to carry).
 
 Edit `packages/AI/PredictiveStudio/Sidecar/src/python/app/main.py` (`_fit_and_score`, PR 2's version, anchor
 `c4-build-estimator-call`) — replace
@@ -14156,9 +14156,9 @@ with
 
   PR 2's `_kfold_out_of_fold_metrics` receives this `build`, so every fold estimator and the final refit are seeded
   with the request seed. Do not change PR 2's validation code.
-- [ ] Step 4: Rerun. Expected: 9 passed; `tests/test_validation_out_of_sample.py tests/test_determinism.py
+- [x] Step 4: Rerun. Expected: 9 passed; `tests/test_validation_out_of_sample.py tests/test_determinism.py
   tests/test_train_predict.py` (PR 2's and the existing tests) → 0 failed.
-- [ ] Step 5: Runtime check against a live sidecar (port 4391, see the M5 bootstrap in §2.4):
+- [x] Step 5: Runtime check against a live sidecar (port 4391, see the M5 bootstrap in §2.4):
 
   ```bash
   cd packages/AI/PredictiveStudio/Sidecar/src/python
@@ -14187,7 +14187,7 @@ with
 `SnapshotRetrainer.TrainOnSnapshot` path, which finalizes through the same method) records `ComputeSeconds = TrainResponse.duration_sec`
 (the sidecar's measured training seconds) and `ComputeCost` by the same rule, never a constant 0 (D-019, D3-13).
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 Create `packages/AI/PredictiveStudio/Engine/src/training/__tests__/trainer-result.test.ts`:
 
@@ -14281,10 +14281,10 @@ with
     expect(run.ComputeCost).toBeNull(); // PS_COMPUTE_USD_PER_SECOND is not set in unit tests: cost unknown
 ```
 
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm test -- training`. Expected: `trainer-result.test.ts`
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm test -- training`. Expected: `trainer-result.test.ts`
   fails to load (`Failed to resolve import "../trainer-result"`); `training-engine.test.ts` 1 failed
   (`expected null to be 1.4` — `ComputeSeconds` is never written today).
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Engine/src/training/compute-cost.ts`:
 
@@ -14402,9 +14402,9 @@ with
     run.ComputeCost = ComputePricing.ComputeCostFor(response.duration_sec, ComputePricing.ReadComputeRate()); // NULL when no rate is configured
 ```
 
-- [ ] Step 4: `pnpm run build && pnpm test`. Expected: build exit 0; `trainer-result.test.ts` 4 passed;
+- [x] Step 4: `pnpm run build && pnpm test`. Expected: build exit 0; `trainer-result.test.ts` 4 passed;
   `training-engine.test.ts` all passed; the Engine suite has 0 failures (record the count in §11).
-- [ ] Step 5: Runtime check (DB). In your env file set `PS_COMPUTE_USD_PER_SECOND=0` (§2.3), restart MJAPI on 4031,
+- [x] Step 5: Runtime check (DB). In your env file set `PS_COMPUTE_USD_PER_SECOND=0` (§2.3), restart MJAPI on 4031,
   run the `PredictiveStudio.TrainModel` operation on a pipeline M2–M4's fixtures created, through the GraphQL API (a
   `tsx` script calling PR 2's harness `(await RunFixtures.HarnessFor(provider, user)).Train(pipeline)`; no step is done by hand in the Explorer), then
   `sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d MJ_PS_PR3_<agent> -Q "SELECT TOP 1 Status,
@@ -14452,7 +14452,7 @@ CodeVersion without `scikit-learn`). G2.30 `W1 -> S5.3`'s node
 `tests/gates/test_trainer_contract_gates.py::test_W1_S5_3_inner_cv_means_with_intervals` is written here and runs under
 pytest from now on; its row and check do not exist until M9.6 flips it (§4.2).
 
-- [ ] Step 1: Write the gate tests.
+- [x] Step 1: Write the gate tests.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/gates/conftest.py`:
 
@@ -14610,7 +14610,7 @@ def test_W8_S3_4_target_encoding_is_in_fold(server: FileServer) -> None:
     assert auc - 1.96 * se <= 0.5 <= auc + 1.96 * se
 ```
 
-- [ ] Step 2: Before Tasks M5.4–M5.9 these tests fail at collection (`ModuleNotFoundError`); after them, check PR 2's
+- [x] Step 2: Before Tasks M5.4–M5.9 these tests fail at collection (`ModuleNotFoundError`); after them, check PR 2's
   base seed set is in the data cache (M5.2 Step 5 generated it; the command is idempotent, §2.4) and run them:
   ```bash
   cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:data -- --set base      # → one line per dataset, exit 0
@@ -14620,7 +14620,7 @@ def test_W8_S3_4_target_encoding_is_in_fold(server: FileServer) -> None:
   (gate tests run in PR 2's TruthSuite venv — the sidecar pins plus mypy; the sidecar venv stays product-only) → 5
   passed (RF and MLP repeat within 1e-9; the inner scores of 3 candidates are means over 15 grouped folds with
   intervals; the shuffled-label target-encoded PostalCode scores a held-out AUC whose Hanley–McNeil interval covers 0.5).
-- [ ] Step 3: Write the `PsGatePytest` unit test first (pure: it reads a canned JUnit report).
+- [x] Step 3: Write the `PsGatePytest` unit test first (pure: it reads a canned JUnit report).
   `IT/src/checks/ps-gates/__tests__/fixtures/canned-junit.xml`:
 
 ```xml
@@ -14667,7 +14667,7 @@ describe('PsGatePytest.FromJUnit', () => {
 ```
 
   `cd packages/TestingFramework/integration-test-suite && pnpm test -- ps-gate-pytest` → fails: unresolved `../ps-gate-pytest`.
-- [ ] Step 4: Implement `IT/src/checks/ps-gates/ps-gate-pytest.ts` (§5.4's signature):
+- [x] Step 4: Implement `IT/src/checks/ps-gates/ps-gate-pytest.ts` (§5.4's signature):
 
 ```ts
 /**
@@ -14767,7 +14767,7 @@ export class PsGatePytest {
 ```
 
   `cd packages/TestingFramework/integration-test-suite && pnpm test -- ps-gate-pytest` → 4 passed.
-- [ ] Step 5: `IT/src/checks/ps-gates/ps-gate-sidecar.ts` (G2.32's TypeScript half) and G2.32's combined check body:
+- [x] Step 5: `IT/src/checks/ps-gates/ps-gate-sidecar.ts` (G2.32's TypeScript half) and G2.32's combined check body:
 
 ```ts
 /** G2.32's refusal half: a completed result whose CodeVersion lacks scikit-learn is refused and the run is not Completed. */
@@ -14833,7 +14833,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-s5-4-3', PsGate.
 ```
 
   G2.27's and G2.31's check files are the §6 preamble's pytest form with the node and `expectedCases` Step 6's table gives.
-- [ ] Step 6: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
+- [x] Step 6: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
   `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
@@ -14844,26 +14844,26 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-s5-4-3', PsGate.
   | G2.31 | `.gate-W1-S5.4-2.json` | `ps-gate-w1-s5-4-2.checks.ts` · `PsGateW1S54No2Checks` | `'G2.31 W1 → S5.4 #2: two single-threaded RF and MLP trainings repeat predictions within 1e-9, 2 of 2'` | pytest body, `expectedCases = 2`: `tests/gates/test_trainer_contract_gates.py::test_W1_S5_4_2_rf_and_mlp_repeat_exactly` |
   | G2.32 | `.gate-W1-S5.4-3.json` | `ps-gate-w1-s5-4-3.checks.ts` · `PsGateW1S54No3Checks` | `'G2.32 W1 → S5.4 #3: lineage records library versions and threads; a run lacking either is refused'` | Step 5's combined body: pytest `expectedCases = 1`, `tests/gates/test_trainer_contract_gates.py::test_W1_S5_4_3_versions_and_threads_logged`, and `SidecarGates.MeasureCodeVersionRefusal()` |
 
-- [ ] Step 7: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
+- [x] Step 7: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
   `export * from './checks/ps-gate-w8-s3-4.checks';`
   `export * from './checks/ps-gate-w1-s5-4-2.checks';`
   `export * from './checks/ps-gate-w1-s5-4-3.checks';`
-- [ ] Step 8: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-w8-s3-4': 1`, `'ps-gate-w1-s5-4-2': 1`, `'ps-gate-w1-s5-4-3': 1` to
+- [x] Step 8: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-w8-s3-4': 1`, `'ps-gate-w1-s5-4-2': 1`, `'ps-gate-w1-s5-4-3': 1` to
   `EXPECTED_BUNDLE_COUNTS`; the bundle total `toHaveLength(166)` → `toHaveLength(169)` (+ any bundle `next` added); add
   `'ps-gate-w8-s3-4.G2.27'`, `'ps-gate-w1-s5-4-2.G2.31'`, `'ps-gate-w1-s5-4-3.G2.32'` to the gated-skip snapshot's `RequiresMutation` list.
-- [ ] Step 9: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
+- [x] Step 9: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
   **Create** `metadata-optional/integration-test/test-suites/.ps-gates-training-suite.json` (suite `Predictive Studio Gates — Training`, `Status: "Active"`, `Description` "The thirty-five deterministic Phase-2 training gates (G2.x outside the statistical suite). Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training\"", `uuidgen` key) holding `W8 -> S3.4` (`Sequence` 1), `W1 -> S5.4 #2` (`Sequence` 2), `W1 -> S5.4 #3` (`Sequence` 3).
-- [ ] Step 10: **Runtime check** (§6 preamble, Gate flip 6):
+- [x] Step 10: **Runtime check** (§6 preamble, Gate flip 6):
   `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → 0 failed (pins and parity);
   `pnpm mj sync push --dir=metadata-optional/integration-test --ci` → exit 0; restart MJAPI; then, one gate at a time,
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "<name>"` → pass for `W8 -> S3.4`, `W1 -> S5.4 #2`, `W1 -> S5.4 #3`.
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → 3 of 3 passed.
   The PR 3 row count (§6 preamble) → `15`.
   Measured values to see and record in §11: G2.27 `collected=1 passed=1`, G2.31 `collected=2 passed=2`, G2.32 `collected=1 passed=1 lineageRefused=true runStatus=Failed`.
-- [ ] Step 11: **Mutation check G2.27:** the target encoder is fitted on all rows before the folds (the shuffled-label AUC interval excludes 0.5) → `W8 -> S3.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.27:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G2.31:** the random forest and MLP estimators drop `random_state` (predictions differ) → `W1 -> S5.4 #2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.31:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G2.32:** `TrainerRunRecorder.ApplyTrainerResultToRun` skips `TrainerContract.CodeVersionGaps` (a lineage-incomplete run completes) → `W1 -> S5.4 #3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.32:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 14: Runtime check (F-L4-5: W8 under 2 GB and 10 s) — from `src/python`:
+- [x] Step 11: **Mutation check G2.27:** the target encoder is fitted on all rows before the folds (the shuffled-label AUC interval excludes 0.5) → `W8 -> S3.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.27:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 12: **Mutation check G2.31:** the random forest and MLP estimators drop `random_state` (predictions differ) → `W1 -> S5.4 #2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.31:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 13: **Mutation check G2.32:** `TrainerRunRecorder.ApplyTrainerResultToRun` skips `TrainerContract.CodeVersionGaps` (a lineage-incomplete run completes) → `W1 -> S5.4 #3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.32:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 14: Runtime check (F-L4-5: W8 under 2 GB and 10 s) — from `src/python`:
   `PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python /usr/bin/time -l $MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python -m pytest -p no:cacheprovider -q "tests/gates/test_trainer_contract_gates.py::test_W8_S3_4_target_encoding_is_in_fold"`
   (Linux: `/usr/bin/time -v`). Expected: passes; `real` under 10 s and `maximum resident set size` under 2 GB
   (measured 0.43 s for the selection and fit, 0.97 GB peak for the whole M5 gate session; the review measured ~33 GB
@@ -14900,7 +14900,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-s5-4-3', PsGate.
   → `25.0.1 0.15.0` (M5.2).
 - `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- -p no:cacheprovider --ignore=tests/gates` (the
   product sidecar venv) → 0 failed: the M4 count plus 22 trainer unit tests (contract 3, encoding 3, snapshot 3,
-  folds 3, algorithms 6, selection 4) and 8 legacy-route tests (record the count in §11).
+  folds 3, algorithms 6, selection 4) and 9 legacy-route tests (record the count in §11).
 - `cd packages/AI/PredictiveStudio/Sidecar && PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python -- -p no:cacheprovider tests/gates`
   → 5 passed. Without `PYTHONPATH` (no `truthsuite`) or with a seed missing from PR 2's cache the 5 gate tests fail by
   design (no skip).
@@ -14914,8 +14914,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-s5-4-3', PsGate.
   `ps-gate-pytest.test.ts`; bundle total 169); the PR 3 row count (§6 preamble) → `15`.
 - `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → 3 of 3
   passed; `… suite "Predictive Studio Gates — Prediction Units"` → 12 of 12 passed.
-- The keep-list run (§6 preamble) → Containment 10 of 10 passed; Feature Pipelines 5 of 5 passed; Deterministic: the
-  M1-start counts, no new failure.
+- The keep-list run (§6 preamble) → Containment 10 of 10 passed; Feature Pipelines environment-blocked (D3-78: needs
+  bizapps-common installed; recorded, not counted); Deterministic: the M1-start counts, no new failure.
 - Runtime: Task M5.2 Step 7 (TruthSuite venv versions, an `n400` set read back), Task M5.10 Step 5 (live `/train`),
   Task M5.11 Step 5 (DB `ComputeSeconds`/`ComputeCost`), Task M5.12 Step 14 (W8 time and memory).
 
@@ -30687,6 +30687,19 @@ corrected, B-REGISTRY-TEST).
 - **D3-103** · G1.1 stays an in-process read; the C1 manifest assertion (4,873 manifest rows mapping to the reference keys, 0 extra; snapshot censored 1,756 and label-known 44) moves to G1.2, which trains the same unit; G1.3 asserts W5's snapshot (censored 2,147, 0 manifest rows on the censored decision day) (M4 preflight Q10, M4.6). *Rejected:* training inside G1.1 (it would no longer be the cheap reference read).
 - **D3-104** · G1.10's mutation checks are (a) the retrain sends the logged hyperparameters with `C` set to 0.001 — red, `maxAbsDiff` 1 — and (b) the retrainer no longer reports a verified content hash — red (M4.6; §4.1 and Step 10 reworded at the M4 close). The ruled seed mutation (`random_state` 42 → 43) stayed green, and that is correct: the sidecar's `validation.random_state` seeds only its internal validation split, while the model that scores the forwarded locked holdout is fit on all development rows with `algorithms.DEFAULT_RANDOM_STATE`, and lbfgs logistic regression is deterministic, so `holdout_metrics` cannot depend on it. *Rejected:* keeping the seed mutation (it cannot go red); loosening G1.10.
 - **D3-105** · G1.11 resolves every value against the scored row, not against the assembler's own references: the scored rows must be exactly the 20 sampled ids, a field reference must key the row (or its stored key field), an aggregate's owner must be the row's stored owner key and its as-of day the row's decision day (`PredictionUnitRowReader.UnitDecisionDate`), every row must carry one entry per non-identifier feature (5 × 20 = 100 expected) and every matrix column must be covered (M4.6 rounds 1–2). The resolver accepts `immutable-after-create` for an entity with no creation instant, checks `created:<iso>` against the later of `__mj_CreatedAt` and the Create Record Change (the assembler's rule), decodes bit/boolean as 1/0 and `__other` against the snapshot's category fold, bounds a record-changes value to the latest change in effect before the day after the decision day, and never resolves series, feature-value or `days-since-decision` values (fails closed). `AsOfFeatureAssembler.ContributorsVersion` and `LockedHoldoutSplitter.Mulberry32` became public statics (one owner of each rule; the harness sampler uses the engine's PRNG), and `PsGate.Harness` sets `PREDICTIVE_STUDIO_SIDECAR_URL` from the suite's `sidecar.url` before any client is built. Mutations shown red: an empty `computedAt` (0 of 20), a perturbed cell (19 of 20), each row bound to the next row (0 of 20). *Rejected:* the resolver ignoring `computedAt` as the mutation (it only makes the resolver more permissive, so it cannot go red); 1:1 positional matching of cells to entries (date parts give one entry several cells).
+- **D3-106** · The sidecar does not recompute the feature-schema hash: it copies `TrainerRequest.snapshot.featureSchemaHash` (the Training Snapshot row's `FeatureSchemaHash`) onto `ReturnedArtifact.featureSchemaHash` once both files' SHA-256 are verified (M5.1, M5.5). *Rejected:* reproducing Core's `Canonicalize` bytes in Python (a second canonical form that can drift from the engine's).
+- **D3-107** · `PreAuthDownload.driverLifetimeSeconds` and `expiresAt` are nullable: a driver whose URLs do not expire (the local file-system driver) sends null and the sidecar checks expiry only when `expiresAt` is set; an unreadable expiry fails closed as `expired-url`. A co-located sidecar accepts the local driver's `file://` URLs (remote sidecars are out of M5's scope; owner flag p on driver lifetimes). *Rejected:* inventing a lifetime for a non-expiring driver (a false contract value).
+- **D3-108** · The snapshot format literals have one Python owner, `app/snapshot_format.py`, mirroring Core `snapshot-format.ts`; the sidecar's header model mirrors `StoreSchemas` (`extra="forbid"`, strict types, cardinality cap ≥ 1) (M5.3, M5.5). *Rejected:* literals repeated across sidecar modules.
+- **D3-109** · `hashed` and `target-in-fold` encoders are fixture-only until a later milestone lifts the assembler's one-hot-only rule, so G2.27 is a sidecar-level gate on a fixture-built W8 snapshot. The assembler's label-free `__other` fold (its counts include future holdout rows) stands; the sidecar one-hots every declared level when the declared non-missing levels number at most `cardinalityCap + 1` and binds its own cap only beyond that (fixture data), so the M5 table's `max_categories` row is mutated as that cap branch (M5.4 rounds 1–2). *Rejected:* folding `__other` a second time in-fold (it would merge a level the assembler kept); fold-dependent one-hot widths.
+- **D3-110** · The trainer honours the header's declared impute op per numeric column (median with an indicator only when no op names the column); an all-missing fold column keeps its width (`keep_empty_features=True`, indicator all 1). A constant fill on a numeric column must be a finite number: the sidecar refuses any other fill at load (`malformed`), and the engine's `FeatureResolver` now refuses it at pipeline resolution as `non-numeric-in-numeric-column` naming the column (M5 close), so the failure surfaces once, not on every training run. *Rejected:* coercing a missing or text constant to 0 or NaN.
+- **D3-111** · Inner folds default to the reference pipeline's unstratified assignment (`repeated-stratified-kfold` stratifies on classification only, as its kind says); `grouped-kfold` groups by the manifest's group key, else the entity key; `blocked-time` groups only when the protocol names a `groupKey` (null = every row its own group) and keeps training periods ≤ the earliest validation period − `gapPeriods` (the reference's `<=`); every empty train or validation fold and `n < folds` is refused naming the fold (M5.6, M5.8). The protocol's `groupKey` is informational in M5 (M6.5 validates it against the unit). *Rejected:* silently empty folds.
+- **D3-112** · `poisson_glm` and `tweedie_glm` are baseline-only drivers with no `MJ: ML Algorithms` row (owner flag o: `metadata/ml-algorithms/**` is outside the allowlist). Fixed estimator keywords (objective, metric, seeds incl. LightGBM sub-seeds, thread counts, deterministic switches, XGBoost `tree_method`/`device`/`gpu_id`/`predictor`, logistic `multi_class`) are refused as a typed `ObjectiveOverrideError` naming the key (M5.7; `gpu_id`/`predictor` added at the M5 close). *Rejected:* letting a candidate override what the task and protocol fix.
+- **D3-113** · `ComputeSeconds` is wall-clock seconds on both training paths, recorded on the run as soon as the sidecar returns (so a run that fails afterwards keeps the compute it spent) and stored at the column's scale (3 places); `ComputeCost` prices those seconds at `PS_COMPUTE_USD_PER_SECOND`, rounded to the column's 6 places, and is NULL when no rate is configured — NULL is unbudgeted (it adds 0 to a session's `MaxComputeCost`; the note lives where NULL becomes 0, `experiment/seams.ts`). The rate is read before anything is written (a malformed rate fails first) (M5.11, M5 close). *Rejected:* a hard-coded 0 cost; recording compute only on success.
+- **D3-114** · `PsGatePytest` runs gate nodes in the TruthSuite venv (`PREDICTIVE_STUDIO_TRUTH_PYTHON`, else `TruthSuite/.venv`), pinning the hash seed and every BLAS/OpenMP/numexpr pool to one thread, reads the JUnit report (never the exit code), deduplicates cases per node id and counts every erroring case; the Sidecar's own pytest config leaves `tests/gates` out (`--ignore=tests/gates`), so the plain `test:python` stays the product-venv run. TruthSuite's mypy step type-checks every new sidecar trainer module (M5.3–M5.12). M5.9 created the `tests/gates` files and M5.12 extended them. *Rejected:* a second Python venv for gates; reading pytest's exit code.
+- **D3-115** · G2.27's out-of-fold check is one-sided (fails only when the 95% interval of the development rows' out-of-fold AUC lies above 0.5): honest k-fold target encoding on shuffled labels biases the AUC slightly below 0.5 (unmutated 0.4837 [0.472, 0.496]), and leakage can only push it up; the held-out check stays two-sided. Its realistic mutation is the encoder fitted on the development rows before the folds (out-of-fold AUC 0.619 [0.608, 0.630], red). The check Name states both conditions (M5 close); the §4.1 row and the M5.12 Step 6 table still quote the held-out half only — left for the next refresh, as this close edits neither. *Rejected:* a two-sided out-of-fold test (red on correct code).
+- **D3-116** · Exit-line restatements (M5 close): M5.10 adds 9 legacy-route tests, not 8 (the seed-reaches-every-estimator spy); Feature Pipelines is environment-blocked (D3-78) and recorded, not counted. Three M5 mutation rows cannot go red as written and use substitutes (§11 M5 entry, list E): in-fold preprocessing → `test_the_preprocessor_learns_from_the_fit_rows_only` (the encoding-level test fits on its training slice itself); one-hot cap → the in-fold cap branch (no `max_categories`, D3-109), and G2.27's realistic leak; `blocked_time` gap → `test_blocked_time_gap_removes_training_periods_closer_than_the_gap`. *Rejected:* rewording the shipped tests to fit the table.
+- **D3-117** · The trainer path (`encoding.py`, `scores.py`, `folds.py`, `selection.py`, `trainer.py`) sits beside the legacy `/train` route's `preprocessing.py`, `metrics.py` and `_kfold_splits`, which are untouched by design until the trainer route replaces them; M5.10's legacy seed change (an absent seed means 42 for every estimator, an explicit 0 is honoured) moved every recorded legacy/unit gate value, re-recorded at M5.10 (G1.3's dominant share 0.4819 against 0.75). *Rejected:* refactoring the legacy route in M5 (out of the milestone's scope).
+- **D3-118** · A snapshot download is bounded (M5 close): `snapshot.load` takes the run clock — the clock is checked before the download opens and after every chunk, and a socket operation times out at the time left — and each file is capped at `MAX_SNAPSHOT_FILE_BYTES` (1 GiB), refused as `download-failed`; a redirect is followed only to http or https. A manifest `period` that is set but empty is `malformed`, not a fallback to the decision date. *Rejected:* a per-socket timeout alone (a slow server outlasts it); unbounded reads.
 
 ### 9.2 Risks
 
@@ -31137,6 +31150,66 @@ Product-direction questions keep a working automated default; the others are dec
   - (i) List G: commits as under Done; M4 start merge `a916714e86`; servers as under State.
   - (j) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`, compiled by no build or test; (e) Engine's full run prints stderr lines from failure-path tests on `next`; (f) the sensitive-fields bracket (D3-85); (g) 101 Sidecar pytest library deprecation warnings from suites on `next`; (h) `metadata-optional/integration-test/tests/integration/.IT114-ai-vendor-effort.json` on `next` has no `primaryKey`, so each `mj sync push --dir=metadata-optional/integration-test` inserts another `IT114 - AI Vendor Effort Levels` row (7 on `MJ_PS_PR3_claude`); (i) `packages/MJStorage/src/config.ts` has no `local` key, so the driver reads `STORAGE_LOCAL_ROOT` directly, and `MJStorage/README.md` does not describe the driver (both outside the allowlist); (j) one later migration-description edit: `ContentHash` ("the three file hashes" → matrix, manifest and feature-schema hashes plus identity), `MatrixFileID` ("header line with column names" → a header object), `EvaluationProtocolID` ("NULL only for legacy" holds once protocols are mandatory), both CodeGen sections regenerated; (k) converging `MJFilesArtifactStore` (model artifacts under `PS_ARTIFACT_DIR`) onto the snapshot file store, with its 4 `@deprecated` aliases in `artifact-store.ts`, belongs to a later milestone; (l) fresh installs need `STORAGE_LOCAL_ROOT` (gotcha b); (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver (harmless while the row is inactive and server-only); (n) `SampleRowIds` / `RowId` spell `Id` where dev-best-practices §1 asks for `ID` (plan-named members; a cross-milestone rename).
 
+### 2026-10-28 11:30 EDT — Claude Opus 5.5 (controller) + Opus/Sonnet subagents; close by Claude Opus 5.5 — M5
+
+- **Branch / HEAD:** `ps/pr-3-honest-training` @ the checkpoint commit that follows `a5635ccfaf` (pushed: yes, after step 10).
+- **Database / ports:** `MJ_PS_PR3_claude` (state: clean of truth-suite fixtures — `__mj.PredictionUnit` 0, `PSTruth:` pipelines 0, `__mj.TrainingSnapshot` 0, snapshot `MJ: Files` 0, 0 stored objects under `STORAGE_LOCAL_ROOT`; the C1 corpus and W4 Record Changes stay by design; 9 `IT114 - AI Vendor Effort Levels` Test rows, owner flag h), MJAPI :4031 (PID 4423, started normally with `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:53515`), truth sidecar http://127.0.0.1:53515 (Python PID 73597, the close's sidecar code).
+- **Done this session:** M5 start (`git fetch origin` → 0 new commits on `next`, no merge); M5.1 `30545c7832` + `c65dd13431` + `4319adb245` (trainer contract, gate types, typed Evaluation Protocol parser in Core; `TRAINER_COMPLETED_KEYS` compile-time completeness); M5.2 `f8e4e621b4` + `6c414bd003` (truth-suite `paths`, `refpipe` port, `p5-golden.json`, real fixtures, `n400`; pyarrow/statsmodels/patsy/formulaic pins; truth guard test); M5.3 `14f4b60ea2` + `379739afac` (pydantic contract mirror, `RunClock`, failure stages, `snapshot_format.py`, test scaffolding, mypy coverage); M5.4 `663958883d` + `6f053f8c48` + `31aab37b41` (in-fold encoding, declared levels, cap rule); M5.5 `3c681b3f43` (snapshot download, SHA-256 verification, strict header mirror, typed parse); M5.6 `3864c94db3` + `0d71f61309` (repeated stratified, grouped and blocked-time inner folds); M5.7 `ef8a7d0192` + `ec5305c54f` (seeded estimator factories, objective refusals); M5.8 `a7351e4be2` + `ace1c85293` (proper scores, corrected resampled-t, 1-SE selection, finalist refit); M5.9 `a47b85a1fe` (CodeVersion); M5.10 `a9bd3a4536` (legacy `/train` seeds every estimator); M5.11 `88444332b1` (real compute on the run, lineage refusal); M5.12 `ca090eb1b3` + `a5635ccfaf` (`PsGatePytest`, G2.27/G2.31/G2.32, the Training suite); this close's checkpoint (self-audit fixes, plan edits).
+- **Standards self-audit (`git diff bd40318c3b..HEAD -- packages/` — M5's 22 commits, 7,382 added lines (4,818 outside TruthSuite and `checks/ps-*`; 1,481 TypeScript, 3,604 sidecar Python) — against dev-best-practices.md and constraints §2; findings fixed first, each behaviour change test-first):**
+  - Scans: no `any`/`as` cast in TS product lines, no `.Get(`/`.Set(`, `.then(`, dynamic `import(`, `PrimaryKeys[0]`, loose equality, bare `new RunView()`/`new Metadata()`, `JSON.parse`, new exported free function; one `??` (`ps-gate-pytest.ts`, commented: exit code 0 is real); 170 marker lines, all the exact `// case-violation-ok-legacy-back-compat: contracts.ts wire name`; `git diff --name-only bd40318c3b..HEAD -- packages/ | xargs git grep -n "@deprecated" --` → 0 lines; plan vocabulary in product lines: only the gate markers in `Sidecar/src/python/tests/gates/` (`@pytest.mark.gate("W1 -> S5.4 #2")`, the gate node ids the plan names — gate infrastructure like `checks/ps-*`) and the registered gate ids pinned in `check-registry.test.ts`; Python: snake_case throughout, no new `Any` outside the documented legacy `/train` half of `algorithms.py`, two reasoned `# type: ignore[misc]` (sklearn base classes ship no stubs); mypy strict covers every new sidecar trainer module (`trainer_schemas`, `failures`, `snapshot_format`, `encoding`, `snapshot`, `folds`, `algorithms`, `scores`, `selection`, `trainer`, `code_version` and the two test tools): 31 files clean. One owner class per TS module, except `trainer-result.ts`'s `TrainerLineageRefusedError` beside `TrainerRunRecorder` (a typed error thrown and documented by its owner, dev-best-practices §2).
+  - Fixed (list A and the audit): (A1) `JUnitCase.NodeId` → `NodeID` (`ps-gate-pytest.ts`, dev-best-practices §1; no behaviour change). (A2) `FeatureResolver` refuses a `constant` impute on a numeric column without a finite numeric fill as `non-numeric-in-numeric-column` naming the column — RED `feature-resolution.test.ts` 1 failed (`expected { Status: 'resolved' … } to deeply equal { Status, Refusal }`) → 15 passed (D3-110). (A3) `snapshot.fetch_verified` takes the run clock (checked before opening and after every chunk; socket timeout = time left), caps a file at 1 GiB and follows redirects only to http/https; `load(req, now, clock)`; an empty manifest `period` is malformed — RED 14 failed (new signature, cap, clock, redirect, empty period) → 46 passed; the four guards each mutated red (D3-118). (A4) tests for `period_ordinals` quarter/month/week/day, manifest precedence, an unreadable `expiresAt`. (A5) xgboost `gpu_id`/`predictor` refused — RED 2 failed → 52 passed. (A6) `test_legacy_validation.py`: the spy takes the required seed, asserts `seen == [7] * 6`, `hp: dict[str, object] | None`. (A7) `ComputePricing.RoundSeconds` (3 places) and `ComputeCostFor` (seconds at 3, cost at 6); `TrainerRunRecorder` and `recordCompute` store rounded seconds; compute recorded as soon as the sidecar returns, so a run failing afterwards keeps it; `trainer-result.test.ts` asserts the refusal `Gaps` and Notes, a `threads: 0` gap and an `Infinity` rate — RED 3 failed (`[61.25049, 0.6125049]`, `[undefined, null]`) → 46 passed (D3-113). (A8) the unbudgeted-NULL note moved from `experiment-orchestrator.ts` to `experiment/seams.ts`, where NULL becomes 0. (A9) G2.27's check Name states both conditions (D3-115). Already done in M5.2's fix round: the `formulaic==1.2.2` pin and the `test_run.py` rewording.
+  - Not changed: the M5 `Id` spellings on wire members (`trainingRunId`, `fileId`, `algorithmId` …) are the camelCase contract (D-067); owner flag n stands for `SampleRowIds`/`RowId`.
+- **Mutation checks (M5 table, 18 rows; each a single-occurrence edit, the named test run, the pre-mutation copy restored byte-identical; all run at this close):**
+  1. `TrainerContract.CodeVersionGaps` ignores blank versions → `CodeVersionGaps › names every missing library and a missing thread count` (1 failed | 5 passed).
+  2. `parseInnerValidation` accepts any kind / `parseBaseline` any kind → `ParseEvaluationProtocolRow › reports every problem of a bad row` (1 failed each); `parsePredictionIntervals` any coverage → `› refuses a nominal coverage outside (0, 1)` (1 failed).
+  3. pydantic `extra="ignore"` → `test_contract_round_trips_and_forbids_unknown_fields` (1 failed).
+  4. `RunClock.check` without the timeout → `test_timeout_raises_timeout`; without the budget → `test_budget_hard_stop_raises_budget_exceeded` (1 failed each).
+  5. `fetch_verified` skips the SHA-256 → `test_snapshot_hash_mismatch_fails_load_snapshot`; skips expiry → `test_snapshot_expired_url_fails_load_snapshot` (1 failed each).
+  6. `snapshot._numeric` NaN for text → `test_non_numeric_in_numeric_column_is_refused_by_name` (1 failed).
+  7. In-fold preprocessing (substitute, D3-116): the encoder fitted on every development row, the model on the fit rows → `test_the_preprocessor_learns_from_the_fit_rows_only` (1 failed; the named encoding test stays green: it fits on its own training slice).
+  8. One-hot cap (substitute, D3-109: there is no `max_categories`): the in-fold cap branch never taken → `test_cardinality_cap_bounds_onehot_width` (`assert 400 == 20`); G2.27's half is the development-only leak below.
+  9. `folds.grouped` assigns rows → `test_grouped_folds_share_zero_keys_and_repeat` (`assert 18 == 0`; 4 failed); `blocked_time` drops the gap (substitute) → `test_blocked_time_gap_removes_training_periods_closer_than_the_gap` (3 failed; the named `…keep_gap_and_groups` stays green).
+  10. objective refusal skipped → `test_objective_override_is_refused` (1 failed).
+  11. `_forest` without `random_state` → `test_refit_is_deterministic[random_forest]` (`0.367 <= 1e-09`); `_trainer_mlp` → `[mlp]` (`0.129 <= 1e-09`); G2.31 below.
+  12. `_resample` draws from all rows (idx ∪ validation) → `test_in_fold_undersampling_never_touches_validation_rows` (1 failed).
+  13. `select_one_se` returns `best` → `test_one_se_rule_prefers_earliest_within_one_se` (1 failed).
+  14. `_assert_dev_only` deleted → `test_selection.py` 19 passed: unexposable by construction (folds are built from development positions only), a defence in depth; deleting it with `_require_development` is red (M5.8).
+  15. legacy seed `or 42` → `test_seed_zero_is_honoured` (1 failed).
+  16. `ReadComputeRate` accepts -1 → `ComputeCostFor / ReadComputeRate › prices seconds…` (1 failed).
+  17. lineage gap check skipped → `› refuses a completed result whose CodeVersion lacks library versions…` and `› names every missing library and a thread count below 1…` (2 failed); G2.32 below.
+  18. `FromJUnit` `NotCollected: []` → `› reports a renamed node as NotCollected…` (2 failed); errors counted over owned cases only → `› counts a collection error…in Errors` (1 failed).
+  Result: 17 of 17 exposable rows red; row 14 green as the table states. The close's new guards (size cap, both clock checks, redirect scheme, empty period) are each red when mutated.
+- **Gate mutation checks (M5.12 and its fix round; evidence in `task-M5.12-report.md`):**
+  - **Mutation output G2.27:** `0 of 1 pytest case(s) passed; not collected: none  {"collected":1,"passed":0,"failed":1,"errors":0,"notCollected":""}` (target encoder fitted on all rows before the folds: held-out AUC 0.607, interval excludes 0.5); development-only leak: the same output (`out-of-fold AUC 0.6190 [0.6082, 0.6298] lies above 0.5`).
+  - **Mutation output G2.31:** `0 of 2 pytest case(s) passed; not collected: none  {"collected":2,"passed":0,"failed":2,"errors":0,"notCollected":""}` (RF and MLP without `random_state`: RF 0.24, MLP 0.694 > 1e-9).
+  - **Mutation output G2.32:** `1 of 1 pytest case(s) passed; a lineage without scikit-learn refused: false  {"collected":1,"passed":1,"failed":0,"errors":0,"notCollected":"","lineageRefused":false,"runStatus":"Completed"}` (the recorder skips `CodeVersionGaps`).
+- **Tests (after the self-audit):**
+  - `cd packages/AI/PredictiveStudio/Core && pnpm test` → 187 passed / 0 failed / 0 skipped (16 files; 173 at M4 + trainer-contract 6 + evaluation-protocol-parse 8).
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 666 passed / 0 failed / 0 skipped (65 files; 653 + trainer-result 7, training-engine 5, feature-resolution 1).
+  - `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test` → 89 passed / 0 failed / 0 skipped (17 files; +1 n400 case). `pnpm run test:python` → 20 passed (judges 7, paths 5 + truth guard 3 + scenario files 2, golden 2, real 1) and mypy strict clean on 31 files; venv `pyarrow 25.0.1`, `statsmodels 0.15.0` (M5.2 Step 7).
+  - `cd packages/AI/PredictiveStudio/Sidecar && pnpm test` → 24 passed / 0 failed / 0 skipped (4 files). `pnpm run test:python -- -p no:cacheprovider` (plain; `tests/gates` excluded by `pytest.ini`) → 317 passed / 0 failed / 0 skipped (133 at M4 + 184: M5's trainer suites, 9 legacy-route tests, the close's 14; 101 library warnings, owner flag g). Gate nodes in the TruthSuite venv (`PREDICTIVE_STUDIO_PYTHON=…/TruthSuite/.venv/bin/python PYTHONPATH=…/TruthSuite/python`, `tests/gates/test_trainer_contract_gates.py`) → 5 passed.
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm run test:integration` (sidecar :53515) → 3 passed / 0 failed / 0 skipped.
+  - `cd packages/TestingFramework/integration-test-suite && pnpm test` → 779 passed / 0 failed / 0 skipped (50 files; `toHaveLength(169)`); PR 3 gate rows (`Tags LIKE '%owner:PR3%' AND Status='Active'`) → 15.
+  - `pnpm run build` at the root → exit 0 (310 tasks). `npm run check:standards` → exit 0 (no errors, 13369 warnings). `check:guards` → exit 0. `check:codegen-tail` → exit 0 (433 entities, 764 migrations).
+  - `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → Completed (3/3 passed); `"Predictive Studio Gates — Prediction Units"` → Completed (12/12 passed); both against MJAPI 74146 restarted on the self-audit build with the restarted sidecar.
+  - Keep-list: Containment → 10 of 10 passed, 0 skipped. Feature Pipelines → ENVIRONMENT-BLOCKED (D3-78): 0 of 5, each "needs bizapps-common installed with its Feature Pipeline changes …". Deterministic (MJAPI 78461, `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`) → 114 passed / 2 failed / 1 skipped (of 117): IT29 `cache-gauntlet.CG5` (the known `next` failure, #3195), IT52 skipped (RUN_SEARCH_TESTS not set), and new: IT33 `runquery-catalog.QC1` — `MJ/Demos/User Activity Summary` times out at 30 s (re-run alone twice: same). Root cause (owner flag q, no M5 code involved): that `next` demo query correlates every active user with a scan of `vwRecordChanges`; Query Store shows the same plan (3174) at 20.5 s at the M4 close and ≥ 30 s now, with durations rising since 10-27 (3.5 → 8.7 → 11.5 → 22.9 → 20.5 → 30.0 s) as `__mj.RecordChange` grew to 94,966 rows (19,616 since the M4 close); each Containment run adds 6,500 `MJ: Record Process Watermarks` changes (14:51:44–14:52:41 UTC = this close's Containment run). Run alone in SQL it takes 122 s.
+  - Milestone-exit gate: see the commit body.
+- **Runtime verification:**
+  - Gate `Measured` (this close's runs): G2.27 `W8 -> S3.4` `{"collected":1,"passed":1,"failed":0,"errors":0,"notCollected":""}`; G2.31 `W1 -> S5.4 #2` `{"collected":2,"passed":2,"failed":0,"errors":0,"notCollected":""}`; G2.32 `W1 -> S5.4 #3` `{"collected":1,"passed":1,"failed":0,"errors":0,"notCollected":"","lineageRefused":true,"runStatus":"Failed","threadsRefused":true,"threadsRunStatus":"Failed"}`; G1.1 `{"matched":4873,"expected":4873,"extra":0}`; G1.2 `{"censoredRowsExcluded":1756,"resolvedRows":4873,"snapshotCensoredRowsExcluded":1756,"snapshotLabelKnownRowsExcluded":44,"manifestRowCount":4873,"manifestRows":4873,"manifestMatched":4873,"manifestExpected":4873,"manifestExtra":0}`; G1.3 `{"censoredRowsExcluded":2147,"censoredInMatrix":0,"meanPrediction":0.828871148354044,"meanTrue":0.7999999998689591,"dominantFeature":"AutoRenew","dominantShare":0.48190744591103746,…,"manifestRowsOnCensoredDecisionDay":0}` (dominant share 0.4819 vs 0.75); G1.6 `{"v2Version":2,"v2LabelVersion":2,"v2SameLineage":true,"modelReferencesV1Unit":true,"modelUnitVersion":1,"inPlaceRefused":true}`; G1.7 `{"refusal":"single-valued-target","modelCreated":false}`; G1.8 `{"refusedContinuous":true,"countRunStatus":"Completed"}`; G1.4 `{"excludedOrFlagged":4,"asOfEqual":16776,"rows":16776,…,"lapsers":3288,"lapsedAfterLapse":3288,"activeBeforeLapse":3288,"recordsMismatched":0}`; G1.5 `{"sameRefused":true,"sameRefusal":"future-period-lag","declaredZeroRefused":true,…,"lagRunStatus":"Completed"}`; G1.9 `{"stoppedNamingColumn":true,"modelCreated":false}`; G1.12 `{"compared":100,"mismatches":0}`; G1.10 `{"manifestRows":16776,"manifestRowCount":16776,"contentHashVerified":true,"maxAbsDiff":0,"reproduced":true}`; G1.11 `{"resolved":20,"sampled":20,"rowsAligned":true,"valuesExpected":100,"valuesSeen":100,"valuesResolved":100,"columnsUncovered":0}`; Containment's ten as recorded at M5.10 (`task-M5.10-report.md`).
+  - Mutation summary: 17 of 17 exposable M5 rows red (above); G2.27, G2.31, G2.32 outputs above.
+  - DB (sqlcmd): during a `W5 -> S2.2` run after the restart, the run row went `Running|NULL|NULL` → `Completed|ComputeSeconds 0.787|ComputeCost 0.000000|TrainingSnapshotID set` (`PS_COMPUTE_USD_PER_SECOND=0`; seconds at the column's 3 places). M5.11 Step 5 (`ComputeSeconds 0.573`, cost 0.000000), M5.10 Step 5 (live `/train` on a throwaway sidecar: RF and MLP twice each identical, AUC 0.590 and 0.562), M5.12 Step 14 (W8 2.02 s, max RSS ~0.31 GB) in their reports. After every run at this close: `PredictionUnit` 0, `PSTruth:` pipelines 0, `TrainingSnapshot` 0, snapshot `MJ: Files` 0, stored objects 0, PR 3 active gate rows 15, `IT114 - AI Vendor Effort Levels` Test rows 9 (owner flag h).
+- **State left behind:** MJAPI on :4031 (PID 4423, `.env.MJ_PS_PR3_claude` + `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:53515`, dispatcher running; log `/tmp/mjapi-4031.log`); truth sidecar http://127.0.0.1:53515 (Python PID 73597, `TruthSuite/.run/sidecar.url`); the integration-suite benchmark-log rewrites restored from HEAD; no `metadata/**` write-backs (no sync push at this close); untracked owner files only.
+- **Next step (exact):** M6 start: `git fetch origin && git merge origin/next` (then the §6 preamble's milestone-start steps; the controller rules on the M6 preflight scan before M6.1), then Task M6.1 Step 1.
+- **Gotchas / decisions:**
+  - (a) §9.1 D3-106…D3-118; the M5 start anchors `# ok 163 · moved 4 · changed 0` with no merge (origin/next had no new commits) (§12).
+  - (b) `snapshot.load(req, now, clock)` now takes the run clock (D3-118): M6's trainer route passes its `RunClock`; a download that runs out of time stops at `timeout`/`budget-exceeded`, not `load-snapshot`.
+  - (c) Restart the truth sidecar after any change to a module it loads (`main.py` imports `algorithms`); its URL changes on every start, so restart MJAPI with the new `PREDICTIVE_STUDIO_SIDECAR_URL` afterwards. Restarts in M5: sidecar after M5.3, M5.7 (+ fix round), M5.10, this close (78595 → 73597); MJAPI after M5.10, M5.11, M5.12 (+ fix round), this close (43784 → 74146 → 78461 dispatcher-disabled → 4423).
+  - (d) Run the Deterministic tier against an MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, with `RUN_MUTATION_TESTS=1`; then restart MJAPI normally. IT33 now fails on this database (owner flag q) and will keep failing as gate runs grow `MJ: Record Changes`.
+  - (e) List E (mutation-table substitutions): row 7 → `test_the_preprocessor_learns_from_the_fit_rows_only`; row 8 → the in-fold cap branch (no `max_categories`) and, for G2.27, the development-only target-encoder leak; row 9's gap half → `test_blocked_time_gap_removes_training_periods_closer_than_the_gap`; row 14 unexposable (defence in depth, stated in the PR description).
+  - (f) List F (parked notes): M5.1 — parser paths untested (rolling-origin, blocked-time, calibration-drift, Promotion); fixture value types build-checked only through the key tuples. M5.2 — golden coverage beyond C1's paths (series/multiclass) left to gates; `formulaic`'s own transitives left to pip. M5.3 — importing `refpipe.run` sets thread env vars. M5.4 — one-hot names can collide across columns (sklearn naming); `NonNumericValueError` beside the legacy class. M5.6 — the gap rule is the reference's (`<=`). M5.7 — `multi_class` is deprecated in sklearn ≥ 1.5 (venv 1.4.2). M5.8 — pooled score (repeat 0) vs paired loss (repeat mean); cross-family refusal in a later task; the `predict_raw` thread cap has no behavioural test. M5.10 — every recorded gate value moved with the 0 → 42 estimator seed (`task-M5.10-report.md`). M5.11 — `ApplyTrainerResultToRun` has no production caller until the trainer route (M6.7). M5.12 — the gate runner reads `PREDICTIVE_STUDIO_TRUTH_PYTHON`; plain Sidecar `test:python` excludes `tests/gates`; G2.27's out-of-fold check is one-sided (D3-115); the §4.1 G2.27 row and the M5.12 Step 6 table still quote the held-out wording.
+  - (g) List G: commits as under Done; no M5 start merge; servers as under State.
+  - (h) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`; (e) Engine's full run prints stderr lines from failure-path tests on `next` (none from an M5 test); (f) the sensitive-fields bracket (D3-85); (g) 101 Sidecar pytest library deprecation warnings (starlette, anyio, sklearn, scipy), none from a PR 3 assertion; (h) `.IT114-ai-vendor-effort.json` on `next` has no `primaryKey` (9 rows here); (i) `MJStorage/src/config.ts` has no `local` key and its README does not describe the driver; (j) the later migration-description edits; (k) converging `MJFilesArtifactStore` onto the snapshot file store with its 4 `@deprecated` aliases; (l) fresh installs need `STORAGE_LOCAL_ROOT`; (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver; (n) `SampleRowIds`/`RowId` spell `Id`; (o) `metadata/ml-algorithms/**` is outside the allowlist, so `poisson_glm`/`tweedie_glm` have no catalog row (baseline-only, D3-112); (p) `MJStorage`'s `CreatePreAuthDownloadUrl` exposes no lifetime (AWS hard-codes 10 minutes), so M6.7 cannot state `driverLifetimeSeconds` honestly without a driver-level member; (q) new: IT33's `MJ/Demos/User Activity Summary` catalog query (on `next`) scans `vwRecordChanges` once per active user and passes IT33's 30 s limit as `MJ: Record Changes` grows — 122 s on this database; the fix (rewrite the demo query or index its access path) belongs to `next`.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — written (trigger a not yet run) — Claude Opus 5.5
@@ -31378,3 +31451,7 @@ Product-direction questions keep a working automated default; the others are dec
 ### 2026-10-28 — M4 close (refresh trigger c at the M4 start merge `a916714e86`) — Claude Opus 5.5
 
 - Anchors `# ok 163 · moved 4 · changed 0` at the M4 start merge `a916714e86` (9 `next` commits; the same four `__mj.ts` entity hints moved as at the M3 start; no pattern changed); no migrations and no integration bundles from `next`, so no sync push was needed; no anchor edited.
+
+### 2026-10-28 — M5 close (no refresh trigger: origin/next had no new commits at the M5 start) — Claude Opus 5.5
+
+- Anchors `# ok 163 · moved 4 · changed 0` at the M5 start (`bd40318c3b`, no merge; the same four `__mj.ts` entity hints moved as at the M3 and M4 starts; no pattern changed); no migrations and no integration bundles from `next`; no anchor edited.

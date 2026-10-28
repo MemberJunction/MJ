@@ -15,7 +15,9 @@ carries no row-id column, so rows and row keys align by position only.
 
 URLs: `http(s)://` (cloud storage drivers) and `file://` (the local file-system driver, whose files only processes on
 the same host can read; this sidecar runs co-located with the engine in that deployment). A URL whose `expiresAt` is
-null does not expire (the local driver issues no lifetime). Any other scheme is a failed download.
+null does not expire (the local driver issues no lifetime). Any other scheme is a failed download, and so is a
+redirect to anything but http or https. A download is bounded by the run clock (the request timeout and the compute
+budget: past either the run stops at that stage) and by a size cap per file (`MAX_SNAPSHOT_FILE_BYTES`).
 """
 
 from __future__ import annotations
@@ -25,10 +27,11 @@ import hashlib
 import http.client
 import json
 import math
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Annotated, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
+from typing import IO, Annotated, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -44,7 +47,7 @@ from .encoding import (
     MissingPolicy,
     NumericEncoding,
 )
-from .failures import SnapshotLoadFailure
+from .failures import RunClock, SnapshotLoadFailure
 from .snapshot_format import INCUMBENT_SCORE_COLUMN, MATRIX_FORMAT, REFERENCE_SCORE_COLUMN
 from .trainer_schemas import PreAuthDownload, TrainerRequest
 
@@ -55,6 +58,10 @@ DecisionPeriod = Literal["day", "week", "month", "quarter", "year"]
 MATRIX_FILE = "matrix.jsonl"
 MANIFEST_FILE = "manifest.jsonl"
 _URL_SCHEMES = frozenset({"http", "https", "file"})
+_REDIRECT_SCHEMES = frozenset({"http", "https"})
+# The largest snapshot file the trainer downloads (1 GiB): a larger body is refused rather than read into memory.
+MAX_SNAPSHOT_FILE_BYTES = 1 << 30
+_CHUNK_BYTES = 1 << 20
 
 
 # ---------------------------------------------------------------------------------------------- download -------
@@ -78,12 +85,48 @@ def _refuse_expired(d: PreAuthDownload, now: dt.datetime) -> None:
         raise SnapshotLoadFailure("expired-url", f"pre-authorised URL for file {d.fileId} expired at {d.expiresAt}")
 
 
-def fetch_verified(d: PreAuthDownload, now: dt.datetime, timeout_seconds: float) -> bytes:
-    """Download one pre-authorised file and verify its SHA-256.
+class _SchemeCheckedRedirect(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to http or https: a pre-authorised URL must not lead the sidecar to another scheme."""
+
+    def redirect_request(self, req: urllib.request.Request, fp: IO[bytes], code: int, msg: str,
+                         headers: http.client.HTTPMessage, newurl: str) -> Optional[urllib.request.Request]:
+        scheme = urllib.parse.urlsplit(newurl).scheme.lower()
+        if scheme not in _REDIRECT_SCHEMES:
+            raise urllib.error.HTTPError(newurl, code, f"redirect to a {scheme!r} URL is refused", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_SchemeCheckedRedirect)
+
+
+def _read_bounded(d: PreAuthDownload, clock: RunClock, max_bytes: int) -> bytes:
+    """Read the body in chunks, refusing it past `max_bytes` and checking the run clock after every chunk. Each socket
+    operation also times out at the time left when the download started, so one stalled read cannot outlast it."""
+    where = f"download of file {d.fileId}"
+    clock.check(where)
+    chunks: List[bytes] = []
+    total = 0
+    with _OPENER.open(d.url, timeout=max(clock.remaining_seconds(), 0.001)) as resp:  # noqa: S310 - scheme checked
+        while True:
+            chunk: bytes = resp.read(_CHUNK_BYTES)
+            if not chunk:
+                return b"".join(chunks)
+            total += len(chunk)
+            if total > max_bytes:
+                raise SnapshotLoadFailure("download-failed", f"download of file {d.fileId} failed: the file is larger "
+                                                             f"than the {max_bytes} bytes a snapshot file may be")
+            chunks.append(chunk)
+            clock.check(where)
+
+
+def fetch_verified(d: PreAuthDownload, now: dt.datetime, clock: RunClock,
+                   max_bytes: int = MAX_SNAPSHOT_FILE_BYTES) -> bytes:
+    """Download one pre-authorised file within the run clock and the size cap, and verify its SHA-256.
 
     Raises:
-        SnapshotLoadFailure: `expired-url`, `download-failed` (also for a URL scheme other than http, https or file)
-            or `hash-mismatch`.
+        SnapshotLoadFailure: `expired-url`, `download-failed` (also for a URL scheme other than http, https or file, a
+            redirect to anything but http or https, and a file larger than `max_bytes`) or `hash-mismatch`.
+        TrainerFailure: `timeout` or `budget-exceeded` when the run clock runs out during the download.
     """
     _refuse_expired(d, now)
     scheme = urllib.parse.urlsplit(d.url).scheme.lower()
@@ -91,8 +134,7 @@ def fetch_verified(d: PreAuthDownload, now: dt.datetime, timeout_seconds: float)
         raise SnapshotLoadFailure("download-failed", f"download of file {d.fileId} failed: unsupported URL scheme "
                                                      f"{scheme!r}")
     try:
-        with urllib.request.urlopen(d.url, timeout=timeout_seconds) as resp:  # noqa: S310 - scheme checked above
-            body: bytes = resp.read()
+        body = _read_bounded(d, clock, max_bytes)
     except (OSError, http.client.HTTPException, ValueError) as exc:
         raise SnapshotLoadFailure("download-failed", f"download of file {d.fileId} failed: {exc}") from exc
     digest = hashlib.sha256(body).hexdigest()
@@ -468,10 +510,11 @@ def parse_snapshot(matrix: bytes, manifest: bytes, feature_schema_hash: str) -> 
     )
 
 
-def load(req: TrainerRequest, now: dt.datetime) -> Snapshot:
-    """Download, verify and parse the request's snapshot. Raises SnapshotLoadFailure (stage `load-snapshot`)."""
-    matrix = fetch_verified(req.snapshot.matrix, now, req.timeoutSeconds)
-    manifest = fetch_verified(req.snapshot.rowManifest, now, req.timeoutSeconds)
+def load(req: TrainerRequest, now: dt.datetime, clock: RunClock) -> Snapshot:
+    """Download, verify and parse the request's snapshot within the run clock. Raises SnapshotLoadFailure (stage
+    `load-snapshot`), or TrainerFailure (`timeout`/`budget-exceeded`) when the clock runs out while downloading."""
+    matrix = fetch_verified(req.snapshot.matrix, now, clock)
+    manifest = fetch_verified(req.snapshot.rowManifest, now, clock)
     return parse_snapshot(matrix, manifest, req.snapshot.featureSchemaHash)
 
 
@@ -489,14 +532,15 @@ def _ordinal(day: dt.date, period: DecisionPeriod) -> int:
 
 def period_ordinals(snap: Snapshot) -> npt.NDArray[np.int64]:
     """Integer period index per row at the unit's decision period, so gaps between training and test rows are counted
-    in whole decision periods. The manifest's `period` wins; otherwise the decision date is bucketed.
+    in whole decision periods. The manifest's `period` wins when it is set (an empty one is malformed, not a fallback
+    to the decision date); a null period buckets the decision date.
 
     Raises:
         SnapshotLoadFailure: `malformed`, when a row's period or decision date is not a yyyy-mm-dd day.
     """
     out = np.empty(len(snap.row_ids), dtype=np.int64)
     for i, (p, d) in enumerate(zip(snap.periods, snap.decision_dates)):
-        text = p or d
+        text = d if p is None else p
         try:
             day = dt.date.fromisoformat(text[:10])
         except ValueError as exc:

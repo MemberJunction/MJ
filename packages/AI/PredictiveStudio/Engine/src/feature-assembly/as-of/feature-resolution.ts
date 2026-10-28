@@ -101,6 +101,7 @@ export class FeatureResolver {
         if (this.isDenied(step.Column)) return;
         const index = this.byName.get(step.Column);
         if (index === undefined) throw new AssemblyRefused({ kind: 'unresolved-column', entity: this.RowEntity.Name, field: step.Column });
+        FeatureResolver.refuseNonNumericConstantFill(step, this.columns[index]);
         // `??`: a FillValue of 0 or '' is a legitimate fill; only an absent one becomes null.
         this.columns[index] = { ...this.columns[index], missing: { impute: step.Strategy, indicator: true, constant: step.FillValue ?? null } };
         return;
@@ -207,6 +208,16 @@ export class FeatureResolver {
   }
 
   /** True when the field deny list names this column (names compared as the leakage guard normalizes them). */
+  /**
+   * A constant fill on a numeric column must be a finite number: the trainer refuses any other fill when it loads the
+   * snapshot, so the pipeline is refused here, at resolution, naming the column, instead of failing every training run.
+   */
+  private static refuseNonNumericConstantFill(step: Extract<FeatureStep, { Kind: 'impute' }>, column: FeatureColumnSpec): void {
+    if (step.Strategy !== 'constant' || column.encoding.kind !== 'numeric') return;
+    if (typeof step.FillValue === 'number' && Number.isFinite(step.FillValue)) return;
+    throw new AssemblyRefused({ kind: 'non-numeric-in-numeric-column', column: step.Column, sampleValue: step.FillValue === undefined ? '' : String(step.FillValue) });
+  }
+
   private isDenied(column: string): boolean {
     return this.deny.has(NormalizeName(column));
   }

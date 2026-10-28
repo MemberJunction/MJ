@@ -61,6 +61,8 @@ def test_objective_override_is_refused() -> None:
         ("logistic_regression", "multiclass", "multi_class", "ovr"),
         ("xgboost", "binary", "tree_method", "exact"),
         ("xgboost", "binary", "device", "cuda"),
+        ("xgboost", "binary", "gpu_id", 0),
+        ("xgboost", "binary", "predictor", "gpu_predictor"),
         ("xgboost", "binary", "nthread", 8),
         ("lightgbm", "binary", "application", "regression"),
         ("lightgbm", "binary", "loss", "huber"),
