@@ -32,6 +32,8 @@ from .trainer_schemas import CandidateSpec, EvaluationProtocol
 # candidate never names them.
 GLM_DRIVER: Dict[TabularFamily, str] = {"binary": "logistic_regression", "multiclass": "logistic_regression",
                                         "continuous": "ridge", "count": "poisson_glm", "non-negative": "tweedie_glm"}
+# The drivers only the GLM baseline fits (no catalog row): a request candidate naming one is refused.
+BASELINE_ONLY_DRIVERS = frozenset({GLM_DRIVER["count"], GLM_DRIVER["non-negative"]})
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 # Gate member names: reserved, so a candidate may neither use one nor start with HEURISTIC_PREFIX.
 DUMMY_MEMBER = "dummy"

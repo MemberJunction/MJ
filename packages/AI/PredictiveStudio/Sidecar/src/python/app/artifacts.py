@@ -197,6 +197,11 @@ class NotATrainerPredictorError(ArtifactRefusedError):
     """A v2 payload decoded to an allowed object that is not a trainer predictor."""
 
 
+class NotAV2EnvelopeError(ArtifactRefusedError):
+    """The bytes are not a ``ps-predictor/v2`` envelope at all (not JSON, or another format tag), so another loader
+    may own them; a v2 envelope that is malformed raises the base ``ArtifactRefusedError`` instead."""
+
+
 class _GuardedArrayWrapper(NumpyArrayWrapper):  # type: ignore[misc]  # joblib has no stubs: its base class is Any
     """joblib's array container with the object-array path routed through the restricted
     unpickler instead of a bare ``pickle.load``."""
@@ -387,14 +392,19 @@ def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, Predictor
     restricted unpickler.
 
     Raises:
-        ArtifactRefusedError: When the bytes are not a well-formed v2 envelope, the payload names a global outside the
+        NotAV2EnvelopeError: When the bytes are not JSON or name another format (a legacy envelope).
+        ArtifactRefusedError: When the bytes are a malformed v2 envelope, the payload names a global outside the
             allow-list or cannot be decoded, or the payload is not a trainer predictor.
     """
     try:
         envelope = PredictorEnvelope.model_validate_json(envelope_bytes)
         payload = base64.b64decode(envelope.payload_b64.encode("ascii"), validate=True)
-    except (ValidationError, binascii.Error, UnicodeEncodeError) as exc:
-        raise ArtifactRefusedError(f"Not a ps-predictor/v2 envelope: {type(exc).__name__}: {exc}") from exc
+    except ValidationError as exc:
+        if any(e["type"] == "json_invalid" or e["loc"] in ((), ("format",)) for e in exc.errors()):
+            raise NotAV2EnvelopeError(f"Not a ps-predictor/v2 envelope: {exc}") from exc
+        raise ArtifactRefusedError(f"Malformed ps-predictor/v2 envelope: {exc}") from exc
+    except (binascii.Error, UnicodeEncodeError) as exc:
+        raise ArtifactRefusedError(f"Malformed ps-predictor/v2 envelope: {type(exc).__name__}: {exc}") from exc
     predictor = _bytes_to_model(payload)
     if not isinstance(predictor, TrainedPredictor):
         raise NotATrainerPredictorError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")

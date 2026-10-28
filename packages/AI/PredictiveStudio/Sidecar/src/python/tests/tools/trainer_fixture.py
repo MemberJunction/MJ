@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 from pydantic import TypeAdapter
 
-from app.baselines import GLM_DRIVER
+from app.baselines import BASELINE_ONLY_DRIVERS, GLM_DRIVER
 from app.schemas import Cell
 from app.snapshot_format import (
     INCUMBENT_SCORE_COLUMN,
@@ -293,10 +293,17 @@ REFPIPE_CANDIDATES: dict[str, list[DriverSpec]] = {
 _GLM_DRIVER_BY_NAME: dict[str, str] = dict(GLM_DRIVER.items())
 
 
+def _default_drivers(family: str) -> list[DriverSpec]:
+    """glm < lgbm < xgb (the 1-SE rule's complexity order). A family whose GLM driver only the GLM baseline may fit
+    (count, non-negative) has no GLM candidate: the gate's `glm` member is that model."""
+    glm = _GLM_DRIVER_BY_NAME[family]
+    lead: list[DriverSpec] = [] if glm in BASELINE_ONLY_DRIVERS else [("glm_candidate", glm, {})]
+    return lead + REFPIPE_CANDIDATES["tabular-boost"]
+
+
 def candidates(family: str, drivers: Sequence[DriverSpec] | None = None) -> list[JsonValue]:
-    """The reference pipeline's candidate set (glm < lgbm < xgb, the 1-SE rule's complexity order) unless `drivers`
-    is given."""
-    spec = list(drivers) if drivers is not None else [("glm_candidate", _GLM_DRIVER_BY_NAME[family], {})] + REFPIPE_CANDIDATES["tabular-boost"]
+    """The reference pipeline's candidate set (see `_default_drivers`) unless `drivers` is given."""
+    spec = list(drivers) if drivers is not None else _default_drivers(family)
     return [{"name": n, "algorithmId": uid(10 + i), "driverKey": d, "hyperparameters": h} for i, (n, d, h) in enumerate(spec)]
 
 

@@ -12,7 +12,7 @@ Keep the two decision tables identical.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Final, Literal, Mapping, Optional, Sequence, Tuple
 
 from .array_types import FArr
 from .intervals import paired_bootstrap
@@ -24,7 +24,7 @@ GateBranch = Literal["a:beats-best-simple", "a:Q15-only-model-beats-dummy", "b:k
 GATE_OUTCOMES: Tuple[GateOutcome, ...] = ("model", "keep-simple-baseline", "no-signal")
 GATE_BRANCHES: Tuple[GateBranch, ...] = (
     "a:beats-best-simple", "a:Q15-only-model-beats-dummy", "b:keep-simple-baseline", "c:no-signal")
-NO_SIMPLE_SIGNAL_NOTE = "no simple baseline carries demonstrable signal"
+NO_SIMPLE_SIGNAL_NOTE: Final = "no simple baseline carries demonstrable signal"
 
 
 def gate_decision(model_beats_dummy: bool, model_beats_best: bool, member_beats_dummy: Dict[str, bool],

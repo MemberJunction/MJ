@@ -142,6 +142,8 @@ class Prediction(BaseModel):
     # Top signed drivers behind THIS row's prediction (linear models only; None otherwise — callers
     # fall back to global feature importance). See app/main.py::_row_contributions.
     contributions: Optional[List[PredictionContribution]] = None
+    # Every class's probability, in PredictResponse.classOrder; None for a regression.
+    probabilities: Optional[List[float]] = None
 
     model_config = {"populate_by_name": True}
 
@@ -150,6 +152,8 @@ class PredictResponse(BaseModel):
     """``POST /predict`` response body."""
 
     predictions: List[Prediction]
+    # The class order `probabilities` follow: the artifact's declared classOrder (v2) or the trained label order.
+    classOrder: Optional[List[str]] = None
 
 
 class HealthResponse(BaseModel):

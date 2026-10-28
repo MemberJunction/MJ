@@ -7,22 +7,32 @@ feature matrix and orchestrates; this service fits/serves the model.
 Endpoints:
   * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
   * ``POST /train``   — fit a model, return artifact + fitted preprocessing + metrics
-  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing
+  * ``POST /trainer`` — one protocol-driven training: inner-CV selection, one holdout scoring, baselines, the gate
+  * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing (legacy or v2 artifacts)
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
+import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 if TYPE_CHECKING:  # scikit-learn is imported function-local at runtime; this import is for the type checker only.
     from sklearn.preprocessing import LabelEncoder
 
 from . import algorithms, artifacts, metrics, preprocessing
+from .artifacts_v2 import PredictorEnvelope
+from .failures import RequestRefused
+from .run import run_trainer
+from .trainer import TrainedPredictor
+from .trainer_schemas import TrainerRequest
 from .schemas import (
     ImportanceKind,
     HealthResponse,
@@ -117,6 +127,18 @@ def train(req: TrainRequest) -> TrainResponse:
         holdout_metrics=result.get("holdout_metrics"),
         validation_out_of_sample=result["validation_out_of_sample"],
     )
+
+
+@app.post("/trainer")
+def trainer(req: TrainerRequest) -> JSONResponse:
+    """Run one protocol-driven training: inner-CV selection on development rows, one scoring of the locked holdout
+    for one finalist, baselines, the gate and artifacts. Returns the TrainerResult (`completed`, or `failed` with its
+    stage); a request that must not run at all (e.g. a primary score of another family) is a 400."""
+    try:
+        result = run_trainer(req)
+    except RequestRefused as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(result.model_dump(mode="json"))
 
 
 def _feature_columns(req: TrainRequest) -> List[str]:
@@ -604,6 +626,9 @@ def predict(req: PredictRequest) -> PredictResponse:
         HTTPException: 400 for a missing artifact/cache key, missing
             ``fitted_preprocessing`` (with ``output_columns``), or a transform error.
     """
+    v2 = _load_v2(req.artifact_b64)
+    if v2 is not None:
+        return _predict_v2(v2[0], v2[1], req)
     try:
         estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
     except (ValueError, artifacts.ArtifactRefusedError) as exc:
@@ -635,7 +660,50 @@ def predict(req: PredictRequest) -> PredictResponse:
     # model's coef_ for per-record contributions (P1-5). Absent/mismatched → contributions degrade to None.
     output_cols = list(req.fitted_preprocessing.get("output_columns") or [])
     predictions = _build_predictions(estimator, X, is_classification, label_classes, output_cols)
-    return PredictResponse(predictions=predictions)
+    return PredictResponse(predictions=predictions, classOrder=list(label_classes) if label_classes else None)
+
+
+def _load_v2(artifact_b64: Optional[str]) -> Optional[Tuple[TrainedPredictor, PredictorEnvelope]]:
+    """(predictor, envelope) when `artifact_b64` carries a ps-predictor/v2 envelope; None when it is another envelope
+    (the legacy loader owns it). A refused v2 envelope is a 400, never a 500."""
+    if not artifact_b64:
+        return None
+    try:
+        raw = base64.b64decode(artifact_b64.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError):  # not base64 at all: the legacy loader reports it
+        return None
+    try:
+        return artifacts.load_v2_envelope(raw)
+    except artifacts.NotAV2EnvelopeError:
+        return None
+    except artifacts.ArtifactRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: PredictRequest) -> PredictResponse:
+    """Score raw rows with a v2 predictor, its own in-fold encoding applied (never re-fit). Classification returns
+    every class's probability in the artifact's declared classOrder; `score` is P(classOrder[1]) for binary, else
+    the predicted class's probability."""
+    names = [c.name for c in envelope.featureColumns if c.encoding.kind != "identifier"]
+    missing = sorted(n for n in names if not any(n in r for r in req.rows))
+    if req.rows and missing:
+        raise HTTPException(status_code=400, detail=f"rows lack the model's feature columns: {missing}")
+    frame = pd.DataFrame([{n: r.get(n) for n in names} for r in req.rows], columns=names)
+    try:
+        out = np.asarray(predictor.predict(frame), dtype=np.float64)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    order = envelope.classOrder
+    if order is None:
+        return PredictResponse(predictions=[Prediction(score=float(v)) for v in out], classOrder=None)
+    probs = np.column_stack([1 - out, out]) if out.ndim == 1 else out
+    preds: List[Prediction] = []
+    for row in probs:
+        k = int(np.argmax(row))
+        score = float(row[1]) if len(order) == 2 else float(row[k])
+        preds.append(Prediction.model_validate({"score": score, "class": order[k],
+                                                "probabilities": [float(v) for v in row]}))
+    return PredictResponse(predictions=preds, classOrder=list(order))
 
 
 def _linear_coef_row(estimator: Any) -> Optional[np.ndarray]:
@@ -708,10 +776,14 @@ def _build_predictions(
         # estimator.classes_ are the encoded ints [0..n-1]; map idx -> string label.
         encoded_labels = estimator.predict(X)
         scores = _positive_scores(estimator, X)
-        return [
+        out = [
             _classification_prediction(scores, encoded_labels, label_classes, i, contribs[i])
             for i in range(X.shape[0])
         ]
+        if scores.ndim == 2 and label_classes and scores.shape[1] == len(label_classes):
+            for i, pred in enumerate(out):
+                pred.probabilities = [float(v) for v in scores[i]]  # every class, in label order
+        return out
     values = np.asarray(estimator.predict(X), dtype=float)
     return [
         Prediction(score=float(values[i]), contributions=contribs[i]) for i in range(X.shape[0])
