@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 from pydantic import TypeAdapter
 
+from app.baselines import GLM_DRIVER
 from app.schemas import Cell
 from app.snapshot_format import (
     INCUMBENT_SCORE_COLUMN,
@@ -286,14 +287,16 @@ REFPIPE_CANDIDATES: dict[str, list[DriverSpec]] = {
         ("xgb", "xgboost", {"n_estimators": 300, "learning_rate": 0.05, "max_depth": 4, "subsample": 0.8}),
     ],
 }
-GLM_DRIVER = {"binary": "logistic_regression", "multiclass": "logistic_regression", "continuous": "ridge",
-              "count": "poisson_glm", "non-negative": "tweedie_glm"}
+
+
+# The GLM baseline's driver per family, looked up by the family name a caller passes (the command line's included).
+_GLM_DRIVER_BY_NAME: dict[str, str] = dict(GLM_DRIVER.items())
 
 
 def candidates(family: str, drivers: Sequence[DriverSpec] | None = None) -> list[JsonValue]:
     """The reference pipeline's candidate set (glm < lgbm < xgb, the 1-SE rule's complexity order) unless `drivers`
     is given."""
-    spec = list(drivers) if drivers is not None else [("glm_candidate", GLM_DRIVER[family], {})] + REFPIPE_CANDIDATES["tabular-boost"]
+    spec = list(drivers) if drivers is not None else [("glm_candidate", _GLM_DRIVER_BY_NAME[family], {})] + REFPIPE_CANDIDATES["tabular-boost"]
     return [{"name": n, "algorithmId": uid(10 + i), "driverKey": d, "hyperparameters": h} for i, (n, d, h) in enumerate(spec)]
 
 

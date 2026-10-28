@@ -14,6 +14,9 @@ All estimators are serialized via ``joblib`` (sklearn, xgboost's sklearn
 wrapper, and lightgbm's sklearn wrapper all pickle cleanly). The ``format``
 field is kept for forward-compat with native booster dumps.
 
+Trainer predictors use their own envelope (``ps-predictor/v2``, see ``artifacts_v2``) and are loaded with
+``load_v2_envelope``; both envelopes go through the same restricted unpickler below.
+
 A process-wide ``OrderedDict``-backed LRU cache keeps recently deserialized
 ``(estimator, envelope)`` pairs keyed by a content hash of the artifact, so
 repeated ``/predict`` calls against the same model skip the deserialize cost.
@@ -22,6 +25,7 @@ repeated ``/predict`` calls against the same model skip the deserialize cost.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import io
 import pickle
@@ -32,6 +36,10 @@ from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 import joblib
 from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
 from joblib.numpy_pickle_utils import _ensure_native_byte_order, _read_fileobject
+from pydantic import ValidationError
+
+from .artifacts_v2 import PredictorEnvelope
+from .trainer import TrainedPredictor
 
 ENVELOPE_VERSION = 1
 
@@ -67,9 +75,55 @@ ENVELOPE_VERSION = 1
 # exact pairs it needs to ``_ALLOWED_GLOBALS`` and extend the round-trip test. Do not add a
 # module prefix.
 
+#: The exact pairs a trainer predictor (``ps-predictor/v2``) pickles beyond the legacy list below: its in-fold
+#: pipeline, the GLM baselines' estimators and losses, its calibration map and the predictor classes themselves.
+#: Recorded by pickling a fitted predictor of every family and driver the trainer ships and listing the globals the
+#: stream resolves (tests/test_artifacts_v2.py fails when one is missing or no longer needed).
+PREDICTOR_V2_GLOBALS: FrozenSet[Tuple[str, str]] = frozenset(
+    {
+        # Python and numpy: the column transformer's column slices and float64 scalars
+        ("builtins", "slice"),
+        ("numpy", "float64"),
+        # the in-fold pipeline: column transformer, imputers, scaler, encoders
+        ("sklearn.pipeline", "Pipeline"),
+        ("sklearn.compose._column_transformer", "ColumnTransformer"),
+        ("sklearn.impute._base", "SimpleImputer"),
+        ("sklearn.preprocessing._data", "StandardScaler"),
+        ("sklearn.preprocessing._encoders", "OneHotEncoder"),
+        ("sklearn.preprocessing._function_transformer", "FunctionTransformer"),
+        ("sklearn.preprocessing._target_encoder", "TargetEncoder"),
+        # the count and non-negative GLM baselines, their losses and link
+        ("sklearn.linear_model._glm.glm", "PoissonRegressor"),
+        ("sklearn.linear_model._glm.glm", "TweedieRegressor"),
+        ("sklearn._loss.loss", "HalfPoissonLoss"),
+        ("sklearn._loss.loss", "HalfTweedieLoss"),
+        ("sklearn._loss.link", "Interval"),
+        ("sklearn._loss.link", "LogLink"),
+        ("sklearn._loss._loss", "CyHalfPoissonLoss"),
+        ("sklearn._loss._loss", "CyHalfTweedieLoss"),
+        ("sklearn._loss._loss", "__pyx_unpickle_CyHalfPoissonLoss"),
+        ("sklearn._loss._loss", "__pyx_unpickle_CyHalfTweedieLoss"),
+        # the isotonic calibration map (Platt is the allowed LogisticRegression)
+        ("sklearn.isotonic", "IsotonicRegression"),
+        # the trainer's own classes and the module-level functions its pipeline steps reference
+        ("app.trainer", "TrainedPredictor"),
+        ("app.calibration", "Calibrator"),
+        ("app.encoding", "ColumnSpec"),
+        ("app.encoding", "NumericEncoding"),
+        ("app.encoding", "CategoricalEncoding"),
+        ("app.encoding", "IdentifierEncoding"),
+        ("app.encoding", "MissingPolicy"),
+        ("app.encoding", "HashBucketEncoder"),
+        ("app.encoding", "_missing_flags"),
+        ("app.encoding", "_missing_flag_names"),
+        ("app.encoding", "_fold_overflow"),
+        ("app.encoding", "_onehot_name"),
+    }
+)
+
 #: Exact (module, name) pairs pickle may resolve while loading an artifact. Everything here
 #: is a class or a reconstructor that takes no path, URL or source text.
-_ALLOWED_GLOBALS: FrozenSet[Tuple[str, str]] = frozenset(
+_ALLOWED_GLOBALS: FrozenSet[Tuple[str, str]] = PREDICTOR_V2_GLOBALS | frozenset(
     {
         # Python
         ("builtins", "bytearray"),
@@ -126,18 +180,20 @@ class ArtifactRefusedError(pickle.UnpicklingError, ValueError):
     callers that map ValueError to a client error (``/predict``) treat it as one."""
 
 
-class _GuardedArrayWrapper(NumpyArrayWrapper):
+# joblib ships no type stubs, so its classes are `Any` to mypy and subclassing them is reported.
+class _GuardedArrayWrapper(NumpyArrayWrapper):  # type: ignore[misc]
     """joblib's array container with the object-array path routed through the restricted
     unpickler instead of a bare ``pickle.load``."""
 
-    def read_array(self, unpickler: "RestrictedModelUnpickler") -> Any:  # type: ignore[override]
+    def read_array(self, unpickler: "RestrictedModelUnpickler") -> Any:
         if self.dtype.hasobject:
             nested = RestrictedModelUnpickler(unpickler.filename, unpickler.file_handle)
             return _ensure_native_byte_order(nested.load())
         return super().read_array(unpickler)
 
 
-class RestrictedModelUnpickler(NumpyUnpickler):
+# joblib ships no type stubs, so its classes are `Any` to mypy and subclassing them is reported.
+class RestrictedModelUnpickler(NumpyUnpickler):  # type: ignore[misc]
     """joblib's unpickler with ``find_class`` gated by ``_ALLOWED_GLOBALS``."""
 
     def find_class(self, module: str, name: str) -> Any:
@@ -307,3 +363,26 @@ def load_estimator(
     estimator, envelope = deserialize_envelope(artifact_b64)
     MODEL_CACHE.put(key, (estimator, envelope))
     return estimator, envelope
+
+
+# ---------------------------------------------------------------------------
+# Trainer predictor envelopes (ps-predictor/v2)
+# ---------------------------------------------------------------------------
+
+def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, PredictorEnvelope]:
+    """Decode a ``ps-predictor/v2`` envelope (the bytes the engine stores) into ``(predictor, envelope)`` through the
+    restricted unpickler.
+
+    Raises:
+        ArtifactRefusedError: When the bytes are not a well-formed v2 envelope, the payload names a global outside the
+            allow-list or cannot be decoded, or the payload is not a trainer predictor.
+    """
+    try:
+        envelope = PredictorEnvelope.model_validate_json(envelope_bytes)
+        payload = base64.b64decode(envelope.payload_b64.encode("ascii"), validate=True)
+    except (ValidationError, binascii.Error, UnicodeEncodeError) as exc:
+        raise ArtifactRefusedError(f"Not a ps-predictor/v2 envelope: {type(exc).__name__}: {exc}") from exc
+    predictor = _bytes_to_model(payload)
+    if not isinstance(predictor, TrainedPredictor):
+        raise ArtifactRefusedError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")
+    return predictor, envelope
