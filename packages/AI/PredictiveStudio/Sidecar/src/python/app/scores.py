@@ -189,14 +189,23 @@ def accuracy(y: FArr, p: FArr) -> float:
 
 
 def _prf(y: FArr, p: FArr) -> tuple[float, float, float]:
+    """Precision, recall and F1 of the positive class at threshold 0.5; each is NaN when its denominator is zero
+    (nothing predicted positive, or no actual positives), F1 whenever precision or recall is.
+
+    Raises:
+        ValueError: When `p` is not 1-D (these are binary metrics).
+    """
+    if _f(p).ndim != 1:
+        raise ValueError("precision, recall and F1 need 1-D binary probabilities")
     yy = _f(y)
     yhat = _labels(p)
     tp = float(np.sum((yhat == 1) & (yy == 1)))
     fp = float(np.sum((yhat == 1) & (yy == 0)))
     fn = float(np.sum((yhat == 0) & (yy == 1)))
-    prec = tp / (tp + fp) if tp + fp > 0 else 0.0
-    rec = tp / (tp + fn) if tp + fn > 0 else 0.0
-    f1 = 2 * prec * rec / (prec + rec) if prec + rec > 0 else 0.0
+    nan = float("nan")
+    prec = tp / (tp + fp) if tp + fp > 0 else nan
+    rec = tp / (tp + fn) if tp + fn > 0 else nan
+    f1 = nan if math.isnan(prec) or math.isnan(rec) else 2 * tp / (2 * tp + fp + fn)
     return prec, rec, f1
 
 

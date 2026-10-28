@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Literal, Union
+from typing import List, Literal, Optional, Union
 
 import numpy as np
 import numpy.typing as npt
+from scipy.special import expit
 from sklearn.base import BaseEstimator
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
@@ -34,20 +35,31 @@ def logit(p: FArr, eps: float = 1e-6) -> FArr:
     return np.asarray(np.log(q / (1 - q)), dtype=np.float64)
 
 
-def _newton_logistic(X: FArr, y: FArr, offset: FArr, iters: int = 100) -> FArr:
-    """Maximum-likelihood coefficients of a logistic GLM with an offset (a 1e-12 ridge keeps the Hessian solvable)."""
+# Coefficients beyond this magnitude mean the likelihood has no finite maximum (separated classes): the fit diverges.
+_DIVERGED = 1e3
+_CONVERGED_STEP = 1e-10
+
+
+def _newton_logistic(X: FArr, y: FArr, offset: FArr, iters: int = 100) -> Optional[FArr]:
+    """Maximum-likelihood coefficients of a logistic GLM with an offset (a 1e-12 ridge keeps the Hessian solvable);
+    None when the fit is undefined: not converged within `iters`, coefficients diverging or non-finite, or a
+    singular Hessian."""
     beta = np.zeros(X.shape[1], dtype=np.float64)
     for _ in range(iters):
-        eta = X @ beta + offset
-        mu = 1 / (1 + np.exp(-eta))
+        mu = expit(X @ beta + offset)
         w = mu * (1 - mu)
         grad = X.T @ (y - mu)
         hess = X.T @ (X * w[:, None])
-        step = np.linalg.solve(hess + 1e-12 * np.eye(X.shape[1]), grad)
+        try:
+            step = np.linalg.solve(hess + 1e-12 * np.eye(X.shape[1]), grad)
+        except np.linalg.LinAlgError:
+            return None
         beta = beta + step
-        if float(np.max(np.abs(step))) < 1e-10:
-            break
-    return beta
+        if not bool(np.all(np.isfinite(beta))) or float(np.max(np.abs(beta))) > _DIVERGED:
+            return None
+        if float(np.max(np.abs(step))) < _CONVERGED_STEP:
+            return beta
+    return None
 
 
 @dataclass(frozen=True)
@@ -60,14 +72,29 @@ class CalibrationFit:
 
 
 def calibration_fit(y: FArr, p: FArr) -> CalibrationFit:
-    """The calibration GLM fit of binary outcomes on predicted probabilities; slope and intercept are NaN when the
-    predictions are constant (the slope is undefined)."""
+    """The calibration GLM fit of binary outcomes on predicted probabilities (1-D P(classOrder[1])).
+
+    Every member is NaN when `y` holds one class (no fit exists). Each fit is NaN on its own when it has no finite
+    maximum-likelihood solution (Newton does not converge, or the coefficients diverge, as on perfectly separated
+    classes); slope and intercept are NaN when the predictions are constant (the slope is undefined).
+
+    Raises:
+        ValueError: When `p` is not 1-D (calibration slope is defined for binary probabilities only).
+    """
     yy = np.asarray(y, dtype=np.float64)
+    if np.asarray(p).ndim != 1:
+        raise ValueError("calibration fit needs 1-D binary probabilities")
+    nan = float("nan")
+    if len(np.unique(yy)) < 2:
+        return CalibrationFit(nan, nan, nan)
     lp = logit(p)
-    citl = float(_newton_logistic(np.ones((len(yy), 1), dtype=np.float64), yy, lp)[0])
+    c = _newton_logistic(np.ones((len(yy), 1), dtype=np.float64), yy, lp)
+    citl = nan if c is None else float(c[0])
     if float(np.ptp(lp)) < 1e-8:
-        return CalibrationFit(float("nan"), float("nan"), citl)
+        return CalibrationFit(nan, nan, citl)
     b = _newton_logistic(np.column_stack([np.ones(len(yy)), lp]), yy, np.zeros(len(yy), dtype=np.float64))
+    if b is None:
+        return CalibrationFit(nan, nan, citl)
     return CalibrationFit(float(b[1]), float(b[0]), citl)
 
 
