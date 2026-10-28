@@ -476,20 +476,25 @@ export class PredictionUnit {
     return null;
   }
 
-  private static parseActor(v: JsonValue | null, errors: string[]): Actor | null {
-    if (v === null) return null;
+  /** Parse an `Actor` JSON value (the `AuthoredBy` columns of units and protocols). */
+  public static ParseActor(v: JsonValue): ParseResult<Actor> {
     if (JsonParse.IsJsonObject(v)) {
       const kind = JsonParse.JsonString(v, 'kind');
       const userId = JsonParse.JsonString(v, 'userId');
       const agentRunId = JsonParse.JsonString(v, 'agentRunId');
       const scheduledJobRunId = JsonParse.JsonString(v, 'scheduledJobRunId');
       const component = JsonParse.JsonString(v, 'component');
-      if (kind === 'human' && userId) return { kind, userId };
-      if (kind === 'agent' && agentRunId) return { kind, agentRunId };
-      if (kind === 'scheduled-job' && scheduledJobRunId) return { kind, scheduledJobRunId };
-      if (kind === 'system' && component) return { kind, component };
+      if (kind === 'human' && userId) return JsonParse.ParseOk({ kind, userId });
+      if (kind === 'agent' && agentRunId) return JsonParse.ParseOk({ kind, agentRunId });
+      if (kind === 'scheduled-job' && scheduledJobRunId) return JsonParse.ParseOk({ kind, scheduledJobRunId });
+      if (kind === 'system' && component) return JsonParse.ParseOk({ kind, component });
     }
-    errors.push('AuthoredBy must be an Actor: {kind:"human",userId}, {kind:"agent",agentRunId}, {kind:"scheduled-job",scheduledJobRunId} or {kind:"system",component}');
-    return null;
+    return JsonParse.ParseFail('AuthoredBy must be an Actor: {kind:"human",userId}, {kind:"agent",agentRunId}, {kind:"scheduled-job",scheduledJobRunId} or {kind:"system",component}');
+  }
+
+  /** The unit parser's actor reader: null when the column did not parse (already reported), else {@link ParseActor}. */
+  private static parseActor(v: JsonValue | null, errors: string[]): Actor | null {
+    if (v === null) return null;
+    return PredictionUnit.collect(PredictionUnit.ParseActor(v), errors);
   }
 }

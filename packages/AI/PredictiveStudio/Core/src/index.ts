@@ -19,6 +19,8 @@ export * from './feature-steps';
 export * from './modeling-plan-spec';
 export * from './modeling-plan-schema';
 export * from './metrics-util';
+export * from './gate';
+export * from './trainer-contract';
 export * from './trust';
 export * from './outcome-config';
 export * from './json-value';
