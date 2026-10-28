@@ -139,6 +139,34 @@ describe('QueryTemplate.Validate: details', () => {
         }).Diagnostics)).toEqual([]);
     });
 
+    describe('known (non-authoritative) parameter types', () => {
+        const known = (Name: string, Type: string): QueryTemplateValidateOptions => ({ KnownParameterTypes: [{ Name, Type }] });
+
+        it.each(['string', 'array', 'date'])('refuses an unfiltered value whose known type is %s', type => {
+            expect(Codes(validate('SELECT {{ v }}', known('v', type)).Diagnostics)).toEqual(['MJQ_UNFILTERED_VALUE']);
+        });
+
+        it('allows an unfiltered value whose known type is number', () => {
+            expect(Codes(validate('SELECT {{ v }}', known('v', 'number')).Diagnostics)).toEqual([]);
+        });
+
+        it('never decides whether a filter fits: the SQL may change a filter', () => {
+            expect(Codes(validate('SELECT {{ v | sqlNumber }}', known('v', 'string')).Diagnostics)).toEqual([]);
+        });
+
+        it('gives way to a declaration, which may make the value server-set', () => {
+            const options: QueryTemplateValidateOptions = {
+                KnownParameterTypes: [{ Name: 'v', Type: 'string' }],
+                DeclaredParameters: [{ Name: 'v', Type: 'string', IsServerSet: true }],
+            };
+            expect(Codes(validate('SELECT {{ v }}', options).Diagnostics)).toEqual([]);
+        });
+
+        it('leaves a parameter with no known type at the untyped warning', () => {
+            expect(Codes(validate('SELECT {{ v }}', known('other', 'string')).Diagnostics)).toEqual(['MJQ_UNFILTERED_UNTYPED']);
+        });
+    });
+
     it.each(['array', 'date'])('refuses an unfiltered %s parameter', type => {
         expect(Codes(validate('SELECT {{ v }}', declared('v', type)).Diagnostics)).toEqual(['MJQ_UNFILTERED_VALUE']);
     });

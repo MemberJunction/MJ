@@ -52,6 +52,36 @@ describe('QueryTemplate.BranchVariants', () => {
         expect(set.Variants[3].Overrides).toEqual({ f: literal(false) });
     });
 
+    describe('compared literals that do not fit the parameter type', () => {
+        const values = (set: ReturnType<typeof plan>, name: string): BranchValue[] =>
+            [set.Base[name], ...set.Variants.map(v => v.Overrides[name])].filter((v): v is BranchValue => v !== undefined);
+
+        it('never gives a date parameter compared text: it keeps the sample and leaves the value out to toggle', () => {
+            const set = plan("SELECT 1 FROM t WHERE 1 = 1 {% if P and P != 'sometext' %}AND d >= {{ P | sqlDate }}{% endif %}");
+            expect(values(set, 'P').filter(v => v.Kind === 'Literal')).toEqual([]);
+            expect(set.Base.P).toEqual(SAMPLE);
+            expect(set.Variants[1].Overrides).toEqual({ P: ABSENT });
+        });
+
+        it('keeps a compared date that fits, and the day after it for the other side', () => {
+            const set = plan("SELECT 1 FROM t WHERE 1 = 1 {% if P == '2024-01-31' %}AND d = {{ P | sqlDate }}{% endif %}");
+            expect(set.Base.P).toEqual(literal('2024-01-31'));
+            expect(values(set, 'P')).toContainEqual(literal('2024-02-01'));
+            expect(values(set, 'P')).not.toContainEqual(literal('2024-01-31_other'));
+        });
+
+        it('never gives a number parameter compared text', () => {
+            const set = plan("SELECT 1 FROM t WHERE 1 = 1 {% if n != 'all' %}AND x = {{ n | sqlNumber }}{% endif %}");
+            expect(values(set, 'n').filter(v => v.Kind === 'Literal')).toEqual([]);
+        });
+
+        it('tries numeric text compared with a number parameter as numbers', () => {
+            const set = plan("SELECT 1 FROM t WHERE 1 = 1 {% if n == '5' %}AND x = {{ n | sqlNumber }}{% endif %}");
+            expect(set.Base.n).toEqual(literal(5));
+            expect(values(set, 'n')).not.toContainEqual(literal('5_other'));
+        });
+    });
+
     it('keeps a required parameter present', () => {
         const set = plan('SELECT {{ a | sqlString }} {% if a %}X{% endif %}');
         expect(set.Variants[1].Satisfiable).toBe(false);

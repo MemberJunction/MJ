@@ -399,7 +399,9 @@ SQL context).
 ### Unfiltered values
 
 A value written into the SQL without an MJ SQL filter is checked by its type. The type is the declared type when the
-query's metadata declares the parameter, otherwise the inferred type.
+query's metadata declares the parameter, otherwise the inferred type. When neither gives a type, a type recorded by a
+parameter row that extraction detected (`AI` or `Parser`) is used. Such a row only types an unfiltered value: it never
+decides whether a filter fits, so an edit may change that parameter's filter.
 
 | Value | Without a filter |
 |---|---|
@@ -808,6 +810,7 @@ if (!check.Value.IsValid) {
 |---|---|---|
 | `Mode` | `'Save'` | `'Refresh'` makes `MJQ_FILTER_TYPE_MISMATCH`, `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` and `MJQ_COMPOSITION_PARTIAL_PATH` warnings. |
 | `DeclaredParameters` | none | `{ Name, Type, IsServerSet? }` from the query's metadata. `Type` drives the filter-fit and unfiltered rules and the `for` iterable check; `IsServerSet` lets a value go unfiltered. Their names also count as outer names for `MJQ_COMPOSITION_IMPLICIT_ARGUMENT`. |
+| `KnownParameterTypes` | none | `{ Name, Type }` for parameters the metadata does not declare, such as detected parameter rows. Used only by the unfiltered-value rule, after `DeclaredParameters` and the inferred type; never by the filter-fit or `for` iterable rules. |
 | `ContextTokens` | the nine tokens | The allowed `Context` tokens. |
 | `ResolveComposition` | none | `(fullPath) => { Exists, Reusable, Parameters: [{ Name, IsRequired }], FullPath?, Compositions? } \| null`; `FullPath` is the target's own full path when it was found by a partial path. Without it, targets are not checked, `MJQ_COMPOSITION_UNCHECKED` is reported, and the result is not `Complete`. Position and duplicate-argument checks run either way. |
 | `QueryPath` | none | The full path of the query being validated, so a composition that leads back to it is a cycle. |

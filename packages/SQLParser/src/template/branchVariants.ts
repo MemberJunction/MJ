@@ -4,6 +4,7 @@ import type { TemplateExpression, TemplateLiteralValue } from './expressionTypes
 import { BranchEvaluator } from './branchEvaluator.js';
 import type { BranchLookup, BranchValue } from './branchEvaluator.js';
 import type { TemplateParameter } from './parameterAnalysis.js';
+import type { TemplateParameterType } from './queryLanguage.js';
 import type { IfNode, TemplateNode } from './templateNodes.js';
 import { WalkTemplate } from './templateWalker.js';
 
@@ -74,11 +75,15 @@ export class BranchVariantPlanner {
     private readonly ifs: IfEntry[] = [];
     private readonly parameterNames: ReadonlySet<string>;
     private readonly required: ReadonlySet<string>;
+    private readonly types = new Map<string, TemplateParameterType>();
     private readonly base = new Map<string, BranchValue>();
 
     private constructor(nodes: readonly TemplateNode[], parameters: readonly TemplateParameter[], private readonly opaque: ReadonlySet<string>) {
         WalkTemplate(nodes, { Node: (node, scope) => { if (node.Kind === 'If') this.ifs.push({ Node: node, Path: scope.IfPath }); } });
-        for (const p of parameters) this.base.set(p.Name, SAMPLE);
+        for (const p of parameters) {
+            this.base.set(p.Name, SAMPLE);
+            this.types.set(p.Name, p.InferredType);
+        }
         this.parameterNames = new Set(parameters.map(p => p.Name));
         this.required = new Set(parameters.filter(p => p.IsRequired).map(p => p.Name));
     }
@@ -128,8 +133,10 @@ export class BranchVariantPlanner {
 
     /**
      * The values worth trying for each parameter the blocks read, in order: Sample, the literals
-     * the blocks' conditions compare it with, and last Absent (unless the parameter is required),
-     * so a present value is preferred.
+     * the blocks' conditions compare it with that fit its type, and last Absent (unless the
+     * parameter is required), so a present value is preferred. A literal that does not fit (text
+     * compared with a date parameter) is never tried: the parameter's validation would refuse it,
+     * so the sample stands for it.
      */
     private candidatesFor(blocks: readonly IfNode[]): Map<string, BranchValue[]> {
         const candidates = new Map<string, BranchValue[]>();
@@ -137,7 +144,7 @@ export class BranchVariantPlanner {
             for (const name of conditionNames(block, this.opaque)) {
                 if (this.parameterNames.has(name) && !candidates.has(name)) candidates.set(name, [SAMPLE]);
             }
-            for (const branch of block.Branches) collectComparisons(branch.Condition, candidates);
+            for (const branch of block.Branches) collectComparisons(branch.Condition, candidates, name => this.types.get(name) ?? 'unknown');
         }
         for (const [name, list] of candidates) if (!this.required.has(name)) list.push(ABSENT);
         return candidates;
@@ -190,7 +197,7 @@ function search(
  * Adds the literals a condition compares each parameter with to that parameter's candidates. A
  * side that is an inline if compares each name its branches can give.
  */
-function collectComparisons(condition: TemplateExpression, candidates: Map<string, BranchValue[]>): void {
+function collectComparisons(condition: TemplateExpression, candidates: Map<string, BranchValue[]>, typeOf: (name: string) => TemplateParameterType): void {
     WalkExpression(condition, node => {
         if (node.Kind !== 'Binary' || !COMPARISON_OPERATORS.includes(node.Operator)) return;
         for (const [side, other] of [[node.Left, node.Right], [node.Right, node.Left]]) {
@@ -198,7 +205,8 @@ function collectComparisons(condition: TemplateExpression, candidates: Map<strin
             if (value === undefined) continue;
             for (const name of comparedNames(side)) {
                 const list = candidates.get(name);
-                if (list) for (const candidate of literalCandidates(value)) addCandidate(list, candidate);
+                const type = typeOf(name);
+                if (list && literalFits(value, type)) for (const candidate of literalCandidates(value, type)) addCandidate(list, candidate);
             }
         }
     });
@@ -231,13 +239,38 @@ function conditionNames(node: IfNode, opaque: ReadonlySet<string>): string[] {
     return names;
 }
 
-/** A compared literal, plus values on each side of it, so every comparison can go both ways. */
-function literalCandidates(value: TemplateLiteralValue): BranchValue[] {
+/**
+ * Whether a compared literal is a value of the parameter's type: a number (or numeric text) for a
+ * number, a boolean for a boolean, text that reads as a date for a date. `null` and any literal for
+ * a string, array or untyped parameter fit.
+ */
+function literalFits(value: TemplateLiteralValue, type: TemplateParameterType): boolean {
+    if (value === null) return true;
+    if (type === 'number') return typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)));
+    if (type === 'boolean') return typeof value === 'boolean';
+    if (type === 'date') return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+    return true;
+}
+
+/**
+ * A compared literal, plus values on each side of it, so every comparison can go both ways, all of
+ * the parameter's type: numeric text compared with a number parameter is tried as numbers, and for
+ * a date parameter the other side is the next day.
+ */
+function literalCandidates(value: TemplateLiteralValue, type: TemplateParameterType): BranchValue[] {
     const literal = (v: TemplateLiteralValue): BranchValue => ({ Kind: 'Literal', Value: v });
+    if (typeof value === 'string' && type === 'number') return literalCandidates(Number(value), type);
     if (typeof value === 'number') return [literal(value), literal(value + 1), literal(value - 1)];
+    if (typeof value === 'string' && type === 'date') return [literal(value), literal(nextDay(value))];
     if (typeof value === 'string') return [literal(value), literal(`${value}_other`)];
     if (typeof value === 'boolean') return [literal(value), literal(!value)];
     return [literal(value)];
+}
+
+/** The day after a date, written `YYYY-MM-DD`. */
+function nextDay(date: string): string {
+    const next = new Date(Date.parse(date) + 24 * 60 * 60 * 1000);
+    return next.toISOString().slice(0, 10);
 }
 
 function sameValue(a: BranchValue, b: BranchValue): boolean {

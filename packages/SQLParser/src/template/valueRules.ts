@@ -28,6 +28,7 @@ export class ValueRules {
     private readonly diagnostics: Diagnostic[] = [];
     private readonly declared = new Map<string, DeclaredTemplateParameter>();
     private readonly inferred = new Map<string, TemplateParameterType>();
+    private readonly known = new Map<string, string>();
     private readonly setNames: ReadonlySet<string>;
     private readonly setValues = new Map<string, SetNode>();
     private readonly contextTokens: readonly string[];
@@ -36,6 +37,7 @@ export class ValueRules {
     private constructor(nodes: readonly TemplateNode[], parameters: readonly TemplateParameter[], options: QueryTemplateValidateOptions) {
         for (const p of options.DeclaredParameters ?? []) this.declared.set(p.Name, p);
         for (const p of parameters) this.inferred.set(p.Name, p.InferredType);
+        for (const p of options.KnownParameterTypes ?? []) this.known.set(p.Name, p.Type);
         this.setNames = SetVariableNames(nodes);
         for (const node of AllNodes(nodes)) if (node.Kind === 'Set' && !this.setValues.has(node.Name)) this.setValues.set(node.Name, node);
         this.contextTokens = options.ContextTokens ?? MJ_QUERY_CONTEXT_TOKENS;
@@ -138,10 +140,17 @@ export class ValueRules {
     private checkUnfilteredParameter(name: string, span: Span): void {
         const declared = this.declared.get(name);
         if (declared?.IsServerSet) return;
-        const type = declared ? declared.Type : this.inferred.get(name) ?? 'unknown';
+        const type = declared ? declared.Type : this.unfilteredType(name);
         if (type === 'number' || type === 'boolean') return;
         if (type === 'string' || type === 'array' || type === 'date') this.unfiltered(span, name, FILTER_FOR_TYPE[type]);
         else this.untyped(span, name);
+    }
+
+    /** An undeclared parameter's type: the one the SQL implies, else a known (non-authoritative) one. */
+    private unfilteredType(name: string): string {
+        const inferred = this.inferred.get(name);
+        if (inferred !== undefined && inferred !== 'unknown') return inferred;
+        return this.known.get(name) ?? 'unknown';
     }
 
     /** The last SQL filter must format the declared type. */

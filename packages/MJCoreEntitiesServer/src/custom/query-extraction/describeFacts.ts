@@ -203,11 +203,29 @@ function renderVariant(input: QueryExtractionInput, definitions: readonly Render
     }
 }
 
-/** The value a branch value gives a parameter in a render; `undefined` leaves it out. */
+/**
+ * The value a branch value gives a parameter in a render; `undefined` leaves it out. A compared
+ * literal that is not a value of the parameter's known type (text compared with a date) would fail
+ * the parameter's validation, so the type's sample stands in for it.
+ */
 function renderValue(branch: BranchValue | undefined, definition: RenderDefinition): string | undefined {
     if (!branch || branch.Kind === 'Absent') return undefined;
-    if (branch.Kind === 'Literal') return branch.Value === null ? undefined : String(branch.Value);
+    if (branch.Kind === 'Literal') {
+        if (branch.Value === null) return undefined;
+        const text = String(branch.Value);
+        if (!definition.TypeKnown || literalFitsType(text, definition.Type)) return text;
+    }
     return definition.TypeKnown ? SampleValueFor(definition.Type, definition.SampleValue) : definition.SampleValue?.trim() || UNTYPED_SAMPLE;
+}
+
+/** Whether a compared literal, as text, is a value of `type`: a number, a date or a boolean; any text for the other types. */
+function literalFitsType(text: string, type: QueryParameterType): boolean {
+    switch (type) {
+        case 'number': return text.trim() !== '' && Number.isFinite(Number(text));
+        case 'date': return !isNaN(new Date(text).getTime());
+        case 'boolean': return text === 'true' || text === 'false';
+        default: return true;
+    }
 }
 
 /**

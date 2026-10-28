@@ -19,6 +19,18 @@ export interface DeclaredTemplateParameter {
     readonly IsServerSet?: boolean;
 }
 
+/**
+ * A parameter type known from a source that does not declare it, such as a parameter row that
+ * extraction detected from an earlier version of the SQL. It is not authoritative: the SQL may
+ * change that parameter's filter, so it never decides whether a filter fits. It only types a value
+ * written without a filter, when neither a declaration nor the SQL gives the type.
+ */
+export interface KnownTemplateParameterType {
+    readonly Name: string;
+    /** The known type: `string`, `number`, `date`, `boolean` or `array`. */
+    readonly Type: TemplateParameterType | string;
+}
+
 /** A parameter of a composed query. */
 export interface CompositionTargetParameter {
     readonly Name: string;
@@ -49,6 +61,12 @@ export interface QueryTemplateValidateOptions {
     readonly Mode?: QueryTemplateValidationMode;
     /** The query's declared parameters, for the type and filter rules. */
     readonly DeclaredParameters?: readonly DeclaredTemplateParameter[];
+    /**
+     * Types known for parameters the metadata does not declare. Consulted only by the unfiltered-value
+     * rule, after `DeclaredParameters` and the type the SQL implies; ignored by the filter-fit and
+     * `for` iterable rules.
+     */
+    readonly KnownParameterTypes?: readonly KnownTemplateParameterType[];
     /** The allowed `Context` tokens; defaults to the nine of the language. */
     readonly ContextTokens?: readonly string[];
     /** Resolves composed queries. Without it, composition targets are not checked and the result is incomplete. */

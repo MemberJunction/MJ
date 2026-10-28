@@ -175,6 +175,31 @@ describe('ComputeQueryExtraction — branch renders (D3)', () => {
     });
 });
 
+describe('ComputeQueryExtraction — a date parameter compared with text', () => {
+    const SQL_FILTERED = "SELECT u.ID, u.Name FROM __mj.vwUsers u WHERE 1 = 1 {% if P and P != 'sometext' %}AND u.CreatedAt >= {{ P | sqlDate }}{% endif %}";
+    const SQL_SERVER_SET = "SELECT u.ID, u.Name FROM __mj.vwUsers u WHERE 1 = 1 {% if P and P != 'sometext' %}AND u.CreatedAt >= {{ P }}{% endif %}";
+
+    it('describes every render with a date, never the compared text', async () => {
+        const { describe, asked } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const result = await ComputeQueryExtraction(input(SQL_FILTERED, { Describe: describe }));
+
+        expect(result.Messages.join('\n')).not.toContain('could not be made');
+        expect(result.Fields?.map(f => f.Name)).toEqual(['ID', 'Name']);
+        expect(asked.some(sql => sql.includes('2024-01-01'))).toBe(true);
+        expect(asked.some(sql => sql.includes('sometext'))).toBe(false);
+    });
+
+    it('gives a parameter typed date only by its stored row a sample date in place of the compared text', async () => {
+        const known: KnownQueryParameter[] = [{ Name: 'P', Type: 'date', IsRequired: false, IsServerSet: true, SampleValue: null, DefaultValue: null, ValidationFilters: null, IsAuthored: true }];
+        const { describe, asked } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const result = await ComputeQueryExtraction(input(SQL_SERVER_SET, { Describe: describe, KnownParameters: known }));
+
+        expect(result.Messages.join('\n')).not.toContain('could not be made');
+        expect(result.Fields?.map(f => f.Name)).toEqual(['ID', 'Name']);
+        expect(asked.some(sql => sql.includes('sometext'))).toBe(false);
+    });
+});
+
 describe('ComputeQueryExtraction — statement semicolons', () => {
     it('describes a statement written with a leading or trailing semicolon without them, template or not', async () => {
         for (const platform of ['sqlserver', 'postgresql'] as const) {
@@ -367,6 +392,38 @@ describe('ComputeQueryExtraction — refusals (R10, save-time rules)', () => {
         const result = await ComputeQueryExtraction(input('SELECT u.ID FROM __mj.vwUsers u WHERE u.OwnerID = {{ OwnerID }}', { KnownParameters: known }));
 
         expect(result.Refusal).toBeNull();
+    });
+
+    describe('an unfiltered value typed only by a stored auto-detected row', () => {
+        const detected = (Type: KnownQueryParameter['Type'], IsServerSet = false): KnownQueryParameter[] =>
+            [{ Name: 'P', Type, IsRequired: true, IsServerSet, SampleValue: null, DefaultValue: null, ValidationFilters: null, IsAuthored: false }];
+
+        it('refuses the save: the stored row types the value the SQL leaves untyped', async () => {
+            const result = await ComputeQueryExtraction(input('SELECT u.ID FROM __mj.vwUsers u WHERE u.Name = {{ P }}', { KnownParameters: detected('string') }));
+
+            expect(result.Refusal).toContain('MJQ_UNFILTERED_VALUE');
+        });
+
+        it('lets an edit add a filter of another type: the stored row decides no filter fit', async () => {
+            const result = await ComputeQueryExtraction(input('SELECT u.ID FROM __mj.vwUsers u WHERE u.ID > {{ P | sqlNumber }}', { KnownParameters: detected('string') }));
+
+            expect(result.Refusal).toBeNull();
+            expect(result.Messages.join('\n')).not.toContain('MJQ_FILTER_TYPE_MISMATCH');
+            expect(result.Parameters.map(p => [p.Name, p.Type])).toEqual([['P', 'number']]);
+        });
+
+        it('still lets a server-set value go unfiltered', async () => {
+            const result = await ComputeQueryExtraction(input('SELECT u.ID FROM __mj.vwUsers u WHERE u.Name = {{ P }}', { KnownParameters: detected('string', true) }));
+
+            expect(result.Refusal).toBeNull();
+        });
+
+        it('only warns for a parameter with no stored type', async () => {
+            const result = await ComputeQueryExtraction(input('SELECT u.ID FROM __mj.vwUsers u WHERE u.Name = {{ P }}'));
+
+            expect(result.Refusal).toBeNull();
+            expect(result.Messages.join('\n')).toContain('MJQ_UNFILTERED_UNTYPED');
+        });
     });
 
     it('requires an argument for a required parameter of a composed query, unless the server sets it', async () => {

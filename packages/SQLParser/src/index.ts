@@ -149,6 +149,7 @@ export type {
     QueryTemplateValidationMode,
     QueryTemplateValidation,
     DeclaredTemplateParameter,
+    KnownTemplateParameterType,
     CompositionTarget,
     CompositionTargetParameter,
     CompositionResolver,

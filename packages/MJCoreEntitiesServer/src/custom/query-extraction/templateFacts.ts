@@ -16,6 +16,7 @@ import type {
     CompositionTarget,
     DeclaredTemplateParameter,
     Diagnostic,
+    KnownTemplateParameterType,
     TableReference,
     TemplateParameter,
 } from "@memberjunction/sql-parser";
@@ -75,6 +76,7 @@ export function AnalyzeQueryTemplate(input: QueryExtractionInput): TemplateAnaly
     const validation = template.Validate({
         Mode: input.Mode,
         DeclaredParameters: DeclaredTemplateParameters(input.KnownParameters),
+        KnownParameterTypes: DetectedTemplateParameterTypes(input.KnownParameters),
         QueryPath: input.QueryPath,
         ResolveComposition: path => resolveTarget(path, input.Queries),
     });
@@ -105,6 +107,16 @@ export function AnalyzeQueryTemplate(input: QueryExtractionInput): TemplateAnaly
  */
 export function DeclaredTemplateParameters(known: readonly KnownQueryParameter[]): DeclaredTemplateParameter[] {
     return known.filter(p => p.IsAuthored || p.IsServerSet).map(p => ({ Name: p.Name, Type: p.Type, IsServerSet: p.IsServerSet }));
+}
+
+/**
+ * The types the detected parameter rows record (the rows {@link DeclaredTemplateParameters} leaves
+ * out). They are not authoritative, so they never decide whether a filter fits. They only type a
+ * value written without a filter when the SQL gives no type. Without them, a string written
+ * unfiltered into a query whose rows were all detected would only be warned about, not refused.
+ */
+export function DetectedTemplateParameterTypes(known: readonly KnownQueryParameter[]): KnownTemplateParameterType[] {
+    return known.filter(p => !p.IsAuthored && !p.IsServerSet).map(p => ({ Name: p.Name, Type: p.Type }));
 }
 
 /**
