@@ -66,3 +66,100 @@ describe('GenericProcessRunTracker.CompleteRun', () => {
         expect(run.ResultSummary).toBeNull();
     });
 });
+
+describe('GenericProcessRunTracker — the detail row waits for its Action log row (#6045)', () => {
+    const summary = { Status: 'Completed' as const, Processed: 1, Success: 1, Error: 0, Skipped: 0, Total: 1 };
+
+    /** A run double whose Save records when the run header was written, next to the detail writes. */
+    function runDouble(order: string[]) {
+        return { ID: 'run-1', Save: vi.fn(async () => { order.push('run-header'); return true; }) };
+    }
+
+    it('does not save the detail before ActionExecutionLogPersisted resolves, and RecordResult does not wait for it', async () => {
+        const order: string[] = [];
+        let landLogRow!: () => void;
+        const ActionExecutionLogPersisted = new Promise<void>((r) => { landLogRow = r; });
+        const detail: DetailDouble = { NewRecord: vi.fn(), Save: vi.fn(async () => { order.push('detail'); return true; }) };
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run: runDouble(order) };
+        const tracker = new GenericProcessRunTracker();
+
+        // RecordResult returns while the log row is still in flight: the loop never waits on it
+        await tracker.RecordResult(runHandle, record,
+            { Status: 'Succeeded', ActionExecutionLogID: 'log-1', ActionExecutionLogPersisted }, user, providerFor(detail));
+        await new Promise((r) => setTimeout(r, 10));
+        expect(detail.Save).not.toHaveBeenCalled();
+
+        let completed = false;
+        const complete = tracker.CompleteRun(runHandle, summary, user).then(() => { completed = true; });
+        await new Promise((r) => setTimeout(r, 10));
+        expect(completed).toBe(false); // CompleteRun's flush covers the gated detail
+
+        landLogRow();
+        await complete;
+        expect(order).toEqual(['detail', 'run-header']);
+    });
+
+    it('saves a detail with no ActionExecutionLogPersisted at once, as before', async () => {
+        const order: string[] = [];
+        const detail: DetailDouble = { NewRecord: vi.fn(), Save: vi.fn(async () => { order.push('detail'); return true; }) };
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run: runDouble(order) };
+        const tracker = new GenericProcessRunTracker();
+
+        await tracker.RecordResult(runHandle, record, { Status: 'Succeeded', AIAgentRunID: 'agent-run-1' }, user, providerFor(detail));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(detail.Save).toHaveBeenCalledTimes(1);
+
+        await tracker.CompleteRun(runHandle, summary, user);
+        expect(order).toEqual(['detail', 'run-header']);
+    });
+});
+
+describe('GenericProcessRunTracker.Checkpoint — honours a pause another writer set', () => {
+    type RunRow = { ID: string; CancellationRequested: boolean; Status: string; ProcessedItems: number };
+    /**
+     * A run entity double over one stored row, with BaseEntity's real save shape: Save() writes every field
+     * of the in-memory entity (not only the changed ones), and Load() replaces the in-memory fields.
+     */
+    function runOverRow(row: RunRow) {
+        const run = {
+            ID: row.ID, CancellationRequested: row.CancellationRequested, Status: row.Status, ProcessedItems: row.ProcessedItems,
+            SuccessCount: 0, ErrorCount: 0, SkippedCount: 0, LastProcessedOffset: null as number | null, LastProcessedKey: null as string | null,
+            EndTime: null as Date | null, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => {
+                row.CancellationRequested = run.CancellationRequested;
+                row.Status = run.Status;
+                row.ProcessedItems = run.ProcessedItems;
+                return true;
+            }),
+            Load: vi.fn(async () => {
+                run.CancellationRequested = row.CancellationRequested;
+                run.Status = row.Status;
+                run.ProcessedItems = row.ProcessedItems;
+                return true;
+            }),
+        };
+        return run;
+    }
+    const counts = (n: number) => ({ Processed: n, Success: n, Error: 0, Skipped: 0 });
+
+    it('pauses at the next checkpoint when CancellationRequested was set on the row since the last one', async () => {
+        const row: RunRow = { ID: 'run-1', CancellationRequested: false, Status: 'Running', ProcessedItems: 0 };
+        const run = runOverRow(row);
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run: run as unknown as MJProcessRunEntity };
+        const tracker = new GenericProcessRunTracker();
+
+        expect(await tracker.Checkpoint(runHandle, { Offset: 10 }, counts(10), user)).toBe(true);
+        row.CancellationRequested = true; // RecordProcess.PauseRun, through its own entity instance
+
+        expect(await tracker.Checkpoint(runHandle, { Offset: 20 }, counts(20), user)).toBe(false);
+        expect(row).toMatchObject({ CancellationRequested: true, Status: 'Paused', ProcessedItems: 20 });
+    });
+
+    it('keeps running and saves the counts when no pause was requested', async () => {
+        const row: RunRow = { ID: 'run-1', CancellationRequested: false, Status: 'Running', ProcessedItems: 0 };
+        const run = runOverRow(row);
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run: run as unknown as MJProcessRunEntity };
+        expect(await new GenericProcessRunTracker().Checkpoint(runHandle, { Offset: 10 }, counts(10), user)).toBe(true);
+        expect(row).toMatchObject({ CancellationRequested: false, Status: 'Running', ProcessedItems: 10 });
+    });
+});

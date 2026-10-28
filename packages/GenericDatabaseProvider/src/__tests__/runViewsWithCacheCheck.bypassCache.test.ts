@@ -56,13 +56,7 @@ class CaptureProvider extends GenericDatabaseProviderTestBase {
 
     /** The fingerprint the cache-check path computes for a param, so a test can seed that exact slot. */
     public FingerprintFor(params: RunViewParams, contextUser?: UserInfo): string {
-        return LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            params,
-            this.InstanceConnectionString,
-            this.ComputeRunViewRLSWhereClause(params, contextUser),
-            undefined,
-            this.ComputeRunViewFLSFingerprintKey(params),
-        );
+        return this.ComputeRunViewCacheFingerprint(params, contextUser);
     }
 }
 

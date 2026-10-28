@@ -29,5 +29,12 @@ export default defineConfig({
         globals: true,
         setupFiles: ['./src/__tests__/setup.ts'],
         include: ['src/__tests__/**/*.test.{ts,tsx}'],
+        // Same values as `vitest.shared.ts`, restated rather than inherited: this package keeps a
+        // self-contained config on purpose (see above), and extending the shared preset would also
+        // pull in `tsconfigPaths()`, which fights the bespoke `resolve.alias` entries below.
+        // Vitest's 5s default is what made `library-registry.test.ts` flake on a loaded CI runner
+        // (shards 3/6 and 5/6) — the tests take milliseconds; it was the import graph that was slow.
+        testTimeout: 30000,
+        hookTimeout: 30000,
     },
 });

@@ -1,5 +1,5 @@
 /**
- * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA10, client
+ * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA12, client
  * transport, needs MJAPI): who a conversation message is from, enforced by the server and proven over the GraphQL
  * wire as two real users.
  *
@@ -13,6 +13,8 @@
  *   - only a message's author may change its authored fields (`UserID`, `Role`, `Message`, attachment, media type,
  *     thread position);
  *   - only its author or the conversation's owner may delete it.
+ * And an agent's reply (`Role='AI'`/`'Error'`) is written only by the server: no person creates one or changes what it
+ * says, and MJ's chat has the server create the reply row for each agent turn (`RunAIAgentFromConversationDetail`).
  *
  * IDENTITIES. A GraphQL client authenticates as one wire identity, so per-user behaviour is only observable through
  * per-user AUTHENTICATION (the model fls-enforcement-client and self-avatar-client use): Setup mints a `full_access`
@@ -46,6 +48,11 @@
  *        and the owner's UserID is refused as posting as someone else, and no row exists.
  *   CA10: the grantee cannot move the owner's message into a conversation the grantee owns (where the owner's rules
  *        would no longer apply): refused, and the message stays in the shared conversation.
+ *   CA11: no person writes an agent's reply: the grantee and the owner saving a `Role='AI'` message, and the grantee
+ *        sending the create mutation with it, are refused, and nothing is written.
+ *   CA12: the grantee's agent turn still gets a reply, written by the server: the agent-turn mutation names the
+ *        grantee's message, its acknowledgement names the reply row the server created, the server settles it, and
+ *        the grantee cannot rewrite it. With no model keys the run itself fails fast; the check is about who writes.
  *
  * CA1–CA6 and CA10 save with entity objects from the acting user's own connection and assert both the
  * `Save()`/`Delete()` result and `LatestResult.CompleteMessage`. CA7–CA9 bypass the entity layer and send raw GraphQL,
@@ -98,8 +105,25 @@ const REFUSAL = {
     OnlyAuthorOrOwnerDeletes: "Only the message's author or the conversation's owner can delete it.",
     NoAccess: 'You do not have access to this conversation.',
     MovedConversation: 'A message cannot be moved to another conversation or fork.',
-    TransactionVariable: 'A conversation message cannot take its values from a transaction variable.'
+    TransactionVariable: 'A conversation message cannot take its values from a transaction variable.',
+    ServerWritesReplies: "Only the server writes an agent's reply."
 } as const;
+
+/** How long CA12 waits for the server to settle the reply row it created (the run ends fast with no model to call). */
+const REPLY_SETTLED_TIMEOUT_MS = 120_000;
+const REPLY_SETTLED_POLL_MS = 2_000;
+
+/** The agent CA12 runs: core-seeded and Active on a standard install. */
+const CA12_AGENT_NAME = 'Sage';
+
+/** The mutation the chat sends for an agent's turn, as any API caller can send it. Fire-and-forget returns the ack at once. */
+const RUN_AGENT_TURN_MUTATION = `
+    mutation RunAIAgentFromConversationDetail($userMessageId: String!, $agentId: String!, $sessionId: String!, $fireAndForget: Boolean) {
+        RunAIAgentFromConversationDetail(userMessageId: $userMessageId, agentId: $agentId, sessionId: $sessionId, fireAndForget: $fireAndForget) {
+            success errorMessage result
+        }
+    }
+`;
 
 /** How long Setup waits for MJAPI to honour the grantee's new grant, and how often it looks. */
 const GRANT_VISIBLE_TIMEOUT_MS = 60_000;
@@ -173,6 +197,29 @@ interface MessageRow {
     Role: MJConversationDetailEntity['Role'];
     Message: string;
     IsPinned: boolean;
+}
+
+/** The fields of an agent's reply row CA12 reads back. */
+interface ReplyRow {
+    ID: string;
+    ConversationID: string;
+    ParentID: string | null;
+    AgentID: string | null;
+    Role: MJConversationDetailEntity['Role'];
+    Status: MJConversationDetailEntity['Status'];
+    Message: string;
+}
+
+/** What `RunAIAgentFromConversationDetail` returns over the wire. */
+interface RunAgentTurnOutput {
+    RunAIAgentFromConversationDetail?: { success: boolean; errorMessage?: string | null; result: string } | null;
+}
+
+/** The fire-and-forget acknowledgement, parsed from the mutation's `result`. */
+interface RunAgentTurnAck {
+    accepted?: boolean;
+    conversationDetailId?: string;
+    createdAt?: string;
 }
 
 /** What happened to a write the rule may refuse: whether it went through, and the reason the caller was given. */
@@ -890,6 +937,119 @@ async function checkCa10MessageCannotMoveConversation(ctx: IntegrationCheckConte
         "CA10: messages in the grantee's own conversation");
 }
 
+/**
+ * CA11 — only the server writes an agent's reply. A person's agent reply is refused over the GraphQL wire whatever
+ * the path: the grantee and the owner saving one as an entity, and the grantee sending the generated create mutation.
+ * Nothing is written. Uses only Setup's conversation and grant.
+ */
+async function checkCa11PeopleCannotWriteAgentReplies(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA11');
+    if (!fx) return;
+    for (const leg of [fx.Grantee, fx.Owner]) {
+        const text = `${fx.RunTag} CA11: ${leg.Email} writing an agent reply ${MARKER}`;
+        const reply = await draftMessage(leg, fx.ConversationID, text);
+        reply.Role = 'AI';
+        assertRefusedWith(await attemptSave(reply), REFUSAL.ServerWritesReplies, `CA11: ${leg.Email} saving a Role='AI' message`);
+        AssertEqual((await messagesWithText(ctx, fx, text)).length, 0, `CA11: rows carrying ${leg.Email}'s refused reply`);
+    }
+
+    const wireText = `${fx.RunTag} CA11: the grantee sending the create mutation with Role='AI' ${MARKER}`;
+    const outcome = await sendDetailCreate(fx.Grantee, {
+        ConversationID: fx.ConversationID,
+        Role: 'AI',
+        Message: wireText,
+        UserID: fx.Grantee.UserID,
+        Status: 'Complete'
+    });
+    assertRefusedWith(outcome, REFUSAL.ServerWritesReplies, `CA11: ${fx.Grantee.Email} sending CreateMJConversationDetail with Role='AI'`);
+    AssertEqual((await messagesWithText(ctx, fx, wireText)).length, 0, 'CA11: rows carrying the refused wire create');
+}
+
+/** The ID of the agent CA12 runs, read as the run's identity; undefined when this install doesn't have it Active. */
+async function findActiveAgentId(ctx: IntegrationCheckContext, name: string): Promise<string | undefined> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        { EntityName: 'MJ: AI Agents', ExtraFilter: `Name = '${EscapeSQLString(name)}' AND Status = 'Active'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+        ctx.User
+    );
+    return res.Success && res.Results.length > 0 ? res.Results[0].ID : undefined;
+}
+
+/** One reply row as the database holds it now; undefined when there is no such row. */
+async function readReply(ctx: IntegrationCheckContext, id: string): Promise<ReplyRow | undefined> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<ReplyRow>(
+        { EntityName: DETAILS_ENTITY, ExtraFilter: `ID = '${EscapeSQLString(id)}'`, Fields: ['ID', 'ConversationID', 'ParentID', 'AgentID', 'Role', 'Status', 'Message'], ResultType: 'simple', BypassCache: true },
+        ctx.User
+    );
+    Assert(res.Success, `reading reply ${id} failed: ${res.ErrorMessage}`);
+    return res.Results[0];
+}
+
+/** Sends the agent-turn mutation as the leg, fire-and-forget, and returns the acknowledgement it parsed. */
+async function startAgentTurn(leg: AuthorshipLeg, userMessageId: string, agentId: string): Promise<RunAgentTurnAck> {
+    const data = (await leg.Provider.ExecuteGQL(RUN_AGENT_TURN_MUTATION, {
+        userMessageId,
+        agentId,
+        sessionId: leg.Provider.sessionId,
+        fireAndForget: true
+    })) as RunAgentTurnOutput | null;
+    const ack = data?.RunAIAgentFromConversationDetail;
+    Assert(ack?.success === true, `CA12: the server refused ${leg.Email}'s agent turn: ${ack?.errorMessage ?? '(no result)'}`);
+    return JSON.parse(ack!.result) as RunAgentTurnAck;
+}
+
+/** Waits (bounded) until the server settles the reply row it created; returns it as stored then. */
+async function waitForSettledReply(ctx: IntegrationCheckContext, id: string): Promise<ReplyRow> {
+    const deadline = Date.now() + REPLY_SETTLED_TIMEOUT_MS;
+    for (;;) {
+        const row = await readReply(ctx, id);
+        Assert(row != null, `CA12: the reply row ${id} disappeared`);
+        if (row!.Status !== 'In-Progress' || Date.now() > deadline) {
+            return row!;
+        }
+        await sleep(REPLY_SETTLED_POLL_MS);
+    }
+}
+
+/**
+ * CA12 — the grantee's agent turn still gets a reply, written by the server. The grantee posts a message and sends
+ * the chat's agent-turn mutation naming it; the acknowledgement names the reply row the server created (before the
+ * run starts), the row is an agent reply to that message, and the server settles it. The grantee cannot then rewrite
+ * it. The deterministic tier has no model keys and the seeded role cannot create agent runs, so the run itself
+ * fails fast: what this proves is who creates and writes the reply, not what the agent says.
+ */
+async function checkCa12AgentTurnGetsAServerWrittenReply(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA12');
+    if (!fx) return;
+    const agentId = await findActiveAgentId(ctx, CA12_AGENT_NAME);
+    if (!agentId) {
+        console.warn(`  ⚠ ${BUNDLE}.CA12 SKIPPED — no Active '${CA12_AGENT_NAME}' agent on this install`);
+        return;
+    }
+    const question = await draftMessage(fx.Grantee, fx.ConversationID, `${fx.RunTag} CA12: the grantee asks an agent ${MARKER}`);
+    assertDone(await attemptSave(question), `CA12: ${fx.Grantee.Email} posting the question`);
+
+    const ack = await startAgentTurn(fx.Grantee, question.ID, agentId);
+    Assert(ack.accepted === true && !!ack.conversationDetailId && !!ack.createdAt,
+        `CA12: the acknowledgement must name the reply row and when it was created; got ${JSON.stringify(ack)}`);
+
+    const created = await readReply(ctx, ack.conversationDetailId!);
+    Assert(created != null, 'CA12: the reply row the acknowledgement names does not exist: the server must create it before acking');
+    AssertEqual(created!.Role, 'AI', 'CA12: the reply row Role');
+    Assert(UUIDsEqual(created!.ConversationID, fx.ConversationID), 'CA12: the reply row is in the shared conversation');
+    Assert(!!created!.ParentID && UUIDsEqual(created!.ParentID, question.ID), `CA12: the reply answers the grantee's message (ParentID=${created!.ParentID ?? '(empty)'})`);
+    Assert(!!created!.AgentID && UUIDsEqual(created!.AgentID, agentId), 'CA12: the reply is from the agent that ran');
+
+    const settled = await waitForSettledReply(ctx, created!.ID);
+    Assert(settled.Status !== 'In-Progress',
+        `CA12: the server did not settle its reply within ${REPLY_SETTLED_TIMEOUT_MS / 1000}s (still In-Progress: "${settled.Message}")`);
+
+    const rewrite = await loadMessage(fx.Grantee, created!.ID);
+    rewrite.Message = `${fx.RunTag} CA12: the grantee rewriting the agent's reply ${MARKER}`;
+    assertRefusedWith(await attemptSave(rewrite), REFUSAL.ServerWritesReplies, `CA12: ${fx.Grantee.Email} rewriting the server's reply`);
+    AssertEqual((await readReply(ctx, created!.ID))?.Message, settled.Message, 'CA12: the reply text after the refused rewrite');
+    console.log(`      → reply ${created!.ID} created by the server before the ack, settled ${settled.Status}, and not rewritable by the grantee`);
+}
+
 export const ConversationAuthorshipClientChecks: NamedCheck[] = [
     {
         Id: `${BUNDLE}.CA1`,
@@ -950,6 +1110,18 @@ export const ConversationAuthorshipClientChecks: NamedCheck[] = [
         Name: "CA10: a grantee moving the owner's message into a conversation the grantee owns is refused, and it stays put",
         RequiresMutation: true,
         Fn: checkCa10MessageCannotMoveConversation
+    },
+    {
+        Id: `${BUNDLE}.CA11`,
+        Name: "CA11: a person's agent reply (Role='AI') is refused over the wire — the grantee's and the owner's, as an entity or a raw create — and nothing is written",
+        RequiresMutation: true,
+        Fn: checkCa11PeopleCannotWriteAgentReplies
+    },
+    {
+        Id: `${BUNDLE}.CA12`,
+        Name: "CA12: the grantee's agent turn gets a reply the server creates (named in the ack) and settles, and the grantee cannot rewrite it",
+        RequiresMutation: true,
+        Fn: checkCa12AgentTurnGetsAServerWrittenReply
     }
 ];
 

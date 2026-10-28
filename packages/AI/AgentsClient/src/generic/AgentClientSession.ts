@@ -334,7 +334,7 @@ export class AgentClientSession {
             // since ExecuteAgentParams requires a full MJAIAgentEntityExtended object
             // which we don't have on the client side.
             const gqlRunParams: GQLRunAgentFromDetailParams = {
-                conversationDetailId: params.ConversationDetailId ?? '',
+                userMessageId: params.UserMessageId ?? '',
                 agentId: params.AgentId,
                 data: params.Data,
                 payload: params.Payload,
@@ -395,7 +395,11 @@ export class AgentClientSession {
 
         try {
             const gqlParams: GQLRunAgentFromDetailParams = {
-                conversationDetailId: params.ConversationDetailId,
+                userMessageId: params.UserMessageId,
+                onAccepted: params.OnAccepted,
+                replyParentId: params.ReplyParentId,
+                announcedByAgentId: params.AnnouncedByAgentId,
+                replyBranchId: params.ReplyBranchId ?? undefined,
                 agentId: params.AgentId,
                 maxHistoryMessages: params.MaxHistoryMessages,
                 data: params.Data,

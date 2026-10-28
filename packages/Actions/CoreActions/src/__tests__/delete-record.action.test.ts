@@ -119,6 +119,25 @@ describe('DeleteRecordAction', () => {
             expect(entity.deleteCallCount).toBe(0);
         });
 
+        it('reports every missing key column in one message', async () => {
+            const entity = new FakeEntity(['Name']);
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name'], ['UserID', 'RoleID'], 'User Roles'), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'User Roles' },
+                    { Name: 'PrimaryKey', Value: { Other: 'x' } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
+            expect(r.Message).toMatch(/'UserID', 'RoleID' not provided/);
+            expect(entity.deleteCallCount).toBe(0);
+        });
+
         it('fails with ENTITY_NOT_FOUND when the entity is not in metadata', async () => {
             const provider = makeProvider({ entityInfo: undefined, entity: new FakeEntity(['Name']) });
             const params = makeParams(

@@ -26,6 +26,7 @@ export {
 export type { RestarLayeredOuterViewArgs } from './postgresqlRestarLayeredOuter.js';
 export {
     AutoQuotePostgreSQLIdentifiers,
+    AutoQuoteLeavesWordBare,
     PostgreSQLQuotingKeywords,
     PostgreSQLStructuralKeywords,
     PostgreSQLContextualStructuralKeywords,

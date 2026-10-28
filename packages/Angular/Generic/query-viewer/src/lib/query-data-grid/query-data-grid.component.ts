@@ -16,6 +16,7 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {
     ColDef,
@@ -106,7 +107,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
         ])
     ]
 })
-export class QueryDataGridComponent implements OnInit, OnDestroy {
+export class QueryDataGridComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -383,6 +384,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         private elementRef: ElementRef,
         private exportService: ExportService
     ) {
+        super();
         // Debounce state changes for persistence
         this.stateChangeSubject.pipe(
             debounceTime(500),
@@ -455,7 +457,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         // Build columns from query fields
-        this.Columns = BuildColumnsFromQueryFields(this._queryInfo.QueryFields);
+        this.Columns = BuildColumnsFromQueryFields(this._queryInfo.QueryFields, this.ProviderToUse);
 
         // Apply initial state if provided via prop (takes precedence)
         if (this.InitialGridState) {

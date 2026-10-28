@@ -592,6 +592,20 @@ export interface RealtimeSessionRunOptions {
   readonly appContext?: AppContextSnapshot | null;
 }
 
+/** Why a call ended, as the runtime reports it on `SessionEnded$`. */
+export type SessionEndReason = 'explicit' | 'error';
+
+/** The `CloseReason` values a client may stamp on its own session row; the others belong to the server. */
+export type ClientCloseReason = 'Explicit' | 'Error';
+
+/** Thrown by a start while a call is live: the runtime holds one driver, and never replaces a live one. */
+export class RealtimeSessionAlreadyActiveError extends Error {
+  constructor(public readonly ActiveAgentSessionId: string | null) {
+    super(`A realtime session is already active${ActiveAgentSessionId ? ` (${ActiveAgentSessionId})` : ''}; end it before starting another.`);
+    this.name = 'RealtimeSessionAlreadyActiveError';
+  }
+}
+
 /**
  * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
  * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
@@ -656,7 +670,7 @@ export class RealtimeSessionRuntime {
   // a naive Active$ subscription would emit session-started with sessionId === null.
   // Emitting explicitly avoids the race entirely. ───
   private _sessionStarted$ = new Subject<{ sessionId: string; channelNames: string[] }>();
-  private _sessionEnded$ = new Subject<{ sessionId: string; reason: 'explicit' | 'error' }>();
+  private _sessionEnded$ = new Subject<{ sessionId: string; reason: SessionEndReason }>();
   private _channelActivity$ = new Subject<BaseRealtimeChannelClient>();
 
   /** Current connection / turn state. */
@@ -821,11 +835,11 @@ export class RealtimeSessionRuntime {
    * Fired EXACTLY ONCE per session as teardown begins, with the prior
    * `agentSessionId` (so subscribers can correlate against `SessionStarted$`'s
    * sessionId) and the client-distinguishable reason — `'explicit'` when the
-   * user called `EndRealtimeSession`, `'error'` when teardown ran from a catch
-   * block. Server-side close paths (janitor, shutdown) do NOT propagate here —
+   * user called `EndRealtimeSession`, `'error'` when the runtime ended the call over a failure: a
+   * failed start, or a fatal error from the provider mid-call. Server-side close paths (janitor, shutdown) do NOT propagate here —
    * they happen out-of-process and have no client push channel today.
    */
-  public readonly SessionEnded$: Observable<{ sessionId: string; reason: 'explicit' | 'error' }> =
+  public readonly SessionEnded$: Observable<{ sessionId: string; reason: SessionEndReason }> =
     this._sessionEnded$.asObservable();
 
   /**
@@ -1184,6 +1198,16 @@ export class RealtimeSessionRuntime {
   private teardownInFlight: Promise<void> | null = null;
 
   /**
+   * True from the moment a start finishes (connected, liveness pulse running) until the slot is
+   * released. A driver's Fatal ends the call only while this is set: during a start, drivers emit
+   * Fatal from their socket handlers while Connect is still pending, and the start's own failure path
+   * ({@link failSessionStart}) is what reports that error, whether Connect then rejects or resolves
+   * (runMintedSession checks {@link lastSessionError} after Connect). Not {@link isSessionLive}: drivers move the
+   * state to 'listening' from inside Connect, and a live call that is resuming reads 'connecting'.
+   */
+  private callWentLive = false;
+
+  /**
    * The latest start's opening of the host's microphone, until {@link IRealtimeMediaHost.ReleaseMicrophone} hands it
    * back; `null` when no opening is owed a release, so a session that ends before asking for the microphone releases
    * nothing.
@@ -1412,6 +1436,26 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Takes the runtime's one driver slot for a new start; the two starts call it after awaiting any
+   * teardown in flight, and only when no End arrived during that wait (a changed {@link startGeneration}).
+   *
+   * A teardown still in flight is awaited rather than read as "busy": ending a call and starting the
+   * next one back to back is normal host behaviour (a retry, a re-mounted surface), and the flag it
+   * used to read flips only at the END of teardown, so the start was dropped with nothing to show
+   * for it — a bare `undefined`, which hosts had to guess at (MJ#4629). A call that is genuinely
+   * live is refused with an error the host can show; it is never silently ignored, and never
+   * overwritten, since a driver no slot points at can never be stopped again.
+   *
+   * Deliberately synchronous: the start's state must be set in the tick the host called it in, or an
+   * End issued straight after the Start (a user tapping back during the mint) finds nothing to abandon.
+   */
+  private claimSessionSlot(): void {
+    if (this.IsActive) {
+      throw new RealtimeSessionAlreadyActiveError(this.agentSessionId);
+    }
+  }
+
+  /**
    * Start a client-direct voice session fronting `targetAgentId`.
    *
    * @param targetAgentId The agent the Realtime Co-Agent voices on behalf of.
@@ -1471,14 +1515,23 @@ export class RealtimeSessionRuntime {
     appContext?: AppContextSnapshot | null,
     options?: RealtimeSessionStartOptions | null
   ): Promise<void> {
-    if (this.IsActive) {
-      return; // a session is already running — ignore duplicate starts
+    // Captured BEFORE any wait: a teardown from here on bumps it, and the checks below (and in
+    // runMintedSession) abandon the start. Re-capturing after the wait would absorb an End issued during it.
+    const generation = this.startGeneration;
+    // Synchronous unless a teardown is in flight: a start must take the slot in the same tick it was
+    // called in, so a host's End issued right after it finds a start to abandon (see claimSessionSlot).
+    if (this.teardownInFlight) {
+      await this.teardownInFlight;
+      // An End issued during the wait found IsActive still true (the last call was closing), so it only
+      // joined that teardown and bumped the generation. Nothing is acquired yet, so nothing to release.
+      if (this.startGeneration !== generation) {
+        return;
+      }
     }
+    this.claimSessionSlot();
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
     this.sessionConversationId = conversationId ?? null;
-    // A teardown while the channels are prepared or the mint runs bumps this; see the checks below.
-    const generation = this.startGeneration;
     // Captured BEFORE the channels are prepared so the mint carries exactly the snapshot the prologue
     // resolved, whatever a channel plugin may push in the meantime.
     const effectiveAppContext = this._appContext$.value;
@@ -1505,7 +1558,7 @@ export class RealtimeSessionRuntime {
     // The host ended the start while the mint ran. That teardown had no session id to close, so
     // close the minted row here, and touch no shared state: a newer start may already own it.
     if (this.startGeneration !== generation) {
-      await this.closeServerSession(session.AgentSessionId);
+      await this.closeServerSession(session.AgentSessionId, 'Explicit');
       return;
     }
 
@@ -1514,7 +1567,7 @@ export class RealtimeSessionRuntime {
       return;
     }
 
-    await this.runMintedSession(session, conversationId ?? null, consent, options?.CameraCheck === true);
+    await this.runMintedSession(session, conversationId ?? null, consent, options?.CameraCheck === true, generation);
   }
 
   /**
@@ -1553,8 +1606,7 @@ export class RealtimeSessionRuntime {
     // published them on ActiveChannels$; skipping teardown would leave them undisposed, their tool
     // handlers registered, and their subscriptions live until the next start replaced them.
     this.agentSessionId = session.AgentSessionId ?? this.agentSessionId;
-    this.setConnectionState('error');
-    await this.teardown(true);
+    await this.endOnFailure();
   }
 
   /**
@@ -1582,9 +1634,15 @@ export class RealtimeSessionRuntime {
     result: StartRealtimeClientSessionResult,
     options?: RealtimeSessionRunOptions
   ): Promise<void> {
-    if (this.IsActive) {
-      return; // a session is already running — ignore duplicate starts
+    // Same wait, same generation check, same reasons as StartRealtimeSession.
+    const generation = this.startGeneration;
+    if (this.teardownInFlight) {
+      await this.teardownInFlight;
+      if (this.startGeneration !== generation) {
+        return;
+      }
     }
+    this.claimSessionSlot();
 
     const effectiveOptions = options ?? {};
     if (!this.hostCanUseProvider(result.Provider)) {
@@ -1592,14 +1650,14 @@ export class RealtimeSessionRuntime {
       return;
     }
     const consent = this.beginSessionStart(effectiveOptions);
-    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent, false);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent, false, generation);
   }
 
   /**
    * Start prologue shared by both entry points: clear the last start's failure, bind the app layer,
    * publish the agent name, reset per-session state, and flip the session live (which is ALSO what
-   * makes the `IsActive` guard suppress duplicate starts while the mint is still in flight — hence it
-   * runs before minting, not after). Returns the resolved recording consent, which the mint half
+   * makes {@link claimSessionSlot} refuse a second start with {@link RealtimeSessionAlreadyActiveError}
+   * while the mint is still in flight — hence it runs before minting, not after). Returns the resolved recording consent, which the mint half
    * reports to the server and the run half uses to decide whether to record.
    */
   private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
@@ -1643,15 +1701,16 @@ export class RealtimeSessionRuntime {
    * the provider connection, and go live. `inputConversationId` is the conversation the START asked
    * for (null ⇒ "server, make me one") — the result alone can't distinguish the two. `cameraCheck` is
    * whether the host shows a camera check ({@link RealtimeSessionStartOptions.CameraCheck}).
+   * `generation` is the {@link startGeneration} the entry point captured before its first await; every
+   * await below is a window in which the host can end the session, and so was every await before this.
    */
   private async runMintedSession(
     session: StartRealtimeClientSessionResult,
     inputConversationId: string | null,
     consent: boolean,
-    cameraCheck: boolean
+    cameraCheck: boolean,
+    generation: number
   ): Promise<void> {
-    // Captured up front: every await below is a window in which the host can end the session.
-    const generation = this.startGeneration;
     try {
       // Mount the channels the resolved policy puts in the session. Deliberately BEFORE the session
       // id is adopted: `ActiveChannels$` consumers (the sessions adapter) treat an emission that
@@ -1702,6 +1761,13 @@ export class RealtimeSessionRuntime {
       }
       if (connectError) {
         throw connectError;
+      }
+      // A Fatal the driver sent during this start (the fatal handler leaves it to the start, see
+      // callWentLive) fails the start even when Connect resolved: the real drivers keep awaiting mic
+      // capture after their connect-failure channel settles, then report 'listening' and resolve on a
+      // socket that already closed. lastSessionError is reset per start and set only by the current client.
+      if (this.lastSessionError?.Fatal) {
+        throw new Error(this.lastSessionError.Message);
       }
       // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
       // the avatar its agent asked for. The driver holds the microphone now, so the user may switch it.
@@ -1758,6 +1824,7 @@ export class RealtimeSessionRuntime {
       // Same place, same reason: the session is connected and its id is known, which is exactly
       // the window in which the server needs to be told it is alive.
       this.startLivenessPulse();
+      this.callWentLive = true;
     } catch (error) {
       await this.failSessionStart(error);
     }
@@ -1827,7 +1894,7 @@ export class RealtimeSessionRuntime {
     // session, and clearing the id would leave that teardown no session to report.
     if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId && !this.teardownInFlight) {
       this.agentSessionId = null;
-      await this.closeServerSession(session.AgentSessionId);
+      await this.closeServerSession(session.AgentSessionId, 'Explicit');
     }
   }
 
@@ -2166,8 +2233,21 @@ export class RealtimeSessionRuntime {
   private async failSessionStart(error: unknown): Promise<void> {
     console.error('[RealtimeSession] Failed to start session:', error);
     this.lastStartError = error instanceof Error ? error : new Error(String(error));
+    await this.endOnFailure();
+  }
+
+  /**
+   * Ends the call over a failure: a failed start, an unusable provider, or a fatal provider error.
+   *
+   * The teardown is claimed BEFORE `'error'` is published. `ConnectionState$` emits synchronously, and a
+   * host may end the call the moment it sees `'error'` (MobileApp's voice screen does); claimed first, that
+   * host's End joins this teardown instead of starting its own as `'explicit'`, so the row still closes as
+   * `Error` and `SessionEnded$` still says `'error'`. Teardown keeps a terminal `'error'` state.
+   */
+  private endOnFailure(): Promise<void> {
+    const ending = this.teardown('error');
     this.setConnectionState('error');
-    await this.teardown(false);
+    return ending;
   }
 
   /**
@@ -2178,7 +2258,7 @@ export class RealtimeSessionRuntime {
     if (!this.IsActive && !this.agentSessionId) {
       return;
     }
-    await this.teardown(true);
+    await this.teardown('explicit');
   }
 
   /**
@@ -2276,7 +2356,16 @@ export class RealtimeSessionRuntime {
     if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
       return false;
     }
-    this.requestChannelSpokenResponse(trimmed);
+    // The opening is part of the conversation, so it goes out as a spoken TURN: captioned, relayed
+    // and persisted like any turn the model takes on its own. It used to ride the delegation
+    // narration channel, whose replies are disposable by contract, so the greeting the participant
+    // heard was never in the transcript (MJ#4591). A driver from before the capability existed
+    // falls back to that channel rather than leaving the session silent.
+    if (this.client.RequestSpokenTurn) {
+      this.client.RequestSpokenTurn(trimmed);
+    } else {
+      this.client.RequestSpokenUpdate(trimmed);
+    }
     return true;
   }
 
@@ -2508,17 +2597,19 @@ export class RealtimeSessionRuntime {
       // Closes over this recording's session id and transport — never the runtime's current ones.
       Queue: new RecordingShardQueue(async (shard) => {
         if (!transport) {
-          return false;
+          return 'Retry';
         }
-        const acked = (await transport.UploadShard(sessionId, shard)) === 'Acked';
-        if (acked) {
+        // The outcome goes to the queue unchanged: it logs a different reason for each, and stops
+        // retrying a `Refused` shard at once (#6012).
+        const outcome = await transport.UploadShard(sessionId, shard);
+        if (outcome === 'Acked') {
           await this.deleteStoredShard(sessionId, shard.Index);
           if (shardsGivenUp) {
             shardsGivenUp = false;
             this.recoverStoredShardsAfterOutage(sessionId);
           }
         }
-        return acked;
+        return outcome;
       }, () => {
         shardsGivenUp = true;
       }),
@@ -4078,6 +4169,27 @@ export class RealtimeSessionRuntime {
       console.error('[RealtimeSession] Provider error event:', JSON.stringify(error), error);
       if (error.Fatal && this.client === client) {
         this.lastSessionError = error;
+        // While the start is still running, its own failure path reports the error and ends the call
+        // (runMintedSession throws on this recorded Fatal after Connect, even if Connect resolves):
+        // ending it here would bump startGeneration, so the start would read as ended by the host and
+        // never set LastStartError.
+        if (!this.callWentLive) {
+          return;
+        }
+        // An explicit teardown is already ending the call and the client stays current until its
+        // finally: a driver reporting its own close as Fatal from inside Disconnect() is part of that
+        // clean End, and must not flip it to 'error' or start a second teardown.
+        if (this.teardownInFlight) {
+          return;
+        }
+        // The driver is dead on the wire; nothing resumes after it says Fatal. End the call the way a
+        // failed start ends: the row closes as Error, the microphone is released, the host is told
+        // through SessionEnded$ (MJ#4629). A host's own End afterwards finds nothing to do.
+        // Captured now: teardown nulls agentSessionId, and the failure it reports must name the session.
+        const failedSessionId = this.agentSessionId;
+        void this.endOnFailure().catch((teardownError: unknown) => {
+          console.error(`[RealtimeSession] Teardown after a fatal provider error failed for session ${failedSessionId}:`, teardownError);
+        });
       }
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
@@ -5020,34 +5132,34 @@ export class RealtimeSessionRuntime {
    * delegation path is untouched.
    */
   private onDelegationStatusMessage(raw: string): void {
-    const frame = this.parseScreencastFrame(raw);
+    let parsed: Partial<RemoteBrowserScreencastPayload & RemoteBrowserAudioChunkPayload & RealtimeDelegationProgressPayload>;
+    try {
+      parsed = JSON.parse(raw) as Partial<RemoteBrowserScreencastPayload & RemoteBrowserAudioChunkPayload & RealtimeDelegationProgressPayload>;
+    } catch {
+      return;
+    }
+    const frame = this.parseScreencastFrame(parsed);
     if (frame) {
       this.routeScreencastFrame(frame);
       return;
     }
-    const audio = this.parseAudioChunk(raw);
+    const audio = this.parseAudioChunk(parsed);
     if (audio) {
       this.routeAudioChunk(audio);
       return;
     }
-    const progress = this.parseProgress(raw);
+    const progress = this.parseProgress(parsed);
     if (progress) {
       this.dispatchProgress(progress);
     }
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a Remote Browser screencast frame for the
+   * Matches a parsed push-status payload and returns it only when it's a Remote Browser screencast frame for the
    * active session — otherwise `null` (ignored, so delegation progress falls through). Matched by
    * `resolver` + `type`, then scoped to THIS session by `agentSessionID`.
    */
-  private parseScreencastFrame(raw: string): RemoteBrowserScreencastPayload | null {
-    let payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return null;
-    }
+  private parseScreencastFrame(payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>): RemoteBrowserScreencastPayload | null {
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
       payload?.type === 'RemoteBrowserScreencastFrame' &&
@@ -5080,17 +5192,11 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a Remote Browser audio chunk for the active
+   * Matches a parsed push-status payload and returns it only when it's a Remote Browser audio chunk for the active
    * session — otherwise `null` (ignored). Matched by `resolver` + `type`, then scoped to THIS session by
    * `agentSessionID`.
    */
-  private parseAudioChunk(raw: string): RemoteBrowserAudioChunkPayload | null {
-    let payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return null;
-    }
+  private parseAudioChunk(payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>): RemoteBrowserAudioChunkPayload | null {
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
       payload?.type === 'RemoteBrowserAudioChunk' &&
@@ -5127,16 +5233,10 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a delegation
+   * Matches a parsed push-status payload and returns it only when it's a delegation
    * progress event for the active voice session — otherwise `null` (ignored).
    */
-  private parseProgress(raw: string): RealtimeDelegationProgress | null {
-    let payload: RealtimeDelegationProgressPayload;
-    try {
-      payload = JSON.parse(raw) as RealtimeDelegationProgressPayload;
-    } catch {
-      return null; // non-JSON or unrelated frame
-    }
+  private parseProgress(payload: Partial<RealtimeDelegationProgressPayload>): RealtimeDelegationProgress | null {
     const matches =
       payload?.resolver === 'RealtimeClientSessionResolver' &&
       payload?.type === 'RealtimeDelegationProgress' &&
@@ -5145,9 +5245,9 @@ export class RealtimeSessionRuntime {
       return null;
     }
     return {
-      CallID: payload.callID,
-      Step: payload.step,
-      Message: payload.message,
+      CallID: payload.callID as string,
+      Step: payload.step as RealtimeDelegationProgress['Step'],
+      Message: payload.message as string,
       Percentage: payload.percentage
     };
   }
@@ -5279,10 +5379,18 @@ export class RealtimeSessionRuntime {
   // ── Teardown ───────────────────────────────────────────────────────────────
 
   /**
-   * Tears down all client resources and (optionally) closes the server session.
-   * @param closeServerSession when true, calls `CloseAgentSession` on the server.
+   * Tears down all client resources and closes the server session when one was minted.
+   *
+   * The server row is closed whichever way the call ended: a start that failed after the mint used to
+   * leave its row `Active` until the janitor's staleness sweep, 15 minutes later, so every host that
+   * counts live sessions saw a phantom call (MJ#6013). The janitor remains the fallback for a client
+   * that dies before it can say anything; it is never the plan.
+   *
+   * @param end why the call ended — `'explicit'` when the host or user ended it, `'error'` when the
+   *   runtime ended it because the start or the call failed. Reported on `SessionEnded$` and stamped on
+   *   the server row as its `CloseReason` (`Explicit` / `Error`).
    */
-  private async teardown(closeServerSession: boolean): Promise<void> {
+  private async teardown(end: SessionEndReason): Promise<void> {
     // Invalidate any start still in flight BEFORE anything else, so it abandons itself at its next
     // await rather than opening a microphone behind a session that is being ended.
     this.startGeneration++;
@@ -5293,7 +5401,7 @@ export class RealtimeSessionRuntime {
       await this.teardownInFlight;
       return;
     }
-    this.teardownInFlight = this.runTeardown(closeServerSession).finally(() => {
+    this.teardownInFlight = this.runTeardown(end).finally(() => {
       if (this._savingRecording$.value) {
         this._savingRecording$.next(false);
       }
@@ -5303,12 +5411,22 @@ export class RealtimeSessionRuntime {
   }
 
   /** The body of {@link teardown}; never called concurrently with itself. */
-  private async runTeardown(closeServerSession: boolean): Promise<void> {
+  private async runTeardown(end: SessionEndReason): Promise<void> {
     // Arm BEFORE any await so a tab closed in the first milliseconds of teardown is still guarded.
     if (this.recorder) {
       this._savingRecording$.next(true);
     }
+    // Whatever a step below does, the slot is released: a teardown that threw halfway used to leave
+    // `IsActive` set for good, so every later start was refused (MJ#4629).
+    try {
+      await this.releaseCallResources(end);
+    } finally {
+      this.releaseSessionSlot(end);
+    }
+  }
 
+  /** The teardown's work: stop the call, hand back what it held, and close the server session. */
+  private async releaseCallResources(end: SessionEndReason): Promise<void> {
     // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
     // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
     this.stopLivenessPulse();
@@ -5373,8 +5491,8 @@ export class RealtimeSessionRuntime {
     await this.flushPendingUsage(this.agentSessionId);
     this.resetUsageRelay();
 
-    if (closeServerSession && this.agentSessionId) {
-      await this.closeServerSession(this.agentSessionId);
+    if (this.agentSessionId) {
+      await this.closeServerSession(this.agentSessionId, end === 'error' ? 'Error' : 'Explicit');
     }
 
     // Wait for the terminal's ack only AFTER the close: nothing after an aborted await ever runs, so
@@ -5383,12 +5501,16 @@ export class RealtimeSessionRuntime {
     if (recordingTerminal) {
       await this.awaitRecordingTerminal(recordingTerminal);
     }
+  }
 
+  /** Clears the slot and tells the host the call ended; runs even when {@link releaseCallResources} threw. */
+  private releaseSessionSlot(end: SessionEndReason): void {
     // Capture the session id BEFORE we null it so the lifecycle emit carries it.
     // Skip emitting when there was no live session (defensive — teardown is safe
     // to call without an active session).
     const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
+    this.callWentLive = false;
     this.sessionConversationId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
@@ -5402,14 +5524,9 @@ export class RealtimeSessionRuntime {
       this.setConnectionState('closed');
     }
 
-    // Surface generic session-ended for the conversations runtime bridge.
-    // `closeServerSession=true` means the user explicitly called EndRealtimeSession;
-    // `false` means teardown ran from a catch block (start path error path).
+    // Surface generic session-ended for the conversations runtime bridge, with why it ended.
     if (closedSessionId) {
-      this._sessionEnded$.next({
-        sessionId: closedSessionId,
-        reason: closeServerSession ? 'explicit' : 'error',
-      });
+      this._sessionEnded$.next({ sessionId: closedSessionId, reason: end });
     }
   }
 
@@ -5425,17 +5542,21 @@ export class RealtimeSessionRuntime {
     }
   }
 
-  /** Calls the `CloseAgentSession` mutation (provisioned in P4b). */
-  private async closeServerSession(agentSessionId: string): Promise<void> {
+  /**
+   * Calls the `CloseAgentSession` mutation (provisioned in P4b) with why the client ended the call, which
+   * the server stamps as the row's `CloseReason`. Requires a server that accepts the `closeReason`
+   * argument (MJ#6013); the runtime and the server ship together.
+   */
+  private async closeServerSession(agentSessionId: string, closeReason: ClientCloseReason): Promise<void> {
     try {
       const mutation = `
-        mutation CloseAgentSession($agentSessionId: String!) {
-          CloseAgentSession(agentSessionId: $agentSessionId)
+        mutation CloseAgentSession($agentSessionId: String!, $closeReason: String) {
+          CloseAgentSession(agentSessionId: $agentSessionId, closeReason: $closeReason)
         }
       `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId });
+      await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
     } catch (error) {
-      console.error('[RealtimeSession] Failed to close server session:', error);
+      console.error(`[RealtimeSession] Failed to close server session ${agentSessionId} (closeReason ${closeReason}):`, error);
     }
   }
 
