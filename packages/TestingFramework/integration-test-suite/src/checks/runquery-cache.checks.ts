@@ -890,6 +890,21 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
         priorSettleMs = QueryEngine.DefaultDefinitionEditSettleMs;
         QueryEngine.DefaultDefinitionEditSettleMs = ENGINE_DELETION_SETTLE_MS;
         ctx.Fixtures = await CreateRunQueryFixtures(ctx);
+        // Creating the fixtures is itself a result-affecting save, so it arms the slot-deletion
+        // timer. Wait it out HERE, once, so the deletion has already happened before the first
+        // check warms a slot.
+        //
+        // This is the actual fix for a race that predates the settable window. At the shipped
+        // 3000ms the deletion landed 2.2-3.2s into the run — right on top of Q5, which is the
+        // measured cause of that bundle's ~0.7% flake (6 failures in ~840 runs). Only Q13+ waited
+        // the window out; Q1-Q12 just hoped to miss it. Shortening the window WITHOUT this wait
+        // does not fix that, it only moves the collision earlier: at 750ms it lands on Q1/Q2
+        // instead, which is exactly what CI caught on the first run of this branch
+        // (`Q2: TTL-served results report ExecutionTime 0 — expected 0, got 4`).
+        //
+        // Paid once per bundle, and only affordable because the window is now short: at the
+        // shipped 3000ms this same wait would cost 3.5s.
+        await Sleep(DEFINITION_SETTLE_MS);
     },
     Teardown: async ctx => {
         if (priorSettleMs !== undefined) {
