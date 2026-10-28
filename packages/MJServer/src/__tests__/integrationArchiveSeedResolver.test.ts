@@ -64,6 +64,12 @@ describe('IntegrationArchiveSeedResolver', () => {
         expect(memberBody(`async ${name}(`)).toContain('this.loadReadableJob(');
     });
 
+    it('IntegrationArchiveSeedSelectTables answers without reading the job back (the apply restarts the API)', () => {
+        const body = memberBody('async IntegrationArchiveSeedSelectTables(');
+        expect(body.split('this.loadReadableJob(').length - 1).toBe(1);
+        expect(body).not.toContain('this.stateOutput(');
+    });
+
     it('the readability check is a RunView on company integrations as the caller', () => {
         const check = memberBody('private async userCanReadCompanyIntegration(');
         expect(check).toContain("EntityName: 'MJ: Company Integrations'");

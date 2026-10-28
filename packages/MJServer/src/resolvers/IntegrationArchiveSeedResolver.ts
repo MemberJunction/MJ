@@ -113,7 +113,9 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
       const caller = await this.authorize(ctx, 'IntegrationArchiveSeedSelectTables');
       await this.loadReadableJob(jobID, caller);
       await ArchiveSeedJobInstance.SelectTables(jobID, tableNames, caller.User, caller.Provider);
-      return this.stateOutput(await this.loadReadableJob(jobID, caller), 'Tables selected; the server applies them and restarts.');
+      // The apply now runs in the background and ends in an API restart, so nothing is read back
+      // here: the caller follows the job with IntegrationArchiveSeedState once the server is back.
+      return { Success: true, Message: `Tables selected for job ${jobID}; the server is applying them and will restart.` };
     } catch (e) {
       return this.failure('IntegrationArchiveSeedSelectTables', e);
     }

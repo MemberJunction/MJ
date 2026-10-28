@@ -245,8 +245,11 @@ class FakeDiscovery implements ArchiveSeedDiscovery {
 class FakeApply implements ArchiveSeedApply {
   public Calls: { CompanyIntegrationID: string; TableNames: string[] }[] = [];
   public Result = { Success: true, Message: 'applied' };
+  /** When set, ApplyTables does not return until this settles (an apply still running). */
+  public Gate?: Promise<void>;
   public async ApplyTables(companyIntegrationID: string, tableNames: string[]): Promise<{ Success: boolean; Message: string }> {
     this.Calls.push({ CompanyIntegrationID: companyIntegrationID, TableNames: tableNames });
+    if (this.Gate) await this.Gate;
     return this.Result;
   }
 }
@@ -433,6 +436,7 @@ describe('ArchiveSeedJob', () => {
     const { JobID, RunID, CompanyIntegrationID } = await StartToSelection();
 
     await job.SelectTables(JobID, ['DBO.ORDERS'], USER, PROVIDER);
+    await job.WaitForIdle();
 
     const state = await job.GetState(JobID, USER, PROVIDER);
     expect(state?.State).toBe('Building');
@@ -452,6 +456,7 @@ describe('ArchiveSeedJob', () => {
     apply.Result = { Success: false, Message: 'CodeGen failed' };
 
     await job.SelectTables(JobID, ['dbo.Orders'], USER, PROVIDER);
+    await job.WaitForIdle();
 
     const state = await job.GetState(JobID, USER, PROVIDER);
     expect(state?.State).toBe('Failed');
@@ -468,6 +473,24 @@ describe('ArchiveSeedJob', () => {
     expect(state?.RunClosed).toBe(true);
   });
 
+  it('SelectTables returns before ApplyTables completes, so the caller gets its response before the restart', async () => {
+    const { JobID } = await StartToSelection();
+    let release: () => void = () => undefined;
+    apply.Gate = new Promise<void>(resolve => { release = resolve; });
+    await job.SelectTables(JobID, ['dbo.Orders'], USER, PROVIDER);
+
+    let applySettled = false;
+    const idle = job.WaitForIdle().then(() => { applySettled = true; });
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(apply.Calls).toHaveLength(1);
+    expect(applySettled).toBe(false);
+    expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('Building');
+
+    release();
+    await idle;
+    expect(store.Failed).toEqual([]);
+  });
+
   // ---------------------------------------------------------------- resume, load, finish
 
   const MAPS: ArchiveSeedEntityMap[] = [
@@ -479,6 +502,7 @@ describe('ArchiveSeedJob', () => {
   async function ToBuilding(): Promise<{ JobID: string; RunID: string; CompanyIntegrationID: string }> {
     const started = await StartToSelection();
     await job.SelectTables(started.JobID, ['dbo.Orders', 'dbo.Customers'], USER, PROVIDER);
+    await job.WaitForIdle();
     return started;
   }
 

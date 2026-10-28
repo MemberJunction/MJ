@@ -156,8 +156,10 @@ export class ArchiveSeedJob {
   }
 
   /**
-   * Records the caller's table selection, completes run A with the handoff, then applies the
-   * tables (which restarts the API). A synchronous apply failure fails the job; it does not throw.
+   * Records the caller's table selection and completes run A with the handoff, then starts the
+   * apply in the background and returns at once: the apply runs migrations, CodeGen and a compile
+   * and then restarts the API, so a caller awaiting it would lose its response. An apply failure
+   * fails the job; it never reaches the caller. {@link WaitForIdle} resolves once the apply settles.
    * Throws when the job is missing, not awaiting selection, or the selection is invalid.
    */
   public async SelectTables(jobID: string, tableNames: string[], user: UserInfo, provider: IMetadataProvider): Promise<void> {
@@ -174,7 +176,7 @@ export class ArchiveSeedJob {
     const emitter = this.emitterFor(ctx);
     emitter.StageComplete('Handoff');
     await emitter.Complete(HANDOFF_MESSAGE);
-    await this.applySelection(ctx);
+    this.track(this.runDetached(ctx, () => this.applySelection(ctx)));
   }
 
   /** The job's work and identifiers, or undefined when there is no such archive-seed job. */
