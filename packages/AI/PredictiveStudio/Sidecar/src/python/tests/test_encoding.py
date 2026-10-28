@@ -135,3 +135,29 @@ def test_normalize_refuses_non_finite_text_in_a_numeric_column(text: str) -> Non
     cols = [E.ColumnSpec("x", "x", E.NumericEncoding("numeric"))]
     with pytest.raises(E.NonNumericValueError, match="'x'"):
         E.normalize(cols, pd.DataFrame({"x": [1.0, text]}))
+
+
+def test_the_cap_one_hot_encodes_every_level_the_assembler_kept_plus_its_other_level() -> None:
+    """A product snapshot declares at most cap kept levels plus `__other`; none of them is folded a second time."""
+    cols = [E.ColumnSpec("c", "c", E.CategoricalEncoding(3, "onehot"), levels=("a", "b", "c", "__other"))]
+    X = pd.DataFrame({"c": ["a", "b", "c", "__other"]})
+    pre = E.build_preprocessor(cols, "binary", 0).fit(X, np.array([0, 1, 0, 1]))
+    assert list(pre.get_feature_names_out()) == ["c___other", "c_a", "c_b", "c_c"]
+
+
+def test_declared_levels_beyond_cap_plus_one_share_the_overflow_column() -> None:
+    """Only fixture data declares more than cap + 1 levels: the first cap - 1 sorted levels keep their columns."""
+    cols = [E.ColumnSpec("c", "c", E.CategoricalEncoding(3, "onehot"), levels=("f", "e", "d", "c", "b", "a"))]
+    X = pd.DataFrame({"c": ["a", "b", "c", "d", "e", "f"]})
+    pre = E.build_preprocessor(cols, "binary", 0).fit(X, np.zeros(6))
+    assert list(pre.get_feature_names_out()) == ["c_a", "c_b", "c_other"]
+    assert pre.transform(pd.DataFrame({"c": ["f"]}))[0].tolist() == [0.0, 0.0, 1.0]
+
+
+def test_the_missing_token_never_counts_toward_the_cap() -> None:
+    """The assembler caps non-missing levels only, so a missing token beside cap kept levels and `__other` folds
+    nothing."""
+    levels = ("a", "b", "c", "__other", E.MISSING_TOKEN)
+    cols = [E.ColumnSpec("c", "c", E.CategoricalEncoding(3, "onehot"), levels=levels)]
+    pre = E.build_preprocessor(cols, "binary", 0).fit(pd.DataFrame({"c": ["a", None]}), np.array([0, 1]))
+    assert list(pre.get_feature_names_out()) == ["c___missing__", "c___other", "c_a", "c_b", "c_c"]
