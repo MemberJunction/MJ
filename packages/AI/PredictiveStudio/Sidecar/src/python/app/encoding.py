@@ -4,19 +4,28 @@
 always placed INSIDE an sklearn Pipeline with the estimator, so every fit — each inner fold, the calibration fold,
 the finalist refit, each baseline — fits imputers, scalers, vocabularies and target encodings on that fit's training
 rows only; no statistic is learned from rows the fit is later judged on. Nothing here maps a non-numeric value to 0:
-`normalize` refuses a non-numeric value in a numeric column, missing values are imputed beside a `<col>__missing`
-indicator column, and an identifier column is excluded.
+`normalize` refuses a non-numeric or non-finite value in a numeric column, missing values are imputed beside a
+`<col>__missing` indicator column, and an identifier column is excluded.
+
+Every column's output width is a pure function of its spec, never of which rows a fold happened to train on, so every
+fold of one run produces the same column list.
 
 Missing numeric values follow the column's declared impute policy (`ColumnSpec.missing`, read from the snapshot
 header's impute ops): `mean`, `median`, `mode` or `constant` (filled with the declared value), with the indicator when
-the policy asks for one. A column no policy names is imputed with its training median, with the indicator.
+the policy asks for one. A column no policy names is imputed with its training median, with the indicator. A fold
+whose training rows hold no value at all for a column keeps that column: `mean`, `median` and `mode` have nothing to
+learn from and fill 0 there, and the indicator (all 1 on that fold) is what states that every value was missing.
 
-High-cardinality categoricals are bounded: `onehot` keeps at most `cardinality_cap` columns (the least frequent
-levels share one "infrequent" column), `hashed` folds values into `cardinality_cap` stable buckets, and
+High-cardinality categoricals are bounded. `onehot` encodes the column's declared levels (`ColumnSpec.levels`: its
+distinct values over the whole snapshot, label-free, computed once when the snapshot is loaded), never the levels a
+fold's training rows happen to hold. When the declared levels exceed `cardinality_cap`, the first `cardinality_cap - 1`
+levels in sorted order keep their own column and every other declared level shares one `<col>_other` column, so the
+width is exactly the cap; within the cap every declared level has its own column. A value outside the declared levels
+encodes as all zeros. `hashed` folds values into `cardinality_cap` stable buckets, and
 `target-in-fold` uses sklearn's cross-fitted TargetEncoder (its own inner 5-fold cross-fit on each fit's training
 rows). Only `onehot` is reachable from a product snapshot today: the engine's assembler emits one-hot categoricals
 only, and it has already folded the levels beyond the cap into one `__other` level (a global, label-free fold), so the
-one-hot cap here is a no-op on those columns and binds only on frames that bypass the assembler.
+one-hot cap here leaves those columns as they are and binds only on frames that bypass the assembler.
 
 The trainer path's encoder is deliberately separate from the legacy `preprocessing` module's fit-once JSON ops; it
 shares that module's notion of a missing value (None, NaN, blank text), not its code.
@@ -27,7 +36,7 @@ from __future__ import annotations
 import hashlib
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Sequence, Tuple, Union
+from typing import Dict, FrozenSet, List, Literal, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -40,6 +49,10 @@ from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardSc
 
 MISSING_TOKEN = "__missing__"
 MISSING_INDICATOR_SUFFIX = "__missing"
+# The one-hot column the declared levels beyond the cap share is named `<col>_other`. Internally those levels are
+# first mapped to this sentinel, which no snapshot value can equal (it starts with a NUL character).
+_OVERFLOW_SENTINEL = "\x00overflow"
+OVERFLOW_LEVEL_NAME = "other"
 TargetType = Literal["binary", "multiclass", "continuous"]
 ImputeStrategy = Literal["mean", "median", "mode", "constant"]
 
@@ -91,13 +104,16 @@ DEFAULT_MISSING_POLICY = MissingPolicy("median", None, True)
 
 @dataclass(frozen=True)
 class ColumnSpec:
-    """One matrix feature column: its name, the source column it was derived from, its encoding and, for a numeric
-    column, its declared impute policy (None: the training median, with the indicator)."""
+    """One feature column: its name, the source column it was derived from, its encoding, for a numeric column its
+    declared impute policy (None: the training median, with the indicator) and, for a categorical column, its declared
+    levels (its distinct values over the whole snapshot, including the missing token when a value is missing; required
+    for `onehot`)."""
 
     name: str
     source_column: str
     encoding: Encoding
     missing: Optional[MissingPolicy] = None
+    levels: Optional[Tuple[str, ...]] = None
 
 
 class NonNumericValueError(ValueError):
@@ -151,17 +167,23 @@ def _numeric_value(column: str, value: object) -> float:
     """The float of a present numeric value, NaN for a missing one.
 
     Raises:
-        NonNumericValueError: When the value is present but not a number.
+        NonNumericValueError: When the value is present but not a finite number.
     """
     if _is_missing(value):
         return math.nan
     if isinstance(value, (bool, int, float, np.number, np.bool_)):
+        if not math.isfinite(float(value)):
+            raise NonNumericValueError(column, value)
         return float(value)
     if isinstance(value, str):
         try:
-            return float(value)
+            number = float(value)
         except ValueError:
             raise NonNumericValueError(column, value) from None
+        # Text such as 'inf', 'nan' or '1e400' parses but is not a finite number; missing is None, NaN or blank only.
+        if not math.isfinite(number):
+            raise NonNumericValueError(column, value)
+        return number
     raise NonNumericValueError(column, value)
 
 
@@ -175,7 +197,10 @@ def _missing_flag_names(transformer: FunctionTransformer, input_features: Sequen
 
 
 def _numeric_pipe(policy: MissingPolicy) -> Pipeline:
-    imputer = SimpleImputer(strategy=_SKLEARN_STRATEGY[policy.strategy], fill_value=policy.fill_value)
+    # keep_empty_features: a fold with no value in the column keeps it (filled 0, stated by the indicator) instead of
+    # dropping it, which would change the width and leave the scaler with no feature to fit.
+    imputer = SimpleImputer(strategy=_SKLEARN_STRATEGY[policy.strategy], fill_value=policy.fill_value,
+                            keep_empty_features=True)
     return Pipeline([("impute", imputer), ("scale", StandardScaler())])
 
 
@@ -192,13 +217,53 @@ def _numeric_parts(column: ColumnSpec) -> List[Tuple[str, Union[Pipeline, Functi
     return parts
 
 
-def _categorical_pipe(enc: CategoricalEncoding, target_type: TargetType, seed: int) -> Pipeline:
+def _fold_overflow(X: npt.NDArray[np.object_], overflow: FrozenSet[str]) -> npt.NDArray[np.object_]:
+    """Maps the declared levels beyond the cap to the overflow sentinel. Module-level so a fitted pipeline pickles."""
+    arr = np.asarray(X, dtype=object).copy()
+    arr[np.isin(arr, list(overflow))] = _OVERFLOW_SENTINEL
+    return arr
+
+
+def _onehot_name(input_feature: str, category: object) -> str:
+    """`<col>_<level>`, and `<col>_other` for the shared overflow column."""
+    if category == _OVERFLOW_SENTINEL:
+        return f"{input_feature}_{OVERFLOW_LEVEL_NAME}"
+    return f"{input_feature}_{category}"
+
+
+_Step = Tuple[str, Union[FunctionTransformer, OneHotEncoder]]
+
+
+def _onehot_steps(column: ColumnSpec, enc: CategoricalEncoding) -> List[_Step]:
+    """One-hot over the declared levels, capped as the module doc states.
+
+    Raises:
+        ValueError: When the column declares no levels, or a kept level would share the overflow column's name.
+    """
+    if column.levels is None:
+        raise ValueError(f"categorical column '{column.name}' is one-hot encoded but has no declared levels")
+    ordered = sorted(set(column.levels))
+    steps: List[_Step] = []
+    if len(ordered) > enc.cardinality_cap:
+        kept = ordered[: enc.cardinality_cap - 1]
+        if OVERFLOW_LEVEL_NAME in kept:
+            raise ValueError(f"categorical column '{column.name}' keeps the level '{OVERFLOW_LEVEL_NAME}', which would "
+                             f"share the name of its '{column.name}_{OVERFLOW_LEVEL_NAME}' overflow column")
+        overflow = frozenset(ordered[enc.cardinality_cap - 1:])
+        steps.append(("overflow", FunctionTransformer(_fold_overflow, kw_args={"overflow": overflow},
+                                                      feature_names_out="one-to-one")))
+        ordered = [*kept, _OVERFLOW_SENTINEL]
+    steps.append(("encode", OneHotEncoder(categories=[ordered], handle_unknown="ignore", sparse_output=False,
+                                          feature_name_combiner=_onehot_name)))
+    return steps
+
+
+def _categorical_pipe(column: ColumnSpec, enc: CategoricalEncoding, target_type: TargetType, seed: int) -> Pipeline:
     fill = SimpleImputer(strategy="constant", fill_value=MISSING_TOKEN, missing_values=None)
     if enc.method == "onehot":
-        step: Union[OneHotEncoder, HashBucketEncoder, TargetEncoder] = OneHotEncoder(
-            handle_unknown="infrequent_if_exist", max_categories=enc.cardinality_cap, sparse_output=False
-        )
-    elif enc.method == "hashed":
+        return Pipeline([("fill", fill), *_onehot_steps(column, enc)])
+    step: Union[HashBucketEncoder, TargetEncoder]
+    if enc.method == "hashed":
         step = HashBucketEncoder(n_buckets=enc.cardinality_cap)
     else:
         step = TargetEncoder(target_type=target_type, random_state=seed)
@@ -210,14 +275,15 @@ def build_preprocessor(columns: Sequence[ColumnSpec], target_type: TargetType, s
     fit's training rows. Feed it frames from `normalize`.
 
     Raises:
-        ValueError: When no column is left (every column is an excluded identifier).
+        ValueError: When no column is left (every column is an excluded identifier), or a one-hot column declares no
+            levels.
     """
     parts: List[Tuple[str, Union[Pipeline, FunctionTransformer], List[str]]] = []
     for c in columns:
         if isinstance(c.encoding, NumericEncoding):
             parts.extend(_numeric_parts(c))
         elif isinstance(c.encoding, CategoricalEncoding):
-            parts.append((f"cat:{c.name}", _categorical_pipe(c.encoding, target_type, seed), [c.name]))
+            parts.append((f"cat:{c.name}", _categorical_pipe(c, c.encoding, target_type, seed), [c.name]))
     if not parts:
         raise ValueError("no usable feature columns: every column is an excluded identifier")
     return ColumnTransformer(parts, remainder="drop", verbose_feature_names_out=False)
@@ -229,7 +295,8 @@ def used_columns(columns: Sequence[ColumnSpec]) -> List[str]:
 
 
 def source_map(columns: Sequence[ColumnSpec]) -> Dict[str, List[str]]:
-    """Source column -> the matrix columns derived from it, so importance can be reported per source column."""
+    """Source column -> the feature columns (before encoding) derived from it, identifiers left out. The encoded matrix
+    columns of each feature column are named by the fitted transformer's `get_feature_names_out`."""
     out: Dict[str, List[str]] = {}
     for c in columns:
         if not isinstance(c.encoding, IdentifierEncoding):
