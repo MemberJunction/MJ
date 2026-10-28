@@ -70,6 +70,15 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     return ds.ID;
   }
 
+  public async SetDataSourceDefaultDatabase(id: string, defaultDatabase: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    const ds = await provider.GetEntityObject<MJExternalDataSourceEntity>('MJ: External Data Sources', user);
+    if (!(await ds.Load(id))) {
+      throw new Error(`External Data Source "${id}" not found`);
+    }
+    ds.DefaultDatabase = defaultDatabase;
+    await SaveOrThrow(ds, `Failed to set External Data Source '${id}' default database`);
+  }
+
   public async DeleteDataSource(id: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
     const ds = await provider.GetEntityObject<MJExternalDataSourceEntity>('MJ: External Data Sources', user);
     if (!(await ds.Load(id))) {

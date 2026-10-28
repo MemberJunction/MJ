@@ -3,14 +3,22 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { SourceFieldInfo, SourceObjectInfo, SourceSchemaInfo } from '@memberjunction/integration-engine';
 import type { ArchiveSeedWork, RSUPendingWork } from '@memberjunction/schema-engine';
 
-const { writePendingWork } = vi.hoisted(() => ({
+interface StoredRow {
+  ID: string;
+  Work: RSUPendingWork;
+  Status: 'Pending';
+  CreatedAt: Date;
+}
+
+const { writePendingWork, readPendingWorkByID } = vi.hoisted(() => ({
   writePendingWork: vi.fn<(data: RSUPendingWork, user?: UserInfo, provider?: IMetadataProvider) => Promise<string>>(),
+  readPendingWorkByID: vi.fn<(id: string) => Promise<StoredRow | undefined>>(),
 }));
 
 vi.mock('@memberjunction/schema-engine', () => ({
   RuntimeSchemaManager: {
     get Instance() {
-      return { WritePendingWork: writePendingWork };
+      return { WritePendingWork: writePendingWork, ReadPendingWorkByID: readPendingWorkByID };
     },
   },
 }));
@@ -95,6 +103,62 @@ describe('DefaultArchiveSeedDeps().Store', () => {
     expect(typeof data.CreatedAt).toBe('string');
     expect(passedUser).toBe(user);
     expect(passedProvider).toBe(provider);
+  });
+});
+
+describe('DefaultArchiveSeedDeps().Store.Read', () => {
+  it('returns the company integration the pending-work row carries', async () => {
+    const work = { State: 'AwaitingSelection' } as ArchiveSeedWork;
+    readPendingWorkByID.mockResolvedValue({
+      ID: 'job-1',
+      Work: { WorkType: 'archive-seed', CompanyIntegrationID: 'ci-9', SourceObjectNames: [], SchemaName: '', CreatedAt: '', ArchiveSeed: work },
+      Status: 'Pending',
+      CreatedAt: new Date(),
+    });
+
+    const job = await DefaultArchiveSeedDeps().Store.Read('job-1', { ID: 'u-1' } as UserInfo, {} as IMetadataProvider);
+
+    expect(job).toEqual({ ID: 'job-1', Work: work, Status: 'Pending', CompanyIntegrationID: 'ci-9' });
+  });
+});
+
+describe('DefaultArchiveSeedDeps().Records.SetDataSourceDefaultDatabase', () => {
+  interface RecordingDataSource {
+    DefaultDatabase: string | null;
+    SavedDefaultDatabase?: string | null;
+    Loaded?: string;
+    Load(id: string): Promise<boolean>;
+    Save(): Promise<boolean>;
+  }
+
+  function Provider(entity: RecordingDataSource): IMetadataProvider {
+    return { GetEntityObject: vi.fn(async () => entity) } as Partial<IMetadataProvider> as IMetadataProvider;
+  }
+
+  it('loads the data source and saves the new default database', async () => {
+    const entity: RecordingDataSource = {
+      DefaultDatabase: null,
+      async Load(id: string) {
+        this.Loaded = id;
+        return true;
+      },
+      async Save() {
+        this.SavedDefaultDatabase = this.DefaultDatabase;
+        return true;
+      },
+    };
+
+    await DefaultArchiveSeedDeps().Records.SetDataSourceDefaultDatabase('ds-1', 'ERP_Prod', { ID: 'u-1' } as UserInfo, Provider(entity));
+
+    expect(entity.Loaded).toBe('ds-1');
+    expect(entity.SavedDefaultDatabase).toBe('ERP_Prod');
+  });
+
+  it('throws when the data source does not exist', async () => {
+    const entity: RecordingDataSource = { DefaultDatabase: null, Load: async () => false, Save: async () => true };
+    await expect(
+      DefaultArchiveSeedDeps().Records.SetDataSourceDefaultDatabase('ds-x', 'ERP', { ID: 'u-1' } as UserInfo, Provider(entity)),
+    ).rejects.toThrow('External Data Source "ds-x" not found');
   });
 });
 

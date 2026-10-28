@@ -50,6 +50,8 @@ export interface ArchiveSeedRecords {
   /** Throws when no External Data Source Type has that driver class. */
   FindDataSourceTypeID(driverClass: 'SQLServerExternalDriver', user: UserInfo, provider: IMetadataProvider): Promise<string>;
   CreateDataSource(values: ArchiveSeedDataSourceValues, user: UserInfo, provider: IMetadataProvider): Promise<string>;
+  /** Sets an existing data source's `DefaultDatabase`; throws when the row does not exist. */
+  SetDataSourceDefaultDatabase(id: string, defaultDatabase: string, user: UserInfo, provider: IMetadataProvider): Promise<void>;
   /** A no-op when the row no longer exists. */
   DeleteDataSource(id: string, user: UserInfo, provider: IMetadataProvider): Promise<void>;
   CreateCompanyIntegration(values: ArchiveSeedCompanyIntegrationValues, user: UserInfo, provider: IMetadataProvider): Promise<string>;
@@ -86,6 +88,8 @@ export interface ArchiveSeedStoredJob {
   ID: string;
   Work: ArchiveSeedWork;
   Status: MJRSUPendingWorkEntity['Status'];
+  /** The company integration the job seeds (carried on the pending-work row, not in the work). */
+  CompanyIntegrationID: string;
 }
 
 /** Status of the newest `apply-objects` pending-work row for a company integration. */

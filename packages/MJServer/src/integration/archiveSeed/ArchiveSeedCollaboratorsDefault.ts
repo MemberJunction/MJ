@@ -127,7 +127,7 @@ export class DefaultArchiveSeedStore implements ArchiveSeedStore {
     if (!row || row.Work.WorkType !== 'archive-seed' || !row.Work.ArchiveSeed) {
       return undefined;
     }
-    return { ID: row.ID, Work: row.Work.ArchiveSeed, Status: row.Status };
+    return { ID: row.ID, Work: row.Work.ArchiveSeed, Status: row.Status, CompanyIntegrationID: row.Work.CompanyIntegrationID };
   }
 
   public async Update(jobID: string, work: ArchiveSeedWork, user: UserInfo, provider: IMetadataProvider): Promise<void> {
