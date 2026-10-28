@@ -11,7 +11,7 @@
  * The decision rules live in {@link DecideBoundLogin} and {@link DecideEmailMatchBinding}, which are
  * pure so they can be tested without a database; {@link ResolveLoginUser} wires them to the caches.
  */
-import { LogError, LogStatusEx, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type { MJUserExternalIdentityEntity } from '@memberjunction/core-entities';
 import sql from 'mssql';
@@ -174,8 +174,7 @@ async function ensureBindingsLoaded(): Promise<boolean> {
   }
   try {
     // Pre-context auth path: per-request providers do not exist yet, so the global is the only one.
-    const provider = Metadata.Provider as unknown as IMetadataProvider; // global-provider-ok: pre-context auth path
-    await engine.Config(false, UserCache.Instance.GetSystemUser(), provider);
+    await engine.Config(false, UserCache.Instance.GetSystemUser(), Metadata.Provider); // global-provider-ok: pre-context auth path
     return engine.Loaded;
   } catch (e) {
     if (!bindingLoadFailureLogged) {
