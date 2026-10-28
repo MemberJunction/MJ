@@ -29433,6 +29433,25 @@
           "primaryKey": {
             "ID": "7CF36A4D-E241-49BB-AEF1-B33487542CA2"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k3.1-pro",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B4D1B236-BF30-4403-A89A-CB203F224BAC"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -29468,7 +29487,7 @@
       "PowerRank": 23,
       "Description": "Moonshot AI's high-throughput serving tier for Kimi K3.1 Pro, launched alongside it on October 23, 2026. Identical weights and capabilities to standard Kimi K3.1 Pro; Moonshot claims equivalent intelligence at roughly 2-3x the generated-token speed for 2x the price ($4.00 input / $20.00 output per 1M tokens, cached input unchanged at $0.20). Invoked through its own API id (`kimi-k3.1-pro-highspeed`), not a per-request flag, which is why it is modelled as its own record rather than a second vendor row on Kimi K3.1 Pro — the same convention MJ already uses for Kimi K3 Fast. Use for latency-sensitive agentic loops where iteration speed dominates token cost; use standard Kimi K3.1 Pro for batch and throughput-insensitive work.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 6,
       "InheritTypeModalities": true,
