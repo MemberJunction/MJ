@@ -102,7 +102,7 @@ class ApplySchemaBatchItemInput {
 // ─── Apply All Input/Output Types ───────────────────────────────────────────
 
 @InputType()
-class SourceObjectInput {
+export class SourceObjectInput {
     @Field({ nullable: true, description: 'Existing IntegrationObject.ID. Either SourceObjectID or SourceObjectName must be provided; if both, ID wins.' }) SourceObjectID?: string;
     @Field({ nullable: true, description: 'External object name (e.g. "Account"). Use when the object has no IntegrationObject row yet — the server will create one via describe+persist.' }) SourceObjectName?: string;
     @Field(() => [String], { nullable: true, description: 'Optional field selection. Empty/null = all fields (including any new ones). Only specified fields get field maps.' }) Fields?: string[];
@@ -163,7 +163,7 @@ class ApplySchemaBatchOutput {
 // ─── Apply All Batch Input/Output Types ──────────────────────────────────────
 
 @InputType()
-class ApplyAllBatchConnectorInput {
+export class ApplyAllBatchConnectorInput {
     @Field() CompanyIntegrationID: string;
     @Field(() => [SourceObjectInput]) SourceObjects: SourceObjectInput[];
     /** Optional per-connector schedule. Applied on success. */
@@ -173,7 +173,7 @@ class ApplyAllBatchConnectorInput {
 }
 
 @InputType()
-class ApplyAllBatchInput {
+export class ApplyAllBatchInput {
     @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
     @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
@@ -196,7 +196,7 @@ class ApplyAllBatchConnectorResult {
 }
 
 @ObjectType()
-class ApplyAllBatchOutput {
+export class ApplyAllBatchOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [ApplyAllBatchConnectorResult]) ConnectorResults: ApplyAllBatchConnectorResult[];
@@ -5414,9 +5414,34 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
     ): Promise<ApplyAllBatchOutput> {
+        let user: UserInfo;
+        let provider: IMetadataProvider;
         try {
-            const user = this.getAuthenticatedUser(ctx);
-            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            user = this.getAuthenticatedUser(ctx);
+            provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+        } catch (e) {
+            LogError(`IntegrationApplyAllBatch error: ${e}`);
+            return {
+                Success: false, Message: this.formatError(e),
+                ConnectorResults: [], SuccessCount: 0, FailureCount: 0,
+            };
+        }
+        return this.ApplyAllBatchCore(input, platform, skipGitCommit, skipRestart, user, provider);
+    }
+
+    /**
+     * Body of the apply-all-batch mutation, callable from server code that already holds a
+     * user and a read-write provider (no GraphQL context required).
+     */
+    public async ApplyAllBatchCore(
+        input: ApplyAllBatchInput,
+        platform: string,
+        skipGitCommit: boolean,
+        skipRestart: boolean,
+        user: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<ApplyAllBatchOutput> {
+        try {
             const validatedPlatform = this.validatePlatform(platform);
 
             // Bust RunView caches for integration metadata BEFORE Config(true).
