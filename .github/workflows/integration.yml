@@ -973,6 +973,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1118,6 +1122,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
