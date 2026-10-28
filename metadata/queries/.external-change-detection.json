@@ -26,6 +26,175 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "CreatedAtField",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "__mj_CreatedAt",
+            "Description": "Name of the column that stores the record creation timestamp",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DF26DD22-188C-4A54-8C66-F026A4FA6DEB"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UpdatedAtField",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "__mj_UpdatedAt",
+            "Description": "Name of the column that stores the record last update timestamp",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0F5CF085-4365-4A52-BA91-9ED40C869B4E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SchemaName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "__mj",
+            "Description": "Database schema name for the base table/view",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CDEDA06E-AC91-46DA-9D58-2A0F73803B8E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BaseView",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "vwUsers",
+            "Description": "Name of the base table or view to query for new records",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "17330D99-8525-4B39-B9B9-2DECEC483000"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryKeyJoin",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "ot.ID",
+            "Description": "Primary key column expression for joining with the RecordChanges view",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "76FCB816-1882-42BF-9636-71C1465485F4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EntityID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "Entity identifier for filtering the RecordChanges view",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C1AED0A0-0CC8-4A1A-8B72-187FCF5B8A44"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryKeyOrderBy",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "ot.ID",
+            "Description": "Primary key expression for ordering the results",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7827F97C-B704-40C2-8AA8-AF5C901F908D"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "__ecd_CreatedAt",
+            "Description": "Record creation timestamp from the base table",
+            "Sequence": 1,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3004DEA9-7B99-4C56-9D99-B73AD4AD5121"
+          }
+        },
+        {
+          "fields": {
+            "Name": "__ecd_UpdatedAt",
+            "Description": "Record last update timestamp from the base table",
+            "Sequence": 2,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "53386301-4B87-4068-A31F-7BA4401C92E5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "*"
+          },
+          "primaryKey": {
+            "ID": "907E7DFB-E39D-4A09-8C30-6134315E1EEC"
+          },
+          "deleteRecord": {
+            "delete": true
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "3366D42B-C3A1-4CE0-9F40-7FBE15F2EA57"
     },
@@ -61,6 +230,149 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "UpdatedAtField",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "__mj_UpdatedAt",
+            "Description": "Name of the field in the base view that contains the last update timestamp for change detection",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A7EB8E6E-CEB3-4EAA-97D3-5FAED24205FD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SchemaName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "__mj",
+            "Description": "Database schema name containing the base view for the entity",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F1F03575-4078-4251-B881-28AF05B8117C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BaseView",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "vwUsers",
+            "Description": "Name of the base view/table containing the entity records",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "55BA071C-E063-472B-8729-34F5837FD159"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EntityID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "Unique identifier for the entity type being processed",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B0027B39-AFAB-4507-B46D-BD5CB20BE4CE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryKeyJoin",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "ot.ID",
+            "Description": "Join condition expression linking the base view to the record changes subquery",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E8F001BE-2D4D-462C-9DB7-608910D8BCBD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryKeyOrderBy",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "ot.ID",
+            "Description": "Field expression for ordering the final results",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C514FDF1-02E4-4AEB-A8AB-6E7C42015492"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "__ecd_UpdatedAt",
+            "Description": "Alias for the UpdatedAtField from the base view, used for change detection timestamp comparison",
+            "Sequence": 1,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9749B3A4-BC94-4ADD-8EB4-691E5B3FD409"
+          }
+        },
+        {
+          "fields": {
+            "Name": "__ecd_LatestRecordChangeAt",
+            "Description": "Maximum change timestamp from the record changes view for each record",
+            "Sequence": 2,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(ChangedAt) aggregate from the vwRecordChanges view grouped by RecordID",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8CB73177-C884-4379-8F8C-8413D3E3C8A8"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "46A91235-2122-40E8-9289-20D04489CAC5"
     },
@@ -92,6 +404,133 @@
           "sync": {
             "lastModified": "2026-03-07T22:42:24.675Z",
             "checksum": "c482cc5c58b9f4dd11646e2dbea7a2f59a34d106caa1ccd83ed7c200fb3db49a"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "SchemaName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "__mj",
+            "Description": "Database schema name where the base table is located",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "96D24DF8-7EFE-48E6-9FCF-B43214DE2933"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BaseView",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "vwUsers",
+            "Description": "Name of the base table/view to join against for detecting deletions",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "29B67678-CD99-48C2-A458-59822ABA4340"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryKeyJoin",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "ot.ID",
+            "Description": "Join condition expression to match record changes with the base table",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CBFA4D25-E05A-4243-B9FE-5F5C4CA014C6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryKeyIsNull",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "ot.ID IS NULL",
+            "Description": "Null check expression to identify records that exist in changes but not in base table",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6132BE42-C6C7-428C-A33B-AD17A6CBE722"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EntityID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "Entity identifier to filter specific record change types",
+            "IsServerSet": true,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1B65B85B-B149-4818-9721-D744F302B8AA"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "RecordID",
+            "Description": "Unique identifier of the record",
+            "Sequence": 1,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(750)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Changes&Name=RecordID",
+            "SourceFieldName": "RecordID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "2BD8662E-E44B-49E0-AD05-705DC09514BE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ChangedAt",
+            "Description": "Most recent timestamp when the record was changed",
+            "Sequence": 2,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(rc.ChangedAt) - latest change timestamp for the record",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "977FAE4A-3C99-4C8F-9DAF-F65BFCFDAF73"
           }
         }
       ]

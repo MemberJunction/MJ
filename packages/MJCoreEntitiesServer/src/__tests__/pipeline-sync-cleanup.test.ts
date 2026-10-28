@@ -200,8 +200,19 @@ describe('Pipeline sync stage — stale record cleanup', () => {
     });
 
     describe('when extraction produces no parameters', () => {
-        it('should call RemoveAllRecords for Query Parameters (existing behavior)', async () => {
+        it('syncs an empty parameter list, so authored and declared rows can stay', async () => {
             // Plain SQL with no template parameters
+            mockRunLLMEnrichment.mockResolvedValue(null);
+
+            const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
+            await RunExtractionPipeline(ctx);
+
+            expect(mockSyncParameters).toHaveBeenCalledTimes(1);
+            expect(mockSyncParameters.mock.calls[0][0]).toBe(QUERY_ID);
+            expect(mockSyncParameters.mock.calls[0][1]).toEqual([]);
+        });
+
+        it('does not remove every parameter row outright', async () => {
             mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
@@ -210,17 +221,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
             const paramCleanupCall = mockRemoveAllRecords.mock.calls.find(
                 (call: unknown[]) => call[1] === 'MJ: Query Parameters'
             );
-            expect(paramCleanupCall).toBeDefined();
-            expect(paramCleanupCall![0]).toBe(QUERY_ID);
-        });
-
-        it('should NOT call SyncParameters when there are no parameters', async () => {
-            mockRunLLMEnrichment.mockResolvedValue(null);
-
-            const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
-            await RunExtractionPipeline(ctx);
-
-            expect(mockSyncParameters).not.toHaveBeenCalled();
+            expect(paramCleanupCall).toBeUndefined();
         });
     });
 

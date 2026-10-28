@@ -13,7 +13,245 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-by-user.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "6FDCFD3F-0AB4-41CF-BA45-4699BB502E88"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Start date/time boundary for filtering AI usage runs (inclusive).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "ACE4ABF8-FAF5-48C5-B6E8-723A6F22C014"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "End date/time boundary for filtering AI usage runs (exclusive).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F3C9D587-57E7-4F61-8AD9-914A64E67439"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "Unique identifier of the user who initiated the AI runs",
+            "Sequence": 1,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "UserID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5F217555-4A9F-403A-A83A-2BBDB0714EE9"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CostCurrency",
+            "Description": "Currency code used for pricing the runs",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(10)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "CostCurrency",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "180852E0-C296-4EE7-BDA0-33A8ADC734E6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Runs",
+            "Description": "Total number of AI runs",
+            "Sequence": 3,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) aggregate counting all matching records in each group",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "57FD4945-603F-43D8-A931-76AF5ACC281C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PricedRuns",
+            "Description": "Number of AI runs that had a price associated with them",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN IsPriced = 1 THEN 1 ELSE 0 END) aggregate",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "85E6ED37-0283-44AD-8747-DA68AF80005F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnpricedRuns",
+            "Description": "Number of AI runs that did not have a price associated with them",
+            "Sequence": 5,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN IsPriced = 0 THEN 1 ELSE 0 END) aggregate",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C47C23E4-66A7-46B3-8234-388487C90E7C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OwnCost",
+            "Description": "Total cost of the priced runs",
+            "Sequence": 6,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(38,8)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN IsPriced = 1 THEN OwnCost ELSE 0 END) aggregate",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B871EF65-33CD-4EA5-9C5E-183A120CF905"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensPrompt",
+            "Description": "Total prompt tokens consumed",
+            "Sequence": 7,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(TokensPrompt) aggregate",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1AECFFFF-9A34-49E5-9C1F-9BB72D6135B6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCompletion",
+            "Description": "Total completion tokens consumed",
+            "Sequence": 8,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(TokensCompletion) aggregate",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1315126B-458A-400B-822B-79579996E5AC"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LastRunAt",
+            "Description": "The UTC timestamp of the most recent run in the group",
+            "Sequence": 9,
+            "SQLBaseType": "datetime2",
+            "SQLFullType": "datetime2(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(RunAtUTC) aggregate",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "920B170C-9EED-440A-9098-F18E68D425B6"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "7C9243A8-0B86-4CFA-A3DF-9A0E50FBC605"
     },

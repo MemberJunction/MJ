@@ -30,6 +30,154 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "AIAgentRunID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The unique identifier (UUID) of the starting AI Agent Run to calculate costs for.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9DE9C1D2-B13E-47EC-8D8D-BE4C5F1FBE24"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "AgentRunID",
+            "Description": "The ID of the starting AI Agent Run",
+            "Sequence": 1,
+            "SQLBaseType": "varchar",
+            "SQLFullType": "varchar(36)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Projected directly from the AIAgentRunID parameter",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0C0BC527-1F71-47C7-9B97-69FC780A0F76"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TotalCost",
+            "Description": "Total cost of the agent runs in the hierarchy",
+            "Sequence": 2,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(38,8)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN f.IsPriced = 1 AND f.IsParallelParent = 0 THEN f.OwnCost END) aggregate from AIUsageFacts",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1CB5979C-E6AC-471E-8CAC-0BBD50FA422D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TotalPrompts",
+            "Description": "Total number of prompts executed, excluding parallel parent runs",
+            "Sequence": 3,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN f.IsParallelParent = 0 THEN 1 ELSE 0 END) aggregate from AIUsageFacts",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "71D9F433-3D07-4A63-B0FF-4E2C2B86E9D0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TotalTokensInput",
+            "Description": "Total input tokens consumed",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensPrompt ELSE 0 END) aggregate from AIUsageFacts",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "17654DA0-443E-4638-8753-777E1C1678D0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TotalTokensOutput",
+            "Description": "Total output tokens generated",
+            "Sequence": 5,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensCompletion ELSE 0 END) aggregate from AIUsageFacts",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4C182D40-B2EF-4887-9A13-B41C2B8FADC5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TotalTokens",
+            "Description": "Total tokens consumed (input + output)",
+            "Sequence": 6,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensPrompt + f.TokensCompletion ELSE 0 END) aggregate from AIUsageFacts",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "48457DF4-D7B5-4315-8DD3-3B73ED3580D4"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "1ED5F808-5B12-45DB-A376-324CF65B0CAF"
     },
@@ -49,7 +197,225 @@
       "ExecutionCostRank": 3,
       "UsesTemplate": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/server-installed-version-history.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "9909CF36-3A50-4F8C-8E1E-84D4E51481DB"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Fields": [
+        {
+          "fields": {
+            "Name": "installed_rank",
+            "Description": "Unique sequential identifier for each migration entry",
+            "Sequence": 1,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "installed_rank",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "ComputationDescription": "Row number ordered by installed_on DESC",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "31554B62-5505-4D79-ACBF-9CC922A7D2CC"
+          }
+        },
+        {
+          "fields": {
+            "Name": "version",
+            "Description": "Flyway version identifier for the migration",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "version",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "010A01A1-1A9E-49AE-A9B2-954AC057BB73"
+          }
+        },
+        {
+          "fields": {
+            "Name": "description",
+            "Description": "Human-readable description of the migration",
+            "Sequence": 3,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(200)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "description",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6D2695F4-80A6-4D52-B9E6-495E2DC0F63B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "type",
+            "Description": "Type of migration (SQL, JDBC, etc.)",
+            "Sequence": 4,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(20)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "type",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8C57285F-F2F6-4171-8740-D9B7C5F42401"
+          }
+        },
+        {
+          "fields": {
+            "Name": "script",
+            "Description": "Filename of the migration script",
+            "Sequence": 5,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(1000)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "script",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "54F49295-7671-4A18-82DB-386757F3E941"
+          }
+        },
+        {
+          "fields": {
+            "Name": "checksum",
+            "Description": "Checksum value for the migration script",
+            "Sequence": 6,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "checksum",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FB54C641-D2EC-4B1C-8C46-8C10683F5581"
+          }
+        },
+        {
+          "fields": {
+            "Name": "installed_by",
+            "Description": "Database user that installed the migration",
+            "Sequence": 7,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "installed_by",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E995B5FA-994B-4E21-9434-37140606FD19"
+          }
+        },
+        {
+          "fields": {
+            "Name": "installed_on",
+            "Description": "Timestamp when the migration was installed",
+            "Sequence": 8,
+            "SQLBaseType": "datetime",
+            "SQLFullType": "datetime",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "installed_on",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "25FFF33E-F6B3-4BFF-AD33-630EB7CA4818"
+          }
+        },
+        {
+          "fields": {
+            "Name": "execution_time",
+            "Description": "Time in milliseconds for the migration to execute",
+            "Sequence": 9,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "execution_time",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "40D852DE-7370-4F9F-AB12-83ABCA2D08FB"
+          }
+        },
+        {
+          "fields": {
+            "Name": "success",
+            "Description": "Whether the migration completed successfully (1) or failed (0)",
+            "Sequence": 10,
+            "SQLBaseType": "bit",
+            "SQLFullType": "bit",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "success",
+            "SourceObjectName": "__mj.flyway_schema_history",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "61B03A6B-E72A-413F-8145-22AB9D843911"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "23F8423E-F36B-1410-8D9C-00021F8B792E"
     },

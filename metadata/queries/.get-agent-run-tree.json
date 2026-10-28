@@ -6,14 +6,607 @@
       "UserQuestion": "What is the full structure of everything an agent run caused — its steps, any workflows it started, and the runs those workflows spawned?",
       "Description": "Returns one row per node of an agent run's complete execution tree: the run, its steps, task graphs those steps submitted, the tasks inside them, and the agent runs those tasks spawned, recursively to a supplied depth cap. Each row carries ParentNodeID/Depth/Sequence so a caller can assemble the tree in memory, plus per-node status, timing, own-cost and own-tokens.",
       "SQL": "@file:SQL/get-agent-run-tree.sql",
-      "TechnicalDescription": "Replaces the timeline's per-level N+1 (load run, load steps, load graph tasks, load spawned runs, repeat) with a single recursive CTE. Four recursive members: run→steps, task-graph step→its parent Task (linked via JSON_VALUE(OutputData,'$.parentTaskID')), task→child tasks, task→the run it spawned. Depth is bounded by a `Depth < maxDepth` predicate inside every recursive member rather than OPTION(MAXRECURSION), which is T-SQL-only and errors rather than degrading — MAXRECURSION 0 disables the engine limit so the portable predicate is the sole bound. Cost is per-node OWN cost (AIAgentRun.TotalCost, AIPromptRun.Cost), never a rollup, so a caller-side SUM does not double-count nested runs; Prompt tasks reach their cost through Configuration.runtime.promptRunID. Consumed by LoadAgentRunTree + BuildAgentRunTree in @memberjunction/ai-core-plus. Parameters (agentRunID, maxDepth) are AUTO-DETECTED from the {{ }} placeholders because UsesTemplate is true — declaring them explicitly as well inserts each name twice in one push and violates UQ_QueryParameter_QueryID_Name, which rolls the whole query back.",
+      "TechnicalDescription": "Replaces the timeline's per-level N+1 (load run, load steps, load graph tasks, load spawned runs, repeat) with a single recursive CTE. Four recursive members: run→steps, task-graph step→its parent Task (linked via JSON_VALUE(OutputData,'$.parentTaskID')), task→child tasks, task→the run it spawned. Depth is bounded by a `Depth < maxDepth` predicate inside every recursive member rather than OPTION(MAXRECURSION), which is T-SQL-only and errors rather than degrading — MAXRECURSION 0 disables the engine limit so the portable predicate is the sole bound. Cost is per-node OWN cost (AIAgentRun.TotalCost, AIPromptRun.Cost), never a rollup, so a caller-side SUM does not double-count nested runs; Prompt tasks reach their cost through Configuration.runtime.promptRunID. Consumed by LoadAgentRunTree + BuildAgentRunTree in @memberjunction/ai-core-plus.",
       "Status": "Approved",
       "QualityRank": 9,
       "ExecutionCostRank": 3,
       "UsesTemplate": true
     },
     "relatedEntities": {
-      "MJ: Query Fields": []
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-agent-run-tree.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "23853EE4-FB18-4658-B765-D3DB7B6E5DE2"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "agentRunID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The unique identifier of the AI Agent Run at the top of the tree.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AB9A54B2-E053-437A-9DB2-DB3A66C2831B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "maxDepth",
+            "Type": "number",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "10",
+            "Description": "The maximum recursion depth limit for traversing the agent run tree.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BC3AEDF7-C730-4B41-AEE3-5CBD6C2AA755"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "NodeID",
+            "Description": "The unique identifier of the tree node (Run, Step, Task, or Loop Pass ID).",
+            "Sequence": 1,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Union of IDs from AI Agent Runs, Run Steps, and Tasks, or generated loop pass IDs.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "79170A96-16BB-4E05-8DCB-CC4DA3855B86"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentNodeID",
+            "Description": "The identifier of the parent node in the hierarchy.",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "The Parent Node ID carried through the recursive CTE.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "65D2365F-3CBC-4701-8BBA-F08A2329E222"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Depth",
+            "Description": "The depth level of the node in the tree hierarchy.",
+            "Sequence": 3,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Recursively calculated depth of the node in the run tree.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BB25E1CC-1B3F-40C7-9D2F-5CB24ED5C94C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Sequence",
+            "Description": "The order sequence of the step or task within its parent context.",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Calculated sequence order of the step or task.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D8B79C26-05A1-479A-895E-B2EB9CE21819"
+          }
+        },
+        {
+          "fields": {
+            "Name": "NodeType",
+            "Description": "The category of the node ('Run', 'Step', 'TaskGraph', 'Task').",
+            "Sequence": 5,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(20)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Literal value indicating node type.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "415FD03C-1489-4FAA-8CFE-CD7D40347177"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Name",
+            "Description": "The display name of the node.",
+            "Sequence": 6,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(500)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Coalesced display name from various run, step, or task name fields.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "249D0CA3-7A8C-4241-A985-A5E59234D663"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Status",
+            "Description": "The execution status of the node.",
+            "Sequence": 7,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Status value from the underlying source record.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0F3D4AA0-F9AC-4D3D-9A5F-B8F00124391B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "StartedAt",
+            "Description": "The timestamp when the node execution started.",
+            "Sequence": 8,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "The start timestamp from the underlying source record.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7D3EEAEF-F3A4-4C31-872E-51744AE158E0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CompletedAt",
+            "Description": "The timestamp when the node execution completed.",
+            "Sequence": 9,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "The completion timestamp from the underlying source record.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C0BF8292-6B5A-4AE5-AE01-27AE0A57BB2F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "DurationMs",
+            "Description": "The total duration of the node execution in milliseconds.",
+            "Sequence": 10,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Difference in milliseconds between StartedAt and CompletedAt.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7493C869-B4A1-4C81-B198-68BA226D5BB8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Cost",
+            "Description": "The direct cost associated with this node.",
+            "Sequence": 11,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(19,8)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Coalesced cost from the tree node or the associated prompt run.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "35F931C5-E6B2-4CB0-92C6-F4E9567E686B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Tokens",
+            "Description": "The total tokens used by this node.",
+            "Sequence": 12,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Coalesced token count from the tree node or the associated prompt run.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7B100CB7-EB57-4011-9B19-CB6E3F04B53D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PromptTokens",
+            "Description": "The prompt tokens used by this node.",
+            "Sequence": 13,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Coalesced prompt token count.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AA4D2FEF-8BB5-4D03-BB46-155AE938E579"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CompletionTokens",
+            "Description": "The completion tokens used by this node.",
+            "Sequence": 14,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Coalesced completion token count.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E001096F-08BA-4A48-8391-D64B8E6A04BE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceEntity",
+            "Description": "The entity name of the source record for navigational purposes.",
+            "Sequence": 15,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Determines the source entity name based on which related record exists (Prompt Runs, Action Logs, or default Tree SourceEntity).",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B04E25E4-A5AC-4EFA-9AD3-FEB9AE543F90"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceKind",
+            "Description": "The specific kind of work represented by this node.",
+            "Sequence": 16,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "The specific step type or task step type carried from the CTE.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1FC3741B-17CC-41C0-BA0B-76534A0752B0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceID",
+            "Description": "The actual database ID of the source record.",
+            "Sequence": 17,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "The ID of the source record (Prompt Run ID, Action Log ID, or Node ID).",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6B0E120E-2EDA-4D73-BCB5-0CB75711DB09"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Model",
+            "Description": "The AI model used, if the node represents a prompt run.",
+            "Sequence": 18,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "09224AAF-4753-4B33-BA41-427532125222"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Vendor",
+            "Description": "The AI vendor used, if the node represents a prompt run.",
+            "Sequence": 19,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "639D0DAF-64FD-40A7-B339-1B2FFB068A38"
+          }
+        },
+        {
+          "fields": {
+            "Name": "InputPayload",
+            "Description": "The input payload data for the node.",
+            "Sequence": 20,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(max)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Input payload for the step or task from the CTE.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9F86B1F7-DF29-457F-AA6D-8B400322B5E6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OutputPayload",
+            "Description": "The output payload data for the node.",
+            "Sequence": 21,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(max)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Output payload for the step or task from the CTE.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4B08F3FA-F707-4B7B-A3B3-4D6292F51C94"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LoopMode",
+            "Description": "The execution mode of a ForEach loop ('parallel' or 'sequential').",
+            "Sequence": 22,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(20)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Extracted execution mode from the task configuration JSON.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AC8929C3-50AE-498C-94D3-4B73CF471935"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ActionID",
+            "Description": "The ID of the action executed by this node, if applicable.",
+            "Sequence": 23,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Coalesced Action ID from the task or action execution log.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A9D8C8E5-7FF6-4FC2-8D2E-402F255D7A4B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Description": "The ID of the agent executed by this node, if applicable.",
+            "Sequence": 24,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(50)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Cast of the AgentID field from the Tasks entity.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5D2C7BC7-107E-4D2E-A2CE-C6390AD65FCE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CreatedAt",
+            "Description": "The creation timestamp of the underlying record.",
+            "Sequence": 25,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Creation timestamp of the underlying record.",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B9841233-8994-4F08-8205-F8D0A9A6B39B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "NotStarted",
+            "Description": "A sorting helper flag indicating if the node has not started.",
+            "Sequence": 26,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Flag indicating if the node has not started yet (1 if StartedAt is NULL, else 0).",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F710FFF4-7BEC-4B3A-825F-6C438807AA10"
+          }
+        }
+      ]
     },
     "primaryKey": {
       "ID": "344ADDAD-458B-4FBC-9F2E-34915ED5373A"

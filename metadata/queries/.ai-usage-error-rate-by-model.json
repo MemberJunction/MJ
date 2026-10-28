@@ -13,7 +13,245 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-error-rate-by-model.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "596D89FB-E3CD-4D51-889A-E1338834208E"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional start date/time filter for prompt runs. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "94A38C7B-F80F-4F3E-B64B-17743739CAE5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional end date/time filter for prompt runs. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7CD45737-0840-4D37-BC12-720F5228D9E7"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "VendorID",
+            "Description": "The identifier of the AI vendor",
+            "Sequence": 1,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "VendorID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F94459D9-B097-4135-BA95-79673F58B9F1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Description": "The identifier of the AI model",
+            "Sequence": 2,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "ModelID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "32BE3E15-038D-4C2F-BBAD-E1834677EE9D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TotalRuns",
+            "Description": "Total runs that have completed (Succeeded, Failed, or Abandoned)",
+            "Sequence": 3,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN o.Outcome IN ('Succeeded', 'Failed', 'Abandoned') THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1B9E1369-BB67-476A-854C-4BD405EDEB5C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SucceededRuns",
+            "Description": "Number of successfully completed runs",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN o.Outcome = 'Succeeded' THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "58F3E969-51F7-416F-A689-E1F49954E15C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "FailedRuns",
+            "Description": "Number of failed runs",
+            "Sequence": 5,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN o.Outcome = 'Failed' THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DDA258AC-6CCD-4434-84F5-375E7EACB5BD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AbandonedRuns",
+            "Description": "Number of abandoned runs (runs that started over an hour ago and never completed)",
+            "Sequence": 6,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN o.Outcome = 'Abandoned' THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "600A3DD9-87AA-4AAD-ADB1-CB58C112D717"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CancelledRuns",
+            "Description": "Number of cancelled runs",
+            "Sequence": 7,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN o.Outcome = 'Cancelled' THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "09565E3C-91D3-48DC-9752-6D0486985B6E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "InFlightRuns",
+            "Description": "Number of runs currently executing (started within the last hour and not completed)",
+            "Sequence": 8,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN o.Outcome = 'InFlight' THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AE64352E-9995-4362-831D-12DF67EE8445"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ErrorRatePct",
+            "Description": "Percentage of runs that failed or were abandoned out of all completed runs",
+            "Sequence": 9,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(5,2)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "CAST(SUM(CASE WHEN o.Outcome IN ('Failed', 'Abandoned') THEN 1.0 ELSE 0.0 END) * 100.0 / NULLIF(SUM(CASE WHEN o.Outcome IN ('Succeeded', 'Failed', 'Abandoned') THEN 1 ELSE 0 END), 0) AS DECIMAL(5, 2))",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C4D132C5-8A81-44BF-8E9C-765330F64EF8"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "F4A74E70-2CE9-4670-A219-62806FD178BE"
     },

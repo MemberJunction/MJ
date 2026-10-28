@@ -12,6 +12,202 @@
       "ExecutionCostRank": 1,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-conversation-artifacts-map.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "18717A30-0910-4E84-8FA7-BBA194E13AFF"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "550e8400-e29b-41d4-a716-446655440000",
+            "Description": "Unique identifier for the conversation to retrieve artifacts for",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9D117371-52FD-4334-BE17-1D6A4A3668B8"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ConversationDetailID",
+            "Description": "Unique identifier for the conversation detail record",
+            "Sequence": 1,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts&Name=ConversationDetailID",
+            "SourceFieldName": "ConversationDetailID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8A396F3D-EAA5-477A-94B2-FCB94792F0A1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Direction",
+            "Description": "Direction of the artifact (Input or Output)",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(20)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts&Name=Direction",
+            "SourceFieldName": "Direction",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "595423CE-7A1E-4E2E-83EA-CA500795B24B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactVersionID",
+            "Description": "Unique identifier for the specific artifact version",
+            "Sequence": 3,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&Name=ID",
+            "SourceFieldName": "ID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4EA8F81B-B47C-43C6-9FA2-981427443425"
+          }
+        },
+        {
+          "fields": {
+            "Name": "VersionNumber",
+            "Description": "Version number of the artifact",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&Name=VersionNumber",
+            "SourceFieldName": "VersionNumber",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C70C6A1F-E113-4527-BC2C-602FAEEEF6DA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactID",
+            "Description": "Unique identifier for the artifact",
+            "Sequence": 5,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Artifact Versions",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifact Versions&Name=ArtifactID",
+            "SourceFieldName": "ArtifactID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "93D1EBAD-4CAC-4948-B4C3-150120B72344"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactName",
+            "Description": "Name of the artifact",
+            "Sequence": 6,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(255)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Artifacts",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&Name=Name",
+            "SourceFieldName": "Name",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "425F45DB-4C22-443A-858F-C19C36DBA14E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactType",
+            "Description": "Type/category of the artifact",
+            "Sequence": 7,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Artifacts",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&Name=Type",
+            "SourceFieldName": "Type",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3F559D77-079E-4A5B-BFC2-A8DD014F0487"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ArtifactDescription",
+            "Description": "Description of the artifact",
+            "Sequence": 8,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(max)",
+            "IsNullable": true,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Artifacts",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&Name=Description",
+            "SourceFieldName": "Description",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7875E1F3-4860-49A8-BBC2-4A793C7D20E2"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "EE272535-9D1D-4E4B-8613-1332CB564501"
     },

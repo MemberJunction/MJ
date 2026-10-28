@@ -30,6 +30,189 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "agentIds",
+            "Type": "array",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "[\"00000000-0000-0000-0000-000000000000\"]",
+            "Description": "Required list of values for agent Ids",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AF4459A1-BEDA-4200-A739-4292E90EA6A1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "since",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional date value for since",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DF0E9F24-CD92-4C6C-BA18-13B443160DE5"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Description": "Unique identifier for the conversation",
+            "Sequence": 1,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Conversations",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=ID",
+            "SourceFieldName": "ID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "09F3C6CC-83AA-4458-9D97-71FD51659C13"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "Unique identifier of the user who owns the conversation",
+            "Sequence": 2,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Conversations",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=UserID",
+            "SourceFieldName": "UserID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FC47BF02-BE51-4C7C-9132-1C20ADC4FEBD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentRunID",
+            "Description": "Most recent agent run ID for this conversation (for scope inheritance)",
+            "Sequence": 3,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Scalar subquery selecting TOP 1 agent run ID ordered by StartedAt DESC",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4CAB47E1-C542-4CDD-9BEF-90BFC2786FF0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MessagesJSON",
+            "Description": "JSON array containing all conversation details with ratings",
+            "Sequence": 4,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(max)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "FOR JSON PATH subquery aggregating conversation details and ratings",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CB76A976-AE46-454B-B837-90A78B74ED50"
+          }
+        },
+        {
+          "fields": {
+            "Name": "HasPositiveRating",
+            "Description": "Flag indicating if conversation has any rating >= 8",
+            "Sequence": 5,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression checking for existence of ratings >= 8",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "ADC80F10-C778-46A7-AB21-1474FF3051BA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "HasNegativeRating",
+            "Description": "Flag indicating if conversation has any rating <= 3",
+            "Sequence": 6,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression checking for existence of ratings <= 3",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5A464544-F105-4F17-94F8-A0423F150812"
+          }
+        },
+        {
+          "fields": {
+            "Name": "IsUnrated",
+            "Description": "Flag indicating if conversation has no ratings",
+            "Sequence": 7,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression checking for absence of any ratings",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F11B7F22-EF85-418E-855A-AC0EDBEE014A"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "574FD9D5-AB9E-4FA5-A36C-C25E7D3F63FC"
     },

@@ -13,7 +13,307 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-by-model.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "B0795695-684A-4723-B28A-B4FC728AE3E9"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional start date for filtering AI usage runs. Guarded by truthiness check — empty string or null will cause this clause to be skipped.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "736825E5-56C1-4C95-8EE3-23F94182147A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional end date for filtering AI usage runs. Guarded by truthiness check — empty string or null will cause this clause to be skipped.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D456527D-468F-472F-A3AD-E530CC7848FB"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "VendorID",
+            "Description": "The identifier of the AI vendor (e.g., OpenAI, Anthropic)",
+            "Sequence": 1,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "VendorID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9BCA4E69-C469-42D1-A497-51D9B1718D62"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Description": "The identifier of the specific AI model used",
+            "Sequence": 2,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "ModelID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "733EFF0E-EBDA-4A2B-A986-03B7ADE81D95"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CostCurrency",
+            "Description": "The currency code used for pricing/cost tracking",
+            "Sequence": 3,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(10)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "CostCurrency",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5F99EFB0-BF09-41FE-8B20-53A3D44A87DA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Runs",
+            "Description": "Total number of model execution runs",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) counting all matching execution rows",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D0487565-F37C-4114-8544-734DA81DB524"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PricedRuns",
+            "Description": "Number of runs that have a known cost",
+            "Sequence": 5,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsPriced = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "683CBAA5-691D-4E35-8270-A209725E4ACF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnpricedRuns",
+            "Description": "Number of runs that do not have a known cost",
+            "Sequence": 6,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsPriced = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3AA70436-2A9C-4789-86CE-936A6359D2C1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OwnCost",
+            "Description": "Total cost accumulated by priced runs",
+            "Sequence": 7,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(38,8)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsPriced = 1 THEN x.OwnCost ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B2358A13-E5C0-4ADD-914E-2BA1DA853E7A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensPrompt",
+            "Description": "Total prompt tokens consumed",
+            "Sequence": 8,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(x.TokensPrompt)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BE53D382-0E87-42B4-872A-E81E5667D75B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCompletion",
+            "Description": "Total completion tokens generated",
+            "Sequence": 9,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(x.TokensCompletion)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E73E7507-A2DC-4DF8-91D7-7DC0859B69E3"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP50",
+            "Description": "The 50th percentile (median) execution latency in milliseconds",
+            "Sequence": 10,
+            "SQLBaseType": "float",
+            "SQLFullType": "float",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP50) where LatencyP50 is calculated using PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY f.ExecutionTimeMS) OVER (PARTITION BY ...)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4A3FD09F-B799-417C-B1F5-4A394C5CB212"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP95",
+            "Description": "The 95th percentile execution latency in milliseconds",
+            "Sequence": 11,
+            "SQLBaseType": "float",
+            "SQLFullType": "float",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP95) where LatencyP95 is calculated using PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY f.ExecutionTimeMS) OVER (PARTITION BY ...)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A0CD0A6E-C000-4A86-9730-972BCB7D245F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CacheEfficiencyPct",
+            "Description": "Percentage of prompt tokens served from cache",
+            "Sequence": 12,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(5,2)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "CAST(SUM(COALESCE(x.TokensCacheRead, 0)) * 100.0 / NULLIF(SUM(COALESCE(x.TokensPrompt, 0) + COALESCE(x.TokensCacheRead, 0)), 0) AS DECIMAL(5, 2))",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F09BB94F-7040-4B92-9AA7-7E00C29A38D9"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "66919067-072A-4306-B49B-C539E254886D"
     },

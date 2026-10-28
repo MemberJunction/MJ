@@ -13,7 +13,176 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/rubric-drift-period-means.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "C10D9100-5343-4C40-89E3-85DB1D48CF13"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "currentStart",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The start date of the current drift window.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B0B400DF-CE0B-4F9C-9603-0124B8249221"
+          }
+        },
+        {
+          "fields": {
+            "Name": "periodEnd",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The end date of the evaluation period.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D41FA741-2356-4F0D-ACB8-221DA9451B72"
+          }
+        },
+        {
+          "fields": {
+            "Name": "previousStart",
+            "Type": "date",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The start date of the previous drift window.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "17397939-16A5-43C9-B695-05E539E06B52"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "AgentName",
+            "Description": "The name of the AI agent.",
+            "Sequence": 1,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(255)",
+            "IsNullable": true,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&Name=Name",
+            "SourceFieldName": "Name",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "50275291-E0CF-4E3B-91A9-5BD17EF23145"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RubricName",
+            "Description": "The name of the rubric used for evaluation.",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(255)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Rubrics",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubrics&Name=Name",
+            "SourceFieldName": "Name",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9B33FC0D-ED89-470B-8362-E0974FD61A70"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CriterionKey",
+            "Description": "The key identifier of the rubric criterion.",
+            "Sequence": 3,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Criteria",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Criteria&Name=Key",
+            "SourceFieldName": "Key",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E95282D3-486A-458C-95A4-F2B3D6DADCE6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CurrentMean",
+            "Description": "The average normalized score for the current drift window.",
+            "Sequence": 4,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(38,6)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN evaluation.[SubmittedAt] >= currentStart AND evaluation.[SubmittedAt] < periodEnd THEN score.[NormalizedScore] END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "610C6B2D-A5F5-4B6C-9676-6340341D65E4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PreviousMean",
+            "Description": "The average normalized score for the previous drift window.",
+            "Sequence": 5,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(38,6)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN evaluation.[SubmittedAt] >= previousStart AND evaluation.[SubmittedAt] < currentStart THEN score.[NormalizedScore] END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AEACF408-F0FC-42FD-B258-961F89012BCA"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "4513AE64-76A5-432C-BA67-360C8A97753F"
     },

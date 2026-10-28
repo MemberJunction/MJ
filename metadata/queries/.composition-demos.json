@@ -5,14 +5,131 @@
       "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
       "Description": "Returns all active users with basic profile info. Designed as a reusable building block for composed queries.",
       "SQL": "@file:SQL/demos/active-users.sql",
-      "TechnicalDescription": "Simple base query selecting active users from vwUsers. Marked as Reusable so other queries can reference it via {{query:\"Demos/Active Users\"}} composition syntax.",
+      "TechnicalDescription": "Simple base query selecting active users from vwUsers. Marked as Reusable so other queries can reference it via {{query:\"MJ/Demos/Active Users\"}} composition syntax.",
       "Status": "Approved",
       "QualityRank": 8,
       "ExecutionCostRank": 1,
       "Reusable": true,
       "UsesTemplate": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/demos/active-users.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "7BA9B3F0-4DD9-464F-8F36-9B3DA9372FA3"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ID",
+            "Description": "Unique identifier for the user",
+            "Sequence": 1,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=ID",
+            "SourceFieldName": "ID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "40579BCF-7402-42FC-94E6-8BEE7D5A1B67"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Name",
+            "Description": "Full name of the user",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Name",
+            "SourceFieldName": "Name",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EF6E8F82-0D8D-49CF-9A94-3B6F9B88C204"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Email",
+            "Description": "Email address of the user",
+            "Sequence": 3,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Email",
+            "SourceFieldName": "Email",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DFF47672-B23E-4138-AF24-1DA13D82A114"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Type",
+            "Description": "Type or role of the user",
+            "Sequence": 4,
+            "SQLBaseType": "nchar",
+            "SQLFullType": "nchar(15)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Type",
+            "SourceFieldName": "Type",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AA268469-2B4C-4587-9DD6-A3BA9E3F10B0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CreatedAt",
+            "Description": "Timestamp when the user record was created",
+            "Sequence": 5,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=__mj_CreatedAt",
+            "SourceFieldName": "__mj_CreatedAt",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CBE5ED0B-EB72-4905-9FC6-45BAD4BCE1E1"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "D972EBBA-AEB3-46F2-9ED1-B8986173039C"
     },
@@ -52,6 +169,111 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "lookbackDays",
+            "Type": "number",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "7",
+            "Description": "Number of days to look back for record changes",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E50491F6-7329-4B32-A5A2-9F0C7E190DE8"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "EntityName",
+            "Description": "Name of the entity that had record changes",
+            "Sequence": 1,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(255)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Entities",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=Name",
+            "SourceFieldName": "Name",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7B31A4B2-84F8-47D8-BDD9-AC09C2DD97DA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ChangeCount",
+            "Description": "Total number of changes for the entity",
+            "Sequence": 2,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) aggregate counting all record changes per entity",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CB2D5E69-CBCA-4B21-88FC-F2EFED09D485"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatestChange",
+            "Description": "Most recent change timestamp for the entity",
+            "Sequence": 3,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(rc.CreatedAt) - latest change timestamp per entity",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "54B7BE79-764E-4F33-A477-551C01A98743"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EarliestChange",
+            "Description": "Earliest change timestamp for the entity",
+            "Sequence": 4,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MIN(rc.CreatedAt) - earliest change timestamp per entity",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D30E0433-1F9B-4679-8D9C-6A5B213711EE"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C3F7F066-789A-42A2-ACFD-2C113B5D2E30"
     },
@@ -66,14 +288,132 @@
       "CategoryID": "@lookup:MJ: Query Categories.Name=Demos",
       "Description": "Composed query that joins Active Users with Recent Entity Changes to show each user's recent activity level. Demonstrates the {{query:\"...\"}} composition syntax.",
       "SQL": "@file:SQL/demos/user-activity-summary.sql",
-      "TechnicalDescription": "This query demonstrates MJ query composition by referencing two reusable queries:\n1. {{query:\"Demos/Active Users\"}} - provides the user base\n2. {{query:\"Demos/Recent Entity Changes(lookbackDays='30')\"}} - provides change metrics with a static 30-day lookback\n\nAt execution time, the composition engine resolves these references into CTEs before the SQL is sent to the database.",
+      "TechnicalDescription": "This query demonstrates MJ query composition by referencing two reusable queries:\n1. {{query:\"MJ/Demos/Active Users\"}} - provides the user base\n2. {{query:\"MJ/Demos/Recent Entity Changes(lookbackDays='30')\"}} - provides change metrics with a static 30-day lookback\n\nAt execution time, the composition engine resolves these references into CTEs before the SQL is sent to the database.",
       "Status": "Approved",
       "QualityRank": 7,
       "ExecutionCostRank": 3,
       "Reusable": false,
       "UsesTemplate": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/demos/user-activity-summary.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "6F698DC3-BD0A-43BA-A933-10E5ED9B6799"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Fields": [
+        {
+          "fields": {
+            "Name": "UserName",
+            "Description": "Name of the user",
+            "Sequence": 1,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Name",
+            "SourceFieldName": "Name",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7DB1DAB5-EF78-48C8-938A-4179B6056E7C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Email",
+            "Description": "Email address of the user",
+            "Sequence": 2,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Email",
+            "SourceFieldName": "Email",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6BAD7846-70B1-4CF1-A900-E4235A195FC6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserType",
+            "Description": "Type classification of the user",
+            "Sequence": 3,
+            "SQLBaseType": "nchar",
+            "SQLFullType": "nchar(15)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=Type",
+            "SourceFieldName": "Type",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B14727C9-7A96-4BA8-8A09-6DBD8C71522A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecentChanges",
+            "Description": "Number of recent changes made by the user",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "COALESCE(rc.ChangeCount, 0) - returns 0 if no changes found",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CAED9AE0-0FCE-4894-8DFC-8651F329CCC7"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatestChange",
+            "Description": "Date/time of the most recent change",
+            "Sequence": 5,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "157580A0-E006-41C4-9A14-D5EE9F40A7FF"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C2162354-AB2F-4244-8659-C5A4E213E9FA"
     },

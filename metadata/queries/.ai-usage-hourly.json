@@ -13,7 +13,636 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-hourly.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "FA5D47DB-CDAF-4338-86B7-29266623CBE4"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Start UTC date/time boundary for filtering AI usage runs. Guarded by truthiness check — value of 0, empty string, or false will cause this clause to be skipped.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "673BA86F-96B3-4B7A-A568-0860413146E1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "End UTC date/time boundary for filtering AI usage runs. Guarded by truthiness check — value of 0, empty string, or false will cause this clause to be skipped.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "96C6AE42-9589-427A-8B2E-CCAEB626F20B"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "HourBucket",
+            "Description": "The start of the hourly bucket as a DATETIME",
+            "Sequence": 1,
+            "SQLBaseType": "datetime",
+            "SQLFullType": "datetime",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "CAST(x.BucketStartUTC AS DATETIME)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A10488B3-75FF-4E21-8C51-A3C70EE16A6D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BucketStartUTC",
+            "Description": "The start of the hourly bucket in UTC",
+            "Sequence": 2,
+            "SQLBaseType": "datetime2",
+            "SQLFullType": "datetime2(0)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "Truncated RunAt timestamp to the nearest hour boundary",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6A244FE5-1497-46B4-9B32-0C7BDA9E08A0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "BucketEndUTC",
+            "Description": "The end of the hourly bucket in UTC",
+            "Sequence": 3,
+            "SQLBaseType": "datetime2",
+            "SQLFullType": "datetime2(0)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": false,
+            "ComputationDescription": "DATEADD(hour, 1, x.BucketStartUTC)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C53EC7AD-3325-45FF-A045-6C0F194A6B50"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Description": "Identifier of the Agent used",
+            "Sequence": 4,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "AgentID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "25F77DB3-5FA8-454A-AD1B-7BAE6B196534"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PromptID",
+            "Description": "Identifier of the prompt template used",
+            "Sequence": 5,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "PromptID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DF3F82A1-9E1D-4711-86F6-7A3CCA48FA1C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Description": "Identifier of the AI model used",
+            "Sequence": 6,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "ModelID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CE41F895-2336-4A0C-9574-6E69E8086194"
+          }
+        },
+        {
+          "fields": {
+            "Name": "VendorID",
+            "Description": "Identifier of the AI vendor",
+            "Sequence": 7,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "VendorID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AD4FAC33-CE17-4302-A13A-F302719A2521"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "Identifier of the user who triggered the run",
+            "Sequence": 8,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "UserID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9531827F-FBCE-4F52-935E-5A54A32F83F3"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeEntityID",
+            "Description": "Identifier of the scope entity",
+            "Sequence": 9,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "PrimaryScopeEntityID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "7C652DE1-257A-44EB-913F-27E8B8955762"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeRecordID",
+            "Description": "Identifier of the scope record",
+            "Sequence": 10,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(100)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "PrimaryScopeRecordID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DB11191D-3210-4616-ABA2-0F019DF630EA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConfigurationID",
+            "Description": "Identifier of the configuration used",
+            "Sequence": 11,
+            "SQLBaseType": "uniqueidentifier",
+            "SQLFullType": "uniqueidentifier",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "ConfigurationID",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8C1AFD6F-B670-444E-9358-191B4C1A2B3A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceKind",
+            "Description": "The source kind of the prompt execution",
+            "Sequence": 12,
+            "SQLBaseType": "varchar",
+            "SQLFullType": "varchar(12)",
+            "IsNullable": false,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "SourceKind",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B5B69B25-7857-443B-A38F-E3E08DD9692C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CostCurrency",
+            "Description": "Currency used for cost calculation",
+            "Sequence": 13,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(10)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": "CostCurrency",
+            "SourceObjectName": "__mj.vwAIUsageFacts",
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "507487FE-BCE2-43F5-8A75-770B704230BA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Runs",
+            "Description": "Total number of non-parallel parent runs",
+            "Sequence": 14,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "575C7C26-39D2-4C81-A9E9-553D8B1E9845"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SucceededRuns",
+            "Description": "Total number of successful non-parallel parent runs",
+            "Sequence": 15,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.Success = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A8958661-C90F-4C11-90CB-49545E946E93"
+          }
+        },
+        {
+          "fields": {
+            "Name": "FailedRuns",
+            "Description": "Total number of failed non-parallel parent runs",
+            "Sequence": 16,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.Success = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1A9C57B1-875E-4A4E-A8D1-5DC62AB40C92"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PricedRuns",
+            "Description": "Total number of priced non-parallel parent runs",
+            "Sequence": 17,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E2CC196B-431E-49C9-A35B-64377C00EE8E"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnpricedRuns",
+            "Description": "Total number of unpriced non-parallel parent runs",
+            "Sequence": 18,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E2967229-231D-496F-9269-7FCBF0DD6EE1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnmeasuredRuns",
+            "Description": "Total number of unmeasured non-parallel parent runs",
+            "Sequence": 19,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsUnmeasured = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AFAE27C8-BDF6-4617-A880-EAB01816E1E0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParallelParents",
+            "Description": "Total number of parallel parent executions",
+            "Sequence": 20,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6CDC5863-158B-4C10-A4B1-30183AE0E64D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensPrompt",
+            "Description": "Sum of prompt tokens for non-parallel parent runs",
+            "Sequence": 21,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensPrompt ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E99AE0D5-95FB-4FEA-8027-E8E0642B7A24"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCompletion",
+            "Description": "Sum of completion tokens for non-parallel parent runs",
+            "Sequence": 22,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCompletion ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "97354393-D74F-44DB-8939-19B5826A4F00"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheRead",
+            "Description": "Sum of cache read tokens for non-parallel parent runs",
+            "Sequence": 23,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCacheRead ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F596B50E-91AD-48E4-896E-8149725768AB"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheWrite",
+            "Description": "Sum of cache write tokens for non-parallel parent runs",
+            "Sequence": 24,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCacheWrite ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "49AC2805-9CC2-4F8D-BF39-62321080CEEF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OwnCost",
+            "Description": "Total cost of priced non-parallel parent runs",
+            "Sequence": 25,
+            "SQLBaseType": "decimal",
+            "SQLFullType": "decimal(38,8)",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 1 THEN x.OwnCost ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "63517053-DCE7-4EBC-B9E9-06DF9E9751AA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP50",
+            "Description": "Maximum of the 50th percentile of latency (execution time in milliseconds)",
+            "Sequence": 26,
+            "SQLBaseType": "float",
+            "SQLFullType": "float",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP50) where LatencyP50 is calculated using PERCENTILE_CONT(0.5) in the subquery",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9B2D50C7-3C8A-4018-BEAF-B2E3F3CE3EB7"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP95",
+            "Description": "Maximum of the 95th percentile of latency (execution time in milliseconds)",
+            "Sequence": 27,
+            "SQLBaseType": "float",
+            "SQLFullType": "float",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP95) where LatencyP95 is calculated using PERCENTILE_CONT(0.95) in the subquery",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "67626B0B-9E5D-4448-B367-2046B26F20B8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AvgFirstTokenMS",
+            "Description": "Average time to first token in milliseconds for non-parallel parent runs",
+            "Sequence": 28,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN x.IsParallelParent = 0 THEN x.FirstTokenTime END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4FE04D4B-6088-4875-A76A-BDF4FE4F0095"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "00B15E3C-A9F1-4E0A-A3D2-BC34FB585931"
     },

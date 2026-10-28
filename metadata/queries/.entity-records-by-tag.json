@@ -14,6 +14,104 @@
       "UsesTemplate": true
     },
     "relatedEntities": {},
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "entityName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "Accounts",
+            "Description": "The display name of the entity to filter tagged items for (e.g., 'Accounts', 'Contacts').",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FD2B267D-7372-451D-A0E3-FB391E82685C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "tagName",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "Priority",
+            "Description": "The display name of the specific tag to match against records.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "83B8EB20-7EED-4273-8E01-DFA0679D676B"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "RecordID",
+            "Description": "The identifier of the record in the target entity that has the tag applied.",
+            "Sequence": 1,
+            "SQLBaseType": "nvarchar",
+            "SQLFullType": "nvarchar(450)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Tagged Items",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=RecordID",
+            "SourceFieldName": "RecordID",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "60E7C816-3553-4B08-BD9C-DFF456221C0D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Weight",
+            "Description": "The numeric weight or importance assigned to this specific tag association.",
+            "Sequence": 2,
+            "SQLBaseType": "numeric",
+            "SQLFullType": "numeric(5,4)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Tagged Items",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=Weight",
+            "SourceFieldName": "Weight",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6EF8908C-013E-4335-9A0E-191A7B94A27F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TaggedAt",
+            "Description": "The timestamp indicating when the tag was associated with the record.",
+            "Sequence": 3,
+            "SQLBaseType": "datetimeoffset",
+            "SQLFullType": "datetimeoffset(7)",
+            "IsNullable": false,
+            "SourceEntityID": "@lookup:MJ: Entities.Name=MJ: Tagged Items",
+            "SourceEntityFieldID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=__mj_CreatedAt",
+            "SourceFieldName": "__mj_CreatedAt",
+            "SourceObjectName": null,
+            "IsComputed": false,
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "2C1BA3E2-5F50-4E4B-BF0C-A28209563912"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "52E5C84F-6B00-45AA-BCB4-9429B1CE5BA7"
     },

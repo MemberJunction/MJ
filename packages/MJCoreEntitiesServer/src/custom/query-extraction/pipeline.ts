@@ -188,16 +188,9 @@ async function sync(
     const syncPromises: Promise<void>[] = [];
     const declared = ctx.DeclaredChildren ?? NO_DECLARED_QUERY_CHILDREN;
 
-    // Parameters
-    if (finalParams) {
-        syncPromises.push(SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.ParameterNames));
-    } else if (declared.ParameterNames.size > 0) {
-        // No parameter in the SQL, but the save declared some: sync an empty list so the declared
-        // rows stay and only the undeclared ones go.
-        syncPromises.push(SyncParameters(ctx.queryID, [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.ParameterNames));
-    } else {
-        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
-    }
+    // Parameters. With no parameter in the SQL this syncs an empty list: the rows the save declared
+    // and the rows a person authored stay, and only the extracted ones go.
+    syncPromises.push(SyncParameters(ctx.queryID, finalParams ?? [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.ParameterNames));
 
     // Fields: when finalFields is null, preserve existing fields instead of deleting them.
     // Deletion only happens when we have a positive new field list (handled inside SyncFields via diff).

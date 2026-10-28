@@ -12,6 +12,206 @@
       "ExecutionCostRank": 1,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/list-conversation-detail-feedback-stats.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "B3FCE5D8-B973-4E6E-9D69-4BB8302BA219"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "StartDate",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01T00:00:00Z",
+            "Description": "Start date filter for conversation details. Guarded by truthiness check — empty string will cause this clause to be omitted.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4E1C1D1F-A19D-40C1-B505-52F6E9B2F544"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EndDate",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-12-31T23:59:59Z",
+            "Description": "End date filter for conversation details. Guarded by truthiness check — empty string will cause this clause to be omitted.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B4015416-3FC5-47A6-BB02-4F8CF7BC19BB"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MinRating",
+            "Type": "number",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "5",
+            "Description": "Minimum user rating to include. Guarded by truthiness check — value 0 will cause this clause to be skipped.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0964156C-4E6C-4543-BEF9-B87A87FC068C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MaxRating",
+            "Type": "number",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "9",
+            "Description": "Maximum user rating to include. Guarded by truthiness check — value 0 will cause this clause to be skipped.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1B612C3D-8459-4530-8B0A-A1E790319749"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "550e8400-e29b-41d4-a716-446655440000",
+            "Description": "Filter to a specific AI agent by its unique identifier. Guarded by truthiness check — empty string will cause this clause to be omitted.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8272018C-FA95-4984-8B96-F8E4CA2C2777"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SearchText",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "feedback",
+            "Description": "Text used for free‑text search across feedback, message, agent name, user name and email. Guarded by truthiness check — empty string will cause this clause to be omitted.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6C80CBEA-D193-495D-B357-DDB70830C4BC"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "Total",
+            "Description": "Total number of conversation detail rows that match the filter",
+            "Sequence": 1,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "COUNT(*) aggregate counting all matching rows",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "545160BD-8BB1-4004-882E-FC5B2B4A48A5"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AvgRating",
+            "Description": "Average user rating across matching rows",
+            "Sequence": 2,
+            "SQLBaseType": "float",
+            "SQLFullType": "float",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CAST(cd.UserRating AS FLOAT)) computes the mean rating",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4F9D7D2C-90D6-4AC1-9D79-068A11BE20AE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PositiveCount",
+            "Description": "Count of rows with a user rating of 8 or higher",
+            "Sequence": 3,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM of CASE expression that adds 1 for each rating >= 8",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DA9C1D0E-B25D-4F03-90C5-472CCBB43215"
+          }
+        },
+        {
+          "fields": {
+            "Name": "NegativeCount",
+            "Description": "Count of rows with a user rating of 3 or lower",
+            "Sequence": 4,
+            "SQLBaseType": "int",
+            "SQLFullType": "int",
+            "IsNullable": true,
+            "SourceEntityID": null,
+            "SourceEntityFieldID": null,
+            "SourceFieldName": null,
+            "SourceObjectName": null,
+            "IsComputed": true,
+            "IsSummary": true,
+            "ComputationDescription": "SUM of CASE expression that adds 1 for each rating <= 3",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "B382DAB1-23EC-40A6-B020-54413E75A9F0"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "F3D2A1B8-9C4E-4E7A-BCDE-1234567ABCDE"
     },
