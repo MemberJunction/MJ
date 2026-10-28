@@ -14,7 +14,8 @@ import io
 import json
 import os
 import pickle
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from pathlib import Path
+from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 import joblib
 import numpy as np
@@ -25,7 +26,7 @@ from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
 from joblib.numpy_pickle_utils import _read_fileobject
 from sklearn.linear_model import Ridge
 
-from app import artifacts, artifacts_v2, baselines as BL, calibration as CAL, encoding as E, folds as F, trainer as TR
+from app import artifacts, artifacts_v2, baselines as BL, calibration as CAL, encoding as E, folds as F, scores, trainer as TR
 from app.algorithms import TabularFamily
 from app.array_types import FArr
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol
@@ -159,39 +160,89 @@ def test_allow_list_holds_exactly_the_globals_every_shipped_predictor_pickles() 
 
 def test_the_dummy_and_the_incumbent_heuristic_never_ship() -> None:
     for yardstick in (BL.ConstantPredictor(np.array(0.3)), BL.ColumnScorePredictor("__ps_incumbent_score")):
-        with pytest.raises(ValueError, match="never ships"):
-            artifacts_v2.build("dummy", yardstick, COLS, "binary", ["x", "y"], ZERO_HASH, None, None)  # type: ignore[arg-type]  # the refusal under test
-    for name in ("dummy", f"{BL.HEURISTIC_PREFIX}renewal-score"):
-        with pytest.raises(ValueError, match="never ships"):
+        with pytest.raises(artifacts_v2.NotShippableError):
+            artifacts_v2.build("lr", yardstick, COLS, "binary", ["x", "y"], ZERO_HASH, None, None)  # type: ignore[arg-type]  # the refusal under test
+    for name in (BL.DUMMY_MEMBER, f"{BL.HEURISTIC_PREFIX}renewal-score"):
+        with pytest.raises(artifacts_v2.NotShippableError):
             _build(name, _fitted("binary", "logistic_regression"), "binary")
 
 
-def test_a_payload_naming_another_global_is_refused() -> None:
+def _envelope_with_payload(payload: bytes) -> bytes:
+    """A complete, valid v2 envelope (built from a real predictor) whose payload is replaced by `payload`, so the
+    payload is what reaches the restricted unpickler."""
+    envelope = json.loads(base64.b64decode(_build("lr", _fitted("binary", "logistic_regression"), "binary").bytes_base64))
+    envelope["payload_b64"] = base64.b64encode(payload).decode("ascii")
+    return json.dumps(envelope).encode("utf-8")
+
+
+def _naming(module: str, name: str) -> bytes:
+    """A protocol-2 pickle stream that resolves `module.name` and calls it with no arguments."""
+    return b"\x80\x02c" + module.encode("ascii") + b"\n" + name.encode("ascii") + b"\n)R."
+
+
+def test_a_payload_naming_another_global_is_refused(tmp_path: Path) -> None:
+    marker = tmp_path / "ran"
+
     class Evil:
         def __reduce__(self) -> Tuple[object, Tuple[str]]:
-            return (os.system, ("echo pwned",))
+            return (os.system, (f"touch {marker}",))
 
-    payload = base64.b64encode(pickle.dumps(Evil())).decode("ascii")
-    env = json.dumps({"format": "ps-predictor/v2", "version": 2, "payload_b64": payload}).encode("utf-8")
-    with pytest.raises(artifacts.ArtifactRefusedError):
-        artifacts.load_v2_envelope(env)
+    with pytest.raises(artifacts.DisallowedGlobalError) as refused:
+        artifacts.load_v2_envelope(_envelope_with_payload(pickle.dumps(Evil())))
+    assert refused.value.name == "system" and refused.value.module in ("posix", "nt")
+    assert not marker.exists()
+
+
+# Sidecar functions and library names that are NOT on the allow-list: a module prefix must never admit them (the
+# snapshot fetcher opens URLs; the trainer and encoder functions run fits and parsing on attacker-chosen arguments).
+UNLISTED = [("app.encoding", "normalize"), ("app.snapshot", "fetch_verified"), ("app.snapshot", "_read_bounded"),
+            ("app.trainer", "fit_predictor"), ("app.artifacts", "_bytes_to_model"),
+            ("sklearn.preprocessing._function_transformer", "anything"), ("sklearn.pipeline", "make_pipeline")]
+
+
+@pytest.mark.parametrize("module,name", UNLISTED, ids=[f"{m}.{n}" for m, n in UNLISTED])
+def test_an_unlisted_global_is_refused_even_beside_allowed_ones(module: str, name: str) -> None:
+    assert not artifacts._is_allowed_global(module, name)
+    with pytest.raises(artifacts.DisallowedGlobalError) as refused:
+        artifacts.load_v2_envelope(_envelope_with_payload(_naming(module, name)))
+    assert (refused.value.module, refused.value.name) == (module, name)
 
 
 def test_an_allowed_object_that_is_not_a_predictor_is_refused() -> None:
-    art = _build("lr", _fitted("binary", "logistic_regression"), "binary")
-    envelope = json.loads(base64.b64decode(art.bytes_base64))
     buf = io.BytesIO()
     joblib.dump(Ridge().fit(np.eye(3), np.arange(3.0)), buf)
-    envelope["payload_b64"] = base64.b64encode(buf.getvalue()).decode("ascii")
-    with pytest.raises(artifacts.ArtifactRefusedError, match="not a trainer predictor"):
-        artifacts.load_v2_envelope(json.dumps(envelope).encode("utf-8"))
+    with pytest.raises(artifacts.NotATrainerPredictorError):
+        artifacts.load_v2_envelope(_envelope_with_payload(buf.getvalue()))
 
 
-@pytest.mark.parametrize("raw", [b"not json", json.dumps({"format": "joblib", "version": 1}).encode("utf-8"),
-                                 json.dumps({"format": "ps-predictor/v2", "version": 2}).encode("utf-8")])
-def test_a_malformed_envelope_is_refused(raw: bytes) -> None:
+def _complete_envelope(**over: object) -> bytes:
+    envelope = json.loads(base64.b64decode(_build("lr", _fitted("binary", "logistic_regression"), "binary").bytes_base64))
+    envelope.update(over)
+    return json.dumps(envelope).encode("utf-8")
+
+
+def _truncated_payload() -> bytes:
+    buf = io.BytesIO()
+    joblib.dump(_fitted("binary", "logistic_regression"), buf)
+    return buf.getvalue()[: len(buf.getvalue()) // 2]
+
+
+MALFORMED: Dict[str, Callable[[], bytes]] = {
+    "not-json": lambda: b"not json",
+    "v1-format": lambda: json.dumps({"format": "joblib", "version": 1}).encode("utf-8"),
+    "missing-fields": lambda: json.dumps({"format": "ps-predictor/v2", "version": 2}).encode("utf-8"),
+    "version-3": lambda: _complete_envelope(version=3),
+    "invalid-base64": lambda: _complete_envelope(payload_b64="!!!!"),
+    "non-ascii-payload": lambda: _complete_envelope(payload_b64="\u00e9t\u00e9"),
+    "garbage-payload": lambda: _envelope_with_payload(b"garbage, not a pickle"),
+    "truncated-payload": lambda: _envelope_with_payload(_truncated_payload()),
+}
+
+
+@pytest.mark.parametrize("case", sorted(MALFORMED))
+def test_a_malformed_envelope_is_refused(case: str) -> None:
     with pytest.raises(artifacts.ArtifactRefusedError):
-        artifacts.load_v2_envelope(raw)
+        artifacts.load_v2_envelope(MALFORMED[case]())
 
 
 def test_content_hash_conventions_are_pinned() -> None:
@@ -254,3 +305,23 @@ def test_the_multiclass_dummy_is_the_class_prior() -> None:
     y = np.array([0, 0, 1, 2], dtype=np.int64)
     prior = BL.dummy(TR.EncodedLabel(y, "multiclass", ["x", "y", "z"], None)).predict(X.iloc[:2])
     assert np.allclose(prior, [[0.5, 0.25, 0.25], [0.5, 0.25, 0.25]])
+
+
+def test_one_feature_scores_each_source_out_of_fold_on_the_given_folds() -> None:
+    """Each source's recorded score is the primary score of its single-source GLM's pooled out-of-fold predictions:
+    fitted on each repeat-0 fold's training rows, scored on that fold's validation rows. An in-sample score (the GLM
+    fitted on every row) differs, so a fit that leaks the validation rows changes the recorded number."""
+    p, enc, folds = _baseline_inputs([{"kind": "dummy", "name": "base-rate"}])
+    _, _, recorded = BL.one_feature(p, COLS, X, enc, folds, 1)
+    primary = scores.primary_score(p.primaryScore.metric, None)
+    y = np.asarray(enc.y, dtype=np.float64)
+    first = [f for f in folds if f.repeat == 0]
+    valid = np.concatenate([f.valid for f in first])
+    all_rows = np.arange(N, dtype=np.int64)
+    for src in ("a", "c"):
+        cols = [c for c in COLS if c.source_column == src]
+        oof = np.concatenate([TR.fit_predictor(BL.glm_spec("binary"), cols, X, enc, f.train, p, 1).predict(X.iloc[f.valid])
+                              for f in first])
+        assert recorded[src] == pytest.approx(primary.aggregate(y[valid], oof), rel=1e-12)
+        in_sample = TR.fit_predictor(BL.glm_spec("binary"), cols, X, enc, all_rows, p, 1).predict(X.iloc[valid])
+        assert abs(recorded[src] - primary.aggregate(y[valid], in_sample)) > 1e-4

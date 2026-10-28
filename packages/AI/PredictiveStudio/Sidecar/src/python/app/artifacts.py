@@ -34,6 +34,8 @@ from collections import OrderedDict
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 import joblib
+import numpy as np
+import numpy.typing as npt
 from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
 from joblib.numpy_pickle_utils import _ensure_native_byte_order, _read_fileobject
 from pydantic import ValidationError
@@ -72,8 +74,9 @@ ENVELOPE_VERSION = 1
 #    500 with a traceback.
 #
 # If a new estimator family fails to load with "not an allowed global", add the narrowest
-# exact pairs it needs to ``_ALLOWED_GLOBALS`` and extend the round-trip test. Do not add a
-# module prefix.
+# exact pairs it needs and extend the round-trip test: a trainer-predictor pair goes in
+# ``PREDICTOR_V2_GLOBALS`` (tests/test_artifacts_v2.py checks it both ways), a legacy
+# ``/train`` pair in the legacy set inside ``_ALLOWED_GLOBALS``. Do not add a module prefix.
 
 #: The exact pairs a trainer predictor (``ps-predictor/v2``) pickles beyond the legacy list below: its in-fold
 #: pipeline, the GLM baselines' estimators and losses, its calibration map and the predictor classes themselves.
@@ -122,7 +125,8 @@ PREDICTOR_V2_GLOBALS: FrozenSet[Tuple[str, str]] = frozenset(
 )
 
 #: Exact (module, name) pairs pickle may resolve while loading an artifact. Everything here
-#: is a class or a reconstructor that takes no path, URL or source text.
+#: is a class, a reconstructor, or (the trainer encoder's four module-level helpers) a pure
+#: array/string function; nothing takes a path, URL or source text.
 _ALLOWED_GLOBALS: FrozenSet[Tuple[str, str]] = PREDICTOR_V2_GLOBALS | frozenset(
     {
         # Python
@@ -180,27 +184,36 @@ class ArtifactRefusedError(pickle.UnpicklingError, ValueError):
     callers that map ValueError to a client error (``/predict``) treat it as one."""
 
 
-# joblib ships no type stubs, so its classes are `Any` to mypy and subclassing them is reported.
-class _GuardedArrayWrapper(NumpyArrayWrapper):  # type: ignore[misc]
+class DisallowedGlobalError(ArtifactRefusedError):
+    """The artifact's pickle stream names a global outside the allow-list; nothing it names was resolved or run."""
+
+    def __init__(self, module: str, name: str) -> None:
+        super().__init__(f"Refusing to load {module}.{name} from a model artifact: not an allowed global")
+        self.module = module
+        self.name = name
+
+
+class NotATrainerPredictorError(ArtifactRefusedError):
+    """A v2 payload decoded to an allowed object that is not a trainer predictor."""
+
+
+class _GuardedArrayWrapper(NumpyArrayWrapper):  # type: ignore[misc]  # joblib has no stubs: its base class is Any
     """joblib's array container with the object-array path routed through the restricted
     unpickler instead of a bare ``pickle.load``."""
 
-    def read_array(self, unpickler: "RestrictedModelUnpickler") -> Any:
+    def read_array(self, unpickler: "RestrictedModelUnpickler") -> npt.NDArray[np.generic]:
         if self.dtype.hasobject:
             nested = RestrictedModelUnpickler(unpickler.filename, unpickler.file_handle)
-            return _ensure_native_byte_order(nested.load())
-        return super().read_array(unpickler)
+            return np.asarray(_ensure_native_byte_order(nested.load()))
+        return np.asarray(super().read_array(unpickler))
 
 
-# joblib ships no type stubs, so its classes are `Any` to mypy and subclassing them is reported.
-class RestrictedModelUnpickler(NumpyUnpickler):  # type: ignore[misc]
+class RestrictedModelUnpickler(NumpyUnpickler):  # type: ignore[misc]  # joblib has no stubs: its base class is Any
     """joblib's unpickler with ``find_class`` gated by ``_ALLOWED_GLOBALS``."""
 
     def find_class(self, module: str, name: str) -> Any:
         if not _is_allowed_global(module, name):
-            raise ArtifactRefusedError(
-                f"Refusing to load {module}.{name} from a model artifact: not an allowed global"
-            )
+            raise DisallowedGlobalError(module, name)
         if (module, name) == ("joblib.numpy_pickle", "NumpyArrayWrapper"):
             return _GuardedArrayWrapper
         return super().find_class(module, name)
@@ -384,5 +397,5 @@ def load_v2_envelope(envelope_bytes: bytes) -> Tuple[TrainedPredictor, Predictor
         raise ArtifactRefusedError(f"Not a ps-predictor/v2 envelope: {type(exc).__name__}: {exc}") from exc
     predictor = _bytes_to_model(payload)
     if not isinstance(predictor, TrainedPredictor):
-        raise ArtifactRefusedError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")
+        raise NotATrainerPredictorError(f"The v2 payload is a {type(predictor).__name__}, not a trainer predictor")
     return predictor, envelope

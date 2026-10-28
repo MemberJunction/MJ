@@ -30,14 +30,12 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from .array_types import FArr
-from .baselines import HEURISTIC_PREFIX
+from .baselines import DUMMY_MEMBER, HEURISTIC_PREFIX
 from .encoding import CategoricalEncoding, ColumnSpec, NumericEncoding
 from .trainer import TrainedPredictor
 
 FORMAT_V2: Final = "ps-predictor/v2"
 TaskKind = Literal["binary", "multiclass", "continuous", "count", "non-negative", "forecast"]
-# The gate's yardstick member names, which never ship as artifacts.
-_DUMMY_MEMBER = "dummy"
 
 
 class _Wire(BaseModel):
@@ -112,13 +110,18 @@ class BuiltArtifact:
     class_order: Optional[List[str]]
 
 
+class NotShippableError(ValueError):
+    """`build` was handed something that never ships: the dummy or an incumbent heuristic (by gate member name), or
+    any predictor that is not a trainer predictor."""
+
+
 def _refuse_yardstick(candidate: str, predictor: TrainedPredictor) -> None:
     """The dummy and the incumbent heuristic never ship: refused by gate member name and by predictor type."""
-    if candidate == _DUMMY_MEMBER or candidate.startswith(HEURISTIC_PREFIX):
-        raise ValueError(f"'{candidate}' is a publishing-gate yardstick and never ships as an artifact")
+    if candidate == DUMMY_MEMBER or candidate.startswith(HEURISTIC_PREFIX):
+        raise NotShippableError(f"'{candidate}' is a publishing-gate yardstick; yardsticks never ship as artifacts")
     if not isinstance(predictor, TrainedPredictor):
-        raise ValueError(f"'{candidate}' is a {type(predictor).__name__}, not a trainer predictor: only a trainer "
-                         f"predictor ships as an artifact; the dummy and the incumbent heuristic never ships")
+        raise NotShippableError(f"'{candidate}' is a {type(predictor).__name__}, not a trainer predictor; only "
+                                f"trainer predictors ship as artifacts")
 
 
 def build(candidate: str, predictor: TrainedPredictor, columns: Sequence[ColumnSpec], task_kind: TaskKind,
@@ -128,7 +131,7 @@ def build(candidate: str, predictor: TrainedPredictor, columns: Sequence[ColumnS
     the same predictor and arguments always produce the same bytes and hash.
 
     Raises:
-        ValueError: When `candidate` names the dummy or an incumbent heuristic, or `predictor` is not a trainer
+        NotShippableError: When `candidate` names the dummy or an incumbent heuristic, or `predictor` is not a trainer
             predictor.
     """
     _refuse_yardstick(candidate, predictor)

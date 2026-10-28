@@ -34,12 +34,12 @@ GLM_DRIVER: Dict[TabularFamily, str] = {"binary": "logistic_regression", "multic
                                         "continuous": "ridge", "count": "poisson_glm", "non-negative": "tweedie_glm"}
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 # Gate member names: reserved, so a candidate may neither use one nor start with HEURISTIC_PREFIX.
-MEMBER_NAMES = frozenset({"dummy", "oneFeature", "glm", "naive", "seasonalNaive"})
+DUMMY_MEMBER = "dummy"
+MEMBER_NAMES = frozenset({DUMMY_MEMBER, "oneFeature", "glm", "naive", "seasonalNaive"})
 HEURISTIC_PREFIX = "heuristic:"
 
 
-# sklearn ships no type stubs, so BaseEstimator is `Any` to mypy and subclassing it is reported.
-class ConstantPredictor(BaseEstimator):  # type: ignore[misc]
+class ConstantPredictor(BaseEstimator):  # type: ignore[misc]  # sklearn has no stubs: BaseEstimator is Any
     """The dummy: one constant prediction per row (a probability or mean as a 0-d value, or a class-prior row)."""
 
     def __init__(self, value: FArr) -> None:
@@ -51,8 +51,7 @@ class ConstantPredictor(BaseEstimator):  # type: ignore[misc]
         return np.asarray(np.tile(self.value, (len(X), 1)), dtype=np.float64)
 
 
-# sklearn ships no type stubs, so BaseEstimator is `Any` to mypy and subclassing it is reported.
-class ColumnScorePredictor(BaseEstimator):  # type: ignore[misc]
+class ColumnScorePredictor(BaseEstimator):  # type: ignore[misc]  # sklearn has no stubs: BaseEstimator is Any
     """The incumbent heuristic: its prediction is the snapshot's incumbent-score column, read as is."""
 
     def __init__(self, column: str) -> None:
@@ -136,7 +135,7 @@ def fit_all(protocol: EvaluationProtocol, columns: Sequence[encoding.ColumnSpec]
     all_rows = np.arange(len(X), dtype=np.int64)
     for i, b in enumerate(protocol.baselines):
         if b.kind == "dummy":
-            out.append(FittedBaseline("dummy", "dummy", i, dummy(enc)))
+            out.append(FittedBaseline(DUMMY_MEMBER, "dummy", i, dummy(enc)))
         elif b.kind == "one-feature":
             src, model, score = one_feature(protocol, columns, X, enc, folds, threads)
             out.append(FittedBaseline("oneFeature", "simple", i, model, score, src))
