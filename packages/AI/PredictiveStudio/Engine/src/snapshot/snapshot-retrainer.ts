@@ -5,7 +5,7 @@
  * manifest records, so what was frozen is exactly what was trained on.
  */
 import type { LegacyRequestConfig, MatrixData, TrainResponse } from '@memberjunction/predictive-studio-core';
-import { LockedHoldoutSplitter } from '../training/locked-holdout';
+import { LockedHoldoutSplitter, type LockedHoldoutSplit } from '../training/locked-holdout';
 import { TrainRequestBuilder } from '../training/train-request';
 import type { ISidecarTrainer } from '../training/types';
 import type { SnapshotContent } from './snapshot-serialization';
@@ -18,6 +18,12 @@ export class SnapshotColumnMissingError extends Error {
   }
 }
 
+/** A training from a snapshot: the trainer's response and the manifest split it trained on (the one split the run records). */
+export interface SnapshotTraining {
+  readonly Response: TrainResponse;
+  readonly Split: LockedHoldoutSplit;
+}
+
 /** Trains from Training Snapshots. Static members on one owner. */
 export class SnapshotRetrainer {
   /**
@@ -28,8 +34,9 @@ export class SnapshotRetrainer {
    * @param content the snapshot content the rows come from
    * @param request the algorithm, problem type, hyperparameters and validation to train with
    * @param sidecar the trainer
+   * @returns the trainer's response and the split it was sent, with every snapshot column, its counts and holdout class counts
    */
-  public static async TrainOnSnapshot(content: SnapshotContent, request: LegacyRequestConfig, sidecar: ISidecarTrainer): Promise<TrainResponse> {
+  public static async TrainOnSnapshot(content: SnapshotContent, request: LegacyRequestConfig, sidecar: ISidecarTrainer): Promise<SnapshotTraining> {
     const columns = [...content.Header.featureSchema.map((f) => f.Name), content.Header.labelColumn];
     const at = columns.map((c) => {
       const k = content.Header.columns.indexOf(c);
@@ -49,6 +56,6 @@ export class SnapshotRetrainer {
       Target: content.Header.labelColumn,
       Data: project(split.Training),
     });
-    return sidecar.train(trainRequest, project(split.LockedHoldout));
+    return { Response: await sidecar.train(trainRequest, project(split.LockedHoldout)), Split: split };
   }
 }

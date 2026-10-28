@@ -331,7 +331,7 @@ export class TrainingEngine {
 
   /**
    * Train through the sidecar from the snapshot's rows (development rows trained on, locked-holdout rows scored once),
-   * create the model row and complete the run. The split the run and model record is read from the snapshot manifest.
+   * create the model row and complete the run. The run and model record the split the trainer was sent.
    */
   private async fitUnitModel(
     run: MJMLTrainingRunEntity,
@@ -345,8 +345,7 @@ export class TrainingEngine {
     uncovered: readonly UncoveredRowsCount[],
   ): Promise<MJMLModelEntity> {
     const request = this.legacyRequestFor(resolved);
-    const response = await SnapshotRetrainer.TrainOnSnapshot(content, request, deps.sidecar);
-    const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
+    const { Response: response, Split: split } = await SnapshotRetrainer.TrainOnSnapshot(content, request, deps.sidecar);
     const schema = { featureSchema: [...content.Header.featureSchema] };
     const evaluation = EvaluationLineage.Build(resolved.validation, {
       ValidationOutOfSample: response.validation_out_of_sample === true,
@@ -493,7 +492,8 @@ export class TrainingEngine {
 
   /**
    * Mark a unit run `Completed` with the `completed` envelope: the unit resolution counts, the trainer's metrics and
-   * the request settings it trained with.
+   * the request settings it trained with. The run's Hyperparameters are the request's, so the run's two records of
+   * them cannot disagree.
    */
   private async finalizeUnitRunSuccess(
     run: MJMLTrainingRunEntity,
@@ -515,7 +515,7 @@ export class TrainingEngine {
     };
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
-    run.Hyperparameters = JSON.stringify(resolved.hyperparameters);
+    run.Hyperparameters = JSON.stringify(request.hyperparameters);
     run.ValidationResults = JSON.stringify(results);
     run.Status = 'Completed';
     run.CompletedAt = new Date();

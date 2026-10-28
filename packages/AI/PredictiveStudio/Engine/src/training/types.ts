@@ -205,7 +205,8 @@ export interface TrainingDeps {
   history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /**
    * Where a Prediction Unit run writes its Training Snapshot's files. Required on the unit path: a unit run trains only
-   * from a snapshot, so a unit run without a file store is refused rather than trained unrecorded.
+   * from a snapshot, so a unit run without a file store fails with an error (incomplete deps; the run is recorded
+   * `Failed`, not as a `refused` envelope) rather than training from rows nothing recorded.
    */
   snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Assigns each unit row its manifest role; defaults to a `TrailingFractionCarver` over the pipeline's `LockedHoldoutFraction`. */

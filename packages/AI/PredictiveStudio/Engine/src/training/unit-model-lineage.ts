@@ -4,7 +4,8 @@
  * The part of `MJ: ML Models.Lineage` a model trained on a Prediction Unit adds, and its validating reader. Training
  * writes it; scoring reads it back to assemble the same typed columns, folded the same way. The reader checks every
  * member (each feature column's source, encoding and missing-value policy field by field), so a stored lineage that
- * drifted from this shape fails loudly instead of being read as something it is not.
+ * drifted from this shape fails loudly instead of being read as something it is not. Unit models carry their
+ * Training Snapshot's ID and content hash; a lineage without them is not a unit model this engine can score.
  */
 import {
   JsonParse,

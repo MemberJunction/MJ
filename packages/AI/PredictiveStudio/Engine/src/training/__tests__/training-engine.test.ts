@@ -627,6 +627,7 @@ function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, feat
   models: FakeMLModel[];
   snapshots: FakeTrainingSnapshot[];
   files: InMemorySnapshotFileStore;
+  snapshotStore: FakeTrainingSnapshotStore;
 } {
   const pipeline = new FakeMLPipeline();
   pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
@@ -639,15 +640,19 @@ function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, feat
   deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
   const files = new InMemorySnapshotFileStore('provider-local');
   deps.snapshotFiles = files;
-  deps.snapshots = new FakeTrainingSnapshotStore(factory);
-  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files };
+  const snapshotStore = new FakeTrainingSnapshotStore(factory);
+  deps.snapshots = snapshotStore;
+  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
 }
 
 /** Finds the snapshots the factory saved by content hash, as the RunView store finds the saved rows. */
 class FakeTrainingSnapshotStore implements ITrainingSnapshotStore {
+  /** Content-hash lookups that found a saved snapshot: each one is a build that reused it instead of writing. */
+  public ReusedLookups = 0;
   constructor(private readonly factory: FakeEntityFactory) {}
   public async FindByContentHash(contentHash: string): Promise<MJTrainingSnapshotEntity | null> {
     const found = this.factory.Snapshots.find((s) => s.ID !== '' && s.ContentHash === contentHash);
+    if (found) this.ReusedLookups++;
     return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
   }
   public async LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null> {
@@ -820,20 +825,36 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('reuses the snapshot for a second training of identical data: one snapshot row, two runs pointing at it', async () => {
-    const { engine, deps, pipeline, runs, snapshots } = unitHarness(years, unitColumns);
+    const { engine, deps, pipeline, runs, snapshots, files, snapshotStore } = unitHarness(years, unitColumns);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const objectsAfterFirst = files.Saved.size;
+    expect(snapshotStore.ReusedLookups).toBe(0);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(files.Saved.size).toBe(objectsAfterFirst); // the second training wrote no files
+    expect(snapshotStore.ReusedLookups).toBe(1); // it found the saved snapshot and reused it
     expect(snapshots).toHaveLength(1);
     expect(runs).toHaveLength(2);
     expect(runs.map((r) => r.TrainingSnapshotID)).toEqual([snapshots[0].ID, snapshots[0].ID]);
   });
 
   it('refuses to train a unit pipeline without a snapshot file store, before calling the sidecar', async () => {
-    const { engine, deps, sidecar, pipeline, snapshots } = unitHarness(years, unitColumns);
+    const { engine, deps, sidecar, pipeline, snapshots, runs } = unitHarness(years, unitColumns);
     delete deps.snapshotFiles;
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/snapshot file store/);
     expect(sidecar.CallCount).toBe(0);
     expect(snapshots).toHaveLength(0);
+    expect(runs[0].Status).toBe('Failed');
+    expect(runs[0].Notes).toMatch(/^Training failed: .*training deps are incomplete.*snapshot file store/);
+  });
+
+  it("records on the run the same hyperparameters the trainer was sent (a column that is not a JSON object sends none)", async () => {
+    const { engine, deps, sidecar, pipeline, runs } = unitHarness(years, unitColumns);
+    pipeline.Hyperparameters = JSON.stringify([3, 4]);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const results = JSON.parse(runs[0].ValidationResults!);
+    expect(sidecar.LastRequest?.hyperparameters).toEqual({});
+    expect(results.legacyRequest.hyperparameters).toEqual({});
+    expect(JSON.parse(runs[0].Hyperparameters!)).toEqual(results.legacyRequest.hyperparameters);
   });
 
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
