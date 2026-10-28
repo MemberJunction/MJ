@@ -1910,11 +1910,21 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The composer dock opened (strip Type control / type-to-compose keystroke) or closed (the
    * dock's hide control). Opening raises the 'engaged' milestone for the cross-session ratchet —
    * but the dock itself stays a per-session, user-owned toggle either way.
+   *
+   * Invariant: the typing box is open only while the conversation is visible — a participant must
+   * see what they type (Caliber). So an open while the thread is hidden reveals it first, through
+   * the same path as the hero's "Show the conversation" ({@link OnTextReveal}: captions on and
+   * persisted, {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a
+   * programmatic open) funnels through here; {@link OnCaptionsToggled} holds the other half.
    */
   public OnComposerOpenChanged(open: boolean): void {
-    // The host disallows typing: refuse any open (closing is always allowed).
+    // The host disallows typing: refuse any open (closing is always allowed). Checked before the reveal,
+    // so a refused open reveals nothing.
     if (open && !this._ui.allowTyping) {
       return;
+    }
+    if (open && !this._ui.showThread) {
+      this.OnTextReveal();
     }
     this.ComposerOpen = open;
     if (open) {
@@ -2101,6 +2111,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The captions toggle = the persisted text-vs-orb switch: on → the thread renders
    * (raising the text disclosure milestone); off → the orb hero owns the screen again,
    * at any level. Persisted per-user so the choice survives refresh and devices.
+   *
+   * Invariant: the typing box is open only while the conversation is visible — a participant must
+   * see what they type (Caliber). So turning captions off closes an open box; the composer instance
+   * is kept, so its draft survives and comes back with the next open. Every captions road (the CC
+   * buttons, {@link SetCaptions}, {@link ToggleCaptions}) funnels through here;
+   * {@link OnComposerOpenChanged} holds the other half.
    */
   public OnCaptionsToggled(on: boolean): void {
     // The host disallows text: refuse turning captions on (nothing persisted or emitted). Off is always allowed.
@@ -2112,6 +2128,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.Disclosure.Raise('text'); // emits Changed$ → recomputeUi()
     } else {
       this.conversationShown = false;
+      this.ComposerOpen = false;
     }
     this.persistCaptionsPref();
     this.ControlInvoked.emit('captions');

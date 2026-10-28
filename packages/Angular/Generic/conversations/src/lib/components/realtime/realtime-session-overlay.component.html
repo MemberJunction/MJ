@@ -68,8 +68,10 @@
         </mj-alert>
       }
 
-      <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
-      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread && Ui.allowTextReveal) {
+      <!-- Ephemeral narration with no active working card to anchor to → under the banner. It is conversation text, so it
+           shows exactly while the thread does (Ui.showThread folds the host's text switch, the captions choice, console
+           chrome and review) — never on the session's disclosure ratchet, which only goes up. -->
+      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Ui.showThread) {
         <div class="banner-live-note" role="status" aria-live="polite">
           <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
           {{ State.Narration }}
