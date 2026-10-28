@@ -31,6 +31,7 @@ import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ReconcileFieldLevelSecurity } from './Database/reconcileFieldLevelSecurity';
+import { RunQueryRebindPass } from './Database/queryRebindPass';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
@@ -252,6 +253,7 @@ export class RunCodeGenBase {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
       ManageMetadataBase.clearFieldTracking();
+      ManageMetadataBase.ClearFieldShapeChanges();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
       reporter.mark('platform', DbPlatform());
@@ -373,6 +375,14 @@ export class RunCodeGenBase {
           }
         } else {
           WarnSpinner('SQL output directory NOT found in config file, skipping...');
+        }
+
+        // Saved queries that read an entity whose columns changed shape in this run are re-bound
+        // once the field sync (both passes) is complete; their SQL is never edited.
+        const shapeChanges = ManageMetadataBase.FieldShapeChangedEntities;
+        if (sqlGenerationSucceeded && shapeChanges.IDs.length + shapeChanges.Names.length > 0) {
+          await this.refreshMetadataAfterManageMetadata(provider);
+          await reporter.phase('queryRebind', () => RunQueryRebindPass(provider, currentUser));
         }
 
         // ── Post-run CRUD validator ─────────────────────────────────────────

@@ -12331,6 +12331,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.6
         version: link:../MJCoreEntities
+      '@memberjunction/core-entities-server':
+        specifier: 6.2.0-edge.5
+        version: link:../MJCoreEntitiesServer
       '@memberjunction/db-auto-doc':
         specifier: 6.2.0-edge.6
         version: link:../DBAutoDoc

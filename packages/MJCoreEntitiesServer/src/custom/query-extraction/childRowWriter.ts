@@ -22,6 +22,25 @@ export interface ChildRowWriteContext {
     readonly Provider: IMetadataProvider & IRunViewProvider;
     /** The user the rows are read and written as: the system user for save-triggered extraction. */
     readonly User: UserInfo;
+    /** Work out and report the changes without writing anything. */
+    readonly DryRun?: boolean;
+    /** The name a Query Entities change is reported under, for an entity ID; the ID when omitted. */
+    readonly EntityName?: (entityID: string) => string;
+}
+
+/** The child collection of a query a row belongs to. */
+export type QueryChildCollection = 'Fields' | 'Parameters' | 'Entities' | 'Dependencies';
+
+/** One child row the writes add, update or remove. */
+export interface ChildRowChange {
+    readonly Collection: QueryChildCollection;
+    readonly Action: 'Added' | 'Updated' | 'Removed';
+    /** The field or parameter name, the entity name, or the dependency's reference path. */
+    readonly Name: string;
+    /** For an update, the columns that change. */
+    readonly ChangedColumns: readonly string[];
+    /** For a field row, the entity field its output column comes from, when it maps to one. */
+    readonly SourceEntityFieldID: string | null;
 }
 
 /** What the writes changed, and which rows still have no description. */
@@ -29,6 +48,10 @@ export interface ChildRowWriteSummary {
     Added: number;
     Updated: number;
     Removed: number;
+    /** Every row added, updated or removed, in write order. */
+    readonly Changes: ChildRowChange[];
+    /** Authored parameters the SQL no longer uses: kept, and flagged on the query. */
+    readonly FlaggedParameters: string[];
     /** Field rows with an empty description, for the description pass. */
     readonly FieldsWithoutDescription: string[];
     /** Parameter rows with an empty description, for the description pass. */
@@ -62,15 +85,18 @@ type Write = () => Promise<boolean>;
  * auto-detected one is deleted. Rows keep their IDs. A `null` fact collection leaves its rows as
  * they are. Existing rows are read from the database on the caller's provider, never a cache, so
  * rows written earlier in the same transaction are seen.
+ *
+ * With `DryRun` the same changes are worked out and reported, and nothing is written.
  */
 export async function WriteExtractedChildRows(context: ChildRowWriteContext, result: QueryExtractionResult): Promise<ChildRowWriteSummary> {
     const stored = await loadStoredChildRows(context);
-    const summary: ChildRowWriteSummary = { Added: 0, Updated: 0, Removed: 0, FieldsWithoutDescription: [], ParametersWithoutDescription: [] };
+    const summary: ChildRowWriteSummary = { Added: 0, Updated: 0, Removed: 0, Changes: [], FlaggedParameters: [], FieldsWithoutDescription: [], ParametersWithoutDescription: [] };
     const writes: Write[] = [];
     if (result.Fields) writes.push(...await fieldWrites(context, stored.Fields, result.Fields, summary));
     writes.push(...await parameterWrites(context, stored.Parameters, result.Parameters, summary));
     if (result.Entities) writes.push(...await entityWrites(context, stored.Entities, result.Entities, summary));
     if (result.Dependencies) writes.push(...await dependencyWrites(context, stored.Dependencies, result.Dependencies, summary));
+    if (context.DryRun) return summary;
     const outcomes = await RunMaybeSerial(context.Provider, writes);
     if (outcomes.some(ok => !ok)) throw new Error(`Query ${context.QueryID}: ${outcomes.filter(ok => !ok).length} of ${writes.length} child-row writes failed.`);
     return summary;
@@ -92,17 +118,40 @@ async function loadStoredChildRows(context: ChildRowWriteContext): Promise<Store
     return { Fields: fields, Parameters: parameters, Entities: entities, Dependencies: dependencies };
 }
 
-/** A write for `row` when it has unsaved changes; counts it as added or updated. */
-function saveIfDirty(row: BaseEntity, summary: ChildRowWriteSummary): Write[] {
+/** How a change to a row is reported. */
+interface RowLabel {
+    readonly Collection: QueryChildCollection;
+    readonly Name: string;
+    readonly SourceEntityFieldID?: string | null;
+}
+
+/** A write for `row` when it has unsaved changes; counts and records it as added or updated. */
+function saveIfDirty(row: BaseEntity, summary: ChildRowWriteSummary, label: RowLabel): Write[] {
     if (row.IsSaved && !row.Dirty) return [];
+    const action = row.IsSaved ? 'Updated' : 'Added';
     if (row.IsSaved) summary.Updated++;
     else summary.Added++;
+    const changedColumns = row.IsSaved ? row.Fields.filter(f => f.Dirty).map(f => f.Name) : [];
+    summary.Changes.push({ ...changeOf(label, action), ChangedColumns: changedColumns });
     return [() => row.Save()];
 }
 
-function deleteRows(rows: readonly BaseEntity[], summary: ChildRowWriteSummary): Write[] {
+function deleteRows<T extends BaseEntity>(rows: readonly T[], summary: ChildRowWriteSummary, labelOf: (row: T) => RowLabel): Write[] {
     summary.Removed += rows.length;
+    for (const row of rows) summary.Changes.push(changeOf(labelOf(row), 'Removed'));
     return rows.map(row => () => row.Delete());
+}
+
+function changeOf(label: RowLabel, action: ChildRowChange['Action']): ChildRowChange {
+    return { Collection: label.Collection, Action: action, Name: label.Name, ChangedColumns: [], SourceEntityFieldID: label.SourceEntityFieldID ?? null };
+}
+
+function fieldLabel(row: MJQueryFieldEntity): RowLabel {
+    return { Collection: 'Fields', Name: row.Name, SourceEntityFieldID: row.SourceEntityFieldID };
+}
+
+function parameterLabel(row: MJQueryParameterEntity): RowLabel {
+    return { Collection: 'Parameters', Name: row.Name };
 }
 
 function byLowerName<T extends { Name: string }>(rows: readonly T[]): Map<string, T> {
@@ -123,11 +172,11 @@ async function fieldWrites(context: ChildRowWriteContext, stored: MJQueryFieldEn
         existing.delete(fact.Name.toLowerCase());
         if (!row) row = await newRow<MJQueryFieldEntity>(context, 'MJ: Query Fields', r => newField(r, context.QueryID, fact));
         else applyFieldAnnotations(row, fact);
-        applyFieldFacts(row, fact);
-        writes.push(...saveIfDirty(row, summary));
+        ApplyFieldFacts(row, fact);
+        writes.push(...saveIfDirty(row, summary, fieldLabel(row)));
         if (isEmpty(row.Description)) summary.FieldsWithoutDescription.push(row.Name);
     }
-    return [...writes, ...deleteRows([...existing.values()], summary)];
+    return [...writes, ...deleteRows([...existing.values()], summary, fieldLabel)];
 }
 
 function newField(row: MJQueryFieldEntity, queryID: string, fact: QueryFieldFact): void {
@@ -137,7 +186,11 @@ function newField(row: MJQueryFieldEntity, queryID: string, fact: QueryFieldFact
     row.DetectionMethod = 'Database';
 }
 
-function applyFieldFacts(row: MJQueryFieldEntity, fact: QueryFieldFact): void {
+/**
+ * Sets a field row's facts (name casing, sequence, types, nullability, computed flag, source) from
+ * the extracted fact, leaving its annotations alone.
+ */
+export function ApplyFieldFacts(row: MJQueryFieldEntity, fact: QueryFieldFact): void {
     row.Name = fact.Name;
     row.Sequence = fact.Sequence;
     row.SQLBaseType = fact.SQLBaseType;
@@ -169,11 +222,13 @@ async function parameterWrites(context: ChildRowWriteContext, stored: MJQueryPar
         if (!row) row = await newRow<MJQueryParameterEntity>(context, 'MJ: Query Parameters', r => newParameter(r, context.QueryID, fact));
         else applyParameterAnnotations(row, fact);
         row.Name = fact.Name;
-        writes.push(...saveIfDirty(row, summary));
+        writes.push(...saveIfDirty(row, summary, parameterLabel(row)));
         if (isEmpty(row.Description)) summary.ParametersWithoutDescription.push(row.Name);
     }
-    const unused = [...existing.values()].filter(row => row.DetectionMethod !== 'Manual');
-    return [...writes, ...deleteRows(unused, summary)];
+    const leftover = [...existing.values()];
+    summary.FlaggedParameters.push(...leftover.filter(row => row.DetectionMethod === 'Manual').map(row => row.Name));
+    const unused = leftover.filter(row => row.DetectionMethod !== 'Manual');
+    return [...writes, ...deleteRows(unused, summary, parameterLabel)];
 }
 
 function newParameter(row: MJQueryParameterEntity, queryID: string, fact: QueryParameterFact): void {
@@ -216,9 +271,13 @@ async function entityWrites(context: ChildRowWriteContext, stored: MJQueryEntity
         const row = takeRow(remaining, r => UUIDsEqual(r.EntityID, fact.EntityID))
             ?? await newRow<MJQueryEntityEntity>(context, 'MJ: Query Entities', r => newEntityLink(r, context.QueryID, fact));
         row.AlternateBaseViewID = fact.AlternateBaseViewID;
-        writes.push(...saveIfDirty(row, summary));
+        writes.push(...saveIfDirty(row, summary, entityLabel(context, row)));
     }
-    return [...writes, ...deleteRows(remaining, summary)];
+    return [...writes, ...deleteRows(remaining, summary, row => entityLabel(context, row))];
+}
+
+function entityLabel(context: ChildRowWriteContext, row: MJQueryEntityEntity): RowLabel {
+    return { Collection: 'Entities', Name: context.EntityName ? context.EntityName(row.EntityID) : (row.Entity || row.EntityID) };
 }
 
 function sameEntityLink(row: MJQueryEntityEntity, fact: QueryEntityFact): boolean {
@@ -254,9 +313,13 @@ async function dependencyWrites(context: ChildRowWriteContext, stored: MJQueryDe
         row.ReferencePath = fact.ReferencePath;
         row.Alias = fact.Alias;
         row.ParameterMapping = fact.ParameterMapping;
-        writes.push(...saveIfDirty(row, summary));
+        writes.push(...saveIfDirty(row, summary, dependencyLabel(row)));
     }
-    return [...writes, ...deleteRows(remaining, summary)];
+    return [...writes, ...deleteRows(remaining, summary, dependencyLabel)];
+}
+
+function dependencyLabel(row: MJQueryDependencyEntity): RowLabel {
+    return { Collection: 'Dependencies', Name: row.ReferencePath };
 }
 
 function newDependency(row: MJQueryDependencyEntity, queryID: string, fact: QueryDependencyFact): void {

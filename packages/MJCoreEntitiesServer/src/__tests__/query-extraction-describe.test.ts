@@ -152,6 +152,7 @@ describe('ComputeQueryExtraction — branch renders (D3)', () => {
         expect(asked.some(s => s.includes('u.Email')) && asked.some(s => s.includes('ShortName'))).toBe(true);
         expect(result.Fields?.map(f => [f.Sequence, f.Name])).toEqual([[1, 'ID'], [2, 'Email'], [3, 'ShortName']]);
         expect(result.Messages.join('\n')).toContain('ShortName');
+        expect(result.Messages.join('\n')).toContain('Email (not in render 1)');
         expect(result.Status).toBe('OK');
         expect(result.UsesTemplate).toBe(true);
     });
@@ -193,6 +194,28 @@ describe('ComputeQueryExtraction — what is not described (D4, D5)', () => {
         expect(result.Fields).toBeNull();
         expect(result.Messages.join('\n')).toContain("Invalid column name 'EngagementScore'");
         expect(result.Entities).toEqual([{ EntityID: USERS_ID, AlternateBaseViewID: null }]);
+    });
+
+    it('does not describe a query that reads a table named by a parameter, and keeps its declared fields', async () => {
+        const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const sql = 'SELECT ot.*, ot.{{ UpdatedAtField | sqlIdentifier }} AS __ecd_UpdatedAt FROM {{ SchemaName | sqlIdentifier }}.{{ BaseView | sqlIdentifier }} ot ' +
+            'INNER JOIN __mj.vwUsers u ON u.ID = ot.UserID';
+        const result = await ComputeQueryExtraction(input(sql, { Describe: describe, Mode: 'Refresh' }));
+
+        expect(describe).not.toHaveBeenCalled();
+        expect(result.Fields).toBeNull();
+        expect(result.Status).toBe('OK');
+        expect(result.Messages.join('\n')).toContain('named by a template parameter');
+        expect(result.Entities).toEqual([{ EntityID: USERS_ID, AlternateBaseViewID: null }]);
+        expect(result.Parameters.map(p => p.Name)).toEqual(['UpdatedAtField', 'SchemaName', 'BaseView']);
+    });
+
+    it('still describes a query whose parameter names only a column', async () => {
+        const { describe } = describer(() => DescribeStatementSuccess(USERS_COLUMNS));
+        const result = await ComputeQueryExtraction(input('SELECT u.ID, u.{{ Col | sqlIdentifier }} AS Name FROM __mj.vwUsers u', { Describe: describe, Mode: 'Refresh' }));
+
+        expect(describe).toHaveBeenCalled();
+        expect(result.Fields?.map(f => f.Name)).toEqual(['ID', 'Name']);
     });
 
     it('D6: hashes the platform SQL with the dialect key', async () => {

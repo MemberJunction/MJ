@@ -38,6 +38,7 @@ import {
     NO_DECLARED_QUERY_CHILDREN,
     ComputeQueryExtraction,
     WriteExtractedChildRows,
+    ApplyFieldFacts,
     RunDescriptionPass,
     SQLUsesTemplate,
 } from "./query-extraction";
@@ -101,6 +102,15 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /** The SQL a re-extraction reads instead of the cached platform variant (set by {@link RerunExtraction}). */
     private platformSQLOverride: string | null = null;
+
+    /** The facts an explicit refresh already established, which its save writes instead of extracting again. */
+    private presetExtraction: QueryExtractionResult | null = null;
+
+    /** Whether the running save is an explicit refresh ({@link ApplyRefreshAsync}). */
+    private refreshing = false;
+
+    /** What the last save's child-row writes changed; `null` when it wrote none. */
+    private lastWriteSummary: ChildRowWriteSummary | null = null;
 
     // ─── Embedding Methods ───────────────────────────────────────────────────────
 
@@ -191,6 +201,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         } finally {
             this.ExtractionOverride = 'Auto';
             this.platformSQLOverride = null;
+            this.presetExtraction = null;
+            this.refreshing = false;
         }
     }
 
@@ -207,14 +219,17 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             return false;
         }
         this.applyRunColumns(extraction);
+        if (extraction) this.applyFactsToDeclaredFields(extraction);
         await this.refreshEmbeddingAsync();
         const postCommit = this.capturePostCommitToken();
+        this.lastWriteSummary = null;
         if (!await super.Save(options)) {
             return false;
         }
         if (extraction) {
             await this.writeExtractionAsync(extraction, options, postCommit);
-            await this.autoConvertDialectsAsync();
+            // A refresh brings the derived rows in line with the SQL; it never writes SQL, a dialect variant's included.
+            if (!this.refreshing) await this.autoConvertDialectsAsync();
         } else if (!this.hasSQL) {
             await this.cleanupEmptyQueryAsync();
         }
@@ -259,6 +274,22 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             this.UsesTemplate = false;
         } else if (this.ExtractionOverride !== 'Skip' && (!this.IsSaved || this.GetFieldByName('SQL').Dirty)) {
             this.UsesTemplate = this.lexicalUsesTemplate();
+        }
+    }
+
+    /**
+     * Gives each field row this save declares the facts extraction established for it, before the
+     * graph is written. Facts follow the SQL and the database server whatever a caller declares, so
+     * a declaration made on another platform (shipped metadata declares SQL Server types) is
+     * corrected before it is written instead of being written and then corrected, and a new
+     * declared row gets the types its columns require.
+     */
+    private applyFactsToDeclaredFields(extraction: QueryExtractionResult): void {
+        if (!extraction.Fields) return;
+        const facts = new Map(extraction.Fields.map(f => [f.Name.toLowerCase(), f]));
+        for (const row of this.DeclaredFields?.Items ?? []) {
+            const fact = facts.get((row.Name ?? '').toLowerCase());
+            if (fact) ApplyFieldFacts(row, fact);
         }
     }
 
@@ -402,6 +433,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * output). The caller when no system user is loaded.
      */
     private get extractionUser(): UserInfo {
+        if (this.refreshing) return this.ContextCurrentUser;
         return UserCache.Instance?.GetSystemUser?.() ?? this.ContextCurrentUser;
     }
 
@@ -410,8 +442,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         return this.platformSQLOverride ?? (this.GetPlatformSQL(this.extractionPlatform) || this.SQL || '');
     }
 
-    /** Establishes the query's facts (nothing is written). */
+    /** Establishes the query's facts (nothing is written); an explicit refresh's facts when it already has them. */
     private async computeExtractionAsync(mode: QueryExtractionMode): Promise<QueryExtractionResult> {
+        if (this.presetExtraction) return this.presetExtraction;
         const provider = this.ProviderToUse;
         await this.ensureQueryEngineLoadedAsync();
         return ComputeQueryExtraction({
@@ -475,11 +508,21 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         const provider = this.extractionProvider;
         try {
             if (!provider) throw new Error('the query is not saved through a database provider');
-            const summary = await WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.extractionUser }, extraction);
+            const summary = await WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.extractionUser, EntityName: id => this.entityNameOf(id) }, extraction);
+            this.lastWriteSummary = summary;
             this.queueDescriptionPass(summary, options, postCommit);
         } catch (e) {
+            // An explicit refresh runs in its own transaction, which a failed write rolls back.
+            if (this.refreshing) throw e;
             await this.recordWriteFailureAsync(e);
         }
+    }
+
+    /** An entity's name from the saving provider's catalog, for reporting; the ID when it is not there. */
+    private entityNameOf(entityID: string): string {
+        const provider = this.ProviderToUse;
+        const entities = provider instanceof DatabaseProviderBase ? provider.Entities : [];
+        return entities.find(e => UUIDsEqual(e.ID, entityID))?.Name ?? entityID;
     }
 
     private async recordWriteFailureAsync(error: unknown): Promise<void> {
@@ -501,12 +544,16 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     /**
      * Queues the LLM description pass to run after the caller's transaction commits, when some row
      * has no description and the save does not skip AI actions. No LLM call is made inside the
-     * transaction.
+     * transaction. A save-triggered extraction that changed no child row does not queue it: the
+     * rows are as the last run left them, so a repeated save (a re-push of unchanged metadata) does
+     * not call the LLM again, and a pass that failed is not retried, and recorded, on every save.
+     * An explicit refresh that asks for the pass always queues it.
      */
     private queueDescriptionPass(summary: ChildRowWriteSummary, options: EntitySaveOptions | undefined, postCommit: PostCommitToken | undefined): void {
         const provider = this.ProviderToUse;
         const undescribed = summary.FieldsWithoutDescription.length + summary.ParametersWithoutDescription.length;
         if (options?.SkipEntityAIActions || undescribed === 0 || !(provider instanceof DatabaseProviderBase)) return;
+        if (!this.refreshing && summary.Changes.length === 0) return;
         const request = { QueryID: this.ID, QueryName: this.Name, SQL: this.extractionSQL, Provider: provider, User: this.extractionUser };
         provider.RunAfterCommit(() => RunDescriptionPass(request), `query description pass for "${this.Name}"`, postCommit);
     }
@@ -525,6 +572,56 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         if (!await this.Save({ SkipEntityAIActions: skipAIEnrichment })) {
             LogError(`[MJQueryEntityServer] Re-extraction of query "${this.Name}" failed: ${this.LatestResult?.CompleteMessage}`);
         }
+    }
+
+    // ─── Explicit refresh ────────────────────────────────────────────────────────
+
+    /**
+     * Establishes this saved query's facts under the refresh rules (a save-time rule error is
+     * recorded, never a refusal), as the save would, and writes nothing. The facts are read on the
+     * provider this entity was loaded with, for its platform.
+     */
+    public async ComputeRefreshExtractionAsync(): Promise<QueryExtractionResult> {
+        return this.computeExtractionAsync('Refresh');
+    }
+
+    /**
+     * The child-row changes `extraction` would make, worked out against the rows stored now and
+     * read as this entity's context user. Nothing is written.
+     */
+    public async PreviewRefreshAsync(extraction: QueryExtractionResult, entityName?: (entityID: string) => string): Promise<ChildRowWriteSummary> {
+        const provider = this.extractionProvider;
+        if (!provider) throw new Error('the query is not loaded through a database provider');
+        return WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.ContextCurrentUser, DryRun: true, EntityName: entityName ?? (id => this.entityNameOf(id)) }, extraction);
+    }
+
+    /**
+     * Writes `extraction` (from {@link ComputeRefreshExtractionAsync}): a save with
+     * {@link ExtractionOverride} `Force` that records the run on the query and brings the child
+     * rows in line with the facts. Unlike a save-triggered extraction, the child rows are written
+     * as this entity's context user, so each write is checked against that user's permissions, and
+     * a failed write fails the refresh instead of being recorded on the query. SQL, dialect
+     * variants and the embedding are never written.
+     *
+     * @param withAI Queue the LLM description pass for rows still without a description.
+     * @returns What the child-row writes changed.
+     * @throws Error when the save or a child-row write fails; the caller's transaction should be rolled back.
+     */
+    public async ApplyRefreshAsync(extraction: QueryExtractionResult, withAI: boolean): Promise<ChildRowWriteSummary | null> {
+        this.ExtractionOverride = 'Force';
+        this.presetExtraction = extraction;
+        this.refreshing = true;
+        // A refresh changes the derived rows, not the text the embedding is computed from.
+        const skipEmbeddings = this.SkipEmbeddings;
+        this.SkipEmbeddings = true;
+        try {
+            if (!await this.Save({ SkipEntityAIActions: !withAI })) {
+                throw new Error(this.LatestResult?.CompleteMessage || `the refresh of query "${this.Name}" could not be saved`);
+            }
+        } finally {
+            this.SkipEmbeddings = skipEmbeddings;
+        }
+        return this.lastWriteSummary;
     }
 
     /**

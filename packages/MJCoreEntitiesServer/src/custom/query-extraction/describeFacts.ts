@@ -10,7 +10,7 @@ import type { KnownQueryParameter, QueryExtractionInput, QueryParameterFact, Que
 export interface DescribedOutput {
     /** The union of the renders' columns by name (case-insensitive): the base render's first, in order. */
     readonly Columns: readonly DescribedColumn[];
-    /** Columns only some branch renders produce, with the variant that first produced each. */
+    /** Columns only some renders produce: the render that first produced each, or one that did not return it. */
     readonly BranchOnlyColumns: readonly string[];
     /** Output names a single render returns more than once (case-insensitive). */
     readonly DuplicateNames: readonly string[];
@@ -48,6 +48,7 @@ export async function DescribeQueryOutput(input: QueryExtractionInput, template:
         const described = await input.Describe(rendered.SQL);
         if (!described.Success) return failure(`The database server could not describe the query: ${described.Diagnostics.join('; ') || 'no reason given'}`);
         for (const name of duplicateNames(described.Columns)) duplicates.add(name);
+        if (index > 0) noteMissingColumns(columns, described.Columns, index, branchOnly);
         mergeColumns(columns, described.Columns, index, branchOnly);
     }
     return { Columns: columns, BranchOnlyColumns: branchOnly, DuplicateNames: [...duplicates], Failure: null };
@@ -65,6 +66,14 @@ function mergeColumns(union: DescribedColumn[], columns: readonly DescribedColum
         known.add(column.Name.toLowerCase());
         union.push(column);
         if (index > 0) branchOnly.push(`${column.Name} (render ${index})`);
+    }
+}
+
+/** Notes the columns of the union so far that render `index` does not return (a column only the base branch returns). */
+function noteMissingColumns(union: readonly DescribedColumn[], columns: readonly DescribedColumn[], index: number, branchOnly: string[]): void {
+    const returned = new Set(columns.map(c => c.Name.toLowerCase()));
+    for (const column of union) {
+        if (!returned.has(column.Name.toLowerCase())) branchOnly.push(`${column.Name} (not in render ${index})`);
     }
 }
 

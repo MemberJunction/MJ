@@ -867,6 +867,20 @@
   },
   {
     "fields": {
+      "Name": "refresh",
+      "FullPath": "query:refresh",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Refresh saved queries' extracted parameters, fields and entities (the Query.RefreshExtraction remote operation)",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "211C34C4-DD98-4522-AB2B-43DD14963223"
+    }
+  },
+  {
+    "fields": {
       "Name": "search",
       "FullPath": "search",
       "ParentID": null,

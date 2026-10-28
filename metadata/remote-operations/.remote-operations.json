@@ -951,5 +951,28 @@
       "lastModified": "2026-10-02T21:42:50.623Z",
       "checksum": "2bd24afe259b91df740881470f64f18001cc684464c5c5bb0ad1cc1d3be62480"
     }
+  },
+  {
+    "fields": {
+      "Name": "Refresh Query Extraction",
+      "OperationKey": "Query.RefreshExtraction",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Queries",
+      "Description": "Re-establish saved queries' parameters, fields, entities and dependencies from their SQL and the database server, without changing the SQL: one query, or a selection by ID, name, category, entity read, or all. Optionally a dry run that reports the changes without writing. Requires Update on MJ: Queries and Create/Update/Delete on its child entities, and read access to every entity a query reads. Long-running, with per-query progress. Implemented by QueryRefreshExtractionServerOperation in @memberjunction/core-entities-server.",
+      "InputTypeName": "QueryRefreshExtractionInput",
+      "InputTypeDefinition": "@file:types/query-refresh-extraction.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "QueryRefreshExtractionOutput",
+      "OutputTypeDefinition": "@file:types/query-refresh-extraction.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "query:refresh",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F0102B15-06AE-4568-AE26-5BDE48E4585F"
+    }
   }
 ]

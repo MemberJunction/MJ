@@ -40,6 +40,12 @@ export interface TemplateAnalysis {
     readonly Entities: readonly QueryEntityFact[] | null;
     /** Output names the select list writes more than once (case-insensitive). */
     readonly DuplicateOutputNames: readonly string[];
+    /**
+     * Whether a table or view the query reads is named by a template parameter
+     * (`FROM {{ Schema | sqlIdentifier }}.{{ View | sqlIdentifier }}`), so its output columns depend
+     * on the arguments and no single render describes them.
+     */
+    readonly ReadsParameterNamedSource: boolean;
     /** `@field` / `--:` descriptions, by lower-cased field name. */
     readonly FieldDocs: ReadonlyMap<string, string>;
     /** Save-time rule errors and warnings (`QueryTemplate.Validate`), and doc-comment warnings. */
@@ -80,6 +86,7 @@ export function AnalyzeQueryTemplate(input: QueryExtractionInput): TemplateAnaly
         Dependencies: resolved.Complete ? resolved.References.map(r => dependencyFact(r, input.SQL)) : null,
         Entities: structure.Entities,
         DuplicateOutputNames: structure.DuplicateOutputNames,
+        ReadsParameterNamedSource: structure.ReadsParameterNamedSource,
         FieldDocs: new Map(docs.Value.Fields.map(f => [f.Name.toLowerCase(), f.Description])),
         Errors: diagnostics.filter(d => d.Severity === 'Error'),
         Warnings: diagnostics.filter(d => d.Severity === 'Warning'),
@@ -209,7 +216,7 @@ function inheritedDescription(parameter: MJQueryParameterEntity): string | null 
 // ─── Structure: entities read, duplicate output names ───────────────────────
 
 /** The table references and duplicate output names of every SQL reading of the template (one per branch variant). */
-function readStructure(sql: string, dialect: ParserDialect, input: QueryExtractionInput): { Entities: QueryEntityFact[] | null; DuplicateOutputNames: string[]; Notes: string[] } {
+function readStructure(sql: string, dialect: ParserDialect, input: QueryExtractionInput): { Entities: QueryEntityFact[] | null; DuplicateOutputNames: string[]; ReadsParameterNamedSource: boolean; Notes: string[] } {
     const views = TemplateSqlViews(sql, dialect);
     const references: TableReference[] = views.flatMap(v => [...v.Document.TableReferences().Value]);
     const duplicates = new Map<string, string>();
@@ -221,6 +228,16 @@ function readStructure(sql: string, dialect: ParserDialect, input: QueryExtracti
     return {
         Entities: complete ? entities : null,
         DuplicateOutputNames: [...duplicates.values()],
+        ReadsParameterNamedSource: references.some(isParameterNamedReference),
         Notes: complete ? [] : ['The SQL could not be read completely, so its Query Entities were left as they are.'],
     };
+}
+
+/** The placeholder a template view writes for a `{{ }}` hole that stands where a name goes. */
+const IDENTIFIER_PLACEHOLDER = /^__MJI_\w+__$/;
+
+/** Whether a table reference's name (any part of it) is a template hole, not a name written in the SQL. */
+function isParameterNamedReference(reference: TableReference): boolean {
+    if (reference.CTE !== null || reference.Kind !== 'Table') return false;
+    return reference.Name.Parts.some(part => IDENTIFIER_PLACEHOLDER.test(part.Value));
 }

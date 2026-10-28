@@ -30,7 +30,9 @@ interface Findings {
  *
  * In `Save` mode a save-time rule error or a repeated output name refuses the save
  * (`Refusal`); in `Refresh` mode they are recorded with status `Error`. An external-data-source
- * query is not described (`Skipped`); a describe failure keeps the stored fields (`Error`).
+ * query is not described (`Skipped`); a describe failure keeps the stored fields (`Error`). A
+ * query that reads a table named by a template parameter is not described either: its output
+ * depends on the arguments, so its stored (declared) fields are kept and a note says why.
  */
 export async function ComputeQueryExtraction(input: QueryExtractionInput): Promise<QueryExtractionResult> {
     const analysis = AnalyzeQueryTemplate(input);
@@ -42,6 +44,10 @@ export async function ComputeQueryExtraction(input: QueryExtractionInput): Promi
         return { ...resultOf(input, analysis, null, findings, null), Entities: null, Status: 'Skipped',
             Messages: ['The query reads an external data source, which the database server cannot describe; its fields and entities were left as they are.', ...messagesOf(findings)] };
     }
+    if (analysis.ReadsParameterNamedSource) {
+        findings.Notes.push(PARAMETER_NAMED_SOURCE_NOTE);
+        return resultOf(input, analysis, null, findings, null);
+    }
     const output = await DescribeQueryOutput(input, analysis.Template, analysis.Parameters);
     const outputRefusal = saveRefusal(input, [], output.DuplicateNames);
     if (outputRefusal) return resultOf(input, analysis, null, findings, outputRefusal);
@@ -49,6 +55,10 @@ export async function ComputeQueryExtraction(input: QueryExtractionInput): Promi
     const fields = output.Failure === null ? fieldFacts(output.Columns, analysis, input, findings) : null;
     return resultOf(input, analysis, fields, findings, null);
 }
+
+/** Why the fields of a query that reads a parameter-named table are not taken from a describe. */
+export const PARAMETER_NAMED_SOURCE_NOTE = 'The query reads a table or view named by a template parameter, so its output columns depend on the arguments ' +
+    'and no sample render describes them; its fields were left as they are (declare them in the query\'s metadata).';
 
 /**
  * The hash of the SQL the child rows are extracted from: SHA-256 (hex) of the dialect key and

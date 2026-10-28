@@ -659,7 +659,35 @@ export class ManageMetadataBase {
       const key = this.fieldKey(entityID, name);
       if (key) {
          this._newFieldSet.add(key);
+         this.RegisterFieldShapeChange({ EntityID: entityID });
       }
+   }
+
+   private static _fieldShapeChangedEntityIDs = new Set<string>();
+   private static _fieldShapeChangedEntityNames = new Set<string>();
+
+   /**
+    * Records that an entity's columns changed shape during this run: a field was added or
+    * dropped, or its type, length, precision, scale or nullability changed. The saved queries
+    * that read such an entity are re-bound after the run's field sync. Give the entity by ID or
+    * by name.
+    */
+   public static RegisterFieldShapeChange(entity: { EntityID?: string | null; EntityName?: string | null }): void {
+      const id = (entity.EntityID ?? '').trim().toLowerCase();
+      const name = (entity.EntityName ?? '').trim();
+      if (id) this._fieldShapeChangedEntityIDs.add(id);
+      if (name) this._fieldShapeChangedEntityNames.add(name);
+   }
+
+   /** The entities whose fields changed shape during this run, by ID (lower-cased) and by name. */
+   public static get FieldShapeChangedEntities(): { IDs: readonly string[]; Names: readonly string[] } {
+      return { IDs: [...this._fieldShapeChangedEntityIDs], Names: [...this._fieldShapeChangedEntityNames] };
+   }
+
+   /** Forgets the entities {@link RegisterFieldShapeChange} recorded. */
+   public static ClearFieldShapeChanges(): void {
+      this._fieldShapeChangedEntityIDs.clear();
+      this._fieldShapeChangedEntityNames.clear();
    }
 
    /** @deprecated Use {@link RegisterNewField}. */
@@ -6252,6 +6280,9 @@ export class ManageMetadataBase {
             ManageMetadataBase.addNewEntitiesToModifiedList(changes.map(c => c.entityName));
             for (const c of changes) {
                ManageMetadataBase.registerFieldChange(c.entityID, c.fieldName, c.reasons);
+               if (c.reasons.some(r => TYPE_REOPEN_REASONS.has(r))) {
+                  ManageMetadataBase.RegisterFieldShapeChange({ EntityID: c.entityID });
+               }
                ManageMetadataBase._changedFieldReport.push({
                   entityName: c.entityName,
                   fieldName: c.fieldName,
@@ -6572,6 +6603,9 @@ export class ManageMetadataBase {
          const prunedEntityNames = this.distinctPrunedEntityNames(result);
          if (prunedEntityNames.length > 0) {
             ManageMetadataBase.addNewEntitiesToModifiedList(prunedEntityNames);
+            for (const entityName of prunedEntityNames) {
+               ManageMetadataBase.RegisterFieldShapeChange({ EntityName: entityName });
+            }
          }
          return { success: true, prunedEntityNames };
       }

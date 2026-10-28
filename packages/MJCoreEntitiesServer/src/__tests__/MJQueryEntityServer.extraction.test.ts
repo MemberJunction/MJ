@@ -18,7 +18,10 @@ import type { DatabasePlatform } from '@memberjunction/core';
 const h = vi.hoisted(() => ({
     writes: [] as Array<{ UsesTemplate: boolean | null; ExtractionStatus: string | null }>,
     computed: [] as Array<{ Platform: string; Mode: string; SQL: string }>,
-    written: [] as Array<{ User: { ID: string } }>,
+    written: [] as Array<{ User: { ID: string }; DryRun?: boolean }>,
+    writeFailure: null as string | null,
+    changes: [] as Array<{ Collection: string; Action: string; Name: string }>,
+    fieldFacts: [] as Array<Record<string, unknown>>,
     afterCommit: [] as Array<() => Promise<void>>,
     refusal: null as string | null,
     undescribed: ['Name'] as string[],
@@ -88,14 +91,16 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 vi.mock('../custom/query-extraction/extractQuery', () => ({
     ComputeQueryExtraction: vi.fn(async (input: { Platform: string; Mode: string; SQL: string }) => {
         h.computed.push(input);
-        return { UsesTemplate: false, Refusal: h.refusal, Status: 'OK', Messages: [], Hash: 'hash-1', Fields: [], Parameters: [], Entities: [], Dependencies: [] };
+        return { UsesTemplate: false, Refusal: h.refusal, Status: 'OK', Messages: [], Hash: 'hash-1', Fields: h.fieldFacts, Parameters: [], Entities: [], Dependencies: [] };
     }),
     ExtractionSQLHash: vi.fn(() => 'hash-1'),
 }));
-vi.mock('../custom/query-extraction/childRowWriter', () => ({
-    WriteExtractedChildRows: vi.fn(async (context: { User: { ID: string } }) => {
+vi.mock('../custom/query-extraction/childRowWriter', async (importOriginal) => ({
+    ApplyFieldFacts: (await importOriginal<typeof import('../custom/query-extraction/childRowWriter')>()).ApplyFieldFacts,
+    WriteExtractedChildRows: vi.fn(async (context: { User: { ID: string }; DryRun?: boolean }) => {
         h.written.push(context);
-        return { Added: 0, Updated: 0, Removed: 0, FieldsWithoutDescription: h.undescribed, ParametersWithoutDescription: [] };
+        if (h.writeFailure) throw new Error(h.writeFailure);
+        return { Added: h.changes.length, Updated: 0, Removed: 0, Changes: h.changes, FlaggedParameters: [], FieldsWithoutDescription: h.undescribed, ParametersWithoutDescription: [] };
     }),
 }));
 vi.mock('../custom/query-extraction/descriptionPass', () => ({ RunDescriptionPass: vi.fn(async () => undefined) }));
@@ -134,7 +139,9 @@ function createQuery(): MJQueryEntityServer & { Provider: object | null; SQLDirt
 
 beforeEach(() => {
     h.writes.length = 0; h.computed.length = 0; h.written.length = 0; h.afterCommit.length = 0;
-    h.refusal = null; h.undescribed = ['Name'];
+    h.refusal = null; h.undescribed = ['Name']; h.writeFailure = null;
+    h.changes = [{ Collection: 'Fields', Action: 'Added', Name: 'Name' }];
+    h.fieldFacts = [];
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -191,6 +198,25 @@ describe('MJQueryEntityServer Save — extraction', () => {
         expect(h.afterCommit).toHaveLength(1);
     });
 
+    it('gives a declared field the facts extraction found before the graph is written, keeping its annotations', async () => {
+        h.fieldFacts = [{ Name: 'Name', Sequence: 1, SQLBaseType: 'character varying', SQLFullType: 'character varying(100)', IsNullable: null, IsComputed: false,
+            SourceEntityID: 'E1', SourceEntityFieldID: 'EF1', SourceFieldName: 'Name', SourceObjectName: null, DocDescription: null, SourceDescription: null }];
+        const declared = { Name: 'name', Sequence: 4, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', IsNullable: false, IsComputed: true,
+            SourceEntityID: null, SourceEntityFieldID: null, SourceFieldName: null, SourceObjectName: 'x', Description: 'Authored.' };
+        const query = createQuery();
+        Object.assign(query.DeclaredFields, { Items: [declared] });
+        await query.Save();
+
+        expect(declared).toEqual({ Name: 'Name', Sequence: 1, SQLBaseType: 'character varying', SQLFullType: 'character varying(100)', IsNullable: null, IsComputed: false,
+            SourceEntityID: 'E1', SourceEntityFieldID: 'EF1', SourceFieldName: 'Name', SourceObjectName: null, Description: 'Authored.' });
+    });
+
+    it('does not queue the description pass when the extraction changed no child row', async () => {
+        h.changes = [];
+        await createQuery().Save();
+        expect(h.afterCommit).toHaveLength(0);
+    });
+
     it('M7: SkipEmbeddings leaves the stored vector alone', async () => {
         const query = createQuery();
         query.SkipEmbeddings = true;
@@ -207,6 +233,71 @@ describe('MJQueryEntityServer Save — extraction', () => {
         await query.RerunExtraction(true, 'SELECT 2 AS Two');
         expect(h.computed).toEqual([expect.objectContaining({ Mode: 'Refresh', SQL: 'SELECT 2 AS Two' })]);
         expect(h.afterCommit).toHaveLength(0);
+    });
+});
+
+describe('MJQueryEntityServer — explicit refresh', () => {
+    function savedQuery() {
+        const query = createQuery();
+        query.IsSaved = true; query.SQLDirty = false;
+        return query;
+    }
+
+    it('computes the facts in refresh mode and previews the writes as the caller, writing nothing', async () => {
+        const query = savedQuery();
+        const facts = await query.ComputeRefreshExtractionAsync();
+        await query.PreviewRefreshAsync(facts);
+
+        expect(h.computed.map(c => c.Mode)).toEqual(['Refresh']);
+        expect(h.written).toEqual([expect.objectContaining({ DryRun: true, User: { ID: 'caller' } })]);
+        expect(h.writes).toEqual([]);
+    });
+
+    it('applies the facts it is given without extracting again, writing the child rows as the caller', async () => {
+        const query = savedQuery();
+        const facts = await query.ComputeRefreshExtractionAsync();
+        const summary = await query.ApplyRefreshAsync(facts, false);
+
+        expect(h.computed).toHaveLength(1);
+        expect(h.writes).toEqual([{ UsesTemplate: false, ExtractionStatus: 'OK' }]);
+        expect(h.written.map(w => w.User.ID)).toEqual(['caller']);
+        expect(summary?.Added).toBe(1);
+        expect(h.afterCommit).toHaveLength(0);
+        expect(query.ExtractionOverride).toBe('Auto');
+    });
+
+    it('leaves the stored embedding alone, even for a query with no description', async () => {
+        const query = savedQuery();
+        query.Description = null;
+        await query.ApplyRefreshAsync(await query.ComputeRefreshExtractionAsync(), false);
+        expect([query.EmbeddingVector, query.SkipEmbeddings]).toEqual(['stored-vector', false]);
+    });
+
+    it('queues the description pass only when asked, even when nothing changed', async () => {
+        h.changes = [];
+        const query = savedQuery();
+        await query.ApplyRefreshAsync(await query.ComputeRefreshExtractionAsync(), true);
+        expect(h.afterCommit).toHaveLength(1);
+    });
+
+    it('fails on a child-row write failure instead of recording it, so the caller rolls back', async () => {
+        h.writeFailure = 'insert refused';
+        const query = savedQuery();
+        await expect(query.ApplyRefreshAsync(await query.ComputeRefreshExtractionAsync(), false)).rejects.toThrow();
+        expect(h.writes).toHaveLength(1);
+
+        const save = createQuery();
+        expect(await save.Save()).toBe(true);
+        expect(save.ExtractionStatus).toBe('Error');
+    });
+
+    it('a save after a refresh writes the child rows as the system user again', async () => {
+        const query = savedQuery();
+        await query.ApplyRefreshAsync(await query.ComputeRefreshExtractionAsync(), false);
+        query.ExtractionOverride = 'Force';
+        await query.Save();
+        expect(h.written.map(w => w.User.ID)).toEqual(['caller', 'system']);
+        expect(h.computed).toHaveLength(2);
     });
 });
 

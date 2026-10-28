@@ -253,3 +253,46 @@ describe('WriteExtractedChildRows — entities and dependencies', () => {
         expect(lookups.every(l => l.BypassCache === true)).toBe(true);
     });
 });
+
+describe('WriteExtractedChildRows — dry run and the change list', () => {
+    function dryContext(): ChildRowWriteContext {
+        return { ...context(), DryRun: true, EntityName: id => `Entity ${id}` };
+    }
+
+    it('reports every add, update and removal it would make, and writes nothing', async () => {
+        stored.set('MJ: Query Fields', [
+            { ID: 'F1', QueryID: QUERY_ID, Name: 'Name', Sequence: 1, SQLBaseType: 'int', SQLFullType: 'int', IsNullable: false, IsComputed: false, SourceEntityID: null, SourceEntityFieldID: null, SourceFieldName: 'Name', SourceObjectName: '__mj.vwThings', DetectionMethod: 'Manual' },
+            { ID: 'F2', QueryID: QUERY_ID, Name: 'Gone', Sequence: 2, SQLBaseType: 'int', SQLFullType: 'int', DetectionMethod: 'Database' },
+        ]);
+        stored.set('MJ: Query Entities', [{ ID: 'QE1', QueryID: QUERY_ID, EntityID: 'C1', DetectionMethod: 'Parser' }]);
+        const summary = await WriteExtractedChildRows(dryContext(), result({
+            Fields: [field('Name', 1), field('Added', 2, { SourceEntityFieldID: 'EF-9' })],
+            Entities: [{ EntityID: 'C2', AlternateBaseViewID: null }],
+        }));
+
+        expect(ops).toEqual([]);
+        expect(summary.Changes.map(c => `${c.Action} ${c.Collection}:${c.Name}`).sort()).toEqual([
+            'Added Entities:Entity C2', 'Added Fields:Added', 'Removed Entities:Entity C1', 'Removed Fields:Gone', 'Updated Fields:Name',
+        ]);
+        const updated = summary.Changes.find(c => c.Action === 'Updated');
+        expect(updated?.ChangedColumns).toEqual(['SQLBaseType', 'SQLFullType']);
+        expect(summary.Changes.find(c => c.Name === 'Added')?.SourceEntityFieldID).toBe('EF-9');
+        expect([summary.Added, summary.Updated, summary.Removed]).toEqual([2, 1, 2]);
+    });
+
+    it('flags an authored parameter the SQL no longer uses, in a dry run and a real one alike', async () => {
+        stored.set('MJ: Query Parameters', [{ ID: 'P1', QueryID: QUERY_ID, Name: 'Kept', Type: 'string', DetectionMethod: 'Manual' }]);
+        const dry = await WriteExtractedChildRows(dryContext(), result({ Parameters: [] }));
+        const real = await WriteExtractedChildRows(context(), result({ Parameters: [] }));
+
+        expect([dry.FlaggedParameters, real.FlaggedParameters]).toEqual([['Kept'], ['Kept']]);
+        expect(ops).toEqual([]);
+    });
+
+    it('records the same changes when it writes', async () => {
+        const summary = await WriteExtractedChildRows(context(), result({ Fields: [field('New', 1)] }));
+
+        expect(ops).toEqual(['create MJ: Query Fields:New']);
+        expect(summary.Changes).toEqual([{ Collection: 'Fields', Action: 'Added', Name: 'New', ChangedColumns: [], SourceEntityFieldID: null }]);
+    });
+});

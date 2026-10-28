@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT138 - Query Extraction Correctness",
+    "Description": "Saves fixture queries with extraction on (a normal save) over a fixture schema (mjit_extract: two tables and a view over a view, created and dropped by the bundle) and core MJ views, and asserts exactly what extraction wrote, on SQL Server and PostgreSQL. QE1 field rows of a query over tables: order, base and full type per platform, nullability (SQL Server reports it; PostgreSQL's describe does not), computed, and the schema.object source of a column no entity backs. QE2 a query over a view on a view keeps the inner types. QE3 a query over __mj.vwUsers binds each column to its MJ: Users field. QE4 Query Entities lists entities read in a CTE body, a join and an EXISTS subquery, never a CTE name spelled like an entity view. QE5 parameters are required only when a use sits outside every if, typed by their filters, with defaults and doc-comment and trailing --: descriptions on the right rows. QE6 the fields are the union of every branch render, with a note naming the else-branch column. QE7 an external-data-source query is Skipped and gets no fields. QE8 a query whose table is named by a template parameter keeps its declared fields. QE9 two output columns with one name are refused at save. QE10 ExtractionStatus, ExtractedSQLHash and UsesTemplate are recorded. QE11 a composition that leaves out a required parameter of its target is refused at save (MJQ_COMPOSITION_MISSING_ARGUMENT); one that passes it records its dependency by full path with the argument mapping. Self-cleaning.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Extraction writes exactly the fields, entities and parameters the SQL and the database server establish, on both platforms."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "query-extraction"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C8A4A26F-EEFA-421D-A7D2-C97A3D22D263"
+  }
+}

@@ -3,8 +3,8 @@
 
 // Extraction (describe-based): facts, child-row writes, the post-commit description pass
 export { ComputeQueryExtraction, ExtractionSQLHash } from "./extractQuery";
-export { WriteExtractedChildRows } from "./childRowWriter";
-export type { ChildRowWriteContext, ChildRowWriteSummary } from "./childRowWriter";
+export { WriteExtractedChildRows, ApplyFieldFacts } from "./childRowWriter";
+export type { ChildRowWriteContext, ChildRowWriteSummary, ChildRowChange, QueryChildCollection } from "./childRowWriter";
 export { RunDescriptionPass } from "./descriptionPass";
 export type { DescriptionPassRequest } from "./descriptionPass";
 export { AnalyzeQueryTemplate, SQLUsesTemplate, DescribeDiagnostic } from "./templateFacts";

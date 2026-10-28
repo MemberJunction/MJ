@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT139 - Query Refresh and Re-bind",
+    "Description": "Drives QueryExtractionService and RebindQueriesForChangedEntities against fixture queries over a fixture table (mjit_rebind, created by the bundle, altered inside the checks, dropped by Teardown) and the core view vwCompanies. QR1 refreshing queries whose facts match is Unchanged and writes no child row. QR2 a bulk refresh refreshes a composed query before the queries composing it. QR3 a re-bind refreshes exactly the queries that read the changed entity. QR4 a definer's-rights query (Query Permissions rows) that gains a column whose source field has field permissions is recorded as a Warning naming it (an all-Allow field rule is added for the check, field-level security stays off, and the rule is removed afterwards). QR5 a caller without the refresh grants gets the not-found refusal for an existing query, word for word identical to a missing one's, dry run included, and NotPermitted in bulk. QR6 a dry run reports an added column and writes nothing (row snapshots with timestamps compared). QR7 the added column reaches the SELECT * query and no other. QR8 a type change updates the field type. QR9 dropping an unused column leaves a query naming other columns unchanged. QR10 dropping a used column records Error with the server's message and keeps the SQL and the stored fields. QR11 renaming a used column does the same. QR12 queries whose stored dependencies form a cycle are each refreshed once and the cycle is reported once. Self-cleaning.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A refresh re-establishes a saved query's facts from the live schema without editing its SQL, writes nothing on a dry run, follows dependency order, and refuses unauthorized callers without disclosing what exists."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "query-refresh"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "143C24B4-B48A-4ECD-A65F-CBB4160321DA"
+  }
+}

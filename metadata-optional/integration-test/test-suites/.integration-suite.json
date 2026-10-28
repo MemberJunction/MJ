@@ -1628,6 +1628,39 @@
           "primaryKey": {
             "ID": "4A05D640-2DD1-4DC8-A8FC-4F9C48F4550B"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT138 - Query Extraction Correctness",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "510C6C04-3845-461E-8DA7-DC343E4BB4FD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT139 - Query Refresh and Re-bind",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3495CE90-529A-437D-A143-54E58E8A218A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT140 - MetadataSync Declared Query Children",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86466F49-FA5A-4B12-BE14-3277813C886C"
+          }
         }
       ]
     },
