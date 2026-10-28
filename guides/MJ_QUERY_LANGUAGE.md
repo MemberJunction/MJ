@@ -13,9 +13,10 @@ MemberJunction developers and for the AI agents that write queries (Skip's query
 - **MJ parses and checks; Nunjucks renders.** MJ reads the query, finds its parameters and checks every rule in this
   document when the query is saved. At run time Nunjucks renders the template with the caller's values and the
   MJ SQL filters.
-- **Strictness.** A query that breaks a rule is refused when it is saved new or edited. Queries already saved keep
-  running. A refresh of an existing query reports what breaks the rules, and two rules are only warnings there (see
-  [Save-time checks reference](#save-time-checks-reference)).
+- **Strictness.** A query that breaks a rule is refused when it is saved new or edited (a save that changes its SQL).
+  Queries already saved keep running, unless they use a construct outside the language (see
+  [Running a saved query](#running-a-saved-query)). A refresh of an existing query reports what breaks the rules, and
+  three rules are only warnings there (see [Save-time checks reference](#12-save-time-checks-reference)).
 
 The reference implementation is `@memberjunction/sql-parser`:
 
@@ -150,8 +151,8 @@ SELECT TOP {{ MaxRows | sqlNumber if MaxRows else 12 }} …
 
 | Level | Operators |
 |---|---|
-| 1 | Filters: `x \| f`, `x \| f(arg)` |
-| 2 | Unary `-`, `+` |
+| 1 | Unary `-`, `+` |
+| 2 | Filters: `x \| f`, `x \| f(arg)` |
 | 3 | `*`, `/`, `%` |
 | 4 | `+`, `-` |
 | 5 | `==`, `!=`, `<`, `>`, `<=`, `>=` |
@@ -174,7 +175,7 @@ to the body only; `(x if x else 12) | sqlNumber` filters both branches.
 | Boolean | `true`, `True`, `false`, `False` |
 | Null | `null`, `none`, `None` |
 | Name | A letter or `_`, then letters, digits or `_`. The words `and`, `or`, `not`, `if`, `else`, `in`, `is` are not names. |
-| Context token | `Context.<Token>`: one of the nine tokens in [Context tokens](#5-context-tokens). |
+| Context token | `Context.<Token>`: one of the nine tokens in [Context tokens](#6-context-tokens). |
 | Loop member | `loop.<member>`, inside a `{% for %}` body only. |
 | Length | `<name>.length`: see [`.length`](#length). |
 
@@ -182,7 +183,7 @@ to the body only; `(x if x else 12) | sqlNumber` filters both branches.
 
 | Construct | Example | Code |
 |---|---|---|
-| Function or method call | `upper(x)`, `x.upper()` | `MJQ_FUNCTION_CALL` |
+| Function or method call | `upper(x)`, `x.upper()` | `MJQ_FUNCTION_CALL` (a method call is also `MJQ_MEMBER_ACCESS`) |
 | Subscript | `x[0]`, `x['key']` | `MJQ_SUBSCRIPT` |
 | Attribute access other than `Context.`, `loop.` and `<name>.length` | `x.Name`, `x.constructor`, `Context.UserID.length` | `MJQ_MEMBER_ACCESS` |
 | `in`, `not in`, `is`, `~`, `**`, `//`, `===`, `!==` | `x in Items`, `x is defined` | `MJQ_UNSUPPORTED_OPERATOR` |
@@ -248,9 +249,10 @@ boolean or `null` (`MJQ_DEFAULT_NOT_LITERAL` otherwise). It formats nothing, so 
 
 Any other filter name (`safe`, `upper`, `join`, …) is `MJQ_UNKNOWN_FILTER`, wherever it appears.
 
-**The filter must fit the type.** When a parameter declares a type in its metadata, the **last SQL filter** of each
-hole must be one that formats that type (`MJQ_FILTER_TYPE_MISMATCH`). All five string filters fit a `string`
-parameter. `Context` tokens have their own fixed list (see below).
+**The filter must fit the type.** When a parameter declares a type in its metadata (see
+[Unfiltered values](#unfiltered-values) for which rows declare), the **last SQL filter** of each hole must be one that
+formats that type (`MJQ_FILTER_TYPE_MISMATCH`). All five string filters fit a `string` parameter. `Context` tokens
+have their own fixed list (see below).
 
 ---
 
@@ -399,7 +401,8 @@ SQL context).
 ### Unfiltered values
 
 A value written into the SQL without an MJ SQL filter is checked by its type. The type is the declared type when the
-query's metadata declares the parameter, otherwise the inferred type. When neither gives a type, a type recorded by a
+query's metadata declares the parameter, otherwise the inferred type. A parameter row declares when a person wrote it
+(`DetectionMethod` `Manual`) or it is marked `IsServerSet`. When neither gives a type, a type recorded by a
 parameter row that extraction detected (`AI` or `Parser`) is used. Such a row only types an unfiltered value: it never
 decides whether a filter fits, so an edit may change that parameter's filter.
 
@@ -505,7 +508,8 @@ Descriptions of parameters and output fields can live in the SQL, versioned with
 - An optional `{type}` may follow the tag. It is recorded as `DeclaredType`.
 - A name is a plain name (letters, digits, `_`, `@`, `#`, `$`), or quoted as `"Name"`, `[Name]` or `` `Name` `` for
   field names with spaces. An optional `- ` may separate the name from the description.
-- Lines after a tag line, up to the next tag, continue its description.
+- Lines after a tag line, up to the next tag, continue its description. They are joined to it with a newline, each
+  with its indentation (and any leading `*`) removed.
 - Text before the first tag of the first doc comment that has tags is the query's **summary**.
 - A `{# #}` comment with no tags is an ordinary comment.
 
@@ -597,8 +601,8 @@ collections of `MJ: Queries`).
 
 ## 12. Save-time checks reference
 
-Severity is for `Mode: 'Save'` (a new or edited query) unless noted. **Error** refuses the save. **Warning** is
-reported. **Info** is a note.
+Severity is for `Mode: 'Save'` (a new query, or a save that changes its SQL) unless noted. Any other save that
+re-extracts a query uses `Mode: 'Refresh'`. **Error** refuses the save. **Warning** is reported. **Info** is a note.
 
 | Code | Severity | Triggered by | Fix |
 |---|---|---|---|
@@ -643,8 +647,19 @@ reported. **Info** is a note.
 | `MJQ_DOC_UNKNOWN_PARAMETER` | Warning | `@param` naming no parameter of the query | Fix the name, or remove it. |
 | `MJQ_DOC_TRAILING_AMBIGUOUS` | Warning | A `--:` comment not attachable to exactly one outer select item | Put it at the end of an aliased item's line, or use `@field`. |
 
-Where they come from: lexing and structure codes are in `QueryTemplate.Diagnostics`; `Validate()` returns those plus
-the value, type, parameter and composition codes; `DocComments()` returns the `MJQ_DOC_*` codes.
+Where they come from: lexing, structure and expression-syntax codes (and `MJQ_COMPOSITION_MALFORMED`) are in
+`QueryTemplate.Diagnostics`; `Validate()` returns those plus the value, type, parameter and composition codes;
+`DocComments()` returns the `MJQ_DOC_*` codes.
+
+### Running a saved query
+
+Before a saved query is rendered, it is validated in `Refresh` mode (without a composition resolver). These errors
+are authoring rules that a query saved before the language existed may rely on, so they never stop a run:
+`MJQ_TAG_IN_STRING_LITERAL`, `MJQ_TAG_IN_QUOTED_IDENTIFIER`, `MJQ_UNFILTERED_VALUE`, `MJQ_UNFILTERED_UNTYPED`,
+`MJQ_ARITHMETIC_IN_HOLE`, `MJQ_HOLE_NOT_A_VALUE`, `MJQ_DEFAULT_NOT_LITERAL`, `MJQ_FOR_ITERABLE`,
+`MJQ_FILTER_TYPE_MISMATCH`, `MJQ_PARAMETER_TYPE_CONFLICT` and `MJQ_COMPOSITION_POSITION`. Every other error refuses
+the run, so a construct outside the language (an unsupported tag, a function call, attribute access other than
+`.length`, a subscript, an unknown filter, a malformed tag) never reaches Nunjucks.
 
 ### Error examples: bad, then good
 
@@ -678,7 +693,7 @@ WHERE 1 = 1
 FROM {{query:"Common/Filters"}} f
 
 -- MJQ_FUNCTION_CALL
-{{ Name.upper() | sqlString }}
+{{ upper(Name) | sqlString }}
 UPPER({{ Name | sqlString }})
 
 -- MJQ_SUBSCRIPT
@@ -719,7 +734,7 @@ WHERE Rank = {{ loop.index }}
 {% for Code, Label in Pairs %}…{% endfor %}
 {% for Code in Codes %}…{% endfor %}
 
--- MJQ_UNFILTERED_VALUE
+-- MJQ_UNFILTERED_VALUE  (Name declared string; with no known type it is the warning MJQ_UNFILTERED_UNTYPED)
 WHERE Name = {{ Name }}
 WHERE Name = {{ Name | sqlString }}
 
