@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app import scores, selection, snapshot as SN, trainer as TR
+from app import folds as F, scores, selection, snapshot as SN, trainer as TR
 from app.encoding import CategoricalEncoding, ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import BinaryTask, CandidateSpec, CountTask, EvaluationProtocol, TrainerRequest
@@ -63,6 +63,9 @@ def test_one_se_rule_prefers_earliest_within_one_se() -> None:
     rl = {"simple": np.array([0.30, 0.31, 0.29, 0.30]), "complex": np.array([0.29, 0.31, 0.29, 0.30])}
     sel = selection.select_one_se(["simple", "complex"], {"simple": 0.300, "complex": 0.2975}, rl)
     assert sel.best_by_score == "complex" and sel.finalist == "simple"
+    assert sel.excess["simple"] == pytest.approx(0.0025)
+    assert sel.se_of_excess["simple"] == 0.0025000000000000022
+    assert sel.within_one_se == {"simple": True, "complex": True}
 
 
 def test_select_finalist_runs_on_development_rows_only(server: FileServer) -> None:
@@ -83,6 +86,55 @@ def test_in_fold_undersampling_never_touches_validation_rows() -> None:
     out = TR._resample(idx, y, "undersample", 0)
     assert set(out.tolist()) <= set(idx.tolist())
     assert int(np.sum(y[out] == 1)) == int(np.sum(y[out] == 0)) == 20
+
+
+@pytest.mark.parametrize(("metric", "power"), [("tweedie-deviance", None), ("tweedie-deviance", 2.5), ("auc", None)])
+def test_a_primary_score_without_a_proper_definition_is_refused(metric: str, power: float | None) -> None:
+    with pytest.raises(ValueError):
+        scores.primary_score(metric, power)  # type: ignore[arg-type]  # deliberately outside PrimaryMetric
+
+
+# ------------------------------------------------------------------------------------------------ fold kinds -------
+
+def _folds_for(server: FileServer, inner: JsonObject) -> tuple[SN.Snapshot, TR.IntArr, list[F.Fold]]:
+    req = _req(server, binary_frame(), innerValidation=inner)
+    snap = SN.load(req, NOW)
+    enc = TR.encode_label(req.task, snap.label)
+    dev = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
+    return snap, dev, TR.build_folds(req.protocol, snap, dev, enc, SN.period_ordinals(snap))
+
+
+def _entities(snap: SN.Snapshot, dev: TR.IntArr) -> list[str]:
+    return [snap.entity_keys[int(i)] for i in dev]
+
+
+def test_an_ungrouped_blocked_time_protocol_does_not_group_rows(server: FileServer) -> None:
+    """`groupKey: null`: every row is its own group, so one entity's rows may sit on both sides of a fold."""
+    snap, dev, folds = _folds_for(server, {"kind": "blocked-time", "folds": 3, "gapPeriods": 0, "groupKey": None})
+    assert sum(F.shared_groups(f, _entities(snap, dev)) for f in folds) > 0
+
+
+def test_a_grouped_blocked_time_protocol_keeps_each_unit_on_one_side(server: FileServer) -> None:
+    snap, dev, folds = _folds_for(server, {"kind": "blocked-time", "folds": 3, "gapPeriods": 0, "groupKey": "EntityKey"})
+    assert all(F.shared_groups(f, _entities(snap, dev)) == 0 for f in folds)
+
+
+def test_grouped_kfold_keeps_each_unit_on_one_side(server: FileServer) -> None:
+    snap, dev, folds = _folds_for(server, {"kind": "grouped-kfold", "folds": 5, "repeats": 2, "groupKey": "EntityKey"})
+    assert len(folds) == 10
+    assert all(F.shared_groups(f, _entities(snap, dev)) == 0 for f in folds)
+
+
+def test_repeated_kfold_on_a_continuous_target_is_unstratified(server: FileServer) -> None:
+    req = _req(server, binary_frame(), innerValidation={"kind": "repeated-stratified-kfold", "folds": 5, "repeats": 2})
+    snap = SN.load(req, NOW)
+    dev = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
+    y = np.random.default_rng(1).normal(size=len(snap.roles))
+    enc = TR.EncodedLabel(y, "continuous", None, None)
+    got = TR.build_folds(req.protocol, snap, dev, enc, SN.period_ordinals(snap))
+    want = F.repeated_stratified(y[dev], 5, 2, req.protocol.seed, stratify=False)
+    assert [(f.repeat, f.train.tolist(), f.valid.tolist()) for f in got] == \
+        [(f.repeat, f.train.tolist(), f.valid.tolist()) for f in want]
 
 
 # ------------------------------------------------------------------------------------- no holdout row leaks -------

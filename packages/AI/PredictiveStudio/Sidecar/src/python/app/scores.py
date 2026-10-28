@@ -115,7 +115,7 @@ def primary_score(metric: PrimaryMetric, tweedie_power: float | None) -> Primary
     caller divides by each origin's scale), so its aggregate is their mean.
 
     Raises:
-        ValueError: For `tweedie-deviance` without a declared power, or a power outside (1, 2).
+        ValueError: For `tweedie-deviance` without a declared power, a power outside (1, 2), or an unknown metric.
     """
     if metric in ("log-loss", "multiclass-log-loss"):
         return PrimaryScore(metric, row_log_loss, _mean_of(row_log_loss))
@@ -127,7 +127,9 @@ def primary_score(metric: PrimaryMetric, tweedie_power: float | None) -> Primary
         return PrimaryScore(metric, row_absolute_error, _mean_of(row_absolute_error))
     if metric == "poisson-deviance":
         return PrimaryScore(metric, row_poisson_deviance, _mean_of(row_poisson_deviance))
-    if tweedie_power is None:
-        raise ValueError("tweedie-deviance needs the task's tweediePower")
-    rl = row_tweedie_deviance(tweedie_power)
-    return PrimaryScore(metric, rl, _mean_of(rl))
+    if metric == "tweedie-deviance":
+        if tweedie_power is None:
+            raise ValueError("tweedie-deviance needs the task's tweediePower")
+        rl = row_tweedie_deviance(tweedie_power)
+        return PrimaryScore(metric, rl, _mean_of(rl))
+    raise ValueError(f"unknown primary metric {metric}")

@@ -100,23 +100,25 @@ class TrainedPredictor(BaseEstimator):  # type: ignore[misc]
     binary, (n, K) probabilities in classOrder for multiclass, the conditional mean otherwise."""
 
     def __init__(self, pipeline: Pipeline, family: Family, n_classes: int,
-                 columns: Sequence[encoding.ColumnSpec] = ()) -> None:
+                 columns: Sequence[encoding.ColumnSpec] = (), threads: int = 1) -> None:
         self.pipeline = pipeline
+        self.threads = threads
         self.columns = list(columns)
         self.family = family
         self.n_classes = n_classes
         self.calibrator: Optional[CalibrationMap] = None
 
     def predict_raw(self, X: pd.DataFrame) -> FArr:
-        """The pipeline's prediction before calibration."""
+        """The pipeline's prediction before calibration, with native thread pools held to the fit's thread count."""
         frame = encoding.normalize(self.columns, X)
-        if self.family in ("binary", "multiclass"):
-            proba = np.asarray(self.pipeline.predict_proba(frame), dtype=np.float64)
-            classes = [int(c) for c in self.pipeline.classes_]
-            full = np.zeros((len(frame), self.n_classes), dtype=np.float64)
-            full[:, classes] = proba
-            return full[:, 1] if self.family == "binary" else full
-        out = np.asarray(self.pipeline.predict(frame), dtype=np.float64)
+        with threadpool_limits(limits=self.threads):
+            if self.family in ("binary", "multiclass"):
+                proba = np.asarray(self.pipeline.predict_proba(frame), dtype=np.float64)
+                classes = [int(c) for c in self.pipeline.classes_]
+                full = np.zeros((len(frame), self.n_classes), dtype=np.float64)
+                full[:, classes] = proba
+                return full[:, 1] if self.family == "binary" else full
+            out = np.asarray(self.pipeline.predict(frame), dtype=np.float64)
         return np.maximum(out, 1e-9) if self.family in ("count", "non-negative") else out
 
     def predict(self, X: pd.DataFrame) -> FArr:
@@ -165,7 +167,7 @@ def fit_predictor(spec: CandidateSpec, columns: Sequence[encoding.ColumnSpec], X
     with threadpool_limits(limits=threads):
         pipe.fit(train_frame, np.asarray(enc.y)[fit_idx])
     n_classes = len(enc.class_order) if enc.class_order is not None else 0
-    return TrainedPredictor(pipe, enc.family, n_classes, columns)
+    return TrainedPredictor(pipe, enc.family, n_classes, columns, threads)
 
 
 def _unit_groups(snap: Snapshot, dev: IntArr) -> list[str]:
@@ -176,9 +178,10 @@ def _unit_groups(snap: Snapshot, dev: IntArr) -> list[str]:
 def build_folds(protocol: EvaluationProtocol, snap: Snapshot, dev: IntArr, enc: EncodedLabel,
                 period_ordinals: IntArr) -> list[F.Fold]:
     """The protocol's inner folds over the development rows `dev` (fold positions index `dev`). Repeated k-fold is
-    stratified on the class for classification and random otherwise. Grouped and blocked-time folds group on the
-    manifest's grouping unit (group key, else entity key); the protocol's `groupKey` names that unit and is not read
-    here.
+    stratified on the class for classification and random otherwise. Grouped k-fold groups on the manifest's grouping
+    unit (group key, else entity key). Blocked-time reads the protocol's `groupKey` to decide grouping: null means no
+    grouping (every row is its own group); a named key groups on the same manifest unit. The named key itself is not
+    resolved here: the manifest carries one grouping unit per row.
 
     Raises:
         ValueError: When the development rows cannot fill the folds (see folds.py).
@@ -191,7 +194,8 @@ def build_folds(protocol: EvaluationProtocol, snap: Snapshot, dev: IntArr, enc: 
     if isinstance(iv, GroupedKFold):
         return F.grouped(groups, iv.folds, iv.repeats, protocol.seed)
     blocked: BlockedTime = iv
-    return F.blocked_time(period_ordinals[dev], groups, blocked.folds, blocked.gapPeriods, protocol.seed)
+    return F.blocked_time(period_ordinals[dev], None if blocked.groupKey is None else groups, blocked.folds,
+                          blocked.gapPeriods, protocol.seed)
 
 
 @dataclass(frozen=True)
@@ -257,6 +261,8 @@ def select_finalist(protocol: EvaluationProtocol, snap: Snapshot, columns: Seque
     cv = {spec.name: _cross_validate(spec, columns, X, dev_enc, folds, validated, primary, protocol, threads, clock)
           for spec in candidates}
     order = [c.name for c in candidates]
+    # The pooled score is each candidate's repeat-0 out-of-fold score; the paired row loss is each validated row's loss
+    # averaged over every repeat. With one repeat both are the reference pipeline's (`_select`) exactly.
     y_val = np.asarray(dev_enc.y, dtype=np.float64)[validated]
     sel = select_one_se(order, {c: primary.aggregate(y_val, cv[c].oof) for c in order},
                         {c: cv[c].row_loss for c in order})
