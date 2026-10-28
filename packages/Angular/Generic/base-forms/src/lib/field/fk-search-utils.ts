@@ -52,3 +52,31 @@ export function FilterCachedFKRows<T>(
   }
   return rows.filter(r => FormatFKCell(getName(r)).toLowerCase().includes(q));
 }
+
+/**
+ * Raised by {@link WithFKSearchTimeout} when a foreign-key lookup has not answered in time. The
+ * field shows it as an error with Retry rather than as "No matches" or an endless spinner.
+ */
+export class FKSearchTimeoutError extends Error {
+  constructor(public readonly TimeoutMs: number) {
+    super(`The lookup did not answer within ${TimeoutMs} ms`);
+    this.name = 'FKSearchTimeoutError';
+  }
+}
+
+/**
+ * Settle with `work`, or reject with {@link FKSearchTimeoutError} once `timeoutMs` passes first.
+ *
+ * The transport under a lookup has no deadline of its own: a request a gateway never answers
+ * keeps its promise pending for good, and the dropdown spinning on it with it. This bounds the
+ * wait the user sees. It does not cancel the request; the field's sequence check drops a late
+ * answer. A `timeoutMs` of zero or less disables the bound.
+ */
+export function WithFKSearchTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  if (!(timeoutMs > 0)) return work;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new FKSearchTimeoutError(timeoutMs)), timeoutMs);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}

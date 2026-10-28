@@ -1,11 +1,11 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FormatFKCell, FilterCachedFKRows } from './fk-search-utils';
+import { FormatFKCell, FilterCachedFKRows, FKSearchTimeoutError, WithFKSearchTimeout } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 
 /**
@@ -822,6 +822,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKActiveIndex = -1;
     this.FKLoading = false;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this._portaledDropdownEl = null;
     this.ShowValueListDropdown = false;
     this.ShowSelectDropdown = false;
@@ -854,6 +855,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Max rows returned from a DB search. */
   private static readonly FK_DB_SEARCH_LIMIT = 20;
 
+  /**
+   * How long the dropdown waits on a lookup before it shows an error with Retry. A lookup normally
+   * answers in well under a second; this bounds the wait when a request is never answered at all
+   * (a gateway timeout, a dropped connection), which otherwise left the field on "Searching…".
+   */
+  private static readonly FK_SEARCH_TIMEOUT_MS = 20_000;
+
+  /**
+   * Milliseconds a lookup may take before the dropdown shows an error with Retry. Zero or less
+   * waits indefinitely.
+   */
+  @Input() FKSearchTimeoutMs = MjFormFieldComponent.FK_SEARCH_TIMEOUT_MS;
+
   /** Suggestions returned from the FK entity search */
   FKSuggestions: FKSuggestion[] = [];
 
@@ -875,6 +889,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** True when a search completed with zero results (drives the "No matches" row). */
   FKNoMatches = false;
+
+  /**
+   * Set when the last lookup failed or timed out (drives the error row with Retry). Kept apart
+   * from {@link FKNoMatches}: "No matches" tells the user the record does not exist, which a
+   * failed request does not establish.
+   */
+  FKSearchError: string | null = null;
 
   /** Index of the keyboard-highlighted active suggestion (-1 = none). */
   FKActiveIndex = -1;
@@ -1283,6 +1304,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKHasIconColumn = (this.FKSelectedSuggestion?.Icon != null) || suggestions.some(s => s.Icon != null);
     this.FKSuggestions = this.sortSuggestions(suggestions);
     this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
+    this.FKSearchError = null;
     this.FKNoMatches = suggestions.length === 0 && !this.FKSelectedSuggestion;
 
     // Show the dropdown for rows, a "no matches" state, or just the pinned selection.
@@ -1849,6 +1871,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.ShowFKDropdown = false;
     this.FKLoading = false;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this.FKActiveIndex = -1;
     this.FKSelectedSuggestion = null;
     this._portaledDropdownEl = null;
@@ -1870,6 +1893,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const seq = ++this._fkSearchSeq;
     this.FKLoading = true;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this.ShowFKDropdown = true;
     if (this._lastFKInputEl) {
       this.updateDropdownPosition(this._lastFKInputEl);
@@ -1888,29 +1912,61 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const escapedQuery = query.replace(/'/g, "''").trim();
 
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const result = await rv.RunView<Record<string, unknown>>({
-      EntityName: fieldInfo.RelatedEntity,
-      // Empty query (focus / cleared field) → no filter → first N rows.
-      ExtraFilter: escapedQuery ? `[${searchField}] LIKE '%${escapedQuery}%'` : '',
-      MaxRows: MjFormFieldComponent.FK_DB_SEARCH_LIMIT,
-      ResultType: 'simple',
-      Fields: fields
-    });
+    let rows: Record<string, unknown>[] | null = null;
+    let failure = '';
+    let timedOut = false;
+    try {
+      const result = await WithFKSearchTimeout(
+        rv.RunView<Record<string, unknown>>({
+          EntityName: fieldInfo.RelatedEntity,
+          // Empty query (focus / cleared field) → no filter → first N rows.
+          ExtraFilter: escapedQuery ? `[${searchField}] LIKE '%${escapedQuery}%'` : '',
+          MaxRows: MjFormFieldComponent.FK_DB_SEARCH_LIMIT,
+          ResultType: 'simple',
+          Fields: fields
+        }),
+        this.FKSearchTimeoutMs
+      );
+      if (result.Success) rows = result.Results;
+      else failure = result.ErrorMessage ?? 'unknown error';
+    } catch (err) {
+      timedOut = err instanceof FKSearchTimeoutError;
+      failure = err instanceof Error ? err.message : String(err);
+    }
 
     // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight. A
     // dismissed panel stays dismissed — this result must not reopen it.
     if (seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
 
-    if (result.Success) {
+    if (rows) {
       const accessor = (r: Record<string, unknown>) => ({ get: (field: string) => r[field] });
-      this.applySuggestions(this.buildSuggestions(result.Results.map(accessor), plan, query), plan);
+      this.applySuggestions(this.buildSuggestions(rows.map(accessor), plan, query), plan);
     } else {
-      this.FKSuggestions = [];
-      this.FKNoMatches = true;
-      this.ShowFKDropdown = true;
+      LogError(`FK lookup failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ${failure}`);
+      this.showFKSearchFailure(timedOut ? 'The search took too long.' : 'The search failed.');
     }
     this.cdr.markForCheck();
+  }
+
+  /** Replace the dropdown's rows with the error row. The pinned current selection stays. */
+  private showFKSearchFailure(message: string): void {
+    this.FKSuggestions = [];
+    this.FKNoMatches = false;
+    this.FKActiveIndex = -1;
+    this.FKSearchError = message;
+    this.ShowFKDropdown = true;
+  }
+
+  /**
+   * Re-run the query that failed. `mousedown` with `preventDefault`, like the clear button, so
+   * the input keeps focus and the blur grace period never closes the panel under the click.
+   */
+  OnFKRetryClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.cancelPendingFKBlur();
+    void this.searchRelatedEntity(this._fkQuery);
   }
 
   // ============================================
@@ -2240,6 +2296,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this.FKActiveIndex = -1;
         this.FKLoading = false;
         this.FKNoMatches = false;
+        this.FKSearchError = null;
         this.FKColumnHeaders = [];
         this.FKColumnFields = [];
         this.FKSortField = null;

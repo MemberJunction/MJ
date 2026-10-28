@@ -879,6 +879,31 @@
   font-style: italic;
 }
 
+.mj-fk-status--error {
+  color: var(--mj-status-error);
+}
+
+.mj-fk-status-text {
+  flex: 1;
+}
+
+.mj-fk-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mj-fk-retry:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
 /* Sticky "create new" footer — sits below the (scrolling) options as a direct child of
    the dropdown panel, so it's always visible regardless of list length. */
 .mj-fk-create-footer {
