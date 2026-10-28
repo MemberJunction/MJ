@@ -755,8 +755,8 @@ Every gate is tier `mutation` (it trains, promotes or writes); none needs a live
 | G1.7 | the one-class target variant of W1-signal s42 is refused before training, 1 of 1 (T16(c)) | W1 | `W1 -> S1.4` | mutation | Prediction Units | `ps-gate-w1-s1-4.checks.ts` · TS (harness) | M2.7 | `UnitTargetValidator.ValidateUnitTargets` drops the one-class check → training starts |
 | G1.8 | the Poisson count target declared "continuous" is refused and accepted when declared count, 1 of 1 each | R3 | `R3 -> S1.4` | mutation | Prediction Units | `ps-gate-r3-s1-4.checks.ts` · TS (harness) | M2.7 | `UnitTargetValidator.ValidateUnitTargets` drops the count-declared-continuous rule (D3-12) → the Poisson target is accepted as continuous |
 | G1.9 | a string column bound as plain numeric `select` on W1-signal s42 stops the run with an error naming the column, 1 of 1, and 0 values are coerced to 0.0 (T16(a)) | W1 | `W1 -> S7.5 #2` | mutation | Prediction Units | `ps-gate-w1-s7-5-2.checks.ts` · TS (harness) | M3.7 | `FeatureResolver.EncodingFor` coerces a string to `Number(x) || 0` → coerced values > 0, no error |
-| G1.10 | the W1-signal s42 snapshot's row manifest holds 16,776 rows, the content hash recomputed from the stored matrix matches (1 of 1), and a retrain from the snapshot and logged configuration reproduces the holdout metric within 1e-9 | W1 | `W1 -> S5.5` | mutation | Prediction Units | `ps-gate-w1-s5-5.checks.ts` · TS (harness) | M4.6 | `SnapshotRetrainer.Retrain` drops the logged seed from its request → retrained holdout metric differs by > 1e-9 |
-| G1.11 | for 20 sampled scored W1-signal s42 rows, every feature value resolves to its source, source version and computed-at, 20 of 20 | W1 | `W1 -> S3.2` | mutation | Prediction Units | `ps-gate-w1-s3-2.checks.ts` · TS (harness) | M4.6 | `AsOfFeatureAssembler` writes `ValueProvenance` without `computedAt` → resolved < 20 of 20 |
+| G1.10 | the W1-signal s42 snapshot's row manifest holds 16,776 rows, the content hash recomputed from the stored matrix matches (1 of 1), and a retrain from the snapshot and logged configuration reproduces the holdout metric within 1e-9 | W1 | `W1 -> S5.5` | mutation | Prediction Units | `ps-gate-w1-s5-5.checks.ts` · TS (harness) | M4.6 | `SnapshotRetrainer.Retrain` sends the logged hyperparameters with `C` set to 0.001 → retrained holdout metric differs by > 1e-9; and the retrainer no longer reports a verified content hash → content hash not matched |
+| G1.11 | for 20 sampled scored W1-signal s42 rows, every feature value resolves to its source, source version and computed-at, 20 of 20 | W1 | `W1 -> S3.2` | mutation | Prediction Units | `ps-gate-w1-s3-2.checks.ts` · TS (harness) | M4.6 | `AsOfFeatureAssembler` writes an empty `computedAt` → resolved < 20 of 20; a scored cell perturbed by 1 → resolved < 20 of 20; each row's provenance checked against another row → resolved < 20 of 20 |
 | G1.12 | 100 scenario C1 entities assembled through the training path and through the scoring path at the same as-of date give identical feature vectors, 0 mismatches of 100 | C1 | `C1 -> S3.1` | mutation | Prediction Units | `ps-gate-c1-s3-1.checks.ts` · TS (harness) | M3.7 | `MLModelInferenceProcessor.AssembleForScoring` reads current values instead of calling `AsOfFeatureAssembler` → mismatches > 0 |
 | G2.1 | over 400 N1c seeds, the gate returns outcome `model` in ≤ 28 publications of 400 (lower end of the two-sided 95% Wilson interval, z = 1.96, ≤ 0.05; P(pass) 0.969 at a 5% true rate, 0.023 at 10%); the reference's outcome is no-signal | N1c | `N1c -> S6.5` | mutation | Training (statistical) | `ps-gate-n1c-s6-5.checks.ts` · `PsGatePytest.Run`: `tests/gates/test_seeds400.py::test_N1c_S6_5_noise_publish` (written M6.8) | M10.5 | `GateRules.BeatsByMargin` tests the point estimate instead of the interval's lower bound → publications above the bound (run at 40 seeds) |
 | G2.2 | over 400 N1r seeds, the gate returns outcome `model` in ≤ 28 publications of 400 (same rule); the reference's outcome is no-signal | N1r | `N1r -> S6.5` | mutation | Training (statistical) | `ps-gate-n1r-s6-5.checks.ts` · `PsGatePytest.Run`: `tests/gates/test_seeds400.py::test_N1r_S6_5_noise_publish` (written M6.8) | M10.5 | `GateRules.BeatsByMargin` tests the point estimate → publications above the bound (run at 40 seeds) |
@@ -8118,7 +8118,7 @@ flipped `Active` and pass; G1.1–G1.3 now also assert against the snapshot.
 `packages/MJStorage/src/__tests__/LocalFileSystemStorage.test.ts`, `metadata/file-storage-providers/.mj-sync.json`,
 `metadata/file-storage-providers/.local-file-system.json` · Modify `packages/MJStorage/src/index.ts`
 
-- [ ] Step 1: Failing test:
+- [x] Step 1: Failing test:
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -8159,8 +8159,8 @@ describe('LocalFileSystemStorage', () => {
 });
 ```
 
-- [ ] Step 2: `cd packages/MJStorage && pnpm test -- LocalFileSystemStorage` → fails: unresolved import.
-- [ ] Step 3: Implement:
+- [x] Step 2: `cd packages/MJStorage && pnpm test -- LocalFileSystemStorage` → fails: unresolved import.
+- [x] Step 3: Implement:
 
 ```ts
 /**
@@ -8315,9 +8315,9 @@ export class LocalFileSystemStorage extends FileStorageBase {
   active provider) is unaffected wherever another provider is active. Add the provider to the canonical list in
   `packages/TestingFramework/integration-test-suite/src/checks/storage.checks.ts` (`CANONICAL_PROVIDERS`, check ST1) so
   the integration tier expects it.
-- [ ] Step 4: `pnpm test` (MJStorage) → all passed (+3); build exit 0; `pnpm mj sync push --dir=metadata --ci` →
+- [x] Step 4: `pnpm test` (MJStorage) → all passed (+3); build exit 0; `pnpm mj sync push --dir=metadata --ci` →
   1 created; restart MJAPI.
-- [ ] Step 5: `sqlcmd … -Q "SELECT Name, ServerDriverKey, Priority, IsActive FROM __mj.FileStorageProvider WHERE Name='Local File System'"`
+- [x] Step 5: `sqlcmd … -Q "SELECT Name, ServerDriverKey, Priority, IsActive FROM __mj.FileStorageProvider WHERE Name='Local File System'"`
   → `Local File System | Local File System Storage | 1000 | 1`.
 
 #### Task M4.2: Canonical JSON, hashes, the snapshot file format and the incumbent-heuristic evaluator
@@ -8337,7 +8337,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
 The matrix header is the file format the trainer reads (M5.5, D3-26): it carries each feature column's full
 `ColumnEncoding` and source column, the optional incumbent-score and slice columns, and the unit's `DecisionSpec`.
 
-- [ ] Step 1: Failing test:
+- [x] Step 1: Failing test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -8405,8 +8405,8 @@ describe('snapshot files', () => {
 });
 ```
 
-- [ ] Step 2: fails: unresolved imports.
-- [ ] Step 3: Implement `snapshot-hash.ts`. Canonical JSON is MJ's existing `Canonicalize` from `@memberjunction/global`
+- [x] Step 2: fails: unresolved imports.
+- [x] Step 3: Implement `snapshot-hash.ts`. Canonical JSON is MJ's existing `Canonicalize` from `@memberjunction/global`
   (keys sorted at every depth, no whitespace — the same canonicalizer Feature Pipelines and BaseEntity hash with), so this
   module only adds the byte hash (coding standards §3: check for an existing utility before writing one):
 
@@ -8843,7 +8843,7 @@ describe('incumbent heuristic expressions', () => {
   `PACKAGE_VERSION` is read once with `createRequire(import.meta.url)('../../package.json').version` (a static
   `require` of a file inside the package; `PS_GIT_SHA` is set by the deployment, §7). The sidecar's `CodeVersion`
   (M5.9) reads the same `PS_GIT_SHA`.
-- [ ] Step 4: `pnpm test -- snapshot-serialization` → `5 passed`; Core `pnpm test -- incumbent-heuristic` →
+- [x] Step 4: `pnpm test -- snapshot-serialization` → `5 passed`; Core `pnpm test -- incumbent-heuristic` →
   `3 passed`; Core and Engine `pnpm run build` → exit 0.
 
 #### Task M4.3: Snapshot file store, holdout carver and snapshot builder
@@ -8852,7 +8852,7 @@ describe('incumbent heuristic expressions', () => {
 `Engine/src/snapshot/snapshot-builder.ts`, `Engine/src/snapshot/__tests__/snapshot-builder.test.ts` · Modify
 `Engine/package.json` (dependency `@memberjunction/storage`, then `pnpm install` at the repo root)
 
-- [ ] Step 1: Failing test (in-memory store, fake entity factory capturing the snapshot row):
+- [x] Step 1: Failing test (in-memory store, fake entity factory capturing the snapshot row):
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -8902,8 +8902,8 @@ describe('TrainingSnapshotBuilder', () => {
 });
 ```
 
-- [ ] Step 2: fails: unresolved imports.
-- [ ] Step 3: Implement `snapshot-file-store.ts`:
+- [x] Step 2: fails: unresolved imports.
+- [x] Step 3: Implement `snapshot-file-store.ts`:
 
 ```ts
 /**
@@ -9264,7 +9264,7 @@ interface StoredSnapshotFiles { readonly Matrix: StoredSnapshotFile; readonly Ma
 interface SnapshotHashes { readonly ContentHash: string; readonly FeatureSchemaHash: string; readonly SchemaColumns: readonly SnapshotFeatureColumn[] }
 ```
 
-- [ ] Step 4: `pnpm test -- snapshot-builder` → `3 passed`; `pnpm install` at the root after adding the dependency;
+- [x] Step 4: `pnpm test -- snapshot-builder` → `3 passed`; `pnpm install` at the root after adding the dependency;
   Engine build exit 0.
 
 #### Task M4.4: The engine trains from the snapshot
@@ -9273,13 +9273,13 @@ interface SnapshotHashes { readonly ContentHash: string; readonly FeatureSchemaH
 `holdoutCarver?`), `Core/src/training-run-results.ts` (`LegacyRequestConfig`), `Engine/src/operations/delegation.ts`,
 `training-engine.test.ts`
 
-- [ ] Step 1: Failing test in `training-engine.test.ts`: after training the W-like unit, the fake entity factory has
+- [x] Step 1: Failing test in `training-engine.test.ts`: after training the W-like unit, the fake entity factory has
   received exactly one `MJ: Training Snapshots` row with `ManifestRowCount = 8`, `CensoredRowsExcluded = 4`; the run's
   `TrainingSnapshotID` equals its ID; the model lineage has `trainingSnapshotId` and `snapshotContentHash`; the
   sidecar request's training + holdout rows equal the manifest's development + locked-holdout rows; and a second
   identical training reuses the snapshot (one row, two runs pointing at it).
-- [ ] Step 2: run → fails.
-- [ ] Step 3: Implement. In `trainUnitPipeline`, after `AssembleForTraining` and before training:
+- [x] Step 2: run → fails.
+- [x] Step 3: Implement. In `trainUnitPipeline`, after `AssembleForTraining` and before training:
 
 ```ts
       const carver = deps.holdoutCarver || new TrailingFractionCarver(resolved.validation.LockedHoldoutFraction);
@@ -9372,7 +9372,7 @@ const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
   (`entity_object`: the reused snapshot is returned as the run's snapshot entity; the hash goes through
   `EscapeSQLString`). Production wiring (`TrainingDelegation.BuildTrainingDeps`) leaves `snapshotFiles` unset so the default
   provider store is used.
-- [ ] Step 4: Engine `pnpm test` → all passed; build exit 0.
+- [x] Step 4: Engine `pnpm test` → all passed; build exit 0.
 
 #### Task M4.5: Retrain from a snapshot reproduces the run
 
@@ -9383,13 +9383,13 @@ const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
 with `RetrainComparison = { TrainingRunID; TrainingSnapshotID; FilesVerified: boolean; ContentHashVerified: boolean;
 Original: Record<string, number>; Retrained: Record<string, number>; MaxAbsDiff: number; Reproduced: boolean }`.
 
-- [ ] Step 1: Failing test: train the W-like unit with a deterministic fake sidecar whose `holdout_metrics.auc` is a
+- [x] Step 1: Failing test: train the W-like unit with a deterministic fake sidecar whose `holdout_metrics.auc` is a
   pure function of the request rows; then `Retrain(run.ID, deps)` → `{ FilesVerified: true, ContentHashVerified: true,
   MaxAbsDiff: 0, Reproduced: true }`; flip one byte of the stored matrix in the `InMemorySnapshotFileStore` →
   `Retrain` rejects with a `SnapshotIntegrityError` whose `File` is `'matrix'` (asserted with `toMatchObject`, not on
   the message).
-- [ ] Step 2: fails (no retrainer).
-- [ ] Step 3: Implement:
+- [x] Step 2: fails (no retrainer).
+- [x] Step 3: Implement:
 
 ```ts
 /** A stored snapshot file whose bytes no longer match the SHA-256 on its snapshot row. */
@@ -9457,7 +9457,7 @@ export class SnapshotRetrainer {
   calls it.
   A third case: a fake sidecar whose retrain response omits one holdout metric → `Reproduced: false`, `MaxAbsDiff`
   `Infinity` (the one-sided-metric rule).
-- [ ] Step 4: `pnpm test -- snapshot-retrainer` → `3 passed`; Engine `pnpm test` → all passed; build exit 0.
+- [x] Step 4: `pnpm test -- snapshot-retrainer` → `3 passed`; Engine `pnpm test` → all passed; build exit 0.
 
 #### Task M4.6: Gates G1.10, G1.11, the harness's sampler, provenance resolver and sidecar hook, and snapshot assertions for G1.1–G1.3
 
@@ -9486,7 +9486,7 @@ task).
 | G1.10 | `W1 -> S5.5` | `ps-gate-w1-s5-5` | `TrainingSnapshotGates.MeasureW1SnapshotRetrain` |
 | G1.11 | `W1 -> S3.2` | `ps-gate-w1-s3-2` | `TrainingSnapshotGates.MeasureW1Provenance` |
 
-- [ ] Step 1: Write the two check files (the §6 preamble's harness form, as M2.7's `ps-gate-c1-s1-1.checks.ts`, with the
+- [x] Step 1: Write the two check files (the §6 preamble's harness form, as M2.7's `ps-gate-c1-s1-1.checks.ts`, with the
   names Step 4's table gives) and the measurements. `IT/src/checks/ps-gates/ps-gate-training-snapshots.ts`:
 
 ```ts
@@ -9546,9 +9546,9 @@ export class TrainingSnapshotGates {
 
 ```
 
-- [ ] Step 2: `cd packages/TestingFramework/integration-test-suite && pnpm run build` fails:
+- [x] Step 2: `cd packages/TestingFramework/integration-test-suite && pnpm run build` fails:
   `UnitFixtures.ProvisionW1ProvenancePipeline` and the three harness members are missing.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
   - **Harness members** (§5.4). `TruthSuite/src/harness/provenance.ts`:
 
 ```ts
@@ -9665,11 +9665,11 @@ export class HarnessSidecar {
   manifest; `PredictionUnitGates.MeasureC1CensoredExcluded` requires `CensoredRowsExcluded = 1756`, `LabelKnownRowsExcluded = 44`, `ManifestRowCount = 4873`;
   `PredictionUnitGates.MeasureW5Censoring` requires `CensoredRowsExcluded = 2147` and no manifest `decisionDate` equal to `2026-12-01` (the censored cycle's
   decision day).
-- [ ] Step 4: Set the `STORAGE_LOCAL_ROOT` and `PS_SNAPSHOT_STORAGE_PROVIDER` lines of §2.3 in your env file,
+- [x] Step 4: Set the `STORAGE_LOCAL_ROOT` and `PS_SNAPSHOT_STORAGE_PROVIDER` lines of §2.3 in your env file,
   `mkdir -p "$STORAGE_LOCAL_ROOT"`, restart MJAPI (on the truth sidecar, §2.3); `pnpm --filter
   @memberjunction/predictive-studio-truth-suite run build` and `cd packages/TestingFramework/integration-test-suite &&
   pnpm run build` → exit 0 each.
-- [ ] Step 5: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
+- [x] Step 5: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
   `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
@@ -9679,24 +9679,24 @@ export class HarnessSidecar {
   | G1.10 | `.gate-W1-S5.5.json` | `ps-gate-w1-s5-5.checks.ts` · `PsGateW1S55Checks` | `'G1.10 W1 → S5.5: the snapshot manifest holds 16,776 rows, its hash matches, a retrain reproduces within 1e-9'` | `PsGate.Assert(await TrainingSnapshotGates.MeasureW1SnapshotRetrain(h))` |
   | G1.11 | `.gate-W1-S3.2.json` | `ps-gate-w1-s3-2.checks.ts` · `PsGateW1S32Checks` | `'G1.11 W1 → S3.2: 20 of 20 sampled scored rows resolve every value to source, version and computed-at'` | `PsGate.Assert(await TrainingSnapshotGates.MeasureW1Provenance(h))` |
 
-- [ ] Step 6: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
+- [x] Step 6: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
   `export * from './checks/ps-gate-w1-s5-5.checks';`
   `export * from './checks/ps-gate-w1-s3-2.checks';`
-- [ ] Step 7: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-w1-s5-5': 1`, `'ps-gate-w1-s3-2': 1` to
+- [x] Step 7: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-w1-s5-5': 1`, `'ps-gate-w1-s3-2': 1` to
   `EXPECTED_BUNDLE_COUNTS`; the bundle total `toHaveLength(164)` → `toHaveLength(166)` (+ any bundle `next` added); add
   `'ps-gate-w1-s5-5.G1.10'`, `'ps-gate-w1-s3-2.G1.11'` to the gated-skip snapshot's `RequiresMutation` list.
-- [ ] Step 8: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
+- [x] Step 8: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
   Append to `metadata-optional/integration-test/test-suites/.ps-gates-prediction-units-suite.json` (10 members before): `W1 -> S5.5` (`Sequence` 11), `W1 -> S3.2` (`Sequence` 12).
-- [ ] Step 9: **Runtime check** (§6 preamble, Gate flip 6):
+- [x] Step 9: **Runtime check** (§6 preamble, Gate flip 6):
   `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → 0 failed (pins and parity);
   `pnpm mj sync push --dir=metadata-optional/integration-test --ci` → exit 0; restart MJAPI; then, one gate at a time,
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "<name>"` → pass for `W1 -> S5.5`, `W1 -> S3.2`.
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → 12 of 12 passed.
   The PR 3 row count (§6 preamble) → `12`.
   Measured values to see and record in §11: `G1.10 manifestRows=16776 contentHashVerified=true maxAbsDiff<=1e-9`, `G1.11 resolved=20`; and `C1 -> S1.1`, `C1 -> S2.2`, `W5 -> S2.2` re-run one at a time → pass with the snapshot assertions of Step 3.
-- [ ] Step 10: **Mutation check G1.10:** `SnapshotRetrainer.Retrain` drops the logged seed from its request (retrained holdout metric differs by > 1e-9) → `W1 -> S5.5` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.10:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G1.11:** `AsOfFeatureAssembler` writes `ValueProvenance` without `computedAt` (resolved < 20 of 20) → `W1 -> S3.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.11:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 12: Runtime DB and storage checks (after Step 9's runs):
+- [x] Step 10: **Mutation check G1.10:** `SnapshotRetrainer.Retrain` sends the logged hyperparameters with `C` set to 0.001 (the sidecar's `random_state` seeds only its internal validation split, so a seed change cannot move the locked-holdout metrics) (retrained holdout metric differs by > 1e-9) → `W1 -> S5.5` fails; and, separately, `Retrain` no longer reports `ContentHashVerified` → `W1 -> S5.5` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.10:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 11: **Mutation check G1.11:** `AsOfFeatureAssembler` writes an empty `computedAt` for immutable-field values (resolved < 20 of 20) → `W1 -> S3.2` fails; and, separately, the first scored row's cell perturbed by 1, and each scored row bound to the next row's binding → `W1 -> S3.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.11:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 12: Runtime DB and storage checks (after Step 9's runs):
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT TOP 3 s.ManifestRowCount, s.HoldoutRowCount, s.CensoredRowsExcluded, s.LabelKnownRowsExcluded, s.ReadComplete, LEN(s.ContentHash), p.Name FROM __mj.TrainingSnapshot s JOIN __mj.FileStorageProvider p ON p.ID=s.StorageProviderID ORDER BY s.__mj_CreatedAt DESC; SELECT COUNT(*) FROM __mj.MLTrainingRun WHERE TrainingSnapshotID IS NOT NULL; SELECT f.Name, f.ProviderKey, f.Status FROM __mj.[File] f WHERE f.ProviderKey LIKE 'predictive-studio/training-snapshots/%' ORDER BY f.__mj_CreatedAt DESC OFFSET 0 ROWS FETCH NEXT 3 ROWS ONLY;"
   ls "$STORAGE_LOCAL_ROOT/predictive-studio/training-snapshots" | head -3
@@ -30673,6 +30673,20 @@ corrected, B-REGISTRY-TEST).
 - **D3-89** · The W4 status-history fixture (`W4StatusHistory`, G1.4) writes only the `MJ: Record Changes` rows that are missing and refuses, listing them, when the entity holds a row it would not write (M3.7). `MJ: Record Changes` is append-only by MJ design: no role holds `CanDelete`, so the brief's delete-then-write path failed on every run after the first. The 8,287 rows (4,999 Create + 3,288 Update) are deterministic truth data and stay on the database between runs. *Rejected:* granting a delete permission or deleting by direct SQL (a scope addition and a bypass of the audit trail); a fresh entity per run (the history would no longer belong to `W4_Person`).
 - **D3-90** · `PredictiveStudioRefusals.CodeOf` keeps its `AsOfSettingHasNoEffectError` → `AS_OF_NO_EFFECT` line (amends M3 preflight ruling Q2) (M3.6): the training engine no longer throws that error, but `modeling-plan-to-pipeline.ts` still does and `TournamentRanking.AllCandidatesFailed` relies on the code to collapse candidates that share the refusal (two `pipeline-builder.test.ts` cases fail without it). *Rejected:* deleting the line (the modeling-plan refusal loses its code); replacing the modeling-plan refusal in M3 (outside M3.6's files).
 - **D3-91** · A model is a unit model when its pipeline points at a Prediction Unit **or** its stored Lineage names one; both paths validate the Lineage (`UnitModelLineageParser`) and fail loudly when it cannot be read, and the unit loaded is the one the Lineage names, so when the pipeline's unit and the Lineage's differ the Lineage wins (the version the model was trained on) (M3.6 round 2). A pipeline row that is not found is an error, not "no unit". *Rejected:* deciding from the pipeline's current `PredictionUnitID` alone (editable and nullable: a unit-trained model whose pipeline was cleared would score through the current-value path); deciding from the Lineage alone (a malformed Lineage would silently mean legacy).
+- **D3-92** · The Training Snapshot header contract — `SnapshotCell`, `SnapshotFeatureColumnHeader`, `SnapshotMatrixHeader`, `RowProvenance`, the four column constants and the header/row zod schemas (`StoreSchemas.SnapshotMatrixHeader`, `StoreSchemas.SnapshotRow`, validated through `StoreSchemas.Validate`) — lives in Core (`snapshot-format.ts`, `store-schemas.ts`); Engine's `SnapshotFiles` imports it and Engine declares no `zod` dependency (M4.2). `z.ZodType<T>` needs `strictNullChecks` (the D3-79 root cause): under Engine's tsconfig every `z.object` member infers optional and the annotation fails to compile. M4.3, M4.5 and M5.5 import the header names from `@memberjunction/predictive-studio-core`. *Rejected:* `strictNullChecks` in Engine (10 errors in 6 files that come from `next`, a scope addition); casting the parse result (loses the compile-time check, violates the no-cast rule); a `zod` dependency in Engine (it also moved `@mistralai/mistralai`'s zod 4.3.6 → 3.25.76 in the lockfile).
+- **D3-93** · The snapshot content hash covers the matrix and manifest SHA-256s, the feature-schema hash and the identity fields (unit, label version, feature-spec version, evaluation protocol, data cutoff day) — **not** the provenance hash (reverses M4 preflight ruling Q11, M4.2 round 1). Provenance records each value's `computedAt`, and aggregates, series and missing values carry the assembly instant, so a hash over it would give identical data a new snapshot on every assembly and reuse could never happen. `ProvenanceSha256` is a stored column the retrainer verifies against the provenance file's own bytes (M4.5). The `ContentHash` column description ("the three file hashes") is corrected in one later migration-description edit (owner flag j). *Rejected:* hashing provenance (no reuse, ever); editing the M1 migration's description now (a shipped migration).
+- **D3-94** · Snapshot object keys are deterministic: `predictive-studio/training-snapshots/<contentHash>/matrix.jsonl`, `…/manifest.jsonl` and `…/provenance-<ProvenanceSha256>.jsonl`; `Put` is idempotent on byte-equal content (an existing object with the same SHA-256 is a success and writes nothing) and refuses different bytes (`SnapshotFileExistsError`); a failed `MJ: Files` row save leaves the object in place (the next identical write records the missing row) (M4.3, three rounds). A partial earlier write therefore never blocks a later build, and a lost content-hash race leaves at most one unreferenced provenance object (the row references the winner's); readers resolve a file through its `MJ: Files` row's stored `ProviderKey`, never a rebuilt key. *Rejected:* per-build UUID key segments (every race orphans a full file set); one `provenance.jsonl` key (identical content with a later `computedAt` is refused); an undo `DeleteObject` after a failed row save (it can delete bytes a concurrent build's committed snapshot references — data loss).
+- **D3-95** · The `Local File System` provider row ships `IsActive: false` (Priority 1000); the snapshot store selects its provider by `Name` (`PS_SNAPSHOT_STORAGE_PROVIDER`, default `Local File System`) from `FileStorageEngine`'s cached providers without the `IsActive` filter, resolves the driver through `ResolveStorageDriver`, and gates use on `IsConfigured`; `Get(fileId)` reads through the provider the file's own row names (`ProviderID`), not the configured one (M4.1, M4.3). *Rejected:* an active row (on a database with no other active provider it would become the model artifact store's provider); reading every file through the currently configured provider (a file written under another provider becomes unreadable).
+- **D3-96** · The local driver reads its root from `STORAGE_LOCAL_ROOT` (an account `rootPath` overrides it), refuses absolute keys outright (stricter than the base class, which treats `/a` and `a` as one object), and enforces real-path containment with symlink refusal on top of `IsSafeStorageObjectKey` and the lexical check; `PutObject` is atomic (temp file + rename) and the non-recursive `DeleteDirectory` removes only an empty directory (M4.1 round 1). `MJStorage/src/config.ts` is outside the allowlist, so there is no `local` config key (owner flag i). *Rejected:* a `config.ts` key (scope); lexical containment only (a symlink inside the root escapes it); accepting absolute keys as root-relative (a caller could believe it addressed a host path).
+- **D3-97** · `ClassBalance` is the label counts over the written manifest's rows, all roles together (the persisted `ClassBalanceEntry` is `{ label, rows }` with no role), and an assembled row the carver gave no role is refused, never defaulted to `development` (M4.3 round 1). *Rejected:* counting from the carver's role map (a missing role silently became `development`); a per-role breakdown (a persisted-shape change no task names).
+- **D3-98** · The unit path never re-carves: `LockedHoldoutSplitter.FromManifest` builds the recorded split from the snapshot's roles, `SnapshotRetrainer.TrainOnSnapshot` returns `{ Response, Split }` so training and the run record one split source, and the `/train` request literal has one owner, `TrainRequestBuilder.Build`, used by the legacy path, `TrainOnSnapshot` and the retrain (M4.4, M4.5). The run's `Hyperparameters` are the `JsonParse`-checked object sent to the sidecar and stored in `legacyRequest`. *Rejected:* a second `FromManifest` call in `fitUnitModel` (two sources that could drift); a request literal per path.
+- **D3-99** · `TrainingDeps.snapshots?` (`ITrainingSnapshotStore`: `FindByContentHash`, `LoadSnapshot`, `LoadRun`), `snapshotFiles?` and `holdoutCarver?` are injectable seams that production wires in `TrainingDelegation.BuildTrainingDeps`; a unit run without a snapshot file store fails before the unit is read and is recorded `Failed` (M4.4). `FindByContentHash` bypasses the cache (the builder re-reads it after losing the race; only the database knows the winner). *Rejected:* silently skipping the snapshot when no store is supplied (a model trained from rows nothing recorded).
+- **D3-100** · Snapshot-less unit models are not scorable: the unit-model lineage parser requires `trainingSnapshotId` and `snapshotContentHash` on read (M4.4 review). `MJ: Prediction Units` and the unit training path arrived with this PR (M1, M2.6), so no unit-trained model without a snapshot exists outside private dev databases; one there needs retraining. *Rejected:* optional-on-read keys (a second, unaudited scoring path); a backfill migration (nothing to backfill on any shipped database).
+- **D3-101** · Snapshots are shared across pipelines: `PipelineID` is not in the content hash, so two pipelines with identical unit, features, versions, protocol and data reuse one snapshot whose row names the first pipeline (M4 preflight Q16). The truth-suite cleanup then reports an FK failure, without forcing anything, when a recorded snapshot is still referenced by another pipeline's run (§11 gotcha). *Rejected:* `PipelineID` in the hash (identical training data would be frozen twice).
+- **D3-102** · The truth-suite harness cleanup deletes, after runs and models, each recorded snapshot row, then for each deleted snapshot its stored objects and then its `MJ: Files` rows, before model files, pipelines and units (M4.4). The snapshot's three file columns are FKs to `MJ: Files`, so the row goes first; a snapshot that survives keeps its files, and a driver error is collected as a failure so cleanup continues. *Rejected:* files before the snapshot row (the M4 preflight Q1 wording; the FK refuses it).
+- **D3-103** · G1.1 stays an in-process read; the C1 manifest assertion (4,873 manifest rows mapping to the reference keys, 0 extra; snapshot censored 1,756 and label-known 44) moves to G1.2, which trains the same unit; G1.3 asserts W5's snapshot (censored 2,147, 0 manifest rows on the censored decision day) (M4 preflight Q10, M4.6). *Rejected:* training inside G1.1 (it would no longer be the cheap reference read).
+- **D3-104** · G1.10's mutation checks are (a) the retrain sends the logged hyperparameters with `C` set to 0.001 — red, `maxAbsDiff` 1 — and (b) the retrainer no longer reports a verified content hash — red (M4.6; §4.1 and Step 10 reworded at the M4 close). The ruled seed mutation (`random_state` 42 → 43) stayed green, and that is correct: the sidecar's `validation.random_state` seeds only its internal validation split, while the model that scores the forwarded locked holdout is fit on all development rows with `algorithms.DEFAULT_RANDOM_STATE`, and lbfgs logistic regression is deterministic, so `holdout_metrics` cannot depend on it. *Rejected:* keeping the seed mutation (it cannot go red); loosening G1.10.
+- **D3-105** · G1.11 resolves every value against the scored row, not against the assembler's own references: the scored rows must be exactly the 20 sampled ids, a field reference must key the row (or its stored key field), an aggregate's owner must be the row's stored owner key and its as-of day the row's decision day (`PredictionUnitRowReader.UnitDecisionDate`), every row must carry one entry per non-identifier feature (5 × 20 = 100 expected) and every matrix column must be covered (M4.6 rounds 1–2). The resolver accepts `immutable-after-create` for an entity with no creation instant, checks `created:<iso>` against the later of `__mj_CreatedAt` and the Create Record Change (the assembler's rule), decodes bit/boolean as 1/0 and `__other` against the snapshot's category fold, bounds a record-changes value to the latest change in effect before the day after the decision day, and never resolves series, feature-value or `days-since-decision` values (fails closed). `AsOfFeatureAssembler.ContributorsVersion` and `LockedHoldoutSplitter.Mulberry32` became public statics (one owner of each rule; the harness sampler uses the engine's PRNG), and `PsGate.Harness` sets `PREDICTIVE_STUDIO_SIDECAR_URL` from the suite's `sidecar.url` before any client is built. Mutations shown red: an empty `computedAt` (0 of 20), a perturbed cell (19 of 20), each row bound to the next row (0 of 20). *Rejected:* the resolver ignoring `computedAt` as the mutation (it only makes the resolver more permissive, so it cannot go red); 1:1 positional matching of cells to entries (date parts give one entry several cells).
 
 ### 9.2 Risks
 
@@ -31056,6 +31070,73 @@ Product-direction questions keep a working automated default; the others are dec
 - **Next step (exact):** M4 start: `git fetch origin && git merge origin/next` (then the §6 preamble's milestone-start steps: build, regenerated manifests, `mj migrate` with the temporary `outOfOrder` key when `next` brings an older migration, `mj sync push`, anchors), then Task M4.1 Step 1.
 - **Gotchas / decisions:** (a) §9.1 D3-85…D3-91; the M3 start anchors `# ok 163 · moved 4 · changed 0 · missing 0` (the four `__mj.ts` anchors moved 38 lines; hints are refreshed at trigger a, §12). (b) M3.1: `refusal.test.ts` was written after its class; the two `STEP_ICONS` entries are required by the compiler (D3-86). (c) M3.2 parked: empty-key vacuous coverage; `ReadByKeys`/deleted/external-ineligible/malformed-JSON paths untested (the reader's `Load` is now tested). (d) M3.3 parked: hex strings accepted by `Number`; a Date `sampleValue` is `String(date)`; `ComputeSeriesFeature`'s redundant `spec` parameter. (e) M3.4 parked (five fix rounds, breaker reached): `Context` unused on the input beyond the fold; `Encoding` type width; untested boolean/date-parts refusals; the `days-since` drop undercount; immutable-field coverage mismatch counts; a backfilled record reads as missing for decision days before its creation (by design, a docs line). (f) M3.6 parked: when the pipeline's and the Lineage's unit ids differ the Lineage wins, unsurfaced (D3-91); scoring a temporal unit reads the whole unit for its series history; one uncovered record fails the whole scoring batch (per-record refusal is PR 4's serving contract); one pipeline read per model load; `withUncoveredNote` untested; `CodeOf` keeps the as-of line (D3-90). (g) M3.7: `MJ: Record Changes` is append-only, so the W4 fixture writes only missing rows (D3-89); the run-row refusals are deleted by the bundle teardown and were polled during the runs; `replayLapses` throws on a refused `Load` instead of failing the measurement. (h) Run the Deterministic tier against an MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, then restart MJAPI normally with `PREDICTIVE_STUDIO_SIDECAR_URL`. (i) The Engine's live suite (`pnpm --filter @memberjunction/predictive-studio run test:integration`) is not part of `pnpm test`; a scoring dep set without `pipelineUnits` fails it. (j) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next` and are compiled by no build or test; (e) Engine's full run prints stderr lines from failure-path tests on `next`; (f) the sensitive-fields bracket change (D3-85: a test file that came from `next`, now in the allowlist); (g) the Sidecar pytest run prints 101 sklearn/scipy/starlette deprecation warnings from suites on `next`, none from a PR 3 test; (h) `metadata-optional/integration-test/tests/integration/.IT114-ai-vendor-effort.json` on `next` has no `primaryKey`, so every `mj sync push --dir=metadata-optional/integration-test` inserts another `IT114 - AI Vendor Effort Levels` Test row (5 on `MJ_PS_PR3_claude`); the owner adds the key on `next`, and the duplicates on the private DB can be deleted by hand.
 
+### 2026-10-28 02:45 EDT — Claude Fable 5.1 (controller) + Opus/Sonnet subagents; close by Claude Opus 5.5 — M4
+
+- **Branch / HEAD:** `ps/pr-3-honest-training` @ the checkpoint commit that follows `30f97e7c37` (pushed: yes, after step 11).
+- **Database / ports:** `MJ_PS_PR3_claude` (state: clean of truth-suite fixtures — `__mj.PredictionUnit` 0, `PSTruth:` pipelines 0, `__mj.TrainingSnapshot` 0, `MJ: Files` under `predictive-studio/training-snapshots/` 0, 0 stored objects under `STORAGE_LOCAL_ROOT=/Users/arieglazier/.mj-ps-pr3-claude/storage` (empty content-hash directories only); the C1 corpus is loaded; the W4 history stays by design: 8,287 `pstruth` Record Changes; 7 `IT114 - AI Vendor Effort Levels` Test rows, owner flag h), MJAPI :4031 (PID 34965, started with `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:50700`), truth sidecar http://127.0.0.1:50700 (Python PID 38528, M3.5 code).
+- **Done this session:** M4 start merge `a916714e86` (9 `next` commits, no conflicts, no migrations or bundles); M4.1 `7e91f77f87` + `c5fea2bd21` (`LocalFileSystemStorage` driver and its inactive `Local File System` provider row; real-path containment, typed refusals, atomic writes); M4.2 `f0222c9331` + `c8c57dc218` (snapshot file format, hashes, code version and the incumbent-heuristic evaluator; header contract in Core; parse refuses malformed files); M4.3 `ac8e5eebcb` + `346bee9843` + `6f848871dc` + `3e2c42cb7c` (snapshot file store, trailing holdout carver, `TrainingSnapshotBuilder`; deterministic keys, byte-equal idempotent writes, no undo delete); M4.4 `02fd93b515` + `2e4031c6a0` (unit training freezes a Training Snapshot and trains from its rows; one split source); M4.5 `c9975d2599` + `cd93f94b09` (`SnapshotRetrainer.Retrain` verifies every file hash and the content hash and reports whether the run reproduces); M4.6 `3ed7c9f831` + `9074130763` + `30f97e7c37` (gates G1.10 and G1.11 flipped `Active`, the provenance resolver bound to the scored row, the row sampler and suite sidecar hook, snapshot assertions on G1.2/G1.3); this close commit (four self-audit fixes, plan ticks, §4.1 G1.10/G1.11 mutation text, D3-92…D3-105, this entry, the §12 line).
+- **Standards self-audit (`git diff a916714e86..HEAD -- packages/` — M4's 15 commits, 4,988 added product and test lines — against dev-best-practices.md and constraints §2; findings fixed first, packages rebuilt and re-tested):**
+  - Scans: no `any` type (the three hits were a local variable named `any`, renamed, below), no `as` cast in product code (the `as unknown as` seam casts are in test doubles only, deferred since M2), no `.Get(`/`.Set(` on entities (the hits are `UUIDMap` and the snapshot file store's `Get(fileId)`), no dynamic `import(`, no `PrimaryKeys[0]`, no `.then(`, no `JSON.parse`, no loose equality, no bare `new RunView()`/`new Metadata()`, no free exported function in a product module (the two in `__tests__/fakes/training-fakes.ts` are test helpers), every product function ≤ 44 lines; plan vocabulary (`M4.`, `D3-`, `F-`, `S5.`, `PR 3`, `§`, `(C2`, `design rule`, `G1.x`, fixture names) in product lines: 0 — the only hits are the two registered gate ids pinned in `check-registry.test.ts`; MJStorage names no consumer (no "Predictive Studio", "snapshot" or "training" in the driver, its test or the provider row); `@deprecated` in the product files M4 touched: 0 (`git grep -n "@deprecated"` over the 57 touched `packages/` files, exit 1).
+  - Markers: 31 marker lines; 30 carry the exact literal on persisted/wire lines (`SnapshotFeatureColumnHeader`, `SnapshotMatrixHeader`, `RowProvenance`, `LegacyRequestConfig`, `TrainingDeps.snapshotFiles?/holdoutCarver?/snapshots?`, the two lineage keys, `LocalFileSystemStorage.initialize`).
+  - Fixed (behaviour unchanged, so no new test; each package rebuilt and its suite re-run): (A1) `LocalFileSystemStorage.pathOf` was a new camelCase `protected` member — protected members are PascalCase extension points in MJ; nothing extends it, so it is now `private` (the mutation table keeps its name); (A2) the test double's `initialize` override in `snapshot-builder.test.ts` carried a non-standard marker text (`… FileStorageBase override`) → the exact literal; (A3) `ProvenanceResolver` used `?? ''` for an absent foreign-key value → `|| ''` (dev-best-practices §2: `||` for fallbacks; a UUID value is never falsy); (A4) `IncumbentExpressions` named a local variable `any` (the parsed OR-groups) → `groups`.
+  - Not changed (owner flag n): `TruthHarness.SampleRowIds` and `ScoredRowBinding.RowId` use `Id`, not `ID` (dev-best-practices §1). The plan's §5.4 fixes `SampleRowIds` as the harness interface name and `RowId` follows the M2 `UnitRow.RowId` member used across Engine and TruthSuite; renaming them is a cross-milestone rename of plan-named members. `LocalFileSystemStorage`'s two module-private helpers (`errnoCode`, `isWithin`) are non-exported, so they stay camelCase functions.
+- **Mutation checks (M4 table, 11 rows; each a targeted single-occurrence edit, the named test file run red, the pre-mutation copy put back (`cmp` equal) and the file re-run green; run at this close — commands and output in the close report):**
+  1. `LocalFileSystemStorage.pathOf` root-escape check (substitute per list E: the containment is three layers, each masking the others for a `../` key): with all three deleted (`IsSafeStorageObjectKey`, the lexical prefix check, the real-path check) → `LocalFileSystemStorage › refuses a key that escapes the root` red (5 failed | 7 passed, `promise resolved "true" instead of rejecting`); the real-path check alone → `› refuses a symlink inside the root that points at a file outside it` and `› refuses a symlinked directory inside the root as a write target` (2 failed); the safe-key check alone → `› refuses an absolute key, a backslash key and a percent-encoded slash` (1 failed). The lexical check alone cannot be reached by a key that passes the safe-key check (M4.1 round 1).
+  2. `SearchFiles` returns an empty result instead of throwing `UnsupportedOperationError` → `› does not support upload URLs or search` (1 failed | 11 passed).
+  3. `SnapshotFiles.SerializeSnapshotFiles` width check deleted → `snapshot files › refuses rows whose width differs from the header columns` (1 failed | 12 passed, `expected [Function] to throw an error`).
+  4. `ComputeSnapshotContentHash` without `labelVersion` → `› fingerprints the matrix, manifest and versions, and changes when any of them changes` (1 failed | 12 passed).
+  5. `IncumbentExpressions.comparisonAt` accepts any operator and operand token → `incumbent heuristic expressions › refuses anything outside the grammar` (1 failed | 3 passed).
+  6. `EvaluateIncumbentExpression` returns 0 for a missing value → `› scores the rule "renewed last year" as 1/0 and null when the value is missing` (`expected [ 1, +0, +0 ] to deeply equal [ 1, +0, null ]`) and `› scores null, not 0, when a referenced value is NaN` (2 failed).
+  7. Write-once (substitute per list E, the reuse test never reaches a second `Put`): `SnapshotWriteOnce.AcceptExisting` drops its SHA-256 comparison (the check both stores' `Put` call) → `StorageProviderSnapshotFileStore › accepts identical bytes under an existing key without writing again, refuses different bytes and an unsafe key, …` (1 failed | 10 passed, `promise resolved "{ FileID: 'file-1', …(4) }" instead of rejecting`).
+  8. `TrainingSnapshotBuilder.incumbentColumn` skips the unassembled-column refusal → `TrainingSnapshotBuilder › writes the incumbent-score and slice columns when asked, and refuses an expression naming an unassembled column` (1 failed | 10 passed).
+  9. `TrainingSnapshotBuilder.Build` ignores `ExistingByContentHash` → `› reuses the existing snapshot when the content hash already exists (identical data, one snapshot)` (`expected false to be true`).
+  10. `SnapshotRetrainer.verifiedSha256` skips the comparison → `SnapshotRetrainer.Retrain › refuses a snapshot whose stored matrix file no longer matches its SHA-256, naming the matrix file` (the refusal arrives as `File: 'content'` instead of `'matrix'`; 1 failed | 5 passed).
+  11. `SnapshotRetrainer.MaxAbsDiff` treats a metric missing on one side as 0 → `› does not report reproduced when the retraining omits a holdout metric the run recorded` (`expected 0.649 to be Infinity`; 1 failed | 5 passed).
+  Result: 11 of 11 rows turn a named test red. Name substitutions (list E): `pathOf`'s containment is the real-path/lexical/safe-key trio; `TrainingSnapshotBuilder` is the class in `snapshot-builder.ts`; `IncumbentExpressions` is the owner class in `Core/src/incumbent-heuristic.ts`; the write-once row uses the `Put`-different-bytes refusal test; the one-sided metric row is the M4.5 `Infinity` / `Reproduced: false` test; the `labelVersion` row is the fingerprint test.
+- **Gate mutation checks (M4.6 Steps 10–11 and its fix rounds; each run against MJAPI, reverted from a saved copy, rebuilt, re-run green; the mutated code ran only in the gate process):**
+  - **Mutation output G1.10:** `manifest 16776 rows (row says 16776), content hash recomputed and matched, retrain max |diff| 1 over accuracy, f1, precision, recall, baseline_accuracy, predicted_classes, n, n_positive, auc` — Measured `{"manifestRows":16776,"manifestRowCount":16776,"contentHashVerified":true,"maxAbsDiff":1,"reproduced":false}` (`Retrain` sends the logged hyperparameters with `C` set to 0.001). Second mutation (the retrainer no longer reports a verified content hash): `manifest 16776 rows (row says 16776), content hash did not match, retrain max |diff| 0 over …` — Measured `{"manifestRows":16776,"manifestRowCount":16776,"contentHashVerified":false,"maxAbsDiff":0,"reproduced":true}`. The ruled seed mutation (`random_state` 42 → 43) stayed green; root cause in D3-104.
+  - **Mutation output G1.11:** `0 of 20 sampled rows resolve every value (20 of 100 values)` — Measured `{"resolved":0,"sampled":20,"values":100,"valuesResolved":20}` (`AsOfFeatureAssembler`'s current-value reader writes `computedAt: ''`; the 20 aggregate values still resolved). Perturbed cell (the first scored row's `EventsAttended` + 1): `19 of 20 sampled rows resolve every value bound to the row (99 of 100 expected values, 100 seen, 0 uncovered columns)` — Measured `{"resolved":19,"sampled":20,"rowsAligned":true,"valuesExpected":100,"valuesSeen":100,"valuesResolved":99,"columnsUncovered":0}`. Row binding (each scored row given the next row's binding): `0 of 20 sampled rows resolve every value bound to the row (0 of 100 expected values, 100 seen, 0 uncovered columns)` — Measured `{"resolved":0,"sampled":20,"rowsAligned":true,"valuesExpected":100,"valuesSeen":100,"valuesResolved":0,"columnsUncovered":0}`.
+  - G1.1–G1.9 and G1.12: their mutation outputs are in the M2 and M3 entries above (G1.2's and G1.3's row descriptions gained the snapshot assertions; their guards are unchanged).
+- **Tests (after the self-audit):**
+  - `cd packages/MJStorage && pnpm test` → 207 passed / 0 failed / 0 skipped (15 files; 192 at M3 + 3 driver tests + 3 driver-source-guard cases at M4.1 + 9 in its fix round).
+  - `cd packages/AI/PredictiveStudio/Core && pnpm test` → 173 passed / 0 failed / 0 skipped (14 files; 165 at M3 + incumbent 4, store-schemas 3, run-results 1).
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 653 passed / 0 failed / 0 skipped (64 files; 615 at M3 + 38: serialization 13, code-version 3, builder 11, training-engine 4, lineage 1, retrainer 6).
+  - `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test` → 88 passed / 0 failed / 0 skipped (17 files; 70 at M3 + cleanup 2 + provenance-resolver 16).
+  - `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- -p no:cacheprovider` → 133 passed / 0 failed / 0 skipped (the M3 count; no Python change in M4; 101 library warnings, owner flag g).
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm run test:integration` (sidecar http://127.0.0.1:50700) → 3 passed / 0 failed / 0 skipped.
+  - `cd packages/TestingFramework/integration-test-suite && pnpm test` → 774 passed / 0 failed / 0 skipped (49 files; bundle total `toHaveLength(166)`; twelve PR 3 `ps-gate-*` pins). PR 3 gate-row count (`Tags LIKE '%owner:PR3%'`, Active) → 12.
+  - `pnpm run build` at the root → exit 0 (310 tasks). `npm run check:standards` → exit 0 (no errors; 13369 warnings, unchanged since M3). `npm run check:guards` → exit 0. `npm run check:codegen-tail` → exit 0 (433 entities, 764 migrations).
+  - `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → Completed (12/12 passed), against MJAPI restarted on the self-audit build.
+  - Keep-list (with `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1`): Containment → 10 passed / 0 failed / 0 skipped (of 10). Feature Pipelines → ENVIRONMENT-BLOCKED (D3-78): 0 of 5, each "needs bizapps-common installed with its Feature Pipeline changes …" / "the job-title pipeline is installed (bizapps-common)". Deterministic (MJAPI restarted with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`) → 115 passed / 1 failed / 1 skipped (of 117), with `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`: equal to the M1–M3 baseline; failed: IT29 - Cache Gauntlet (`cache-gauntlet.CG5`, the known `next` failure: "TotalRowCount (1) must exceed the truncated row count (1) — this is the #3195 collapse"); skipped: IT52 (RUN_SEARCH_TESTS not set); no new failure; storage `ST1` → "8 canonical providers present with exact driver keys (8 total rows)"; MJAPI then restarted normally with the sidecar URL.
+  - Milestone-exit gate: see the commit body (the gate ran after this entry was written).
+- **Runtime verification (gate `Measured`, the suite run at this close, run twice — before and after the last self-audit fix — with identical values):**
+  - G1.1 `C1 -> S1.1`: `{"matched":4873,"expected":4873,"extra":0}`
+  - G1.2 `C1 -> S2.2`: `{"censoredRowsExcluded":1756,"resolvedRows":4873,"snapshotCensoredRowsExcluded":1756,"snapshotLabelKnownRowsExcluded":44,"manifestRowCount":4873,"manifestRows":4873,"manifestMatched":4873,"manifestExpected":4873,"manifestExtra":0}`
+  - G1.3 `W5 -> S2.2`: `{"censoredRowsExcluded":2147,"censoredInMatrix":0,"meanPrediction":0.828871148354044,"meanTrue":0.7999999998689591,"dominantFeature":"AutoRenew","dominantShare":0.48190744591103746,"snapshotCensoredRowsExcluded":2147,"manifestRowsOnCensoredDecisionDay":0}` (the trailing holdout moved the dominant share from 0.500 to 0.482)
+  - G1.6 `C1 -> S2.3`: `{"v2Version":2,"v2LabelVersion":2,"v2SameLineage":true,"modelReferencesV1Unit":true,"modelUnitVersion":1,"inPlaceRefused":true}`
+  - G1.7 `W1 -> S1.4`: `{"refusal":"single-valued-target","modelCreated":false}`
+  - G1.8 `R3 -> S1.4`: `{"refusedContinuous":true,"countRunStatus":"Completed"}`
+  - G1.4 `W4 -> S2.1 #2`: `{"excludedOrFlagged":4,"asOfEqual":16776,"rows":16776,"unitRows":16776,"rowsExpectingLapsed":0,"lapsers":3288,"lapsedAfterLapse":3288,"activeBeforeLapse":3288,"recordsMismatched":0}`
+  - G1.5 `T3 -> S-T.1`: `{"sameRefused":true,"sameRefusal":"future-period-lag","declaredZeroRefused":true,"declaredZeroRefusal":"future-period-lag","lagAccepted":true,"lagRunStatus":"Completed"}`
+  - G1.9 `W1 -> S7.5 #2`: `{"stoppedNamingColumn":true,"modelCreated":false}`
+  - G1.12 `C1 -> S3.1`: `{"compared":100,"mismatches":0}`
+  - G1.10 `W1 -> S5.5`: `{"manifestRows":16776,"manifestRowCount":16776,"contentHashVerified":true,"maxAbsDiff":0,"reproduced":true}` (detail: `retrain max |diff| 0 over accuracy, f1, precision, recall, baseline_accuracy, predicted_classes, n, n_positive, auc`; the first live `Retrain` was M4.6's — the `DataCutoff` read-back recomputes the stored hash)
+  - G1.11 `W1 -> S3.2`: `{"resolved":20,"sampled":20,"rowsAligned":true,"valuesExpected":100,"valuesSeen":100,"valuesResolved":100,"columnsUncovered":0}`
+  - DB and storage during the M4.6 runs (sqlcmd poller): one snapshot per training — W1 `16776|3355|0|0` (manifest rows, locked-holdout rows (0.2 of the manifest), censored, label-known), C1 `4873|974|1756|44`, W5 `14629|2925|2147|0`, each with three `Uploaded` `MJ: Files` rows on `Local File System` whose keys are `predictive-studio/training-snapshots/<contentHash>/{matrix.jsonl,manifest.jsonl,provenance-<sha256>.jsonl}` and present on disk. After every run at this close (sqlcmd): `PredictionUnit` 0, `PSTruth:` pipelines 0, `TrainingSnapshot` 0, snapshot `MJ: Files` 0, files under `STORAGE_LOCAL_ROOT` 0 (`find -type f | wc -l`), `pstruth` Record Changes 8,287, `IT114 - AI Vendor Effort Levels` Test rows 7 (two more from M4.6's two pushes, owner flag h).
+- **State left behind:** MJAPI running on :4031 (PID 34965, env `.env.MJ_PS_PR3_claude` + `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:50700`), truth sidecar http://127.0.0.1:50700 (Python PID 38528); the database holds the C1 corpus and no truth-suite fixture rows; empty content-hash directories under `STORAGE_LOCAL_ROOT` (the local driver's `DeleteObject` removes files, not their directories); the integration-suite benchmark-log rewrites restored from HEAD; untracked owner files only.
+- **Next step (exact):** M5 start: `git fetch origin && git merge origin/next` (then the §6 preamble's milestone-start steps; the controller rules on `m5-preflight-scan.md` before M5.1), then Task M5.1 Step 1.
+- **Gotchas / decisions:**
+  - (a) §9.1 D3-92…D3-105; the M4 start anchors `# ok 163 · moved 4 · changed 0` at `a916714e86` (the same four `__mj.ts` hints as the M3 start), no migrations or bundles from `next` (§12).
+  - (b) Fresh installs and CI need `STORAGE_LOCAL_ROOT` (and the `Local File System` row pushed): without it every unit training fails with "storage provider … is not configured on this server" (the inactive row's driver has no root) — a guide line at M12 and the env in CI (owner flag l). `PS_SNAPSHOT_STORAGE_PROVIDER` names another provider row.
+  - (c) Cross-pipeline snapshot reuse (D3-101): a pipeline's harness cleanup reports an FK failure, and forces nothing, while another pipeline's run still references the shared snapshot; no gate hit it.
+  - (d) A NULL `ComputeCost` is unbudgeted: `finalizeUnitRunSuccess` writes no `ComputeCost` (the legacy `finalizeRunSuccess` writes 0), and the experiment seam reads `run.ComputeCost ?? 0`, so a unit run counts nothing against a session's `MaxComputeCost`; M5.11 writes `ComputeSeconds`/`ComputeCost` on the unit path (M5 preflight Q12).
+  - (e) MJAPI restarts in M4: after M4.1 (provider cache), M4.4 (PID 12142), M4.6's row push (PID 62290), this close (self-audit build; dispatcher-disabled for the Deterministic tier; then normal). The ServerBootstrap generated manifest was regenerated at M4.4 to register the local driver (the M4.1 build had not). The lockfile moved only by the Engine and TruthSuite links to `@memberjunction/storage` (+6 lines).
+  - (f) Run the Deterministic tier against an MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` (IT74 races a running dispatcher), with `RUN_MUTATION_TESTS=1`; then restart MJAPI normally with `PREDICTIVE_STUDIO_SIDECAR_URL`.
+  - (g) List E (mutation-table name substitutions): above, under Mutation checks.
+  - (h) List F (parked notes): M4.1 — a long key's temp name can hit `ENAMETOOLONG`; `CopyObject`'s source is not `lstat`-checked (in-root only); a `.<name>.<uuid>.tmp` entry is visible in a listing during a write; directory `ObjectExists` and `ListObjects` delimiter/partial-prefix semantics (no caller uses them). M4.2 — the `DAY` regex accepts impossible dates; the write side does not check provenance/manifest `rowId` alignment (the read side does). M4.3 — case-insensitive provider-name match; a test fake's ID sort; the ClassBalance test mirrors the implementation. M4.4 — the unrecorded-lineage cleanup edge; `training-engine.ts` is 823 lines; one unit-tested cleanup edit landed after the gate runs (M4.6's suite re-ran everything live). M4.5 — the moved test fakes keep camelCase helpers and seam casts (test-only). M4.6 — `computedAt` for immutable/aggregate values is checked for ISO form and ≤ now only (ruling-accepted); `HarnessSidecar.DefaultToSuiteSidecar` adopts `.run/sidecar.url` without a reachability check; `RetrainFromSnapshotViaEngine`'s optional-sidecar branch has no Engine unit test; `MeasureW1Provenance` runs a full `AssembleForTraining` to obtain the specs; the fold set comes from the snapshot's own `ColumnProvenance`; `created-after-decision` on the field paths is not checked against the record's creation instant.
+  - (i) List G: commits as under Done; M4 start merge `a916714e86`; servers as under State.
+  - (j) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`, compiled by no build or test; (e) Engine's full run prints stderr lines from failure-path tests on `next`; (f) the sensitive-fields bracket (D3-85); (g) 101 Sidecar pytest library deprecation warnings from suites on `next`; (h) `metadata-optional/integration-test/tests/integration/.IT114-ai-vendor-effort.json` on `next` has no `primaryKey`, so each `mj sync push --dir=metadata-optional/integration-test` inserts another `IT114 - AI Vendor Effort Levels` row (7 on `MJ_PS_PR3_claude`); (i) `packages/MJStorage/src/config.ts` has no `local` key, so the driver reads `STORAGE_LOCAL_ROOT` directly, and `MJStorage/README.md` does not describe the driver (both outside the allowlist); (j) one later migration-description edit: `ContentHash` ("the three file hashes" → matrix, manifest and feature-schema hashes plus identity), `MatrixFileID` ("header line with column names" → a header object), `EvaluationProtocolID` ("NULL only for legacy" holds once protocols are mandatory), both CodeGen sections regenerated; (k) converging `MJFilesArtifactStore` (model artifacts under `PS_ARTIFACT_DIR`) onto the snapshot file store, with its 4 `@deprecated` aliases in `artifact-store.ts`, belongs to a later milestone; (l) fresh installs need `STORAGE_LOCAL_ROOT` (gotcha b); (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver (harmless while the row is inactive and server-only); (n) `SampleRowIds` / `RowId` spell `Id` where dev-best-practices §1 asks for `ID` (plan-named members; a cross-milestone rename).
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — written (trigger a not yet run) — Claude Opus 5.5
@@ -31293,3 +31374,7 @@ Product-direction questions keep a working automated default; the others are dec
 ### 2026-10-27 — M3 close (refresh trigger c at the M3 start merge `bdc9a0a962`) — Claude Opus 5.5
 
 - Anchors `# ok 163 · moved 4 · changed 0 · missing 0` (the four `__mj.ts` entity anchors moved 38 lines; no pattern changed, hints refreshed at trigger a); migrations from `next`: `V202610261530__v6.2.x__CodeGen_EntityField_Drift_Repairs.sql`, `V202610271915__v6.2.x__CommunicationProvider_UserDelegatedOAuth_Gates.sql` (applied out of order on the private DB); no anchor edited.
+
+### 2026-10-28 — M4 close (refresh trigger c at the M4 start merge `a916714e86`) — Claude Opus 5.5
+
+- Anchors `# ok 163 · moved 4 · changed 0` at the M4 start merge `a916714e86` (9 `next` commits; the same four `__mj.ts` entity hints moved as at the M3 start; no pattern changed); no migrations and no integration bundles from `next`, so no sync push was needed; no anchor edited.

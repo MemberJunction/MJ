@@ -42,8 +42,8 @@ export class IncumbentExpressions {
     if (tokens.length === 1 && only !== undefined && IncumbentExpressions.isColumn(only)) {
       return JsonParse.ParseOk({ Kind: 'column', Column: only });
     }
-    const any = IncumbentExpressions.parseRule(tokens);
-    return any === null ? fail : JsonParse.ParseOk({ Kind: 'rule', Any: any });
+    const groups = IncumbentExpressions.parseRule(tokens);
+    return groups === null ? fail : JsonParse.ParseOk({ Kind: 'rule', Any: groups });
   }
 
   /** Every column the expression reads, each once, in first-reference order. */
@@ -80,7 +80,7 @@ export class IncumbentExpressions {
 
   /** Comparison tokens `<column> <op> <number>` joined by `and`/`or` → OR of AND-groups; null when malformed. */
   private static parseRule(tokens: readonly string[]): IncumbentComparison[][] | null {
-    const any: IncumbentComparison[][] = [];
+    const groups: IncumbentComparison[][] = [];
     let group: IncumbentComparison[] = [];
     let k = 0;
     for (;;) {
@@ -91,15 +91,15 @@ export class IncumbentExpressions {
       if (k === tokens.length) break;
       const joiner = tokens[k];
       if (joiner === 'or') {
-        any.push(group);
+        groups.push(group);
         group = [];
       } else if (joiner !== 'and') {
         return null;
       }
       k += 1;
     }
-    any.push(group);
-    return any;
+    groups.push(group);
+    return groups;
   }
 
   /** The comparison starting at token `k`, or null when the three tokens are not `<column> <op> <number>`. */

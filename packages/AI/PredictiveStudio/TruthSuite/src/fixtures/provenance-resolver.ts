@@ -266,7 +266,7 @@ export class ProvenanceResolver {
       ProvenanceResolver.hasField(child, '__mj_UpdatedAt') ? '__mj_UpdatedAt' : null, hasCreatedAt ? '__mj_CreatedAt' : null,
     ].filter((f): f is string => !!f);
     const all = await ProvenanceResolver.fetch(sources, { EntityName: child.Name, ExtraFilter: `[${source.foreignKey}]='${EscapeSQLString(ref.Owner)}'`, Fields: [...new Set(fields)] });
-    const rows = all.filter((row) => UUIDsEqual(String(row[source.foreignKey] ?? ''), ref.Owner));
+    const rows = all.filter((row) => UUIDsEqual(String(row[source.foreignKey] || ''), ref.Owner));
     const keyOf = (row: SourceRow): string => String(row[child.PrimaryKey]).toLowerCase();
     const fromHistory = child.TrackRecordChanges ? await ProvenanceResolver.createRowInstants(sources, child, rows.map(keyOf)) : new Map<string, Date>();
     const asOf = UtcDay.AddUtcDays(new Date(`${ref.AsOfDay}T00:00:00.000Z`), 1).getTime();

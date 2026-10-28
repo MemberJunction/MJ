@@ -136,7 +136,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
   }
 
   /** The absolute path a key addresses, after every containment check in the module doc. */
-  protected async pathOf(objectName: string, scope: KeyScope): Promise<string> {
+  private async pathOf(objectName: string, scope: KeyScope): Promise<string> {
     const full = this.lexicalPathOf(objectName, scope);
     const [realRoot, realFull] = await Promise.all([this.realPathOf(this.root, objectName), this.realPathOf(full, objectName)]);
     if (!isWithin(realRoot, realFull)) {

@@ -304,7 +304,7 @@ const filesMetadata = (factory: FakeEntityFactory): IMetadataProvider => ({
 /** A local-disk driver rooted at its own directory, standing for a second storage provider. */
 class ArchiveStorage extends LocalFileSystemStorage {
   public static Root = '';
-  public override async initialize(): Promise<void> { // case-violation-ok-legacy-back-compat: FileStorageBase override
+  public override async initialize(): Promise<void> { // case-violation-ok-legacy-back-compat: contracts.ts wire name
     await super.initialize({ rootPath: ArchiveStorage.Root });
   }
 }
