@@ -18,6 +18,10 @@ import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } fr
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
 
+/** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+
+
 /**
  * Unit tests for the "needs training" guard and the opt-in train-if-untrained path.
  * No DB, no sidecar — every seam is an in-memory fake.
@@ -98,7 +102,7 @@ function setup(models: FakeModel[]): { deps: MLInferenceDeps; map: Map<string, F
   const map = new Map(models.map((m) => [m.ID, m]));
   const artifacts = new InMemoryArtifactLoader();
   artifacts.Set('file-1', new TextEncoder().encode('bytes'));
-  return { deps: { modelLoader: new MapModelLoader(map), artifactLoader: artifacts, sidecar: new FakeSidecar() }, map, artifacts };
+  return { deps: { modelLoader: new MapModelLoader(map), artifactLoader: artifacts, sidecar: new FakeSidecar(), pipelineUnits: NO_PIPELINE_UNITS }, map, artifacts };
 }
 
 describe('model readiness helpers', () => {

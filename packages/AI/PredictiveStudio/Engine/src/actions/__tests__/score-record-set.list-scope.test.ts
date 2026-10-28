@@ -8,6 +8,10 @@ import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor } from '../../scoring/types';
 
+/** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+
+
 /**
  * The list scope loads its members as full entity objects, like the view and filter scopes, so scoring works for
  * an entity whose key is not called `ID` (feature columns are on the preloaded rows; nothing is re-read by an
@@ -227,7 +231,7 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const artifacts = new InMemoryArtifactLoader();
     artifacts.set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
-    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar } });
+    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS } });
 
     const result = await runner.run({
       modelId: 'model-1',
@@ -253,7 +257,7 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const artifacts = new InMemoryArtifactLoader();
     artifacts.set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
-    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar } });
+    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS } });
 
     const result = await runner.run({
       modelId: 'model-1',

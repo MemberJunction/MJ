@@ -59,6 +59,15 @@ export class UnitModelLineageParser {
     return checked.Ok === false ? JsonParse.ParseFail(checked.Error) : JsonParse.ParseOk(checked.Value);
   }
 
+  /**
+   * True when a stored `Lineage` text names a Prediction Unit (a `predictionUnitId` member, of any value): the model
+   * was trained on a unit, and its Lineage must then pass {@link ParseUnitModelLineage}.
+   */
+  public static NamesUnit(text: string | null | undefined): boolean {
+    const parsed = JsonParse.ParseJsonText(text, 'Lineage');
+    return parsed.Ok === true && JsonParse.IsJsonObject(parsed.Value) && 'predictionUnitId' in parsed.Value;
+  }
+
   private static lineage(v: JsonValue): Checked<UnitModelLineage> {
     if (!JsonParse.IsJsonObject(v)) return UnitModelLineageParser.fail('Lineage', 'is not a JSON object');
     const unitId = JsonParse.JsonString(v, 'predictionUnitId');

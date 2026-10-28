@@ -48,8 +48,8 @@ export class RunViewMLModelLoader implements IMLModelLoader {
 }
 
 /**
- * `RunView`-backed {@link IPipelineUnitLookup}: one narrow read of the pipeline's `PredictionUnitID`. A read failure
- * throws, since a model whose pipeline cannot be read cannot be told apart from a legacy one.
+ * `RunView`-backed {@link IPipelineUnitLookup}: one narrow read of the pipeline's `PredictionUnitID`. A failed read and
+ * a read that finds no row both throw: a pipeline that cannot be read is not a pipeline without a unit.
  */
 export class RunViewPipelineUnitLookup implements IPipelineUnitLookup {
   /** @inheritdoc */
@@ -59,7 +59,9 @@ export class RunViewPipelineUnitLookup implements IPipelineUnitLookup {
       contextUser,
     );
     if (!result.Success) throw new Error(`Reading ML Training Pipeline ${pipelineId} failed: ${result.ErrorMessage || 'unknown error'}`);
-    return result.Results[0]?.PredictionUnitID || null;
+    const row = result.Results[0];
+    if (!row) throw new Error(`ML Training Pipeline ${pipelineId} was not found or not readable, so whether its models belong to a Prediction Unit is unknown`);
+    return row.PredictionUnitID || null;
   }
 }
 

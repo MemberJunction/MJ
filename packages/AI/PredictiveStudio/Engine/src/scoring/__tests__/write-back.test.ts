@@ -15,6 +15,10 @@ import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../type
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
 
+/** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
+const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+
+
 /**
  * Write-back wiring tests (plan §10.1). The MLModelInferenceProcessor is
  * EPHEMERAL by default — it returns the prediction as the RecordResult payload
@@ -123,6 +127,7 @@ function buildInner(): MLModelInferenceProcessor {
   const deps: MLInferenceDeps = {
     modelLoader: new FakeModelLoader(new FakeMLModel()),
     artifactLoader: new InMemoryArtifactLoader(new Map([['file-1', new TextEncoder().encode('bytes')]])),
+    pipelineUnits: NO_PIPELINE_UNITS,
     sidecar: new FakeSidecar(),
   };
   return new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));

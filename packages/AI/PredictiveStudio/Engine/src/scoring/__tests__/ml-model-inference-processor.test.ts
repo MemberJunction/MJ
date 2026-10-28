@@ -61,7 +61,7 @@ const FROZEN_PREPROCESSING = { 'standardize.tenure': { mean: 5, std: 2.5 }, 'one
 /** A model fake exposing exactly the fields the processor reads. */
 class FakeMLModel {
   public ID = 'model-1';
-  public PipelineID: string | null = null;
+  public PipelineID = 'pipe-members';
   public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
   public FittedPreprocessing: string | null = JSON.stringify(FROZEN_PREPROCESSING);
@@ -139,7 +139,9 @@ function buildDeps(model: FakeMLModel | null = new FakeMLModel()): {
   const sidecar = new FakeSidecar();
   const artifacts = new InMemoryArtifactLoader();
   artifacts.set('file-1', new TextEncoder().encode('fake-model-bytes'));
-  return { deps: { modelLoader: loader, artifactLoader: artifacts, sidecar }, loader, sidecar, artifacts };
+  // The members pipeline has no Prediction Unit: these models are legacy models.
+  const noUnits = { PredictionUnitIDOf: async () => null };
+  return { deps: { modelLoader: loader, artifactLoader: artifacts, sidecar, pipelineUnits: noUnits }, loader, sidecar, artifacts };
 }
 
 function buildProcessor(deps: MLInferenceDeps): MLModelInferenceProcessor {
@@ -379,7 +381,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
   const pipelineUnits = { PredictionUnitIDOf: async (pipelineId: string) => (pipelineId === 'pipe-u' ? UnitYearsWorld.UnitID : null) };
 
   /** A Validated unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
-  async function unitModel(lineageOverride?: string): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
+  async function unitModel(lineageOverride?: string, lookup: typeof pipelineUnits = pipelineUnits): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
     const dataAccess = new TableDataAccess(UnitYearsWorld.Tables());
     const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess));
     if (training.Assembled.Status !== 'assembled') throw new Error('training assembly refused');
@@ -394,7 +396,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     });
     if (lineageOverride !== undefined) model.Lineage = lineageOverride;
     const { deps, sidecar } = buildDeps(model);
-    return { deps: { ...deps, pipelineUnits, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
+    return { deps: { ...deps, pipelineUnits: lookup, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
   }
 
   it('refuses in Preflight a scope whose entity is not the unit row entity, as a typed refusal', async () => {
@@ -443,10 +445,38 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*predictionUnitId/);
   });
 
-  it('loads a model whose pipeline has no unit as a legacy model (no as-of assembly)', async () => {
-    const { deps } = buildDeps(new FakeMLModel());
-    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits } }, new TestAssembler(new InMemoryDataAccess()));
+  /** A lookup whose pipelines all have no unit (the unit was cleared after training), counting its calls. */
+  const clearedUnits = () => {
+    const calls: string[] = [];
+    return { calls, lookup: { PredictionUnitIDOf: async (pipelineId: string) => { calls.push(pipelineId); return null; } } };
+  };
+
+  it('takes the unit path for a model whose pipeline no longer points at a unit, from the unit its Lineage stored', async () => {
+    const cleared = clearedUnits();
+    const { deps, training } = await unitModel(undefined, cleared.lookup);
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps });
+    await expect(processor.Preflight(ctx(UnitYearsWorld.PeopleEntity.ID))).rejects.toMatchObject({ Refusal: { reason: { kind: 'scope-entity-mismatch' } } });
+    const scored = await processor.AssembleForScoring([{ ID: 'y2024-2' }], ctx(), 'unit-rule');
+    expect(cleared.calls).toEqual(['pipe-u']);
+    expect(scored.Status === 'assembled' && training.Assembled.Status === 'assembled' && scored.Rows[0].Values).toEqual(
+      training.Assembled.Status === 'assembled' ? training.Assembled.Rows.find((r) => r.RowId === 'y2024-2')?.Values : null,
+    );
+  });
+
+  it('fails loudly for a model whose pipeline no longer points at a unit when its Lineage names a unit but is invalid', async () => {
+    const cleared = clearedUnits();
+    const { deps } = await unitModel(JSON.stringify({ predictionUnitId: 'U-1', featureSpec: [], categoryLevels: {} }), cleared.lookup);
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*predictionUnitVersion/);
+  });
+
+  it('loads a model whose pipeline has no unit and whose Lineage names none as a legacy model (no as-of assembly)', async () => {
+    const legacy = new FakeMLModel();
+    legacy.PipelineID = 'pipe-legacy';
+    const { deps } = buildDeps(legacy);
+    const cleared = clearedUnits();
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits: cleared.lookup } }, new TestAssembler(new InMemoryDataAccess()));
     await expect(processor.Preflight(CTX)).resolves.toBeUndefined();
+    expect(cleared.calls).toEqual(['pipe-legacy']);
     await expect(processor.AssembleForScoring([{ ID: 'm1' }], CTX, 'unit-rule')).rejects.toThrow(/not trained on a Prediction Unit/);
   });
 

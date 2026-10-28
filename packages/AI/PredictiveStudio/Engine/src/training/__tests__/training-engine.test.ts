@@ -674,8 +674,9 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const artifacts = new InMemoryArtifactLoader();
     artifacts.set('file-1', new TextEncoder().encode('model-bytes'));
     const scoringDeps: MLInferenceDeps = {
-      // One deliberate test-double cast at the seam: the model row training wrote, read back as scoring loads it.
-      modelLoader: { loadModel: async () => ({ ...trained, PipelineID: pipeline.ID } as unknown as MJMLModelEntity) },
+      // The model row training wrote (it carries the pipeline ID), read back as scoring loads it: one deliberate
+      // test-double cast at the seam, as this file's entity factory does (a field-bag fake is not a BaseEntity).
+      modelLoader: { loadModel: async () => trained as unknown as MJMLModelEntity },
       artifactLoader: artifacts,
       sidecar: { predict: async () => ({ predictions: [] }) },
       pipelineUnits: { PredictionUnitIDOf: async (id: string) => (id === pipeline.ID ? UnitYearsWorld.UnitID : null) },
