@@ -8718,6 +8718,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       const batchSize = configInfo.advancedGeneration?.batchSize ?? 5;
       let processedCount = 0;
       let errorCount = 0;
+      let circuitSkippedCount = 0;
       const total = entities.length;
 
       // Pre-group fields by EntityID once — O(total fields) — instead of a per-entity linear scan
@@ -8738,6 +8739,10 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       // Process in batches
       for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
+         // processEntityAdvancedGeneration returns at once while the circuit is open; count those entities.
+         if (ag.AICircuitOpen) {
+            circuitSkippedCount += batch.length;
+         }
 
          // Process batch in parallel. entityPhase() sets the reporter's "current entity"
          // so any LLM calls issued by processEntityAdvancedGeneration get attributed
@@ -8770,8 +8775,15 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          if (ag.AICircuitOpen) {
             const skipped = total - processedCount;
             UpdateSpinner(`Advanced generation: AI credential circuit open — skipping remaining ${skipped} entit${skipped === 1 ? 'y' : 'ies'} (check AI credentials).`);
+            circuitSkippedCount += total - (i + batch.length);
             break;
          }
+      }
+
+      // The circuit skips entities without an error, so say so once: an entity left without a name
+      // field may not have been analyzed at all this run (MJ issue #3608).
+      if (ag.AICircuitOpen) {
+         LogWarning(`Advanced generation: the AI credential circuit was open, so smart-field identification (name field, default-in-view, searchable fields) and form layout did not run for ${circuitSkippedCount} of ${total} entit${total === 1 ? 'y' : 'ies'}. Fix the AI credentials and run CodeGen again.`);
       }
 
       return errorCount === 0;
@@ -9138,9 +9150,15 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       }
 
       const winner = this.selectNameFieldWinner(fields, nameFieldNames);
+      const entityName = entity?.Name ?? '(unknown entity)';
+      if (!winner) {
+         logStatus(`         Name field: no eligible name field for ${entityName}; it has no name field after this run`);
+      }
 
-      // Set the winner when it isn't flagged yet (and auto-update is allowed).
+      // Set the winner when it isn't flagged yet (and auto-update is allowed). An unflagged winner
+      // can only come from step 3, the AI's ranked candidates, so the pick is logged (MJ issue #3608).
       if (winner && winner.AutoUpdateIsNameField && winner.ID && !winner.IsNameField) {
+         logStatus(`         Name field: set ${entityName}.${String(winner.Name)} as the name field (AI pick; no eligible field was flagged)`);
          sqlStatements.push(`
                UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET IsNameField = ${this.boolLit(true)}
