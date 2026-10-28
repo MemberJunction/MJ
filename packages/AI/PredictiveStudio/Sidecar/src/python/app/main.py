@@ -394,7 +394,7 @@ def _fit_and_score(
 
     def build() -> Any:
         return algorithms.build_estimator(
-            req.algorithm, req.problem_type, req.hyperparameters
+            req.algorithm, req.problem_type, req.hyperparameters, random_state
         )
 
     fold_ctx = FoldContext(dev_rows, columns, feature_cols, ops_spec, target_idx, y, build)
@@ -411,7 +411,7 @@ def _fit_and_score(
         out_of_sample = True  # pooled out-of-fold: each row is scored by a fold model that never saw it
     else:
         # `train_test_split` and `holdout` (the schema's Literal admits nothing else) share one out-of-sample split
-        # (F-SC-1): `holdout` used to score in-sample.
+        # so `holdout` is scored on rows the scoring model never trained on.
         test_size = req.validation.test_size or 0.2
         idx = np.arange(n_dev)
         stratify = y if is_classification and len(np.unique(y)) > 1 else None
