@@ -400,6 +400,15 @@ export class OpenAILLM extends BaseLLM {
     /**
      * Create a streaming request for OpenAI
      */
+    /**
+     * Whether a streaming request asks for the trailing usage chunk (`stream_options.include_usage`).
+     * OpenAI and the compatible hosts this driver fronts accept the field; a subclass for a host that
+     * rejects request fields it does not know returns false.
+     */
+    protected get IncludeStreamingUsage(): boolean {
+        return true;
+    }
+
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
@@ -431,6 +440,10 @@ export class OpenAILLM extends BaseLLM {
             temperature: params.temperature,
             max_completion_tokens: params.maxOutputTokens,
             stream: true,
+            // The final chunk then carries `usage` (with prompt_tokens_details.cached_tokens, which
+            // processStreamingChunk already reads). Without it a streamed call records zero prompt
+            // tokens, zero cache reads and no cost.
+            ...(this.IncludeStreamingUsage ? { stream_options: { include_usage: true } } : {}),
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
