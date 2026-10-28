@@ -20,7 +20,13 @@
             <div class="meta-info">
               @if (agent) {
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
+                  <a href="javascript:void(0)"
+                     class="entity-link"
+                     [mjRecordLink]="record"
+                     FieldName="AgentID"
+                     [DisplayName]="agent.Name"
+                     [HandleClick]="false"
+                     (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
                     {{ agent.Name }}
                   </a>
                 </span>
@@ -29,7 +35,11 @@
               @if (record.ParentRunID) {
                 <span class="parent-run">
                   <i class="fas fa-level-up-alt"></i>
-                  <a (click)="navigateToParentRun()" class="parent-link">Parent Run</a>
+                  <a [mjRecordLink]="record"
+                     FieldName="ParentRunID"
+                     [HandleClick]="false"
+                     (click)="navigateToParentRun()"
+                     class="parent-link">Parent Run</a>
                 </span>
               }
               <!-- Conversation Link Pill -->
@@ -181,9 +191,11 @@
                 <mj-ai-agent-run-step-detail
                   [selectedTimelineItem]="selectedTimelineItem"
                   [Provider]="ProviderToUse"
+                  [SavingWorkflow]="SavingWorkflow"
                   (closePanel)="closeJsonPanel()"
                   (navigateToActionLog)="navigateToActionLog($event)"
-                  (copyToClipboard)="copyToClipboard($event)">
+                  (copyToClipboard)="copyToClipboard($event)"
+                  (SaveAsWorkflowRequested)="OnSaveAsWorkflowRequested($event)">
                 </mj-ai-agent-run-step-detail>
               </as-split-area>
             }

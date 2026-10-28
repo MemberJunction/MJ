@@ -79,6 +79,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: aiEngineStub } }));
 vi.mock('@memberjunction/tag-engine', () => ({ TagEngine: { Instance: tagEngineStub } }));
 vi.mock('../custom/util', () => ({ EmbedTextLocalHelper: embedTextLocalHelper }));
+// The approval rules have their own tests (approvalStamp.test.ts); here they approve nothing.
+vi.mock('../custom/approvalStamp', () => ({ ApplyApprovalRulesAsync: vi.fn(async () => false), ApprovalRefusalResult: vi.fn() }));
 
 import { MJAIAgentNoteEntityServer } from '../custom/MJAIAgentNoteEntityServer.server';
 import { MJAIAgentExampleEntityServer } from '../custom/MJAIAgentExampleEntityServer.server';

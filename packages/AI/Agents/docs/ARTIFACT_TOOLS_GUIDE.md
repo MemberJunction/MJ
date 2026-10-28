@@ -184,6 +184,69 @@ Then wire it through metadata:
 3. Pick a `DefaultDeliveryMode` (`ToolsOnly` for non-multimodal content)
 4. `mj sync push --dir=metadata --include="artifact-types"`
 
+## Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Prompt Gating
+
+When a Loop agent produces a payload at the end of a turn (`taskComplete: true`), `AgentRunner` can automatically persist that payload as a `ConversationArtifact` + `ConversationArtifactVersion`. How the framework decides whether to **version an existing artifact in the conversation**, **create a brand-new artifact**, or **suppress artifact output** is governed by the `artifactDirective` response field and per-agent prompt gating.
+
+### 1. Per-Agent Prompt Gating (`_ARTIFACTS_ENABLED`, Default: `true`)
+
+`BaseAgent.isArtifactSupportEnabled(agent)` inspects `AIAgent.ArtifactCreationMode`:
+
+| `AIAgent.ArtifactCreationMode` | `_ARTIFACTS_ENABLED` | System Prompt Behavior |
+|---|---|---|
+| `'Always'`, `'Prompt'`, or `null` / `undefined` *(default)* | `true` | Injects the `artifactDirective` JSON schema, `### Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One` instructions, and `_CONVERSATION_ARTIFACTS` catalog into `<mj-runtime-state>`. |
+| `'Never'` or `'System Only'` | `false` | Strips all `artifactDirective` schema fields, rules, and examples from the Loop Agent system prompt (`{% if _ARTIFACTS_ENABLED != false %}`) and suppresses `<mj-runtime-state>` artifact catalog rendering so non-artifact agents (e.g., `Sage`, `Knowledge Agent`) pay zero token overhead and never hallucinate artifact directives. |
+
+The Nunjucks template checks `{% if _ARTIFACTS_ENABLED != false %}`, so artifact instructions **default to ON** whenever `_ARTIFACTS_ENABLED` is `true` or omitted.
+
+### 2. The `artifactDirective` Contract
+
+On its final turn (`taskComplete: true`), an artifact-producing Loop agent may include an optional `artifactDirective`:
+
+```typescript
+export interface AgentArtifactDirective {
+    /**
+     * - 'version-source' (default when an existing artifact is present): appends a new version (v2, v3, ...)
+     *   to the targeted existing artifact in the conversation.
+     * - 'create-new': creates a brand-new Artifact record (v1) instead of versioning the previous artifact.
+     * - 'suppress': skips creating or versioning any user-visible artifact for this turn (e.g., conversational-only reply).
+     */
+    behavior: 'create-new' | 'version-source' | 'suppress';
+
+    /**
+     * Optional ArtifactID from the conversation's Output Artifacts catalog (`_CONVERSATION_ARTIFACTS`).
+     * Allows the agent to version an earlier artifact (e.g., Artifact #1 after Artifact #2 was created)
+     * rather than only the most recently touched artifact. Falls back to `sourceArtifactId` if omitted or invalid.
+     */
+    targetArtifactId?: string;
+
+    /**
+     * Optional human-friendly artifact title override (used when creating a new artifact or naming a new version).
+     */
+    name?: string;
+
+    /**
+     * Optional summary description of the artifact or what changed in this version.
+     */
+    description?: string;
+}
+```
+
+### 3. Full-Conversation Artifact Discovery & Resolution (`AgentRunner`)
+
+Before executing a conversational agent turn:
+1. **`AgentRunner.loadConversationArtifactsCatalog`** queries all prior `Direction = 'Output'` artifact versions in the conversation (honoring `agentHistoryFrom` and `Visibility !== 'System Only'`), groups them by `ArtifactID` in chronological order, and passes the deduplicated `ConversationArtifactSummary[]` list into `BaseAgent` (`_CONVERSATION_ARTIFACTS` in `<mj-runtime-state>`).
+2. **`BaseAgent.executePromptStep` clean-payload reset on `create-new`**: When the LLM emits `artifactDirective.behavior === 'create-new'` and the current payload is still the unmodified inherited payload from the prior conversation turn (`payload === params.payload`, even if read-only action steps ran first in the current run) or `replaceElements` is used, `BaseAgent` applies `payloadChangeRequest` against a fresh `{}` object so fields from the previous artifact never bleed into the new artifact.
+3. **`AgentRunner.resolveArtifactVersioningDecision`** resolves the final persistence action (`shouldProcess`, `previousArtifactInfo`, `nameOverride`, `descriptionOverride`) using case-insensitive UUID matching (`NormalizeUUID`) against `conversationArtifacts` and `sourceArtifactId`.
+
+### 4. Metadata-Driven Naming (`ArtifactType.ExtractRules`)
+
+Each `ArtifactType` in `/metadata/artifact-types/.artifact-types.json` can declare `ExtractRules` (`ArtifactExtractRule[]`) that extract human-friendly `name` and `description` values from the JSON payload when `artifactDirective.name` / `description` are not explicitly supplied. For example, the **`Data`** artifact type extracts:
+- **`name`**: `content.queryName || content.name || content.title || 'Data Query'`
+- **`description`**: `content.description || content.explanation || ''`
+
+This ensures data/query artifacts display meaningful titles (such as `"Top 5 Schemas by Entity Count"`) in chat cards and the Artifact Panel header instead of generic `<AgentName> Payload` fallbacks.
+
 ## Deprecated: ConversationDetailAttachment
 
 The `MJ: Conversation Detail Attachments` entity is `Status='Deprecated'`

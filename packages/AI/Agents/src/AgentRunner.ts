@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
@@ -20,7 +20,8 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -30,13 +31,17 @@ import { FileStorageEngine } from '@memberjunction/storage';
  */
 interface ArtifactVersionRow {
     VersionID: string;
+    ArtifactID?: string;
+    VersionNumber?: number;
     VersionName: string | null;
+    VersionDescription?: string | null;
     ContentMode: 'File' | 'Text';
     FileID: string | null;
     Content: string | null;
     MimeType: string | null;
     ForceToolsOnly: boolean | null;
     ArtifactName: string;
+    ArtifactDescription?: string | null;
     TypeName: string;
     ToolLibraryClass: string | null;
     DefaultDeliveryMode: 'Inline' | 'ToolsOnly' | null;
@@ -130,6 +135,9 @@ export class AgentRunner {
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
+    /** Artifact type for structured research report payloads containing `{ report: { html } }`. */
+    private static readonly RESEARCH_CONTENT_ARTIFACT_TYPE_ID = 'a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d';
+
     /**
      * Max length of `MJ: Artifacts.Name` (`nvarchar(255)`).
      *
@@ -196,13 +204,35 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
+            // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
+            // clone occurs in hydrateConversationArtifacts or Execute.
+            if (!params.treeBudget) {
+                params.treeBudget = {
+                    maxTreeSteps: params.maxTreeSteps,
+                    maxTreeTokens: params.maxTreeTokens,
+                    maxTreeCost: params.maxTreeCost,
+                    maxTreeDurationMs: params.maxTreeDurationMs,
+                    totalSteps: 0,
+                    totalTokens: 0,
+                    totalCost: 0,
+                    startedAtMs: Date.now()
+                };
+            }
+
             // A conversation-linked run must see the conversation's artifacts no matter which
             // entry point the caller used. See hydrateConversationArtifacts for why.
             const runParams = await this.hydrateConversationArtifacts(params);
+            runParams.treeBudget = params.treeBudget;
 
             // Execute the agent and return the result directly, threading the isolated provider.
             // Favor provider already in params (caller-supplied) over the instance-level provider.
-            return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            try {
+                return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider }) as ExecuteAgentResult<R>;
+            } finally {
+                if (agentInstance.TreeBudget) {
+                    params.treeBudget = agentInstance.TreeBudget;
+                }
+            }
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -212,6 +242,57 @@ export class AgentRunner {
             // BaseAgent.Execute will handle creating a proper error result with an agent run
             throw error;
         }
+    }
+
+    /**
+     * Creates the reply row for an agent's turn on the server: `Role` `AI`, In-Progress, '⏳ Starting...', marked with
+     * `MarkServerAuthoredReply()` so the conversation detail gate accepts it. Only the server writes replies, so this is
+     * the one place a reply row starts; pass the returned instance to {@link RunAgentInConversation} as
+     * `agentResponseDetail` and the run writes its progress and result into it.
+     *
+     * @param args.conversationId The conversation the reply belongs to.
+     * @param args.branchId The fork it sits on, the same as the message it answers; null or omitted is Main.
+     * @param args.agentId The agent the reply is from; null for a status line no agent wrote (a workflow's).
+     * @param args.contextUser Whom the row is written as: the person the reply is for. They must own the conversation
+     *   or hold an `Edit` grant on it.
+     * @param args.parentId The message the reply answers, when known.
+     * @param args.testRunId A test run to link the row to.
+     * @param args.provider The provider to write through; defaults to this runner's.
+     * @param args.message The row's text, for a server-composed status line; defaults to '⏳ Starting...'.
+     * @param args.status The row's status; defaults to In-Progress (a reply a run will fill).
+     * @returns The saved row. Throws with the gate's reason when the save is refused.
+     */
+    public async CreateAgentReplyDetail(args: {
+        conversationId: string;
+        branchId?: string | null;
+        agentId: string | null;
+        contextUser: UserInfo;
+        parentId?: string;
+        testRunId?: string;
+        provider?: IMetadataProvider;
+        message?: string;
+        status?: MJConversationDetailEntity['Status'];
+    }): Promise<MJConversationDetailEntityExtended> {
+        const md = args.provider || this._provider;
+        const reply = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', args.contextUser);
+        reply.MarkServerAuthoredReply();
+        reply.ConversationID = args.conversationId;
+        reply.BranchID = args.branchId ?? null;
+        reply.Message = args.message ?? '⏳ Starting...';
+        reply.Role = 'AI';
+        reply.Status = args.status ?? 'In-Progress';
+        reply.HiddenToUser = false;
+        reply.AgentID = args.agentId;
+        if (args.parentId) {
+            reply.ParentID = args.parentId;
+        }
+        if (args.testRunId) {
+            reply.TestRunID = args.testRunId; // test execution traceability
+        }
+        if (!(await reply.Save())) {
+            throw new Error(`Failed to create agent response conversation detail: ${AgentRunner.saveFailureReason(reply)}`);
+        }
+        return reply;
     }
 
     /**
@@ -249,6 +330,12 @@ export class AgentRunner {
             conversationId?: string;
             /** Optional existing conversation detail ID. If provided, skips conversation/detail creation */
             conversationDetailId?: string;
+            /**
+             * The reply row the caller already created on the server for this run, with
+             * {@link CreateAgentReplyDetail}. The run's progress and result are written into this instance, so the
+             * writes carry its server-authored marker and its context user. Wins over `conversationDetailId`.
+             */
+            agentResponseDetail?: MJConversationDetailEntityExtended;
             /** The user's message text for this conversation turn (required if conversationDetailId not provided) */
             userMessage?: string;
             /** Whether to create artifacts from the agent's payload (default: true) */
@@ -259,6 +346,14 @@ export class AgentRunner {
             conversationName?: string;
             /** Optional test run ID to link conversation and details to (for test execution traceability) */
             testRunId?: string;
+            /**
+             * The user who writes this run's conversation rows: the conversation, the user's message and the agent's
+             * reply. Defaults to `params.contextUser`. A caller that runs the agent under an elevated principal on
+             * someone else's behalf (a public widget guest runs as the system user) names the conversation's owner
+             * here, because only the owner or a grantee may write a conversation's messages; the run's own records
+             * (run, steps, prompt runs, artifacts) are still written as `params.contextUser`.
+             */
+            ConversationWriter?: UserInfo;
         }
     ): Promise<{
         /** The agent execution result */
@@ -286,16 +381,28 @@ export class AgentRunner {
         if (!contextUser) {
             throw new Error('contextUser is required for RunAgentInConversation');
         }
+        const conversationWriter = options.ConversationWriter ?? contextUser;
 
-        let agentResponseDetail: MJConversationDetailEntity | undefined;
+        let agentResponseDetail: MJConversationDetailEntityExtended | undefined;
 
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
 
-            // If conversationDetailId is provided, use it (UI-created agent response detail)
-            if (options.conversationDetailId) {
+            if (options.agentResponseDetail) {
+                // The server created the reply row for this run (RunAIAgentFromConversationDetail): write into it.
+                agentResponseDetail = options.agentResponseDetail;
+                agentResponseDetailId = agentResponseDetail.ID;
+                conversationId = options.conversationId || agentResponseDetail.ConversationID;
+                userMessageDetailId = agentResponseDetail.ParentID || agentResponseDetailId;
+            } else if (options.conversationDetailId) {
+                // A caller-supplied detail ID (the legacy RunAIAgent(conversationDetailId=...) shape). The row was not
+                // created for this run, so it is loaded unmarked (no MarkServerAuthoredReply), and the conversation
+                // detail gate's reply rule refuses the final save (step 5 changes Message and Status) for every user,
+                // the system user included. So a caller-supplied detail ID cannot receive the final reply: the run
+                // fails at step 5. Only the server-created reply path (options.agentResponseDetail, or the branch
+                // below that creates the reply via CreateAgentReplyDetail) completes.
                 agentResponseDetailId = options.conversationDetailId;
 
                 // LATENCY OPTIMIZATION (Opt #2): When conversationId is pre-resolved by the caller
@@ -316,7 +423,7 @@ export class AgentRunner {
                     // This path still works but incurs the extra DB round-trip to extract conversationId.
                     const tempDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                         'MJ: Conversation Details',
-                        contextUser
+                        conversationWriter
                     );
                     if (await tempDetail.Load(agentResponseDetailId)) {
                         conversationId = tempDetail.ConversationID;
@@ -328,9 +435,9 @@ export class AgentRunner {
 
                 // Load the entity object for progress updates and final status Save at step 5.
                 // This is needed regardless of whether conversationId was pre-resolved.
-                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntityExtended>(
                     'MJ: Conversation Details',
-                    contextUser
+                    conversationWriter
                 );
                 if (!await agentResponseDetail.Load(agentResponseDetailId)) {
                     throw new Error(`Failed to load conversation detail entity for status updates: ${agentResponseDetailId}`);
@@ -350,7 +457,7 @@ export class AgentRunner {
                     LogStatus('Creating new conversation');
                     const conversation = await md.GetEntityObject<MJConversationEntity>(
                         'MJ: Conversations',
-                        contextUser
+                        conversationWriter
                     );
 
                     // Smart conversation naming:
@@ -375,7 +482,7 @@ export class AgentRunner {
 
                     conversation.Name = conversationName;
                     conversation.Description = conversationDescription || ''; // Set description too (like UI does)
-                    conversation.UserID = params.userId || contextUser.ID;
+                    conversation.UserID = params.userId || conversationWriter.ID;
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
 
@@ -396,13 +503,13 @@ export class AgentRunner {
                 LogStatus('Creating conversation detail for user message');
                 const userMessageDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
-                    contextUser
+                    conversationWriter
                 );
 
                 userMessageDetail.ConversationID = conversationId;
                 userMessageDetail.Message = options.userMessage;
                 userMessageDetail.Role = 'User';
-                userMessageDetail.UserID = contextUser.ID;
+                userMessageDetail.UserID = conversationWriter.ID;
                 userMessageDetail.HiddenToUser = false;
                 userMessageDetail.BranchID = params.ConversationBranchID ?? null;
 
@@ -418,30 +525,16 @@ export class AgentRunner {
                 userMessageDetailId = userMessageDetail.ID;
                 LogStatus(`Created user message detail ${userMessageDetailId}`);
 
-                // Step 3: Create conversation detail for agent response (like UI does)
+                // Step 3: Create conversation detail for agent response
                 LogStatus('Creating conversation detail for agent response');
-                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
-                    'MJ: Conversation Details',
-                    contextUser
-                );
-
-                agentResponseDetail.ConversationID = conversationId;
-                agentResponseDetail.Message = '⏳ Starting...';
-                agentResponseDetail.Role = 'AI';
-                agentResponseDetail.Status = 'In-Progress';
-                agentResponseDetail.HiddenToUser = false;
-                agentResponseDetail.AgentID = params.agent.ID;
-                agentResponseDetail.BranchID = params.ConversationBranchID ?? null;
-
-                // Link to test run if provided (for test execution traceability)
-                if (options.testRunId) {
-                    agentResponseDetail.TestRunID = options.testRunId;
-                }
-
-                if (!(await agentResponseDetail.Save())) {
-                    throw new Error(`Failed to create agent response conversation detail: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
-                }
-
+                agentResponseDetail = await this.CreateAgentReplyDetail({
+                    conversationId,
+                    branchId: params.ConversationBranchID ?? null,
+                    agentId: params.agent.ID,
+                    contextUser: conversationWriter,
+                    testRunId: options.testRunId,
+                    provider: md
+                });
                 agentResponseDetailId = agentResponseDetail.ID;
                 LogStatus(`Created agent response detail ${agentResponseDetailId}`);
             }
@@ -591,7 +684,11 @@ export class AgentRunner {
 
                     const saved = await agentResponseDetail.Save();
                     if (!saved) {
-                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
+                        const reason = AgentRunner.saveFailureReason(agentResponseDetail);
+                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status: ${reason}`);
+                        // The reply never reached the conversation, so the caller must not report success: a chat
+                        // client waiting for this row to complete would otherwise wait forever.
+                        throw new Error(`The agent's reply could not be saved: ${reason}`);
                     }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
@@ -707,7 +804,43 @@ export class AgentRunner {
             // no report." Sequential execution removes the interleave; all writes still complete
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
-            await updateDetail();
+            //
+            // A failed reply save (step 5) into the reply row created for this run does NOT skip steps 6-7. AgentRunner is the only writer of
+            // AIAgentRunMedia and nothing retries, so skipping them would leave the run Completed with no
+            // artifact linked and its media bytes lost. Instead the step-5 error is held, steps 6, 6b and 7
+            // each run (one's rejection must not skip the next, and ProcessAgentArtifacts can reject outside
+            // its own try/catch), and the step-5 error is thrown last, so the run still fails with its reason.
+            let replySaveError: Error | undefined;
+            try {
+                await updateDetail();
+            } catch (error) {
+                replySaveError = error instanceof Error ? error : new Error(String(error));
+            }
+            if (replySaveError) {
+                const runDespiteFailedReply = async (stepName: string, step: () => Promise<unknown>): Promise<void> => {
+                    try {
+                        await step();
+                    } catch (stepError) {
+                        const stepMessage = stepError instanceof Error ? stepError.message : String(stepError);
+                        LogError(`${stepName} failed for agent run ${agentResult.agentRun?.ID} (reply detail ${agentResponseDetailId}) after its reply could not be saved: ${stepMessage}`, undefined, stepError);
+                    }
+                };
+                if (options.conversationDetailId && !options.agentResponseDetail) {
+                    // A caller-supplied row (not created for this run) that the gate refused: link nothing to it, since
+                    // that would write into a conversation the gate kept this run out of, as the run user. The media
+                    // bytes belong to the run (AIAgentRunMedia), so only those are kept.
+                    await runDespiteFailedReply('Step 7 (media audit)', async () => {
+                        if (agentResult.mediaOutputs?.length) {
+                            await this.SaveAgentRunMedia(agentResult.agentRun.ID, agentResult.mediaOutputs, contextUser, md);
+                        }
+                    });
+                } else {
+                    await runDespiteFailedReply('Step 6 (payload artifacts)', processArtifacts);
+                    await runDespiteFailedReply('Step 6b (file artifacts)', processFileArtifacts);
+                    await runDespiteFailedReply('Step 7 (media)', saveMedia);
+                }
+                throw replySaveError;
+            }
             const payloadArtifact = await processArtifacts();
             const fileArtifacts = await processFileArtifacts();
             await saveMedia();
@@ -1078,8 +1211,37 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
-        const creationMode = agent?.ArtifactCreationMode;
+        const agentsById = IndexByUUID(AIEngine.Instance.Agents);
+        let agent = agentsById.Get(agentRun.AgentID);
+        let creationMode = agent?.ArtifactCreationMode;
+
+        // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
+        // DefaultArtifactTypeID, such as Sage) delegates a folded single-node task graph (or
+        // sub-agent step) to a specialist agent (such as Query Builder or Research Agent) that
+        // DOES produce user-visible artifacts, resolve the artifact creation mode and
+        // DefaultArtifactTypeID from the last completed Sub-Agent step's specialist agent so
+        // the specialist's deliverable artifact is persisted with the specialist's
+        // DefaultArtifactTypeID and visibility.
+        if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
+            for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
+                const step = agentRun.Steps[i];
+                if (step.StepType === 'Sub-Agent' && step.Success) {
+                    const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
+                    const delegatedAgent = subAgentId
+                        ? agentsById.Get(subAgentId)
+                        : undefined;
+                    if (
+                        delegatedAgent &&
+                        delegatedAgent.ArtifactCreationMode !== 'Never' &&
+                        (delegatedAgent.DefaultArtifactTypeID != null || delegatedAgent.ArtifactCreationMode === 'Always')
+                    ) {
+                        agent = delegatedAgent;
+                        creationMode = delegatedAgent.ArtifactCreationMode;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (creationMode === 'Never') {
             LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
@@ -1167,7 +1329,7 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive);
+                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
@@ -1206,29 +1368,74 @@ export class AgentRunner {
             version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
+            const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
+            const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
+            const payloadRecord = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+                ? (payload as Record<string, unknown>)
+                : undefined;
+            const reportRecord = (typeof payloadRecord?.report === 'object' && payloadRecord.report !== null && !Array.isArray(payloadRecord.report))
+                ? (payloadRecord.report as Record<string, unknown>)
+                : undefined;
+            const synthesisRecord = (typeof payloadRecord?.synthesis === 'object' && payloadRecord.synthesis !== null && !Array.isArray(payloadRecord.synthesis))
+                ? (payloadRecord.synthesis as Record<string, unknown>)
+                : undefined;
+            const payloadName = AgentRunner.safeDirectiveText(
+                payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName ?? reportRecord?.name,
+                AgentRunner.ARTIFACT_NAME_MAX_LENGTH
+            );
+            const payloadDescription = AgentRunner.safeDirectiveText(
+                payloadRecord?.description ?? payloadRecord?.interpretation ?? reportRecord?.description ?? synthesisRecord?.executiveSummary
+            );
+
+            if (directiveName || payloadName) {
+                version.Name = directiveName || payloadName || null;
+            }
+            if (directiveDescription || payloadDescription) {
+                version.Description = directiveDescription || payloadDescription || null;
+            }
+
             if (!(await version.Save())) {
                 throw new Error('Failed to save artifact version');
             }
 
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
-            // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
-                const nameAttr = (version as any).Attributes?.find((attr: any) =>
+            // First version of a new artifact: adopt the extracted Name/Description attribute (or payload title/description)
+            // unless the agent explicitly named/described it via artifactDirective.
+            if (isNewArtifact && newVersionNumber === 1 && (!directiveName || !directiveDescription)) {
+                const attrs = (version as unknown as { Attributes?: Array<{ StandardProperty?: string; Name?: string; Value?: string }> }).Attributes;
+                const nameAttr = attrs?.find((attr) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
+                const descAttr = attrs?.find((attr) =>
+                    attr.StandardProperty === 'description' || attr.Name?.toLowerCase() === 'description'
+                );
 
-                let extractedName = nameAttr?.Value?.trim();
-                if (extractedName && extractedName.toLowerCase() !== 'null') {
-                    extractedName = extractedName.replace(/^["']|["']$/g, '');
+                const cleanAttr = (val: string | undefined, maxLen?: number): string | undefined => {
+                    const trimmed = val?.trim();
+                    if (!trimmed || trimmed.toLowerCase() === 'null') {
+                        return undefined;
+                    }
+                    const unquoted = trimmed.replace(/^["']|["']$/g, '').trim();
+                    return AgentRunner.safeDirectiveText(unquoted, maxLen);
+                };
 
+                const resolvedName = !directiveName ? (cleanAttr(nameAttr?.Value, AgentRunner.ARTIFACT_NAME_MAX_LENGTH) || payloadName) : undefined;
+                const resolvedDescription = !directiveDescription ? (cleanAttr(descAttr?.Value) || payloadDescription) : undefined;
+
+                if (resolvedName || resolvedDescription) {
                     const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
 
                     if (await artifact.Load(artifactId)) {
-                        artifact.Name = extractedName;
+                        if (resolvedName) {
+                            artifact.Name = resolvedName;
+                        }
+                        if (resolvedDescription) {
+                            artifact.Description = resolvedDescription;
+                        }
                         if (await artifact.Save()) {
                             LogStatus(`Updated artifact name to: ${artifact.Name}`);
                         }
@@ -1463,7 +1670,8 @@ export class AgentRunner {
         contextUser: UserInfo,
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
-        directive: ArtifactDirective | undefined
+        directive: ArtifactDirective | undefined,
+        payload?: unknown
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -1476,8 +1684,17 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available
-        artifact.TypeID = agent?.DefaultArtifactTypeID || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
+        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+            ? (payload as Record<string, unknown>)
+            : undefined;
+        const reportObj = (typeof payloadObj?.report === 'object' && payloadObj.report !== null && !Array.isArray(payloadObj.report))
+            ? (payloadObj.report as Record<string, unknown>)
+            : undefined;
+        const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
+        artifact.TypeID = agent?.DefaultArtifactTypeID
+            || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
         artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
@@ -2374,10 +2591,18 @@ export class AgentRunner {
                         }
 
                         if (content) {
+                            const rawDescription = row.VersionDescription || row.ArtifactDescription;
+                            const cleanDescription = rawDescription && !rawDescription.startsWith('Payload returned by ')
+                                ? rawDescription
+                                : undefined;
                             inputArtifacts.push({
                                 name: artifactName,
                                 typeName,
                                 content,
+                                ...(row.ArtifactID ? { artifactId: row.ArtifactID } : {}),
+                                ...(row.VersionID ? { versionId: row.VersionID } : {}),
+                                ...(row.VersionNumber != null ? { versionNumber: row.VersionNumber } : {}),
+                                ...(cleanDescription ? { description: cleanDescription } : {}),
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
                                 deliveryMode: row.DefaultDeliveryMode ?? 'ToolsOnly',
@@ -2414,9 +2639,10 @@ export class AgentRunner {
      * `ArtifactToolManager`. No-op for binary content, non-JSON content, or
      * content that already has rows populated.
      *
-     * Security: `RunQuery` uses the same read-only, `SQLExpressionValidator`-
-     * checked execution path that `data-artifact-viewer` already uses at
-     * render time — identical security posture to the existing view path.
+     * Security: the stored SQL runs as ad-hoc SQL for `contextUser`, so the provider
+     * allows only a single read statement over entity views that user may read in
+     * full (no row-level filter, no denied field). It runs on the host's read-only
+     * database login when one is configured, and on the default provider otherwise.
      */
     private async hydrateSqlBackedContent(content: string, contextUser: UserInfo): Promise<string> {
         let parsed: Record<string, unknown>;
@@ -2425,9 +2651,12 @@ export class AgentRunner {
         } catch {
             return content;
         }
+        if (!this.hasUnhydratedSql(parsed)) {
+            return content;
+        }
 
         let changed = false;
-        const rq = new RunQuery();
+        const rq = await this.adhocSqlRunner();
 
         const rootMeta = parsed?.metadata as { sql?: string; rowCount?: number; executionTimeMs?: number } | undefined;
         const rootRows = parsed?.rows as unknown[] | undefined;
@@ -2464,6 +2693,33 @@ export class AgentRunner {
         }
 
         return changed ? JSON.stringify(parsed) : content;
+    }
+
+    /** True when the parsed artifact carries stored SQL whose rows are missing. */
+    private hasUnhydratedSql(parsed: Record<string, unknown>): boolean {
+        const rootMeta = parsed?.metadata as { sql?: string } | undefined;
+        const rootRows = parsed?.rows as unknown[] | undefined;
+        if (rootMeta?.sql && (!rootRows || rootRows.length === 0)) {
+            return true;
+        }
+        const tables = parsed?.tables as Array<{ metadata?: { sql?: string }; rows?: unknown[] }> | undefined;
+        return Array.isArray(tables) && tables.some(t => !!t?.metadata?.sql && (!t.rows || t.rows.length === 0));
+    }
+
+    /**
+     * A RunQuery on the host's read-only database login when one is registered with the action
+     * engine, otherwise on the default provider.
+     */
+    private async adhocSqlRunner(): Promise<RunQuery> {
+        try {
+            const readOnly = await ActionEngineServer.Instance.GetReadOnlyProvider();
+            if (readOnly) {
+                return new RunQuery(readOnly);
+            }
+        } catch (error) {
+            LogError(`[AgentRunner] Could not open the read-only provider; using the default provider: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return new RunQuery();
     }
 
     /**

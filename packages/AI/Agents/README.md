@@ -153,6 +153,23 @@ An agent can ask a fast decision model typed questions in six places on its own.
 
 Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
 
+##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
+
+When an artifact-producing Loop agent finishes a turn (`taskComplete: true`), it controls whether its final payload creates a new artifact, versions an existing artifact in the conversation, or suppresses artifact creation via `artifactDirective: { behavior: 'create-new' | 'version-source' | 'suppress', targetArtifactId?, name?, description? }`:
+
+- **Default-on per-agent gating (`_ARTIFACTS_ENABLED`)**: `BaseAgent.isArtifactSupportEnabled(agent)` returns `true` unless `AIAgent.ArtifactCreationMode` is `'Never'` or `'System Only'`. The Loop Agent system prompt (`{% if _ARTIFACTS_ENABLED != false %}`) and `<mj-runtime-state>` automatically omit all `artifactDirective` instructions and the `_CONVERSATION_ARTIFACTS` catalog for non-artifact agents (such as `Sage` and `Knowledge Agent`), while enabling them by default for artifact-producing agents (`Query Builder`, `SkillSmith`, `Codesmith`, `Research Agent`, etc.).
+- **Full-conversation artifact targeting (`targetArtifactId`)**: `AgentRunner` loads the conversation's prior output artifacts into `_CONVERSATION_ARTIFACTS` so the agent can version any earlier artifact by `targetArtifactId` (not just the immediately preceding turn's artifact).
+- **Clean payload reset on `create-new`**: When `artifactDirective.behavior === 'create-new'` and the current payload is still the unmodified inherited payload from the prior conversation turn (`payload === params.payload`, even after read-only action steps) or `replaceElements` is used, `BaseAgent.executePromptStep` applies `payloadChangeRequest` against a fresh `{}` object so fields from a prior artifact never bleed into the new artifact.
+
+See the [Artifact Tools & Output Lifecycle Guide](./docs/ARTIFACT_TOOLS_GUIDE.md#output-artifact-lifecycle-artifactdirective--_artifacts_enabled-prompt-gating).
+
+##### Single-Node Task Graph Folding (`foldSingleTaskStep`) vs. Multi-Step Durable Workflows
+
+When a Loop agent (such as `Sage`) emits `nextStep.type: 'Tasks'`, `LoopAgentType.foldSingleTaskStep` inspects the `taskGraph`:
+
+- **Single-node task graphs (1 task of kind `'Agent'` or `'Action'`)**: Automatically fold inline into a standard in-process `'Sub-Agents'` or `'Actions'` step — even when `taskGraph.continuation === 'reinvoke'` is specified (`terminateAfter: false` so the parent Loop agent gets another turn to synthesize the specialist's output). This avoids durable task-graph dispatch overhead for 1-step specialist delegations (e.g., `Query Builder`, `Visualization Agent`) and keeps live sub-agent streaming in the active chat turn.
+- **Multi-node task graphs (2+ tasks with `dependsOn` / `payloadMapping` or non-trivial scheduling)**: Dispatch as durable `MJ: Tasks` rows through [`@memberjunction/task-graph`](../../TaskGraph/README.md), broadcasting real-time step transitions via `TaskGraphFrameBroadcaster` and delivering synthesized continuation replies and artifacts back to the conversation via `TaskGraphContinuationDeliverer`.
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
@@ -166,6 +183,7 @@ Consequences worth knowing before you debug one:
 - **The mode is on the run.** A completed `Decision` step named "Workflow runs in this run" or "Workflow runs on the task-graph dispatcher" records which engine ran it and why.
 - **A dispatched `Sub-Agent` node starts its own `AIAgentRun`**, linked from `Task.AgentRunID` and parented to the submitting run. If that sub-agent is itself a Flow agent, it runs in-process and returns its result to the task.
 - **A `Decision` step routes the same way in both modes.** Paths read its answers only through `decisions.<key>.<question>`; its `stepResult.result` is the payload, which carries no answers. A flow with a Decision step is compiled and validated before its first step in-run too, so an incomplete Choice fork, a decision read before it can answer, or one read through the payload is refused in both modes. An answer below its `minConfidence` stops an in-run flow (the dispatcher holds the fork, and `Retry` on the step asks again). A failed decision call is a failed step: the paths that read its answers are passed over, and a recovery path such as `stepResult.Success === false` is taken whatever its rank.
+- **Multiple starting steps are supported.** A Flow agent with more than one active `StartingStep: true` step (for example, a workflow saved from a task graph with parallel wave-1 roots) compiles all active starting steps as root nodes (`dependsOn: []`) in dispatch mode, and walks all starting branches sequentially before entering any downstream join step in `inRun` mode.
 - **Answers live in the run, not the payload.** A run started with `startAtStep` past a Decision step has no answers from it, so every path that reads that decision stops the run with the reason. Start at or before the Decision step to route on it.
 
 See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
@@ -255,7 +273,8 @@ The browser-side driver layer lives in [`@memberjunction/ai-realtime-client`](..
 Manages data flow through agent execution:
 
 - Stores key-value data accessible across all steps and sub-agents
-- Supports typed payload changes requested by the LLM
+- Supports typed payload changes requested by the LLM (`newElements`, `updateElements`, `replaceElements`, `removeElements`)
+- Auto-corrects LLM output shape errors (`autoCorrectStrayKeys`), moving stray sibling keys into `newElements`/`updateElements` and automatically unwrapping common LLM wrapper aliases (`setFields`, `setElements`, `createElements`, `addElements`, `modifyElements`, `patchElements`, `updates`, `fields`, `set`, `add`) when the wrapper key does not exist on the payload and is not in `allowedPaths`
 - Validates and applies changes through PayloadChangeAnalyzer
 - Provides feedback to the LLM about successful/failed changes via PayloadFeedbackManager
 
@@ -390,6 +409,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Bound Action Parameters
+
+A host can fix some of an action's input parameters for the run, so the model can neither see nor change them. A bound parameter is left out of the action's description in the prompt, out of its native tool schema, out of the result echoed to the model and out of what Find Candidate Actions / Find Best Action report; at dispatch the bound value replaces whatever the model sent under that name, the override is logged with the run and step IDs, and the action's execution log marks the parameter `Bound`. Bindings reach every sub-agent run. A required parameter bound to nothing, or a binding that names a parameter the action does not have, refuses the action before it runs: the model is told only that the action is unavailable, and the action is locked out for the rest of the run. A binding keyed by anything other than a known Action ID fails the run at its start.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: spaceAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    // Action ID → parameter name → value. The model is never told ChapterID exists.
+    boundActionParams: {
+        [listMembersActionId]: { ChapterID: space.ChapterID }
+    }
+});
+```
+
+**Limits.** Bindings are server-side only (no GraphQL input reaches them). A run with bindings has task graphs withheld, because a graph's action nodes are dispatched outside the agent's binding gate. A run stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another (`lastRunId`, including a resume from a stored request) applies them when its caller passes none; a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do not parse to an object) fails the continuing run. `actionChanges` are not persisted, so a resumed run starts without them. Bindings hide a value from the model; they are not a boundary against the user, who can start an unbound run. The realtime client-direct action path and the `Execute Agent` action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that refuses them) dispatch without forwarding `boundActionParams`, so do not grant them to a bound agent. An action's own message text may mention a bound value. The rules are exported for hosts that dispatch actions themselves: `BindingsForAction`, `UnboundParams`, `IsBoundParamName`, `ApplyBoundActionParams`.
+
 ### With Memory Scope (Multi-Tenant)
 
 Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
@@ -443,6 +480,28 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
+
+Programmatic callers and multi-run workflows can opt into automatic post-run cleanup once an agent run settles via `ExecuteAgentParams.compactAfterRun`. When enabled (`true` or an `AgentPostRunCompactionConfig` object), `BaseAgent.finalizeAgentRun` executes a failure-isolated post-run compaction pass after pending step writes and the run record are saved:
+
+1. **Conversation Message Compaction** — When `params.conversationMessages.length >= messageCountThreshold` (default: `20`), older volatile result messages (`IsVolatileResultMessage`: `action-result`, `client-tool-result`, `tool-result`, `sub-agent-result`, `loop-result`) in `[1 .. length - preserveRecentCount - 1]` are compacted via `compactMessage()` while preserving the initial user goal (`index 0`), ordinary `user`/`assistant` conversational turns, turns carrying `toolCalls`, and the most recent turns.
+2. **Scratchpad Pruning** — When the loop scratchpad contains more notes or completed tasks than `maxScratchpadNotes` (default: `20`), `ScratchpadManager.PruneNotes()` and `ScratchpadManager.EnforceTaskLimit()` prune the oldest low-priority note lines first (preserving `[HIGH]` / `[IMPORTANT]` / `[PINNED]` / `❗` / `⚠️` notes) and trim excess completed tasks.
+3. **Background Memory Extraction** — When `extractMemories !== false` and `agentRun.Success` is `true`, triggers background memory extraction (`triggerPostRunMemoryExtraction`) to harvest durable learnings from the completed run without blocking the caller.
+
+```typescript
+const result = await runner.ExecuteAgent({
+    agentId: 'my-agent-id',
+    conversationMessages: messages,
+    contextUser: currentUser,
+    compactAfterRun: {
+        enabled: true,
+        messageCountThreshold: 12,
+        extractMemories: true,
+        maxScratchpadNotes: 20
+    }
+});
+```
+
 ## Latency Optimizations & Concurrent Sub-Agent Execution
 
 To drastically reduce execution latency, the framework includes the following optimizations:
@@ -461,10 +520,10 @@ In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant lo
 `AgentDataPreloader.PreloadAgentData` resolves agent data sources concurrently with a bounded concurrency cap (default 10 in-flight at once) so a long list of sources can't saturate the DB connection pool.
 
 ### 3. Non-blocking Observability DB Logging
-Observability writes (`AIAgentRunStep` records) are completely non-blocking:
-* Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
-* Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
-* All pending logging writes are drained with `Promise.allSettled` inside `finalizeAgentRun()` and the queues are cleared, so a reused agent instance doesn't leak settled promises. Save failures (rejected promises OR `Save()===false`) are logged via `LogError` and a summary is folded into `agentRun.ErrorMessage` for visibility.
+Observability writes (`AIAgentRunStep` and `AIPromptRun` records) are non-blocking during step execution and settled at terminal boundaries:
+* **Per-entity and cross-step save chaining (`AgentRunStepSaveQueue`)**: Step creation (`createStepEntity`, `createCompactionStep`) and finalization/updates (`finalizeStepEntity`, `updateCompactionStep`, `checkExecutionGuardrails`, `validateSuccessNextStep`, `handleFinalPayloadValidationFailure`) enqueue `INSERT` and `UPDATE` operations onto `_stepSaveQueue` without blocking the agent loop. Updates on a step are chained behind its initial `INSERT`, and `finalizeStepEntity` preserves pre-finalize step fields (such as `guardrailExceeded` in `OutputData` and `FinalPayloadValidationResult`/`FinalPayloadValidationMessages`) across post-INSERT reloads. Child steps (`ParentID`) are chained behind their parent step's `INSERT`.
+* **In-flight `PayloadAtStartSourceStepID` FK ordering (`FK_AIAgentRunStep_PayloadAtStartSourceStep`)**: `findPayloadAtStartSource` matches the latest non-`Running` step with `PayloadAtEnd` even when that source step's initial `INSERT` is still in flight (`!sourceStep.IsSaved`), avoiding redundant multi-kilobyte `PayloadAtStart` clones on fast sequential steps. When the matched source step is not yet saved, `createStepEntity` chains the new step's `INSERT` after `[parentStepEntity, payloadAtStartSource]` and attaches a `beforeInsert` safety fallback that restores inline `PayloadAtStart` (and clears `PayloadAtStartSourceStepID = null`) if the source step's `INSERT` failed.
+* **Complete terminal settlement**: `_stepSaveQueue.Flush()` and `_promptRunner.FlushPendingSaves()` are awaited across all terminal paths — normal completion (`finalizeAgentRun`), failure (`createFailureResult`), cancellation (`createCancelledResult`), and post-turn conversation compaction (`recordCompactionRunStep`) — before the final `agentRun.Save()` executes, ensuring no orphaned or `Running` steps/prompt runs remain in Flight when `ExecuteAgent()` resolves. Save failures are logged via `LogError` and folded into `agentRun.ErrorMessage` for visibility.
 
 ### 4. Concurrent Sub-Agent Execution
 Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:
@@ -533,6 +592,78 @@ Long conversations no longer grow the agent's context without bound. Two coopera
 
 A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (carrying `Reason`) in ~0 ms without reaching the action engine, and the model receives a `[CRITICAL/ACTION_UNAVAILABLE | REPEATED_IDENTICAL_CALL | ATTEMPTS_EXHAUSTED]` directive as a user message (a `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter otherwise). Argument identity is `normalizeActionParams` (three protected layers: outer → per-entry → recursive value). The pipeline registry and the ForEach / While operators pass `{ skipCircuitBreaker: true }` and bypass every rule, leaving the history untouched. Evidence and thresholds: [Performance and Cost Briefing §4](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
 
+## Root-Tree Cumulative Budget Guards (`AgentTreeBudget`)
+
+Per-agent entity guardrails (`MaxIterationsPerRun`, `MaxTokensPerRun`, `MaxCostPerRun`, `MaxTimePerRun`) bound each `AIAgentRun` in isolation, which cannot stop multiplicative fan-out when a parent agent delegates to sequential or parallel sub-agents (for example, a depth-3 tree where each agent stays under a 10-step limit can still execute hundreds of steps across the tree).
+
+`BaseAgent` enforces **root-tree cumulative budget guards** via a single shared `AgentTreeBudget` instance initialized at the root run and passed by object reference (`params.treeBudget`) to every child, related, parallel, and realtime-delegated sub-agent run:
+
+| Ceiling on `ExecuteAgentParams` / `AgentTreeBudget` | Shared Counter | Breach Message |
+|---|---|---|
+| `maxTreeSteps` | `totalSteps` (incremented on every `createStepEntity`) | `Agent tree step budget exceeded (${totalSteps}/${maxTreeSteps} total steps across tree)` |
+| `maxTreeTokens` | `totalTokens` (accumulated after every prompt, decision, and compaction run) | `Agent tree token budget exceeded (${totalTokens}/${maxTreeTokens} total tokens across tree)` |
+| `maxTreeCost` | `totalCost` (accumulated USD cost across all prompt runs in the tree) | `Agent tree cost budget exceeded ($${totalCost.toFixed(4)}/$${maxTreeCost.toFixed(4)} across tree)` |
+| `maxTreeDurationMs` | `Date.now() - startedAtMs` (wall-clock elapsed time since root run started) | `Agent tree duration budget exceeded (${elapsedMs}ms/${maxTreeDurationMs}ms across tree)` |
+
+When any ceiling is reached:
+1. `budget.breachedReason` is stamped on the shared `AgentTreeBudget` instance.
+2. `hasExceededAgentRunGuardrails()` and `executeNextStep()` immediately return a terminal `{ step: 'Failed', terminate: true }` decision with the breach reason.
+3. Any parent or parallel sibling sharing the `AgentTreeBudget` observes `breachedReason` as soon as its in-flight step settles and halts the tree cleanly.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: orchestratorAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    maxTreeSteps: 25,
+    maxTreeTokens: 100_000,
+    maxTreeCost: 1.50,
+    maxTreeDurationMs: 120_000
+});
+```
+
+## Event-Driven Agent Wakes (`AgentWakeTriggerService`)
+
+Self-scheduling agents such as the Chief of Staff normally wake on a cron or adaptive `MJ: User Routines` schedule guarded by the 3-tier wake gate (see [Built-In Agents Guide](../../../guides/BUILT_IN_AGENTS_GUIDE.md)). `AgentWakeTriggerService` (a `BaseSingleton`, exported from this package) adds the event-driven complement: when something happens that an agent should react to now, it writes a one-shot `AgentWake` routine for the right user so the agent runs on the dispatcher's next sweep instead of waiting for its next scheduled slot.
+
+**Delivery is a routine row, not a direct agent invocation.** Every trigger ends in `upsertImmediateWakeRoutine`, which finds (by `UserID` + `TargetID` + `WakeConfigurationObject.workstreamKey`) or creates an `MJ: User Routines` row with `RoutineType = 'AgentWake'`, `TargetType = 'Agent'`, `ScheduleMode = 'OneShot'`, `Status = 'Active'`, `NextRunAt = now`, and stores `{ workstreamKey, wakeReason, resumeState }` in `WakeConfigurationObject` (also mirrored into `StartingPayload` and `InitialMessage`). `resumeState` carries the latest event at its top level **and** every event since the last dispatcher claim in `resumeState.pendingEvents`: while the routine is still waiting (`Status = 'Active'` with a `NextRunAt`), a new event is appended rather than replacing the previous one, so two approvals clicked within one sweep both reach the agent; once the dispatcher has claimed the routine the list starts over. The same request in the same status is queued once. With more than one pending event, `wakeReason` / `InitialMessage` enumerate them. `UserRoutineDispatcherDriver` sweeps due routines once a minute, so "immediate" means **on the next sweep, within about a minute**. The dispatcher hands the agent `payload._wakeContext.resumeState` and runs it with `compactAfterRun: true`. A freshly created event routine carries no tier configuration, so `WakeGateEvaluator` fails open; an existing routine for the same workstream keeps whatever gate it already had.
+
+| Trigger | Fired by | Whose agent wakes | `workstreamKey` | `resumeState.triggerType` |
+|---|---|---|---|---|
+| `TriggerWakeOnAgentRequestResolution` | `MJAIAgentRequestEntityServer.Save()` when an action-created `MJ: AI Agent Requests` row (`OriginatingAgentRunID` and `OriginatingTaskID` both null) moves from `Requested` to `Approved`, `Rejected` or `Responded` | The request owner (`RequestForUserID`) and `AgentID` | `approval-resolution` | `AgentRequestResolution` — `requestID`, `status`, `request`, `response`, parsed `responseData` and `commentsData`, `respondedByUserID`, `respondedAt` |
+| Same method, inter-agent envelope | The resolved request's `Comments` is a `Send Inter-Agent Request` envelope (`interAgentCoordination: true`) | The **sender** user (`envelope.senderUserID`) and `senderAgentID` | envelope `workstreamKey`, else `inter-agent-resolution` | `InterAgentRequestResolved` — `requestID`, `status`, `subject`, `response`, `responseData`, `respondedByUserID`, `respondedAt`, `targetUserID`, `targetUserName` |
+| `TriggerWakeOnIncomingInterAgentRequest` | `MJAIAgentRequestEntityServer.Save()` on a **new** `Requested` row whose `Comments` is an inter-agent envelope (`interAgentCoordination: true`) | The **target** user (`envelope.targetUserID`) and the request's `AgentID` | envelope `workstreamKey`, else `inter-agent-inbox` | `InterAgentRequestReceived` — `requestID`, `senderUserID`, `senderUserName`, `senderAgentID`, `subject`, `messageBody` |
+| `RouteInboundUtilityMailboxWake` | An inbound-email ingestion path (none wired yet) passing an `InboundUtilityMailboxEmailInput` | The verified internal sender (`fromAddress` matches an active `MJ: Users` row) and the `AgentID` of the matching `MJ: AI Bridge Agent Identities` row (`IdentityType = 'Email'`, `IsActive`) | input `workstreamKey`, else identity `Configuration.defaultWorkstreamKey`, else `inbound-utility-mailbox` | `InboundUtilityMailboxEmail` — `identityID`, `utilityMailboxAddress`, `senderUserID`, `senderEmail`, `messageID`, `subject`, `bodyPreview`, `receivedAt` |
+
+Every `resumeState` also repeats the `workstreamKey`. Requests that carry `OriginatingAgentRunID` (a paused run) or `OriginatingTaskID` (a task graph) are skipped — those resume through the existing `lastRunId` path and the task dispatcher, not through a wake.
+
+**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; the mailbox trigger also refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
+
+**Result.** Each method returns an `AgentWakeTriggerResult` — `{ triggered, resultCode, reason, routineID, targetUserID, targetAgentID, workstreamKey, nextRunAtISO }` — and never throws for business outcomes. `resultCode` is one of `WAKE_SCHEDULED`, `SKIPPED_NOT_APPLICABLE`, `POLICY_DENIED`, `IDENTITY_NOT_FOUND`, `UNVERIFIED_EXTERNAL_SENDER`, `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`, `SAVE_FAILED`.
+
+```typescript
+import { LogStatus } from '@memberjunction/core';
+import { AgentWakeTriggerService } from '@memberjunction/ai-agents';
+
+// Inside a server-side entity subclass or resolver, after the request has saved:
+const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+    request,                // MJAIAgentRequestEntity, Status already Approved/Rejected/Responded
+    contextUser,            // UserInfo the save ran under
+    this.ProviderToUse      // IMetadataProvider; defaults to Metadata.Provider when omitted
+);
+if (!result.triggered) {
+    LogStatus(`No wake scheduled (${result.resultCode}): ${result.reason}`);
+}
+```
+
+**Current limitations**
+
+- Routines are private to their owner (`MJUserRoutineEntityServer.validateOwnership`, plus row-level security on the lookup). A wake for the caller's own agent is saved in the caller's scope; a wake for another user (inter-agent arrival, or a resolution that wakes the sender) is saved as the scheduler's **system user** from `UserCache`, which the ownership gate exempts. If no system user is cached (unit tests, unusual hosts) the service falls back to the caller and logs that the save may be rejected.
+- The service's `InterAgentCoordinationEnvelopeShape` accepts both the `InterAgentCoordinationEnvelope` field names the action writes (`protocolVersion`, `message`) and the older `envelopeVersion` / `messageBody` names. The two shapes are still declared separately because `@memberjunction/core-actions` depends on this package, not the reverse.
+- Wakes are keyed by `UserID` + `TargetID` + `workstreamKey`; events for the same workstream that land between sweeps are queued in `resumeState.pendingEvents` (see above). The queue is at-least-once: an event that lands between the dispatcher's claim save and the service's save can be delivered twice, so the agent should treat `requestID` as idempotent and re-check the request's current status.
+- `RouteInboundUtilityMailboxWake` has no production caller. Wiring it needs an inbound-email ingestion path (mailbox poller or provider webhook) that does not exist yet, and `resolveVerifiedInternalSender` should then resolve the sender through `UserCache` rather than building a role-less `UserInfo`. Deferred to a follow-up by decision.
+- The wake is a `OneShot` `MJ: User Routines` row picked up by the dispatcher, not a direct `AgentRunner` call, so delivery latency is bounded by the sweep interval and the dispatcher's concurrency limit.
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:
@@ -540,6 +671,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Artifact Tools & Output Lifecycle Guide](./docs/ARTIFACT_TOOLS_GUIDE.md) | Inbound artifact routing (`Inline` vs `ToolsOnly`), tool libraries, output `artifactDirective` lifecycle (`create-new`, `version-source`, `suppress`), `_ARTIFACTS_ENABLED` prompt gating, full-conversation artifact targeting, and `ArtifactType.ExtractRules` |
 | [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate |
 | [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
 | [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
@@ -548,7 +680,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
 | [Agent Memory Scoping](./docs/AGENT_MEMORY_SCOPING.md) | Multi-tenant memory (notes/examples) with UserScope support |
 | [Iterative Operations](./docs/guide-to-iterative-operations-in-agents.md) | ForEach and While loop patterns, parallel execution |
-| [State Management](./docs/state-management.md) | Payload management, agent type state |
+| [State Management](./docs/state-management.md) | Payload management, agent type state, stray-key & wrapper-alias recovery |
 | [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
 | [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
 | [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |

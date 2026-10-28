@@ -1,10 +1,46 @@
-import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
 import { GetAIAPIKey } from "@memberjunction/ai";
 import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
+
+/** The distance metrics a provider index can be created with. */
+const VALID_METRICS: ReadonlyArray<IndexModelMetricEnum> = ['cosine', 'euclidean', 'dotproduct'];
+
+/**
+ * What happened when this row tried to become a real index.
+ *
+ * Recorded on `ProviderConfig` (`provisionState`, `provisionMessage`, `provisionCheckedAt`) so the
+ * outcome of the detached provisioning is readable off the row itself, rather than only from a log
+ * line nobody connects back to the record.
+ */
+type VectorIndexProvisionState =
+    /** The provider created the index; `ExternalID`, `Dimensions` and `Metric` carry what it reported. */
+    | 'provisioned'
+    /** The provider refused the create, or the driver threw. Nothing exists; `provisionMessage` says why. */
+    | 'failed'
+    /**
+     * The provider did not answer within {@link MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS}. Not
+     * `failed`: the call is abandoned rather than cancelled, so the provider may still finish creating it.
+     */
+    | 'timed-out'
+    /** The driver owns no index objects; this row is the whole definition (see {@link VectorDBBase.ManagesIndexes}). */
+    | 'not-applicable'
+    /**
+     * The row was created with `ExternalID` already set: it names an index that exists on the provider
+     * (an app's shipped index, or one created outside MJ). Nothing was created, and deleting the row
+     * leaves the provider index alone, because MJ never owned it.
+     */
+    | 'adopted'
+    /** No driver instance could be built in this process, so nothing was attempted. */
+    | 'unprovisioned';
+
+type ProvisionResult = { state: VectorIndexProvisionState; reason?: string };
+
+/** Raised by {@link MJVectorIndexEntityServer.withTimeout}, so a hung provider is told apart from one that refused. */
+class ProvisionTimeoutError extends Error {}
 
 /**
  * Server-side VectorIndex entity that syncs with the vector database provider.
@@ -13,11 +49,13 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  *
  * Provisioning is DETACHED from the save that triggers it: the save returns once the metadata row is
  * written, and the provider call runs afterwards (see {@link Save}). That call is bounded by
- * {@link CREATE_INDEX_TIMEOUT_MS}: past it the hook stops waiting, logs, and skips the metadata
- * write-back. The provider call itself is abandoned, not cancelled (there is no cancellation handle),
- * so the bound limits how long this record's provisioning stays open, not the provider's work.
+ * {@link CREATE_INDEX_TIMEOUT_MS}: past it the hook stops waiting and records `timed-out`. The provider
+ * call itself is abandoned, not cancelled (there is no cancellation handle), so the bound limits how
+ * long this record's provisioning stays open, not the provider's work.
  * Pinecone's createIndex returns as soon as the request is accepted (we never pass waitUntilReady),
  * so the bound only ever trips on a hung connection, not on a slow index build.
+ *
+ * Whatever the outcome, it is written onto the row's `ProviderConfig` as a {@link VectorIndexProvisionState}.
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Indexes')
 export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
@@ -34,7 +72,8 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * After saving, if this is a new record, create the index in the provider.
      * The provider call is deliberately NOT awaited: the client only needs the metadata row, and the
      * request that triggered the save (an "Auto" index from the UI, or the Config page) must not wait
-     * on the provider. Failures are logged; the record keeps its metadata row either way.
+     * on the provider. Save() never throws over provisioning; the outcome is recorded on the row's
+     * `ProviderConfig` instead (see {@link createIndexInProvider}).
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNew = this.IsSaved === false;
@@ -87,13 +126,82 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
     }
 
     /**
-     * Create the index in the vector database provider.
+     * The detached half of {@link Save}: provision, then write the outcome onto the row.
+     *
+     * Before this, a provider that refused (`success: false`), threw, or never answered reached only
+     * the server log, and the committed row looked exactly like one with an index behind it. The
+     * row's `ProviderConfig` now says which of the {@link VectorIndexProvisionState}s it is in.
+     *
+     * Keep this name: the integration suite's content-vectorization fixture stubs it by name to keep
+     * the provider out of the run.
      */
     private async createIndexInProvider(): Promise<void> {
+        let outcome: ProvisionResult;
+        try {
+            outcome = await this.provisionIndexInProvider();
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            // A driver that throws rather than returning `success: false` is the same verdict; a call
+            // that outlived the bound is not, because the provider may still finish it.
+            outcome = { state: error instanceof ProvisionTimeoutError ? 'timed-out' : 'failed', reason };
+        }
+
+        await this.recordProvisionState(outcome);
+
+        switch (outcome.state) {
+            case 'failed':
+                LogError(
+                    `Vector index "${this.Name}" was NOT created in the vector database provider: ` +
+                    `${outcome.reason ?? 'the provider reported a failure with no message'}. ` +
+                    `Recorded provisionState "failed" on the record; delete it and recreate it once the provider is reachable.`
+                );
+                break;
+            case 'timed-out':
+                LogError(
+                    `Vector index "${this.Name}": ${outcome.reason ?? 'the provider did not answer in time'}. ` +
+                    `Recorded provisionState "timed-out" on the record.`
+                );
+                break;
+            case 'unprovisioned':
+            case 'not-applicable':
+            case 'adopted':
+                LogStatus(`Vector index "${this.Name}": provisionState "${outcome.state}" (${outcome.reason ?? 'no detail'})`);
+                break;
+        }
+    }
+
+    /**
+     * Create the index in the vector database provider and report what happened.
+     *
+     * Returns rather than logs, so {@link createIndexInProvider} records every outcome the same way.
+     * Throws only when the driver throws or the call times out; the caller classifies both.
+     */
+    private async provisionIndexInProvider(): Promise<ProvisionResult> {
+        // A row created with ExternalID already set addresses an index that exists on the provider
+        // (an Open App's shipped index, or one made outside MJ). Creating one from Name instead would
+        // leave an empty index behind and point the row at it, away from the vectors it names.
+        const adoptedIndex = this.ExternalID?.trim();
+        if (adoptedIndex) {
+            return {
+                state: 'adopted',
+                reason: `ExternalID "${adoptedIndex}" names an existing provider index; nothing was created`,
+            };
+        }
+
         const vectorDB = await this.getVectorDBInstance();
         if (!vectorDB) {
-            LogError(`Cannot create index: no VectorDB instance for database ${this.VectorDatabaseID}`);
-            return;
+            // getVectorDBInstance() has already logged the specific reason.
+            return {
+                state: 'unprovisioned',
+                reason: `No vector DB driver instance could be built for VectorDatabaseID ${this.VectorDatabaseID} in this process`,
+            };
+        }
+
+        if (vectorDB.ManagesIndexes === false) {
+            return {
+                state: 'not-applicable',
+                reason: 'This vector database driver owns no index objects; this record is the whole index definition',
+            };
         }
 
         // Sanitize the index name for the provider (e.g., Pinecone requires lowercase, no spaces)
@@ -105,7 +213,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         const params: CreateIndexParams = {
             id: sanitizedName,
             dimension: await this.resolveDimensions(),
-            metric: 'cosine' as IndexModelMetricEnum,
+            metric: this.resolveMetric(),
             additionalParams: {
                 serverless: {
                     cloud: 'aws',
@@ -115,30 +223,39 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         };
 
         LogStatus(`Creating index "${sanitizedName}" in vector DB provider...`);
-        try {
-            const result = await MJVectorIndexEntityServer.withTimeout(
-                vectorDB.CreateIndex(params),
-                MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS,
-                `CreateIndex("${sanitizedName}")`
-            );
-            if (result.success) {
-                LogStatus(`Index "${sanitizedName}" created successfully in provider`);
-                await this.saveProviderMetadata(result.data, params, sanitizedName);
-            } else {
-                LogError(`Provider returned error creating index "${sanitizedName}": ${result.message}`);
-            }
-        } catch (error) {
-            LogError(`Exception while creating index "${sanitizedName}" in vector DB provider`, undefined, error);
+        const result = await MJVectorIndexEntityServer.withTimeout(
+            vectorDB.CreateIndex(params),
+            MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS,
+            `CreateIndex("${sanitizedName}")`
+        );
+        if (!result.success) {
+            return { state: 'failed', reason: result.message || 'the provider reported a failure with no message' };
         }
+
+        LogStatus(`Index "${sanitizedName}" created successfully in provider`);
+        await this.saveProviderMetadata(result.data, params, sanitizedName);
+        return { state: 'provisioned' };
     }
 
     /**
      * Delete the index from the vector database provider.
      */
     private async deleteIndexFromProvider(): Promise<void> {
+        if (this.readProvisionState() === 'adopted') {
+            // MJ never created this index, and other rows or apps may still use it.
+            LogStatus(`Vector index "${this.Name}" adopted an existing provider index; leaving it in place`);
+            return;
+        }
+
         const vectorDB = await this.getVectorDBInstance();
         if (!vectorDB) {
             LogError(`Cannot delete index: no VectorDB instance for database ${this.VectorDatabaseID}`);
+            return;
+        }
+
+        if (vectorDB.ManagesIndexes === false) {
+            // Nothing was ever provisioned, so there is nothing to remove. Asking anyway just
+            // produces an "unsupported" error log on every delete.
             return;
         }
 
@@ -218,7 +335,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * model's vectors are rejected by a `VECTOR(1536)` column or a 1536-wide Pinecone index outright.
      *
      * 1536 (OpenAI text-embedding-3-small) remains the fallback only when the probe cannot run or
-     * fails, and the failure is logged so the width can be set by hand.
+     * fails, and the failure is logged so the width can be set by hand. A wrong fallback does not go
+     * unnoticed: the vectorize pipeline compares every returned vector against the index's width and
+     * refuses the batch before upserting it.
      */
     private async resolveDimensions(): Promise<number> {
         if (this.Dimensions) {
@@ -275,6 +394,23 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
     }
 
     /**
+     * Resolve the distance metric to request the provider index be created with.
+     *
+     * `Metric` on this row is what the operator asked for; `cosine` is the fallback. This used to be
+     * hardcoded to `cosine` at the call site, which made the `Metric` write-back a tautology: the
+     * column simply echoed a constant this file had chosen, so it could never disagree with the
+     * provider and could never tell you the provider had done something else.
+     */
+    private resolveMetric(): IndexModelMetricEnum {
+        const stated = this.Metric?.trim().toLowerCase();
+        const match = VALID_METRICS.find((m) => m === stated);
+        if (stated && !match) {
+            LogError(`Vector index "${this.Name}" declares an unrecognized Metric "${this.Metric}"; requesting "cosine" instead. Valid values: ${VALID_METRICS.join(', ')}.`);
+        }
+        return match ?? 'cosine';
+    }
+
+    /**
      * Resolve `work` or reject after `timeoutMs`, whichever comes first. The timer is cleared when the
      * work settles, so a fast provider leaves nothing behind. On timeout the provider may still finish
      * on its side; the record simply does not get its metadata written back, and the log says so.
@@ -282,9 +418,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
     private static withTimeout<T>(work: Promise<T> | T, timeoutMs: number, label: string): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             const timer = setTimeout(() => {
-                reject(new Error(
-                    `${label} timed out after ${timeoutMs}ms; the provider may still finish creating the index, ` +
-                    `but its metadata was not written back to the record`
+                reject(new ProvisionTimeoutError(
+                    `${label} timed out after ${timeoutMs}ms; the provider may still finish on its side, ` +
+                    `but nothing it returns will be written back to the record`
                 ));
             }, timeoutMs);
             Promise.resolve(work).then(
@@ -296,7 +432,16 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
 
     /**
      * After provider creates the index, save the returned metadata back to our record.
-     * Stores ExternalID, Dimensions, Metric, and full provider config as JSON.
+     * Stores ExternalID, Dimensions, Metric, the provisioning state, and provider config as JSON.
+     *
+     * **Provider truth beats our request.** `Dimensions` and `Metric` are read off the provider's
+     * own response when it reports them, and only fall back to what we asked for. A provider is
+     * free to round, clamp or ignore a requested dimension, and the whole point of these two
+     * columns is to be checkable against the embeddings we later generate; a column that can
+     * only ever repeat our own request is not a check.
+     *
+     * A failed write-back is logged rather than recorded: the index exists, and the only way to
+     * record anything on the row is the same save that just failed.
      */
     private async saveProviderMetadata(
         providerResult: Record<string, unknown> | undefined,
@@ -304,31 +449,120 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         sanitizedName: string
     ): Promise<void> {
         try {
-            // Save what we know from our params + whatever the provider returned
             this.ExternalID = sanitizedName; // The sanitized name used in the provider
-            this.Dimensions = params.dimension;
-            this.Metric = params.metric;
+            this.Dimensions = this.readProviderDimension(providerResult) ?? params.dimension;
+            this.Metric = this.readProviderMetric(providerResult) ?? params.metric;
 
-            // Store full provider response + our spec as JSON config
-            const config: Record<string, unknown> = {};
+            // Store full provider response + our spec as JSON config while preserving existing keys (e.g. namespaceField)
+            const extra: Record<string, unknown> = {};
             if (params.additionalParams) {
-                config['spec'] = params.additionalParams;
+                extra['spec'] = params.additionalParams;
             }
             if (providerResult && typeof providerResult === 'object') {
                 // Extract useful provider metadata (host, status, etc.)
-                if ('host' in providerResult) config['host'] = providerResult['host'];
-                if ('status' in providerResult) config['status'] = providerResult['status'];
+                if ('host' in providerResult) extra['host'] = providerResult['host'];
+                if ('status' in providerResult) extra['status'] = providerResult['status'];
             }
-            this.ProviderConfig = JSON.stringify(config);
+            this.ProviderConfig = this.buildProviderConfig({ state: 'provisioned' }, extra);
 
             const saved = await super.Save();
             if (saved) {
                 LogStatus(`Saved provider metadata for index "${this.Name}"`);
             } else {
-                LogError(`Failed to save provider metadata for index "${this.Name}": ${this.LatestResult?.CompleteMessage}`);
+                LogError(this.writeBackFailureMessage(sanitizedName, this.LatestResult?.CompleteMessage ?? 'the record save returned false with no message'));
             }
         } catch (error) {
-            LogError(`Error saving provider metadata for index "${this.Name}"`, undefined, error);
+            LogError(this.writeBackFailureMessage(sanitizedName, error instanceof Error ? error.message : String(error)), undefined, error);
         }
+    }
+
+    private writeBackFailureMessage(sanitizedName: string, reason: string): string {
+        return `Vector index "${this.Name}" WAS created in the vector database provider as "${sanitizedName}", but its ` +
+            `provider metadata could not be written back to the record: ${reason}. The index exists and the record ` +
+            `does not yet address it; set ExternalID to "${sanitizedName}" to reconcile them.`;
+    }
+
+    /** The provider's own dimension, when it reported a usable one. */
+    private readProviderDimension(providerResult: Record<string, unknown> | undefined): number | null {
+        const raw = providerResult?.['dimension'];
+        const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+        return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    /** The provider's own metric, when it reported a recognized one. */
+    private readProviderMetric(providerResult: Record<string, unknown> | undefined): IndexModelMetricEnum | null {
+        const raw = providerResult?.['metric'];
+        if (typeof raw !== 'string') {
+            return null;
+        }
+        const normalized = raw.trim().toLowerCase();
+        return VALID_METRICS.find((m) => m === normalized) ?? null;
+    }
+
+    /**
+     * Write the provisioning outcome onto the row, so a row that has no index behind it says so
+     * instead of looking identical to one that does.
+     *
+     * Best-effort by construction: this runs after the caller's save has already returned, and a
+     * second failure here must not replace the original diagnosis with a save error.
+     */
+    private async recordProvisionState(outcome: ProvisionResult): Promise<void> {
+        if (outcome.state === 'provisioned') {
+            return; // saveProviderMetadata already stamped it, along with the provider's values
+        }
+        try {
+            this.ProviderConfig = this.buildProviderConfig(outcome);
+            const saved = await super.Save();
+            if (!saved) {
+                LogError(`Could not record provisioning state "${outcome.state}" on vector index "${this.Name}": ${this.LatestResult?.CompleteMessage ?? 'save returned false'}`);
+            }
+        } catch (error) {
+            LogError(`Could not record provisioning state "${outcome.state}" on vector index "${this.Name}"`, undefined, error);
+        }
+    }
+
+    /** The `provisionState` recorded on `ProviderConfig`, or undefined when there is none or it cannot be read. */
+    private readProvisionState(): string | undefined {
+        if (!this.ProviderConfig) {
+            return undefined;
+        }
+        try {
+            const parsed: unknown = JSON.parse(this.ProviderConfig);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const state = (parsed as Record<string, unknown>)['provisionState'];
+                return typeof state === 'string' ? state : undefined;
+            }
+        } catch {
+            // An unreadable ProviderConfig carries no provisioning state.
+        }
+        return undefined;
+    }
+
+    /**
+     * Merge the provisioning outcome into the existing `ProviderConfig` JSON bag, preserving any
+     * driver-specific keys already there (e.g. Pinecone's `namespaceField`).
+     */
+    private buildProviderConfig(outcome: ProvisionResult, extra?: Record<string, unknown>): string {
+        let existing: Record<string, unknown> = {};
+        if (this.ProviderConfig) {
+            try {
+                const parsed: unknown = JSON.parse(this.ProviderConfig);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    existing = parsed as Record<string, unknown>;
+                }
+            } catch {
+                // A ProviderConfig we cannot parse is not something to preserve silently.
+                LogError(`Vector index "${this.Name}" has an unparseable ProviderConfig; it is being replaced.`);
+            }
+        }
+        const merged: Record<string, unknown> = { ...existing, ...(extra ?? {}) };
+        merged['provisionState'] = outcome.state;
+        merged['provisionCheckedAt'] = new Date().toISOString();
+        if (outcome.reason) {
+            merged['provisionMessage'] = outcome.reason;
+        } else {
+            delete merged['provisionMessage'];
+        }
+        return JSON.stringify(merged);
     }
 }

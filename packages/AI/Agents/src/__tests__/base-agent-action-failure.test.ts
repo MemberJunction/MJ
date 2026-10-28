@@ -142,7 +142,7 @@ class FailureHarness {
     public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
     public runActionCallCount = 0;
-    public runAction: () => ActionResult = () => {
+    public runAction: (dispatched?: RunActionParams) => ActionResult = () => {
         this.runActionCallCount++;
         const ar = new ActionResult();
         ar.Success = true;
@@ -221,7 +221,7 @@ class FailureHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async () => this.runAction(),
+            RunAction: async (dispatched: RunActionParams) => this.runAction(dispatched),
         };
     }
 
@@ -793,6 +793,35 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
         });
     });
 
+    describe('ExecuteSingleAction argument coercion', () => {
+        it('coerces envelope-path arguments against the declared ValueSchema before dispatch', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = {
+                ID: ACTION_ID,
+                Name: ACTION_NAME,
+                Params: { Items: [
+                    { Name: 'Width', Type: 'Input', ValueType: 'Scalar', IsArray: false, ValueSchemaObject: { type: 'integer' } },
+                    { Name: 'ShowGrid', Type: 'Input', ValueType: 'Scalar', IsArray: false, ValueSchemaObject: { type: 'boolean' } },
+                    { Name: 'Title', Type: 'Input', ValueType: 'Scalar', IsArray: false, ValueSchemaObject: null }
+                ] }
+            } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            let received: Record<string, unknown> = {};
+            harness.runAction = (dispatched) => {
+                received = Object.fromEntries((dispatched?.Params ?? []).map((p) => [p.Name, p.Value]));
+                const ar = new ActionResult();
+                ar.Success = true;
+                ar.Message = 'ok';
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            await agent.ExecuteSingleAction(makeParams(), { name: ACTION_NAME, params: { Width: '640', ShowGrid: 'true', Title: '42' } }, actionEntity);
+
+            expect(received).toEqual({ Width: 640, ShowGrid: true, Title: '42' });
+        });
+    });
+
     describe('Agent-type gate (BaseAgentType.UsesActionCircuitBreaker)', () => {
         it('the Loop type uses the breaker; an opted-out type (Flow) dispatches every retry and gets no directive', async () => {
             expect(new LoopAgentType().UsesActionCircuitBreaker).toBe(true);
@@ -889,6 +918,72 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(guidanceMsg).toContain('Parameter "query" cannot be empty');
             expect(guidanceMsg).toContain('(attempt 1 of 5)');
             expect(guidanceMsg).toContain("DO NOT retry calling 'Perplexity Search' with identical arguments");
+        });
+
+        it('a refusal by the user\'s agent policy gets a policy directive, not the "adjust your parameters" warning', async () => {
+            harness.runAction = () => {
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = "Action 'Perplexity Search' targets external recipients and RequireApprovalForExternalComms is enabled.";
+                ar.Params = [];
+                // The policy gate's code matches none of the action's metadata result codes: Result stays
+                // undefined and only the text code carries it.
+                ar.ResultCode = 'POLICY_APPROVAL_REQUIRED';
+                return ar;
+            };
+
+            const { agent } = makeAgent([
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+
+            const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
+            const guidanceMsg = contents.find(c => c.includes('[CRITICAL/POLICY_APPROVAL_REQUIRED]'));
+
+            expect(guidanceMsg).toBeDefined();
+            expect(guidanceMsg).toContain("DO NOT retry 'Perplexity Search'");
+            expect(guidanceMsg).toContain('ask them to approve it');
+            expect(contents.some(c => c.includes('[WARNING/ACTION_FAILURE]'))).toBe(false);
+            // The text code reaches the model's result view instead of a bare ERROR.
+            expect(contents.some(c => c.includes('POLICY_APPROVAL_REQUIRED —'))).toBe(true);
+        });
+
+        it('a policy refusal repeated with the same arguments still gets the policy directive, not REPEATED_IDENTICAL_CALL', async () => {
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Quiet hours: the policy defers this action until 08:00.';
+                ar.Params = [];
+                ar.ResultCode = 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW';
+                return ar;
+            };
+
+            // The same refused call twice, then the model gives up.
+            const { agent } = makeAgent([
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+            expect(harness.runActionCallCount).toBe(2);
+
+            const guidance = params.conversationMessages
+                .map(m => typeof m.content === 'string' ? m.content : '')
+                .filter(c => c.includes('Action Execution Failure Guidance'));
+            expect(guidance).toHaveLength(2);
+            expect(guidance[0]).toContain('[CRITICAL/POLICY_DEFERRED]');
+            // The second identical call would otherwise trip the identical-arguments rule and be told to
+            // "adjust your parameters" — the one thing a deferred call must not do.
+            expect(guidance[1]).toContain('[CRITICAL/POLICY_DEFERRED]');
+            expect(guidance.some(g => g.includes('[CRITICAL/REPEATED_IDENTICAL_CALL]'))).toBe(false);
         });
 
         it('once the budget is spent the directive says ATTEMPTS_EXHAUSTED, never REPEATED_IDENTICAL_CALL', async () => {

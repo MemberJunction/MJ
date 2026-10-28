@@ -16,7 +16,7 @@ import { ShellComponent } from './shell.component';
 
 const allOn: ShellChromeFlags = {
   searchBar: true, searchPreview: true, notifications: true, appSwitcher: true,
-  appSwitcherStyle: 'auto', appNav: true, recordOpenStyle: 'records'
+  appSwitcherStyle: 'auto', appNav: true, chatOverlay: true, recordOpenStyle: 'records'
 };
 
 class NoSearchPolicy extends BaseShellChromePolicy {
@@ -41,13 +41,28 @@ describe('BaseShellChromePolicy', () => {
   it('a policy cannot widen past Instance Config — true from the policy never re-enables', () => {
     class WidenPolicy extends BaseShellChromePolicy {
       public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {
-        return { ...flags, searchBar: true, notifications: true, appSwitcher: true, appNav: true };
+        return { ...flags, searchBar: true, notifications: true, appSwitcher: true, appNav: true, chatOverlay: true };
       }
     }
-    const ceiling: ShellChromeFlags = { ...allOn, searchBar: false, notifications: false };
+    const ceiling: ShellChromeFlags = { ...allOn, searchBar: false, notifications: false, chatOverlay: false };
     const flags = ApplyShellChromePolicy(ceiling, new WidenPolicy());
     expect(flags.searchBar).toBe(false);
     expect(flags.notifications).toBe(false);
+    expect(flags.chatOverlay).toBe(false);
+    expect(flags.appSwitcher).toBe(true);
+  });
+
+  it('a host policy can hide the floating chat overlay for one audience — a learner portal that owns its own AI surface', () => {
+    class NoOverlayPolicy extends BaseShellChromePolicy {
+      public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {
+        return { ...flags, chatOverlay: false };
+      }
+    }
+    const flags = ApplyShellChromePolicy(allOn, new NoOverlayPolicy());
+    expect(flags.chatOverlay).toBe(false);
+    // Only the overlay goes: the rest of the chrome is untouched.
+    expect(flags.searchBar).toBe(true);
+    expect(flags.notifications).toBe(true);
     expect(flags.appSwitcher).toBe(true);
   });
 
@@ -114,6 +129,12 @@ describe('ShellComponent — the cached flags follow the policy', () => {
     open['cdr'] = { markForCheck: vi.fn() };
     return shell;
   }
+
+  it('ChromeFlags exposes the resolved set (explorer-app reads the overlay bit through it)', () => {
+    const shell = createShell();
+    expect(shell.ChromeFlags).toEqual(allOn);
+    expect(shell.ChromeFlags.chatOverlay).toBe(true);
+  });
 
   it('Changed drops the cache and asks for a repaint', () => {
     const shell = createShell();

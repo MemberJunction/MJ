@@ -1,0 +1,45 @@
+{
+  "id": "C2",
+  "namespace": "e5c409ca-89f9-42a2-a0c7-569208423004",
+  "seed": 2201,
+  "description": "Fictitious claim fraud, rare binary (~2% positive rate).",
+  "kind": "binary",
+  "nEntities": 30000,
+  "features": {
+    "ClaimAmountZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "PriorClaims": {
+      "dist": "int",
+      "lo": 0,
+      "hi": 5
+    },
+    "NewPolicy": {
+      "dist": "bernoulli",
+      "p": 0.2
+    },
+    "ReportDelayZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "NoiseZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    }
+  },
+  "betas": {
+    "ClaimAmountZ": 0.8,
+    "PriorClaims": 0.35,
+    "NewPolicy": 0.7,
+    "ReportDelayZ": 0.5,
+    "NoiseZ": 0.0
+  },
+  "intercept": -5.522289,
+  "targetRate": 0.02,
+  "sizingNote": "30,000 rows at a 2% rate gives about 600 positives (Ruling Q9 asks for >= 500; realized 626), so thresholded precision/recall and calibration rest on hundreds of events. The binomial SE of the rate is 0.00083, so the planned 0.02 sits about 6 SE from each edge of the [0.015, 0.025] check.",
+  "interceptCalibration": "node probes/scenarios/calibrate_intercept.mjs probes/scenarios/specs/C2.json: Loom calibrateIntercept over 200,000 feature draws (stream C2:calibration) solving mean(sigmoid(b0 + betas.x)) = 0.02; output in evidence/logs/P2/C2-calibration.txt"
+}

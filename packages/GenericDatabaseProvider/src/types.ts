@@ -8,6 +8,20 @@
  */
 
 /**
+ * One schema-name to Flyway-placeholder rule for a migration-formatted SQL log. Same shape as
+ * `SQLOutput.schemaPlaceholders` in `mj.config.cjs`, so a repo declares the mapping once and
+ * CodeGen and the SQL logger read the same array. They apply it differently: CodeGen goes in
+ * declared order and needs no `.` after the schema name; the SQL logger needs the `.` and skips a
+ * name preceded by a word character, `$`, `@` or `#`.
+ */
+export interface SqlSchemaPlaceholder {
+  /** The schema name as it appears in captured SQL, e.g. `__mj_BizAppsAccounting` */
+  schema: string;
+  /** The placeholder written in its place, e.g. `${flyway:defaultSchema}` or `${mjSchema}` */
+  placeholder: string;
+}
+
+/**
  * Configuration options for SQL logging sessions
  */
 export interface SqlLoggingOptions {
@@ -17,8 +31,41 @@ export interface SqlLoggingOptions {
   /**
    * Optional default schema name to use for Flyway migrations for replacing schema names with
    * the placeholder ${flyway:defaultSchema}
+   *
+   * Used only when `schemaPlaceholders` is absent or empty.
    */
   defaultSchemaName?: string;
+
+  /**
+   * Schema-to-placeholder rules for migration formatting (#3618). When set, they replace the
+   * single `defaultSchemaName` -> `${flyway:defaultSchema}` rewrite.
+   *
+   * `${flyway:defaultSchema}` is the core schema in MJ's own repo, but in an Open App repo Skyway
+   * binds it to the app schema and `${mjSchema}` to core. An Open App therefore supplies both:
+   *
+   * ```ts
+   * schemaPlaceholders: [
+   *   { schema: '__mj_BizAppsAccounting', placeholder: '${flyway:defaultSchema}' },
+   *   { schema: '__mj', placeholder: '${mjSchema}' },
+   * ]
+   * ```
+   *
+   * The rules run in one pass, so an emitted placeholder is never rewritten again. A schema name
+   * is rewritten only when a `.` follows it (optionally after a closing `]`), which also keeps a
+   * short rule off the prefix of a longer schema name, and no word character, `$`, `@` or `#`
+   * precedes it. Code and string data are treated alike: `__mj.` inside a quoted literal is
+   * rewritten; a bare name with no `.` after it is left alone.
+   *
+   * Ignored unless `formatAsMigration` is true.
+   */
+  schemaPlaceholders?: SqlSchemaPlaceholder[];
+
+  /**
+   * Escape `${...}` inside SQL string literals so Flyway/Skyway does not read captured data
+   * (template text, prompt bodies) as a placeholder. Always on when `formatAsMigration` is true;
+   * set it to get the escaping without migration formatting.
+   */
+  escapeFlywaySyntax?: boolean;
 
   /** Optional description to include as a comment at the start of the log */
   description?: string;
@@ -74,6 +121,21 @@ export interface SqlLoggingOptions {
    * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
    */
   filterType?: 'include' | 'exclude';
+  /**
+   * Optional rewrite of each logged text before the session reads it: the statement, its simple-SQL
+   * fallback, the description and the `-- Parameters:` line. It runs before the verbose prints, the
+   * filters, the Flyway escape, the schema-placeholder rewrite and the pretty-print, so text it
+   * removes never reaches the log file or the console, and SQL it adds that names a real schema
+   * (`[__mj].Entity`) is rewritten to that schema's placeholder like the rest of the statement.
+   *
+   * It covers only this session's file and verbose prints, plus the provider's shared verbose
+   * `Query to log:` print. Other sessions and other output paths do not use it.
+   *
+   * If it throws, the error is caught: the session writes the fixed line
+   * `-- Statement not logged: TransformStatement failed` in place of the statement and the SQL
+   * call goes on as normal.
+   */
+  TransformStatement?: (sql: string) => string;
 }
 
 /**

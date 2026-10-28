@@ -1,9 +1,10 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
-import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
+import { BaseEntity, EntityInfo, EntitySaveOptions, ExtractAlternateBaseViewFromDisplayState, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { ComputeUserViewFingerprintAsync, MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
 import { IsClientClauseScreeningProvider } from "@memberjunction/generic-database-provider";
 
 /**
@@ -27,6 +28,8 @@ interface SmartFilterTemplateData extends Record<string, unknown> {
     listsSchema: string;
     listsFields: string;
     listDetailsFields: string;
+    alternateBaseViewName?: string;
+    alternateBaseViewDescription?: string;
 }
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
@@ -38,12 +41,94 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
         return true;
     }
 
+    /**
+     * Applies the approval rules (see `ApplyApprovalRulesAsync`). The base save regenerates the
+     * WhereClause before it writes, so an approving save stamps the fingerprint after the write,
+     * from the definition as stored, with one more write.
+     */
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        let approving: boolean;
+        try {
+            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'ApprovalStatus', this.ApprovalStatus);
+        } catch (e) {
+            this.RegisterResultHistoryEntry(ApprovalRefusalResult(this, e));
+            return false;
+        }
+        if (!await super.Save(options)) {
+            return false;
+        }
+        if (approving) {
+            try {
+                this.ApprovedFingerprint = await ComputeUserViewFingerprintAsync(this);
+                if (!await super.Save(options)) {
+                    LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+                }
+            } catch (e) {
+                LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+        return true;
+    }
+
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.validateCustomWhereClauseAuthorization(result);
+        this.validatePinnedAlternateBaseView(result);
         this.validateStoredClauses(result);
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /**
+     * Validates that a pinned `DisplayState.alternateBaseView` (if newly set or changed)
+     * corresponds to a registered, usable alternate base view on the view's target entity.
+     * Existing saved views whose pinned alternate base view did not change are allowed to save
+     * other edits (e.g. renaming or clearing the pin after an admin disabled the alternate view).
+     */
+    private validatePinnedAlternateBaseView(result: ValidationResult): void {
+        const pinnedName = this.AlternateBaseView;
+        if (!pinnedName || !this.ViewEntityInfo) {
+            return;
+        }
+        const smartPromptModified = Boolean(
+            this.SmartFilterEnabled &&
+            (this.GetFieldByName('SmartFilterPrompt')?.Dirty === true ||
+                this.GetFieldByName('SmartFilterEnabled')?.Dirty === true),
+        );
+        if (this.IsSaved && !this.hasAlternateBaseViewChanged() && !smartPromptModified) {
+            return;
+        }
+        const abv = this.ViewEntityInfo.GetAlternateBaseView(pinnedName);
+        if (!abv) {
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'DisplayState',
+                    `Alternate Base View '${pinnedName}' is not registered on entity '${this.ViewEntityInfo.Name}'.`,
+                    pinnedName,
+                    ValidationErrorType.Failure
+                )
+            );
+        } else if (!abv.IsUsable) {
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'DisplayState',
+                    `Alternate Base View '${pinnedName}' on entity '${this.ViewEntityInfo.Name}' has status '${abv.Status}' and cannot be used.`,
+                    pinnedName,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
+    }
+
+    private hasAlternateBaseViewChanged(): boolean {
+        const displayStateField = this.GetFieldByName('DisplayState');
+        if (!displayStateField?.Dirty) {
+            return false;
+        }
+        const oldPinned = ExtractAlternateBaseViewFromDisplayState(
+            typeof displayStateField.OldValue === 'string' ? displayStateField.OldValue : null,
+        );
+        return (oldPinned ?? null) !== (this.AlternateBaseView ?? null);
     }
 
     /**
@@ -88,6 +173,12 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     private screenStoredClause(result: ValidationResult, field: string, clause: string, label: string, entityInfo?: EntityInfo): void {
         if (!clause.trim()) return;
         const provider = this.ProviderToUse;
+        // When MJUserViewEntityServer is resolved in a mixed-tier process (e.g. CLI test runner)
+        // against a Network provider (GraphQLDataProvider), defer SQL AST screening to MJServer's
+        // Database provider when the GraphQL mutation executes on the server.
+        if (provider && (provider as { ProviderType?: string }).ProviderType === 'Network') {
+            return;
+        }
         try {
             if (!IsClientClauseScreeningProvider(provider)) {
                 throw new Error(`Invalid ${label}: the data provider cannot screen client SQL`);
@@ -149,6 +240,12 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      */
     public async GenerateSmartFilterWhereClause(prompt: string, entityInfo: EntityInfo): Promise<{whereClause: string, userExplanation: string}> {
         try {
+            if (this.AlternateBaseView && entityInfo) {
+                const pinnedAbv = entityInfo.GetAlternateBaseView(this.AlternateBaseView);
+                if (!pinnedAbv || !pinnedAbv.IsUsable) {
+                    return { whereClause: '', userExplanation: '' };
+                }
+            }
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, this.ContextCurrentUser);
 
@@ -234,19 +331,33 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      * This data is used to populate the Nunjucks template variables.
      */
     protected BuildTemplateData(entityInfo: EntityInfo): SmartFilterTemplateData {
+        const pinnedAbv = this.AlternateBaseView
+            ? entityInfo.GetAlternateBaseView(this.AlternateBaseView)
+            : undefined;
+        const effectiveBaseView = pinnedAbv && pinnedAbv.IsUsable ? pinnedAbv.ViewName : entityInfo.BaseView;
+
         const processedViews: string[] = [entityInfo.BaseView];
+        if (effectiveBaseView !== entityInfo.BaseView) {
+            processedViews.push(effectiveBaseView);
+        }
         const md: IMetadataProvider = this.ProviderToUse as unknown as IMetadataProvider;
         const listsEntity = md.EntityByName("MJ: Lists");
         const listDetailsEntity = md.EntityByName("MJ: List Details");
 
         // Build fields description
-        const fieldsDescription = entityInfo.Fields.map(f => {
+        let fieldsDescription = entityInfo.Fields.map(f => {
             let ret: string = `${f.Name} (${f.Type})`;
             if (f.RelatedEntity) {
                 ret += ` (fkey to ${f.RelatedEntityBaseView})`;
             }
             return ret;
         }).join(',');
+
+        if (pinnedAbv && pinnedAbv.IsUsable) {
+            fieldsDescription +=
+                `\n[Base View Context: Reading from alternate base view '${pinnedAbv.EffectiveDisplayName}' (${pinnedAbv.ViewName}): ${pinnedAbv.Description}. ` +
+                `Do NOT duplicate conditions already enforced by this base view unless the user explicitly asks to refine them.]`;
+        }
 
         // Build related views description
         const relatedViewsDescription = this.BuildRelatedViewsDescription(entityInfo, md, processedViews);
@@ -261,16 +372,21 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
             return f.Name + ' (' + f.SQLFullType + ')';
         }).join(', ') : '';
 
-        return {
+        const templateData: SmartFilterTemplateData = {
             entityName: entityInfo.Name,
             entityId: entityInfo.ID,
-            baseView: entityInfo.BaseView,
+            baseView: effectiveBaseView,
             fieldsDescription,
-            relatedViewsDescription: processedViews.length > 1 ? relatedViewsDescription : '',
+            relatedViewsDescription: relatedViewsDescription.length > 0 ? relatedViewsDescription : '',
             listsSchema: listsEntity?.SchemaName || '__mj',
             listsFields,
-            listDetailsFields
+            listDetailsFields,
         };
+        if (pinnedAbv && pinnedAbv.IsUsable) {
+            templateData.alternateBaseViewName = pinnedAbv.Name;
+            templateData.alternateBaseViewDescription = pinnedAbv.Description;
+        }
+        return templateData;
     }
 
     /**

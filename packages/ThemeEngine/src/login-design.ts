@@ -340,7 +340,11 @@ function normalizeBlock(v: unknown): LoginBlock | null {
         .slice(0, LOGIN_LIMITS.Links);
       return { ...base, Type: 'links', Links: links };
     }
-    case 'image': return { ...base, Type: 'image', URL: str(b['URL'], LOGIN_LIMITS.URL), Alt: str(b['Alt'], LOGIN_LIMITS.Alt), Size: size };
+    case 'image':
+      // As with links, the URL is kept as written rather than checked here, so an unsafe one is reported by
+      // LoginBlockProblems ("needs an https:// address") instead of silently emptied. Nothing unsafe is drawn:
+      // <mj-login-region> shows only a safe URL, and a design with a problem is never saved or served.
+      return { ...base, Type: 'image', URL: str(b['URL'], LOGIN_LIMITS.URL), Alt: str(b['Alt'], LOGIN_LIMITS.Alt), Size: size };
     case 'spacer': return { ...base, Type: 'spacer', Size: size };
     default: return null;
   }

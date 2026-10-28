@@ -52,7 +52,9 @@ export function CreateLLMInstance(provider: string, apiKey: string): BaseLLM {
     apiKey
   );
 
-  if (!llm) {
+  // The ClassFactory falls back to the base class when nothing is registered under the key, and a bare
+  // BaseLLM fails on every call, so treat that as "not installed" too.
+  if (!llm || Object.getPrototypeOf(llm) === BaseLLM.prototype) {
     throw new Error(
       `Failed to create LLM instance for provider: ${provider} (driver class: ${driverClass}). Check that the provider is installed.`
     );

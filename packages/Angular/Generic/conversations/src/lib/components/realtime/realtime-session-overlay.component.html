@@ -19,6 +19,7 @@
       <mj-realtime-agent-banner
         [State]="state"
         [Compact]="!IsReviewing && Ui.compact && Ui.chrome === 'orb'"
+        [HideState]="ShowHero && !PresenterOnStage"
         [AgentName]="AgentName"
         [ErrorLabel]="CallEndLabel"
         [ModelName]="IsReviewing ? null : (ModelName$ | async)"
@@ -123,11 +124,13 @@
               <!-- The agent's tile names it and says what it is doing; this live region still says it for screen readers. -->
               <span class="hero__sr">{{ HeroStateLabel(state) }}</span>
             }
-            <button type="button" class="hero__reveal" (click)="OnTextReveal()"
-                    title="Show the conversation as text">
-              <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-              Show the conversation
-            </button>
+            @if (PresenterOnStage || !Ui.showCaptionsControl) {
+              <button type="button" class="hero__reveal" (click)="OnTextReveal()"
+                      title="Show the conversation as text">
+                <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+                Show the conversation
+              </button>
+            }
           </div>
         } @else {
           <mj-realtime-session-thread
@@ -147,9 +150,9 @@
            them, so a camera or a shared screen never opens over End call (#5408). Empty, so with no size, in review. -->
       <div class="call-controls" #callControls>
         @if (!IsReviewing) {
-          <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
-               video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
-          <mj-realtime-perception-chip [Sources]="VideoSources"
+          <!-- "Agent can see": what the agent is looking at, with a switch per source. Shown while the user
+               captures camera/screen (or when [ShowPerceptionChip]="true"). -->
+          <mj-realtime-perception-chip [Sources]="VisibleVideoSources"
                                        (SourceToggled)="OnVideoSourceToggled($event)"
                                        (SourcePicked)="OnVideoSourcePicked($event)">
           </mj-realtime-perception-chip>
@@ -164,7 +167,7 @@
                two-way toggle (Type opens, hide closes), never level-forced. -->
           <mj-realtime-composer
             [Open]="ComposerOpen"
-            [Compact]="Ui.compact && Ui.chrome === 'orb'"
+            [Compact]="Ui.chrome === 'orb' || Ui.compact"
             (OpenChanged)="OnComposerOpenChanged($event)"
             [CaptionsOn]="ShowCaptions"
             [IsMuted]="Muted"

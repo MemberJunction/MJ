@@ -485,6 +485,7 @@ async function handleEntityLoad(
                 `Could not load ${args.entityName} record with ID ${args.id}.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -508,12 +509,14 @@ async function handleEntityCreate(
     if (!saved) {
         return {
             Success: false,
+            // fls-guard: built for ctx.contextUser; width follows its user, after Save too
             Record: entity.GetAll(),
             ErrorMessage:
                 entity.LatestResult?.CompleteMessage ??
                 `Failed to create ${args.entityName} record.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user, after Save too
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -546,12 +549,14 @@ async function handleEntityUpdate(
     if (!saved) {
         return {
             Success: false,
+            // fls-guard: built for ctx.contextUser; width follows its user, after Save too
             Record: entity.GetAll(),
             ErrorMessage:
                 entity.LatestResult?.CompleteMessage ??
                 `Failed to update ${args.entityName} record ${args.id}.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user, after Save too
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -627,12 +632,14 @@ async function handleEntitySave(
     if (!saved) {
         return {
             Success: false,
+            // fls-guard: built for ctx.contextUser; width follows its user, after Save too
             Record: entity.GetAll(),
             ErrorMessage:
                 entity.LatestResult?.CompleteMessage ??
                 `Failed to save ${args.entityName} record.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user, after Save too
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 

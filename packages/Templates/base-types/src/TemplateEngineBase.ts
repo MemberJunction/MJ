@@ -43,7 +43,8 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
                 Type: 'dataset',
                 DatasetName: 'Template_Metadata',
                 DatasetResultHandling: "single_property",
-                PropertyName: "_metadata"
+                PropertyName: "_metadata",
+                AutoRefresh: true
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -62,6 +63,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
             template.Content = contentByTemplate.get(key) ?? [];
             template.Params = paramsByTemplate.get(key) ?? [];
         }
+        this._indexedTemplatesRef = undefined;
     }
 
     public get Templates(): MJTemplateEntityExtended[] {
@@ -81,12 +83,56 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         return this._metadata.TemplateParams;
     }
 
+    private _indexedTemplatesRef?: MJTemplateEntityExtended[];
+    private _templatesById = new Map<string, MJTemplateEntityExtended>();
+    private _templatesByName = new Map<string, MJTemplateEntityExtended>();
+
+    private ensureTemplateIndexes(): void {
+        const templates = this._metadata?.Templates;
+        if (!templates) {
+            return;
+        }
+        if (this._indexedTemplatesRef === templates && this._templatesById.size === templates.length) {
+            return;
+        }
+        this._templatesById.clear();
+        this._templatesByName.clear();
+        for (let i = 0; i < templates.length; i++) {
+            const t = templates[i];
+            if (t.ID) {
+                this._templatesById.set(NormalizeUUID(t.ID), t);
+            }
+            if (t.Name) {
+                const nameKey = t.Name.trim().toLowerCase();
+                if (!this._templatesByName.has(nameKey)) {
+                    this._templatesByName.set(nameKey, t);
+                }
+            }
+        }
+        this._indexedTemplatesRef = templates;
+    }
+
+    /**
+     * Convenience method to find a template by ID, case-insensitive.
+     */
+    public FindTemplateByID(templateId: string): MJTemplateEntityExtended | undefined {
+        if (!templateId) {
+            return undefined;
+        }
+        this.ensureTemplateIndexes();
+        return this._templatesById.get(NormalizeUUID(templateId));
+    }
+
     /**
      * Convenience method to find a template by name, case-insensitive
      * @param templateName 
      * @returns 
      */
     public FindTemplate(templateName: string): MJTemplateEntityExtended {
-        return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
+        if (!templateName) {
+            return undefined!;
+        }
+        this.ensureTemplateIndexes();
+        return this._templatesByName.get(templateName.trim().toLowerCase())!;
     }
 }

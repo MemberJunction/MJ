@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, TransactionGroupBase, TransactionResult } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, DataObjectParams, EntityField, TransactionGroupBase, TransactionItem, TransactionResult } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { SafeJSONParse } from "@memberjunction/global";
@@ -10,48 +10,77 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         this._provider = provider;
     }
 
-    // protected async HandleSubmit(): Promise<TransactionResult[]> {
-    //     // iterate through each instruction and build up the combined query string
-    //     // and the combined variables object
-    //     let combinedQuery = '';
-    //     let mutationParams = '';
-    //     const combinedVars: any = {};
+    /**
+     * Checks whether `field` is dirty on `entity` or, for IS-A child entities where parent
+     * fields are mirrored as virtual fields, on any ancestor in the `ISAParent` chain.
+     */
+    private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
+        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
+            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
+            if (parentField) {
+                return this.isFieldDirtyOnChain(entity.ISAParent, parentField) || field.Dirty;
+            }
+        }
+        return field.Dirty;
+    }
 
-    //     for (let i = 0; i < this.PendingTransactions.length; i++) {
-    //         const item = this.PendingTransactions[i];
-    //         let itemMutation = item.Instruction;
-    //         if (item.Vars) {
-    //             const keys = Object.keys(item.Vars);
-    //             // rename the variables to avoid collisions and aggregate the varisables
-    //             // from the item into our combined variables
-    //             for (let j = 0; j < keys.length; j++) {
-    //                 const key = keys[j];
-    //                 const newKey = `${key}_${i}`;
-    //                 combinedVars[newKey] = item.Vars[key];
+    /**
+     * Serializes a pending transaction item's entity for the `ExecuteTransactionGroup` wire payload.
+     *
+     * - **Update (when `ignoreDirtyState` is not set)**: Excludes all non-primary-key fields that
+     *   are read-only, `NotLoaded`, or clean (`!Dirty`), so only primary keys and mutated writable
+     *   fields (plus any companion payloads) cross the wire. On the server,
+     *   `TransactionResolver.ExecuteTransactionGroup` loads the existing row via `InnerLoad(pkey)`
+     *   before calling `entity.SetMany(itemValues, true)`, so untouched fields remain intact.
+     * - **Create / Delete / `ignoreDirtyState`**: Serializes the full loaded data object via
+     *   `GetDataObjectJSON()`.
+     * - **Every operation**: leaves out the fields the current user may not read.
+     */
+    private async serializeTransactionItemEntity(pt: TransactionItem): Promise<string> {
+        const entity = pt.BaseEntity;
+        const ignoreDirty = Boolean((pt.ExtraData as { ignoreDirtyState?: boolean } | undefined)?.ignoreDirtyState);
+        const dirtyFiltered = pt.OperationType === 'Update' && !ignoreDirty;
+        const denied = this.deniedReadFieldNames(entity);
+        if (denied.size === 0 && !dirtyFiltered) {
+            // Nothing to leave out: serialize without walking (and so building) the field objects.
+            return await entity.GetDataObjectJSON();
+        }
+        const fields = Array.isArray(entity.Fields) ? entity.Fields : [];
+        const excludeFields = fields
+            .filter(f => !f.IsPrimaryKey && (
+                denied.has(f.Name.trim().toLowerCase()) ||
+                (dirtyFiltered && (f.ReadOnly || f.NotLoaded || !this.isFieldDirtyOnChain(entity, f)))
+            ))
+            .map(f => f.Name);
+        if (excludeFields.length === 0) {
+            return await entity.GetDataObjectJSON();
+        }
+        const params: DataObjectParams = {
+            oldValues: false,
+            omitNullValues: false,
+            omitEmptyStrings: false,
+            excludeFields,
+            includeRelatedEntityData: false,
+            relatedEntityList: []
+        };
+        return await entity.GetDataObjectJSON(params);
+    }
 
-    //                 const keyRegEx = new RegExp('\\$' + key, 'g'); // Create the RegExp dynamically with the global flag.
-    //                 itemMutation = itemMutation.replace(keyRegEx, '$' + newKey);
-    //                 const mutationInputType = item.ExtraData.mutationInputTypes.find((t: any) => t.varName === key)?.inputType;
-    //                 //{varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}
-    //                 mutationParams += `$${newKey}: ${mutationInputType} \n`;
-    //             }
-    //         }
-    //         // add in the specific mutation and give it an alias so we can easily figure out the results
-    //         // from each of them and pass back properly
-    //         combinedQuery += `mutation_${i}: ` + itemMutation + '\n';
-    //     }
+    /** The denied set for an entity without field security or a provider with no user. */
+    private static readonly noDeniedFields: ReadonlySet<string> = new Set<string>();
 
-    //     combinedQuery = `mutation TransactionGroup(${mutationParams}){ \n` + combinedQuery+ '\n}'; // wrap it up in a mutation so we can execute it
-    //     const execResults = await this._provider.ExecuteGQL(combinedQuery, combinedVars)
-    //     const returnResults: TransactionResult[] = [];
-    //     for (let i = 0; i < this.PendingTransactions.length; i++) {
-    //         /// NEED TO TEST TO SEE WHAT ORDER WE GET RESULTS BACK AS
-    //         const result = execResults[`mutation_${i}`];
-    //         const item = this.PendingTransactions[i];
-    //         returnResults.push(new TransactionResult(item, result, result !== null));
-    //     }
-    //     return returnResults;
-    // }
+    /**
+     * The fields the current user may not READ on `entity`'s entity, lowercased. A loaded record
+     * already omits them (they are not loaded), but a new record holds every field at its default,
+     * and the server refuses a restricted caller's payload that names a field it may not read.
+     */
+    private deniedReadFieldNames(entity: BaseEntity): ReadonlySet<string> {
+        const user = this._provider.CurrentUser;
+        if (!entity.EntityInfo?.FieldLevelSecurityApplies || !user) {
+            return GraphQLTransactionGroup.noDeniedFields;
+        }
+        return entity.EntityInfo.GetDeniedReadFields(user);
+    }
 
     // new implementation
     protected async HandleSubmit(): Promise<TransactionResult[]> {
@@ -71,7 +100,7 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         for (const pt of this.PendingTransactions) {
             items.push({
                 EntityName: pt.BaseEntity.EntityInfo.Name,
-                EntityObjectJSON: await pt.BaseEntity.GetDataObjectJSON(),
+                EntityObjectJSON: await this.serializeTransactionItemEntity(pt),
                 OperationType: pt.OperationType
             });
         }

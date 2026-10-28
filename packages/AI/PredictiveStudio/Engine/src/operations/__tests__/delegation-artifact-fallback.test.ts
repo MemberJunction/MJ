@@ -59,12 +59,12 @@ describe('resolveActiveFileStorageProviderId', () => {
 
 describe('buildArtifactStore', () => {
   it('builds an MJFilesArtifactStore (real File row + local bytes) when a provider id is present', () => {
-    const store = BuildArtifactStore('PROVIDER-1', new MetadataEntityFactory());
+    const store = BuildArtifactStore('PROVIDER-1', new MetadataEntityFactory(makeSpyProvider([]).provider));
     expect(store).toBeInstanceOf(MJFilesArtifactStore);
   });
 
   it('still builds an MJFilesArtifactStore when no provider id is present (save will fail loudly without one)', () => {
-    const store = BuildArtifactStore(null, new MetadataEntityFactory());
+    const store = BuildArtifactStore(null, new MetadataEntityFactory(makeSpyProvider([]).provider));
     expect(store).toBeInstanceOf(MJFilesArtifactStore);
   });
 });

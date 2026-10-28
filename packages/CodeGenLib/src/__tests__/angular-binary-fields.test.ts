@@ -162,4 +162,20 @@ describe('AngularClientGeneratorBase — a section is created only for fields th
             expect(gen.SectionHTML(entity, section)).toContain('<mj-form-field');
         }
     });
+
+    it('omits Deprecated and Disabled fields from generated form sections', () => {
+        const entity = buildEntity([
+            field('ActiveField', 'nvarchar', 1, { Status: 'Active' }),
+            field('LinkedUserID', 'uniqueidentifier', 2, { Status: 'Deprecated' }),
+            field('LegacyDisabled', 'nvarchar', 3, { Status: 'Disabled' }),
+        ]);
+        const section = detailsSection();
+        const html = gen.SectionHTML(entity, section);
+
+        expect(html).toContain('FieldName="ActiveField"');
+        expect(html).not.toContain('FieldName="LinkedUserID"');
+        expect(html).not.toContain('FieldName="LegacyDisabled"');
+        expect((section.Fields ?? []).map(f => f.Name)).toEqual(['ActiveField']);
+    });
 });
+

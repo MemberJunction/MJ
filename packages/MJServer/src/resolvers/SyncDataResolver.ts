@@ -319,6 +319,7 @@ export class SyncDataResolver {
             }
             else {
                 // pass back the full record as it was JUST BEFORE the delete, often quite useful on the other end
+                // fls-guard: system-user-only resolver (@RequireSystemUser)
                 result.RecordJSON = await altKeyResult.GetDataObjectJSON({
                     includeRelatedEntityData: false,
                     excludeFields: [],
@@ -337,6 +338,7 @@ export class SyncDataResolver {
         }
         else if (await entityObject.InnerLoad(pk)) {
             // pass back the full record as it was JUST BEFORE the delete, often quite useful on the other end
+            // fls-guard: system-user-only resolver (@RequireSystemUser)
             result.RecordJSON = await entityObject.GetDataObjectJSON({
                 includeRelatedEntityData: false,
                 excludeFields: [],
@@ -368,6 +370,7 @@ export class SyncDataResolver {
             result.Success = true;
             result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
             // pass back the full record AFTER the sync, that's often quite useful on the other end
+            // fls-guard: system-user-only resolver (@RequireSystemUser)
             result.RecordJSON = await entityObject.GetDataObjectJSON({
                 includeRelatedEntityData: false,
                 excludeFields: [],
@@ -411,6 +414,7 @@ export class SyncDataResolver {
                 result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
             }
             // pass back the full record AFTER the sync, that's often quite useful on the other end
+            // fls-guard: system-user-only resolver (@RequireSystemUser)
             result.RecordJSON = await entityObject.GetDataObjectJSON({
                 includeRelatedEntityData: false,
                 excludeFields: [],

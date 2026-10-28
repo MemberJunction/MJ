@@ -30,13 +30,12 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
+### 1. SAFE COMMITS & PR WORKFLOW
 
-- **NEVER run `git commit` without the user explicitly asking you to**
-- **Each commit requires ONE-TIME explicit approval** - don't assume ongoing permission
-- **NEVER ask to commit** - wait for the user to request it
-- **ONLY commit what is staged** - never modify or add to staged changes
-- **NEVER commit work-in-progress** that isn't staged by the user
+- **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
+- **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
+- **NEVER commit or push directly to `next` or `main`**
 
 ### 2. NO `any` TYPES - EVER
 
@@ -104,6 +103,29 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
   4. **Appended CodeGen output** (`EntityField` INSERT with apply-time `(SELECT COALESCE(MAX([Sequence]), 0) FROM [EntityField] WHERE [EntityID] = ...) + 1`, regenerated `spCreate`/`spUpdate`/`spDelete`, `trgUpdate`, `vwEntityFields`, and permissions).
 - **Never do ad-hoc inline metadata updates/mutations in migration scripts** when metadata is meant to be managed via `metadata/*.json` seed files (pushed via `mj sync push`). Migrations are strictly for physical database DDL + CodeGen plumbing; metadata values belong in `metadata/` files.
 - **Metadata ships only as migrations.** Install and upgrade run migrations only; there is no metadata phase, by design. PRs contribute metadata JSON only, and the build engineer turns it into one `Metadata_Sync` migration per release. Rows missing after a fresh install usually mean a release shipped without its metadata migration, not an installer gap (check the app's documented post-install exceptions first). Details: [Release Metadata Migrations](guides/RELEASE_METADATA_MIGRATIONS_GUIDE.md).
+
+### 2e. POLYMORPHIC FOREIGN KEYS — ALWAYS DECORATE WITH `EntityField.EntityIDFieldName` (NO HEURISTICS)
+
+- **Whenever an entity has a polymorphic foreign-key column pair** (e.g., `EntityID` + `RecordID`, `SourceEntityID` + `SourceRecordID`, `TargetEntityID` + `TargetRecordID`, `AssigneeEntityID` + `AssigneeRecordID`, `LinkedEntityID` + `LinkedRecordID`), you **MUST** populate `EntityField.EntityIDFieldName` on the record-ID field pointing to the exact column name of its companion entity-reference field.
+- **How to author**: Add the entity/field entry in `metadata/entities/.polymorphic-fk-entity-fields.json` (or the app's `metadata/entities/` file) under `relatedEntities["MJ: Entity Fields"]`:
+  ```json
+  {
+    "fields": { "Name": "MJ: Tagged Items" },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "RecordID",
+            "EntityIDFieldName": "EntityID"
+          }
+        }
+      ]
+    }
+  }
+  ```
+- **Why this matters**: MemberJunction forms (`<mj-form-field>`), grids (`<mj-entity-data-grid>`), cards (`<mj-entity-cards>`), and record detail panels (`<mj-entity-record-detail-panel>`) use `EntityField.EntityIDFieldName` to turn polymorphic `RecordID` fields into smart clickable record links (resolving the target entity's display name + icon in read mode, and providing a scoped FK autocomplete picker in edit mode).
+- **STRICTLY NO HEURISTICS**: Never write code that guesses polymorphic FK pairs by column name (`RecordID` / `EntityID`) — an entity can have multiple polymorphic pairs (such as `SourceEntityID`/`SourceRecordID` and `TargetEntityID`/`TargetRecordID`), so polymorphic FK behavior is enabled **only** when the hard metadata link `EntityField.EntityIDFieldName` is populated.
 
 ### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 
@@ -237,7 +259,7 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
     }
   }
   ```
-- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+- **When a class cannot extend `BaseSingleton<T>`** (e.g. `GraphQLDataProvider extends ProviderBase`, Angular `@Injectable()` services with DI constructor args, or classes whose constructor takes required arguments): back `Instance` with `GetGlobalObjectStore()` from `@memberjunction/global` under `private static readonly _globalStoreKey = '___SINGLETON__ClassName'` instead of a `private static _instance` field.
 
 ### 8. NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
 
@@ -2334,7 +2356,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
      }
    }
    ```
-3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values and a `primaryKey` UUID from CLI `uuidgen`; omit `sync`, which the release-time `mj sync push` writes. A record without a `primaryKey` is inserted as a new row on every push (see `metadata/CLAUDE.md` rule 1).
 4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
@@ -2357,7 +2379,7 @@ When creating new applications with custom dashboards:
    - `ResourceType`: Usually `"Custom"` for dashboard resources
    - `DriverClass`: Class name registered with `@RegisterClass(BaseResourceComponent, 'ClassName')`
    - `isDefault`: Set to `true` for the default tab (only one per app)
-4. For new apps, omit `primaryKey` and `sync` sections - they're populated by mj-sync
+4. For new apps, include a `primaryKey` from CLI `uuidgen` and omit `sync` (see `metadata/CLAUDE.md` rule 1)
 5. Include `"relatedEntities": { "Application Entities": [] }` for the sync structure
 
 ### Resource Components for Custom Dashboards
