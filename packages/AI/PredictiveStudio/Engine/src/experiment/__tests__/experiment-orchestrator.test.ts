@@ -673,7 +673,7 @@ describe('runBounded', () => {
   });
 });
 
-describe('extractNormalizedScore', () => {
+describe('ExtractNormalizedScore', () => {
   it('prefers holdout metrics and passes ranking metrics through', () => {
     expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), JSON.stringify({ auc: 0.95 }), 'AUC', 'classification')).toBe(0.81);
   });

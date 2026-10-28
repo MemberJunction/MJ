@@ -51,12 +51,12 @@ export function ResolveComparisonMetric(
       return name;
     }
   }
-  // First numeric metric present on BOTH — but skip error metrics here so the
-  // `'auto'` fallback always lands on a higher-is-better key (an explicit pinned
-  // metric name still wins above, where the comparison handles direction).
+  // First numeric metric present on BOTH whose direction is declared and rankable (higher- or
+  // lower-is-better): closer-to-one keys (calibration slope) and unknown keys are never auto-picked,
+  // because the comparison can only rank a metric by its direction. An explicit pinned name still wins above.
   const sharedNumeric = Object.keys(incumbentMetrics).find(
     (k) =>
-      !MetricDirections.IsErrorMetric(k) &&
+      isRankableDirection(MetricDirections.MetricDirectionOf(k)) &&
       isFiniteNumber(incumbentMetrics[k]) &&
       isFiniteNumber(challengerMetrics[k]),
   );
@@ -95,4 +95,9 @@ function parseMetrics(raw: string | null | undefined): Record<string, unknown> {
 /** Type guard: a finite number. */
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+/** A direction the comparison can rank on: closer-to-one and unknown (null) keys are not rankable. */
+function isRankableDirection(direction: ReturnType<typeof MetricDirections.MetricDirectionOf>): boolean {
+  return direction === 'higher-is-better' || direction === 'lower-is-better';
 }

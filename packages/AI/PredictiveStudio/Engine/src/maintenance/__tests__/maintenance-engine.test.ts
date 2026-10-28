@@ -206,7 +206,7 @@ function buildDeps(overrides: Partial<MaintenanceDeps> = {}): {
 
 // ===========================================================================
 
-describe('MaintenanceEngine.detectStaleness', () => {
+describe('MaintenanceEngine.DetectStaleness', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -328,7 +328,7 @@ describe('MaintenanceEngine.detectStaleness', () => {
   });
 });
 
-describe('MaintenanceEngine.rescoreScheduledBinding', () => {
+describe('MaintenanceEngine.RescoreScheduledBinding', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -375,7 +375,7 @@ describe('MaintenanceEngine.rescoreScheduledBinding', () => {
   });
 });
 
-describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
+describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -488,7 +488,7 @@ describe('MaintenanceEngine.triggerRetrainIfStale + compareChallenger', () => {
   });
 });
 
-describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
+describe('MaintenanceEngine.RunMaintenancePass (+ free-function entry)', () => {
   let engine: MaintenanceEngine;
   beforeEach(() => {
     engine = new MaintenanceEngine();
@@ -608,6 +608,14 @@ describe('maintenance metric helpers', () => {
     const ch = new FakeModel('m2');
     ch.HoldoutMetrics = JSON.stringify({ r2: 0.65, rmse: 4 });
     expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('r2');
+  });
+
+  it('ResolveComparisonMetric auto skips closer-to-one and unknown keys', () => {
+    const inc = new FakeModel('m1');
+    inc.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 0.9, explained_variance: 0.5, brier: 0.2 });
+    const ch = new FakeModel('m2');
+    ch.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 1.0, explained_variance: 0.6, brier: 0.18 });
+    expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('brier');
   });
 
   it('ReadMetric returns null for missing / unparseable metrics', () => {

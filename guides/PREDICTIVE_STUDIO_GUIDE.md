@@ -216,11 +216,11 @@ The shared vocabulary across the sidecar, the engine, the UI, and the agent. **S
 | `feature-steps.ts` | the visual **FeatureStep DAG** — a discriminated union on `Kind` (**8 kinds**: `select`/`impute`/`standardize`/`onehot`/`bin`/`embedding`/`llm-derived`/`flow-agent`/`vision-llm`) + `FeatureStepGraph` |
 | `modeling-plan-spec.ts` | `ModelingPlanSpec` (the Model Development Agent's strongly-typed payload), `Budget`, `LeaderboardEntry` |
 | `modeling-plan-schema.ts` | **Zod** `ModelingPlanSpecSchema` / `BudgetSchema` + `validateModelingPlanSpec()` / `validateBudget()` — the **runtime** plan/budget validators the Start-Experiment op and Run-Experiment action call before any iteration runs |
-| `metrics-util.ts` | `isErrorMetric(metricKey)` + the canonical **lower-is-better** key set (`rmse`/`mae`/`mse`/`loss`/`logloss`/`log_loss`) — lifted to Core so the leaderboard (§7) and the challenger-vs-incumbent comparison (§14) **cannot drift** on metric direction |
+| `metrics-util.ts` | `MetricDirections.IsErrorMetric(metricKey)` / `MetricDirections.MetricDirectionOf(metricKey)` — the lower-is-better set is read from Core's `METRIC_DIRECTION` declaration (plus the legacy spellings such as `mse`/`loss`/`logloss`/`log_loss`) — lifted to Core so the leaderboard (§7) and the challenger-vs-incumbent comparison (§14) **cannot drift** on metric direction |
 
 ```typescript
 import type { ModelingPlanSpec, TrainRequest, FeatureStepGraph } from '@memberjunction/predictive-studio-core';
-import { validateModelingPlanSpec, isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { validateModelingPlanSpec, MetricDirections } from '@memberjunction/predictive-studio-core';
 ```
 
 > **Note on dependencies:** Core is *almost* pure types, but it carries **one** runtime dependency — `zod` — for `modeling-plan-schema.ts`. Plan/budget validation is a correctness invariant shared by every consumer, so it lives in Core (push-to-generic) rather than being re-implemented per call site. Everything else in the package is interfaces and union types.
@@ -526,7 +526,7 @@ flowchart LR
 | Concern | How |
 |---|---|
 | **Wave generation** | the `IWaveStrategist` seam — default `PlanOrderWaveStrategist` (priority order); swap in an LLM-backed strategist for adaptive "what next" without touching the orchestrator |
-| **Leaderboard** (`src/experiment/leaderboard.ts`) | `LeaderboardEntry[]` ranked by a **normalized** score (prefers `HoldoutMetrics`, falls back to training metrics; error metrics negated via Core's `isErrorMetric` so higher always = better) |
+| **Leaderboard** (`src/experiment/leaderboard.ts`) | `LeaderboardEntry[]` ranked by a **normalized** score (prefers `HoldoutMetrics`, falls back to training metrics; error metrics negated via Core's `MetricDirections.IsErrorMetric` so higher always = better) |
 | **Pruning** | `selectPrunedIterationIds()` — top-K / relative-threshold rules; pruned iterations marked `Pruned` + removed from the leaderboard |
 | **Budget gate** | `MaxRuns` / `MaxComputeCost` / `MaxWallclockMinutes` checked **both** between waves *and inside the bounded runner* (see below) |
 | **Concurrency** | `runBounded()` (`src/experiment/concurrency.ts`) with a configurable max |
@@ -911,12 +911,12 @@ flowchart TB
 
 Scheduled re-scoring (`RescoreScheduledBinding`, for `Mode='Scheduled'` bindings) stamps `LastScoredAt = now` and `LastRowCount = scoredCount` after each pass.
 
-**Challenger-vs-incumbent — respects metric direction, never auto-promotes.** When a binding is stale, a challenger is trained and compared. Direction is handled via Core's shared `isErrorMetric`:
+**Challenger-vs-incumbent — respects metric direction, never auto-promotes.** When a binding is stale, a challenger is trained and compared. Direction is handled via Core's shared `MetricDirections.IsErrorMetric`:
 
 ```typescript
 private metricImprovement(metric, incumbentValue, challengerValue): number | null {
     if (incumbentValue == null || challengerValue == null) return null;
-    return isErrorMetric(metric) ? incumbentValue - challengerValue   // lower-is-better
+    return MetricDirections.IsErrorMetric(metric) ? incumbentValue - challengerValue   // lower-is-better
                                  : challengerValue - incumbentValue;  // higher-is-better
 }
 private recommendPromotion(improvement, margin): PromotionRecommendation {
@@ -927,7 +927,7 @@ private recommendPromotion(improvement, margin): PromotionRecommendation {
 
 Positive `improvement` always means "better," whichever direction the metric runs. `CompareChallenger` returns only a `recommendation` (`'promote' | 'hold'`) — it performs **no promotion**. The class doc is explicit: *"It NEVER auto-promotes — promotion is a separate signed-off Action,"* and the comparison detail always appends *"Promotion still requires explicit human sign-off — nothing has been promoted automatically."* Promotion only ever happens through the §13 gate with its sign-off.
 
-> One nuance: the `'auto'` comparison-metric *selection* (`metrics.ts → ResolveComparisonMetric`) only auto-picks higher-is-better keys; a **pinned** error metric is still compared direction-correctly via `metricImprovement`, but `'auto'` won't land on an error metric by itself.
+> One nuance: the `'auto'` comparison-metric *selection* (`metrics.ts → ResolveComparisonMetric`) only auto-picks keys whose direction `MetricDirections.MetricDirectionOf` declares higher- or lower-is-better (closer-to-one keys such as calibration slope and unknown keys are skipped), and `metricImprovement` compares either direction correctly.
 
 ---
 

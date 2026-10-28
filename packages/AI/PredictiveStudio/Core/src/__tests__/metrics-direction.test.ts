@@ -15,6 +15,19 @@ describe('metric direction', () => {
     expect(MetricDirections.IsErrorMetric('calibration-slope')).toBe(false);
   });
 
+  it('treats the legacy spellings as lower-is-better', () => {
+    for (const m of ['brier_score', 'multiclass_log_loss', 'poisson_deviance', 'smape']) {
+      expect(MetricDirections.IsErrorMetric(m)).toBe(true);
+      expect(MetricDirections.MetricDirectionOf(m)).toBe('lower-is-better');
+    }
+  });
+
+  it('reads direction case- and whitespace-insensitively', () => {
+    expect(MetricDirections.MetricDirectionOf(' BRIER ')).toBe('lower-is-better');
+    expect(MetricDirections.MetricDirectionOf('AUC')).toBe('higher-is-better');
+    expect(MetricDirections.MetricDirectionOf(' Calibration-Slope ')).toBe('closer-to-one');
+  });
+
   it('returns null for an unknown key rather than guessing', () => {
     expect(MetricDirections.MetricDirectionOf('explained_variance')).toBeNull();
   });
