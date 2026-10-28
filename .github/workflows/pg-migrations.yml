@@ -519,6 +519,13 @@ jobs:
             echo "| metadata sync push | ${{ steps.pg_sync.outcome }} |"
             echo "| integration subset | ${{ steps.pg_subset.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.pg_sync.outcome }}" != "success" ] || [ "${{ steps.pg_subset.outcome }}" != "success" ]; then
+          # A failed `mj sync push` fails the job: without metadata the subset never runs, so a
+          # warning here left the whole functional lane silently dark. The subset stays report-only
+          # (warning) while PostgreSQL parity is in progress.
+          if [ "${{ steps.pg_sync.outcome }}" = "failure" ]; then
+            echo "::error::PG functional lane: mj sync push failed against PostgreSQL, so the integration subset did not run. See the '(Nightly) Sync push metadata to PG' step log."
+            exit 1
+          fi
+          if [ "${{ steps.pg_subset.outcome }}" != "success" ]; then
             echo "::warning::PG functional lane is NOT green — PostgreSQL still ships on migration-parity evidence alone. See the step logs; flip continue-on-error to false once the seams are fixed."
           fi
