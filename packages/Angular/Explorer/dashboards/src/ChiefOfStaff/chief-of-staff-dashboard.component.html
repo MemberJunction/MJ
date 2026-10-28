@@ -360,7 +360,7 @@
                         [Variant]="Metrics.PriorityCards.length === 0 ? 'empty' : 'no-results'"
                         Icon="fa-solid fa-bullseye"
                         [Title]="!HasLinkedPerson ? 'No People Record Linked to Your User' : Metrics.PriorityCards.length === 0 ? 'No Priority Objectives Tracked Yet' : 'No Priority Objectives Match Your Filter'"
-                        [Message]="!HasLinkedPerson ? 'Priorities are read from tasks you created or are assigned to. Ask an administrator to link your People record to your user account.' : Metrics.PriorityCards.length === 0 ? 'Chat with your Chief of Staff to onboard your quarterly priorities and milestone schedule.' : 'Try clearing your search or health filter.'"
+                        [Message]="!HasLinkedPerson ? 'Priorities are read from tasks you created or are assigned to. Ask an administrator to add your People record with your sign-in email, or to link it to your user account.' : Metrics.PriorityCards.length === 0 ? 'Chat with your Chief of Staff to onboard your quarterly priorities and milestone schedule.' : 'Try clearing your search or health filter.'"
                         [ActionText]="Metrics.PriorityCards.length === 0 ? '' : 'Clear Filters'"
                         ActionIcon="fa-solid fa-rotate-left"
                         (Action)="ClearFilters()">

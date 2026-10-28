@@ -1187,7 +1187,7 @@ export class ChiefOfStaffDashboardComponent
             return null;
         }
         try {
-            const scope = await ResolvePersonTaskScope(rv, currentUserId, peopleEntity.ID);
+            const scope = await ResolvePersonTaskScope(rv, currentUserId, peopleEntity.ID, this.ProviderToUse.CurrentUser?.Email ?? null);
             this.HasLinkedPerson = scope.HasLinkedPerson;
             return scope.HasLinkedPerson ? scope.Filter : null;
         } catch (err) {

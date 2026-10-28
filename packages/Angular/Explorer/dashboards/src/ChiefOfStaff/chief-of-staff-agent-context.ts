@@ -299,13 +299,20 @@ export interface TaskScopeQueryRunner {
     RunView<T>(params: RunViewParams): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }>;
 }
 
+/** How the signed-in user was matched to a BizApps person. */
+export type PersonMatchSource = 'LinkedUserID' | 'Email';
+
 export type PersonTaskScope =
     | { HasLinkedPerson: false }
-    | { HasLinkedPerson: true; PersonID: string; Filter: string };
+    | { HasLinkedPerson: true; PersonID: string; MatchedBy: PersonMatchSource; Filter: string };
 
 /**
- * Resolve the BizApps person linked to `currentUserId` and the filter that limits the Tasks query to work
- * that person created or is assigned to. Throws when either lookup fails so the caller can show the error.
+ * Resolve the BizApps person for the signed-in user and the filter that limits the Tasks query to work
+ * that person created or is assigned to. Throws when a lookup fails so the caller can show the error.
+ *
+ * The person is matched by `LinkedUserID` first. When no person is linked and `currentUserEmail` is
+ * given, an exact, case-insensitive match on the person's `Email` is used instead, so an
+ * administrator-entered People record works without a manual link.
  *
  * `peopleEntityId` is the `MJ: Entities` ID of {@link BIZAPPS_PEOPLE_ENTITY_NAME}: Task Assignments has no
  * PersonID column, its assignee is the polymorphic (`AssigneeEntityID`, `AssigneeRecordID`) pair, so the
@@ -315,10 +322,48 @@ export async function ResolvePersonTaskScope(
     runner: TaskScopeQueryRunner,
     currentUserId: string,
     peopleEntityId: string,
+    currentUserEmail?: string | null,
 ): Promise<PersonTaskScope> {
+    const match = await resolvePersonForUser(runner, currentUserId, currentUserEmail);
+    if (!match) {
+        return { HasLinkedPerson: false };
+    }
+    const assignedTaskIDs = await loadAssignedTaskIDs(runner, peopleEntityId, match.PersonID);
+    return {
+        HasLinkedPerson: true,
+        PersonID: match.PersonID,
+        MatchedBy: match.MatchedBy,
+        Filter: BuildPersonScopedTaskFilter(match.PersonID, assignedTaskIDs),
+    };
+}
+
+interface PersonMatch {
+    PersonID: string;
+    MatchedBy: PersonMatchSource;
+}
+
+/** The linked person, else the person whose email equals the user's, else null. */
+async function resolvePersonForUser(
+    runner: TaskScopeQueryRunner,
+    currentUserId: string,
+    currentUserEmail: string | null | undefined,
+): Promise<PersonMatch | null> {
+    const linked = await findPersonID(runner, `LinkedUserID = '${EscapeSQLString(currentUserId)}'`);
+    if (linked) {
+        return { PersonID: linked, MatchedBy: 'LinkedUserID' };
+    }
+    const email = (currentUserEmail ?? '').trim().toLowerCase();
+    if (!email) {
+        return null;
+    }
+    const byEmail = await findPersonID(runner, `LOWER(Email) = '${EscapeSQLString(email)}'`);
+    return byEmail ? { PersonID: byEmail, MatchedBy: 'Email' } : null;
+}
+
+async function findPersonID(runner: TaskScopeQueryRunner, extraFilter: string): Promise<string | null> {
     const people = await runner.RunView<{ ID: string }>({
         EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
-        ExtraFilter: `LinkedUserID = '${EscapeSQLString(currentUserId)}'`,
+        ExtraFilter: extraFilter,
         Fields: ['ID'],
         MaxRows: 1,
         ResultType: 'simple',
@@ -326,10 +371,10 @@ export async function ResolvePersonTaskScope(
     if (!people.Success) {
         throw new Error(people.ErrorMessage ?? 'Failed to resolve the linked person.');
     }
-    const personID = people.Results[0]?.ID;
-    if (!personID) {
-        return { HasLinkedPerson: false };
-    }
+    return people.Results[0]?.ID ?? null;
+}
+
+async function loadAssignedTaskIDs(runner: TaskScopeQueryRunner, peopleEntityId: string, personID: string): Promise<string[]> {
     const assignments = await runner.RunView<{ TaskID: string }>({
         EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
         ExtraFilter: `AssigneeEntityID = '${EscapeSQLString(peopleEntityId)}' AND AssigneeRecordID = '${EscapeSQLString(personID)}'`,
@@ -339,8 +384,7 @@ export async function ResolvePersonTaskScope(
     if (!assignments.Success) {
         throw new Error(assignments.ErrorMessage ?? 'Failed to load task assignments.');
     }
-    const assignedTaskIDs = assignments.Results.map((a) => a.TaskID).filter((id) => !!id);
-    return { HasLinkedPerson: true, PersonID: personID, Filter: BuildPersonScopedTaskFilter(personID, assignedTaskIDs) };
+    return assignments.Results.map((a) => a.TaskID).filter((id) => !!id);
 }
 
 /**

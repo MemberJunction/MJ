@@ -431,9 +431,46 @@ describe('ResolvePersonTaskScope', () => {
         );
     });
 
-    it('reports no linked person without querying assignments', async () => {
+    it('reports the match source as LinkedUserID when the person is linked', async () => {
+        const runner = makeRunner({
+            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
+        });
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID, 'Paul@Example.com');
+        expect(scope.HasLinkedPerson && scope.MatchedBy).toBe('LinkedUserID');
+        // A linked person is found on the first query; the email fallback is never issued.
+        expect(runner.Calls.filter((c) => c.startsWith('MJ_BizApps_Common: People')).length).toBe(1);
+    });
+
+    it('falls back to an exact, case-insensitive email match when no person is linked to the user', async () => {
+        let peopleCalls = 0;
+        const runner: TaskScopeQueryRunner & { Calls: string[] } = {
+            Calls: [],
+            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string }) => {
+                runner.Calls.push(`${params.EntityName} :: ${params.ExtraFilter ?? ''}`);
+                if (params.EntityName === 'MJ_BizApps_Common: People') {
+                    peopleCalls += 1;
+                    // First call (LinkedUserID) finds nothing; second call (Email) finds the person.
+                    return { Success: true, Results: (peopleCalls === 1 ? [] : [{ ID: 'PPPPPPPP-0000-0000-0000-000000000002' }]) as T[] };
+                }
+                return { Success: true, Results: [] as T[] };
+            },
+        };
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID, '  Paul@Example.com ');
+        expect(scope.HasLinkedPerson).toBe(true);
+        if (scope.HasLinkedPerson) {
+            expect(scope.MatchedBy).toBe('Email');
+            expect(scope.PersonID).toBe('PPPPPPPP-0000-0000-0000-000000000002');
+        }
+        expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
+        expect(runner.Calls[1]).toBe("MJ_BizApps_Common: People :: LOWER(Email) = 'paul@example.com'");
+        expect(runner.Calls[2]).toBe(
+            `MJ_BizApps_Tasks: Task Assignments :: AssigneeEntityID = '${PEOPLE_ENTITY_ID}' AND AssigneeRecordID = 'PPPPPPPP-0000-0000-0000-000000000002'`,
+        );
+    });
+
+    it('reports no linked person without querying assignments, and skips the email fallback when the user has no email', async () => {
         const runner = makeRunner({});
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID, '  ');
         expect(scope.HasLinkedPerson).toBe(false);
         expect(runner.Calls.length).toBe(1);
     });
