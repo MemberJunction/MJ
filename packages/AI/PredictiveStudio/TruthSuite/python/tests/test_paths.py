@@ -51,3 +51,24 @@ def test_real_fixture_resolves_committed_files_only() -> None:
     assert paths.real_fixture("person_years.parquet") == paths.FIXTURES / "real" / "person_years.parquet"
     with pytest.raises(FileNotFoundError):
         paths.real_fixture("no-such-case.rows.csv")
+
+
+def test_spec_seed_reads_the_spec_file_and_a_derived_scenario_uses_its_source_spec() -> None:
+    c2 = json.loads((paths.FIXTURES / "scenarios" / "specs" / "C2.json").read_text(encoding="utf-8"))["seed"]
+    t3 = json.loads((paths.FIXTURES / "scenarios" / "specs" / "T3.json").read_text(encoding="utf-8"))["seed"]
+    assert paths.spec_seed("C2") == c2
+    assert paths.spec_seed("T3-lag") == t3
+
+
+def test_generated_scenario_seeds_lists_the_current_spec_seeds_spec_seed_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    current = tmp_path / "scenario" / "C2" / "0123456789ab"
+    _cache(tmp_path, {
+        "scenario/C2/seed-2201002": current / "seed-2201002",
+        "scenario/C2/seed-2201": current / "seed-2201",
+        "scenario/C2/seed-2201001": current / "seed-2201001",
+        "scenario/C2/seed-42": tmp_path / "scenario" / "C2" / "ba9876543210" / "seed-42",  # an older spec's seed
+        "scenario/C4/seed-2202": tmp_path / "scenario" / "C4" / "0123456789ab" / "seed-2202",
+    })
+    (current / "seed-2201002" / ".complete").unlink()  # an unfinished seed is not a generated one
+    monkeypatch.setenv("TRUTH_DATA_DIR", str(tmp_path))
+    assert paths.generated_scenario_seeds("C2") == [2201, 2201001]

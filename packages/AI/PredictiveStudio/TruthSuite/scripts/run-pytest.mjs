@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * run-pytest.mjs — run TruthSuite's Python tests using its bundled .venv.
- * `--mypy` type-checks the Python package and its tests (`mypy --strict`, python/mypy.ini) instead.
+ * `--mypy` type-checks the Python package and its tests, and the sidecar's trainer-contract modules and test fixtures
+ * (`mypy --strict`, python/mypy.ini), instead.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -29,10 +30,20 @@ if (process.platform === 'darwin') {
   env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH ? `${libomp}:${env.DYLD_LIBRARY_PATH}` : libomp;
 }
 
+// The sidecar's trainer contract and test fixtures, which the gate tests import: type-checked here under the same strict
+// configuration (the sidecar's own venv carries no mypy).
+const SIDECAR_TYPED_MODULES = [
+  'app/trainer_schemas.py',
+  'app/failures.py',
+  'app/snapshot_format.py',
+  'tests/tools/trainer_fixture.py',
+  'tests/tools/trainer_scaffold.py',
+].map((m) => path.join('..', 'Sidecar', 'src', 'python', m));
+
 const rawArgs = process.argv.slice(2);
 const args = rawArgs[0] === '--' ? rawArgs.slice(1) : rawArgs;
 const result = args[0] === '--mypy'
-  ? spawnSync(venvPython, ['-m', 'mypy', '--config-file', 'python/mypy.ini', 'python/truthsuite', 'python/tests'], {
+  ? spawnSync(venvPython, ['-m', 'mypy', '--config-file', 'python/mypy.ini', 'python/truthsuite', 'python/tests', ...SIDECAR_TYPED_MODULES], {
       cwd: root,
       stdio: 'inherit',
       env,

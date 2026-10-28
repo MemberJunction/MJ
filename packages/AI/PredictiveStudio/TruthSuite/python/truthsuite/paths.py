@@ -59,16 +59,38 @@ def seed_dir(kind: DatasetKind, dataset_id: str, seed: int) -> Path:
 _SPEC_OF_DERIVED_SCENARIO: dict[str, str] = {"T3-lag": "T3"}
 
 
-def spec_seed_dir(scenario_id: str) -> Path:
-    """The generated directory of a scenario's spec seed (the seed its spec file names; a derived scenario uses the
-    spec it is generated from). Raises KeyError like seed_dir when that seed is not generated."""
+def spec_seed(scenario_id: str) -> int:
+    """The seed a scenario's spec file names (a derived scenario: the spec it is generated from), its `base` seed."""
     spec_id = _SPEC_OF_DERIVED_SCENARIO.get(scenario_id, scenario_id)
     spec_path = FIXTURES / "scenarios" / "specs" / f"{spec_id}.json"
     raw: object = json.loads(spec_path.read_text(encoding="utf-8"))
     seed = raw.get("seed") if isinstance(raw, dict) else None
     if not isinstance(seed, int) or isinstance(seed, bool):
         raise ValueError(f"{spec_path} has no integer seed")
-    return seed_dir("scenario", scenario_id, seed)
+    return seed
+
+
+def spec_seed_dir(scenario_id: str) -> Path:
+    """The generated directory of a scenario's spec seed. Raises KeyError like seed_dir when that seed is not generated."""
+    return seed_dir("scenario", scenario_id, spec_seed(scenario_id))
+
+
+def generated_scenario_seeds(scenario_id: str) -> list[int]:
+    """Every finished seed the catalog generated for a scenario under its current spec (the spec seed's directory's
+    spec hash): the spec seed first, then the others ascending. Seeds generated under an older spec and unfinished
+    seeds are left out. Raises KeyError like seed_dir when the spec seed itself is not generated."""
+    first = spec_seed(scenario_id)
+    spec_hash_dir = spec_seed_dir(scenario_id).parent
+    prefix = f"scenario/{scenario_id}/seed-"
+    others: list[int] = []
+    for key, directory in _read_index(data_root() / "index.json").items():
+        if not key.startswith(prefix) or not key[len(prefix):].isdigit():
+            continue
+        seed = int(key[len(prefix):])
+        d = Path(directory)
+        if seed != first and d.parent == spec_hash_dir and (d / ".complete").is_file():
+            others.append(seed)
+    return [first, *sorted(others)]
 
 
 def real_fixture(name: str) -> Path:
