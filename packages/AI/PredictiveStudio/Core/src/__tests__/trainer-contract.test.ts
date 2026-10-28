@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { TrainerContract, REQUIRED_LIBRARIES, type CodeVersion, type MetricWithInterval, type TrainerCompleted } from '../index';
+import {
+  EvaluationProtocol,
+  TrainerContract,
+  REQUIRED_LIBRARIES,
+  TRAINER_COMPLETED_KEYS,
+  TRAINER_FAILED_KEYS,
+  TRAINER_REQUEST_KEYS,
+  type CodeVersion,
+  type EvaluationProtocolSpec,
+  type MetricWithInterval,
+  type PreAuthDownload,
+  type TrainerCompleted,
+  type TrainerFailed,
+  type TrainerRequest,
+} from '../index';
 
 const complete: CodeVersion = {
   psGitSha: 'c92d4a47f957dcc5054cb5bbd52f4a7b39acb673',
@@ -59,9 +73,67 @@ const completed: TrainerCompleted = {
   innerSplitContrast: null,
 };
 
-describe('TrainerCompleted', () => {
-  it('has the 23 members of the completed result, baselines among them', () => {
-    expect(Object.keys(completed)).toHaveLength(23);
+const failed: TrainerFailed = { status: 'failed', trainingRunId: 'R1', stage: 'inner-cv', message: 'fold 3 has one class', computeSeconds: 1.2 };
+
+const download: PreAuthDownload = {
+  fileId: 'F1', url: 'file:///tmp/m.json', issuedAt: '2026-10-28T03:00:00.000Z', driverLifetimeSeconds: null, expiresAt: null, sha256: 'ab',
+};
+
+const protocol: EvaluationProtocolSpec = {
+  id: 'P1', lineageRootId: 'P1', version: 1, name: 'Renewal grading',
+  holdout: { kind: 'date-carved', dateColumn: 'OrderDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null },
+  innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 },
+  seed: 0, holdoutAccessBudget: 1,
+  primaryScore: { family: 'binary', metric: 'log-loss' },
+  secondaryMetrics: ['auc'],
+  baselines: [{ kind: 'dummy', name: 'base-rate' }],
+  calibration: { kind: 'platt', fitOn: 'disjoint-calibration-fold' },
+  resampling: { kind: 'none' },
+  intervals: { level: 0.95, method: 'bootstrap', resamples: 1000, pairedTest: 'paired-bootstrap' },
+  promotion: { comparators: [], incumbent: 'none', margin: EvaluationProtocol.ToNonNegative(0), lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' },
+  allowedOutcomes: ['model', 'keep-simple-baseline', 'no-signal'],
+  leakageAudit: { singleFeatureHeldOutAucMax: 0.9, timeShiftedLabelTest: true, dropColumnTest: true, importanceAggregation: 'per-source-column', highCardinalityIdCheck: true },
+  exclusions: { denyFields: [], denySources: [] },
+  slices: { outOfTime: false, subgroups: [] },
+  predictionIntervals: null, residualDiagnostics: null, retrainTriggers: [],
+  search: { kind: 'random', candidates: 1 },
+  budgets: { maxComputeSeconds: 60, maxTokens: 0, maxCandidates: 1, hardStop: true },
+  minMinorityClassRows: 20, guardFieldsEditableBy: 'non-agent',
+  authoredBy: { kind: 'human', userId: 'U1' },
+};
+
+/** Every member of the request. */
+const request: TrainerRequest = {
+  trainingRunId: 'R1',
+  snapshot: { id: 'S1', contentHash: 'h', featureSchemaHash: 'f', matrix: download, rowManifest: download },
+  incumbent: null,
+  protocol,
+  task: { kind: 'binary', classOrder: ['false', 'true'], adverseIndex: 1 },
+  candidates: [{ name: 'c1', algorithmId: 'A1', driverKey: 'lightgbm', hyperparameters: { num_leaves: 31 } }],
+  seed: 0,
+  threads: 1,
+  timeoutSeconds: 600,
+  maxRetries: 0,
+};
+
+function sortedKeys(o: object): string[] {
+  return Object.keys(o).sort();
+}
+
+describe('trainer contract member lists', () => {
+  it('lists the 23 members of the completed result, baselines among them', () => {
+    expect(TRAINER_COMPLETED_KEYS).toHaveLength(23);
+    expect(sortedKeys(completed)).toEqual([...TRAINER_COMPLETED_KEYS].sort());
     expect(completed.baselines[0].role).toBe('dummy');
+  });
+
+  it('lists the 5 members of the failed result', () => {
+    expect(TRAINER_FAILED_KEYS).toHaveLength(5);
+    expect(sortedKeys(failed)).toEqual([...TRAINER_FAILED_KEYS].sort());
+  });
+
+  it('lists the 10 members of the request', () => {
+    expect(TRAINER_REQUEST_KEYS).toHaveLength(10);
+    expect(sortedKeys(request)).toEqual([...TRAINER_REQUEST_KEYS].sort());
   });
 });

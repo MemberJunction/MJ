@@ -176,7 +176,9 @@ export class EvaluationProtocol {
   /**
    * The shape checks run by `MJEvaluationProtocolEntityServer.Validate()`: every JSON column parses, the fixed
    * fields hold their only admissible values, the primary score is proper for its family, the margin is >= 0,
-   * rolling-origin has >= 5 origins and no-signal cannot be omitted. The full typed parse and the save-time rules are separate members.
+   * rolling-origin has >= 5 origins and no-signal cannot be omitted. Seed (an integer >= 0) and Version (an integer
+   * >= 1) are checked here too, so a row the typed parser would refuse is refused at save time as well. The full typed
+   * parse and the save-time rules are separate members.
    */
   public static GetEvaluationProtocolShapeProblems(row: EvaluationProtocolColumns): string[] {
     const problems: string[] = [];

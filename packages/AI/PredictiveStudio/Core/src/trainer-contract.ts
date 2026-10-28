@@ -264,6 +264,39 @@ export type TrainerCompleted = Extract<TrainerResult, { readonly status: 'comple
 /** The failed variant of {@link TrainerResult}. */
 export type TrainerFailed = Extract<TrainerResult, { readonly status: 'failed' }>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
+/**
+ * `true` only when `Listed` names every key of `Shape` and nothing else; otherwise `never`, and assigning `true` fails
+ * to compile. The member lists below are what the sidecar's pydantic mirror is checked against.
+ */
+type ListsExactlyTheKeys<Shape, Listed> = [Exclude<keyof Shape, Listed>] extends [never]
+  ? [Exclude<Listed, keyof Shape>] extends [never] ? true : never
+  : never;
+
+/** Every member of {@link TrainerCompleted}. */
+export const TRAINER_COMPLETED_KEYS = [
+  'status', 'trainingRunId', 'codeVersion', 'computeSeconds', 'innerScores', 'finalist', 'holdoutAccess', 'holdout',
+  'baselines', 'comparisons', 'gate', 'artifacts', 'incumbentDiff', 'calibration', 'slices', 'operatingPoint', 'cost',
+  'importance', 'leakageFlags', 'predictionIntervalCoverage', 'residualDiagnostics', 'forecast', 'innerSplitContrast',
+] as const satisfies readonly (keyof TrainerCompleted)[];
+
+/** Every member of {@link TrainerFailed}. */
+export const TRAINER_FAILED_KEYS = ['status', 'trainingRunId', 'stage', 'message', 'computeSeconds'] as const satisfies readonly (keyof TrainerFailed)[];
+
+/** Every member of {@link TrainerRequest}. */
+export const TRAINER_REQUEST_KEYS = [
+  'trainingRunId', 'snapshot', 'incumbent', 'protocol', 'task', 'candidates', 'seed', 'threads', 'timeoutSeconds', 'maxRetries',
+] as const satisfies readonly (keyof TrainerRequest)[];
+
+/** Compile-time completeness: a member added to or dropped from TrainerCompleted without updating its list breaks the build. */
+const trainerCompletedKeysExact: ListsExactlyTheKeys<TrainerCompleted, (typeof TRAINER_COMPLETED_KEYS)[number]> = true;
+/** Compile-time completeness: a member added to or dropped from TrainerFailed without updating its list breaks the build. */
+const trainerFailedKeysExact: ListsExactlyTheKeys<TrainerFailed, (typeof TRAINER_FAILED_KEYS)[number]> = true;
+/** Compile-time completeness: a member added to or dropped from TrainerRequest without updating its list breaks the build. */
+const trainerRequestKeysExact: ListsExactlyTheKeys<TrainerRequest, (typeof TRAINER_REQUEST_KEYS)[number]> = true;
+void trainerCompletedKeysExact;
+void trainerFailedKeysExact;
+void trainerRequestKeysExact;
+
 /** Libraries every run's CodeVersion must name: a lineage without them cannot be reproduced and is refused. */
 export const REQUIRED_LIBRARIES = ['python', 'numpy', 'scikit-learn', 'xgboost', 'lightgbm'] as const;
 
