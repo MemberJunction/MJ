@@ -43,7 +43,7 @@ import {
   RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 import { AuthorizeSessionAccess, ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
-import { ConversationBrowserLedger, ConversationBrowserLimitError } from '../agentSessions/conversationBrowsers.js';
+import { ConversationBrowserLedger, RemoteBrowserRefusedError } from '../agentSessions/conversationBrowsers.js';
 import { configInfo, type ConversationBrowserConfig } from '../config.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -311,7 +311,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   /**
    * The push session each surface's frames and audio go to, by stream key. A reloaded tab starts again
    * from a new push session while the browser keeps streaming; it takes the frames over here instead of
-   * being told "already streaming" while they still go to the old session.
+   * being told "already streaming" while they still go to the old session. An entry whose streams have
+   * stopped is dropped by {@link sweepStreamEntries}.
    */
   private streamTargets = new Map<string, UserPayload>();
 
@@ -331,6 +332,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     for (const [key, startedAt] of this.startedAudioStreams) {
       if (startedAt < cutoff) {
         this.startedAudioStreams.delete(key);
+      }
+    }
+    // A target outlives its streams only until here (a stop, a failed start, a voice session's end).
+    for (const key of this.streamTargets.keys()) {
+      if (!this.startedScreencasts.has(key) && !this.startedAudioStreams.has(key)) {
+        this.streamTargets.delete(key);
       }
     }
   }
@@ -692,7 +699,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         // Backend can't stream — the client keeps polling. Not an error condition.
         return { Streaming: false };
       }
-      if (err instanceof ConversationBrowserLimitError) {
+      if (err instanceof RemoteBrowserRefusedError) {
         throw err; // the client must stop and say so, not poll for a browser that will never start
       }
       const message = err instanceof Error ? err.message : String(err);
@@ -808,7 +815,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         // Backend can't capture audio — the client plays no audio. Not an error condition.
         return { Streaming: false };
       }
-      if (err instanceof ConversationBrowserLimitError) {
+      if (err instanceof RemoteBrowserRefusedError) {
         throw err;
       }
       const message = err instanceof Error ? err.message : String(err);
@@ -1187,7 +1194,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       return await LoadOwnedRealtimeSession(agentSessionID, contextUser, provider);
     } catch (err) {
       if (err instanceof RealtimeSessionOwnershipError) {
-        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+        throw new RemoteBrowserRefusedError(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
       }
       if (!(err instanceof RealtimeSessionNotFoundError)) {
         throw err;
@@ -1198,26 +1205,26 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // (owner, and for an anonymous widget guest its scope id), loaded as the caller so its RLS applies too.
     const settings = this.ConversationBrowserSettings();
     if (!settings.enabled) {
-      throw new Error(`Remote-browser session ${agentSessionID} not found. Conversation browsers are not enabled on this server (realtime.conversationBrowser.enabled).`);
+      throw new RemoteBrowserRefusedError(`Remote-browser session ${agentSessionID} not found. Conversation browsers are not enabled on this server (realtime.conversationBrowser.enabled).`);
     }
     if (contextUser.IsMagicLinkAnonymous && !settings.allowAnonymous) {
-      throw new Error(`Not authorized: anonymous users cannot open a conversation browser on this server.`);
+      throw new RemoteBrowserRefusedError(`Not authorized: anonymous users cannot open a conversation browser on this server.`);
     }
     // One browser per conversation: an instance key would key a second one past the cap, the network
     // policy and the reaper (the client never sends one).
     if (instanceKey?.trim()) {
-      throw new Error('A conversation browser has no instances; instanceKey is not accepted.');
+      throw new RemoteBrowserRefusedError('A conversation browser has no instances; instanceKey is not accepted.');
     }
     const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
     if (!(await conversation.Load(agentSessionID))) {
-      throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+      throw new RemoteBrowserRefusedError(`Remote-browser session ${agentSessionID} not found.`);
     }
     const access = AuthorizeSessionAccess(
       { SessionUserID: conversation.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: true },
       contextUser,
     );
     if (!access.Allowed) {
-      throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+      throw new RemoteBrowserRefusedError(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
     }
     // Each use puts off the browser's idle end.
     ConversationBrowserLedger.Instance.Touch(agentSessionID);
@@ -1245,8 +1252,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       // ponytail: an action that joins a launch a concurrent End then tears down keeps this slot until the
       // reaper frees it (idleMinutes); release it on that teardown if users hit maxPerUser this way.
       // An anonymous guest's cap is its own: every guest is the one shared Anonymous user.
-      const scope = contextUser.IsMagicLinkAnonymous ? ResolveSessionScopeIdentity(contextUser) : undefined;
-      ConversationBrowserLedger.Instance.Claim(agentSessionID, scope ? `scope:${scope}` : `user:${NormalizeUUID(contextUser.ID)}`, settings.maxPerUser, settings.idleMinutes);
+      const guestScope = contextUser.IsMagicLinkAnonymous ? ResolveSessionScopeIdentity(contextUser) : undefined;
+      const owner = { Key: guestScope ? `scope:${guestScope}` : `user:${NormalizeUUID(contextUser.ID)}`, Anonymous: Boolean(contextUser.IsMagicLinkAnonymous) };
+      ConversationBrowserLedger.Instance.Claim(agentSessionID, owner, settings);
       // Set once, before the browser launches; the engine re-applies it to any replacement.
       if (!RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
         await RemoteBrowserEngine.Instance.RestrictPrivateNetworkForAgentSession(agentSessionID, settings.allowedPrivateHosts);

@@ -188,7 +188,7 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
   const otherUserID = 'c3c3c3c3-0000-4000-8000-000000000003';
   const convID = 'b2b2b2b2-0000-4000-8000-000000000002';
 
-  const ENABLED: ConversationBrowserConfig = { enabled: true, allowAnonymous: false, maxPerUser: 2, idleMinutes: 15, allowedPrivateHosts: ['localhost:4200'] };
+  const ENABLED: ConversationBrowserConfig = { enabled: true, allowAnonymous: false, maxPerUser: 2, maxAnonymousTotal: 4, idleMinutes: 15, allowedPrivateHosts: ['localhost:4200'] };
 
   /**
    * A resolver whose provider has no agent session by that ID, only conversations owned by `ownerID`
@@ -274,6 +274,50 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
     const guestB = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-b' };
     expect((await conversationResolver(userID, guestA, 'visitor-a', settings).ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true);
     expect((await conversationResolver(userID, guestB, 'visitor-b', settings).ExecuteRemoteBrowserAction(convID2, 'inspect', ctx)).Success).toBe(true);
+  });
+
+  it('caps all anonymous guests together, since a guest can start a new scope cheaply; signed-in users are not counted', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const settings = { ...ENABLED, allowAnonymous: true, maxPerUser: 1, maxAnonymousTotal: 2 };
+    const guest = (visitor: string) => ({ ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: visitor });
+    const open = (visitor: string, conversationID: string) =>
+      conversationResolver(userID, guest(visitor), visitor, settings).ExecuteRemoteBrowserAction(conversationID, 'inspect', ctx);
+    expect((await open('visitor-a', convID)).Success).toBe(true);
+    expect((await open('visitor-b', convID2)).Success).toBe(true);
+    const third = await open('visitor-c', convID3);
+    expect(third.Success).toBe(false);
+    expect(third.Detail).toContain('allows for guests is in use');
+    expect((await conversationResolver(userID, { ID: userID }, null, settings).ExecuteRemoteBrowserAction(convID3, 'inspect', ctx)).Success).toBe(true);
+  });
+
+  it('every refusal carries the REMOTE_BROWSER_REFUSED code, so a client stops asking', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue({ ...deadSession, StartScreencast: vi.fn(async () => undefined) } as never);
+    const refused = { extensions: { code: 'REMOTE_BROWSER_REFUSED' } };
+    const guest = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-a' };
+    const pubSub = { publish: vi.fn() } as never;
+    await expect(conversationResolver(userID, { ID: userID }, null, { ...ENABLED, enabled: false }).RemoteBrowserSnapshot(convID, ctx)).rejects.toMatchObject(refused);
+    await expect(conversationResolver(userID, guest, 'visitor-a').RemoteBrowserSnapshot(convID, ctx)).rejects.toMatchObject(refused);
+    await expect(conversationResolver(userID).EndRemoteBrowserSession(convID, ctx, 'x')).rejects.toMatchObject(refused);
+    await expect(conversationResolver(otherUserID).RemoteBrowserSnapshot(convID, ctx)).rejects.toMatchObject(refused);
+    await expect(conversationResolver(userID).RemoteBrowserSnapshot('d4d4d4d4-0000-4000-8000-000000000004', ctx)).rejects.toMatchObject(refused);
+    const capped = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, maxPerUser: 1 });
+    await capped.StartRemoteBrowserScreencast(convID, ctx, pubSub);
+    await expect(capped.StartRemoteBrowserScreencast(convID2, ctx, pubSub)).rejects.toMatchObject(refused);
+  });
+
+  it('forgets where a stopped stream went, so a browser that never ends cannot leak its targets', async () => {
+    const streamingSession = { ...makeSession(), StartScreencast: vi.fn(async () => undefined) };
+    startSessionMock.mockReset().mockResolvedValue(streamingSession as never);
+    const resolver = conversationResolver(userID);
+    const pubSub = { publish: vi.fn() } as never;
+    const targets = (resolver as unknown as { streamTargets: Map<string, unknown> }).streamTargets;
+
+    await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub);
+    await resolver.StopRemoteBrowserScreencast(convID, ctx);
+    await resolver.StartRemoteBrowserScreencast(convID2, ctx, pubSub);
+    expect(targets.size).toBe(1);
   });
 
   it('a reloaded tab (a new push session) takes the frames over instead of hearing "already streaming"', async () => {

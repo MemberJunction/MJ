@@ -1,29 +1,43 @@
 /**
  * @fileoverview The remote browsers this process holds for TEXT conversations: who owns each and when it
- * was last used. Backs the per-user cap (`realtime.conversationBrowser.maxPerUser`) and ends browsers
+ * was last used. Backs the caps (`realtime.conversationBrowser.maxPerUser` and `maxAnonymousTotal`) and ends browsers
  * nobody uses any more, since a reloaded or closed tab never ends its own
  * (`realtime.conversationBrowser.idleMinutes`). Realtime calls' browsers are not tracked here: they end
  * with their session.
  *
  * @module @memberjunction/server/agentSessions
  */
+import { GraphQLError } from 'graphql';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
+import type { ConversationBrowserConfig } from '../config.js';
 
 /** How often idle conversation browsers are looked for. */
 const REAP_INTERVAL_MS = 60_000;
 
-/** A user (or, for an anonymous guest, a scope) already holds the most conversation browsers allowed. */
-export class ConversationBrowserLimitError extends Error {
-  constructor(count: number) {
-    super(`You already have ${count} conversation browser(s) open, the most this server allows. Close one first.`);
-    this.name = 'ConversationBrowserLimitError';
+/** The `extensions.code` of a {@link RemoteBrowserRefusedError}, which a client reads to stop asking. */
+export const REMOTE_BROWSER_REFUSED = 'REMOTE_BROWSER_REFUSED';
+
+/**
+ * A remote-browser request this server refuses however often it is asked: browsers not enabled, a session
+ * that is not the caller's or does not exist, or a cap reached.
+ */
+export class RemoteBrowserRefusedError extends GraphQLError {
+  constructor(message: string) {
+    super(message, { extensions: { code: REMOTE_BROWSER_REFUSED } });
+    this.name = 'RemoteBrowserRefusedError';
   }
 }
 
+/** Who a conversation browser counts against: a user, or an anonymous guest's own scope. */
+export interface ConversationBrowserOwner {
+  Key: string;
+  Anonymous: boolean;
+}
+
 interface HeldBrowser {
-  OwnerKey: string;
+  Owner: ConversationBrowserOwner;
   LastUsedAt: number;
   IdleMs: number;
 }
@@ -39,9 +53,6 @@ export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowser
   public EndBrowser: (conversationID: string) => Promise<unknown> = (conversationID) =>
     RemoteBrowserEngine.Instance.EndSessionForAgentSession(conversationID);
 
-  /** The clock (a seam for tests). */
-  public Now: () => number = () => Date.now();
-
   protected constructor() {
     super();
   }
@@ -52,20 +63,25 @@ export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowser
 
   /**
    * Records that a conversation's browser is about to be used. A conversation the ledger does not hold
-   * yet counts against its owner's cap. `ownerKey` is who the cap counts: a user, or for an anonymous
-   * guest (who all share one Anonymous user) the guest's own scope.
+   * yet counts against its owner's cap and, for an anonymous guest, against the cap all guests share: a
+   * guest can start a new scope cheaply, so its own cap alone bounds nothing.
    *
-   * @throws ConversationBrowserLimitError when the owner already holds `maxPerUser` conversation browsers.
+   * @throws RemoteBrowserRefusedError when the owner already holds `maxPerUser` conversation browsers, or
+   * guests together already hold `maxAnonymousTotal`.
    */
-  public Claim(conversationID: string, ownerKey: string, maxPerUser: number, idleMinutes: number): void {
+  public Claim(conversationID: string, owner: ConversationBrowserOwner, limits: Pick<ConversationBrowserConfig, 'maxPerUser' | 'maxAnonymousTotal' | 'idleMinutes'>): void {
     const key = conversationID.toLowerCase();
     if (!this.held.has(key)) {
-      const count = Array.from(this.held.values()).filter((b) => b.OwnerKey === ownerKey).length;
-      if (count >= maxPerUser) {
-        throw new ConversationBrowserLimitError(count);
+      const held = Array.from(this.held.values());
+      const count = held.filter((b) => b.Owner.Key === owner.Key).length;
+      if (count >= limits.maxPerUser) {
+        throw new RemoteBrowserRefusedError(`You already have ${count} conversation browser(s) open, the most this server allows. Close one first.`);
+      }
+      if (owner.Anonymous && held.filter((b) => b.Owner.Anonymous).length >= limits.maxAnonymousTotal) {
+        throw new RemoteBrowserRefusedError('Every conversation browser this server allows for guests is in use. Try again later.');
       }
     }
-    this.held.set(key, { OwnerKey: ownerKey, LastUsedAt: this.Now(), IdleMs: idleMinutes * 60_000 });
+    this.held.set(key, { Owner: owner, LastUsedAt: Date.now(), IdleMs: limits.idleMinutes * 60_000 });
     this.startReaper();
   }
 
@@ -73,7 +89,7 @@ export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowser
   public Touch(conversationID: string): void {
     const browser = this.held.get(conversationID.toLowerCase());
     if (browser) {
-      browser.LastUsedAt = this.Now();
+      browser.LastUsedAt = Date.now();
     }
   }
 
@@ -84,7 +100,7 @@ export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowser
 
   /** Ends every held browser unused for longer than its idle limit. Returns how many were ended. */
   public async ReapIdle(): Promise<number> {
-    const now = this.Now();
+    const now = Date.now();
     const idle = Array.from(this.held).filter(([, b]) => now - b.LastUsedAt > b.IdleMs).map(([id]) => id);
     for (const conversationID of idle) {
       this.held.delete(conversationID);
