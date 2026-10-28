@@ -307,6 +307,28 @@ describe('QueryParameterProcessor.validateParameters ValidationFilters enforceme
       const result = QueryParameterProcessor.validateParameters({ p: 'a@b.co' }, defWithFilters([{ name: 'email' }]) as never[]);
       expect(result.success).toBe(true);
     });
+    it.each([
+      ['a@b.co', true],
+      ['first.last@sub.example.org', true],
+      ['a@b.c.d', true],
+      ['a@.co', false],
+      ['a@b.', false],
+      ['a@bco', false],
+      ['@b.co', false],
+      ['a@b@c.co', false],
+      ['a b@c.co', false],
+      ['a@b.c o', false],
+    ])('treats %s as an address: %s', (address, valid) => {
+      const result = QueryParameterProcessor.validateParameters({ p: address }, defWithFilters([{ name: 'email' }]) as never[]);
+      expect(result.success).toBe(valid);
+    });
+    it('rejects a long crafted value in linear time', () => {
+      const started = Date.now();
+      const crafted = '!@!.' + '!.'.repeat(100_000) + ' ';
+      const result = QueryParameterProcessor.validateParameters({ p: crafted }, defWithFilters([{ name: 'email' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(Date.now() - started).toBeLessThan(500);
+    });
   });
 
   describe('min filter', () => {

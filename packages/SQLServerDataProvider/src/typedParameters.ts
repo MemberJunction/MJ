@@ -13,7 +13,9 @@ interface ParsedSQLType {
 }
 
 function parseSQLType(sqlType: string): ParsedSQLType | null {
-    const match = /^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:\(\s*([^)]*)\))?\s*$/.exec(sqlType);
+    // Trimmed first so no two whitespace runs in the pattern can compete for the same characters
+    // (that overlap made a crafted type string cost quadratic time); arguments are trimmed below.
+    const match = /^([A-Za-z][A-Za-z0-9_]*)\s*(?:\(([^)]*)\))?$/.exec(sqlType.trim());
     if (!match) return null;
     const args = match[2] === undefined ? [] : match[2].split(',').map(a => a.trim().toLowerCase());
     return { Base: match[1].toLowerCase(), Args: args };

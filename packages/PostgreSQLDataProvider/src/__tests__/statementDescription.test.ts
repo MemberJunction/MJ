@@ -28,6 +28,15 @@ describe('PostgreSQL statement description', () => {
         expect(DescribeWrapperSQL('SELECT 1 -- note')).toBe('SELECT * FROM (SELECT 1 -- note\n) _q LIMIT 0');
     });
 
+    it('drops every trailing semicolon, and only trailing ones, in linear time', () => {
+        expect(DescribeWrapperSQL('SELECT 1;;; ')).toBe('SELECT * FROM (SELECT 1\n) _q LIMIT 0');
+        expect(DescribeWrapperSQL("SELECT ';' AS s")).toBe("SELECT * FROM (SELECT ';' AS s\n) _q LIMIT 0");
+        const started = Date.now();
+        const semicolons = ';'.repeat(100_000) + 'x';
+        expect(DescribeWrapperSQL(semicolons)).toBe(`SELECT * FROM (${semicolons}\n) _q LIMIT 0`);
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
     it('passes the table, column and type numbers aligned, for one catalog lookup', () => {
         expect(DescribeCatalogParameters(fields)).toEqual([[16401, 16401, 0], [1, 3, 0], [2950, 1043, 1700], [-1, 104, -1]]);
     });

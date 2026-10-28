@@ -64,7 +64,10 @@ export function DescribeCatalogParameters(fields: readonly PostgreSQLFieldDescri
 
 /** The wrapper that makes PostgreSQL describe `sql` without returning rows. A trailing `;` is dropped. */
 export function DescribeWrapperSQL(sql: string): string {
-    const body = sql.trim().replace(/;+\s*$/, '');
+    const trimmed = sql.trim();
+    let end = trimmed.length;
+    while (end > 0 && trimmed[end - 1] === ';') end--;
+    const body = trimmed.slice(0, end);
     return `SELECT * FROM (${body}\n) _q LIMIT 0`;
 }
 

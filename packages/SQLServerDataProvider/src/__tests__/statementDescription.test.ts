@@ -69,6 +69,18 @@ describe('MssqlTypeFor', () => {
         expect(MssqlTypeFor('geography')).toBeNull();
         expect(MssqlTypeFor('varchar(50); DROP TABLE x')).toBeNull();
     });
+
+    it('allows whitespace around the name and its arguments', () => {
+        expect(MssqlTypeFor('  decimal ( 18 , 2 )  ')).toMatchObject({ type: sql.Decimal, precision: 18, scale: 2 });
+        expect(MssqlTypeFor('\tint\n')).toMatchObject({ type: sql.Int });
+    });
+
+    it('refuses a long malformed type string in linear time', () => {
+        const started = Date.now();
+        expect(MssqlTypeFor('A(' + '\t'.repeat(100_000) + 'x')).toBeNull();
+        expect(MssqlTypeFor('A' + '\t'.repeat(100_000) + 'x')).toBeNull();
+        expect(Date.now() - started).toBeLessThan(500);
+    });
 });
 
 describe('BindTypedParameters', () => {

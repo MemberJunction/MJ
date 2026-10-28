@@ -1506,9 +1506,19 @@ export class MaterializationRefresher {
         return this.CoerceExternalParamValue(value);
     }
 
+    /**
+     * The lower-cased type name without its argument list: `NVARCHAR(255)` → `nvarchar`, `int` → `int`.
+     * Index arithmetic rather than a regex, so a type string full of `(` costs linear time.
+     */
+    public static BaseTypeName(sqlFullType: string): string {
+        const type = sqlFullType.trim().toLowerCase();
+        const open = type.indexOf('(');
+        return open >= 0 && type.endsWith(')') ? type.slice(0, open) : type;
+    }
+
     /** Map a SQL-Server-style `SQLFullType` (e.g. `nvarchar(255)`, `int`, `bit`) to a PostgreSQL column type. */
     public static MapSqlTypeToPostgres(sqlFullType: string): string {
-        const base = sqlFullType.trim().toLowerCase().replace(/\(.*\)$/, '');
+        const base = MaterializationRefresher.BaseTypeName(sqlFullType);
         switch (base) {
             case 'bit': return 'boolean';
             case 'tinyint': case 'smallint': return 'smallint';
@@ -1566,7 +1576,7 @@ export class MaterializationRefresher {
      * type (EntityFieldInfo.SQLFullType); the base type drives the canonical cast.
      */
     public static CanonicalKeyColumnSql(name: string, type: string, isPostgres: boolean): string {
-        const base = type.trim().toLowerCase().replace(/\(.*\)$/, '');
+        const base = MaterializationRefresher.BaseTypeName(type);
         const col = MaterializationRefresher.quoteIdent(name, isPostgres);
         const nullSentinel = isPostgres ? `chr(30) || 'NULL' || chr(30)` : `CHAR(30) + 'NULL' + CHAR(30)`;
         let canonical: string;

@@ -225,6 +225,21 @@ export class QueryParameterProcessor {
         return { value: current };
     }
 
+
+    /**
+     * `local@domain.tld` shape: one `@`, no whitespace, a non-empty local part, and a domain with a `.`
+     * that is neither its first nor its last character. Checked by index rather than with a regex,
+     * whose overlapping character classes made a crafted value cost quadratic time.
+     */
+    private static isEmailShaped(value: string): boolean {
+        if (/\s/.test(value)) return false;
+        const parts = value.split('@');
+        if (parts.length !== 2 || parts[0].length === 0) return false;
+        const domain = parts[1];
+        const dot = domain.indexOf('.', 1);
+        return dot > 0 && dot < domain.length - 1;
+    }
+
     /** True for values a `required` filter (and the empty checks) treat as "not provided". */
     private static isEmptyValue(value: unknown): boolean {
         return value === undefined || value === null || value === '';
@@ -266,8 +281,7 @@ export class QueryParameterProcessor {
 
             case 'email': {
                 const str = String(value);
-                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                return emailPattern.test(str) ? { value } : fail(`'${str}' is not a valid email address`);
+                return QueryParameterProcessor.isEmailShaped(str) ? { value } : fail(`'${str}' is not a valid email address`);
             }
 
             case 'min':
