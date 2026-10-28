@@ -1482,27 +1482,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── Fresh execution ──
         const promise = this.executeRunViewsPipeline<T>(params, contextUser)
             .then(results => {
-                // Stash resolved results for the linger window. Safety cap: under
-                // extreme churn (hundreds of distinct keys resolving within one linger
-                // window) skip lingering rather than hold more result arrays in memory —
-                // the linger is a latency optimization, never a correctness requirement.
-                const entry = this._inflightViews.get(key);
-                if (entry && entry.promise === promise) {
-                    if (ProviderBase.DedupLingerMs > 0 && this._inflightViews.size <= ProviderBase.MaxLingerEntries) {
-                        entry.resolvedResults = results as RunViewResult[];
-                        entry.resolvedAt = Date.now();
-
-                        // Schedule cleanup after linger expires
-                        setTimeout(() => {
-                            const current = this._inflightViews.get(key);
-                            if (current && current.promise === promise) {
-                                this._inflightViews.delete(key);
-                            }
-                        }, ProviderBase.DedupLingerMs);
-                    } else {
-                        this._inflightViews.delete(key);
-                    }
-                }
+                this.stashInflightLingerResult(key, promise, results as RunViewResult[], true);
                 return results as RunViewResult[];
             })
             .catch(err => {
@@ -1522,6 +1502,46 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     // ── Dedup helpers ──────────────────────────────────────────────────
+
+    /**
+     * Stashes resolved RunViews results on `_inflightViews` for `DedupLingerMs` and schedules
+     * cleanup via an isolated static `WeakRef` timer helper so the timer closure's V8 lexical
+     * context never retains `this`, `promise`, or `results` on short-lived per-request providers.
+     */
+    private stashInflightLingerResult(
+        key: string,
+        promise: Promise<RunViewResult[]>,
+        results: RunViewResult[],
+        enforceMaxEntries: boolean,
+    ): void {
+        const entry = this._inflightViews.get(key);
+        if (!entry || entry.promise !== promise) {
+            return;
+        }
+        if (ProviderBase.DedupLingerMs > 0 && (!enforceMaxEntries || this._inflightViews.size <= ProviderBase.MaxLingerEntries)) {
+            const resolvedAt = Date.now();
+            entry.resolvedResults = results;
+            entry.resolvedAt = resolvedAt;
+            ProviderBase.scheduleInflightLingerExpiry(new WeakRef(this), key, resolvedAt);
+        } else {
+            this._inflightViews.delete(key);
+        }
+    }
+
+    private static scheduleInflightLingerExpiry(
+        selfRef: WeakRef<ProviderBase>,
+        key: string,
+        resolvedAt: number,
+    ): void {
+        const timer = setTimeout(() => {
+            const self = selfRef.deref();
+            const current = self?._inflightViews.get(key);
+            if (current && current.resolvedAt === resolvedAt) {
+                self?._inflightViews.delete(key);
+            }
+        }, ProviderBase.DedupLingerMs);
+        timer?.unref?.();
+    }
 
     /**
      * The original RunViews execution pipeline (pre-processing, cache,
@@ -1865,21 +1885,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── Fresh execution ──
         const promise = this.executeRunViewsPipeline<T>(params, contextUser)
             .then(results => {
-                const entry = this._inflightViews.get(key);
-                if (entry && entry.promise === promise) {
-                    entry.resolvedResults = results as RunViewResult[];
-                    entry.resolvedAt = Date.now();
-                    if (ProviderBase.DedupLingerMs > 0) {
-                        setTimeout(() => {
-                            const current = this._inflightViews.get(key);
-                            if (current && current.promise === promise) {
-                                this._inflightViews.delete(key);
-                            }
-                        }, ProviderBase.DedupLingerMs);
-                    } else {
-                        this._inflightViews.delete(key);
-                    }
-                }
+                this.stashInflightLingerResult(key, promise, results as RunViewResult[], false);
                 return results as RunViewResult[];
             })
             .catch(err => {

@@ -1,5 +1,55 @@
 # @memberjunction/ng-shared-generic
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- b5955fb: The org brand overlay now survives a cold load. `ApplyBrandOverlay()` persisted only the overlay id, and the overlay stylesheet is a session Blob, so after a reload the pre-paint script restored the `data-theme-overlay` attribute with no CSS behind it: the shell's loading screen and the sign-in page rendered MJ's default tokens until workspace bootstrap re-emitted the overlay at the end of its metadata refresh.
+  - `ApplyBrandOverlay()` persists the emitted overlay CSS beside the id (`mj-theme-overlay-css`, JSON `{ id, css }`). A session-only overlay (`persist: false`, the Theme Studio preview) persists neither.
+  - New `ThemeService.RestorePersistedBrandOverlay()` re-injects that CSS as a `<style>` and sets the attribute from localStorage alone, and records the overlay id so `Initialize()` keeps the attribute until bootstrap registers the brand. Bootstrap's real `<link>` replaces the preloaded `<style>`; a CSS entry whose id no longer matches the persisted overlay is dropped as stale; `ClearBrandOverlay()` removes both. localStorage failures are swallowed as before.
+  - `MJExplorerAppComponent` calls the restore in its constructor, before the sign-in page or the shell's loading screen renders.
+  - `ng-workspace-initializer`: when bootstrap's brand query succeeds and finds no active brand, it calls `ClearBrandOverlay()`, so a brand restored from localStorage cannot outlive its retirement; a failed query leaves the cached brand alone. The service tracks a restored overlay as pending until bootstrap confirms or clears it (not inferred from the preload `<style>`'s presence), the preload lookup is an attribute walk so an id with selector metacharacters cannot throw from the constructor, and a re-apply of the same brand skips the CSS write.
+  - `ng-auth-services`: the logout cache clearing now preserves `mj-theme-overlay-css` alongside `mj-theme` and `mj-theme-overlay`, so a sign-out followed by a sign-in still has the CSS to restore. Without it the sign-in cold load had the attribute and no stylesheet behind it.
+
+  Verified live: on a cold reload the loading screen is branded at the first instant it exists (~400 ms, before any real stylesheet link), and the real overlay link takes over once bootstrap completes.
+
+- d538c14: `BRAND_OVERLAY_PREPAINT_SCRIPT`: an inline, dependency-free snippet hosts paste at the top of their `index.html` `<body>` (before the app root; from `<head>` its `<style>` precedes the app stylesheet and loses the cascade) so the frame BEFORE the Angular bundle boots carries the persisted org brand overlay. `ThemeService.RestorePersistedBrandOverlay()` already brands everything Angular renders; this covers the one frame that runs before any package code can. It shares the storage keys and the `data-mj-brand-overlay-preload` marker with the service, so the two are idempotent and bootstrap's real stylesheet replaces either; it fails open on any storage or parse error. The storage-key and marker constants are now exported. MJExplorer's `index.html` carries the snippet as the reference host, pinned to the export by a spec.
+- 291485d: `ThemeDefinition.IsDefault` (LXP P2). A host could not make its brand theme the default: `Initialize()` resolved to `'system'` whenever the user had no saved preference, so a single-brand host force-called `SetTheme('brand')` on every login, fighting the service's own resolution and writing a preference the user never chose.
+  - `IsDefault?: boolean` on `ThemeDefinition`. With no saved preference (or a saved theme that is no longer registered) `Initialize()` applies the first registered theme flagged default, else `'system'` as before. A saved preference, including `'system'`, still wins. Nothing is written to user settings.
+  - `ThemeService.DefaultPreference` exposes the answer so a picker can mark it.
+  - THEMING.md documents the compiled-in single-brand recipe (brand CSS in the bundle keyed to `:root` / `[data-theme='dark']`, picker-only definitions over the built-in slots, `IsDefault` on the brand) and when `CssUrl` themes are the right tool instead.
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [3b7c949]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/theme-engine@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

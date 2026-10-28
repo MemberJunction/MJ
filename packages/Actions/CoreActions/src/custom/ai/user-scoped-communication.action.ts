@@ -22,6 +22,7 @@ import {
     UpdateCalendarEventParams,
 } from '@memberjunction/communication-types';
 
+
 /**
  * Result of evaluating whether the enterprise communication provider is permitted
  * and able to access a user's personal mailbox or utility agent inbox.
@@ -367,12 +368,18 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
+            const approvalTypeId = await AIEngine.Instance.ResolveAgentRequestTypeID('Approval', contextUser);
+            if (!approvalTypeId) {
+                LogError('Agent request type "Approval" is not in metadata; cannot create an approval request.');
+                return null;
+            }
             const md = provider ?? new Metadata();
             const req = await md.GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', contextUser);
             req.RequestForUserID = contextUser.ID;
             if (agentId) {
                 req.AgentID = agentId;
             }
+            req.RequestTypeID = approvalTypeId;
             req.RequestedAt = new Date();
             req.Status = 'Requested';
             req.Priority = 50;

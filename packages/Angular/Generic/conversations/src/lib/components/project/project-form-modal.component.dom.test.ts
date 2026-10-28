@@ -106,3 +106,30 @@ describe('ProjectFormModalComponent (DOM) — save failure reporting', () => {
     expect(String(alertSpy.mock.calls[0][0]).length).toBeGreaterThan(0);
   });
 });
+
+describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', () => {
+  const SHARING_IS_ONE_WAY = "Once shared, a folder can't be made private again.";
+
+  /** Renders a new-folder dialog with the visibility already chosen, before the first paint. */
+  const renderWithVisibility = (isPersonal: boolean): string => {
+    const f = renderComponentFixture(ProjectFormModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
+      inputs: { environmentId: 'env1', currentUser, dialogRef: { Close: vi.fn() } as unknown as MJDialogRef },
+      setup: (instance) => {
+        instance.formData.isPersonal = isPersonal;
+      },
+    });
+    return (f.nativeElement as HTMLElement).querySelector('#projectVisibilityHint')?.textContent ?? '';
+  };
+
+  it('warns that sharing cannot be undone when Everyone is selected', () => {
+    expect(renderWithVisibility(false)).toContain(SHARING_IS_ONE_WAY);
+  });
+
+  it('does not show the warning when Only me is selected', () => {
+    const hint = renderWithVisibility(true);
+    expect(hint).toContain('Only you can see this folder.');
+    expect(hint).not.toContain(SHARING_IS_ONE_WAY);
+  });
+});

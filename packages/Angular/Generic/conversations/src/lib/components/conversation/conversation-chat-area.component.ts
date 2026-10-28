@@ -108,6 +108,7 @@ import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID, IsValidUUID } from '@m
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
 import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
+import { DescribeCallFailureNotice } from '../realtime/realtime-call-failure-notice';
 import type {
   IMJChatAgentPresenceComponent,
   MJChatAgentPresenceState,
@@ -3157,6 +3158,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .subscribe(() => {
         namedThisSession = false;
         this.onRealtimeSessionStarted();
+      });
+    // A call that ends over a failure (a failed start, a dropped connection, a time limit) is ended by the
+    // runtime itself, which closes the call surface with it: say why, or the call just vanishes.
+    this.RealtimeSession.SessionEnded$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((ended) => {
+        if (ended.reason === 'error') {
+          const notice = DescribeCallFailureNotice(this.RealtimeSession.LastStartError, this.RealtimeSession.LastSessionError);
+          MJNotificationService.Instance.CreateSimpleNotification(notice, 'error', 6000);
+        }
       });
     let voiceWasActive = false;
     this.RealtimeSession.Active$
