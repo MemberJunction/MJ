@@ -727,9 +727,14 @@ export class ChiefOfStaffDashboardComponent
         return entityInfo;
     }
 
+    /** The drawer's milestone list follows the card's rule: every milestone for the owner, only the person's own otherwise. */
     public get SelectedTaskSubtasks(): BizAppsTaskRecordLike[] {
         if (!this.SelectedTask) return [];
         const id = this.SelectedTask.ID;
+        const card = this.Metrics.PriorityCards.find((c) => UUIDsEqual(c.Task.ID, id));
+        if (card) {
+            return card.Milestones.map((m) => m.Task);
+        }
         return this.Tasks.filter((t) => UUIDsEqual(t.ParentID, id));
     }
 

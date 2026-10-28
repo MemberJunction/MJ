@@ -92,6 +92,8 @@ export interface BizAppsTaskRecordLike {
     TypeID?: string | null;
     Type?: string | null;
     TaskType?: string | null;
+    /** The person who created the task; with the objective's assignees, decides who owns it. */
+    CreatedByPersonID?: string | null;
 }
 
 /**
@@ -117,12 +119,17 @@ export interface MilestoneRowViewModel {
 export interface PriorityObjectiveCardViewModel {
     Task: BizAppsTaskRecordLike;
     Subtasks: BizAppsTaskRecordLike[];
-    /** The same subtasks with their assignees; the template renders these. */
+    /**
+     * The milestone rows the template renders: every subtask for the objective's owner, only the
+     * ones the signed-in person holds otherwise. `Subtasks` keeps the full set for progress.
+     */
     Milestones: MilestoneRowViewModel[];
     /** People assigned to the objective itself. */
     Assignees: TaskAssignee[];
     /** True when the signed-in user's person is assigned to the objective itself. */
     AssignedToMe: boolean;
+    /** True when the signed-in person created the objective or is assigned to it; owners see every milestone. */
+    IsOwner: boolean;
     CompletedSubtaskCount: number;
     EffectivePercentComplete: number;
     EffectiveHealth: TaskHealthStatus;
@@ -642,15 +649,23 @@ export function CalculateChiefOfStaffMetrics(
             effectiveHealth !== 'Completed';
 
         const rootAssignees = assigneesOf(root.ID);
+        const assignedToMe = heldByMe(rootAssignees);
+        const isOwner = assignedToMe
+            || (!!options.CurrentPersonID && !!root.CreatedByPersonID && UUIDsEqual(root.CreatedByPersonID, options.CurrentPersonID));
+        const milestoneRows: MilestoneRowViewModel[] = children.map((child) => {
+            const assignees = assigneesOf(child.ID);
+            return { Task: child, Assignees: assignees, AssignedToMe: heldByMe(assignees) };
+        });
+        // The objective is shared context; the milestone list is the person's own unless they own the objective.
+        // With no current person (no People record resolved) nothing is hidden.
+        const milestones = isOwner || !options.CurrentPersonID ? milestoneRows : milestoneRows.filter((m) => m.AssignedToMe);
         return {
             Task: root,
             Subtasks: children,
-            Milestones: children.map((child) => {
-                const assignees = assigneesOf(child.ID);
-                return { Task: child, Assignees: assignees, AssignedToMe: heldByMe(assignees) };
-            }),
+            Milestones: milestones,
             Assignees: rootAssignees,
-            AssignedToMe: heldByMe(rootAssignees),
+            AssignedToMe: assignedToMe,
+            IsOwner: isOwner,
             CompletedSubtaskCount: completedChildren,
             EffectivePercentComplete: effectivePercent,
             EffectiveHealth: effectiveHealth,

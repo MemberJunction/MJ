@@ -1118,3 +1118,9 @@
 .cos-subtask-row--mine {
     border-left: 3px solid var(--mj-color-primary);
 }
+
+.cos-subtasks__scope-note {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--mj-text-secondary);
+}

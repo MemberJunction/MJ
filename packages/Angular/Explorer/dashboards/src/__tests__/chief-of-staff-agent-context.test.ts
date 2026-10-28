@@ -691,7 +691,8 @@ describe('LoadTaskAssignees', () => {
 
 describe('CalculateChiefOfStaffMetrics — assignees on cards and milestones', () => {
     it('attaches assignees to the objective and each milestone, and marks the ones held by the current person', () => {
-        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack' });
+        // P2 created the objective, so they own it and see every milestone (the visibility rule has its own suite below).
+        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack', CreatedByPersonID: 'P2' });
         const mine = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core' });
         const theirs = makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Finalize requirements' });
         const assignees = new UUIDMap<TaskAssignee[]>();
@@ -717,5 +718,57 @@ describe('CalculateChiefOfStaffMetrics — assignees on cards and milestones', (
         expect(card.Assignees).toEqual([]);
         expect(card.AssignedToMe).toBe(false);
         expect(card.Milestones[0].Assignees).toEqual([]);
+    });
+});
+
+describe('CalculateChiefOfStaffMetrics — the objective is shared context, the milestone list is yours unless you own it', () => {
+    const root = () => makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack', CreatedByPersonID: 'P1', PercentComplete: null });
+    const m1 = () => makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core' });
+    const m2 = () => makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Finalize requirements' });
+    const m3 = () => makeBaseTask({ ID: 'M3', ParentID: 'R1', Name: 'Deploy', Status: 'Completed' });
+    function assigneesWith(entries: Array<[string, string]>): UUIDMap<TaskAssignee[]> {
+        const map = new UUIDMap<TaskAssignee[]>();
+        for (const [task, person] of entries) {
+            map.Set(task, [...(map.Get(task) ?? []), { PersonID: person, Name: person }]);
+        }
+        return map;
+    }
+
+    it('an assignee who does not own the objective sees only the milestones they hold, while progress still counts them all', () => {
+        const metrics = CalculateChiefOfStaffMetrics([root(), m1(), m2(), m3()], [], [], new Date(), {
+            Assignees: assigneesWith([['M1', 'P2']]),
+            CurrentPersonID: 'P2',
+        });
+        const card = metrics.PriorityCards[0];
+        expect(card.IsOwner).toBe(false);
+        expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1']);
+        expect(card.Subtasks.length).toBe(3);
+        expect(card.CompletedSubtaskCount).toBe(1);
+        // Progress is the objective's own (its metric, 3 of 12), untouched by what the viewer can see.
+        expect(card.EffectivePercentComplete).toBe(25);
+    });
+
+    it('the person who created the objective owns it and sees every milestone', () => {
+        const card = CalculateChiefOfStaffMetrics([root(), m1(), m2(), m3()], [], [], new Date(), {
+            Assignees: assigneesWith([['M1', 'P2']]),
+            CurrentPersonID: 'P1',
+        }).PriorityCards[0];
+        expect(card.IsOwner).toBe(true);
+        expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1', 'M2', 'M3']);
+    });
+
+    it('a person assigned to the objective itself owns it too', () => {
+        const card = CalculateChiefOfStaffMetrics([root(), m1(), m2()], [], [], new Date(), {
+            Assignees: assigneesWith([['R1', 'P3']]),
+            CurrentPersonID: 'p3',
+        }).PriorityCards[0];
+        expect(card.IsOwner).toBe(true);
+        expect(card.Milestones.length).toBe(2);
+    });
+
+    it('with no current person, nobody is an owner and every milestone shows (the pre-scoping behaviour)', () => {
+        const card = CalculateChiefOfStaffMetrics([root(), m1(), m2()], [], []).PriorityCards[0];
+        expect(card.IsOwner).toBe(false);
+        expect(card.Milestones.length).toBe(2);
     });
 });

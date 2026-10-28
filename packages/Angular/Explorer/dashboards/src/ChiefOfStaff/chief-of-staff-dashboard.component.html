@@ -476,10 +476,15 @@
                                         }
                                     </div>
 
-                                    @if (IsPriorityExpanded(card.Task.ID) && card.Subtasks.length > 0) {
+                                    @if (IsPriorityExpanded(card.Task.ID) && card.Milestones.length > 0) {
                                         <div class="cos-subtasks">
                                             <div class="cos-subtasks__header">
-                                                <span>Milestones & Workstreams ({{ card.Subtasks.length }})</span>
+                                                <span>Milestones & Workstreams ({{ card.Milestones.length }})</span>
+                                                @if (!card.IsOwner && card.Milestones.length < card.Subtasks.length) {
+                                                    <span class="cos-subtasks__scope-note" title="You see the milestones assigned to you; the objective's owner sees all of them">
+                                                        Yours: {{ card.Milestones.length }} of {{ card.Subtasks.length }}
+                                                    </span>
+                                                }
                                             </div>
                                             <div class="cos-subtasks__list">
                                                 @for (row of card.Milestones; track row.Task.ID) {
