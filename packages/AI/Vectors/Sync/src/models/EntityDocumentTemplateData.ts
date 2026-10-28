@@ -3,6 +3,7 @@ import type { EntityInfo, IMetadataProvider, RunView, UserInfo } from '@memberju
 import type { MJTemplateEntityExtended, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import type { TemplateParamData } from '../generic/vectorSync.types';
 import { OmitRestrictedValues, WarnOnTemplateRestrictedFieldReferences } from '../generic/indexRestrictedFields';
+import { NormalizeTemporalFields } from '../generic/temporalValues';
 
 /**
  * Builds the data an entity document's template renders for each record.
@@ -90,7 +91,8 @@ export class EntityDocumentTemplateDataBuilder {
     const templateData: Record<string, unknown> = {};
     const restricted = GetIndexRestrictedFieldNames(entity);
     WarnOnTemplateRestrictedFieldReferences(template.ID ?? template.Name, templateTextOf(template), entity.Name, restricted);
-    const indexableRecord = OmitRestrictedValues(record, restricted);
+    // Dates render as their stored day / ISO instant, not Date.toString() in the server's zone.
+    const indexableRecord = NormalizeTemporalFields(entity, OmitRestrictedValues(record, restricted));
     for (const param of template.Params) {
       switch (param.Type) {
         case 'Record':

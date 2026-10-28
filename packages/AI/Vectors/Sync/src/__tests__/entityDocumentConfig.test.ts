@@ -459,6 +459,19 @@ describe('EntityDocumentConfiguration', () => {
       expect(metadata['Status']).toBe('Active');
     });
 
+    it('stores a date-only display field as its day and timestamps as ISO 8601, not Date.toString()', () => {
+      // A `date` column arrives as a Date at UTC midnight; String() of it was the previous day west of UTC (#6055).
+      const displayFields = [makeField({ Name: 'DateOfBirth', Type: 'date' })];
+      const item = makeEmbeddingItem({
+        DateOfBirth: new Date('1964-04-24T00:00:00.000Z'),
+        __mj_UpdatedAt: new Date('2026-10-22T18:53:06.123Z'),
+      });
+      const metadata = syncer.testBuildVectorMetadata(item, entityDocument, templateContent, entityInfo, displayFields);
+
+      expect(metadata['DateOfBirth']).toBe('1964-04-24');
+      expect(metadata['__mj_UpdatedAt']).toBe('2026-10-22T18:53:06.123Z');
+    });
+
     it('should keep system keys under "include" strategy (back-compat)', () => {
       const config: EntityDocumentMetadataConfig = {
         fieldStrategy: 'include',

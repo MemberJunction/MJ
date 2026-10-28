@@ -15,6 +15,7 @@ import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocument
 import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
 import { EntityDocumentTemplateDataBuilder } from './EntityDocumentTemplateData';
+import { NormalizeTemporalValue } from '../generic/temporalValues';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { Transform, TransformCallback, Writable } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -865,7 +866,7 @@ export class EntityVectorSyncer extends VectorBase {
   ): void {
     const includeUpdatedAt = explicit ? metadataConfig?.includeUpdatedAt === true : metadataConfig?.includeUpdatedAt !== false;
     if (record['__mj_UpdatedAt'] && includeUpdatedAt) {
-      metadata['__mj_UpdatedAt'] = String(record['__mj_UpdatedAt']);
+      metadata['__mj_UpdatedAt'] = String(NormalizeTemporalValue(null, record['__mj_UpdatedAt']));
     }
   }
 
@@ -881,7 +882,7 @@ export class EntityVectorSyncer extends VectorBase {
     metadataConfig?: EntityDocumentMetadataConfig
   ): void {
     for (const field of displayFields) {
-      const val = record[field.Name];
+      const val = NormalizeTemporalValue(field.Type, record[field.Name]);
       if (val == null) continue;
 
       const fieldCfg = metadataConfig?.fields?.[field.Name];

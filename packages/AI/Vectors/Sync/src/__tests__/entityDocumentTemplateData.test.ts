@@ -101,5 +101,28 @@ describe('EntityDocumentTemplateDataBuilder', () => {
                 Nickname: '',
             });
         });
+
+        // A `date` column arrives as a Date at UTC midnight. Rendered as-is it became
+        // "Sun May 06 1984 20:00:00 GMT-0400 (Eastern Daylight Time)" for a stored 1984-05-07 (#6055).
+        it('renders a date-only field as its stored day and a timestamp as ISO 8601', () => {
+            const people = {
+                Name: 'People',
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                Fields: [
+                    { Name: 'ID', Type: 'uniqueidentifier' },
+                    { Name: 'DateOfBirth', Type: 'date' },
+                    { Name: 'LastSeenAt', Type: 'datetimeoffset' },
+                ],
+            } as unknown as EntityInfo;
+            const recordOnly = { ID: 'tpl-2', Params: [{ Name: 'Entity', Type: 'Record' }] } as unknown as MJTemplateEntityExtended;
+
+            const data = builder.BuildTemplateData(people, {
+                ID: 'P1',
+                DateOfBirth: new Date('1984-05-07T00:00:00.000Z'),
+                LastSeenAt: new Date('2026-10-22T18:53:06.123Z'),
+            }, recordOnly, []);
+
+            expect(data).toEqual({ ID: 'P1', DateOfBirth: '1984-05-07', LastSeenAt: '2026-10-22T18:53:06.123Z' });
+        });
     });
 });
