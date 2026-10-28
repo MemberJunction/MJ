@@ -29,6 +29,7 @@ vi.mock('@memberjunction/integration-engine', () => {
 });
 
 let mockGetCompanyIntegrationObjectFn: ReturnType<typeof vi.fn>;
+let mockGetIntegrationObjectFn: ReturnType<typeof vi.fn>;
 
 /** Every call made on the progress emitter, in order, so tests can assert the stream a detached run sees. */
 let progressCalls: Array<{ Method: string; Args: unknown[] }> = [];
@@ -54,6 +55,8 @@ vi.mock('@memberjunction/integration-engine-base', () => {
             Instance: {
                 Config: () => Promise.resolve(),
                 GetCompanyIntegrationObject: (...args: unknown[]) => mockGetCompanyIntegrationObjectFn(...args),
+                GetIntegrationObject: (...args: unknown[]) => mockGetIntegrationObjectFn(...args),
+                GetCompanyIntegrationByID: () => ({ IntegrationID: 'int-001' }),
             },
         },
     };
@@ -275,6 +278,8 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         mockGetCompanyIntegrationObjectFn = vi.fn().mockImplementation((_ciID: string, objectName: string) =>
             objectName === 'sales.Customer' ? { ID: 'obj-cust', Name: 'sales.Customer', IncrementalWatermarkField: 'ModifiedAt' } : undefined
         );
+
+        mockGetIntegrationObjectFn = vi.fn().mockReturnValue(undefined);
 
         mockEntityByNameFn = vi.fn().mockImplementation((name: string) => {
             if (name === 'MJ: Company Integration Record Maps') {
@@ -527,6 +532,26 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
 
             expect(result.Message).toContain('1,500 rows');
             expect(mockInvalidateEntityCachesFn).toHaveBeenCalledWith('Customer');
+        });
+
+        it('seeds LastSeenModifiedValue from the shared catalog when no per-connection object exists', async () => {
+            mockGetCompanyIntegrationObjectFn.mockReturnValue(undefined);
+            mockGetIntegrationObjectFn.mockImplementation((integrationID: string, name: string) =>
+                integrationID === 'int-001' && name === 'sales.Customer'
+                    ? { ID: 'obj-shared', Name: 'sales.Customer', IncrementalWatermarkField: 'ModifiedAt' }
+                    : undefined);
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Staging_TestDB',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            expect(findLoadBatch()).toContain('CAST(s.[ModifiedAt] AS NVARCHAR(255)) AS [__mj_integration_LastSeenModifiedValue]');
         });
 
         it('joins composite source keys with | exactly as the connector builds external IDs', async () => {

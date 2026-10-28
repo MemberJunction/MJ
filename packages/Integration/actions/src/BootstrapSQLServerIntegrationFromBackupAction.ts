@@ -634,9 +634,17 @@ END`;
     ): Promise<string | undefined> {
         const engine = IntegrationEngineBase.Instance;
         await engine.Config(false, contextUser);
-        const object = engine.GetCompanyIntegrationObject(companyIntegrationID, externalObjectName);
+        // Per-connection catalog first; the backup-archive flow populates the shared catalog instead.
+        const object = engine.GetCompanyIntegrationObject(companyIntegrationID, externalObjectName)
+            ?? this.getSharedCatalogObject(engine, companyIntegrationID, externalObjectName);
         const fieldName = object?.IncrementalWatermarkField?.trim();
         return fieldName && sourceColSet.has(fieldName.toLowerCase()) ? fieldName : undefined;
+    }
+
+    /** Looks the object up in the integration's shared catalog via the connection's parent integration. */
+    private getSharedCatalogObject(engine: IntegrationEngineBase, companyIntegrationID: string, externalObjectName: string) {
+        const integrationID = engine.GetCompanyIntegrationByID(companyIntegrationID)?.IntegrationID;
+        return integrationID ? engine.GetIntegrationObject(integrationID, externalObjectName) : undefined;
     }
 
     /**
