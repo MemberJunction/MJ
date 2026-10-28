@@ -46,7 +46,12 @@ export interface SnapshotBuildInput {
   readonly ExistingByContentHash: (contentHash: string) => Promise<MJTrainingSnapshotEntity | null>;
 }
 
-/** A built snapshot: its row, its content, and whether an existing snapshot with the same content was reused. */
+/**
+ * A built snapshot: its row, its content, and whether an existing snapshot with the same content was reused. On reuse,
+ * `Content` is this build's content: its matrix and manifest equal the stored ones (they are in the content hash), but
+ * its `Provenance` is this build's, while `Entity.ProvenanceFileID` points at the stored provenance file of the
+ * snapshot that was reused. Only that stored provenance file is authoritative for the snapshot.
+ */
 export interface BuiltSnapshot {
   readonly Entity: MJTrainingSnapshotEntity;
   readonly Content: SnapshotContent;
@@ -191,7 +196,7 @@ export class TrainingSnapshotBuilder {
     s.ColumnProvenance = JSON.stringify(input.Assembled.ColumnProvenance);
     s.PinnedFeatureVersions = JSON.stringify(input.Features.flatMap((f) => (f.source.kind === 'feature-value' && f.source.pin ? [f.source.pin] : [])));
     TrainingSnapshotBuilder.setCounts(s, input);
-    s.ClassBalance = TaskTypeRules.IsClassificationTask(input.Unit.label.outcome) ? JSON.stringify(TrainingSnapshotBuilder.classBalance(input)) : null;
+    s.ClassBalance = TaskTypeRules.IsClassificationTask(input.Unit.label.outcome) ? JSON.stringify(TrainingSnapshotBuilder.classBalance(input, content.Manifest)) : null;
     s.DataCutoff = new Date(`${input.UnitRead.Counts.dataCutoff}T00:00:00Z`);
     s.AssemblyCodeVersion = CodeVersionInfo.AssemblyCodeVersion();
     if (await s.Save()) return { Status: 'saved', Entity: s };
@@ -216,7 +221,7 @@ export class TrainingSnapshotBuilder {
     if (!u) throw new Error(`Snapshot: assembled row ${rowId} is not a unit row`);
     return {
       rowId: u.RowId, entityKey: u.EntityKey, decisionDate: UtcDay.UtcDayIso(u.DecisionDate), groupKey: u.GroupKey,
-      period: u.Period ? UtcDay.UtcDayIso(u.Period) : null, role: input.Roles.get(rowId) || 'development',
+      period: u.Period ? UtcDay.UtcDayIso(u.Period) : null, role: TrainingSnapshotBuilder.roleOf(input, rowId),
     };
   }
 
@@ -307,12 +312,24 @@ export class TrainingSnapshotBuilder {
     throw new TrainingRefusedError({ stage: 'assembly', reason: { kind: 'unresolved-column', entity: input.Unit.name, field } });
   }
 
-  /** Rows per label over the snapshot's rows (those the carver assigned a role), in ordinal label order. */
-  private static classBalance(input: SnapshotBuildInput): ClassBalanceEntry[] {
+  /**
+   * The carver's role for an assembled row. Every assembled row must have one: a missing role is a caller error (the
+   * carver was given other rows), not a data refusal, and silently defaulting it would let the manifest and the
+   * counts stored beside it disagree.
+   */
+  private static roleOf(input: SnapshotBuildInput, rowId: string): SnapshotRowRole {
+    const role = input.Roles.get(rowId);
+    if (role === undefined) throw new Error(`Snapshot: assembled row ${rowId} has no manifest role; the holdout carver must assign every assembled row`);
+    return role;
+  }
+
+  /** Rows per label over the written manifest's rows, in ordinal label order, so the row describes the stored manifest. */
+  private static classBalance(input: SnapshotBuildInput, manifest: readonly SnapshotRowKey[]): ClassBalanceEntry[] {
+    const labels = new Map(input.UnitRead.Rows.map((r) => [r.RowId, String(r.Label)]));
     const m = new Map<string, number>();
-    for (const r of input.UnitRead.Rows) {
-      if (!input.Roles.has(r.RowId)) continue;
-      const label = String(r.Label);
+    for (const line of manifest) {
+      const label = labels.get(line.rowId);
+      if (label === undefined) throw new Error(`Snapshot: manifest row ${line.rowId} is not a unit row`);
       m.set(label, (m.get(label) || 0) + 1);
     }
     return [...m.entries()].sort((a, b) => OrdinalCompare(a[0], b[0])).map(([label, rows]) => ({ label, rows }));

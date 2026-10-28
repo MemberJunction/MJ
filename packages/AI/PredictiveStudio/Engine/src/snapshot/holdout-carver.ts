@@ -20,6 +20,10 @@ export interface IHoldoutCarver {
  * It relies on the rows arriving in decision-date order and does not re-sort them: the unit row reader sorts the unit
  * rows by decision date, then row id, and the assembler keeps that order. The holdout size follows the locked-holdout
  * rule: at least one row for a positive fraction, never every row, none when there is at most one row.
+ *
+ * The carve is positional, so rows that share a decision date can straddle the boundary: the earlier row ids of that
+ * date stay in development and the later ones are held out. The boundary is still deterministic (decision-date order,
+ * row-id tiebreak), and no development row is decided after a holdout row.
  */
 export class TrailingFractionCarver implements IHoldoutCarver {
   constructor(private readonly fraction: number) {}

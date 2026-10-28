@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJFileStorageProviderEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import { FileStorageEngine, LocalFileSystemStorage } from '@memberjunction/storage';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { FileStorageBase, FileStorageEngine, LocalFileSystemStorage } from '@memberjunction/storage';
 import type { FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { TrainingSnapshotBuilder, type SnapshotBuildInput } from '../snapshot-builder';
 import { InMemorySnapshotFileStore, StorageProviderSnapshotFileStore } from '../snapshot-file-store';
@@ -133,9 +134,14 @@ class FakeFileEntity {
   public ProviderKey: string | null = null;
   public Status = '';
   public Description: string | null = null;
+  public CreatedAt = new Date(0);
   public LatestResult: FakeSaveResult | null = null;
-  constructor(private readonly id: string) {}
+  constructor(private readonly id: string, private readonly saveFailure: string | null = null) {}
   public async Save(): Promise<boolean> {
+    if (this.saveFailure !== null) {
+      this.LatestResult = { CompleteMessage: this.saveFailure };
+      return false;
+    }
     this.ID = this.id;
     return true;
   }
@@ -145,6 +151,8 @@ class FakeFileEntity {
 class FakeEntityFactory implements IEntityFactory {
   public readonly Snapshots: FakeSnapshotEntity[] = [];
   public readonly Files: FakeFileEntity[] = [];
+  /** `MJ: Files` saves that fail before file saves succeed. */
+  public FileSaveFailures = 0;
   constructor(private snapshotSaveFailures = 0, private readonly failure = 'Violation of UNIQUE KEY constraint \'UQ_TrainingSnapshot_ContentHash\'') {}
   async getEntityObject<T extends BaseEntity>(entityName: string, _contextUser?: UserInfo): Promise<T> {
     if (entityName === 'MJ: Training Snapshots') {
@@ -155,7 +163,10 @@ class FakeEntityFactory implements IEntityFactory {
       return s as unknown as T;
     }
     if (entityName === 'MJ: Files') {
-      const f = new FakeFileEntity(`file-${this.Files.length + 1}`);
+      const failing = this.FileSaveFailures > 0;
+      if (failing) this.FileSaveFailures -= 1;
+      const f = new FakeFileEntity(`file-${this.Files.length + 1}`, failing ? 'the MJ: Files table is unavailable' : null);
+      f.CreatedAt = new Date(Date.UTC(2026, 9, 27, 0, 0, this.Files.length));
       this.Files.push(f);
       return f as unknown as T;
     }
@@ -233,6 +244,18 @@ describe('TrainingSnapshotBuilder', () => {
   });
 });
 
+describe('TrainingSnapshotBuilder manifest roles', () => {
+  it('refuses an assembled row the carver gave no role, and stores the class balance of the manifest it wrote', async () => {
+    const partial = new Map([...roles].filter(([id]) => id !== 'r2'));
+    await expect(new TrainingSnapshotBuilder().Build({ ...input(new InMemorySnapshotFileStore('p')), Roles: partial })).rejects.toThrow(/r2/);
+    const built = await new TrainingSnapshotBuilder().Build(input(new InMemorySnapshotFileStore('p')));
+    const labelOf = new Map(unitRead.Rows.map((r) => [r.RowId, String(r.Label)]));
+    const counts = new Map<string, number>();
+    for (const m of built.Content.Manifest) counts.set(labelOf.get(m.rowId) ?? '', (counts.get(labelOf.get(m.rowId) ?? '') ?? 0) + 1);
+    expect(built.Entity.ClassBalance).toBe(JSON.stringify([...counts].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([label, rows]) => ({ label, rows }))));
+  });
+});
+
 describe('Snapshot file write-once rule', () => {
   it('lets a later build of the same content succeed after an earlier build failed once its files were written', async () => {
     const files = new InMemorySnapshotFileStore('provider-local');
@@ -267,45 +290,108 @@ describe('Snapshot provenance object', () => {
   });
 });
 
+/** A metadata provider whose RunView answers `MJ: Files` reads from the factory's saved rows, honouring the filter. */
+const filesMetadata = (factory: FakeEntityFactory): IMetadataProvider => ({
+  RunView: async (params: { ExtraFilter?: string; OrderBy?: string }) => {
+    const wanted = [...(params.ExtraFilter ?? '').matchAll(/(\w+)='([^']*)'/g)].map((m) => [m[1], m[2]] as const);
+    const field = (f: FakeFileEntity, name: string): string => (name === 'ID' ? f.ID : name === 'ProviderID' ? f.ProviderID : name === 'ProviderKey' ? f.ProviderKey ?? '' : `unknown:${name}`);
+    const rows = factory.Files.filter((f) => f.ID !== '' && wanted.every(([name, value]) => field(f, name).toLowerCase() === value.toLowerCase()));
+    const ordered = params.OrderBy ? [...rows].sort((a, b) => a.CreatedAt.getTime() - b.CreatedAt.getTime() || (a.ID < b.ID ? -1 : 1)) : rows;
+    return { Success: true, Results: ordered.map((f) => ({ ID: f.ID, ProviderID: f.ProviderID, ProviderKey: f.ProviderKey })) };
+  },
+}) as unknown as IMetadataProvider;
+
+/** A local-disk driver rooted at its own directory, standing for a second storage provider. */
+class ArchiveStorage extends LocalFileSystemStorage {
+  public static Root = '';
+  public override async initialize(): Promise<void> { // case-violation-ok-legacy-back-compat: FileStorageBase override
+    await super.initialize({ rootPath: ArchiveStorage.Root });
+  }
+}
+MJGlobal.Instance.ClassFactory.Register(FileStorageBase, ArchiveStorage, 'Snapshot Test Archive Storage');
+
 describe('StorageProviderSnapshotFileStore', () => {
   let root = '';
+  let archiveRoot = '';
   let savedRoot: string | undefined;
   const providerRow = { ID: 'BCC08E0E-F0A8-4703-A9C4-1F2A040786A2', Name: 'Local File System', ServerDriverKey: 'Local File System Storage', IsActive: false } as unknown as MJFileStorageProviderEntity;
+  const archiveRow = { ID: '0B6E3D2A-7C41-4F58-9E1A-2D3C4B5A6978', Name: 'Snapshot Archive', ServerDriverKey: 'Snapshot Test Archive Storage', IsActive: false } as unknown as MJFileStorageProviderEntity;
+  const key = 'predictive-studio/training-snapshots/abc/matrix.jsonl';
+  const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'ps-snapshot-store-'));
+    archiveRoot = mkdtempSync(join(tmpdir(), 'ps-snapshot-archive-'));
+    ArchiveStorage.Root = archiveRoot;
     savedRoot = process.env.STORAGE_LOCAL_ROOT;
     process.env.STORAGE_LOCAL_ROOT = root;
     vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue();
-    vi.spyOn(FileStorageEngine.Instance, 'Providers', 'get').mockReturnValue([providerRow]);
+    vi.spyOn(FileStorageEngine.Instance, 'Providers', 'get').mockReturnValue([providerRow, archiveRow]);
+    vi.spyOn(FileStorageEngine.Instance, 'GetProviderById').mockImplementation((id: string) => [providerRow, archiveRow].find((p) => UUIDsEqual(p.ID, id)));
   });
   afterEach(() => {
     vi.restoreAllMocks();
     if (savedRoot === undefined) delete process.env.STORAGE_LOCAL_ROOT;
     else process.env.STORAGE_LOCAL_ROOT = savedRoot;
     rmSync(root, { recursive: true, force: true });
+    rmSync(archiveRoot, { recursive: true, force: true });
   });
 
   it('accepts identical bytes under an existing key without writing again, refuses different bytes and an unsafe key, through the inactive provider selected by name', async () => {
     const factory = new FakeEntityFactory();
-    // The MJ: Files lookup by provider and key: the fake answers from the rows the factory created.
-    const metadata = {
-      RunView: async () => ({ Success: true, Results: factory.Files.filter((f) => f.ID !== '').map((f) => ({ ID: f.ID })) }),
-    } as unknown as IMetadataProvider;
     const writes = vi.spyOn(LocalFileSystemStorage.prototype, 'PutObject');
-    const store = new StorageProviderSnapshotFileStore(factory, metadata, undefined, 'Local File System');
-    const key = 'predictive-studio/training-snapshots/abc/matrix.jsonl';
-    const stored = await store.Put(key, 'matrix.jsonl', new TextEncoder().encode('first\n'), 'application/x-ndjson');
+    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    const stored = await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
     expect(stored.ProviderID).toBe(providerRow.ID);
     expect(stored.Sha256).toBe(SnapshotHash.Sha256Hex('first\n'));
     expect(factory.Files.map((f) => [f.ProviderKey, f.Status])).toEqual([[key, 'Uploaded']]);
-    const again = await store.Put(key, 'matrix.jsonl', new TextEncoder().encode('first\n'), 'application/x-ndjson');
+    const again = await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
     expect(again).toEqual(stored);
     expect(writes).toHaveBeenCalledTimes(1);
-    await expect(store.Put(key, 'matrix.jsonl', new TextEncoder().encode('second\n'), 'application/x-ndjson'))
-      .rejects.toThrow(/write-once/);
-    await expect(store.Put('predictive-studio/../escape.jsonl', 'escape.jsonl', new TextEncoder().encode('x\n'), 'application/x-ndjson'))
-      .rejects.toThrow(/not a safe storage key/);
+    await expect(store.Put(key, 'matrix.jsonl', bytes('second\n'), 'application/x-ndjson')).rejects.toThrow(/write-once/);
+    await expect(store.Put('predictive-studio/../escape.jsonl', 'escape.jsonl', bytes('x\n'), 'application/x-ndjson')).rejects.toThrow(/not a safe storage key/);
     expect(writes).toHaveBeenCalledTimes(1);
     expect(factory.Files).toHaveLength(1);
+  });
+
+  it('leaves the stored object in place when its MJ: Files row fails to save, and records the row on the next identical write', async () => {
+    const factory = new FakeEntityFactory();
+    factory.FileSaveFailures = 1;
+    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    await expect(store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson')).rejects.toThrow(/the MJ: Files table is unavailable/);
+    expect(readFileSync(join(root, key), 'utf8')).toBe('first\n');
+    const retried = await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
+    expect(factory.Files.filter((f) => f.ID !== '').map((f) => f.ID)).toEqual([retried.FileID]);
+  });
+
+  it('reuses the earliest-created MJ: Files row when several record one object', async () => {
+    const factory = new FakeEntityFactory();
+    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
+    // Two more rows recording the same object, listed before the original with the later-created one first.
+    const later = new FakeFileEntity('file-later');
+    const earliest = new FakeFileEntity('file-earliest');
+    for (const [f, at] of [[earliest, Date.UTC(2026, 0, 1)], [later, Date.UTC(2026, 9, 28)]] as const) {
+      f.ProviderID = providerRow.ID; f.ProviderKey = key; f.CreatedAt = new Date(at);
+      await f.Save();
+      factory.Files.unshift(f);
+    }
+    const unrelated = new FakeFileEntity('file-unrelated');
+    unrelated.ProviderID = providerRow.ID; unrelated.ProviderKey = 'predictive-studio/other.jsonl'; unrelated.CreatedAt = new Date(Date.UTC(2025, 0, 1));
+    await unrelated.Save();
+    factory.Files.unshift(unrelated);
+    const again = await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
+    expect(again.FileID).toBe('file-earliest');
+  });
+
+  it('reads a file through the provider its MJ: Files row names, not the configured one', async () => {
+    const factory = new FakeEntityFactory();
+    const archived = new FakeFileEntity('file-archived');
+    archived.ProviderID = archiveRow.ID; archived.ProviderKey = key;
+    await archived.Save();
+    factory.Files.push(archived);
+    mkdirSync(join(archiveRoot, 'predictive-studio/training-snapshots/abc'), { recursive: true });
+    writeFileSync(join(archiveRoot, key), 'archived\n');
+    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    expect(new TextDecoder().decode(await store.Get('file-archived'))).toBe('archived\n');
   });
 });

@@ -11,7 +11,12 @@
  * content, and two builds racing on one content share the matrix and manifest objects. A lost race can leave one
  * unreferenced provenance object: provenance is outside the content hash, so the loser's may differ from the
  * winner's, and the snapshot row references the winner's. Readers resolve a file through its `MJ: Files` row's stored
- * `ProviderKey` (`Get(fileId)`), never by rebuilding a key.
+ * `ProviderID` and `ProviderKey` (`Get(fileId)`), never by rebuilding a key or assuming today's configured provider.
+ *
+ * A stored object is never deleted: when its `MJ: Files` row fails to save, the object stays. Two builds of one
+ * content write the same bytes under the same key, so deleting "this build's" object could remove the object a
+ * committed snapshot references; a leftover byte-equal object is harmless, and the next identical write records the
+ * row it is missing.
  *
  * The provider is the `MJ: File Storage Providers` row named by `PS_SNAPSHOT_STORAGE_PROVIDER` (default
  * "Local File System"), read from `FileStorageEngine`'s cached providers. It is selected by name whatever its
@@ -22,7 +27,7 @@
  * without an account.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import type { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, IsSafeStorageObjectKey, ResolveStorageDriver, type FileStorageBase } from '@memberjunction/storage';
 import { SnapshotHash } from './snapshot-hash';
@@ -118,6 +123,12 @@ interface SnapshotFileRow {
   readonly Detail: string;
 }
 
+/** Where a stored snapshot file is: the provider its `MJ: Files` row names and the stored object key. */
+interface SnapshotFileLocation {
+  readonly ProviderID: string;
+  readonly ProviderKey: string;
+}
+
 /** The outcome of saving a snapshot file's `MJ: Files` row. */
 type SnapshotFileRowSave = { readonly Saved: true; readonly ID: string } | { readonly Saved: false; readonly Error: string };
 
@@ -130,6 +141,8 @@ export interface SnapshotStorageDriver {
 /** Snapshot files in an MJ storage provider, each recorded as an `MJ: Files` row. */
 export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
   private driverPromise: Promise<SnapshotStorageDriver> | null = null;
+  /** Drivers for the providers stored files name (by provider ID), resolved once each. */
+  private readonly readDrivers = new UUIDMap<Promise<FileStorageBase>>();
 
   constructor(
     private readonly entityFactory: IEntityFactory,
@@ -159,10 +172,12 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return { FileID: fileId, ProviderID: Provider.ID, ProviderKey: objectKey, Sha256: sha256, SizeBytes: bytes.byteLength };
   }
 
+  /** The file's bytes, read through the provider its `MJ: Files` row names (not necessarily the configured one). */
   public async Get(fileId: string): Promise<Uint8Array> {
-    const [{ Driver }, key] = await Promise.all([this.driver(), this.providerKeyOf(fileId)]);
-    SnapshotObjectKeys.AssertSafe(key);
-    return new Uint8Array(await Driver.GetObject({ fullPath: key }));
+    const location = await this.fileLocationOf(fileId);
+    SnapshotObjectKeys.AssertSafe(location.ProviderKey);
+    const driver = await this.readDriver(location.ProviderID);
+    return new Uint8Array(await driver.GetObject({ fullPath: location.ProviderKey }));
   }
 
   /** The provider row and its initialised driver, resolved once per store (a lazy promise, so concurrent Puts share it). */
@@ -177,10 +192,33 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     const wanted = this.providerName.trim().toLowerCase();
     const row = engine.Providers.find((p) => p.Name.trim().toLowerCase() === wanted);
     if (!row) throw new Error(`Training snapshots: no File Storage Provider named "${this.providerName}" (PS_SNAPSHOT_STORAGE_PROVIDER)`);
+    return { Driver: await StorageProviderSnapshotFileStore.initializedDriver(row), Provider: row };
+  }
+
+  /** The driver of the provider a stored file names, resolved once per provider ID. */
+  private readDriver(providerId: string): Promise<FileStorageBase> {
+    let driver = this.readDrivers.Get(providerId);
+    if (!driver) {
+      driver = this.resolveReadDriver(providerId);
+      this.readDrivers.Set(providerId, driver);
+    }
+    return driver;
+  }
+
+  private async resolveReadDriver(providerId: string): Promise<FileStorageBase> {
+    const engine = FileStorageEngine.Instance;
+    await engine.Config(false, this.contextUser, this.provider);
+    const row = engine.GetProviderById(providerId);
+    if (!row) throw new Error(`Training snapshots: no File Storage Provider with ID ${providerId}`);
+    return StorageProviderSnapshotFileStore.initializedDriver(row);
+  }
+
+  /** The provider's driver, initialised from this server's environment; a driver not configured here is refused. */
+  private static async initializedDriver(row: MJFileStorageProviderEntity): Promise<FileStorageBase> {
     const driver = ResolveStorageDriver(row);
     await driver.initialize();
-    if (!driver.IsConfigured) throw new Error(`Training snapshots: storage provider "${this.providerName}" is not configured on this server`);
-    return { Driver: driver, Provider: row };
+    if (!driver.IsConfigured) throw new Error(`Training snapshots: storage provider "${row.Name}" is not configured on this server`);
+    return driver;
   }
 
   /** An existing object: identical bytes reuse it (and its `MJ: Files` row when there is one); different bytes throw. */
@@ -195,16 +233,15 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return file.ID;
   }
 
-  /** A new object: stored, then recorded; when the row cannot be saved the object is removed again. */
+  /**
+   * A new object: stored, then recorded. When the row cannot be saved the object stays (never deleted: another build
+   * of the same content may have written, and committed a snapshot over, the same bytes under this key); the next
+   * identical write records the missing row.
+   */
   private async writeNew(driver: FileStorageBase, provider: MJFileStorageProviderEntity, row: SnapshotFileRow, bytes: Uint8Array): Promise<string> {
     if (!(await driver.PutObject(row.ObjectKey, Buffer.from(bytes), row.ContentType))) throw new Error(`Training snapshots: storage refused ${row.ObjectKey}`);
     const file = await this.saveFileRow(provider, row);
-    if (file.Saved === false) {
-      // Undo the upload so a retry writes the object afresh; a failed undo is reported in the same error, never silent.
-      const removed = await driver.DeleteObject(row.ObjectKey);
-      const undo = removed ? '' : '; the stored object could not be removed';
-      throw new Error(`Training snapshots: saving the MJ: Files row for ${row.ObjectKey} failed: ${file.Error}${undo}`);
-    }
+    if (file.Saved === false) throw new Error(`Training snapshots: saving the MJ: Files row for ${row.ObjectKey} failed: ${file.Error}`);
     return file.ID;
   }
 
@@ -221,13 +258,18 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return { Saved: false, Error: file.LatestResult?.CompleteMessage || 'unknown error' };
   }
 
-  /** The `MJ: Files` row already recording this provider's object, or null (read-only: `'simple'`, one field). */
+  /**
+   * The `MJ: Files` row already recording this provider's object, or null (read-only: `'simple'`, one field). When
+   * several rows record one object, the earliest created wins (ties by ID), so every writer picks the same row.
+   */
   private async fileRowIdOf(provider: MJFileStorageProviderEntity, objectKey: string): Promise<string | null> {
     const r = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJFileEntity, 'ID'>>(
       {
         EntityName: 'MJ: Files',
         ExtraFilter: `ProviderID='${EscapeSQLString(provider.ID)}' AND ProviderKey='${EscapeSQLString(objectKey)}'`,
+        OrderBy: '__mj_CreatedAt ASC, ID ASC',
         Fields: ['ID'],
+        MaxRows: 1,
         ResultType: 'simple',
       },
       this.contextUser,
@@ -236,14 +278,14 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return r.Results[0]?.ID || null;
   }
 
-  /** The storage key of a snapshot's `MJ: Files` row (read-only: `'simple'`, one field). */
-  private async providerKeyOf(fileId: string): Promise<string> {
-    const r = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJFileEntity, 'ProviderKey'>>(
-      { EntityName: 'MJ: Files', ExtraFilter: `ID='${EscapeSQLString(fileId)}'`, Fields: ['ProviderKey'], ResultType: 'simple' },
+  /** Where a snapshot's `MJ: Files` row says its object is: the provider and the stored key (read-only: `'simple'`). */
+  private async fileLocationOf(fileId: string): Promise<SnapshotFileLocation> {
+    const r = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJFileEntity, 'ProviderID' | 'ProviderKey'>>(
+      { EntityName: 'MJ: Files', ExtraFilter: `ID='${EscapeSQLString(fileId)}'`, Fields: ['ProviderID', 'ProviderKey'], ResultType: 'simple' },
       this.contextUser,
     );
-    const key = r.Success ? r.Results[0]?.ProviderKey : undefined;
-    if (!key) throw new Error(`Training snapshots: file ${fileId} has no storage key`);
-    return key;
+    const row = r.Success ? r.Results[0] : undefined;
+    if (!row?.ProviderKey) throw new Error(`Training snapshots: file ${fileId} has no storage key`);
+    return { ProviderID: row.ProviderID, ProviderKey: row.ProviderKey };
   }
 }
