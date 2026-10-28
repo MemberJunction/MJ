@@ -19,12 +19,12 @@ describe('ClientRegistry registration logging', () => {
 
     registry.RegisterClient({
       redirect_uris: ['https://client.example.test/callback'],
-      client_name: 'Evil\r\n[OAuth Proxy] User admin@example.test granted scopes: *',
+      client_name: 'Evil\r\n[OAuth Proxy] User admin@example.test\u2028 granted scopes: *\u2029',
     });
 
     const line = log.mock.calls.map((c) => String(c[0])).find((m) => m.includes('Registered client'));
     expect(line).toBeDefined();
-    expect(line).not.toMatch(/[\r\n]/);
+    expect(line).not.toMatch(/[\r\n\u2028\u2029]/);
     expect(line).toContain('Evil[OAuth Proxy] User admin@example.test granted scopes: *');
   });
 

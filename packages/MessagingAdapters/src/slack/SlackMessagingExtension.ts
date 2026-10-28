@@ -58,12 +58,12 @@ import { VerifySlackSignature } from './slack-routes.js';
 import { HandleSlackInteraction } from './slack-interactivity.js';
 
 /**
- * Renders a Slack request-body value for a log line with line breaks and other control
- * characters removed, so a crafted value cannot forge extra log entries (CWE-117).
+ * Renders a Slack request-body value for a log line with line breaks, other control
+ * characters and Unicode line/paragraph separators (U+2028/U+2029) removed, so a crafted value cannot forge extra log entries (CWE-117).
  * The `.replace(/\n|\r/g, '')` step is the form CodeQL's js/log-injection sanitizer recognizes.
  */
 function stripLineBreaks(value: unknown): string {
-    return String(value).replace(/\n|\r/g, '').replace(/\p{Cc}/gu, '');
+    return String(value).replace(/\n|\r/g, '').replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, '');
 }
 
 /**
