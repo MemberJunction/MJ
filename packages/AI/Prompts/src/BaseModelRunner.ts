@@ -389,8 +389,8 @@ export abstract class BaseModelRunner {
 
     // Priority 2: PromptModel bindings (most specific) - with failover
     if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
+      const promptModel = this.getPromptModelsForPromptId(promptId).find(
+        pm => UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
@@ -641,8 +641,8 @@ export abstract class BaseModelRunner {
   private hasPlatformCredential(promptId: string | undefined, modelId: string | undefined, vendorId: string | undefined): boolean {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
+      const promptModel = this.getPromptModelsForPromptId(promptId).find(
+        pm => UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
         return true;
@@ -803,8 +803,8 @@ export abstract class BaseModelRunner {
     verbose?: boolean
   ): ModelVendorCandidate[] {
     // Get all active AIPromptModel records for this prompt
-    const allPromptModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview')
+    const allPromptModels = this.getPromptModelsForPromptId(prompt.ID).filter(
+      pm => pm.Status === 'Active' || pm.Status === 'Preview'
     );
 
     // Filter by configuration matching rules
@@ -1164,12 +1164,19 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * Returns all AIPromptModel rows for a prompt via AIEngine's O(1) PromptModelsByPromptID index.
+   */
+  protected getPromptModelsForPromptId(promptId: string): MJAIPromptModelEntity[] {
+    return AIEngine.Instance.PromptModelsByPromptID.get(NormalizeUUID(promptId)) ?? [];
+  }
+
+  /**
    * Helper: true if this prompt has any AIPromptModel bindings at all, regardless of Status or
    * ConfigurationID. Distinguishes "no bindings were ever configured" (general selection strategy
    * should apply) from "bindings exist but are all Inactive" (no model should be selected).
    */
   private hasAnyPromptModelBindings(prompt: MJAIPromptEntityExtended): boolean {
-    return AIEngine.Instance.PromptModels.some(pm => UUIDsEqual(pm.PromptID, prompt.ID));
+    return this.getPromptModelsForPromptId(prompt.ID).length > 0;
   }
 
   /**
@@ -1181,15 +1188,15 @@ export abstract class BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     configurationId?: string
   ): MJAIPromptModelEntity[] {
+    const forPrompt = this.getPromptModelsForPromptId(prompt.ID);
     if (configurationId) {
       // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
       const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
 
       // Walk the chain looking for prompt models
       for (const config of chain) {
-        const promptModels = AIEngine.Instance.PromptModels.filter(
-          pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-                (pm.Status === 'Active' || pm.Status === 'Preview') &&
+        const promptModels = forPrompt.filter(
+          pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
                 UUIDsEqual(pm.ConfigurationID, config.ID)
         );
 
@@ -1203,9 +1210,8 @@ export abstract class BaseModelRunner {
     }
 
     // Return null-config (universal) models
-    return AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+    return forPrompt.filter(
+      pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
   }
@@ -1255,13 +1261,13 @@ export abstract class BaseModelRunner {
   ): void {
     const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
     const requiredTypeId = this.RequiredModelTypeID();
+    const forPrompt = this.getPromptModelsForPromptId(prompt.ID);
 
     // Add models from parent configs (skip index 0 which is the direct config, already handled)
     for (let i = 1; i < chain.length; i++) {
       const parentConfig = chain[i];
-      const parentModels = AIEngine.Instance.PromptModels.filter(
-        pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+      const parentModels = forPrompt.filter(
+        pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
               UUIDsEqual(pm.ConfigurationID, parentConfig.ID)
       );
 
@@ -1294,9 +1300,8 @@ export abstract class BaseModelRunner {
     }
 
     // Finally add NULL config models (universal fallback) with lowest priority
-    const nullConfigModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+    const nullConfigModels = forPrompt.filter(
+      pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
 

@@ -47,6 +47,15 @@ const h = vi.hoisted(() => {
         keyedDrivers: new Set<string>(),
     };
 
+    const byPromptID = <T extends { PromptID?: unknown }>(rows: T[]): Map<string, T[]> => {
+        const map = new Map<string, T[]>();
+        for (const row of rows) {
+            const key = norm(row.PromptID);
+            map.set(key, [...(map.get(key) ?? []), row]);
+        }
+        return map;
+    };
+
     const engine = {
         get VendorTypeDefinitions() { return [{ ID: inferenceTypeId, Name: 'Inference Provider' }]; },
         get Vendors() { return state.vendors; },
@@ -63,6 +72,7 @@ const h = vi.hoisted(() => {
         get ModelVendorsByModelID() {
             return new Map(state.models.map(m => [norm(m.ID), m.ModelVendors as Array<Record<string, unknown>>]));
         },
+        get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
         GetConfigurationChain() { return []; },
         GetEffectiveModelConfiguration() { return undefined; },
         HasCredentialBindings() { return false; },

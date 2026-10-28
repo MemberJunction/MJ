@@ -1,5 +1,126 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- cc36de5: Add Alternate Base Views (MJ Canon Layer 1): allow entities to register governed SQL views (`MJ: Entity Alternate Base Views`) that maintain 100% column parity with the canonical `BaseView` while returning curated row subsets (such as `Active` members or `Open` orders), with full support across `RunView`, `RunViews`, `BaseEngine`, `LocalCacheManager`, `CodeGen` column-parity validation, `QueryEntity.AlternateBaseViewID` lineage extraction, `QueryGen`, `Lists`, `DataContext`, `GetEntityDetails`, and `MJExplorer` Data Explorer / Entity Viewer.
+- 6770aad: CodeGen keeps EntityField metadata in step with the views and procedures it regenerates, and fails the run when a step fails instead of reporting success.
+  - Custom and layered base views are refreshed live, inner view first, before fields are synced; orphaned EntityField rows are pruned across every entity once per run, and the Sequence renumber no longer collides on them (#4050, #4336, #4737, #5976, #6028).
+  - Self-referencing keys that still have `Root*` fields or a `GetRootID` function keep their hierarchy after the 6.1 opt-in change (#5976).
+  - IS-A child entities keep the foreign-key metadata of inherited fields (#4569).
+  - Stale create/update/delete procedures are found by comparing them with what CodeGen generates (#3343); expression column defaults no longer produce procedures that fail to compile (#4000).
+  - `spDeleteEntityWithCoreDependencies` handles every reference to an entity from a checked-in policy and runs in one transaction (#3546).
+  - The runtime schema update path resolves `additionalSchemaInfo` from the config file's folder and fails when CodeGen creates no entity for a table (#5858).
+  - Batch, script and step failures are collected and the run exits non-zero listing all of them.
+
+### Patch Changes
+
+- c0ebd70: CodeGen: the IS-A parent-field sync now marks a child entity as modified whenever it inserts, updates or removes one of the child's virtual `EntityField` rows, so the child's entity subclass, zod schema and GraphQL types are regenerated in the same run instead of staying stale until a `--skipdb` pass (#5961).
+- ea1a2fb: CodeGen: the IS-A parent-field sync now honours the compiled `includeSchemas`/`excludeSchemas` scope, so an Open App publisher run no longer processes sibling apps' IS-A children or writes their `EntityField` INSERTs into its own migration capture, and the IS-A `EntityField` INSERT it does emit is wrapped in the same existence guard as the schema-field inserts so a replayed capture is idempotent (#4879).
+- f7d5ab5: Ten small fixes:
+  - Vector indexing treats field names with `pin`, `otp`, `passcode` or `biometric` as sensitive (#5670).
+  - `DropboxFileStorage.ListObjects` no longer makes an extra account call or logs the account email on every listing (#4440).
+  - The folder dialog's "Everyone" hint says a shared folder can't be made private again (#4817), and a stray indent is fixed (#4818).
+  - The entity save inconsistency warning is saved to the error log with a code that fits the column, and a failed save logs why (#6024).
+  - The SQL converter's jsonb guard compares an unquoted schema name in lower case, matching how PostgreSQL stores it (#5864).
+  - CodeGen's built-in feature defaults enable form-layout generation under the name the code checks (#5827), and the validator count no longer counts duplicates (#4376).
+  - `mj sync push` honors `sqlLogging.variableBatchThreshold`, default 200, as watch already did (#5556).
+
+- 0c8adca: CodeGen no longer treats an entity's own primary key as its hierarchy parent. FK auto-detection can mark a `<prefix>_key` primary key as referencing its own table; the recursive root-id view CodeGen then generated joined the key to itself and failed to compile ("column reference is ambiguous"), taking the base view and its CRUD routines with it.
+- a8bda68: PostgreSQL full-text search no longer requires a SQL-Server-only precondition: the primary-key index lookup that only SQL Server's `CREATE FULLTEXT INDEX … KEY INDEX` uses now runs only on providers that declare they need it, so a PostgreSQL entity without a primary-key constraint gets its full-text objects. The full-text write-back's error now names the entity and field, says why the user cache was empty, and guards the cache array rather than its element.
+- 74a3420: On PostgreSQL, enabling full-text search for an entity now creates its search objects, and no longer fails the CodeGen run.
+  - **The DDL runs.** The PostgreSQL phased executor had no full-text phase, so the generated search
+    function and index were written to a file and never created. A full-text phase now runs between
+    CRUD and view permissions. It must follow the view, because the search function returns rows of
+    the base view.
+  - **A missing function no longer fails the run.** The permissions phase granted `EXECUTE` on the
+    search function even when it did not exist, and PostgreSQL's `42883` failed the whole run, not
+    one entity. Each grant is now guarded by a `pg_proc` existence check and raises a `NOTICE` when
+    the function is absent.
+  - **The stored name matches the function.** `Entity.FullTextSearchFunction` was written back as
+    `fnSearch<CodeName>`, the SQL Server name, while PostgreSQL creates `fn_search_<base_table>`. The
+    provider now supplies the name, and a stored name that differs is corrected on the next run.
+    SQL Server is unaffected.
+
+- db4e210: - `@memberjunction/ng-base-forms`:
+  - Extract declarative `[mjRecordLink]` directive (`MjRecordLinkDirective`), `<mj-record-link>` component (`MjRecordLinkComponent`), and body-mounted singleton `MjRecordPreviewPopoverService` so any custom form header, `BaseFormPanel`, or dashboard widget can attach hover-intent record previews, inline Quick Edit with live propagation to virtual display fields, standard/polymorphic FK resolution, and `FormNavigationEvent` navigation. Refactor `<mj-form-field>` and `<mj-record-links>` to share the same DRY infrastructure.
+  - Upgrade `<mj-record-preview-popover>` (`MjRecordPreviewPopoverComponent`) with an Option A header micro-cluster (Copy ID pill, `[✎]` Quick Edit, `[↗]` New Tab), clickable record title (`Record →`), auto-spanning wide fields (`grid-column: 1 / -1`), contextual `Cancel`/`Save` footer only in edit mode, cancellable `BeforeQuickEditSave` / `AfterQuickEditSaved` events, and 3-tier `@RegisterClass(MjRecordPreviewPopoverComponent, ...)` / `ClassFactory` runtime specialization (`ResolveRecordPreviewPopoverType`).
+  - Add one-click Quick Unlink for nullable outgoing foreign keys inside `<mj-record-links>`.
+  - `@memberjunction/ng-ui-components`:
+    - Add general-purpose, zero-domain-knowledge `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) for irregular time-series event streams with generic `[Items]` or raw `[Data]` + `[FieldMap]` binding, configurable grouping & resolution (`Resolution`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'`, `CoalesceStrategy`: `'adaptive-era' | 'merge-closest'`, `SessionGapHours`, `GroupSameCalendarDay`, `MaxClusters`, `EraZoomThreshold`), semantic Click-to-Zoom on multi-year era cards, rich imperative methods, and cancellable `Before*` / `After*` events.
+  - `@memberjunction/ng-record-changes`:
+    - Consume `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to replace the linear 12-bucket spark-bar chart with a **Burst-Aware Cluster Strip (Time-Gap Compression)** with multi-year adaptive era zoom and click-to-filter session cards.
+    - Add a Cross-Version Diff Comparison workbench (`vA ↔ vB`) to `<mj-record-changes>`, allowing users to compare any two historical snapshots or compare a historical snapshot against the live record state.
+  - `@memberjunction/codegen-lib`: Prevent foreign keys, polymorphic `RecordID` columns (`EntityIDFieldName` set or `*RecordID`/`*RecordPrimaryKey` naming), and columns on tables with an `MJ: Entities` FK from being auto-selected as `IsNameField`.
+  - `@memberjunction/ng-explorer-core` & `@memberjunction/ng-explorer-app`: Fix infinite loading screen hang when navigating to an invalid or unmatched URL by handling `NavigationError` / `NavigationCancel` in `ShellComponent.ngOnInit` and falling back to the active workspace tab or landing app when a deep link fails to resolve.
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [cc41d33]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [e8e6cd6]
+- Updated dependencies [142d524]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [96c44bf]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [f75f559]
+- Updated dependencies [8ec184d]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [663ff80]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+- Updated dependencies [ced8414]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/actions-base@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/aiengine@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/core-entities-server@6.2.0-edge.6
+  - @memberjunction/generic-database-provider@6.2.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.6
+  - @memberjunction/sql-dialect@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.6
+  - @memberjunction/ai-prompts@6.2.0-edge.6
+  - @memberjunction/actions@6.2.0-edge.6
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.6
+  - @memberjunction/query-processor@6.2.0-edge.6
+  - @memberjunction/external-data-sources@6.2.0-edge.6
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.6
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.6
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.6
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.6
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.6
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.6
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.6
+  - @memberjunction/sql-parser@6.2.0-edge.6
+  - @memberjunction/cli-core@6.2.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.6
+  - @memberjunction/config@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes
