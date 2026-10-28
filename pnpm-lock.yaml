@@ -4797,7 +4797,7 @@ importers:
         specifier: 6.2.0-edge.6
         version: link:../../Generic/notifications
       '@memberjunction/ng-query-viewer':
-        specifier: 6.2.0-edge.5
+        specifier: 6.2.0-edge.6
         version: link:../../Generic/query-viewer
       '@memberjunction/ng-record-clone':
         specifier: 6.2.0-edge.6
@@ -12335,7 +12335,7 @@ importers:
         specifier: 6.2.0-edge.6
         version: link:../MJCoreEntities
       '@memberjunction/core-entities-server':
-        specifier: 6.2.0-edge.5
+        specifier: 6.2.0-edge.6
         version: link:../MJCoreEntitiesServer
       '@memberjunction/db-auto-doc':
         specifier: 6.2.0-edge.6
@@ -14933,7 +14933,7 @@ importers:
   packages/SQLDialect:
     dependencies:
       '@memberjunction/global':
-        specifier: 6.2.0-edge.5
+        specifier: 6.2.0-edge.6
         version: link:../MJGlobal
     devDependencies:
       ts-node-dev:
@@ -16478,7 +16478,7 @@ importers:
         specifier: 6.2.0-edge.6
         version: link:../../Encryption
       '@memberjunction/external-data-sources':
-        specifier: 6.2.0-edge.5
+        specifier: 6.2.0-edge.6
         version: link:../../ExternalDataSources/Engine
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0-edge.6
