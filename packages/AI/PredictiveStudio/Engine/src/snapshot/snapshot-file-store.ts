@@ -4,6 +4,12 @@
  * Write-once Training Snapshot files through an MJ storage provider. MJ is the system of record: every file written
  * here is an `MJ: Files` row whose `ProviderKey` names the stored object.
  *
+ * Write-once with byte-equal idempotence: a key that already holds an object is never overwritten. When the stored
+ * bytes are identical to the new ones (equal SHA-256), the write succeeds without writing; different bytes are
+ * refused with `SnapshotFileExistsError`. Snapshot keys are derived from the content hash, so a build that failed
+ * after writing its files never blocks a later build of the same content, and two builds racing on one content
+ * write the same objects instead of two file sets.
+ *
  * The provider is the `MJ: File Storage Providers` row named by `PS_SNAPSHOT_STORAGE_PROVIDER` (default
  * "Local File System"), read from `FileStorageEngine`'s cached providers. It is selected by name whatever its
  * `IsActive` flag: an inactive provider is never picked by automatic provider selection, which is exactly why a
@@ -30,7 +36,10 @@ export interface StoredSnapshotFile {
 
 /** Where Training Snapshot files are written and read. */
 export interface ISnapshotFileStore {
-  /** Upload once (an existing key is refused) and record the `MJ: Files` row. */
+  /**
+   * Upload once and record the `MJ: Files` row. An existing key holding identical bytes succeeds without a write; an
+   * existing key holding different bytes is refused (`SnapshotFileExistsError`).
+   */
   Put(objectKey: string, name: string, bytes: Uint8Array, contentType: string): Promise<StoredSnapshotFile>;
   Get(fileId: string): Promise<Uint8Array>;
   /** The provider the files are stored with (`MJ: File Storage Providers.ID`). */
@@ -51,9 +60,10 @@ export class InMemorySnapshotFileStore implements ISnapshotFileStore {
 
   public async Put(objectKey: string, _name: string, bytes: Uint8Array): Promise<StoredSnapshotFile> {
     SnapshotObjectKeys.AssertSafe(objectKey);
-    if ([...this.Saved.values()].some((f) => f.Key === objectKey)) throw new SnapshotFileExistsError(objectKey);
-    const id = `mem-snapshot-file-${this.Saved.size + 1}`;
-    this.Saved.set(id, { Key: objectKey, Bytes: bytes });
+    const existing = [...this.Saved.entries()].find(([, f]) => f.Key === objectKey);
+    if (existing) SnapshotWriteOnce.AcceptExisting(objectKey, existing[1].Bytes, bytes);
+    const id = existing ? existing[0] : `mem-snapshot-file-${this.Saved.size + 1}`;
+    if (!existing) this.Saved.set(id, { Key: objectKey, Bytes: bytes });
     return { FileID: id, ProviderID: this.providerId, ProviderKey: objectKey, Sha256: SnapshotHash.Sha256Hex(bytes), SizeBytes: bytes.byteLength };
   }
 
@@ -68,11 +78,22 @@ export class InMemorySnapshotFileStore implements ISnapshotFileStore {
   }
 }
 
-/** A snapshot object key that already exists: snapshot files are written once and never overwritten. */
+/** A snapshot object key that already holds different bytes: snapshot files are written once and never overwritten. */
 export class SnapshotFileExistsError extends Error {
   constructor(public readonly ObjectKey: string) {
-    super(`Training snapshots: ${ObjectKey} already exists; snapshot files are write-once`);
+    super(`Training snapshots: ${ObjectKey} already exists with different bytes; snapshot files are write-once`);
     this.name = 'SnapshotFileExistsError';
+  }
+}
+
+/** The write-once rule every snapshot store applies to a key that already holds an object. */
+export class SnapshotWriteOnce {
+  /**
+   * Returns when the stored bytes equal the new ones (equal SHA-256: the write is already done); throws
+   * `SnapshotFileExistsError` when they differ.
+   */
+  public static AcceptExisting(objectKey: string, stored: Uint8Array, bytes: Uint8Array): void {
+    if (SnapshotHash.Sha256Hex(stored) !== SnapshotHash.Sha256Hex(bytes)) throw new SnapshotFileExistsError(objectKey);
   }
 }
 
@@ -85,6 +106,17 @@ export class SnapshotObjectKeys {
     }
   }
 }
+
+/** What a snapshot file's `MJ: Files` row records. */
+interface SnapshotFileRow {
+  readonly ObjectKey: string;
+  readonly Name: string;
+  readonly ContentType: string;
+  readonly Detail: string;
+}
+
+/** The outcome of saving a snapshot file's `MJ: Files` row. */
+type SnapshotFileRowSave = { readonly Saved: true; readonly ID: string } | { readonly Saved: false; readonly Error: string };
 
 /** The snapshot storage provider row and its initialised driver. */
 export interface SnapshotStorageDriver {
@@ -108,15 +140,20 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return (await this.driver()).Provider.ID;
   }
 
-  /** Check-then-write: an existing object is refused, then the bytes are stored and their `MJ: Files` row saved. */
+  /**
+   * Check-then-write. A key that already holds an object is read and compared: identical bytes succeed without a
+   * write (reusing the object's `MJ: Files` row, or recording one when an earlier build left none), different bytes
+   * are refused. A new object is stored and its `MJ: Files` row saved.
+   */
   public async Put(objectKey: string, name: string, bytes: Uint8Array, contentType: string): Promise<StoredSnapshotFile> {
     SnapshotObjectKeys.AssertSafe(objectKey);
     const { Driver, Provider } = await this.driver();
-    if (await Driver.ObjectExists(objectKey)) throw new SnapshotFileExistsError(objectKey);
-    if (!(await Driver.PutObject(objectKey, Buffer.from(bytes), contentType))) throw new Error(`Training snapshots: storage refused ${objectKey}`);
     const sha256 = SnapshotHash.Sha256Hex(bytes);
-    const file = await this.saveFileRow(Driver, Provider, objectKey, name, contentType, `${bytes.byteLength} bytes, sha256 ${sha256}`);
-    return { FileID: file.ID, ProviderID: Provider.ID, ProviderKey: objectKey, Sha256: sha256, SizeBytes: bytes.byteLength };
+    const row: SnapshotFileRow = { ObjectKey: objectKey, Name: name, ContentType: contentType, Detail: `${bytes.byteLength} bytes, sha256 ${sha256}` };
+    const fileId = (await Driver.ObjectExists(objectKey))
+      ? await this.acceptExisting(Driver, Provider, row, bytes)
+      : await this.writeNew(Driver, Provider, row, bytes);
+    return { FileID: fileId, ProviderID: Provider.ID, ProviderKey: objectKey, Sha256: sha256, SizeBytes: bytes.byteLength };
   }
 
   public async Get(fileId: string): Promise<Uint8Array> {
@@ -143,20 +180,57 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return { Driver: driver, Provider: row };
   }
 
-  /** Records the stored object as an `MJ: Files` row; when the row cannot be saved the object is removed again. */
-  private async saveFileRow(driver: FileStorageBase, provider: MJFileStorageProviderEntity, objectKey: string, name: string, contentType: string, detail: string): Promise<MJFileEntity> {
+  /** An existing object: identical bytes reuse it (and its `MJ: Files` row when there is one); different bytes throw. */
+  private async acceptExisting(driver: FileStorageBase, provider: MJFileStorageProviderEntity, row: SnapshotFileRow, bytes: Uint8Array): Promise<string> {
+    const stored = new Uint8Array(await driver.GetObject({ fullPath: row.ObjectKey }));
+    SnapshotWriteOnce.AcceptExisting(row.ObjectKey, stored, bytes);
+    const recorded = await this.fileRowIdOf(provider, row.ObjectKey);
+    if (recorded !== null) return recorded;
+    const file = await this.saveFileRow(provider, row);
+    // The object predates this write, so a failed row leaves it in place.
+    if (file.Saved === false) throw new Error(`Training snapshots: saving the MJ: Files row for ${row.ObjectKey} failed: ${file.Error}`);
+    return file.ID;
+  }
+
+  /** A new object: stored, then recorded; when the row cannot be saved the object is removed again. */
+  private async writeNew(driver: FileStorageBase, provider: MJFileStorageProviderEntity, row: SnapshotFileRow, bytes: Uint8Array): Promise<string> {
+    if (!(await driver.PutObject(row.ObjectKey, Buffer.from(bytes), row.ContentType))) throw new Error(`Training snapshots: storage refused ${row.ObjectKey}`);
+    const file = await this.saveFileRow(provider, row);
+    if (file.Saved === false) {
+      // Undo the upload so a retry writes the object afresh; a failed undo is reported in the same error, never silent.
+      const removed = await driver.DeleteObject(row.ObjectKey);
+      const undo = removed ? '' : '; the stored object could not be removed';
+      throw new Error(`Training snapshots: saving the MJ: Files row for ${row.ObjectKey} failed: ${file.Error}${undo}`);
+    }
+    return file.ID;
+  }
+
+  /** Records the stored object as an `MJ: Files` row: its ID, or the failed Save's CompleteMessage. */
+  private async saveFileRow(provider: MJFileStorageProviderEntity, row: SnapshotFileRow): Promise<SnapshotFileRowSave> {
     const file = await this.entityFactory.getEntityObject<MJFileEntity>('MJ: Files', this.contextUser);
-    file.Name = name;
-    file.ContentType = contentType;
+    file.Name = row.Name;
+    file.ContentType = row.ContentType;
     file.ProviderID = provider.ID;
-    file.ProviderKey = objectKey;
+    file.ProviderKey = row.ObjectKey;
     file.Status = 'Uploaded';
-    file.Description = `Predictive Studio training snapshot file (${detail})`;
-    if (await file.Save()) return file;
-    // Undo the upload so a retry can write the same key; a failed undo is reported in the same error, never silent.
-    const removed = await driver.DeleteObject(objectKey);
-    const undo = removed ? '' : `; the stored object could not be removed`;
-    throw new Error(`Training snapshots: saving the MJ: Files row for ${objectKey} failed: ${file.LatestResult?.CompleteMessage || 'unknown error'}${undo}`);
+    file.Description = `Predictive Studio training snapshot file (${row.Detail})`;
+    if (await file.Save()) return { Saved: true, ID: file.ID };
+    return { Saved: false, Error: file.LatestResult?.CompleteMessage || 'unknown error' };
+  }
+
+  /** The `MJ: Files` row already recording this provider's object, or null (read-only: `'simple'`, one field). */
+  private async fileRowIdOf(provider: MJFileStorageProviderEntity, objectKey: string): Promise<string | null> {
+    const r = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJFileEntity, 'ID'>>(
+      {
+        EntityName: 'MJ: Files',
+        ExtraFilter: `ProviderID='${EscapeSQLString(provider.ID)}' AND ProviderKey='${EscapeSQLString(objectKey)}'`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+      },
+      this.contextUser,
+    );
+    if (!r.Success) throw new Error(`Training snapshots: looking up the MJ: Files row for ${objectKey} failed: ${r.ErrorMessage}`);
+    return r.Results[0]?.ID || null;
   }
 
   /** The storage key of a snapshot's `MJ: Files` row (read-only: `'simple'`, one field). */

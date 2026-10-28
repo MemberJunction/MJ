@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJFileStorageProviderEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import { FileStorageEngine } from '@memberjunction/storage';
+import { FileStorageEngine, LocalFileSystemStorage } from '@memberjunction/storage';
 import type { FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { TrainingSnapshotBuilder, type SnapshotBuildInput } from '../snapshot-builder';
 import { InMemorySnapshotFileStore, StorageProviderSnapshotFileStore } from '../snapshot-file-store';
@@ -233,6 +233,19 @@ describe('TrainingSnapshotBuilder', () => {
   });
 });
 
+describe('Snapshot file write-once rule', () => {
+  it('lets a later build of the same content succeed after an earlier build failed once its files were written', async () => {
+    const files = new InMemorySnapshotFileStore('provider-local');
+    const failing = new FakeEntityFactory(1, 'the database is unavailable');
+    await expect(new TrainingSnapshotBuilder().Build(input(files, failing))).rejects.toThrow(/the database is unavailable/);
+    expect(files.Saved.size).toBe(3);
+    const retried = await new TrainingSnapshotBuilder().Build(input(files));
+    expect(retried.Reused).toBe(false);
+    expect(files.Saved.size).toBe(3);
+    expect(files.Saved.get(retried.Entity.MatrixFileID)?.Key).toBe(`predictive-studio/training-snapshots/${retried.Entity.ContentHash}/matrix.jsonl`);
+  });
+});
+
 describe('StorageProviderSnapshotFileStore', () => {
   let root = '';
   let savedRoot: string | undefined;
@@ -251,17 +264,27 @@ describe('StorageProviderSnapshotFileStore', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('refuses a second write under one key (write-once) and an unsafe key, through the inactive provider selected by name', async () => {
+  it('accepts identical bytes under an existing key without writing again, refuses different bytes and an unsafe key, through the inactive provider selected by name', async () => {
     const factory = new FakeEntityFactory();
-    const store = new StorageProviderSnapshotFileStore(factory, {} as IMetadataProvider, undefined, 'Local File System');
-    const stored = await store.Put('predictive-studio/training-snapshots/abc/matrix.jsonl', 'matrix.jsonl', new TextEncoder().encode('first\n'), 'application/x-ndjson');
+    // The MJ: Files lookup by provider and key: the fake answers from the rows the factory created.
+    const metadata = {
+      RunView: async () => ({ Success: true, Results: factory.Files.filter((f) => f.ID !== '').map((f) => ({ ID: f.ID })) }),
+    } as unknown as IMetadataProvider;
+    const writes = vi.spyOn(LocalFileSystemStorage.prototype, 'PutObject');
+    const store = new StorageProviderSnapshotFileStore(factory, metadata, undefined, 'Local File System');
+    const key = 'predictive-studio/training-snapshots/abc/matrix.jsonl';
+    const stored = await store.Put(key, 'matrix.jsonl', new TextEncoder().encode('first\n'), 'application/x-ndjson');
     expect(stored.ProviderID).toBe(providerRow.ID);
     expect(stored.Sha256).toBe(SnapshotHash.Sha256Hex('first\n'));
-    expect(factory.Files.map((f) => [f.ProviderKey, f.Status])).toEqual([['predictive-studio/training-snapshots/abc/matrix.jsonl', 'Uploaded']]);
-    await expect(store.Put('predictive-studio/training-snapshots/abc/matrix.jsonl', 'matrix.jsonl', new TextEncoder().encode('second\n'), 'application/x-ndjson'))
+    expect(factory.Files.map((f) => [f.ProviderKey, f.Status])).toEqual([[key, 'Uploaded']]);
+    const again = await store.Put(key, 'matrix.jsonl', new TextEncoder().encode('first\n'), 'application/x-ndjson');
+    expect(again).toEqual(stored);
+    expect(writes).toHaveBeenCalledTimes(1);
+    await expect(store.Put(key, 'matrix.jsonl', new TextEncoder().encode('second\n'), 'application/x-ndjson'))
       .rejects.toThrow(/write-once/);
     await expect(store.Put('predictive-studio/../escape.jsonl', 'escape.jsonl', new TextEncoder().encode('x\n'), 'application/x-ndjson'))
       .rejects.toThrow(/not a safe storage key/);
+    expect(writes).toHaveBeenCalledTimes(1);
     expect(factory.Files).toHaveLength(1);
   });
 });

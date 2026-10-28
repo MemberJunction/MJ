@@ -6,7 +6,6 @@
  * read. Identical content resolves to one snapshot: the content hash is unique, so a build whose hash already exists
  * reuses that snapshot instead of writing another.
  */
-import { randomUUID } from 'node:crypto';
 import type { UserInfo } from '@memberjunction/core';
 import { OrdinalCompare } from '@memberjunction/global';
 import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
@@ -151,12 +150,12 @@ export class TrainingSnapshotBuilder {
   }
 
   /**
-   * The three write-once files, uploaded in parallel (independent objects). They sit under the content-hash prefix
-   * plus a segment unique to this build, so a build that fails after writing (or loses the content-hash race) never
-   * blocks a later build of the same content from writing its own files.
+   * The three write-once files, uploaded in parallel (independent objects) under the content-hash prefix. The keys
+   * are deterministic and the stores accept identical bytes under an existing key, so a build that failed after
+   * writing, or lost the content-hash race, leaves the same objects a later build of the same content reuses.
    */
   protected async WriteFiles(store: ISnapshotFileStore, contentHash: string, files: SnapshotFileBytes): Promise<StoredSnapshotFiles> {
-    const prefix = `predictive-studio/training-snapshots/${contentHash}/${randomUUID()}`;
+    const prefix = `predictive-studio/training-snapshots/${contentHash}`;
     const short = contentHash.slice(0, 12);
     const [matrix, manifest, provenance] = await Promise.all([
       store.Put(`${prefix}/matrix.jsonl`, `snapshot-${short}-matrix.jsonl`, files.Matrix, 'application/x-ndjson'),
