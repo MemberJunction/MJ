@@ -89,10 +89,10 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   }
 
   /**
-   * Signs a set of magic-link claims and returns the compact JWT.
+   * Signs a set of magic-link (or local-dev) claims and returns the compact JWT.
    * `iat`/`exp` are expected to already be set on the claims.
    */
-  public Sign(claims: MagicLinkJWTClaims): string {
+  public Sign(claims: MagicLinkJWTClaims | Record<string, unknown>): string {
     this.ensureInitialized();
     return jwt.sign(claims, this.privateKeyPem, { algorithm: 'RS256', keyid: this._kid });
   }

@@ -136,11 +136,14 @@ export class ConfigurePhase {
 
     if (!overwrite && await this.fileSystem.FileExists(envPath)) {
       const existingRootEnv = await this.fileSystem.ReadText(envPath);
-      const patchedRootEnv = this.ensureEnvVar(
+      let patchedRootEnv = this.ensureEnvVar(
         existingRootEnv,
         'MJ_BASE_ENCRYPTION_KEY',
         config.BaseEncryptionKey ?? ''
       );
+      if (config.AuthProvider === 'local') {
+        patchedRootEnv = this.ensureEnvVar(patchedRootEnv, 'MJ_DEV_AUTH_ENABLED', 'true');
+      }
 
       if (patchedRootEnv !== existingRootEnv) {
         await this.fileSystem.WriteText(envPath, patchedRootEnv);
@@ -166,6 +169,9 @@ export class ConfigurePhase {
           'MJ_BASE_ENCRYPTION_KEY',
           config.BaseEncryptionKey ?? ''
         );
+        if (config.AuthProvider === 'local') {
+          patchedMjapiEnv = this.ensureEnvVar(patchedMjapiEnv, 'MJ_DEV_AUTH_ENABLED', 'true');
+        }
 
         if (patchedMjapiEnv !== existingMjapiEnv) {
           await this.fileSystem.WriteText(mjapiEnvPath, patchedMjapiEnv);
@@ -314,19 +320,44 @@ export class ConfigurePhase {
   ): Promise<InstallConfig> {
     const config = { ...partial };
 
+    // Database platform — asked first because it decides the default port.
+    if (!config.DatabasePlatform) {
+      if (yes) {
+        config.DatabasePlatform = 'sqlserver';
+      } else {
+        const platformChoice = await this.promptSelect(
+          emitter,
+          'db-platform',
+          'Database platform:',
+          [
+            { Label: 'SQL Server', Value: 'sqlserver' },
+            { Label: 'PostgreSQL', Value: 'postgresql' },
+          ],
+          'sqlserver'
+        );
+        config.DatabasePlatform = platformChoice as InstallConfig['DatabasePlatform'];
+      }
+    }
+
+    const defaultPort = config.DatabasePlatform === 'postgresql' ? 5432 : 1433;
+
     // Database settings
     config.DatabaseHost = config.DatabaseHost ?? await this.promptInput(
       emitter, 'db-host', 'Database server hostname:', 'localhost', yes
     );
     config.DatabasePort = config.DatabasePort ?? await this.promptPort(
-      emitter, 'db-port', 'Database server port:', 1433, yes
+      emitter, 'db-port', 'Database server port:', defaultPort, yes
     );
     config.DatabaseName = config.DatabaseName ?? await this.promptInput(
       emitter, 'db-name', 'Database name:', 'MemberJunction', yes
     );
-    config.DatabaseTrustCert = config.DatabaseTrustCert ?? await this.promptConfirm(
-      emitter, 'db-trust-cert', 'Trust self-signed server certificate? (common for local instances)', false, yes
-    );
+
+    // Trusting a self-signed certificate is a SQL Server (tedious) setting.
+    config.DatabaseTrustCert = config.DatabasePlatform === 'sqlserver'
+      ? (config.DatabaseTrustCert ?? await this.promptConfirm(
+        emitter, 'db-trust-cert', 'Trust self-signed server certificate? (common for local instances)', false, yes
+      ))
+      : false;
 
     // CodeGen credentials
     config.CodeGenUser = config.CodeGenUser ?? await this.promptInput(
@@ -363,6 +394,7 @@ export class ConfigurePhase {
           'Authentication provider:',
           [
             { Label: 'None (skip auth for now)', Value: 'none' },
+            { Label: 'Local Dev (mock JWT — localhost only, never for production)', Value: 'local' },
             { Label: 'Microsoft Entra (MSAL)', Value: 'entra' },
             { Label: 'Auth0', Value: 'auth0' },
           ],
@@ -492,6 +524,19 @@ export class ConfigurePhase {
    */
   private async writeEnvFile(envPath: string, config: InstallConfig): Promise<void> {
     const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
+    // PostgreSQL installs need DB_PLATFORM: MJAPI picks its provider from this
+    // env var only (it does not read `dbPlatform` from mj.config.cjs), and
+    // CodeGen and `mj migrate` default to it. SQL Server is everyone's default,
+    // so SQL Server installs leave it out, exactly as before.
+    //
+    // Both platforms use the same connection keys, keeping the CodeGen and API
+    // logins separate: `mj migrate` reads only DB_HOST / DB_PORT / DB_DATABASE and
+    // CODEGEN_DB_USERNAME / CODEGEN_DB_PASSWORD; CodeGen falls back to
+    // CODEGEN_DB_* when PG_USERNAME is unset; MJAPI's PostgreSQL pool reads
+    // PG_USERNAME || DB_USERNAME. PG_USERNAME / PG_PASSWORD are deliberately
+    // not written — CodeGen and MJAPI both prefer them, so setting them would
+    // put CodeGen and MJAPI on the same login.
+    const platformLine = config.DatabasePlatform === 'postgresql' ? "DB_PLATFORM='postgresql'\n" : '';
     // Accept both internal-shape (`ClientID`, `TenantID`, ...) and user-facing
     // shape (`CLIENT_ID`, `TENANT_ID`, ...) keys in AuthProviderValues — see
     // generateEnvironmentFile() for rationale.
@@ -502,7 +547,7 @@ export class ConfigurePhase {
     const auth0Domain = authValues.AUTH0_DOMAIN ?? authValues.Domain ?? '';
 
     const content = `#Database Setup
-DB_HOST='${config.DatabaseHost}'
+${platformLine}DB_HOST='${config.DatabaseHost}'
 DB_PORT=${config.DatabasePort}
 CODEGEN_DB_USERNAME='${config.CodeGenUser}'
 CODEGEN_DB_PASSWORD='${config.CodeGenPassword}'
@@ -524,14 +569,14 @@ MJ_BASE_ENCRYPTION_KEY='${config.BaseEncryptionKey ?? ''}'
 AI_VENDOR_API_KEY__OpenAILLM='${config.OpenAIKey ?? ''}'
 AI_VENDOR_API_KEY__MistralLLM='${config.MistralKey ?? ''}'
 AI_VENDOR_API_KEY__AnthropicLLM='${config.AnthropicKey ?? ''}'
-
+${config.GeminiKey ? `AI_VENDOR_API_KEY__GeminiLLM='${config.GeminiKey}'\n` : ''}
 GRAPHQL_PORT=${config.APIPort}
 
 UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000
 
 # AUTHENTICATION SECTION
-WEB_CLIENT_ID=${clientId}
+${config.AuthProvider === 'local' ? 'MJ_DEV_AUTH_ENABLED=true\n' : ''}WEB_CLIENT_ID=${clientId}
 TENANT_ID=${tenantId}
 
 # Auth0 Section
@@ -566,14 +611,18 @@ ASK_SKIP_ORGANIZATION_ID=1
     FirstName: '${config.CreateNewUser.FirstName}',
     LastName: '${config.CreateNewUser.LastName}',
     Email: '${config.CreateNewUser.Email}',
+    Roles: ['Developer', 'Integration', 'UI'],
   },
 `
       : '';
 
     const versionSection = resolvedVersion ? `  mjRepoVersion: '${resolvedVersion}',\n` : '';
+    // Only PostgreSQL needs the platform pinned here (CodeGen and `mj migrate`
+    // read `dbPlatform` ahead of DB_PLATFORM); SQL Server is their default.
+    const dbPlatformField = config.DatabasePlatform === 'postgresql' ? `  dbPlatform: 'postgresql',\n` : '';
 
     const content = `module.exports = {
-  settings: {
+${dbPlatformField}  settings: {
     host: '${config.DatabaseHost}',
     port: ${config.DatabasePort},
     database: '${config.DatabaseName}',
@@ -613,6 +662,7 @@ ${versionSection}${newUserSection}  output: [],
     FirstName: '${newUser.FirstName}',
     LastName: '${newUser.LastName}',
     Email: '${newUser.Email}',
+    Roles: ['Developer', 'Integration', 'UI'],
   }`;
 
     // Try to replace existing newUserSetup block
@@ -804,12 +854,15 @@ ${versionSection}${newUserSection}  output: [],
    * should stay where it is.
    */
   private static readonly ROOT_TO_MJAPI_SYNC_KEYS: ReadonlyArray<string> = Object.freeze([
+    // Platform selector (written only by PostgreSQL installs; MJAPI reads it from env)
+    'DB_PLATFORM',
     // SQL Server / generic env var names
     'DB_HOST', 'DB_PORT', 'DB_DATABASE',
     'DB_USERNAME', 'DB_PASSWORD',
     'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD',
     'DB_TRUST_SERVER_CERTIFICATE',
     'MJ_CORE_SCHEMA',
+    'MJ_DEV_AUTH_ENABLED',
     // PostgreSQL-preferred env var names — codegen-lib's `DEFAULT_CODEGEN_CONFIG`
     // accepts these when `dbPlatform === 'postgresql'`, so a PG install whose
     // `.env` uses the PG_* names must have those keys synced root → MJAPI too.
@@ -1073,7 +1126,10 @@ ${versionSection}${newUserSection}  output: [],
 
     // Infer AuthProvider from env values if it was defaulted to 'none'
     if (config.AuthProvider === 'none') {
-      if (tenantId && clientId) {
+      const devAuthRaw = (merged['MJ_DEV_AUTH_ENABLED'] || '').trim().toLowerCase();
+      if (devAuthRaw === 'true' || devAuthRaw === '1') {
+        config.AuthProvider = 'local';
+      } else if (tenantId && clientId) {
         config.AuthProvider = 'entra';
       } else if (auth0Domain) {
         config.AuthProvider = 'auth0';
@@ -1153,6 +1209,7 @@ ${versionSection}${newUserSection}  output: [],
       GRAPHQL_URI:    /^https?:\/\/localhost:4000\/?$/,
       GRAPHQL_WS_URI: /^wss?:\/\/localhost:4000\/?$/,
       REDIRECT_URI:   /^https?:\/\/localhost:4200\/?$/,
+      AUTH_TYPE:      /^msal$/i,
     };
 
     for (const [field, value] of Object.entries(patches)) {
@@ -1312,10 +1369,11 @@ ${versionSection}${newUserSection}  output: [],
    * validation error because `AUTH_TYPE='msal'` requires `CLIENT_ID` and
    * `TENANT_ID`. The caller should emit a warning when auth is unconfigured.
    */
-  private mapAuthType(provider: InstallConfig['AuthProvider']): 'msal' | 'auth0' {
+  private mapAuthType(provider: InstallConfig['AuthProvider']): 'msal' | 'auth0' | 'local' {
     switch (provider) {
       case 'entra': return 'msal';
       case 'auth0': return 'auth0';
+      case 'local': return 'local';
       case 'none': return 'msal';
       default: return 'msal';
     }

@@ -15,6 +15,8 @@ import {
     OpenAILiveClient,
     IRealtimeLivePeerConnection,
 } from '../drivers/openAILiveClient';
+import { FakeRtpSender } from './helpers/realtime-fakes';
+import { DescribeWebRtcMicrophoneReplacement } from './helpers/microphone-replacement';
 import { IRealtimeAudioMeter } from '../audio/audioMeter';
 
 // ── Test Fakes ─────────────────────────────────────────────────────────────
@@ -63,6 +65,8 @@ class FakeDataChannel implements IRealtimeDataChannel {
 class FakePeerConnection implements IRealtimeLivePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
@@ -70,8 +74,11 @@ class FakePeerConnection implements IRealtimeLivePeerConnection {
     public Closed = false;
     public iceGatheringState: RTCIceGatheringState = 'complete';
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
 
     public createDataChannel(label: string): IRealtimeDataChannel {
@@ -659,6 +666,24 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
             content: 'Background note for reasoning',
             delegation_id: null,
         });
+    });
+
+    it('RequestSpokenTurn sends the same commentary and response.create but tags the reply normal (MJ#4591)', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+        client.Channel.Sent = [];
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        client.RequestSpokenTurn('Greet the participant.');
+
+        const sent = client.Channel.SentEvents();
+        expect(sent).toEqual([
+            { type: 'session.commentary.append', content: 'Greet the participant.', delegation_id: null },
+            { type: 'response.create' },
+        ]);
+        client.Channel.EmitServer({ type: 'session.output_transcript.delta', delta: 'Hello, welcome.' });
+        expect(transcripts[0].Kind).toBe('normal');
     });
 
     it('RequestSpokenUpdate tags narration and sends commentary with response.create', async () => {
@@ -1526,3 +1551,13 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         // Now barrier is complete and emittedToolCallIds is cleared.
     });
 });
+
+DescribeWebRtcMicrophoneReplacement(
+    async () => {
+        const client = new TestableOpenAILiveClient();
+        const track = new FakeTrack();
+        await client.Connect(makeConfig(), new FakeMediaStream([track]));
+        return { Client: client, Track: track, Senders: client.MockPC.Senders };
+    },
+    () => new TestableOpenAILiveClient()
+);

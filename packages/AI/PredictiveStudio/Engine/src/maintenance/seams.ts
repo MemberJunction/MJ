@@ -39,10 +39,10 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
   /** @inheritdoc */
   public async loadBinding(
     bindingId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelScoringBindingEntity | null> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLModelScoringBindingEntity>(
       {
         EntityName: 'MJ: ML Model Scoring Bindings',
@@ -60,15 +60,18 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
 
   /** @inheritdoc */
   public async loadBindings(
-    mode?: MaintenanceBindingMode,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    mode: MaintenanceBindingMode | undefined,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelScoringBindingEntity[]> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLModelScoringBindingEntity>(
       {
         EntityName: 'MJ: ML Model Scoring Bindings',
         ExtraFilter: mode ? `Mode='${mode}'` : undefined,
+        // Every binding: without this the read stops at UserViewMaxRows (1,000 by default) and maintenance
+        // silently skips the rest (F-L3-2).
+        IgnoreMaxRows: true,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -82,10 +85,10 @@ export class RunViewMaintenanceLoader implements IMaintenanceLoader {
   /** @inheritdoc */
   public async loadModel(
     modelId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelEntity | null> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLModelEntity>(
       {
         EntityName: 'MJ: ML Models',
@@ -111,11 +114,11 @@ export class RunViewRowCounter implements IRowCounter {
   /** @inheritdoc */
   public async countRows(
     entityName: string,
-    extraFilter?: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    extraFilter: string | undefined,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<number> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView(
       {
         EntityName: entityName,

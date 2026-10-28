@@ -1,8 +1,8 @@
 {
   "name": "@memberjunction/ai-inception",
   "type": "module",
-  "version": "6.2.0-edge.3",
-  "description": "MemberJunction Wrapper for Inception Labs (Mercury diffusion LLM family)",
+  "version": "6.2.0-edge.6",
+  "description": "MemberJunction Wrapper for Inception Labs: the Mercury diffusion LLM family, and the Mercury Decide decision model",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -20,9 +20,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.3",
-    "@memberjunction/ai-openai": "6.2.0-edge.3",
-    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/ai": "6.2.0-edge.6",
+    "@memberjunction/ai-openai": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
     "openai": "6.18.0"
   },
   "repository": {

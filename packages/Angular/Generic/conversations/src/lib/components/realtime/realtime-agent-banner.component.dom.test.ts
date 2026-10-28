@@ -25,6 +25,16 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(query(f, '.banner--review')).toBeNull();
   });
 
+  it('says why the call ended in the error state when the host gives a label, else "Connection error"', () => {
+    const f = render({ State: 'error', AgentName: 'Sage', ErrorLabel: 'Time limit reached' });
+    expect(text(f, '.banner__state-label')).toBe('Time limit reached');
+  });
+
+  it('says "Connection error" in the error state without a label', () => {
+    const f = render({ State: 'error', AgentName: 'Sage' });
+    expect(text(f, '.banner__state-label')).toBe('Connection error');
+  });
+
   // One render per test (TestBed is single-use) — the two states are separate specs.
   it('shows the busy spinner (not the waveform) for thinking state', () => {
     const thinking = render({ State: 'thinking', AgentName: 'Sage' });
@@ -110,5 +120,17 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     click(f, '.bar-actions .iconb');
     expect(startLive).toHaveLength(1);
     expect(closes).toHaveLength(1);
+  });
+
+  it('leaves out the start-live action, but keeps Close, when ShowStartLive is off', () => {
+    const f = render({ State: 'closed', ReviewMode: true, AgentName: 'Sage', ShowStartLive: false });
+    expect(query(f, '.start-live-pill')).toBeNull();
+    expect(query(f, '.bar-actions .iconb')).not.toBeNull();
+  });
+
+  it('hides the redundant state pill when HideState is true (while the center hero orb shows the state)', () => {
+    const f = render({ State: 'speaking', AgentName: 'Sage', HideState: true });
+    expect(query(f, '.banner__state')).toBeNull();
+    expect(query(f, '.banner__for')).toBeNull();
   });
 });

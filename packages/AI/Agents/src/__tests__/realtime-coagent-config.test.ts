@@ -25,7 +25,9 @@ import {
     REALTIME_CONFIG_SECTION_KEYS,
     RealtimeConfigSection,
     GetDirectActionsConfig,
-    IsActionAllowedForDirectInvocation
+    IsActionAllowedForDirectInvocation,
+    GetWatchesMeetingVideo,
+    FindDeprecatedRealtimeVideoKeys
 } from '../realtime/realtime-coagent-config';
 
 describe('DeepMergeConfigs', () => {
@@ -406,6 +408,55 @@ describe('GetNarrationPaceMs', () => {
     });
 });
 
+describe('GetWatchesMeetingVideo', () => {
+    it('is true only when realtime.video.watchMeetings is true', () => {
+        expect(GetWatchesMeetingVideo({ realtime: { video: { watchMeetings: true } } })).toBe(true);
+        expect(GetWatchesMeetingVideo({ realtime: { video: { watchMeetings: false } } })).toBe(false);
+        expect(GetWatchesMeetingVideo({ realtime: { video: { enabled: true } } })).toBe(false);
+        expect(GetWatchesMeetingVideo({})).toBe(false);
+        expect(GetWatchesMeetingVideo(null)).toBe(false);
+        expect(GetWatchesMeetingVideo(undefined)).toBe(false);
+    });
+
+    it('keeps only a boolean through normalization', () => {
+        const kept = ResolveEffectiveRealtimeConfig(null, '{"realtime":{"video":{"watchMeetings":true}}}', null);
+        expect(kept.realtime?.video).toEqual({ watchMeetings: true });
+
+        const dropped = ResolveEffectiveRealtimeConfig(null, '{"realtime":{"video":{"watchMeetings":"yes","enabled":true}}}', null);
+        expect(dropped.realtime?.video).toEqual({ enabled: true });
+        expect(GetWatchesMeetingVideo(dropped)).toBe(false);
+    });
+
+    it("lets the voiced (target) agent's setting win over the co-agent's", () => {
+        const on = '{"realtime":{"video":{"watchMeetings":true}}}';
+        const off = '{"realtime":{"video":{"watchMeetings":false}}}';
+        expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(null, off, null, on))).toBe(true);
+        expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(null, on, null, off))).toBe(false);
+        expect(GetWatchesMeetingVideo(ResolveEffectiveRealtimeConfig(on, null, null, null))).toBe(true);
+    });
+});
+
+describe('FindDeprecatedRealtimeVideoKeys', () => {
+    it('reports realtime.video.provider and providers when the effective configuration sets them', () => {
+        const config = ResolveEffectiveRealtimeConfig(
+            null,
+            '{"realtime":{"video":{"enabled":true,"provider":"Runway Avatar","providers":{"runway":{"quality":"high"}}}}}',
+            null
+        );
+        expect(FindDeprecatedRealtimeVideoKeys(config)).toEqual(['realtime.video.provider', 'realtime.video.providers']);
+        expect(FindDeprecatedRealtimeVideoKeys({ realtime: { video: { providers: { gemini: {} } } } })).toEqual(['realtime.video.providers']);
+    });
+
+    it('reports nothing for the keys that are read, for values normalization drops, or without a video block', () => {
+        expect(FindDeprecatedRealtimeVideoKeys({ realtime: { video: { enabled: true, avatarId: 'Ben', watchMeetings: true } } })).toEqual([]);
+        const dropped = ResolveEffectiveRealtimeConfig(null, '{"realtime":{"video":{"enabled":true,"provider":"  ","providers":{"runway":7}}}}', null);
+        expect(FindDeprecatedRealtimeVideoKeys(dropped)).toEqual([]);
+        expect(FindDeprecatedRealtimeVideoKeys({})).toEqual([]);
+        expect(FindDeprecatedRealtimeVideoKeys(null)).toEqual([]);
+        expect(FindDeprecatedRealtimeVideoKeys(undefined)).toEqual([]);
+    });
+});
+
 describe('EvaluateRuntimeOverrideAuthorization — the authorization matrix', () => {
     it('allows a plain start (no overrides, no model) regardless of authorization', () => {
         for (const has of [true, false]) {
@@ -581,6 +632,7 @@ describe('C1: GetSessionTuningSettings', () => {
                     parallelToolCalls: false,
                     mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
                     inputTranscriptionModel: '  whisper-1  ',
+                    transcriptionLanguages: [' en-US ', '', 'es-US'],
                 },
             },
         });
@@ -589,6 +641,7 @@ describe('C1: GetSessionTuningSettings', () => {
             parallelToolCalls: false,
             mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
             inputTranscriptionModel: 'whisper-1',
+            transcriptionLanguages: ['en-US', 'es-US'],
         });
     });
 
@@ -603,6 +656,7 @@ describe('C1: GetSessionTuningSettings', () => {
         expect(GetSessionTuningSettings({ realtime: { session: {} } })).toBeNull();
         expect(GetSessionTuningSettings({ realtime: { session: { mcpTools: [] } } })).toBeNull();
         expect(GetSessionTuningSettings({ realtime: { session: { inputTranscriptionModel: '   ' } } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { transcriptionLanguages: ['  '] } } })).toBeNull();
     });
 });
 
@@ -812,7 +866,7 @@ describe('FindIgnoredRealtimeConfigKeys', () => {
         const VALID_SAMPLE: { [K in keyof Required<RealtimeConfigSection>]: unknown } = {
             modelPreference: 'GPT Realtime',
             voice: { default: { tone: 'warm' } },
-            video: { enabled: true },
+            video: { avatarId: 'Ben' }, // an override can't turn video on, so the sample is a pick
             allowUserModelOverride: false,
             narration: { paceMs: 5000 },
             turnTaking: { mode: 'proactive' },

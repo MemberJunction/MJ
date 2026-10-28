@@ -44,6 +44,11 @@ vi.mock('@memberjunction/core', () => {
             this._contextUser = contextUser;
             this._loaded = true;
         }
+        async EnsureLoaded(contextUser?: unknown) {
+            if (this._loaded) return;
+            this._contextUser = contextUser;
+            this._loaded = true;
+        }
         static _instance: unknown = undefined;
         static getInstance<U>(): U {
             if (!this._instance) {
@@ -119,6 +124,10 @@ vi.mock('../AIAgentPermissionHelper', () => ({
             canView: true, canRun: true, canEdit: true, canDelete: true, isOwner: true,
         }),
         GetAccessibleAgents: vi.fn().mockResolvedValue([]),
+        IsDirectlyDiscoverable: vi.fn(
+            (a: { ParentID: string | null; ExposeAsAction: boolean; InvocationMode: string }) =>
+                a.ParentID === null && a.ExposeAsAction && a.InvocationMode !== 'Sub-Agent'
+        ),
         ClearCache: vi.fn(),
         RefreshCache: vi.fn().mockResolvedValue(undefined),
     },
@@ -165,7 +174,7 @@ describe('AIEngineBase', () => {
                 'ModelCosts', 'ModelPriceTypes', 'ModelPriceUnitTypes',
                 'Configurations', 'ConfigurationParams', 'CredentialBindings',
                 'Modalities', 'AgentModalities', 'ModelModalities',
-                'AgentCoAgents', 'AgentChannels',
+                'AgentCoAgents', 'AgentChannels', 'AgentRequestTypes',
             ];
             for (const p of props) {
                 expect((engine as unknown as Record<string, unknown>)[p]).toEqual([]);
@@ -191,6 +200,20 @@ describe('AIEngineBase', () => {
             expect(coAgentConfig!.CacheLocal).toBe(true);
             expect(channelConfig).toBeDefined();
             expect(channelConfig!.CacheLocal).toBe(true);
+        });
+
+        it('registers agent request types as a locally-cached dataset', async () => {
+            const engine = AIEngineBase.Instance;
+            const loadSpy = vi.spyOn(
+                engine as unknown as { Load: (params: Array<{ PropertyName: string; EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
+                'Load',
+            );
+            await engine.Config(false);
+            const params = loadSpy.mock.calls[0][0];
+            const config = params.find(p => p.PropertyName === '_agentRequestTypes');
+            expect(config).toBeDefined();
+            expect(config!.EntityName).toBe('MJ: AI Agent Request Types');
+            expect(config!.CacheLocal).toBe(true);
         });
 
         it('fetches the binary embedding column for agent notes and examples on database providers only', async () => {
@@ -270,6 +293,45 @@ describe('AIEngineBase', () => {
         it('should return undefined for non-existent name', () => {
             set('_agents', []);
             expect(AIEngineBase.Instance.GetAgentByName('no')).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------
+    // GetAgentRequestTypeByName
+    // -----------------------------------------------
+    describe('GetAgentRequestTypeByName', () => {
+        it('should find a request type case-insensitively with trimming', () => {
+            const types = [{ ID: 'rt1', Name: 'Approval' }, { ID: 'rt2', Name: '  Information ' }];
+            set('_agentRequestTypes', types);
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName(' approval')).toBe(types[0]);
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName('INFORMATION')).toBe(types[1]);
+            expect(AIEngineBase.Instance.AgentRequestTypes).toBe(types);
+        });
+
+        it('should return undefined for a missing or empty name', () => {
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }]);
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName('Escalation')).toBeUndefined();
+            expect(AIEngineBase.Instance.GetAgentRequestTypeByName('')).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------
+    // ResolveAgentRequestTypeID
+    // -----------------------------------------------
+    describe('ResolveAgentRequestTypeID', () => {
+        it('should ensure the engine is loaded, then return the matching ID', async () => {
+            const ctx = { ID: 'u1' };
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }, { ID: 'rt2', Name: 'Information' }]);
+            const ensure = vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded');
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID(' approval ', ctx as never)).toBe('rt1');
+            expect(ensure).toHaveBeenCalledWith(ctx, undefined);
+            expect(AIEngineBase.Instance.ContextUser).toBe(ctx);
+        });
+
+        it('should return null when no request type has that name', async () => {
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }]);
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID('Escalation')).toBeNull();
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID('')).toBeNull();
         });
     });
 
@@ -1602,5 +1664,128 @@ describe('AIEngineBase', () => {
             expect(effective!.AgentPersona).toBeUndefined();
         });
     });
+
+    describe('GetUserRunnableAgentDirectory & ClearUserRunnableAgentDirectoryCache', () => {
+        beforeEach(() => {
+            AIEngineBase.Instance.ClearUserRunnableAgentDirectoryCache();
+            set('_agentPermissions', []);
+        });
+
+        it('returns active, exposed, non-Sub-Agent runnable agents sorted by name and caches per user', () => {
+            set('_agents', [
+                {
+                    ID: 'a-qb',
+                    Name: 'Query Builder',
+                    Description: 'Writes and validates parameterized SQL queries.\nSecond line ignored.',
+                    Status: 'Active',
+                    ParentID: null,
+                    ExposeAsAction: true,
+                    InvocationMode: 'Any',
+                    OwnerUserID: 'owner-1',
+                },
+                {
+                    ID: 'a-rrw',
+                    Name: 'Research Report Writer',
+                    Description: 'Synthesizes findings into executive reports.',
+                    Status: 'Active',
+                    ParentID: null,
+                    ExposeAsAction: true,
+                    InvocationMode: 'Top-Level',
+                    OwnerUserID: 'owner-1',
+                },
+                {
+                    ID: 'a-sub-only',
+                    Name: 'Internal Sub Agent',
+                    Description: 'Only runnable as sub-agent',
+                    Status: 'Active',
+                    ParentID: 'a-qb',
+                    ExposeAsAction: false,
+                    InvocationMode: 'Sub-Agent',
+                    OwnerUserID: 'owner-1',
+                },
+                {
+                    ID: 'a-disabled',
+                    Name: 'Disabled Agent',
+                    Description: 'Inactive agent',
+                    Status: 'Disabled',
+                    ParentID: null,
+                    ExposeAsAction: true,
+                    InvocationMode: 'Any',
+                    OwnerUserID: 'owner-1',
+                },
+            ]);
+
+            const user = { ID: 'user-1', UserRoles: [] } as never;
+            const first = AIEngineBase.Instance.GetUserRunnableAgentDirectory(user);
+            expect(first).toEqual([
+                {
+                    ID: 'a-qb',
+                    Name: 'Query Builder',
+                    Description: 'Writes and validates parameterized SQL queries.',
+                },
+                {
+                    ID: 'a-rrw',
+                    Name: 'Research Report Writer',
+                    Description: 'Synthesizes findings into executive reports.',
+                },
+            ]);
+
+            // Second call returns cached reference
+            const second = AIEngineBase.Instance.GetUserRunnableAgentDirectory(user);
+            expect(second).toBe(first);
+
+            // Clearing cache for that user forces recomputation
+            AIEngineBase.Instance.ClearUserRunnableAgentDirectoryCache('user-1');
+            const third = AIEngineBase.Instance.GetUserRunnableAgentDirectory(user);
+            expect(third).not.toBe(first);
+            expect(third).toEqual(first);
+        });
+
+        it('excludes agents where ACL permissions exist and user lacks CanRun/CanEdit/CanDelete', () => {
+            set('_agents', [
+                {
+                    ID: 'a-public',
+                    Name: 'Public Agent',
+                    Description: 'Open to all',
+                    Status: 'Active',
+                    ParentID: null,
+                    ExposeAsAction: true,
+                    InvocationMode: 'Any',
+                    OwnerUserID: 'owner-1',
+                },
+                {
+                    ID: 'a-restricted',
+                    Name: 'Restricted Agent',
+                    Description: 'Restricted to role-admin',
+                    Status: 'Active',
+                    ParentID: null,
+                    ExposeAsAction: true,
+                    InvocationMode: 'Any',
+                    OwnerUserID: 'owner-1',
+                },
+            ]);
+            set('_agentPermissions', [
+                {
+                    AgentID: 'a-restricted',
+                    UserID: null,
+                    RoleID: 'role-admin',
+                    CanView: true,
+                    CanRun: true,
+                    CanEdit: false,
+                    CanDelete: false,
+                },
+            ]);
+
+            const regularUser = { ID: 'user-regular', UserRoles: [{ RoleID: 'role-viewer' }] } as never;
+            const adminUser = { ID: 'user-admin', UserRoles: [{ RoleID: 'role-admin' }] } as never;
+
+            const regularDir = AIEngineBase.Instance.GetUserRunnableAgentDirectory(regularUser);
+            expect(regularDir.map(a => a.Name)).toEqual(['Public Agent']);
+
+            const adminDir = AIEngineBase.Instance.GetUserRunnableAgentDirectory(adminUser);
+            expect(adminDir.map(a => a.Name)).toEqual(['Public Agent', 'Restricted Agent']);
+        });
+    });
 });
+
 

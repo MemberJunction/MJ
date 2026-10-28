@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileFunction } from 'node:vm';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+import { PackageRunsOnTier } from '../manifest/package-platform.js';
 import { ResolveServerPackagePath } from './workspace-paths.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
@@ -327,6 +328,9 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
     const sharedPkgs = manifest.packages?.shared ?? [];
 
     for (const pkg of [...serverPkgs, ...sharedPkgs]) {
+        if (!PackageRunsOnTier(pkg, 'server')) {
+            continue;
+        }
         if (pkg.startupExport) {
             entries.push({
                 PackageName: pkg.name,
@@ -342,9 +346,14 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
 
 /**
  * Extracts client package entries from a manifest's packages section.
- * Includes `client` and `shared` packages (shared packages run in both the server
- * and client bundles). Unlike server entries, every client/shared package is emitted
- * regardless of startupExport — client entries are side-effect imports.
+ *
+ * Includes `client` and `shared` packages, minus any whose platform excludes the browser — see
+ * {@link PackageRunsOnTier}. `shared` says which tiers a package is FOR, not that it can run on
+ * all of them: an actions package is shared source that reaches `@google-cloud/storage`, and
+ * namespace-importing it into the Angular bundle breaks the host's build (#4428).
+ *
+ * Unlike server entries, a qualifying package is emitted regardless of startupExport — client
+ * entries are side-effect imports and the client bootstrap never calls a startup function.
  */
 function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageEntry[] {
     const entries: DynamicPackageEntry[] = [];
@@ -352,6 +361,9 @@ function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
     const sharedPkgs = manifest.packages?.shared ?? [];
 
     for (const pkg of [...clientPkgs, ...sharedPkgs]) {
+        if (!PackageRunsOnTier(pkg, 'client')) {
+            continue;
+        }
         entries.push({
             PackageName: pkg.name,
             AppName: manifest.name,
@@ -739,6 +751,52 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
         'Could not find a config object in mj.config.cjs to insert into. ' +
         'Expected either `module.exports = { ... }` or `module.exports = <variable>;` where the variable is declared as an object literal.',
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW USER TEMPLATE (MJAPI userHandling)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sets `userHandling.newUserTemplate` in mj.config.cjs, so MJAPI builds every user it creates at
+ * first sign-in as a copy of the template user `email` (through the `MJ: Users` clone `preset`).
+ * Replaces an existing `newUserTemplate`, adds it to an existing `userHandling` object, or adds a
+ * `userHandling` section. Autocreation itself is still `userHandling.autoCreateNewUsers`.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param email - Email of the template user
+ * @param preset - MJ: Users clone preset to apply (normally `template`)
+ * @param serverPackagePath - Optional server package path for config resolution
+ * @returns Operation result
+ */
+export function SetNewUserTemplate(
+    repoRoot: string,
+    email: string,
+    preset: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'set userHandling.newUserTemplate', (content) =>
+        UpsertNewUserTemplate(content, email, preset));
+}
+
+/** Writes `newUserTemplate: { email, preset }` into the config's `userHandling`, creating what is missing. */
+function UpsertNewUserTemplate(content: string, email: string, preset: string): string {
+    const literal = `{ email: ${JSON.stringify(email)}, preset: ${JSON.stringify(preset)} }`;
+    const existing = /newUserTemplate\s*:\s*\{/.exec(content);
+    if (existing) {
+        const open = content.indexOf('{', existing.index);
+        const close = FindMatchingBracket(content, open);
+        if (close === -1) {
+            throw new Error('Could not locate the end of userHandling.newUserTemplate in mj.config.cjs.');
+        }
+        return content.slice(0, open) + literal + content.slice(close + 1);
+    }
+    const handling = /userHandling\s*:\s*\{/.exec(content);
+    if (handling) {
+        const open = content.indexOf('{', handling.index);
+        return content.slice(0, open + 1) + `\n    newUserTemplate: ${literal},` + content.slice(open + 1);
+    }
+    return InsertBeforeModuleExportsClose(content, `\n  userHandling: {\n    newUserTemplate: ${literal},\n  },\n`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

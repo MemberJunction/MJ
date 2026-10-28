@@ -110,6 +110,29 @@ describe('rubric judge calibration', () => {
         expect(folded[0].major).toBe(1);
     });
 
+    it('pairs each score with its own evaluation: unknown and unsubmitted evaluations are skipped, and the first of a duplicated ID wins', () => {
+        const pairs = CalibrationPairs({
+            versions: [{ id: 'v', major: 2 }],
+            levels: [],
+            criteria: [{ id: 'c', key: 'facts' }],
+            evaluations: [
+                { id: 'H', subjectId: 'one', versionId: 'v', evaluatorType: 'Human', status: 'Submitted' },
+                { id: 'h', subjectId: 'shadow', versionId: 'v', evaluatorType: 'Human', status: 'Submitted' },
+                { id: 'A', subjectId: 'one', versionId: 'v', evaluatorType: 'Agent', status: 'Submitted' },
+                { id: 'draft', subjectId: 'two', versionId: 'v', evaluatorType: 'Human', status: 'Draft' },
+                { id: 'A2', subjectId: 'two', versionId: 'v', evaluatorType: 'AIPrompt', status: 'Submitted' },
+            ],
+            scores: [
+                { evaluationId: 'h', criterionId: 'c', normalizedScore: 1, scaleLevelId: null },
+                { evaluationId: 'a', criterionId: 'c', normalizedScore: 0, scaleLevelId: null },
+                { evaluationId: 'DRAFT', criterionId: 'c', normalizedScore: 1, scaleLevelId: null },
+                { evaluationId: 'a2', criterionId: 'c', normalizedScore: 1, scaleLevelId: null },
+                { evaluationId: 'missing', criterionId: 'c', normalizedScore: 1, scaleLevelId: null },
+            ],
+        });
+        expect(pairs.map(pair => [pair.subjectId, pair.criterionId, pair.major, pair.humanLevel, pair.aiLevel])).toEqual([['one', 'facts', 2, 1, 0]]);
+    });
+
     it('returns InsufficientData below the default sample of 20', () => {
         const few = CalibrationOracles(agreed);
         expect(few.score).toBe(0);

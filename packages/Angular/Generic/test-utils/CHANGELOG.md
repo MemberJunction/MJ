@@ -1,5 +1,79 @@
 # @memberjunction/ng-test-utils
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+  - @memberjunction/core@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

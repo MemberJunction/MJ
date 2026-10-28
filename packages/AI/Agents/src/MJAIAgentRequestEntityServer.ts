@@ -15,10 +15,11 @@
 
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
+import { AgentWakeTriggerService } from './AgentWakeTriggerService';
 
 /** Statuses that indicate a human has responded */
 const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
@@ -28,6 +29,7 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // Capture pre-save state to detect status transitions
         const statusField = this.GetFieldByName('Status');
+        const wasNewRecord = !this.IsSaved;
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
 
@@ -58,6 +60,32 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             this.resumeAgent().catch(error => {
                 LogError(`Failed to resume agent for request ${this.ID}: ${(error as Error).message}`, undefined, error);
             });
+        } else if (
+            this.OriginatingAgentRunID == null &&
+            this.ResumingAgentRunID == null &&
+            this.OriginatingTaskID == null &&
+            this.AgentID != null
+        ) {
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            if (wasRequested && isNowResponded) {
+                // Action-created approval or inter-agent request was resolved — schedule immediate AgentWake
+                AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                    this,
+                    this.ContextCurrentUser,
+                    md
+                ).catch(error => {
+                    LogError(`Failed to schedule resolution wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
+                });
+            } else if (wasNewRecord && this.Status === 'Requested') {
+                // Newly created peer-to-peer InterAgent request — schedule immediate AgentWake for target user's CoS
+                AgentWakeTriggerService.Instance.TriggerWakeOnIncomingInterAgentRequest(
+                    this,
+                    this.ContextCurrentUser,
+                    md
+                ).catch(error => {
+                    LogError(`Failed to schedule incoming inter-agent wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
+                });
+            }
         }
 
         return true;
@@ -113,6 +141,9 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         // this run's request status to decide approved-vs-rejected; see base-agent.ts.
         const isPlanResume = await this.isPlanStepResume(md, contextUser);
 
+        // The resumed run writes and reads on the fork of the message that spawned the originating run.
+        const branchId = await this.resolveOriginatingBranchId(md, contextUser, originatingRun);
+
         // Run the agent with lastRunId to continue the conversation
         const runner = new AgentRunner();
         const params: ExecuteAgentParams = {
@@ -121,7 +152,8 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             contextUser,
             lastRunId: this.OriginatingAgentRunID!,
             autoPopulateLastRunPayload: true,
-            ...(isPlanResume ? { planMode: true } : {})
+            ...(isPlanResume ? { planMode: true } : {}),
+            ...(branchId ? { ConversationBranchID: branchId } : {})
         };
 
         LogStatus(`🔄 Resuming agent "${agentEntity.Name}" for feedback request ${this.ID}`);
@@ -140,6 +172,31 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             } else {
                 LogError(`Failed to save ResumingAgentRunID for request ${this.ID}`);
             }
+        }
+    }
+
+    /**
+     * Returns the conversation branch of the message that spawned the originating run, or null
+     * (Main) when the run has no conversation or message. A message that cannot be read is logged
+     * and also gives null.
+     */
+    private async resolveOriginatingBranchId(
+        md: IMetadataProvider,
+        contextUser: BaseEntity['ContextCurrentUser'],
+        originatingRun: MJAIAgentRunEntity
+    ): Promise<string | null> {
+        const detailId = originatingRun.ConversationDetailID;
+        if (!originatingRun.ConversationID || !detailId) return null;
+        try {
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            if (!(await detail.Load(detailId))) {
+                LogError(`Resume for request ${this.ID}: conversation detail ${detailId} of run ${originatingRun.ID} not found; resuming on Main`);
+                return null;
+            }
+            return detail.BranchID ?? null;
+        } catch (error) {
+            LogError(`Resume for request ${this.ID}: failed to load conversation detail ${detailId} of run ${originatingRun.ID}; resuming on Main: ${(error as Error).message}`);
+            return null;
         }
     }
 

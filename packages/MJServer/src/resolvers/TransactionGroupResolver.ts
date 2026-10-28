@@ -1,9 +1,10 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { AssertClientInputWritableForUser, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
+import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
 export enum TransactionVariableType {
     Define = "Define",
@@ -142,14 +143,24 @@ export class TransactionResolver extends ResolverBase {
             // rows were all refused arrive at Submit() empty, take its legitimate "nothing to do"
             // branch, and report success for writes that never happened.
             const refusals: string[] = [];
+            const preUpdateValues = new Map<number, Record<string, unknown>>();
+
+            // instantiate an entity object for every item first, so the group's variables are known
+            // BEFORE any Save()/Delete() runs below: a 'Use' variable sets its field at Submit(), after
+            // every server-side write check has passed, so an entity whose check depends on a field's
+            // final value must be able to see that a variable will set it.
+            const user: UserInfo = context.userPayload.userRecord;
+            for (const item of group.Items) {
+                entityObjects.push(await md.GetEntityObject(item.EntityName, user));
+            }
+            this.AssertNetworkInputWritable(group, entityObjects, user);
+            this.AddNetworkVariables(group, entityObjects, tg);
 
             for (const [index, item] of group.Items.entries()) {
-                // instantiate a new entity object for the item
-                const entity = await md.GetEntityObject(item.EntityName, context.userPayload.userRecord);
-                entityObjects.push(entity); // save for later for mapping variables if needed
+                const entity = entityObjects[index];
 
                 // get the values from the payload
-                const itemValues = SafeJSONParse(item.EntityObjectJSON);
+                const itemValues = SafeJSONParse<Record<string, unknown>>(item.EntityObjectJSON) ?? {};
                 // build a primary key for the item
                 const pkey = new CompositeKey(entity.PrimaryKeys.map(pk => {
                     const kv = new KeyValuePair();
@@ -162,6 +173,13 @@ export class TransactionResolver extends ResolverBase {
                     case "Create":
                         if (item.OperationType === "Update") {
                             await entity.InnerLoad(pkey);
+                            if (typeof entity.GetDataObject === 'function') {
+                                // fls-guard: pre-update snapshot; projected before the delta is built
+                                preUpdateValues.set(index, await entity.GetDataObject());
+                            } else if (typeof entity.GetAll === 'function') {
+                                // fls-guard: pre-update snapshot; projected before the delta is built
+                                preUpdateValues.set(index, { ...(entity.GetAll() as Record<string, unknown>) });
+                            }
                         }
                         objectValues.push(itemValues);
                         entity.SetMany(itemValues, true);
@@ -184,6 +202,7 @@ export class TransactionResolver extends ResolverBase {
                         // Awaiting costs nothing here — DataObjectParams defaults
                         // includeRelatedEntityData to false, which guards the method's only awaited
                         // work, so with no params this is GetAll() plus a filter loop.
+                        // fls-guard: projected in PrepareReturnValue
                         objectValues.push(await entity.GetDataObject());
                         entity.TransactionGroup = tg;
                         if (!await entity.Delete()) {
@@ -208,32 +227,17 @@ export class TransactionResolver extends ResolverBase {
                     `TransactionResolver::ExecuteTransactionGroup --- ${refusals.length} of ${group.Items.length} ` +
                     `item(s) were refused, so the group was not submitted:\n${refusals.join('\n')}`
                 );
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
-            }
-
-            // now, we need to set the variables
-            if (group.Variables && group.Variables.length > 0) {
-                for (const networkVar of group.Variables) {
-                    // for each variable, add it to the transaction group and map the index from the network payload to the specific entity object loaded up above
-                    if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
-                        const entityObject = entityObjects[networkVar.ItemIndex];
-                        const newVar = new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type);
-                        tg.AddVariable(newVar);
-                    }
-                    else {
-                        throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
-                    }
-                }
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
 
             // after all that, we are ready to roll, so let's run the TG
             if (await tg.Submit()) {
                 // success!
-                return await this.PrepareReturnValue(true, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(true, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
             else {
                 // failure, send back the results
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
         } 
         catch (err) {
@@ -242,16 +246,82 @@ export class TransactionResolver extends ResolverBase {
         }
     }
 
-    protected async PrepareReturnValue(success: boolean, entityObjects: BaseEntity[], objectValues: any[], group: TransactionInputType): Promise<TransactionOutputType> {
+    /**
+     * Field-level security gate on everything the client sent, run before any item is applied.
+     *
+     * Each create or update payload must name only fields the caller may read, and so must every transaction
+     * variable: a `Define` on a denied field would copy its value into another item's readable
+     * field at `Submit()`, and a `Use` would write it. A key that names no field is refused with
+     * the same message as a denied one (see `AssertClientInputWritableForUser`). Callers denied
+     * nothing on an entity are not affected. A delete payload is not gated: only its primary key
+     * is read, and the record is loaded from the database.
+     */
+    protected AssertNetworkInputWritable(group: TransactionInputType, entityObjects: BaseEntity[], user: UserInfo): void {
+        for (const [index, item] of group.Items.entries()) {
+            if (item.OperationType === TransactionOperationType.Delete) {
+                continue;
+            }
+            const values = SafeJSONParse<Record<string, unknown>>(item.EntityObjectJSON);
+            AssertClientInputWritableForUser(entityObjects[index]?.EntityInfo, values, user);
+        }
+        for (const networkVar of group.Variables ?? []) {
+            const target = entityObjects[networkVar.ItemIndex];
+            if (target && networkVar.FieldName) {
+                AssertClientInputWritableForUser(target.EntityInfo, { [networkVar.FieldName]: null }, user);
+            }
+        }
+    }
+
+    /**
+     * Adds the network payload's variables to the group, mapping each one's item index to the entity
+     * object built for that item.
+     */
+    protected AddNetworkVariables(group: TransactionInputType, entityObjects: BaseEntity[], tg: TransactionGroupBase): void {
+        for (const networkVar of group.Variables ?? []) {
+            if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
+                const entityObject = entityObjects[networkVar.ItemIndex];
+                tg.AddVariable(new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type));
+            }
+            else {
+                throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
+            }
+        }
+    }
+
+    protected async PrepareReturnValue(
+        success: boolean,
+        entityObjects: BaseEntity[],
+        objectValues: unknown[],
+        group: TransactionInputType,
+        preUpdateValues?: Map<number, Record<string, unknown>>,
+        provider?: RecordChangeMetadataSource,
+        user?: UserInfo
+    ): Promise<TransactionOutputType> {
         const jsonResults = [];
         for (let i = 0; i < group.Items.length; i++) {
             const item = group.Items[i];
-            if (item.OperationType==='Delete') {
-                jsonResults.push(JSON.stringify(objectValues[i]));
+            const project = (values: Record<string, unknown>) =>
+                ProjectValuesForCaller(entityObjects[i]?.EntityInfo, values, user, provider);
+            if (item.OperationType === 'Delete') {
+                const deleted = objectValues[i];
+                jsonResults.push(JSON.stringify(deleted && typeof deleted === 'object' ? project(deleted as Record<string, unknown>) : deleted));
+            }
+            else if (item.OperationType === 'Update') {
+                jsonResults.push(
+                    await this.serializeUpdateReturnValue(
+                        entityObjects[i],
+                        objectValues[i],
+                        preUpdateValues?.get(i),
+                        group,
+                        i,
+                        project
+                    )
+                );
             }
             else {
-                // create or update, return what is in the database
-                jsonResults.push(await entityObjects[i].GetDataObjectJSON());
+                // create, return what is in the database, as the caller may read it
+                // fls-guard: projected by project()
+                jsonResults.push(JSON.stringify(project(await entityObjects[i].GetDataObject())));
             }
         }
 
@@ -261,6 +331,91 @@ export class TransactionResolver extends ResolverBase {
             ResultsJSON: jsonResults
         }
     }
- 
+
+    /**
+     * Serializes a delta return payload for an `Update` transaction group item containing:
+     * - Primary key fields
+     * - All keys sent by the client in `sentValues` (`objectValues[i]`)
+     * - Any `TransactionVariable` fields targeting this item
+     * - `__mj_CreatedAt` and `__mj_UpdatedAt`
+     * - Virtual fields when any foreign key field was in `sentValues`
+     * - Any field whose post-save value differs from its pre-update DB snapshot (`preSaveValues`),
+     *   capturing virtual fields, triggers, or server-side `BeforeSave()` mutations automatically
+     *   while omitting unchanged columns.
+     *
+     * Both rows are projected for the caller BEFORE they are compared. Comparing a full-width
+     * post-save row against a snapshot taken from a narrowed load would count every denied value
+     * as changed, and the delta would then deliver exactly the values the caller may not read.
+     */
+    private async serializeUpdateReturnValue(
+        entity: BaseEntity,
+        sentValues: unknown,
+        preSaveValues: Record<string, unknown> | undefined,
+        group: TransactionInputType,
+        itemIndex: number,
+        project: (values: Record<string, unknown>) => Record<string, unknown>
+    ): Promise<string> {
+        const rawDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
+            // fls-guard: projected by project() below
+            ? (await entity.GetDataObject() as Record<string, unknown>)
+            // fls-guard: projected by project() below
+            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON());
+        if (!rawDataObj || typeof rawDataObj !== 'object') {
+            return JSON.stringify(rawDataObj);
+        }
+        const fullDataObj = project(rawDataObj);
+        if (!sentValues || typeof sentValues !== 'object') {
+            return JSON.stringify(fullDataObj);
+        }
+        preSaveValues = preSaveValues ? project(preSaveValues) : preSaveValues;
+
+        const sentRecord = sentValues as Record<string, unknown>;
+        const includeKeys = new Set<string>([
+            EntityInfo.CreatedAtFieldName,
+            EntityInfo.UpdatedAtFieldName,
+        ]);
+
+        for (const pk of entity.PrimaryKeys ?? []) {
+            if (pk?.Name) {
+                includeKeys.add(pk.Name);
+            }
+        }
+        for (const key of Object.keys(sentRecord)) {
+            includeKeys.add(key);
+        }
+        for (const v of group.Variables ?? []) {
+            if (v.ItemIndex === itemIndex && v.FieldName) {
+                includeKeys.add(v.FieldName);
+            }
+        }
+        if (Array.isArray(entity.Fields)) {
+            for (const f of entity.Fields) {
+                if (
+                    f.EntityFieldInfo?.IsSpecialDateField ||
+                    Boolean(f.EntityFieldInfo?.IsVirtual) ||
+                    Boolean(f.EntityFieldInfo?.IsComputed) ||
+                    f.ReadOnly
+                ) {
+                    includeKeys.add(f.Name);
+                }
+            }
+        }
+        if (preSaveValues) {
+            for (const key of Object.keys(fullDataObj)) {
+                if (!ValuesEqual(fullDataObj[key], preSaveValues[key])) {
+                    includeKeys.add(key);
+                }
+            }
+        }
+
+        const deltaObj: Record<string, unknown> = {};
+        for (const key of Object.keys(fullDataObj)) {
+            if (includeKeys.has(key)) {
+                deltaObj[key] = fullDataObj[key];
+            }
+        }
+        return JSON.stringify(deltaObj);
+    }
+
 }
  

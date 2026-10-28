@@ -71,6 +71,10 @@ export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
     RunQuery: async (params: RunQueryParams): Promise<RunQueryResult> => toQueryResult(queryRowsFor(params)),
     RunQueries: async (paramsList: RunQueryParams[]): Promise<RunQueryResult[]> => paramsList.map((p) => toQueryResult(queryRowsFor(p))),
     EntityByName: (name: string): EntityInfo | undefined => options.entityByName?.(name),
+    // Mirrors the real provider: an ID lookup over `entities`, case-insensitive (UUID case differs
+    // between SQL Server and PostgreSQL).
+    EntityByID: (id: string): EntityInfo | undefined =>
+      id ? ((options.entities ?? []).find((e) => typeof e.ID === 'string' && e.ID.trim().toLowerCase() === id.trim().toLowerCase()) as EntityInfo | undefined) : undefined,
   };
 
   // `IMetadataProvider` is a large interface; this fake deliberately implements only the

@@ -13,6 +13,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { configManager } from './lib/config-manager';
+import type { SqlSchemaPlaceholder } from '@memberjunction/generic-database-provider';
 
 /**
  * MemberJunction database configuration
@@ -148,6 +149,18 @@ export interface SyncConfig {
      * while avoiding one GO per statement. Defaults to 200. Set to 0 for legacy per-statement behavior.
      */
     variableBatchThreshold?: number;
+    /**
+     * Schema name → Flyway placeholder rules for a `formatAsMigration` log, the same shape as
+     * `mj.config.cjs` `SQLOutput.schemaPlaceholders` (which is used when this is absent). An Open
+     * App maps its own schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Without
+     * either, the core schema becomes `${flyway:defaultSchema}`. Used only with `formatAsMigration`.
+     */
+    schemaPlaceholders?: SqlSchemaPlaceholder[];
+    /**
+     * Escape `${...}` inside captured string data so Flyway does not read it as a placeholder.
+     * Always on with `formatAsMigration`; set this to escape a plain log too. Defaults to false.
+     */
+    escapeFlywaySyntax?: boolean;
   };
   /** Watch command configuration */
   watch?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -244,6 +257,11 @@ export interface EntityConfig {
    * Examples: ["output", "examples", "temp"]
    */
   ignoreDirectories?: string[];
+  /**
+   * Pushes this folder only when the named environment variable is `true` or `1`,
+   * for example "@env:DEMO_AGENTS_ENABLED". Otherwise push skips the folder and logs it.
+   */
+  pushWhen?: string; // case-violation-ok-legacy-back-compat: mirrors the .mj-sync.json key
   /**
    * Declarative collection configuration for composition axes.
    * Key is collection property name (e.g. "Lines", "Payments").

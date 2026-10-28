@@ -11,6 +11,9 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { EntityTransactionScope } from "./entityTransactionScope";
+import type { EntitySaveReturnMode } from "./entityConfiguration";
+import type { GetRecordDependenciesOptions } from "./databaseProviderBase";
+export type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 
 /**
  * Base configuration class for data providers.
@@ -336,7 +339,7 @@ export class EntitySaveOptions {
     /**
      * If set to true, the record will be saved to the database even if nothing is detected to be "dirty" or changed since the prior load.
      */
-    IgnoreDirtyState: boolean = false;
+    IgnoreDirtyState?: boolean = false;
     /**
      * If set to true, an AI actions associated with the entity will be skipped during the save operation
      */
@@ -460,6 +463,16 @@ export class EntitySaveOptions {
      * is legal does not depend on who is saving it.
      */
     OriginatingEntityActionIDs?: string[];
+    /**
+     * Optional per-save override for which columns the database save operation returns.
+     * When omitted, defaults to `entity.EntityInfo.SaveReturnMode` (`'full'` unless the entity's
+     * `Configuration.SaveReturnMode` is set to `'datestamps_only'`).
+     *
+     * - `'full'`: Re-queries all columns from the entity's `BaseView`.
+     * - `'datestamps_only'`: Returns only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`,
+     *   merging those database-generated values over the entity's current in-memory field values.
+     */
+    SaveReturnMode?: EntitySaveReturnMode;
 }
 
 /**
@@ -935,8 +948,10 @@ export interface IMetadataProvider {
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
      * @param CompositeKey the compositeKey for the record to check
+     * @param options optional filtering options for dependency discovery
      */
-    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]>
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
@@ -1524,6 +1539,15 @@ export type RunViewCacheStatus = {
      * Used to detect if any records have been deleted.
      */
     rowCount: number;
+    /**
+     * A hash of the client's field-security key for this request (what it may read on the entity,
+     * and for a saved view its denials everywhere), computed from the client's metadata, or ''
+     * when the user is denied nothing. When it differs from the key the server computes for the
+     * same user, the server answers `stale` with fresh rows even though no row changed: that is
+     * how a browser learns it lost a column. Omitted by older clients, for which the server skips
+     * the check.
+     */
+    fieldSecurityKey?: string;
 }
 
 /**
@@ -1697,6 +1721,14 @@ export type RunQueryCacheStatus = {
      * Used to detect if any records have been deleted.
      */
     rowCount: number;
+    /**
+     * The query definition hash the client's slot was written under, as the server returned it
+     * (`RunQueryWithCacheCheckResult.definitionHash`). When it differs from the server's own, the
+     * server answers `stale` with fresh rows, whatever the query's CacheValidationSQL says. An empty
+     * string means the slot has no hash, which also counts as different. Omitted by older clients,
+     * for which the server skips the definition check.
+     */
+    definitionHash?: string;
 }
 
 /**
@@ -1753,6 +1785,11 @@ export type RunQueryWithCacheCheckResult<T = unknown> = {
      * Error message if status is 'error'
      */
     errorMessage?: string;
+    /**
+     * The server's definition hash for the query, returned with every non-error result. The client
+     * stores it with the slot and sends it back in `RunQueryCacheStatus.definitionHash`.
+     */
+    definitionHash?: string;
 }
 
 /**

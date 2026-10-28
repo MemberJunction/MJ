@@ -10,10 +10,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
+vi.mock('../install/template-user.js', () => ({
+    OfferTemplateUser: vi.fn(),
+    NamesFromEmail: vi.fn(),
+    TEMPLATE_USER_ENV: {},
+}));
 vi.mock('../github/github-client.js', () => ({
     FetchManifestFromGitHub: vi.fn(),
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
+    DescribeUnresolvedVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
     ParseGitHubUrl: (u: string) => {
         const m = u.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
@@ -78,7 +85,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp, RemoveApp, EnableApp, DisableApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, RemoveAppPackages } from '../install/package-manager.js';
@@ -241,6 +248,29 @@ describe('InstallApp — resume after a crash mid-install', () => {
         // by then) and RecordAppInstallation reuses the existing row (FindInstalledApp match)
         // rather than duplicating it — safe, just not the fast checkpoint-skip path.
         expect(vi.mocked(RecordAppInstallation)).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('UpgradeApp — no resolvable latest version (#4505)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        baseHappyPathStubs();
+    });
+
+    it('reports why no version resolved, from the repository it could not read', async () => {
+        // A private repo with no credential: the release/tag listings 404 and come back empty, so
+        // GetLatestVersion is null. The failure must say why, not just "Could not determine".
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active', RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as never);
+        vi.mocked(GetLatestVersion).mockResolvedValueOnce(null);
+        vi.mocked(DescribeUnresolvedVersion).mockResolvedValueOnce('Cannot read test/app-x. (described)');
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe('Cannot read test/app-x. (described)');
+        expect(vi.mocked(DescribeUnresolvedVersion)).toHaveBeenCalledWith('https://github.com/test/app-x', context.GitHubOptions, undefined);
     });
 });
 

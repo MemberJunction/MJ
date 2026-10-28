@@ -7,26 +7,18 @@ import {
 } from '@memberjunction/core-entities';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
+import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import { GetHostInstanceID } from './HostInstance.js';
 import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { SessionRunIDVerifier, SessionRunIDs } from './SessionRunIDVerifier.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { RecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
+import { ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const CONVERSATION_ENTITY = 'MJ: Conversations';
-
-/**
- * Shape of the observability run ids a realtime voice session persists in `AIAgentSession.Config_`.
- * Read on {@link SessionManager.CloseSession} to finalize the co-agent runs. All fields optional —
- * a non-voice session (or one whose run creation was skipped) carries none of them.
- */
-interface SessionRunConfig {
-    coAgentRunID?: string;
-    promptRunID?: string;
-    /** The co-agent run's single system-prompt `MJ: AI Agent Run Steps` row id (its Timeline entry). */
-    coAgentRunStepID?: string;
-}
 
 /**
  * Inputs for {@link SessionManager.CreateSession}. `conversationID`/`lastSessionID`/`config`
@@ -53,6 +45,24 @@ export interface CreateSessionInput {
  * closed before this column existed.
  */
 export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+
+/**
+ * The {@link SessionCloseReason} for a session whose bridged agent has left (see
+ * {@link SessionManager.CloseSessionForEndedBridge}). The bridge's reason carries over where the session has the same one;
+ * `HostEnded` (everyone left the room, the call hung up) closes it as `Explicit`, people ending it, as phone calls close
+ * theirs.
+ */
+function sessionCloseReasonForBridgeEnd(reason: BridgeDisconnectReason): SessionCloseReason {
+    switch (reason) {
+        case 'Error':
+        case 'Janitor':
+        case 'Shutdown':
+            return reason;
+        case 'Explicit':
+        case 'HostEnded':
+            return 'Explicit';
+    }
+}
 
 /**
  * Thrown by {@link SessionManager.CreateSession} when the caller lacks `CanRun` on the target
@@ -126,6 +136,9 @@ export class SessionManager {
      */
     private readonly realtimeClientSessionService: RealtimeClientSessionService;
 
+    /** Checks the run ids read from a session's owner-editable `Config_` before they are used. */
+    private readonly runIDVerifier = new SessionRunIDVerifier();
+
     /**
      * @param realtimeClientSessionService The shared {@link RealtimeClientSessionService} instance to
      *   finalize observability runs through. Pass the SAME instance your resolver/service used to create
@@ -141,11 +154,13 @@ export class SessionManager {
     /**
      * Authorize and create a new session. Flow:
      * 1. `CanRun` check on the agent — denied → {@link SessionAuthorizationError}, no row written.
-     * 2. Resolve the conversation (use the supplied one, or create+link a fresh Conversation).
+     * 2. Resolve the conversation (use the supplied one, or create+link a fresh Conversation). An anonymous
+     *    caller may only supply a conversation stamped with its own scope identity.
      * 3. Persist the `AIAgentSession` as `Active`, stamped with this host and `LastActiveAt = now`.
      *
      * @returns the saved {@link MJAIAgentSessionEntity}.
-     * @throws {SessionAuthorizationError} when the user may not run the agent.
+     * @throws {SessionAuthorizationError} when the user may not run the agent, or an anonymous caller supplies a
+     *   conversation that is not its own.
      * @throws {Error} when conversation creation or session save fails.
      */
     public async CreateSession(
@@ -154,6 +169,9 @@ export class SessionManager {
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity> {
         await this.assertCanRun(input.agentID, contextUser);
+        if (input.conversationID && contextUser.IsMagicLinkAnonymous) {
+            await this.assertAnonymousOwnsConversation(input.conversationID, contextUser, provider);
+        }
 
         const conversationID = input.conversationID
             ?? await this.createConversation(input, contextUser, provider);
@@ -201,6 +219,13 @@ export class SessionManager {
         if (!closed) {
             return false;
         }
+        if (session.RecordingStartedAt) {
+            // A client-direct recording is assembled only after the grace period while its call is open
+            // (a hidden tab must not rewrite recording.wav on every switch; see RealtimeRecordingHandler).
+            // The call has ended now, so assemble it right away. The ledger's claim arbitrates instances,
+            // and a recording with nothing to assemble (none, or server-bridged) is simply not claimable.
+            RecordingAssemblyScheduler.Instance.ScheduleAssembly(agentSessionID, 0, false);
+        }
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
         await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
@@ -209,6 +234,68 @@ export class SessionManager {
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
         await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Closes a session that was created for one bridged agent (a bot in a meeting room) once that agent's bridge has
+     * ended, whatever ended it: the agent was stopped, the meeting was ended, everyone left, the model session was lost.
+     * Without this the session stays `Active` until the janitor's staleness sweep closes it, 15 minutes or more later.
+     *
+     * The close is {@link CloseSession}, the one the janitor runs, with the bridge's reason: `Explicit` for a stop, an
+     * ended meeting or an emptied room (`HostEnded`), otherwise the bridge's own (`Error`, `Janitor`, `Shutdown`). A
+     * session already closed (by the janitor, or by its user) keeps its reason.
+     *
+     * Never throws: it runs as the bridge's end-of-session bookkeeping. A failure is logged and leaves the session to the
+     * janitor, as before.
+     *
+     * @param agentSessionID The session created for the bridged agent.
+     * @param reason Why the bridge ended.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForEndedBridge(
+        agentSessionID: string,
+        reason: BridgeDisconnectReason,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, sessionCloseReasonForBridgeEnd(reason));
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForEndedBridge could not close agent session ${agentSessionID} after its bridge ended ` +
+                    `(${reason}); the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Closes a session that was created for one agent's time in a room when that agent failed to start: its model session
+     * could not open, the bot's token could not be minted, the bridge did not start. The agent never joined, so no
+     * end-of-session hook will close the session; without this it stays `Active` until the janitor's staleness sweep.
+     *
+     * The close is {@link CloseSession} with reason `Error`. A session already closed keeps its reason.
+     *
+     * Never throws: it runs while the caller handles the failed start, whose error is the one the caller reports. A failure
+     * is logged and leaves the session to the janitor.
+     *
+     * @param agentSessionID The session created for the agent.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForFailedStart(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, 'Error');
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForFailedStart could not close agent session ${agentSessionID} after its agent failed ` +
+                    `to start; the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
     }
 
     /**
@@ -260,7 +347,8 @@ export class SessionManager {
 
     /**
      * Finalizes the co-agent observability runs a realtime voice session stored in its `Config_`
-     * (see `RealtimeClientSessionResolver`). No-op when the config carries no run ids. Tolerant: a
+     * (see `RealtimeClientSessionResolver`). Only run ids that are records of the session are
+     * finalized, because the owner can edit `Config_`. No-op when none remain. Tolerant: a
      * malformed config or a finalize failure is swallowed so it can never break session close.
      */
     private async finalizeObservabilityRuns(
@@ -268,8 +356,8 @@ export class SessionManager {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
-        const config = this.parseSessionRunConfig(session.Config_);
-        if (!config.coAgentRunID && !config.promptRunID && !config.coAgentRunStepID) {
+        const claimed = this.parseSessionRunConfig(session.Config_);
+        if (!claimed.CoAgentRunID && !claimed.PromptRunID && !claimed.CoAgentRunStepID) {
             return;
         }
         try {
@@ -277,34 +365,52 @@ export class SessionManager {
             // for a scoped anonymous session, so an owner-initiated (or error) close must finalize
             // under it too — the caller's role holds no grants on the AI run entities. Janitor and
             // shutdown sweeps already close as the system user and pass through unchanged.
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            const runIDs = await this.runIDVerifier.Verify(session.ID, claimed, runUser, provider);
+            if (!runIDs.CoAgentRunID && !runIDs.PromptRunID && !runIDs.CoAgentRunStepID) {
+                return;
+            }
             await this.realtimeClientSessionService.FinalizeCoAgentRun(
-                config.coAgentRunID ?? null,
-                config.promptRunID ?? null,
-                ResolveScopedAnonymousRunUser(contextUser),
+                runIDs.CoAgentRunID ?? null,
+                runIDs.PromptRunID ?? null,
+                runUser,
                 provider,
                 true,
-                config.coAgentRunStepID ?? null,
+                runIDs.CoAgentRunStepID ?? null,
             );
         } catch (e) {
             LogError(`SessionManager.finalizeObservabilityRuns failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
-    /** Parses the session's `Config_` for observability run ids; returns an empty config on any error. */
-    private parseSessionRunConfig(raw: string | null): SessionRunConfig {
+    /** Parses the session's `Config_` for observability run ids; returns none on any error. */
+    private parseSessionRunConfig(raw: string | null): SessionRunIDs {
         if (!raw) {
             return {};
         }
         try {
-            const parsed = JSON.parse(raw) as Partial<SessionRunConfig>;
+            const parsed = JSON.parse(raw) as { coAgentRunID?: unknown; promptRunID?: unknown; coAgentRunStepID?: unknown };
             return {
-                coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
-                promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
-                coAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
+                CoAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
+                PromptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+                CoAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
             };
         } catch {
             return {};
         }
+    }
+
+    /** The session's co-agent run id from its `Config_`, when it is a run of the session. */
+    private async verifiedCoAgentRunID(
+        session: MJAIAgentSessionEntity,
+        runUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | undefined> {
+        const { CoAgentRunID } = this.parseSessionRunConfig(session.Config_);
+        if (!CoAgentRunID) {
+            return undefined;
+        }
+        return (await this.runIDVerifier.Verify(session.ID, { CoAgentRunID }, runUser, provider)).CoAgentRunID;
     }
 
     /**
@@ -348,6 +454,23 @@ export class SessionManager {
 
     // ----- internals -------------------------------------------------------------------------
 
+    /**
+     * Throws {@link SessionAuthorizationError} unless the anonymous caller owns the conversation it wants to bind a
+     * new session to: the conversation, read as the caller, loads, and its `ExternalID` equals the caller's scope
+     * identity ({@link ResolveSessionScopeIdentity}). A caller with no scope identity is refused. Every anonymous
+     * visitor shares one Anonymous user, so row-level security alone may let one visitor read another's
+     * conversation; without this check the new session row and its relays would point into that conversation.
+     */
+    private async assertAnonymousOwnsConversation(conversationID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+        const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+        const loaded = await conversation.Load(conversationID);
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (!loaded || !scopeIdentity || conversation.ExternalID !== scopeIdentity) {
+            LogError(`SessionManager.CreateSession: refused anonymous user ${contextUser.ID} binding a session to conversation ${conversationID} (${loaded ? 'not its own' : 'not readable'}).`);
+            throw new SessionAuthorizationError('Not authorized to start a session on this conversation.');
+        }
+    }
+
     /** Throws {@link SessionAuthorizationError} unless the user has `CanRun` on the agent. */
     private async assertCanRun(agentID: string, contextUser: UserInfo): Promise<void> {
         const canRun = await AIAgentPermissionHelper.HasPermission(agentID, contextUser, 'run');
@@ -368,13 +491,13 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
-        // For a magic-link-anonymous principal (e.g. a public web-widget voice guest), stamp the
-        // session's conversation with the signed per-session scope so the Widget Guest RLS filters
-        // ({{ScopeResourceID}}) isolate this session — and everything chained to it (AI Agent
-        // Sessions via ConversationID, Session Channels via the session) — from other guests
-        // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
-        if (contextUser.MagicLinkScope?.ResourceID) {
-            conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        // Stamp the scope identity AuthorizeSessionAccess compares against (one rule, one place:
+        // ResolveSessionScopeIdentity) — the token's resource scope when it has one, else an anonymous
+        // visitor's mj_sid. This isolates anonymous visitors that share the Anonymous UserID, and keeps
+        // the {{ScopeResourceID}} RLS filters matching the visitor's own rows. No-op for unscoped named principals.
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (scopeIdentity) {
+            conversation.ExternalID = scopeIdentity;
         }
 
         // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the
@@ -438,7 +561,11 @@ export class SessionManager {
         return session;
     }
 
-    /** Loads a session entity by ID, returning null when it cannot be loaded. */
+    /**
+     * Loads a session entity by ID, returning null when it cannot be loaded. The lifecycle saves that
+     * follow cannot write back the recording ledger's columns: those have `AllowUpdateAPI=0`, so they are
+     * not parameters of `spUpdateAIAgentSession` (#5294, #6010).
+     */
     private async loadSession(
         agentSessionID: string,
         contextUser: UserInfo,
@@ -567,10 +694,11 @@ export class SessionManager {
             this.heartbeatLastWrite.Set(agentSessionID.toLowerCase(), Date.now());
             // A live session keeps its co-agent run live too — on whichever instance gets its heartbeats —
             // or the agent-run watchdog force-fails the run mid-call. Same elevation as the finalize path.
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
             this.realtimeClientSessionService.KeepCoAgentRunAlive(
-                this.parseSessionRunConfig(session.Config_).coAgentRunID,
+                await this.verifiedCoAgentRunID(session, runUser, provider),
                 provider,
-                ResolveScopedAnonymousRunUser(contextUser),
+                runUser,
             );
         }
         return saved;

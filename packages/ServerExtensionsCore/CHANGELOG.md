@@ -1,5 +1,112 @@
 # @memberjunction/server-extensions-core
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- b73e3bc: Five fixes found while building and testing the BizApps Voting Open App:
+  - **IS-A lookups and other Info-class lookups now use the entity's own provider.** Info objects keep the provider that built them (`BaseInfo.OwningProvider`). `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filter lookups, `QueryInfo` sibling getters and `AuthorizationInfo.Roles` resolve through that provider and fall back to the global one only when there is none. `EnsureISAChild` no longer throws "not a declared IsA child entity" in a process with several providers and no global provider. The constructors take an optional provider, so existing callers still compile.
+  - **Server-side writes clear the client's RunView dedup-linger cache.** There is a new `ProviderBase.InvalidateRunViewDedupCache(entityNames?)`. `RouteOperation` calls it after every Remote Operation, and the GraphQL client calls it after every mutation (Actions, agent runs and saves included). Both run on failure too. An identical RunView no longer returns pre-operation rows for up to 5 s.
+  - **Server extensions can own CORS.** A new `OwnsCORS` option on a server extension config makes global CORS skip that extension's `RootPath`, so the extension's own origin policy and `OPTIONS` handler apply. `X-Powered-By` is now disabled app-wide.
+  - **Explorer deep links beat the saved workspace on a full load.** When the URL carries query params for an open tab, they replace that tab's saved params. Workspace changes are also written to localStorage synchronously and flushed on `pagehide` / `visibilitychange`, so a quick refresh no longer comes back one step behind.
+  - **Magic-link sessions no longer get an uncaught `PermissionConstrainedError` at boot.** `UserInfoEngine` adds `UserNotificationsIfPermitted`, and `GetSetting` returns "not set" for a user who can't read settings. It logs once per property. Notifications and `ApplicationManager` use the safe paths.
+
+- 08be974: Review follow-ups to the multi-provider / cache / CORS / deep-link fixes:
+  - `QueryFieldInfo.QueryInfo` matches the parent query by `QueryID` (it compared the field's own ID and always returned undefined). Query Info getters no longer throw when no provider is bound.
+  - The IS-A SubtypeSelector lookup memo is partitioned per provider, so one provider never receives a row (or a miss) recorded through another.
+  - Entity `Save()`/`Delete()` and transaction groups clear only their own entities' RunView dedup-linger entries (`ExecuteGQL` takes `{ AffectedEntityNames }`). Other mutations still clear everything. `IsGraphQLMutation` reads only top-level tokens, so a fragment field named `query` can no longer hide a mutation. A failed coalesced RunView no longer evicts a newer request's entry.
+  - A host `serverExtensions[]` entry may be a partial overlay: only `DriverClass` is required. An overlay without `Enabled` inherits the published value; a host-only entry without it is enabled.
+  - Explorer: a startup deep link waits for the app list before it is resolved. A permission-constrained magic-link session gets its scoped app (plus default apps when access can be judged) instead of "No Applications Available". Workspace saves run one at a time, and a save that lands after the page unloads no longer wins over newer journaled changes. A brand-new user's first boot also runs the deep-link hook.
+  - `UserInfoEngine.UserFavorites`, `NotificationPreferences` and `NotificationTypes` read empty for a session that cannot read them.
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

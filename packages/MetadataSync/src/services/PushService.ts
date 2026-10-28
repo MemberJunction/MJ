@@ -8,7 +8,7 @@ import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
-import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
+import { loadEntityConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
@@ -25,11 +25,23 @@ import {
 } from '../lib/push-write-mode';
 import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
-import { findEntityDirectories } from '../lib/provider-utils';
+import { ResolvePushFolders, SkippedDirectoryMessage } from '../lib/push-directories';
+import type { SkippedDirectory } from '../lib/push-when';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { DescribeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { EnvVariableNotSetError, OptionalEnvMissingError, OptionalEnvSkipMessage, ParseEnvReference } from '../lib/env-reference';
+import { RecordStartLine } from '../lib/json-record-lines';
+import { EnvDisplayMask, EnvSourceLabel, ENV_HIDDEN_VALUE, MaskedError } from '../lib/env-display';
+import { EnvSqlLog, AddSkippedOptionalEnvField } from '../lib/env-sql-redactor';
+import { ComposeStatementTransforms, LookupSqlLog } from '../lib/lookup-sql';
+import { ResolveSchemaPlaceholders } from '../lib/schema-placeholders';
+import { DatabaseNaturalKeyReader, NaturalKeyConflictMessage, NaturalKeyPreflight, UniqueKeyColumns } from '../lib/natural-key-preflight';
+import { CreatedRecordKeyFields, IsKeyReference, KeyFieldValue } from '../lib/created-record-key';
+import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
+import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
+import { DEFAULT_RECORD_FILE_PATTERN, RECORD_FILE_GLOB_OPTIONS } from '../lib/record-file-glob';
 import { resolveCollectionRelationship } from '@memberjunction/record-graph';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
@@ -121,6 +133,8 @@ export interface PushResult {
   sqlLogPath?: string;
   /** Structured per-record changes captured during the push, for the changes recap. */
   changeLog: RecordChangeDetail[];
+  /** Folders skipped because their pushWhen variable was not true. */
+  SkippedDirectories?: SkippedDirectory[];
 }
 
 export interface EntityPushResult {
@@ -131,6 +145,13 @@ export interface EntityPushResult {
   skipped: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   deferred: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   errors: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+}
+
+/** An env-sourced composition child field that is registered with the SQL log redactor at its owner's save. */
+interface PendingEnvSqlChildField {
+  Target: BaseEntity;
+  FieldName: string;
+  Variables: ReadonlySet<string>;
 }
 
 /**
@@ -154,6 +175,8 @@ interface DeferredRecord {
   entityDir: string;
   /** The entity configuration */
   entityConfig: EntityConfig;
+  /** The batch context of the main pass, so the retry finds the parents of a deferred child */
+  batchContext?: BatchContext;
 }
 
 /**
@@ -181,7 +204,10 @@ interface PushRun {
   options: PushOptions;
   fileBackupManager: FileBackupManager;
   callbacks?: PushCallbacks;
-  configDir: string;
+  /** The sync root: holds the root settings, and incremental state keys are relative to it. */
+  syncRootDir: string;
+  /** True when the push runs over a folder below the sync root, so pruning stays inside the pushed folders. */
+  belowSyncRoot: boolean;
 }
 
 /** One JSON file's graphs, run level by level. */
@@ -258,11 +284,20 @@ export class PushService {
   private runningTotals: EntityPushResult = emptyPushTotals();
   /** The SQL log for this run, when one is being written. */
   private sqlLogFilePath: string | undefined;
+  /** The open SQL log's redactor and lookup-create hook; null when no log is open. */
+  private envSqlLog: EnvSqlLog | null = null;
+  /** The open SQL log's `@lookup` → subquery rewriter and lookup-create hook; null when no log is open. */
+  private lookupSqlLog: LookupSqlLog | null = null;
+  /** Unique keys of each entity's table read for the create pre-flight (#4400), by entity name. */
+  private uniqueKeyCache = new Map<string, Promise<UniqueKeyColumns[]>>();
+  /** Composition child fields waiting for their owner's save, by the owner record's resolution collector. */
+  private pendingEnvSqlChildFields = new WeakMap<SyncResolutionCollector, PendingEnvSqlChildField[]>();
   /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
   private committedWrites: CommittedWrite[] = [];
   /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
   private pendingChecksums: Map<string, string> = new Map();
   private pushedEntityDirs: string[] = [];
+  private skippedDirectories: SkippedDirectory[] = [];
   /** Errors whose record was already sent to onRecordError, so a caller does not report it twice. */
   private reportedRecordErrors = new WeakSet<Error>();
 
@@ -385,16 +420,20 @@ export class PushService {
     this.committedWrites = [];
     this.pendingChecksums.clear();
     this.pushedEntityDirs = [];
+    this.skippedDirectories = [];
     this.directoryModes.clear();
     this.runningTotals = emptyPushTotals();
     this.sqlLogFilePath = undefined;
+    this.closeEnvSqlRedactor();
     
     const fileBackupManager = new FileBackupManager();
     
     // Load sync config for SQL logging settings and autoCreateMissingRecords flag
-    // If dir option is specified, load from that directory, otherwise use original CWD
-    const configDir = options.dir ? path.resolve(configManager.getOriginalCwd(), options.dir) : configManager.getOriginalCwd();
-    this.syncConfig = await loadSyncConfig(configDir);
+    // With the dir option, load from the sync root at or above that directory, otherwise from the original CWD
+    const folders = await ResolvePushFolders(configManager.getOriginalCwd(), options.dir, options.include, options.exclude);
+    const configDir = folders.ConfigDir;
+    const syncRootDir = folders.SyncRootDir;
+    this.syncConfig = folders.SyncConfig;
     
     // Display warnings for special flags that are enabled
     if (this.syncConfig?.push?.alwaysPush && !options.dryRun) {
@@ -406,7 +445,7 @@ export class PushService {
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
       callbacks?.onLog?.(`Config directory (with dir option): ${configDir}`);
-      callbacks?.onLog?.(`Config file path: ${path.join(configDir, '.mj-sync.json')}`);
+      callbacks?.onLog?.(`Config file path: ${path.join(syncRootDir, '.mj-sync.json')}`);
       callbacks?.onLog?.(`Full sync config loaded: ${JSON.stringify(this.syncConfig, null, 2)}`);
       callbacks?.onLog?.(`SQL logging config: ${JSON.stringify(this.syncConfig?.sqlLogging)}`);
     }
@@ -423,22 +462,13 @@ export class PushService {
     let sqlLoggingSession: SqlLoggingSession | null = null;
     
     try {
-      sqlLoggingSession = await this.startSqlLogging(sqlLogger, options, configDir, callbacks);
+      sqlLoggingSession = await this.startSqlLogging(sqlLogger, options, syncRootDir, callbacks);
 
-      // Find entity directories to process
-      // Note: If options.dir is specified, configDir already points to that directory
-      // So we don't need to pass it as specificDir
-      const entityDirs = findEntityDirectories(
-        configDir,
-        undefined,
-        this.syncConfig?.directoryOrder,
-        this.syncConfig?.ignoreDirectories,
-        options.include,
-        options.exclude
-      );
-      
-      if (entityDirs.length === 0) {
-        throw new Error('No entity directories found');
+      const selection = folders.SelectDirectories();
+      const entityDirs = selection.Included;
+      this.skippedDirectories = selection.Skipped;
+      for (const skipped of selection.Skipped) {
+        callbacks?.onLog?.(SkippedDirectoryMessage(configDir, skipped));
       }
 
       await this.applyWritePlan(entityDirs, options, callbacks);
@@ -480,7 +510,8 @@ export class PushService {
             deferred: 0,
             errors: 0,
             warnings: this.warnings,
-            changeLog: this.changeDetails
+            changeLog: this.changeDetails,
+            SkippedDirectories: this.skippedDirectories
           };
         }
       }
@@ -493,7 +524,7 @@ export class PushService {
       }
 
       const totals = await this.runPushInTransaction(
-        { entityDirs, deletionAudit, options, fileBackupManager, callbacks, configDir },
+        { entityDirs, deletionAudit, options, fileBackupManager, callbacks, syncRootDir, belowSyncRoot: syncRootDir !== configDir },
         transactionManager
       );
 
@@ -515,17 +546,20 @@ export class PushService {
         await sqlLoggingSession.dispose();
         if (hadStatements) {
           sqlLogPath = filePath;
+          this.addEnvSqlWarnings(filePath, callbacks);
           if (options.verbose) {
             callbacks?.onLog?.(`📝 SQL log written to: ${filePath}`);
           }
         }
+        this.closeEnvSqlRedactor();
       }
       
       return {
         ...totals,
         warnings: this.warnings,
         sqlLogPath,
-        changeLog: this.changeDetails
+        changeLog: this.changeDetails,
+        SkippedDirectories: this.skippedDirectories
       };
 
     } catch (error) {
@@ -543,8 +577,13 @@ export class PushService {
       if (sqlLoggingSession) {
         try {
           await sqlLoggingSession.dispose();
+          if (await fs.pathExists(sqlLoggingSession.filePath)) {
+            this.addEnvSqlWarnings(sqlLoggingSession.filePath, callbacks);
+          }
         } catch (disposeError) {
           callbacks?.onWarn?.(`Failed to close SQL logging session: ${disposeError}`);
+        } finally {
+          this.closeEnvSqlRedactor();
         }
       }
       
@@ -561,7 +600,7 @@ export class PushService {
   private async startSqlLogging(
     sqlLogger: SQLLogger,
     options: PushOptions,
-    configDir: string,
+    syncRootDir: string,
     callbacks?: PushCallbacks
   ): Promise<SqlLoggingSession | null> {
     let sqlLoggingSession: SqlLoggingSession | null = null;
@@ -581,8 +620,8 @@ export class PushService {
           ? `MetadataSync_Push_${timestamp}.sql`
           : `push_${timestamp}.sql`;
 
-        // Use .sql-log-push directory in the config directory (where sync was initiated)
-        const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
+        // The SQL log folder is relative to the sync root
+        const outputDir = path.join(syncRootDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
         const filepath = path.join(outputDir, filename);
 
         // Ensure the directory exists
@@ -590,8 +629,17 @@ export class PushService {
 
         // Create the SQL logging session
         this.sqlLogFilePath = filepath;
+        this.envSqlLog = new EnvSqlLog(this.syncEngine);
+        this.lookupSqlLog = new LookupSqlLog(this.syncEngine);
+        const schemaPlaceholders = ResolveSchemaPlaceholders(this.syncConfig, configManager.GetMJConfig());
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
+          // Env values are left out first, then lookup IDs become subqueries; the logger's schema
+          // placeholder rewrite runs after both, so the subqueries' schema names become placeholders.
+          TransformStatement: ComposeStatementTransforms(this.envSqlLog.Redactor.Transform, this.lookupSqlLog.Rewriter.Transform),
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
+          schemaPlaceholders,
+          // Escaping is tied to migration output, never to whether placeholder rules exist
+          escapeFlywaySyntax: this.syncConfig?.sqlLogging?.formatAsMigration === true || this.syncConfig?.sqlLogging?.escapeFlywaySyntax === true,
           description: 'MetadataSync push operation',
           statementTypes: "mutations",
           prettyPrint: true,
@@ -600,6 +648,7 @@ export class PushService {
           filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
           filterType: this.syncConfig?.sqlLogging?.filterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+          variableBatchThreshold: this.syncConfig?.sqlLogging?.variableBatchThreshold ?? 200,
         });
         
         if (options.verbose) {
@@ -671,8 +720,18 @@ export class PushService {
             }
           } catch (cleanupError) {
             callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
+          } finally {
+            this.closeEnvSqlRedactor();
           }
         }
+  }
+
+  /** Drops the SQL log redactor and this push's lookup-create hook, after the log is closed. */
+  private closeEnvSqlRedactor(): void {
+    this.envSqlLog?.Close();
+    this.envSqlLog = null;
+    this.lookupSqlLog?.Close();
+    this.lookupSqlLog = null;
   }
 
   /**
@@ -789,7 +848,7 @@ export class PushService {
         committed = true;
         // PHASE 3: files that contained deletions, then the incremental state
         await this.writeDeferredFiles(run.options, run.callbacks);
-        await this.persistIncrementalState(run.configDir);
+        await this.persistIncrementalState(run.syncRootDir, run.belowSyncRoot);
       }
       return totals;
     } catch (error) {
@@ -931,7 +990,7 @@ export class PushService {
   }
 
   /** Apply incremental checksums and push timestamps. Called only after the push commits. */
-  private async persistIncrementalState(syncRootDir: string): Promise<void> {
+  private async persistIncrementalState(syncRootDir: string, belowSyncRoot: boolean): Promise<void> {
     if (!this.stateManager) {
       return;
     }
@@ -942,7 +1001,7 @@ export class PushService {
     for (const relativeEntityDir of this.pushedEntityDirs) {
       this.stateManager.setLastPushTimestamp(relativeEntityDir, pushedAt);
     }
-    await this.stateManager.pruneStaleChecksums(syncRootDir);
+    await this.stateManager.pruneStaleChecksums(syncRootDir, belowSyncRoot ? this.pushedEntityDirs : undefined);
     await this.stateManager.save();
   }
 
@@ -966,7 +1025,7 @@ export class PushService {
       this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
       const firstChange = this.changeDetails.length;
       const result = await this.processEntityDirectory(
-        entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.configDir
+        entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.syncRootDir
       );
       // Nested relatedEntities land in changeDetails under their own entity name, so the
       // directory's configured entity is not what decides the reload (MJ#4836).
@@ -1063,14 +1122,8 @@ export class PushService {
     }
 
     // Find all JSON files in the directory
-    const pattern = entityConfig.filePattern || '*.json';
-    const files = await fastGlob(pattern, {
-      cwd: entityDir,
-      absolute: true,
-      onlyFiles: true,
-      dot: true,
-      ignore: ['**/node_modules/**', '**/.mj-*.json']
-    });
+    const pattern = entityConfig.filePattern || DEFAULT_RECORD_FILE_PATTERN;
+    const files = await fastGlob(pattern, { ...RECORD_FILE_GLOB_OPTIONS, cwd: entityDir });
     
     if (options.verbose) {
       callbacks?.onLog?.(`Found ${files.length} files to process`);
@@ -1110,13 +1163,14 @@ export class PushService {
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
 
-        // Compute checksum on the RESOLVED content (after @include preprocessing)
-        // so that changes to included files are properly detected.
+        // Compute checksum on the RESOLVED content (after @include preprocessing), with the content
+        // of each @file: target folded in, so a change to an included or referenced file is
+        // detected (#4190). @file: paths resolve against the entity folder, as push resolves them.
         let cachedChecksum: string | undefined;
 
         if (options.incremental && this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
-          cachedChecksum = this.syncEngine.calculateChecksum(fileData);
+          cachedChecksum = await this.syncEngine.CalculateChecksumWithFileContent(fileData, entityDir);
           if (!this.stateManager.hasFileChanged(relativePath, cachedChecksum)) {
             const recordCount = Array.isArray(rawFileData) ? rawFileData.length : 1;
             if (options.verbose) {
@@ -1132,6 +1186,9 @@ export class PushService {
         // Analyze dependencies and get sorted records
         const analyzer = new RecordDependencyAnalyzer();
         const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+        for (const flattened of analysisResult.sortedRecords) {
+          flattened.FilePath = filePath;
+        }
         
         if (analysisResult.circularDependencies.length > 0) {
           callbacks?.onWarn?.(`⚠️  Circular dependencies detected in ${filePath}`);
@@ -1228,7 +1285,7 @@ export class PushService {
         // Uses resolved content (after @include) so included-file changes are tracked.
         if (this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
-          const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
+          const checksum = cachedChecksum ?? (await this.syncEngine.CalculateChecksumWithFileContent(fileData, entityDir));
           this.pendingChecksums.set(relativePath, checksum);
         }
       } catch (fileError) {
@@ -1400,14 +1457,42 @@ export class PushService {
   }
 
   private throwRecordFailure(failure: GraphRecordFailure, callbacks?: PushCallbacks): never {
-    const err = failure.error instanceof Error ? failure.error : new Error(String(failure.error));
     const rec = failure.record;
+    const err = this.locateRecordError(failure.error instanceof Error ? failure.error : new Error(String(failure.error)), rec);
     callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
     callbacks?.onLog?.(`   ${err.message}\n`);
     if (err.stack) {
       callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
     }
     throw err;
+  }
+
+  /**
+   * For an unset `@env:` variable, an error that names the record file with the record's start line,
+   * the entity and the field: `/abs/file.json:12: Entity fields.Name uses @env:VAR, which is not set`.
+   * Other errors are returned as they are.
+   */
+  private locateRecordError(error: Error, record: FlattenedRecord): Error {
+    if (!(error instanceof EnvVariableNotSetError)) {
+      return error;
+    }
+    const field = error.Field ?? 'a field';
+    const message = `${this.recordLocation(record)}: ${error.EntityName ?? record.entityName} ${field} uses @env:${error.VariableName}, which is not set`;
+    return new Error(message, { cause: error });
+  }
+
+  /** `/abs/file.json:12` for a record from a file (the line where the record starts, when found), else the record path. */
+  private recordLocation(record: FlattenedRecord): string {
+    if (!record.FilePath) {
+      return record.path;
+    }
+    const filePath = path.resolve(record.FilePath);
+    try {
+      const line = RecordStartLine(fs.readFileSync(filePath, 'utf8'), record.path);
+      return line === undefined ? filePath : `${filePath}:${line}`;
+    } catch {
+      return filePath;
+    }
   }
 
   protected async processFlattenedRecord(
@@ -1438,14 +1523,23 @@ export class PushService {
     // This ensures we can properly find parent entities even when they're new
     const lookupKey = recordId;
     
-    // Check if already in batch context
+    // Check if already in batch context; the deferred retry runs again for a record the main pass added
     const existingEntry = batchContext.get(lookupKey);
-    if (existingEntry) {
+    if (existingEntry && allowDefer) {
       // Already processed
       return { status: 'unchanged', isDuplicate: true };
     }
 
     let entity: BaseEntity;
+
+    // Parent entity from the batch context, for @parent refs in primaryKey
+    let parentEntity: BaseEntity | BatchContextStub | null = null;
+    if (parentContext) {
+      const parentRecordId = flattenedRecord.dependencies.values().next().value;
+      if (parentRecordId) {
+        parentEntity = batchContext.get(parentRecordId) || null;
+      }
+    }
 
     // Record-level skip (--incremental only): if the record has a stored
     // checksum and it matches the current fields, nothing changed — skip
@@ -1460,16 +1554,20 @@ export class PushService {
     // drift-correction behavior single-env workflows rely on, and prevents
     // silent no-ops when seeding a fresh DB from JSON files that already
     // carry stored checksums from another environment.
-    if (options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
+    // The deferred retry (allowDefer false) never takes this shortcut: the first pass left fields unsaved
+    if (allowDefer && options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
       // checksum was also computed with file content and composition payloads, so the comparison is apples-to-apples.
       const checksumPayload = this.buildRecordChecksumPayload(record);
       const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       if (currentChecksum === record.sync.checksum) {
-        // Lightweight stub — just enough for @parent:ID and @lookup resolution.
-        // No DB call, no entity framework overhead.
-        const allFields = { ...record.primaryKey, ...record.fields };
+        // Lightweight stub — just enough for @parent:ID and @lookup resolution. No entity load.
+        // @env:, @parent: and @owner: key values are resolved without a DB call, so a child's @parent:
+        // reference copies the value; other key values (such as @lookup:) stay raw.
+        const keyCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+        const shortcutKey = await this.resolvePrimaryKey(record.primaryKey, entityDir, parentEntity, batchContext, keyCollector, recordProvider, true);
+        const allFields = { ...record.fields, ...shortcutKey };
         const stub = {
           EntityInfo: { Name: entityName, PrimaryKeys: Object.keys(record.primaryKey).map(k => ({ Name: k })), Fields: Object.keys(allFields).map(k => ({ Name: k })) },
           Get: (field: string) => allFields[field],
@@ -1488,47 +1586,20 @@ export class PushService {
       throw new Error(`Failed to create entity object for ${entityName}`);
     }
 
-    // Get parent entity from context if available (needed for @parent refs in primaryKey)
-    let parentEntity: BaseEntity | BatchContextStub | null = null;
-    if (parentContext) {
-      const parentRecordId = flattenedRecord.dependencies.values().next().value;
-      if (parentRecordId) {
-        parentEntity = batchContext.get(parentRecordId) || null;
-      }
-      if (!parentEntity) {
-        throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
-      }
+    if (parentContext && !parentEntity) {
+      throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
     }
 
     // Check if record exists
     // Process primaryKey values through processFieldValue to resolve @lookup, @parent, etc.
     // Create a resolution collector to track @lookup and @parent resolutions
-    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey' };
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map(), LookupSources: new Map() };
+    // Reads the same EnvFields map, so fields recorded later are masked too
+    const envMask = new EnvDisplayMask(resolutionCollector.EnvFields);
 
-    let resolvedPrimaryKey: Record<string, any> | undefined;
+    let resolvedPrimaryKey: Record<string, unknown> | undefined;
     if (record.primaryKey && Object.keys(record.primaryKey).length > 0) {
-      resolvedPrimaryKey = {};
-      for (const [pkField, pkValue] of Object.entries(record.primaryKey)) {
-        try {
-          resolvedPrimaryKey[pkField] = await this.syncEngine.processFieldValue(
-            pkValue,
-            entityDir,
-            parentEntity,
-            null, // rootRecord
-            0,
-            batchContext,
-            resolutionCollector,
-            pkField,
-            recordProvider
-          );
-        } catch (pkError: unknown) {
-          // Check if this is a deferrable lookup error
-          if (pkError instanceof DeferrableLookupError) {
-            throw new Error(`Cannot defer lookup in primaryKey field '${pkField}': ${(pkError as DeferrableLookupError).message}. Primary key lookups must resolve immediately.`);
-          }
-          throw pkError;
-        }
-      }
+      resolvedPrimaryKey = await this.resolvePrimaryKey(record.primaryKey, entityDir, parentEntity, batchContext, resolutionCollector, recordProvider);
     }
 
     let exists = false;
@@ -1550,7 +1621,7 @@ export class PushService {
         // Record doesn't exist in database
         const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
         const pkDisplay = Object.entries(resolvedPrimaryKey)
-          .map(([key, value]) => `${key}=${value}`)
+          .map(([key, value]) => `${key}=${envMask.NewValue(key, String(value))}`)
           .join(', ');
 
         if (!autoCreate) {
@@ -1589,12 +1660,35 @@ export class PushService {
 
     // Apply defaults if entityConfig is provided
     if (entityConfig) {
-      const defaults = await this.syncEngine.buildDefaults(flattenedRecord.path, entityConfig);
+      const defaultsCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'fields', EnvFields: new Map() };
+      // Folder defaults come from the record file's folders
+      const recordFile = flattenedRecord.FilePath ?? path.join(entityDir, '.record.json');
+      const skippedDefaults = new Map<string, string>();
+      const defaults = await this.syncEngine.buildDefaults(recordFile, entityConfig, defaultsCollector, skippedDefaults);
+
+      // Field names match the entity's fields without case; a default for a virtual property applies when the entity has that property
+      const recordFields = new RecordFieldNames(record.fields);
+
+      // A default left out for an unset optional variable warns when the record would have used it
+      for (const [field, variableName] of skippedDefaults) {
+        const name = EntityFieldName(entity, field) ?? (field in entity ? field : undefined);
+        if (name && !recordFields.Has(name)) {
+          const warning = OptionalEnvSkipMessage(entityName, name, variableName);
+          localWarnings.push(warning);
+          callbacks?.onWarn?.(`⚠️  ${warning}`);
+          AddSkippedOptionalEnvField(resolutionCollector.EnvFields, name, variableName);
+        }
+      }
 
       // Apply defaults only to fields not explicitly set in record.fields
       for (const [field, value] of Object.entries(defaults)) {
-        if (!(field in record.fields) && field in entity) {
-          entity.Set(field, value);
+        const name = EntityFieldName(entity, field) ?? (field in entity ? field : undefined);
+        if (name && !recordFields.Has(name)) {
+          entity.Set(name, value);
+          const variables = defaultsCollector.EnvFields?.get(field);
+          if (variables) {
+            resolutionCollector.EnvFields?.set(name, variables);
+          }
         }
       }
     }
@@ -1671,6 +1765,16 @@ export class PushService {
           entity.Set(fieldName, valueToSet);
         }
       } catch (fieldError: unknown) {
+        if (fieldError instanceof EnvVariableNotSetError) {
+          throw fieldError.ForField(`fields.${fieldName}`);
+        }
+        if (fieldError instanceof OptionalEnvMissingError) {
+          const warning = OptionalEnvSkipMessage(entityName, fieldName, fieldError.VariableName);
+          localWarnings.push(warning);
+          callbacks?.onWarn?.(`⚠️  ${warning}`);
+          AddSkippedOptionalEnvField(resolutionCollector.EnvFields, EntityFieldName(entity, fieldName) ?? fieldName, fieldError.VariableName);
+          continue;
+        }
         // Check if this is a deferrable lookup error first
         if (fieldError instanceof DeferrableLookupError) {
           // If allowDefer is false, we're in deferred processing mode - can't defer again
@@ -1789,16 +1893,17 @@ export class PushService {
         const primaryKeyDisplay: string[] = [];
         if (entityInfo) {
           for (const pk of entityInfo.PrimaryKeys) {
-            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+            primaryKeyDisplay.push(`${pk.Name}: ${envMask.NewValue(pk.Name, String(entity.Get(pk.Name)))}`);
           }
         }
 
         const fieldDiffs = changeKeys.map((fieldName) => {
           const field = entity.GetFieldByName(fieldName);
+          const envName = field?.Name ?? fieldName;
           return {
             field: fieldName,
-            oldValue: this.formatFieldValue(field ? field.OldValue : undefined),
-            newValue: this.formatFieldValue((changes as Record<string, unknown>)[fieldName]),
+            oldValue: envMask.OldValue(envName, this.formatFieldValue(field ? field.OldValue : undefined)),
+            newValue: envMask.NewValue(envName, this.formatFieldValue((changes as Record<string, unknown>)[fieldName])),
           };
         });
         this.changeDetails.push({
@@ -1832,6 +1937,12 @@ export class PushService {
       };
     }
 
+    // A literal key that missed can still collide on a unique key with a row this database made
+    // under another ID: report that row instead of a constraint violation (#4400).
+    if (isNew && resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
+      await this.checkNaturalKey(entity, resolvedPrimaryKey, envMask, recordProvider);
+    }
+
     // A dry run stops here, after the same change detection a real push uses, so an
     // in-sync record reports unchanged above rather than "would update" (#4529).
     if (options.dryRun) {
@@ -1841,7 +1952,7 @@ export class PushService {
       const batchContextEntry = { key: lookupKey, entity };
       if (exists) {
         callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
-        return { status: 'updated', batchContextEntry };
+        return { status: 'updated', batchContextEntry, warnings: localWarnings.length > 0 ? localWarnings : undefined };
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
         // A real push records the create after Save; a dry run records it here so the
@@ -1849,21 +1960,29 @@ export class PushService {
         // a throwaway UUID that changes every run and is never the one a push writes.
         const entityInfo = this.syncEngine.getEntityInfo(entityName);
         const primaryKeyDisplay = (entityInfo?.PrimaryKeys ?? [])
-          .filter((pk) => resolvedPrimaryKey?.[pk.Name] != null || record.fields?.[pk.Name] != null)
-          .map((pk) => `${pk.Name}: ${resolvedPrimaryKey?.[pk.Name] ?? entity.Get(pk.Name)}`);
+          .filter((pk) => KeyFieldValue(resolvedPrimaryKey, pk.Name) != null || KeyFieldValue(record.fields, pk.Name) != null)
+          .map((pk) => `${pk.Name}: ${envMask.NewValue(pk.Name, String(KeyFieldValue(resolvedPrimaryKey, pk.Name) ?? entity.Get(pk.Name)))}`);
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : 'new',
           Operation: 'created',
           fields: [],
         });
-        return { status: 'created', batchContextEntry };
+        return { status: 'created', batchContextEntry, warnings: localWarnings.length > 0 ? localWarnings : undefined };
       }
     }
     
+    this.registerEnvSqlFields(entity, resolutionCollector.EnvFields, isNew || alwaysPush);
+    this.registerPendingEnvSqlChildFields(resolutionCollector);
+    // Key and foreign-key values from @lookup are logged as subqueries on the natural key (#5626)
+    this.lookupSqlLog?.Rewriter.RegisterEntityLookups(entity, resolutionCollector.LookupSources);
+
     // Save the record with detailed error logging
+    const keyBeforeSave = new Map(entity.PrimaryKeys.map((pk) => [pk.Name, entity.Get(pk.Name)]));
     const recordName = entity.Get('Name');
-    const entityRecordId = entity.Get('ID');
+    const recordKeyText = this.recordIdLabel(entity, envMask);
+    // Free error text can hold a value of any variable push resolved, composition children included
+    const errorTextMask = EnvDisplayMask.ForVariables(this.syncEngine.ResolvedEnvVariables);
     
     let saveResult;
     try {
@@ -1882,10 +2001,10 @@ export class PushService {
       };
 
       logError(`\n❌ SAVE EXCEPTION for ${entityName}`);
-      logError(`   Record ID: ${entityRecordId || 'NEW'}`);
-      logError(`   Record Name: ${recordName || 'N/A'}`);
+      logError(`   Record ID: ${recordKeyText}`);
+      logError(`   Record Name: ${recordName ? envMask.NewValue('Name', String(recordName)) : 'N/A'}`);
       logError(`   File Path: ${flattenedRecord.path}`);
-      logError(`   Error: ${saveError.message || saveError}`);
+      logError(`   Error: ${errorTextMask.MaskText(String(saveError.message || saveError))}`);
 
       // Check for specific error patterns
       if (saveError.message?.includes('Cannot insert the value NULL')) {
@@ -1906,11 +2025,11 @@ export class PushService {
           const displayValue = typeof value === 'string' && value.length > 100
             ? value.substring(0, 100) + '...'
             : value;
-          logError(`     ${field.Name}: ${displayValue}`);
+          logError(`     ${field.Name}: ${envMask.NewValue(field.Name, String(displayValue))}`);
         }
       }
       logError(''); // Empty line for readability
-      throw saveError;
+      throw MaskedError(saveError, errorTextMask);
     }
     
     if (!saveResult) {
@@ -1921,15 +2040,15 @@ export class PushService {
       };
 
       logError(`\n❌ SAVE RETURNED FALSE for ${entityName}`);
-      logError(`   Record ID: ${entityRecordId || 'NEW'}`);
-      logError(`   Record Name: ${recordName || 'N/A'}`);
+      logError(`   Record ID: ${recordKeyText}`);
+      logError(`   Record Name: ${recordName ? envMask.NewValue('Name', String(recordName)) : 'N/A'}`);
       logError(`   File Path: ${flattenedRecord.path}`);
 
       // Log the LatestResult for debugging
       if (entity.LatestResult) {
         const completeMessage = entity.LatestResult.CompleteMessage;
         if (completeMessage) {
-          logError(`   Database Error: ${completeMessage}`);
+          logError(`   Database Error: ${errorTextMask.MaskText(completeMessage)}`);
         }
         if ((entity.LatestResult as any).SQL) {
           // Don't log the full SQL as it might be huge, just indicate it's available
@@ -1945,7 +2064,7 @@ export class PushService {
           const displayValue = typeof value === 'string' && value.length > 100
             ? value.substring(0, 100) + '...'
             : value;
-          logError(`     ${field.Name}: ${displayValue}`);
+          logError(`     ${field.Name}: ${envMask.NewValue(field.Name, String(displayValue))}`);
         }
       }
       logError(''); // Empty line for readability
@@ -1958,21 +2077,22 @@ export class PushService {
       if (entityInfo) {
         for (const pk of entityInfo.PrimaryKeys) {
           const pkValue = entity.Get(pk.Name);
-          primaryKeyInfo.push(`${pk.Name}=${this.formatFieldValue(pkValue)}`);
+          primaryKeyInfo.push(`${pk.Name}=${envMask.NewValue(pk.Name, this.formatFieldValue(pkValue))}`);
         }
       }
       
       // Collect field values that were being saved
       for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
         const processedValue = entity.Get(fieldName);
-        fieldInfo.push(`${fieldName}=${this.formatFieldValue(processedValue)}`);
+        const envName = entity.GetFieldByName(fieldName)?.Name ?? fieldName;
+        fieldInfo.push(`${fieldName}=${envMask.NewValue(envName, this.formatFieldValue(processedValue))}`);
       }
       
       // Get the actual error details from the entity
-      const errorMessage = entity.LatestResult?.CompleteMessage || 'Unknown error';
-      const errorDetails = entity.LatestResult?.Errors?.map(err => 
+      const errorMessage = errorTextMask.MaskText(entity.LatestResult?.CompleteMessage || 'Unknown error');
+      const errorDetails = errorTextMask.MaskText(entity.LatestResult?.Errors?.map(err => 
         typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
-      )?.join(', ') || '';
+      )?.join(', ') || '');
       
       // Log detailed error information
       callbacks?.onError?.(`\n❌ FATAL ERROR: Failed to save ${entityName} record`);
@@ -2027,7 +2147,8 @@ export class PushService {
       deferredRecord = {
         flattenedRecord,
         entityDir,
-        entityConfig
+        entityConfig,
+        batchContext
       };
 
       if (options.verbose) {
@@ -2044,9 +2165,10 @@ export class PushService {
       if (entityInfo) {
         const newPrimaryKey: Record<string, any> = {};
         const primaryKeyDisplay: string[] = [];
-        for (const pk of entityInfo.PrimaryKeys) {
-          newPrimaryKey[pk.Name] = entity.Get(pk.Name);
-          primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+        // An env-sourced key keeps the file's reference unless the database assigned another value
+        for (const key of CreatedRecordKeyFields(entityInfo.PrimaryKeys, entity, keyBeforeSave, record.primaryKey, originalFields, envMask)) {
+          newPrimaryKey[key.Name] = key.FileValue;
+          primaryKeyDisplay.push(`${key.Name}: ${key.KeptBySave ? envMask.NewValue(key.Name, String(key.SavedValue)) : String(key.SavedValue)}`);
         }
         record.primaryKey = newPrimaryKey;
         // Capture the create for the changes recap (no field diffs — the whole record is new).
@@ -2064,6 +2186,11 @@ export class PushService {
     const shouldWriteSync = entityConfig?.push?.writeSyncMetadata !== false;
     if (!shouldWriteSync) {
       delete record.sync;
+    } else if (deferredRecord) {
+      // A deferred record keeps its earlier checksum in the file, so each later --incremental push checks it again until the record changes
+      if (options.verbose) {
+        callbacks?.onLog?.(`   - Sync metadata waits for the deferred fields`);
+      }
     } else if (isNew || isDirty) {
       const checksumPayload = this.buildRecordChecksumPayload(record, originalFields);
       const checksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
@@ -2134,6 +2261,102 @@ export class PushService {
     };
   }
 
+  /**
+   * Resolves each primary-key value (`@lookup`, `@parent`, `@env`, …). A key lookup cannot be deferred.
+   * With `referencesOnly`, only `@env:`, `@parent:` and `@owner:` values are resolved; others are copied as is.
+   */
+  private async resolvePrimaryKey(
+    primaryKey: Record<string, unknown>,
+    entityDir: string,
+    parentEntity: BaseEntity | BatchContextStub | null,
+    batchContext: BatchContext,
+    resolutionCollector: SyncResolutionCollector,
+    recordProvider?: IMetadataProvider,
+    referencesOnly = false
+  ): Promise<Record<string, unknown>> {
+    const resolved: Record<string, unknown> = {};
+    for (const [pkField, pkValue] of Object.entries(primaryKey)) {
+      if (referencesOnly && !IsKeyReference(pkValue)) {
+        resolved[pkField] = pkValue;
+        continue;
+      }
+      try {
+        resolved[pkField] = await this.syncEngine.processFieldValue(
+          pkValue,
+          entityDir,
+          parentEntity,
+          null, // rootRecord
+          0,
+          batchContext,
+          resolutionCollector,
+          pkField,
+          recordProvider
+        );
+      } catch (pkError: unknown) {
+        if (pkError instanceof EnvVariableNotSetError) {
+          throw pkError.ForField(`primaryKey.${pkField}`);
+        }
+        if (pkError instanceof DeferrableLookupError) {
+          throw new Error(`Cannot defer lookup in primaryKey field '${pkField}': ${pkError.message}. Primary key lookups must resolve immediately.`);
+        }
+        throw pkError;
+      }
+    }
+    return resolved;
+  }
+
+  /** A file key value for printing: `<from @env:VAR>` for an `@env:` reference, else the value. */
+  private fileKeyText(value: unknown): string {
+    const reference = ParseEnvReference(value);
+    return reference ? EnvSourceLabel([reference.VariableName]) : String(value);
+  }
+
+  /**
+   * The key with each `@env:` value resolved through `collector`, which records the env-sourced fields.
+   * Other values are copied as written. A malformed or unset reference throws a names-only error.
+   */
+  private async resolveEnvKeyValues(
+    primaryKey: Record<string, unknown>,
+    entityDir: string,
+    collector: SyncResolutionCollector
+  ): Promise<Record<string, unknown>> {
+    const resolved: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(primaryKey)) {
+      resolved[field] = typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.ENV)
+        ? await this.syncEngine.processFieldValue(value, entityDir, null, null, 0, undefined, collector, field)
+        : value;
+    }
+    return resolved;
+  }
+
+  /** True when the child holds every key value; UUID key fields match without regard to case. */
+  private childHasKey(child: BaseEntity, key: Record<string, unknown>): boolean {
+    return Object.entries(key).every(([field, value]) => {
+      const current = child.Get(field);
+      const isUuidField = child.GetFieldByName(field)?.EntityFieldInfo?.IsUniqueIdentifier === true;
+      if (isUuidField && typeof current === 'string' && typeof value === 'string') {
+        return UUIDsEqual(current, value);
+      }
+      return String(current) === String(value);
+    });
+  }
+
+  /**
+   * The record's key for save-failure output: the value of a single key field, or `Field=value` pairs
+   * for a composite key, with env-sourced key fields shown as labels. `NEW` when no key field has a value.
+   */
+  private recordIdLabel(entity: BaseEntity, envMask: EnvDisplayMask): string {
+    const keyFields = entity.PrimaryKeys.filter((pk) => {
+      const value = entity.Get(pk.Name);
+      return value !== null && value !== undefined && value !== '';
+    });
+    if (keyFields.length === 0) {
+      return 'NEW';
+    }
+    const labels = keyFields.map((pk) => envMask.NewValue(pk.Name, String(entity.Get(pk.Name))));
+    return keyFields.length === 1 ? labels[0] : keyFields.map((pk, i) => `${pk.Name}=${labels[i]}`).join(', ');
+  }
+
   private formatFieldValue(value: any): string {
     if (value === null || value === undefined) return 'null';
     if (typeof value === 'string') {
@@ -2152,7 +2375,7 @@ export class PushService {
   
   private async processDeleteRecord(
     flattenedRecord: FlattenedRecord,
-    _entityDir: string,
+    entityDir: string,
     options: PushOptions,
     callbacks?: PushCallbacks,
     isDbOnly: boolean = false
@@ -2164,8 +2387,13 @@ export class PushService {
       throw new Error(`Cannot delete ${entityName} record without primaryKey. Please specify primaryKey fields.`);
     }
     
-    // Load the entity to check if it exists in the target database
-    const existingEntity = await this.syncEngine.loadEntity(entityName, record.primaryKey);
+    // Load the entity to check if it exists in the target database; an `@env:` key value is resolved first
+    const keyCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+    const resolvedKey = await this.resolveEnvKeyValues(record.primaryKey, entityDir, keyCollector);
+    const keyMask = new EnvDisplayMask(keyCollector.EnvFields);
+    // Read through the push transaction's provider, not the preload cache: a row an earlier delete's
+    // cascade removed in this push is still in the cache until commit (#4935).
+    const existingEntity = await this.syncEngine.LoadEntityFromDatabase(entityName, resolvedKey, this.transactionProvider());
 
     // Check if the deletion has already been processed
     if (record.deleteRecord?.deletedAt) {
@@ -2186,30 +2414,18 @@ export class PushService {
     }
     
     if (!existingEntity) {
-      const pkDisplay = Object.entries(record.primaryKey)
-        .map(([key, value]) => `${key}=${value}`)
-        .join(', ');
-      
-      const warning = `Record not found for deletion: ${entityName} with primaryKey {${pkDisplay}}`;
-      this.warnings.push(warning);
-      callbacks?.onWarn?.(warning);
-      
-      // Mark as deleted anyway since it doesn't exist
-      if (!record.deleteRecord) {
-        record.deleteRecord = { delete: true };
-      }
-      record.deleteRecord.deletedAt = undefined; // Indicate it was not found
-      record.deleteRecord.notFound = true;
-      
-      return { status: 'skipped', isDuplicate: false };
+      return this.skipMissingDelete(flattenedRecord, 'Record not found for deletion', callbacks);
     }
     
+    // Key values and free error text can hold a value of any variable push resolved
+    const errorTextMask = EnvDisplayMask.ForVariables(this.syncEngine.ResolvedEnvVariables);
+
     // Log the deletion
     const entityInfo = this.syncEngine.getEntityInfo(entityName);
     const primaryKeyDisplay: string[] = [];
     if (entityInfo) {
       for (const pk of entityInfo.PrimaryKeys) {
-        primaryKeyDisplay.push(`${pk.Name}: ${existingEntity.Get(pk.Name)}`);
+        primaryKeyDisplay.push(`${pk.Name}: ${keyMask.NewValue(pk.Name, errorTextMask.MaskText(String(existingEntity.Get(pk.Name))))}`);
       }
     }
     
@@ -2226,7 +2442,9 @@ export class PushService {
       }
       const recordNameVerbose = existingEntity.Get('Name');
       if (recordNameVerbose) {
-        callbacks?.onLog?.(`   Name: ${recordNameVerbose}`);
+        const fileNameKey = Object.keys(record.fields ?? {}).find((key) => key.toLowerCase() === 'name');
+        const nameFromEnv = fileNameKey !== undefined && ParseEnvReference(record.fields?.[fileNameKey]) !== null;
+        callbacks?.onLog?.(`   Name: ${nameFromEnv ? ENV_HIDDEN_VALUE : recordNameVerbose}`);
       }
     }
 
@@ -2245,16 +2463,23 @@ export class PushService {
       return { status: 'deleted', isDuplicate: false };
     }
     
+    // An env-sourced delete key gets the names-only SQL log warning
+    this.registerEnvSqlFields(existingEntity, keyCollector.EnvFields, false);
+
     // Delete the record
     try {
       const deleteResult = await existingEntity.Delete();
       
       if (!deleteResult) {
+        // A row already gone (removed by an earlier delete's cascade) is the intended end state
+        if (!(await this.rowStillExists(entityName, resolvedKey))) {
+          return this.skipMissingDelete(flattenedRecord, 'Record was already gone when it was deleted (an earlier delete in this push may have cascaded to it)', callbacks);
+        }
         // Check the LatestResult for error details
-        const errorMessage = existingEntity.LatestResult?.CompleteMessage || 'Unknown error';
-        const errorDetails = existingEntity.LatestResult?.Errors?.map(err => 
+        const errorMessage = errorTextMask.MaskText(existingEntity.LatestResult?.CompleteMessage || 'Unknown error');
+        const errorDetails = errorTextMask.MaskText(existingEntity.LatestResult?.Errors?.map(err => 
           typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
-        )?.join(', ') || '';
+        )?.join(', ') || '');
         
         callbacks?.onError?.(`\n❌ Failed to delete ${entityName} record`);
         callbacks?.onError?.(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
@@ -2274,7 +2499,7 @@ export class PushService {
       }
 
       // Remove from metadata cache
-      this.syncMetadataEngine.removeEntityFromCache(entityName, record.primaryKey);
+      this.syncMetadataEngine.removeEntityFromCache(entityName, resolvedKey);
       
       // Set deletedAt timestamp after successful deletion (only for metadata records)
       if (!isDbOnly) {
@@ -2298,9 +2523,12 @@ export class PushService {
       return { status: 'deleted', isDuplicate: false };
       
     } catch (deleteError: any) {
+      if (!(await this.rowStillExists(entityName, resolvedKey))) {
+        return this.skipMissingDelete(flattenedRecord, 'Record was already gone when it was deleted (an earlier delete in this push may have cascaded to it)', callbacks);
+      }
       console.error(`\n❌ DELETE EXCEPTION for ${entityName}`);
       console.error(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
-      console.error(`   Error: ${deleteError.message || deleteError}`);
+      console.error(`   Error: ${errorTextMask.MaskText(String(deleteError.message || deleteError))}`);
       
       // Check for specific error patterns
       if (deleteError.message?.includes('FOREIGN KEY constraint')) {
@@ -2310,10 +2538,78 @@ export class PushService {
         console.error(`   Tip: You may not have permission to delete this record.`);
       }
       
-      throw deleteError;
+      throw MaskedError(deleteError, errorTextMask);
     }
   }
   
+  /**
+   * A delete whose row is not in the database: a warning, the record marked not found, and a skip.
+   * The database is already in the state the delete asks for.
+   */
+  private skipMissingDelete(
+    flattenedRecord: FlattenedRecord,
+    reason: string,
+    callbacks?: PushCallbacks
+  ): { status: 'skipped'; isDuplicate: boolean } {
+    const { record, entityName } = flattenedRecord;
+    const pkDisplay = Object.entries(record.primaryKey ?? {})
+      .map(([key, value]) => `${key}=${this.fileKeyText(value)}`)
+      .join(', ');
+    const warning = `${reason}: ${entityName} with primaryKey {${pkDisplay}}`;
+    this.warnings.push(warning);
+    callbacks?.onWarn?.(warning);
+
+    // Mark as deleted anyway since it doesn't exist
+    if (!record.deleteRecord) {
+      record.deleteRecord = { delete: true };
+    }
+    record.deleteRecord.deletedAt = undefined; // Indicate it was not found
+    record.deleteRecord.notFound = true;
+    return { status: 'skipped', isDuplicate: false };
+  }
+
+  /**
+   * True when the row is still in the database, read through the push transaction. A failed read
+   * counts as present, so the original delete error is reported.
+   */
+  private async rowStillExists(entityName: string, primaryKey: Record<string, unknown>): Promise<boolean> {
+    try {
+      return (await this.syncEngine.LoadEntityFromDatabase(entityName, primaryKey, this.transactionProvider())) !== null;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Throws when creating `entity` with the key the record declares would collide on a unique key
+   * with an existing row, naming that row's key. See natural-key-preflight.ts.
+   */
+  private async checkNaturalKey(
+    entity: BaseEntity,
+    resolvedPrimaryKey: Record<string, unknown>,
+    envMask: EnvDisplayMask,
+    recordProvider?: IMetadataProvider
+  ): Promise<void> {
+    const host = this.hostProvider();
+    if (typeof host?.ExecuteSQL !== 'function') {
+      return; // no SQL provider, so no catalog to read unique keys from
+    }
+    // Rows are found on the record's provider, so the lookup sees what its transaction wrote
+    const reader = new DatabaseNaturalKeyReader(host, this.contextUser, recordProvider ?? this.transactionProvider(), this.uniqueKeyCache);
+    const conflict = await new NaturalKeyPreflight(reader).Check(entity);
+    if (conflict) {
+      const recordKey = Object.entries(resolvedPrimaryKey)
+        .map(([field, value]) => `${field}=${envMask.NewValue(field, String(value))}`)
+        .join(', ');
+      throw new Error(NaturalKeyConflictMessage(entity.EntityInfo.Name, recordKey, conflict));
+    }
+  }
+
+  /** The provider that owns the push transaction, as the metadata provider a read joins it through. */
+  private transactionProvider(): IMetadataProvider {
+    return this.hostProvider();
+  }
+
   /**
    * Prompt user for confirmation before proceeding with push operation
    * This happens after deletion audit but before any database operations
@@ -2420,7 +2716,7 @@ export class PushService {
         }
       }
 
-      const pattern = entityConfig.filePattern || '*.json';
+      const pattern = entityConfig.filePattern || DEFAULT_RECORD_FILE_PATTERN;
       const files = await fastGlob(pattern, {
         cwd: entityDir,
         absolute: true,
@@ -2479,7 +2775,7 @@ export class PushService {
       }
 
       // Find all JSON files
-      const pattern = entityConfig.filePattern || '*.json';
+      const pattern = entityConfig.filePattern || DEFAULT_RECORD_FILE_PATTERN;
       const files = await fastGlob(pattern, {
         cwd: entityDir,
         absolute: true,
@@ -2507,6 +2803,9 @@ export class PushService {
 
           // Phase 1: Flatten only - accumulates into analyzer's internal state
           const flattenedRecords = analyzer.flattenFileRecords(records, entityConfig.entity);
+          for (const flattened of flattenedRecords) {
+            flattened.FilePath = filePath;
+          }
           allFlattenedRecords.push(...flattenedRecords);
         } catch (error) {
           if (options.verbose) {
@@ -2637,9 +2936,10 @@ export class PushService {
             // Record not found, already handled in processDeleteRecord
           }
         } catch (error) {
-          callbacks?.onError?.(`   Failed to delete ${record.entityName}: ${error}`);
+          const located = error instanceof Error ? this.locateRecordError(error, record) : error;
+          callbacks?.onError?.(`   Failed to delete ${record.entityName}: ${located}`);
           errors++;
-          throw error; // Fail fast on first deletion error
+          throw located; // Fail fast on first deletion error
         }
       }
     }
@@ -2703,15 +3003,15 @@ export class PushService {
     let updated = 0;
     let errors = 0;
 
-    // Create a fresh batch context for deferred processing
-    // Records are in DB now, so this is mainly for tracking within this phase
-    const batchContext = new BatchContextIndex();
+    // A deferred record without the batch context of its main pass gets one for this phase
+    const phaseBatchContext = new BatchContextIndex();
 
     for (const deferred of this.deferredRecords) {
       const { flattenedRecord, entityDir, entityConfig } = deferred;
+      const batchContext = deferred.batchContext ?? phaseBatchContext;
       const entityName = flattenedRecord.entityName;
       const recordId = flattenedRecord.record.primaryKey
-        ? Object.entries(flattenedRecord.record.primaryKey).map(([k, v]) => `${k}=${v}`).join(', ')
+        ? Object.entries(flattenedRecord.record.primaryKey).map(([k, v]) => `${k}=${this.fileKeyText(v)}`).join(', ')
         : (flattenedRecord.record.fields.Name || 'NEW');
 
       try {
@@ -2747,7 +3047,7 @@ export class PushService {
         }
 
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err = this.locateRecordError(error instanceof Error ? error : new Error(String(error)), flattenedRecord);
 
         callbacks?.onError?.(
           `   ✗ Failed to process deferred record: ${entityName} (${recordId})`
@@ -2938,6 +3238,121 @@ export class PushService {
   }
 
   /**
+   * Resolves one field of an embed, collection item or extension and sets it on the target.
+   * A missing `@env:VAR?optional` variable leaves the field unset and raises a warning.
+   * `sharesOwnerFields` (IS-A extension children) records env-sourced fields in the owner's collector.
+   */
+  private async setCompositionField(
+    target: BaseEntity,
+    fieldName: string,
+    rawValue: unknown,
+    entityDir: string,
+    batchContext: BatchContext,
+    resolutionCollector: SyncResolutionCollector,
+    recordProvider: IMetadataProvider | undefined,
+    ownerRecord: BaseEntity,
+    callbacks?: PushCallbacks,
+    sharesOwnerFields: boolean = false
+  ): Promise<void> {
+    // An IS-A extension child writes owner fields, so it records into the owner's collector. Other
+    // children get their own EnvFields map, so a child field never masks an owner field of the same name.
+    const childCollector: SyncResolutionCollector = sharesOwnerFields
+      ? resolutionCollector
+      : { notes: resolutionCollector.notes, fieldPrefix: resolutionCollector.fieldPrefix, EnvFields: new Map() };
+    try {
+      const value = await this.syncEngine.processFieldValue(
+        rawValue,
+        entityDir,
+        null,
+        null,
+        0,
+        batchContext,
+        childCollector,
+        fieldName,
+        recordProvider,
+        ownerRecord
+      );
+      target.Set(fieldName, value);
+      const variables = childCollector.EnvFields?.get(fieldName);
+      if (variables) {
+        this.queueEnvSqlChildField(resolutionCollector, { Target: target, FieldName: fieldName, Variables: variables });
+      }
+    } catch (error) {
+      if (error instanceof EnvVariableNotSetError) {
+        throw error.ForField(`fields.${fieldName}`, target.EntityInfo.Name);
+      }
+      if (!(error instanceof OptionalEnvMissingError)) {
+        throw error;
+      }
+      this.addWarning(OptionalEnvSkipMessage(target.EntityInfo.Name, fieldName, error.VariableName), callbacks);
+      this.queueEnvSqlChildField(resolutionCollector, { Target: target, FieldName: fieldName, Variables: new Set([error.VariableName]) });
+    }
+  }
+
+  /** Runs composition work and names its path (and entity) in an unset-variable error. */
+  private async withCompositionPath(compositionPath: string, entityName: () => string | undefined, work: () => Promise<void>): Promise<void> {
+    try {
+      await work();
+    } catch (error) {
+      if (error instanceof EnvVariableNotSetError) {
+        throw error.Within(compositionPath, entityName());
+      }
+      throw error;
+    }
+  }
+
+  /** Registers the env-sourced fields of this save with the SQL log redactor, when a log is open. */
+  private registerEnvSqlFields(
+    entity: BaseEntity,
+    envFields: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+    fullRow: boolean
+  ): void {
+    this.envSqlLog?.Redactor.RegisterEntityFields(entity, envFields, fullRow);
+  }
+
+  /** Keeps an env-sourced composition child field until its owner's save, when a SQL log is open. */
+  private queueEnvSqlChildField(ownerCollector: SyncResolutionCollector, field: PendingEnvSqlChildField): void {
+    if (!this.envSqlLog) {
+      return;
+    }
+    const pending = this.pendingEnvSqlChildFields.get(ownerCollector) ?? [];
+    pending.push(field);
+    this.pendingEnvSqlChildFields.set(ownerCollector, pending);
+  }
+
+  /** Queues each env-sourced key field of a composition child for the names-only SQL log warning. */
+  private queueEnvSqlChildKey(ownerCollector: SyncResolutionCollector, child: BaseEntity, keyCollector: SyncResolutionCollector): void {
+    for (const [fieldName, variables] of keyCollector.EnvFields ?? []) {
+      this.queueEnvSqlChildField(ownerCollector, { Target: child, FieldName: fieldName, Variables: variables });
+    }
+  }
+
+  /** Registers the queued composition child fields of the record that is about to be saved. */
+  private registerPendingEnvSqlChildFields(ownerCollector: SyncResolutionCollector): void {
+    const pending = this.pendingEnvSqlChildFields.get(ownerCollector) ?? [];
+    this.pendingEnvSqlChildFields.delete(ownerCollector);
+    for (const field of pending) {
+      this.registerEnvSqlCompositionField(field.Target, field.FieldName, field.Variables);
+    }
+  }
+
+  /** Registers one env-sourced composition child field when its save statement holds it. */
+  private registerEnvSqlCompositionField(target: BaseEntity, fieldName: string, variables: ReadonlySet<string>): void {
+    const fullRow = !target.IsSaved || this.syncConfig?.push?.alwaysPush === true;
+    this.registerEnvSqlFields(target, new Map([[fieldName, variables]]), fullRow);
+  }
+
+  /** Adds the names-only SQL log warnings of this run. */
+  private addEnvSqlWarnings(sqlLogPath: string, callbacks?: PushCallbacks): void {
+    for (const warning of this.envSqlLog?.Redactor.Warnings(sqlLogPath) ?? []) {
+      this.addWarning(warning, callbacks);
+    }
+    for (const warning of this.lookupSqlLog?.Rewriter.Warnings() ?? []) {
+      this.addWarning(warning, callbacks);
+    }
+  }
+
+  /**
    * Applies first-class composition axes onto the entity before Save (§5):
    * 1. embeds (peer first via {fkField}_EnsureObject() or companion.Ensure())
    * 2. collections (owner.Collection.Create() or match by PK, apply fields, recursive composition)
@@ -2998,39 +3413,30 @@ export class PushService {
           );
         }
 
-        // Apply embed fields, passing ownerRecord = entity for @owner: resolution
-        if (embedRecord.fields && typeof embedRecord.fields === 'object') {
-          for (const [fName, fVal] of Object.entries(embedRecord.fields)) {
-            const processedValue = await this.syncEngine.processFieldValue(
-              fVal,
-              entityDir,
-              null,
-              null,
-              0,
-              batchContext,
-              resolutionCollector,
-              fName,
-              recordProvider,
-              entity // ownerRecord
-            );
-            embeddedEntity.Set(fName, processedValue);
+        const embedded = embeddedEntity;
+        await this.withCompositionPath(`embeds.${fkField}`, () => embedded.EntityInfo.Name, async () => {
+          // Apply embed fields, passing ownerRecord = entity for @owner: resolution
+          if (embedRecord.fields && typeof embedRecord.fields === 'object') {
+            for (const [fName, fVal] of Object.entries(embedRecord.fields)) {
+              await this.setCompositionField(embedded, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks);
+            }
           }
-        }
 
-        // Recursively apply nested composition on the embedded record
-        await this.applyCompositionAxes(
-          embeddedEntity,
-          embedRecord,
-          embeddedEntity.EntityInfo.Name,
-          entityDir,
-          batchContext,
-          resolutionCollector,
-          options,
-          callbacks,
-          entityConfig,
-          recordProvider,
-          depth + 1
-        );
+          // Recursively apply nested composition on the embedded record
+          await this.applyCompositionAxes(
+            embedded,
+            embedRecord,
+            embedded.EntityInfo.Name,
+            entityDir,
+            batchContext,
+            resolutionCollector,
+            options,
+            callbacks,
+            entityConfig,
+            recordProvider,
+            depth + 1
+          );
+        });
       }
     }
 
@@ -3096,6 +3502,7 @@ export class PushService {
           Load: () => Promise<void>;
           Create: () => Promise<BaseEntity>;
           Remove: (item: BaseEntity | number) => void;
+          RelatedEntityName?: string;
         };
 
         // Rider 4: Load: 'never' fails loud under both modes
@@ -3118,125 +3525,117 @@ export class PushService {
         const mode = colConfig?.mode ?? 'upsert';
         const matchOn = colConfig?.matchOn ?? [];
 
-        for (const itemData of colItems) {
+        for (const [itemIndex, itemData] of colItems.entries()) {
           if (!itemData || typeof itemData !== 'object') continue;
 
-          let targetChild: BaseEntity | null = null;
+          await this.withCompositionPath(`collections.${colName}[${itemIndex}]`, () => col.RelatedEntityName, async () => {
+            let targetChild: BaseEntity | null = null;
 
-          // Match by primaryKey if available
-          if (itemData.primaryKey && Object.keys(itemData.primaryKey).length > 0 && loadedItems.length > 0) {
-            targetChild = loadedItems.find((child) => {
-              for (const [pkK, pkV] of Object.entries(itemData.primaryKey!)) {
-                if (String(child.Get(pkK)) !== String(pkV)) {
-                  return false;
-                }
-              }
-              return true;
-            }) ?? null;
-          }
+            // The child's key with `@env:` values resolved; env-sourced key fields are kept for the SQL log
+            const childKeyCollector: SyncResolutionCollector = { notes: resolutionCollector.notes, fieldPrefix: 'primaryKey', EnvFields: new Map() };
+            const childKey = itemData.primaryKey
+              ? await this.resolveEnvKeyValues(itemData.primaryKey, entityDir, childKeyCollector)
+              : undefined;
 
-          // Fall back to the child's natural key. A row the server created for itself — a
-          // query parameter the extraction pipeline inferred, say — carries an id the
-          // declaration cannot know, so a primary-key match can never find it and the item
-          // below would be created a second time, colliding on the child's unique
-          // constraint. Matching on the declared fields adopts that row instead.
-          //
-          // Declared values are resolved first, so a key written as a reference
-          // (`@lookup:`, `@parent:`, `@owner:` …) compares as the value it stands for. The
-          // resolved values are reused when the fields are applied below, so each
-          // reference is resolved once.
-          const resolvedFieldValues = new Map<string, unknown>();
-          if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
-            const fields = itemData.fields;
-            const wanted = matchOn.filter((f) => f in fields);
-            if (wanted.length === matchOn.length) {
-              for (const f of wanted) {
-                resolvedFieldValues.set(
-                  f,
-                  await this.syncEngine.processFieldValue(
-                    fields[f],
-                    entityDir,
-                    null,
-                    null,
-                    0,
-                    batchContext,
-                    resolutionCollector,
-                    f,
-                    recordProvider,
-                    entity // ownerRecord
-                  )
+            // Match by primaryKey if available
+            if (childKey && Object.keys(childKey).length > 0 && loadedItems.length > 0) {
+              targetChild = loadedItems.find((child) => this.childHasKey(child, childKey)) ?? null;
+            }
+
+            // Fall back to the child's natural key. A row the server created for itself — a
+            // query parameter the extraction pipeline inferred, say — carries an id the
+            // declaration cannot know, so a primary-key match can never find it and the item
+            // below would be created a second time, colliding on the child's unique
+            // constraint. Matching on the declared fields adopts that row instead.
+            //
+            // Declared values are resolved first, so a key written as a reference
+            // (`@lookup:`, `@parent:`, `@owner:` …) compares as the value it stands for.
+            if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
+              const fields = itemData.fields;
+              const missing = matchOn.filter((f) => !(f in fields));
+              if (missing.length > 0) {
+                // Without every key field the item cannot be matched, and the create below
+                // fails on the child's unique constraint with an error that names the
+                // constraint rather than the authoring mistake.
+                this.addWarning(
+                  `Collection '${colName}' on '${entityName}' item ${itemIndex} is missing matchOn field(s) ${missing.join(', ')}; it cannot be matched to an existing row and will be created.`,
+                  callbacks
                 );
+              } else {
+                const resolvedFieldValues = new Map<string, unknown>();
+                for (const f of matchOn) {
+                  resolvedFieldValues.set(
+                    f,
+                    await this.syncEngine.processFieldValue(
+                      fields[f],
+                      entityDir,
+                      null,
+                      null,
+                      0,
+                      batchContext,
+                      resolutionCollector,
+                      f,
+                      recordProvider,
+                      entity // ownerRecord
+                    )
+                  );
+                }
+                targetChild = loadedItems.find((child) =>
+                  matchOn.every((f) => {
+                    const childValue = child.Get(f);
+                    const declaredValue = resolvedFieldValues.get(f);
+                    if (childValue == null || declaredValue == null) return childValue === declaredValue;
+                    // Case-insensitive: the constraints these keys stand in for are, and a
+                    // declaration differing only in case means the same row, not a new one.
+                    return String(childValue).toLowerCase() === String(declaredValue).toLowerCase();
+                  })
+                ) ?? null;
               }
-              targetChild = loadedItems.find((child) =>
-                wanted.every((f) => {
-                  const childValue = child.Get(f);
-                  const declaredValue = resolvedFieldValues.get(f);
-                  if (childValue == null || declaredValue == null) return childValue === declaredValue;
-                  // Case-insensitive: the constraints these keys stand in for are, and a
-                  // declaration differing only in case means the same row, not a new one.
-                  return String(childValue).toLowerCase() === String(declaredValue).toLowerCase();
-                })
-              ) ?? null;
             }
-          }
 
-          if (itemData.deleteRecord?.delete === true) {
-            // Explicit delete in both modes (§8.1(a) rider 1)
-            if (targetChild) {
-              col.Remove(targetChild);
-              matchedItemSet.add(targetChild);
+            if (itemData.deleteRecord?.delete === true) {
+              // Explicit delete in both modes (§8.1(a) rider 1)
+              if (targetChild) {
+                this.queueEnvSqlChildKey(resolutionCollector, targetChild, childKeyCollector);
+                col.Remove(targetChild);
+                matchedItemSet.add(targetChild);
+              }
+              return;
             }
-            continue;
-          }
 
-          if (!targetChild) {
-            targetChild = await col.Create();
-            if (itemData.primaryKey) {
-              for (const [pkK, pkV] of Object.entries(itemData.primaryKey)) {
+            if (!targetChild) {
+              targetChild = await col.Create();
+              for (const [pkK, pkV] of Object.entries(childKey ?? {})) {
                 targetChild.Set(pkK, pkV);
               }
+            } else {
+              matchedItemSet.add(targetChild);
             }
-          } else {
-            matchedItemSet.add(targetChild);
-          }
 
-          // Apply fields with ownerRecord = entity for @owner:Field resolution
-          if (itemData.fields && typeof itemData.fields === 'object') {
-            for (const [fName, fVal] of Object.entries(itemData.fields)) {
-              if (resolvedFieldValues.has(fName)) {
-                targetChild.Set(fName, resolvedFieldValues.get(fName));
-                continue;
+            this.queueEnvSqlChildKey(resolutionCollector, targetChild, childKeyCollector);
+
+            // Apply fields with ownerRecord = entity for @owner:Field resolution
+            if (itemData.fields && typeof itemData.fields === 'object') {
+              for (const [fName, fVal] of Object.entries(itemData.fields)) {
+                await this.setCompositionField(targetChild, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks);
               }
-              const processedValue = await this.syncEngine.processFieldValue(
-                fVal,
-                entityDir,
-                null,
-                null,
-                0,
-                batchContext,
-                resolutionCollector,
-                fName,
-                recordProvider,
-                entity // ownerRecord
-              );
-              targetChild.Set(fName, processedValue);
             }
-          }
 
-          // Recursively apply nested composition on the collection item
-          await this.applyCompositionAxes(
-            targetChild,
-            itemData,
-            targetChild.EntityInfo.Name,
-            entityDir,
-            batchContext,
-            resolutionCollector,
-            options,
-            callbacks,
-            entityConfig,
-            recordProvider,
-            depth + 1
-          );
+            // Recursively apply nested composition on the collection item
+            await this.applyCompositionAxes(
+              targetChild,
+              itemData,
+              targetChild.EntityInfo.Name,
+              entityDir,
+              batchContext,
+              resolutionCollector,
+              options,
+              callbacks,
+              entityConfig,
+              recordProvider,
+              depth + 1
+            );
+          });
         }
 
         // Handle authoritative mode deletions (§8.1(a))
@@ -3302,36 +3701,26 @@ export class PushService {
           );
         }
 
-        for (const [fName, fVal] of Object.entries(extObj.fields as Record<string, unknown>)) {
-          const processedValue = await this.syncEngine.processFieldValue(
-            fVal,
+        await this.withCompositionPath('extension', () => child.EntityInfo.Name, async () => {
+          for (const [fName, fVal] of Object.entries(extObj.fields as Record<string, unknown>)) {
+            await this.setCompositionField(child, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks, true);
+          }
+
+          // Recursively apply nested composition on the child extension
+          await this.applyCompositionAxes(
+            child,
+            extObj as unknown as RecordData,
+            child.EntityInfo.Name,
             entityDir,
-            null,
-            null,
-            0,
             batchContext,
             resolutionCollector,
-            fName,
+            options,
+            callbacks,
+            entityConfig,
             recordProvider,
-            entity // ownerRecord
+            depth + 1
           );
-          child.Set(fName, processedValue);
-        }
-
-        // Recursively apply nested composition on the child extension
-        await this.applyCompositionAxes(
-          child,
-          extObj as unknown as RecordData,
-          child.EntityInfo.Name,
-          entityDir,
-          batchContext,
-          resolutionCollector,
-          options,
-          callbacks,
-          entityConfig,
-          recordProvider,
-          depth + 1
-        );
+        });
       } else {
         // Map form: { [SubtypeName]: { fields: { ... } } }
         for (const [subKey, subVal] of Object.entries(extObj)) {
@@ -3345,39 +3734,29 @@ export class PushService {
             );
           }
 
-          const subRecord = subVal as Record<string, unknown>;
-          if (subRecord.fields && typeof subRecord.fields === 'object') {
-            for (const [fName, fVal] of Object.entries(subRecord.fields as Record<string, unknown>)) {
-              const processedValue = await this.syncEngine.processFieldValue(
-                fVal,
-                entityDir,
-                null,
-                null,
-                0,
-                batchContext,
-                resolutionCollector,
-                fName,
-                recordProvider,
-                entity // ownerRecord
-              );
-              child.Set(fName, processedValue);
+          await this.withCompositionPath(`extension.${subKey}`, () => child.EntityInfo.Name, async () => {
+            const subRecord = subVal as Record<string, unknown>;
+            if (subRecord.fields && typeof subRecord.fields === 'object') {
+              for (const [fName, fVal] of Object.entries(subRecord.fields as Record<string, unknown>)) {
+                await this.setCompositionField(child, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks, true);
+              }
             }
-          }
 
-          // Recursively apply nested composition on the child extension
-          await this.applyCompositionAxes(
-            child,
-            subRecord as unknown as RecordData,
-            child.EntityInfo.Name,
-            entityDir,
-            batchContext,
-            resolutionCollector,
-            options,
-            callbacks,
-            entityConfig,
-            recordProvider,
-            depth + 1
-          );
+            // Recursively apply nested composition on the child extension
+            await this.applyCompositionAxes(
+              child,
+              subRecord as unknown as RecordData,
+              child.EntityInfo.Name,
+              entityDir,
+              batchContext,
+              resolutionCollector,
+              options,
+              callbacks,
+              entityConfig,
+              recordProvider,
+              depth + 1
+            );
+          });
         }
       }
     }

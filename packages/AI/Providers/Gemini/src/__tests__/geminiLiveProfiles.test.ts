@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import {
     ResolveGeminiLiveProfile,
     ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
+    ResolveGeminiTurnCoverage,
     GEMINI_LIVE_FALLBACK_PROFILE,
+    GEMINI_LIVE_ENDPOINT_OVERLAYS,
+    GEMINI_LIVE_ENDPOINT_PROFILES,
+    GEMINI_LIVE_MODEL_ALIASES_ENV,
+    type GeminiLiveEndpoint,
 } from '../geminiLiveProfiles';
 
 describe('ResolveGeminiLiveProfile', () => {
@@ -34,13 +39,164 @@ describe('ResolveGeminiLiveProfile', () => {
 
     it('falls back permissively for an unknown model rather than refusing to connect', () => {
         for (const id of ['gemini-9.9-live-future', '', '   ', null, undefined]) {
-            expect(ResolveGeminiLiveProfile(id as string)).toBe(GEMINI_LIVE_FALLBACK_PROFILE);
+            expect(ResolveGeminiLiveProfile(id as string)).toEqual({
+                ...GEMINI_LIVE_FALLBACK_PROFILE,
+                SupportsAvatarOutput: false,
+                ...GEMINI_LIVE_ENDPOINT_PROFILES.developer,
+                Endpoint: 'developer',
+            });
         }
     });
 
     it('never invents a thinking level for an unknown model', () => {
         expect(GEMINI_LIVE_FALLBACK_PROFILE.SupportsThinkingLevel).toBe(false);
         expect(GEMINI_LIVE_FALLBACK_PROFILE.AllowedThinkingLevels).toEqual([]);
+    });
+
+    it('returns the same object for one model on one endpoint, so a resolved profile is stable', () => {
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live')).toBe(ResolveGeminiLiveProfile(' GEMINI-3.8-LIVE '));
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise')).not.toBe(ResolveGeminiLiveProfile('gemini-3.8-live'));
+    });
+});
+
+describe('ResolveGeminiLiveProfile by endpoint (live avatars)', () => {
+    it('defaults to the Developer API, where no model renders an avatar', () => {
+        for (const id of ['gemini-3.8-live', 'gemini-3.8-live-extended-thinking', 'gemini-3.1-flash-live-preview', 'unknown-live']) {
+            const p = ResolveGeminiLiveProfile(id);
+            expect(p.Endpoint, id).toBe('developer');
+            expect(p.SupportsAvatarOutput, id).toBe(false);
+            expect(p.AvatarOutputEncoding, id).toBeUndefined();
+        }
+    });
+
+    it('renders an avatar on Gemini Enterprise for gemini-3.8-live: fragmented MP4 that carries the voice', () => {
+        const p = ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+        expect(p.Endpoint).toBe('enterprise');
+        expect(p.SupportsAvatarOutput).toBe(true);
+        expect(p.AvatarOutputEncoding).toBe('video/mp4; codecs="avc1.42c01f, mp4a.40.2"');
+        expect(p.AvatarAudioMuxed).toBe(true);
+    });
+
+    it('keeps every other fact of the model row on Enterprise', () => {
+        const { Endpoint: _e, SupportsAvatarOutput: _s, AvatarOutputEncoding: _a, AvatarAudioMuxed: _m, AcceptedTurnCoverages: _c, ...enterprise } =
+            ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+        const { Endpoint: _e2, SupportsAvatarOutput: _s2, AvatarOutputEncoding: _a2, AvatarAudioMuxed: _m2, AcceptedTurnCoverages: _c2, ...developer } =
+            ResolveGeminiLiveProfile('gemini-3.8-live');
+        expect(enterprise).toEqual(developer);
+    });
+
+    it("doesn't let Extended Thinking inherit 3.8 Live's avatar through the longer id", () => {
+        const et = ResolveGeminiLiveProfile('gemini-3.8-live-extended-thinking', 'enterprise');
+        expect(et.MatchPrefix).toBe('gemini-3.8-live-extended-thinking');
+        expect(et.SupportsAvatarOutput).toBe(false);
+    });
+
+    it('renders no avatar for the legacy model or an unknown one on Enterprise', () => {
+        expect(ResolveGeminiLiveProfile('gemini-3.1-flash-live-preview', 'enterprise').SupportsAvatarOutput).toBe(false);
+        expect(ResolveGeminiLiveProfile('gemini-9.9-live-future', 'enterprise').SupportsAvatarOutput).toBe(false);
+        expect(ResolveGeminiLiveProfile(undefined, 'enterprise').SupportsAvatarOutput).toBe(false);
+    });
+
+    it('declares overlays only for model rows that exist', () => {
+        for (const overlay of GEMINI_LIVE_ENDPOINT_OVERLAYS) {
+            expect(ResolveGeminiLiveProfile(overlay.ModelPrefix, overlay.Endpoint).MatchPrefix).toBe(overlay.ModelPrefix);
+        }
+    });
+});
+
+describe('model aliases (MJ_GEMINI_LIVE_MODEL_ALIASES)', () => {
+    let saved: string | undefined;
+    let warn: MockInstance<typeof console.warn>;
+    let log: MockInstance<typeof console.log>;
+
+    beforeEach(() => {
+        saved = process.env[GEMINI_LIVE_MODEL_ALIASES_ENV];
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+        if (saved === undefined) delete process.env[GEMINI_LIVE_MODEL_ALIASES_ENV];
+        else process.env[GEMINI_LIVE_MODEL_ALIASES_ENV] = saved;
+        vi.restoreAllMocks();
+    });
+
+    const lines = (spy: MockInstance<typeof console.warn>): string[] => spy.mock.calls.map((call) => String(call[0]));
+    const aliases = (value: string): void => {
+        process.env[GEMINI_LIVE_MODEL_ALIASES_ENV] = value;
+    };
+
+    it('is named MJ_GEMINI_LIVE_MODEL_ALIASES', () => {
+        expect(GEMINI_LIVE_MODEL_ALIASES_ENV).toBe('MJ_GEMINI_LIVE_MODEL_ALIASES');
+    });
+
+    it("gives an id the table doesn't know the profile of the model it names: on Enterprise, gemini-3.8-live's avatar", () => {
+        expect(ResolveGeminiLiveProfile('gemini-live-3.8-preview-1009', 'enterprise').SupportsAvatarOutput).toBe(false);
+        aliases('gemini-live-3.8-preview-1009=gemini-3.8-live');
+        expect(ResolveGeminiLiveProfile('gemini-live-3.8-preview-1009', 'enterprise')).toBe(ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise'));
+        expect(ResolveGeminiLiveProfile('gemini-live-3.8-preview-1009')).toBe(ResolveGeminiLiveProfile('gemini-3.8-live'));
+        expect(ResolveGeminiLiveProfile('gemini-live-3.8-preview-1009', 'enterprise').SupportsAvatarOutput).toBe(true);
+    });
+
+    it('matches the whole id, ignoring case and spaces: a longer or shorter id is not the alias', () => {
+        aliases('  Gemini-Live-3.8 = GEMINI-3.8-LIVE ');
+        expect(ResolveGeminiLiveProfile(' GEMINI-LIVE-3.8 ', 'enterprise').SupportsAvatarOutput).toBe(true);
+        expect(ResolveGeminiLiveProfile('gemini-live-3.8-extended', 'enterprise').SupportsAvatarOutput).toBe(false);
+        expect(ResolveGeminiLiveProfile('gemini-live-3', 'enterprise').SupportsAvatarOutput).toBe(false);
+    });
+
+    it('takes several aliases, comma-separated, and leaves every other id to the table', () => {
+        aliases('live-a=gemini-3.8-live, live-b=gemini-3.8-live-extended-thinking');
+        expect(ResolveGeminiLiveProfile('live-a').MatchPrefix).toBe('gemini-3.8-live');
+        expect(ResolveGeminiLiveProfile('live-b').MatchPrefix).toBe('gemini-3.8-live-extended-thinking');
+        expect(ResolveGeminiLiveProfile('gemini-3.1-flash-live-preview').MatchPrefix).toBe('gemini-3.1-flash-live');
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live-extended-thinking', 'enterprise').SupportsAvatarOutput).toBe(false);
+    });
+
+    it('an alias wins over the table for an id the table knows', () => {
+        aliases('gemini-3.8-live-extended-thinking=gemini-3.8-live');
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live-extended-thinking').MatchPrefix).toBe('gemini-3.8-live');
+    });
+
+    it('ignores an entry that is not id=id or whose target the table does not know, and says so once per setting', () => {
+        const setting = 'no-equals-sign, =gemini-3.8-live, live-x=, live-y=gemini-9.9-live-future, live-z=gemini-3.8-live';
+        aliases(setting);
+        for (const id of ['live-y', 'live-x', 'no-equals-sign']) {
+            expect(ResolveGeminiLiveProfile(id).MatchPrefix, id).toBe('');
+        }
+        expect(ResolveGeminiLiveProfile('live-z').MatchPrefix).toBe('gemini-3.8-live');
+        const warnings = lines(warn).filter((line) => line.includes(GEMINI_LIVE_MODEL_ALIASES_ENV));
+        expect(warnings).toHaveLength(1);
+        for (const bad of ['"no-equals-sign"', '"=gemini-3.8-live"', '"live-x="', '"live-y=gemini-9.9-live-future"']) {
+            expect(warnings[0]).toContain(bad);
+        }
+        expect(warnings[0]).not.toContain('"live-z');
+        expect(warnings[0]).toContain('gemini-3.8-live');
+    });
+
+    it('says once per alias that it is used, the first time a session resolves it', () => {
+        aliases('live-q=gemini-3.8-live');
+        ResolveGeminiLiveProfile('live-q', 'enterprise');
+        ResolveGeminiLiveProfile('live-q');
+        ResolveGeminiLiveProfile('gemini-3.8-live');
+        const used = lines(log).filter((line) => line.includes('live-q'));
+        expect(used).toEqual([`[GeminiLiveProfiles] Model live-q uses the gemini-3.8-live profile (${GEMINI_LIVE_MODEL_ALIASES_ENV}).`]);
+    });
+
+    it('reads the setting each time, so changing it (and restarting) is all it takes', () => {
+        aliases('live-r=gemini-3.8-live');
+        expect(ResolveGeminiLiveProfile('live-r').MatchPrefix).toBe('gemini-3.8-live');
+        aliases('live-r=gemini-3.8-live-extended-thinking');
+        expect(ResolveGeminiLiveProfile('live-r').MatchPrefix).toBe('gemini-3.8-live-extended-thinking');
+        delete process.env[GEMINI_LIVE_MODEL_ALIASES_ENV];
+        expect(ResolveGeminiLiveProfile('live-r').MatchPrefix).toBe('');
+    });
+
+    it('quotes a bad entry shortened and with printable characters only', () => {
+        aliases(`bad\u0007${'x'.repeat(300)}`);
+        ResolveGeminiLiveProfile('anything');
+        const line = lines(warn).find((text) => text.includes(GEMINI_LIVE_MODEL_ALIASES_ENV)) ?? '';
+        expect(line).not.toContain('\u0007');
+        expect(line.length).toBeLessThan(500);
     });
 });
 
@@ -84,6 +240,70 @@ describe('ResolveGeminiThinkingLevel', () => {
         for (const [v, p] of [['low', et], ['minimal', et], ['high', live]] as const) {
             const r = ResolveGeminiThinkingLevel(v, p);
             expect(Boolean(r.Level) && Boolean(r.Warning)).toBe(false);
+        }
+    });
+});
+
+describe('turn coverage by endpoint', () => {
+    const ENDPOINTS: GeminiLiveEndpoint[] = ['developer', 'enterprise'];
+    const MODELS = ['gemini-3.8-live', 'gemini-3.8-live-extended-thinking', 'gemini-3.1-flash-live-preview', 'gemini-9.9-live-future', undefined];
+
+    it('the Developer API accepts both coverages', () => {
+        expect(GEMINI_LIVE_ENDPOINT_PROFILES.developer.AcceptedTurnCoverages).toEqual(['audioActivityOnly', 'audioActivityAndAllVideo']);
+    });
+
+    it('Gemini Enterprise accepts only audioActivityOnly: Vertex AI closes the setup on TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO', () => {
+        expect(GEMINI_LIVE_ENDPOINT_PROFILES.enterprise.AcceptedTurnCoverages).toEqual(['audioActivityOnly']);
+    });
+
+    it('every endpoint accepts audioActivityOnly, the coverage a refused one is sent as', () => {
+        for (const endpoint of ENDPOINTS) {
+            expect(GEMINI_LIVE_ENDPOINT_PROFILES[endpoint].AcceptedTurnCoverages, endpoint).toContain('audioActivityOnly');
+            expect(ResolveGeminiTurnCoverage('not-a-coverage', GEMINI_LIVE_ENDPOINT_PROFILES[endpoint]).Coverage, endpoint).toBe('audioActivityOnly');
+        }
+    });
+
+    it("every profile resolved for an endpoint carries that endpoint's coverages, whatever the model", () => {
+        for (const endpoint of ENDPOINTS) {
+            for (const model of MODELS) {
+                expect(ResolveGeminiLiveProfile(model, endpoint).AcceptedTurnCoverages, `${endpoint} ${model}`).toEqual(
+                    GEMINI_LIVE_ENDPOINT_PROFILES[endpoint].AcceptedTurnCoverages
+                );
+            }
+        }
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live').AcceptedTurnCoverages).toContain('audioActivityAndAllVideo');
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise').AcceptedTurnCoverages).not.toContain('audioActivityAndAllVideo');
+    });
+});
+
+describe('ResolveGeminiTurnCoverage', () => {
+    const developer = ResolveGeminiLiveProfile('gemini-3.8-live');
+    const enterprise = ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+
+    it('sends audio only when nothing is configured, on either endpoint, refusing nothing', () => {
+        for (const profile of [developer, enterprise]) {
+            for (const requested of [undefined, null, '', '   ']) {
+                expect(ResolveGeminiTurnCoverage(requested, profile), `${profile.Endpoint} ${String(requested)}`).toEqual({ Coverage: 'audioActivityOnly' });
+            }
+        }
+    });
+
+    it('sends a configured coverage the endpoint accepts, trimmed', () => {
+        expect(ResolveGeminiTurnCoverage('audioActivityAndAllVideo', developer)).toEqual({ Coverage: 'audioActivityAndAllVideo' });
+        expect(ResolveGeminiTurnCoverage(' audioActivityAndAllVideo ', developer)).toEqual({ Coverage: 'audioActivityAndAllVideo' });
+        expect(ResolveGeminiTurnCoverage('audioActivityOnly', developer)).toEqual({ Coverage: 'audioActivityOnly' });
+        expect(ResolveGeminiTurnCoverage(' audioActivityOnly', enterprise)).toEqual({ Coverage: 'audioActivityOnly' });
+    });
+
+    it('sends audio only for audioActivityAndAllVideo on Gemini Enterprise, and returns what it did not send', () => {
+        expect(ResolveGeminiTurnCoverage('audioActivityAndAllVideo', enterprise)).toEqual({ Coverage: 'audioActivityOnly', Refused: 'audioActivityAndAllVideo' });
+    });
+
+    it('sends audio only for a value that is not a coverage, on either endpoint, and returns it', () => {
+        for (const profile of [developer, enterprise]) {
+            for (const requested of ['allInput', 'AudioActivityAndAllVideo', 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO']) {
+                expect(ResolveGeminiTurnCoverage(requested, profile), `${profile.Endpoint} ${requested}`).toEqual({ Coverage: 'audioActivityOnly', Refused: requested });
+            }
         }
     });
 });

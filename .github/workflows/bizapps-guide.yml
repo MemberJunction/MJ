@@ -1,0 +1,125 @@
+name: Refresh the BizApps guide
+
+# guides/BIZAPPS_GUIDE.md is the GitHub copy of the BizApps catalog: every public
+# `bizapps-*` repository in the MemberJunction org, read from its mj-app.json by
+# docs-site/scripts/bizapps-guide.mjs. The docs site does not need this file — it
+# reads the catalog live on every build — so this workflow exists only to keep the
+# copy people read on GitHub current.
+#
+# WHEN. After every docs deploy (docs.yml, the moment the site re-reads the catalog),
+# weekly so a new repository or release between deploys is picked up, and on demand.
+#
+# WHAT IT WRITES. Nothing to next, ever. When the regenerated file differs, it pushes
+# ONE commit to the bot-owned branch chore/bizapps-guide-refresh (reset from next on
+# every run, so it never accumulates or conflicts) and opens a pull request into next,
+# or updates the one already open. The generated file has no versions or dates in it,
+# so a pull request means an app was added, retired, released for the first time, or
+# changed what its manifest says about it.
+#
+# WHY THE APP TOKEN. Required checks never start on a pull request opened with
+# GITHUB_TOKEN. The same App and least-privilege grant publish.yml uses for its
+# back-merge PR: contents (the bot branch) and pull-requests (the PR).
+
+on:
+  workflow_run:
+    workflows: ["Update package documentation"]
+    types: [completed]
+  schedule:
+    - cron: '17 13 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bizapps-guide
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh guides/BIZAPPS_GUIDE.md
+    if: github.repository == 'MemberJunction/MJ'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BRANCH: chore/bizapps-guide-refresh
+    steps:
+      - name: Checkout next
+        uses: actions/checkout@v4
+        with:
+          ref: next
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Node built-ins only: no install step. Exits non-zero, failing the run, if the
+      # catalog cannot be read — a refresh never commits a half-empty guide.
+      - name: Regenerate the guide
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node docs-site/scripts/bizapps-guide.mjs
+
+      - name: Detect a change
+        id: diff
+        run: |
+          if git diff --quiet -- guides/BIZAPPS_GUIDE.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "guides/BIZAPPS_GUIDE.md already matches the catalog." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo '### guides/BIZAPPS_GUIDE.md is out of date'
+              echo
+              echo '```diff'
+              git diff -- guides/BIZAPPS_GUIDE.md | head -200
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Mint the App token
+        if: steps.diff.outputs.changed == 'true'
+        id: token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Push the bot branch and open or update the pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          APP_TOKEN: ${{ steps.token.outputs.token }}
+          APP_SLUG: ${{ steps.token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          BOT_ID=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add guides/BIZAPPS_GUIDE.md
+          git commit -m "docs(guides): refresh the BizApps catalog"
+          # Force is safe here and only here: the branch belongs to this workflow and is
+          # rebuilt from next on every run. Never point BRANCH at a branch a person works on.
+          git push --force "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}" "HEAD:refs/heads/${BRANCH}"
+
+          EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base next --state open --json url --jq '.[0].url // ""')
+          if [ -n "$EXISTING" ]; then
+            echo "Updated the open pull request: $EXISTING" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat > "$RUNNER_TEMP/body.md" <<'BODY'
+          The BizApps catalog changed, so this regenerates `guides/BIZAPPS_GUIDE.md` from every public `bizapps-*` repository in the MemberJunction org (`node docs-site/scripts/bizapps-guide.mjs`).
+
+          **Review:** the diff is generated, not hand-written. Check that a new app, a retired app, or a changed description is what you expect; anything wrong belongs in that app's `mj-app.json`, not in this file.
+
+          The docs site already shows the change: it reads the catalog live on every deploy. This pull request only updates the copy on GitHub. It is opened by `.github/workflows/bizapps-guide.yml` and kept up to date by later runs until it is merged.
+          BODY
+          URL=$(gh pr create --repo "$GITHUB_REPOSITORY" --base next --head "$BRANCH" \
+            --title "docs(guides): refresh the BizApps catalog" --body-file "$RUNNER_TEMP/body.md")
+          echo "Opened $URL" >> "$GITHUB_STEP_SUMMARY"

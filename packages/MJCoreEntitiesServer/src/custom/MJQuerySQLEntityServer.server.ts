@@ -34,7 +34,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         // current environment's database platform. A SQL Server environment
         // receiving a PostgreSQL variant (or vice versa) should not re-extract.
         try {
-            await this.triggerParentExtractionIfDialectMatches();
+            await this.triggerParentExtractionIfDialectMatches(options?.SkipEntityAIActions === true);
         } catch (e) {
             // Non-fatal — the QuerySQL record saved successfully, extraction
             // is a side effect that can be retried by re-saving the record.
@@ -55,7 +55,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         }
     }
 
-    private async triggerParentExtractionIfDialectMatches(): Promise<void> {
+    private async triggerParentExtractionIfDialectMatches(skipAIEnrichment: boolean): Promise<void> {
         const currentPlatform = resolveDbPlatformFromEnv() ?? 'sqlserver';
 
         await this.ensureQueryEngineLoaded();
@@ -75,7 +75,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         // will find the dialect variant via GetPlatformSQL().
         if (parentQuery.SQL && parentQuery.SQL.trim().length > 0) {
             LogStatus(`[MJQuerySQLEntityServer] Triggering re-extraction on "${parentQuery.Name}" — dialect variant saved for ${currentPlatform}`);
-            await parentQuery.RerunExtraction();
+            await parentQuery.RerunExtraction(skipAIEnrichment);
         }
     }
 

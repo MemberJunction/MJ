@@ -26,6 +26,15 @@ The loader reads the `data-*` attributes, calls `POST /widget/session` to mint a
 mounts `<mj-support-widget>` **inside a shadow DOM** so host CSS cannot bleed in or out. See
 [`examples/blank-host.html`](./examples/blank-host.html).
 
+**The host page must be served over HTTPS** (or from `localhost`). The widget binds its guest session to a
+Web Crypto key and signs each token refresh with it, and browsers expose Web Crypto (`crypto.subtle`) only in a
+secure context. On a plain `http://` page no widget is shown, and the console says why (`[mj-widget] The support
+widget needs a secure context …`). There is no fallback: a session that cannot prove the key could be renewed by
+anyone who copied its token.
+
+The refresh proof and the refresh timer run on the server's clock, which the widget learns from each token's
+`iat`, so a visitor whose device clock is minutes off keeps one session instead of restarting it at each refresh.
+
 ### Programmatic mount
 
 ```ts
@@ -85,8 +94,8 @@ host page → <mj-support-widget> (shadow DOM, design-token-scoped)
 ## Scripts
 
 ```bash
-npm run build       # tsc → dist/ (ESM)
-npm run bundle      # esbuild → dist/mj-widget.js (single-file browser ESM)
+npm run build       # tsc → dist/ (ESM), then the bundle below, so a build never leaves a stale mj-widget.js
+npm run bundle      # esbuild → dist/embed/mj-widget.js (browser ESM, code-split into dist/embed/chunks)
 npm run bundle:min  # minified variant
 npm run test        # vitest (jsdom): session client, element, loader
 ```
