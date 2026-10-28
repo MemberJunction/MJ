@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S5.4 #3",
+    "Description": "Gate G2.32 (phase 2, dataset W1, criterion S5.4 #3): 100% of W1-signal s42 training runs record, in the model lineage, the library versions (python, numpy, scikit-learn, xgboost, lightgbm) and the thread count they ran with, and a run whose lineage lacks either is refused, 1 of 1. It fails when TrainerRunRecorder.ApplyTrainerResultToRun skips TrainerContract.CodeVersionGaps, so a lineage-incomplete run completes.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.32\",\"owner:PR3\",\"phase:2\",\"dataset:W1\",\"criterion:S5.4#3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The trainer's CodeVersion records the python, numpy, scikit-learn, xgboost and lightgbm versions and the thread count (1 of 1 pytest case passes), and a completed result whose lineage lacks scikit-learn is refused with the run left Failed."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s5-4-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "8C6500E6-EDD3-42BA-B9D9-6A9713DC0B21"
+  }
+}

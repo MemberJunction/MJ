@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="1" tests="4">
+<testcase classname="tests.gates.test_trainer_contract_gates" name="test_W1_S5_4_2_rf_and_mlp_repeat_exactly[random_forest]" time="1.0" />
+<testcase classname="tests.gates.test_trainer_contract_gates" name="test_W1_S5_4_2_rf_and_mlp_repeat_exactly[mlp]" time="1.0" />
+<testcase classname="tests.gates.test_trainer_contract_gates" name="test_W8_S3_4_target_encoding_is_in_fold" time="0.4"><failure message="assert 0.43 &lt;= 0.5">trace</failure></testcase>
+<testcase classname="tests.gates.test_trainer_contract_gates" name="test_W1_S5_3_inner_cv_means_with_intervals" time="0.0"><skipped type="pytest.skip" message="no data">skip</skipped></testcase>
+</testsuite></testsuites>
