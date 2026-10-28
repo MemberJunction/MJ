@@ -52,6 +52,7 @@ const h = vi.hoisted(() => {
                 : [];
         },
         PromptModels: [],
+        PromptModelsByPromptID: new Map(),
         VendorsByID: new Map(),
     };
 

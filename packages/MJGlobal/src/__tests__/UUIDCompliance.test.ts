@@ -283,7 +283,7 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'AI/Agents/src/base-agent.ts': 29,
     'AI/Agents/src/decision-discovery.ts': 1,
     'AI/Agents/src/memory-note-gate.ts': 1,
-    'AI/Agents/src/realtime/realtime-client-session-service.ts': 2,
+    'AI/Agents/src/realtime/realtime-client-session-service.ts': 1,
     'AI/BaseAIEngine/src/AIAgentPermissionHelper.ts': 1,
     'AI/BaseAIEngine/src/AISkillPermissionHelper.ts': 1,
     'AI/BaseAIEngine/src/BaseAIEngine.ts': 6,
