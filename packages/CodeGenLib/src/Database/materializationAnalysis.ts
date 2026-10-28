@@ -1,10 +1,7 @@
 import { MaterializedColumnSpec } from './codeGenDatabaseProvider';
-import { SQLParser, SqlDocument, type SQLSelectColumn } from '@memberjunction/sql-parser';
+import { SQLParser, SqlDocument, type FromSource, type SQLSelectColumn, type SelectCore, type SqlExpression } from '@memberjunction/sql-parser';
 import type { SQLDialect, SQLParserDialect } from '@memberjunction/sql-dialect';
-import {
-    IsObject, NodeType, qualifiedColumn, IdentifiersEqual, IsSetOperationRoot, SoleStatement,
-    type AstNode, type AstObject,
-} from './materializationSqlAst';
+import { IdentifiersEqual, ParseSoleSelect, PathColumn, PathQualifier, type SoleSelect } from './materializationSqlAst';
 
 /**
  * Result-shape + key analysis for query materialization (CodeGen materialization phase,
@@ -273,7 +270,7 @@ export function QualifyParameterizedQuery(opts: {
             return refuse(`query "${queryName}" param "${p.name}" filters on "${p.filterColumn}" with operator "${op ?? '(unresolved)'}", which is not in the read-time-safe operator set {${[...SAFE_READ_FILTER_OPERATORS].join(', ')}} — deferred; the query stays live-only`);
         }
         // Operator/value-shape consistency: IN/NOT IN must carry a list value; every other op a scalar.
-        // A mismatch means our AST reading is inconsistent → refuse under uncertainty rather than guess.
+        // A mismatch means our reading is inconsistent → refuse under uncertainty rather than guess.
         const isListOp = op === 'IN' || op === 'NOT IN';
         const expectedKind = isListOp ? 'list' : 'scalar';
         if (p.filterKind !== expectedKind) {
@@ -342,46 +339,67 @@ export function qualifyParameterizedQuery(opts: {
     return QualifyParameterizedQuery(opts);
 }
 
-// AST-walking primitives are shared with the param verifier + broad-render via ./materializationSqlAst
-// (single source of truth — see that module's header). extractGroupByTerms is GROUP-BY-specific and stays here.
+/** A GROUP BY term that is a plain column reference, split into its qualifier and column. */
+interface GroupingColumn {
+    /** Table alias / table name qualifying the reference (`o` in `o.Region`); null when unqualified. */
+    Qualifier: string | null;
+    /** Bare column name (`Region` in `o.Region`). */
+    Column: string;
+}
+
+/** GROUP BY forms whose grouping sets are not the plain list of terms (rollups, cubes, grouping sets, ALL/DISTINCT). */
+const NON_PLAIN_GROUPING = /\b(ROLLUP|CUBE|GROUPING\s+SETS)\b|^\s*GROUP\s+BY\s+(ALL|DISTINCT)\b/i;
+
+/** The column an expression consists of exactly, or null when it is anything else (a function, an operator, a literal). */
+function plainGroupingColumn(term: SqlExpression): GroupingColumn | null {
+    const paths = term.Identifiers();
+    if (paths.length !== 1 || term.FunctionCalls().length > 0) return null;
+    const path = paths[0];
+    if (path.Span.Start !== term.Span.Start || path.Span.End !== term.Span.End) return null;
+    return { Qualifier: PathQualifier(path), Column: PathColumn(path) };
+}
+
 /**
- * Extracts the top-level GROUP BY term nodes, normalizing node-sql-parser's dialect-varying shapes.
- * Returns `[]` (→ no key → full rebuild) for anything it cannot read as a single plain SELECT's GROUP BY.
+ * Reads a SELECT block's GROUP BY terms as plain column references. Returns `[]` (→ no key → full rebuild)
+ * when there is no GROUP BY or its form is not a plain list, and null when any term is an expression
+ * (`YEAR(date)`, `a + b`, an ordinal) that cannot be reconstructed from the materialized output columns.
  *
- * **Set-operation refusal (soundness-critical).** A `UNION` / `UNION ALL` / `EXCEPT` / `INTERSECT` parses to
- * a SINGLE `select` root carrying `set_op`/`_next`, whose `groupby` and `columns` describe **only the first
- * branch** (see {@link isSetOperationRoot}). Reading that root would report the first branch's grouping
- * columns as the key of the WHOLE query — but the combined result legitimately contains one row per
- * (branch × group), so those "key" columns are NOT unique across the result. The caller would then hash the
- * key into the surrogate PK and pick the MERGE-upsert Incremental path, where the branches collide on the
- * same hash and one silently overwrites the other — permanently wrong aggregates with no error. Refuse.
+ * **Set-operation refusal (soundness-critical)** happens before this is reached, in {@link ParseSoleSelect}:
+ * a `UNION` / `EXCEPT` / `INTERSECT` has no single block whose GROUP BY describes the combined result,
+ * which legitimately contains one row per (branch × group). Keying the first branch's grouping columns
+ * would let the branches collide on the same surrogate hash under the MERGE-upsert Incremental path, and
+ * one would silently overwrite the other.
  */
-function extractGroupByTerms(stmt: AstObject): AstNode[] {
-    const gb = stmt.groupby;
-    if (IsObject(gb) && Array.isArray(gb.columns)) return gb.columns; // observed shape: { columns: [...] }
-    if (Array.isArray(gb)) return gb; // some dialects emit a bare array
-    if (IsObject(gb) && Array.isArray(gb.value)) return gb.value; // …or { value: [...] }
-    return [];
+function groupingColumns(sole: SoleSelect): GroupingColumn[] | null {
+    const groupBy = sole.Select.GroupBy;
+    if (groupBy === null || NON_PLAIN_GROUPING.test(sole.Document.Text(groupBy))) return [];
+    const columns: GroupingColumn[] = [];
+    for (const term of groupBy.Items) {
+        const column = plainGroupingColumn(term);
+        if (column === null) return null;
+        columns.push(column);
+    }
+    return columns;
 }
 
-/**
- * Parses `sql` and returns its sole plain-SELECT statement root, or null when that is not what it is —
- * unparseable, multi-statement, a non-SELECT, or a SET OPERATION (see {@link isSetOperationRoot}, whose
- * first-branch-only view every analyzer here must refuse). Every analyzer in this module goes through
- * this one gate so no future reader can reintroduce a bare `ast[0]` set-op blind spot.
- */
-function parseSoleSelectRoot(sql: string, dialect: SQLParserDialect): AstObject | null {
-    const parsed = SQLParser.Astify(sql, dialect);
-    if (!parsed.astParsed || parsed.ast == null) return null;
-    const stmt = SoleStatement(parsed.ast);
-    if (!IsObject(stmt) || NodeType(stmt) !== 'select') return null;
-    if (IsSetOperationRoot(stmt)) return null;
-    return stmt;
+/** Number of relations a FROM source reads: each table, derived table or function of a join tree counts. */
+function sourceRelationCount(source: FromSource): number {
+    switch (source.Kind) {
+        case 'Join':
+        case 'Apply':
+            return sourceRelationCount(source.Left) + sourceRelationCount(source.Right);
+        case 'ParenthesizedSource':
+            return sourceRelationCount(source.Inner);
+        case 'Pivot':
+            return sourceRelationCount(source.Source);
+        default:
+            return 1;
+    }
 }
 
-/** Number of relations in a SELECT's FROM clause (each JOIN / comma source counts). 0 when unreadable. */
-function fromSourceCount(stmt: AstObject): number {
-    return Array.isArray(stmt.from) ? stmt.from.length : 0;
+/** Number of relations in a SELECT's FROM clause (each JOIN / comma source counts). 0 when there is no FROM. */
+function fromSourceCount(select: SelectCore): number {
+    return select.From === null ? 0 : select.From.Sources.reduce((sum, source) => sum + sourceRelationCount(source), 0);
 }
 
 /**
@@ -407,23 +425,17 @@ export interface FilterColumnBindingProof {
 }
 
 /**
- * Collects the table qualifiers of every reference to `column` inside an AST subtree, in encounter order.
- * A `null` entry means an unqualified reference. Used to read the WHERE clause's view of a filter column.
+ * The table qualifiers of every reference to `column` inside the block's WHERE clause (subqueries in it
+ * included), in text order. A `null` entry means an unqualified reference. Used to read the WHERE
+ * clause's view of a filter column.
  */
-function collectColumnQualifiers(node: AstNode, column: string, found: (string | null)[]): void {
-    if (Array.isArray(node)) {
-        for (const child of node) collectColumnQualifiers(child, column, found);
-        return;
-    }
-    if (!IsObject(node)) return;
-    const qc = qualifiedColumn(node);
-    if (qc != null) {
-        if (IdentifiersEqual(qc.column, column)) found.push(qc.Qualifier);
-        return; // a column_ref has no further column_ref descendants
-    }
-    for (const [k, v] of Object.entries(node)) {
-        if (k !== 'loc') collectColumnQualifiers(v, column, found);
-    }
+function whereColumnQualifiers(sole: SoleSelect, column: string): (string | null)[] {
+    const where = sole.Select.Where;
+    if (where === null) return [];
+    return sole.Document.ColumnReferences().Value
+        .filter((ref) => ref.Span.Start >= where.Span.Start && ref.Span.End <= where.Span.End && IdentifiersEqual(ref.Column.Value, column))
+        .sort((x, y) => x.Span.Start - y.Span.Start)
+        .map((ref) => (ref.Qualifier.length > 0 ? ref.Qualifier[ref.Qualifier.length - 1].Value : null));
 }
 
 /**
@@ -442,8 +454,8 @@ function collectColumnQualifiers(node: AstNode, column: string, found: (string |
  *    read filters `ShipRegion = 'East'` while live filters `BillRegion = 'East'`.
  *
  * Refuses (never guesses) unless ALL of the following hold — falling back to the live query, always correct:
- *  1. `sql` parses to a single plain SELECT (not multi-statement, not a set operation — a `UNION` root
- *     exposes only its first branch, so nothing about the whole result can be proven from it);
+ *  1. `sql` parses to a single plain SELECT (not multi-statement, not a set operation — no single branch
+ *     of a `UNION` describes the whole result, so nothing about it can be proven from one branch);
  *  2. the SELECT list is readable and not a wildcard (`SELECT *` hides the real output↔source mapping);
  *  3. exactly ONE output column is named `filterColumn` (two would make the read-time predicate ambiguous);
  *  4. that output column is a plain column reference, not a computed expression;
@@ -466,23 +478,16 @@ export function ProveFilterColumnBinding(opts: {
     const refuse = (reason: string): FilterColumnBindingProof => ({ provable: false, reason });
     if (!sql || sql.trim().length === 0) return refuse('no rendered SQL to analyze');
 
-    let root: AstObject | null;
-    let selectCols: SQLSelectColumn[];
-    try {
-        root = parseSoleSelectRoot(sql, dialect);
-        selectCols = SQLParser.ExtractSelectColumns(sql, dialect);
-    } catch {
-        return refuse('the rendered SQL could not be parsed');
-    }
+    const root = ParseSoleSelect(sql, dialect);
     if (root == null) {
         return refuse('the rendered SQL is not a single plain SELECT (multi-statement, non-SELECT, or a UNION/EXCEPT/INTERSECT whose branches are not all visible)');
     }
+    const selectCols = SQLParser.ExtractSelectColumnsChecked(sql, dialect).Columns;
     const outputCheck = resolveProvableOutputColumn(selectCols, filterColumn);
     if (!outputCheck.provable) return refuse(outputCheck.reason);
     const output = outputCheck.column;
 
-    const qualifiers: (string | null)[] = [];
-    collectColumnQualifiers(root.where, filterColumn, qualifiers);
+    const qualifiers = whereColumnQualifiers(root, filterColumn);
     if (qualifiers.length === 0) {
         return refuse(`the WHERE clause of the rendered SQL has no reference to a column named "${filterColumn}"`);
     }
@@ -492,9 +497,9 @@ export function ProveFilterColumnBinding(opts: {
     }
     const predicateQualifier = qualifiers[0];
 
-    const singleSource = fromSourceCount(root) === 1;
+    const singleSource = fromSourceCount(root.Select) === 1;
     if (!singleSource && (predicateQualifier == null || output.TableQualifier == null)) {
-        return refuse(`the query reads ${fromSourceCount(root)} relations and the ${predicateQualifier == null ? 'WHERE predicate on' : 'SELECT-list projection of'} "${filterColumn}" is unqualified, so the name cannot be attributed to a single source`);
+        return refuse(`the query reads ${fromSourceCount(root.Select)} relations and the ${predicateQualifier == null ? 'WHERE predicate on' : 'SELECT-list projection of'} "${filterColumn}" is unqualified, so the name cannot be attributed to a single source`);
     }
     if (!sourceRefsMatch(output.TableQualifier, predicateQualifier, singleSource)) {
         return refuse(`the WHERE predicate filters "${predicateQualifier}.${filterColumn}" but the output column "${filterColumn}" projects "${output.TableQualifier}.${filterColumn}" — a different source column`);
@@ -555,7 +560,7 @@ function resolveProvableOutputColumn(selectCols: SQLSelectColumn[], filterColumn
  * aggregation whose key is expressible in the materialized output; ANY ambiguity → null, and the caller
  * then uses the synthetic surrogate + full rebuild (always correct, just not incrementally optimizable —
  * the §10 "refuse under uncertainty" bias applied to keying). See the inline comment for the exact rules;
- * the key is built from the AST GROUP BY terms (not a SELECT-list split), so grouping expressions and
+ * the key is built from the parsed GROUP BY terms (not a SELECT-list split), so grouping expressions and
  * grouped-but-unprojected columns both refuse rather than silently producing a too-narrow key.
  */
 export function DetectAggregationKeyColumns(opts: {
@@ -566,7 +571,7 @@ export function DetectAggregationKeyColumns(opts: {
     const { sql, dialect, fields } = opts;
     if (!/\bgroup\s+by\b/i.test(sql)) return null; // no GROUP BY → not an aggregation key
 
-    // AST-level GROUP BY extraction (the "hardening follow-up" the heuristic promised) — robust vs. splitting
+    // Structural GROUP BY reading — robust vs. splitting
     // the SELECT list, which can't tell a grouping EXPRESSION apart from an aggregate measure. Rules, all
     // biased to refuse (null → synthetic surrogate + full rebuild, always correct; §10 "refuse under
     // uncertainty"): (1) every grouping term must be a bare column reference — an expression grouping term
@@ -574,33 +579,24 @@ export function DetectAggregationKeyColumns(opts: {
     // be at least one aggregate measure; (3) every grouping column must map to exactly one PROJECTED output
     // column (so the key is expressible in the materialized table — a grouped-but-unprojected column would
     // make the surrogate key too narrow and collide).
-    let root: AstObject | null;
-    let selectCols: SQLSelectColumn[];
-    try {
-        root = parseSoleSelectRoot(sql, dialect);
-        selectCols = SQLParser.ExtractSelectColumns(sql, dialect);
-    } catch {
-        return null; // unparseable → not keyed (safe: synthetic surrogate + full rebuild)
-    }
-    if (root == null) return null; // multi-statement / non-SELECT / set operation → refuse
-    const groupByTerms = extractGroupByTerms(root);
-    if (groupByTerms.length === 0 || !selectCols || selectCols.length === 0) return null;
-    if (groupByTerms.some((t) => NodeType(t) !== 'column_ref')) return null; // expression grouping → bail
+    const root = ParseSoleSelect(sql, dialect);
+    if (root == null) return null; // unreadable / multi-statement / non-SELECT / set operation → refuse
+    const groupByTerms = groupingColumns(root); // null: an expression grouping term → bail
+    const selectCols = SQLParser.ExtractSelectColumnsChecked(sql, dialect).Columns;
+    if (groupByTerms === null || groupByTerms.length === 0 || selectCols.length === 0) return null;
     if (!selectCols.some((c) => c.IsExpression)) return null; // no aggregate measure → not an aggregation
 
     // (4) A grouping term is matched to a projected output column by SOURCE COLUMN NAME — which is ambiguous
     // across a join (`GROUP BY o.Region` vs. a projected `c.Region` are different columns). Require the table
     // qualifiers to agree whenever there is more than one FROM relation; see sourceRefsMatch.
-    const singleSource = fromSourceCount(root) === 1;
+    const singleSource = fromSourceCount(root.Select) === 1;
     const fieldByOutput = new Map(fields.map((f) => [f.Name.trim().toLowerCase(), f]));
     const key: { name: string; type: string }[] = [];
-    for (const term of groupByTerms) {
-        const gb = qualifiedColumn(term);
-        if (gb == null) return null;
+    for (const gb of groupByTerms) {
         // The projected (non-expression) SELECT column whose pre-alias source column IS this grouping column.
         const projected = selectCols.filter(
             (c) => !c.IsExpression
-                && IdentifiersEqual(c.SourceColumn, gb.column)
+                && IdentifiersEqual(c.SourceColumn, gb.Column)
                 && sourceRefsMatch(c.TableQualifier, gb.Qualifier, singleSource),
         );
         if (projected.length !== 1) return null; // unprojected (0) or ambiguous (>1) → bail
@@ -666,7 +662,25 @@ export function ChooseMaterializationRefreshStrategy(opts: {
 }): MaterializationRefreshStrategy {
     const { sql, dialect, isKeyed } = opts;
     if (!isKeyed || !sql) return 'FullRebuild';
-    const cteHeaded = SqlDocument.Parse(sql, dialect).CTEs().Value.some((cte) => cte.Leading);
-    if (cteHeaded || SQLParser.ExtractTableRefs(sql, dialect).length !== 1) return 'FullRebuild';
+    const document = SqlDocument.Parse(sql, dialect);
+    // Explicit rule: a CTE-headed query is always rebuilt in full, even over a single table.
+    const cteHeaded = document.CTEs().Value.some((cte) => cte.Leading);
+    if (cteHeaded || distinctTableCount(document, dialect) !== 1) return 'FullRebuild';
     return DetectAdditiveMeasures(sql) ? 'Incremental' : 'DirtyGroupRecompute';
+}
+
+/**
+ * How many distinct tables or views a document reads, anywhere in it: CTE references and table-valued
+ * functions are not tables, and an unqualified name counts as the dialect's default schema (`dbo` when
+ * the dialect names none), so `Orders` and `dbo.Orders` are one table.
+ */
+function distinctTableCount(document: SqlDocument, dialect: SQLDialect): number {
+    const defaultSchema = (dialect.Grammar.DefaultSchema ?? 'dbo').toLowerCase();
+    const keys = new Set<string>();
+    for (const ref of document.TableReferences().Value) {
+        if (ref.Kind !== 'Table' || ref.Source.Kind !== 'Table') continue;
+        const table = ref.Name.Parts[ref.Name.Parts.length - 1].Value.toLowerCase();
+        keys.add(`${(ref.Schema ?? defaultSchema).toLowerCase()}.${table}`);
+    }
+    return keys.size;
 }

@@ -277,24 +277,22 @@ describe('#3778 — a set operation’s ORDER BY moved outside a derived table s
         expect(QueryPagingEngine.WrapWithPaging(own, 0, 10, 'sqlserver').CountSQL).toContain(`WITH [__count] AS (\n${own}\n)`);
     });
 
-    // Pinned: #5592, a qualifier written with spaces or comments around the dot is dropped like `a.Name` (DISCUSSION §6, 2026-10-27). PG-d.
-    // Observed today: the ORDER BY is moved outside unchanged, as 'ORDER BY a . Name DESC', where the alias `a` is out of scope.
-    it.fails('the row cap unqualifies `a . Name` (spaces around the dot) like `a.Name`', () => {
+    // Fixed (was pinned): #5592, a qualifier written with spaces or comments around the dot is dropped like `a.Name`;
+    // the ORDER BY is read as identifier paths by the structural parser (DISCUSSION §6, 2026-10-27). PG-d.
+    it('the row cap unqualifies `a . Name` (spaces around the dot) like `a.Name`', () => {
         const sql = QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY a . Name DESC`, 10, 'sqlserver');
         expect(sql).toMatch(/\) AS \[_mj_capped\]\nORDER BY Name DESC$/);
     });
 
-    // Pinned: #5592 (DISCUSSION §6, 2026-10-27). PG-d.
-    // Observed today: moved outside unchanged, as 'ORDER BY [a] /*c*/ . [Name]'.
-    it.fails('the row cap unqualifies `[a] /*c*/ . [Name]` (a comment before the dot) like `[a].[Name]`', () => {
+    // Fixed (was pinned): #5592 (DISCUSSION §6, 2026-10-27). PG-d.
+    it('the row cap unqualifies `[a] /*c*/ . [Name]` (a comment before the dot) like `[a].[Name]`', () => {
         const sql = QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY [a] /*c*/ . [Name]`, 10, 'sqlserver');
         expect(sql).toMatch(/\) AS \[_mj_capped\]\nORDER BY (\/\*c\*\/ ?)?\[Name\]$/);
         expect(sql).not.toMatch(/\)\s*AS \[_mj_capped\][\s\S]*\[a\]/);
     });
 
-    // Pinned: #5592 (DISCUSSION §6, 2026-10-27). PG-d.
-    // Observed today: paging moves 'ORDER BY a . Name' outside unchanged.
-    it.fails('paging unqualifies `a . Name` and `[a] /*c*/ . [Name]` like `a.Name`', () => {
+    // Fixed (was pinned): #5592 (DISCUSSION §6, 2026-10-27). PG-d.
+    it('paging unqualifies `a . Name` and `[a] /*c*/ . [Name]` like `a.Name`', () => {
         const spaced = QueryPagingEngine.WrapWithPaging(`${union} ORDER BY a . Name`, 20, 10, 'sqlserver');
         expect(spaced.DataSQL).toMatch(/\) AS \[__mj_page\]\nORDER BY Name\nOFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY$/);
         const commented = QueryPagingEngine.WrapWithPaging(`${union} ORDER BY [a] /*c*/ . [Name]`, 20, 10, 'sqlserver');

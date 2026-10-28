@@ -117,6 +117,19 @@ describe('detectAggregationKeyColumns (Phase 3)', () => {
             dialect, fields,
         })).toBeNull();
     });
+    it('returns null for ROLLUP, CUBE and ordinal grouping (not a plain list of grouping columns)', () => {
+        for (const groupBy of ['GROUP BY ROLLUP(region, yr)', 'GROUP BY region, yr WITH ROLLUP', 'GROUP BY CUBE(region, yr)', 'GROUP BY 1, 2']) {
+            const sql = `SELECT region, yr, SUM(amt) AS total FROM sales ${groupBy}`;
+            expect(DetectAggregationKeyColumns({ sql, dialect, fields })).toBeNull();
+        }
+    });
+    it('keys the outer query of a WITH-headed aggregation, with bracket-quoted names read unquoted', () => {
+        const key = DetectAggregationKeyColumns({
+            sql: 'WITH s AS (SELECT * FROM sales) SELECT [region], yr, SUM(amt) AS total FROM s GROUP BY [region], yr',
+            dialect, fields,
+        });
+        expect(key).toEqual([{ name: 'region', type: 'nvarchar(50)' }, { name: 'yr', type: 'int' }]);
+    });
     it('returns null when a grouped column is not projected (key would be too narrow)', () => {
         // GROUP BY region, yr but only region is projected → key can only be {region}, which collides.
         expect(DetectAggregationKeyColumns({
@@ -255,5 +268,17 @@ describe('ChooseMaterializationRefreshStrategy', () => {
         const pgSQL = 'WITH o AS (SELECT customer_id, amount FROM orders) SELECT customer_id, SUM(amount) AS total FROM o GROUP BY customer_id';
         expect(ChooseMaterializationRefreshStrategy({ sql: ssSQL, dialect: ss, isKeyed: true })).toBe('FullRebuild');
         expect(ChooseMaterializationRefreshStrategy({ sql: pgSQL, dialect: pg, isKeyed: true })).toBe('FullRebuild');
+    });
+
+    it('counts a table written with and without its default schema as one table', () => {
+        const ssSQL = 'SELECT CustomerID, SUM(Amount) AS Total FROM dbo.Orders WHERE ID IN (SELECT ID FROM Orders) GROUP BY CustomerID';
+        const pgSQL = 'SELECT customer_id, SUM(amount) AS total FROM public.orders WHERE id IN (SELECT id FROM orders) GROUP BY customer_id';
+        expect(ChooseMaterializationRefreshStrategy({ sql: ssSQL, dialect: ss, isKeyed: true })).toBe('Incremental');
+        expect(ChooseMaterializationRefreshStrategy({ sql: pgSQL, dialect: pg, isKeyed: true })).toBe('Incremental');
+    });
+
+    it('keeps a CTE-headed query on FullRebuild even when it is keyed and additive (explicit rule)', () => {
+        const sql = 'WITH x AS (SELECT 1 AS n) SELECT CustomerID, SUM(Amount) AS Total FROM dbo.Orders GROUP BY CustomerID';
+        expect(ChooseMaterializationRefreshStrategy({ sql, dialect: ss, isKeyed: true })).toBe('FullRebuild');
     });
 });
