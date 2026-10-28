@@ -12,6 +12,8 @@ import { CompositeKey, EntityInfo, LogError, RunView, RunViewParams } from '@mem
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
+    MJConversationEntity,
+    MJEnvironmentEntityExtended,
     MJUserRoutineEntity,
     ResourceData,
 } from '@memberjunction/core-entities';
@@ -19,6 +21,8 @@ import { RegisterClass, UUIDsEqual, UUIDSet, MJGlobal } from '@memberjunction/gl
 import { ActionParam } from '@memberjunction/actions-base';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { TabConfig } from '@memberjunction/ng-ui-components';
@@ -101,6 +105,7 @@ export class ChiefOfStaffDashboardComponent
     implements OnInit, OnDestroy
 {
     private cdr = inject(ChangeDetectorRef);
+    private appManager = inject(ApplicationManager);
     protected override destroy$ = new Subject<void>();
     private initialParamsApplied = false;
 
@@ -108,6 +113,14 @@ export class ChiefOfStaffDashboardComponent
     public IsSavingPolicy = false;
     public BusyRequestID: string | null = null;
     public BusyRoutineID: string | null = null;
+
+    // ── Briefing reader: a wake routine's conversation, read inside the cockpit ──────────
+    /** The routine whose briefings the reader shows; null while the reader is closed. */
+    public BriefingRoutine: MJUserRoutineEntity | null = null;
+    /** The routine's conversation ID, bound to the embedded chat area. */
+    public BriefingConversationId: string | null = null;
+    /** The conversation entity when it could be loaded (title, pinned agent); the chat area loads messages by ID either way. */
+    public BriefingConversation: MJConversationEntity | null = null;
     public FeedbackBanner: { Type: 'success' | 'error'; Message: string } | null = null;
 
     public ActiveTab: ChiefOfStaffTab = 'overview';
@@ -885,6 +898,82 @@ export class ChiefOfStaffDashboardComponent
                 CompositeKey.FromID(this.PolicyEntity.ID),
             );
         }
+    }
+
+    // ── Briefings: where a wake routine's replies live ───────────────────────────────────
+    //
+    // A wake writes its reply into the routine's own conversation, which is application-scoped
+    // and therefore never in the chat sidebar. The conversation is created on the routine's first
+    // run, so a routine that has not run yet has nothing to open.
+
+    /** True when the routine has run at least once and so has a conversation to read. */
+    public CanOpenBriefing(routine: MJUserRoutineEntity): boolean {
+        return !!routine.ConversationID;
+    }
+
+    /**
+     * Opens the routine's conversation in the Chat app. The ID goes in the query params as well
+     * as the nav item configuration: an already-open Chat tab is reused and reacts only to a
+     * query-param change.
+     */
+    public OpenRoutineBriefing(routine: MJUserRoutineEntity, event?: Event): void {
+        event?.stopPropagation();
+        const conversationId = routine.ConversationID;
+        if (!conversationId) {
+            return;
+        }
+        const chatApp = this.appManager.GetAppByName('Chat');
+        if (!chatApp) {
+            MJNotificationService.Instance.CreateSimpleNotification('The Chat app is not installed, so this briefing cannot be opened there', 'error', 4000);
+            return;
+        }
+        void this.navigationService.OpenNavItemByName(
+            'Conversations',
+            { conversationId },
+            chatApp.ID,
+            { queryParams: { conversationId } },
+        );
+    }
+
+    /** Opens the slide-in reader on the routine's conversation without leaving the cockpit. */
+    public async OpenBriefingReader(routine: MJUserRoutineEntity, event?: Event): Promise<void> {
+        event?.stopPropagation();
+        const conversationId = routine.ConversationID;
+        if (!conversationId) {
+            return;
+        }
+        this.BriefingRoutine = routine;
+        this.BriefingConversationId = conversationId;
+        this.BriefingConversation = await this.loadBriefingConversation(conversationId);
+        this.cdr.markForCheck();
+    }
+
+    public CloseBriefingReader(): void {
+        this.BriefingRoutine = null;
+        this.BriefingConversationId = null;
+        this.BriefingConversation = null;
+        this.cdr.markForCheck();
+    }
+
+    public get IsBriefingReaderOpen(): boolean {
+        return this.BriefingConversationId != null;
+    }
+
+    /** The environment the embedded chat area reads under. */
+    public get BriefingEnvironmentId(): string {
+        return this.BriefingConversation?.EnvironmentID ?? MJEnvironmentEntityExtended.DefaultEnvironmentID;
+    }
+
+    /** The application the routine conversation is filed under, so the chat area stays in that scope. */
+    public get BriefingApplicationId(): string | null {
+        return this.BriefingConversation?.ApplicationID ?? null;
+    }
+
+    /** The conversation entity, or null when it cannot be read; the reader still works by ID. */
+    private async loadBriefingConversation(conversationId: string): Promise<MJConversationEntity | null> {
+        const p = this.ProviderToUse;
+        const conversation = await p.GetEntityObject<MJConversationEntity>('MJ: Conversations', p.CurrentUser);
+        return await conversation.Load(conversationId) ? conversation : null;
     }
 
     public OpenRoutineEntityRecord(routineId: string, event?: Event): void {

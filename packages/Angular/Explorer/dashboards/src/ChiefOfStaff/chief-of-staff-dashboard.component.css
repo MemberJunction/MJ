@@ -1069,3 +1069,16 @@
     border-top: 1px solid var(--mj-border-default);
     background-color: var(--mj-bg-surface);
 }
+
+/* Briefing reader: the embedded chat area fills the slide panel body. */
+.cos-briefing-reader {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.cos-briefing-reader mj-conversation-chat-area {
+    flex: 1 1 auto;
+    min-height: 0;
+}

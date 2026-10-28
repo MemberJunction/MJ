@@ -14,6 +14,7 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { MJButtonDirective, MJClickableDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -173,6 +174,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ChiefOfStaffDashboardComponent
   ],
   imports: [
+    ConversationsModule,
     CompareValueComponent,
     CommonModule,
     FormsModule,

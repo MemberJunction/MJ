@@ -318,6 +318,12 @@
                                                 </div>
                                             </div>
                                             <div class="cos-routine-mini__actions">
+                                                <button mjButton variant="outline" size="sm"
+                                                        [disabled]="!CanOpenBriefing(routine)"
+                                                        [title]="CanOpenBriefing(routine) ? 'Read this routine\'s briefings here' : 'No briefing yet: the routine has not run'"
+                                                        (click)="OpenBriefingReader(routine, $event)">
+                                                    <i class="fa-solid fa-book-open"></i> Read
+                                                </button>
                                                 <button mjButton variant="primary" size="sm"
                                                         [disabled]="BusyRoutineID === routine.ID"
                                                         (click)="TriggerWakeNow(routine, $event)">
@@ -664,6 +670,18 @@
 
                                         <div class="cos-routine-card__actions">
                                             <button mjButton variant="primary" size="sm"
+                                                    [disabled]="!CanOpenBriefing(routine)"
+                                                    [title]="CanOpenBriefing(routine) ? 'Read this routine\'s briefings here' : 'No briefing yet: the routine has not run'"
+                                                    (click)="OpenBriefingReader(routine, $event)">
+                                                <i class="fa-solid fa-book-open"></i> Read Briefing
+                                            </button>
+                                            <button mjButton variant="outline" size="sm"
+                                                    [disabled]="!CanOpenBriefing(routine)"
+                                                    title="Open this routine's conversation in the Chat app"
+                                                    (click)="OpenRoutineBriefing(routine, $event)">
+                                                <i class="fa-solid fa-comments"></i> Open in Chat
+                                            </button>
+                                            <button mjButton variant="outline" size="sm"
                                                     [disabled]="BusyRoutineID === routine.ID"
                                                     (click)="TriggerWakeNow(routine, $event)">
                                                 <i class="fa-solid fa-bolt"></i> Wake Now
@@ -931,6 +949,40 @@
             }
         }
     </mj-page-body>
+
+    <!-- Briefing reader: a wake routine's conversation, read without leaving the cockpit. -->
+    <mj-slide-panel
+        Mode="slide"
+        [Title]="BriefingRoutine?.Name ?? 'Briefings'"
+        [Visible]="IsBriefingReaderOpen"
+        [Resizable]="true"
+        [WidthPx]="760"
+        (Closed)="CloseBriefingReader()">
+        @if (IsBriefingReaderOpen) {
+            <div class="cos-briefing-reader">
+                <mj-conversation-chat-area
+                    [Provider]="Provider"
+                    [EnvironmentId]="BriefingEnvironmentId"
+                    [CurrentUser]="ProviderToUse.CurrentUser"
+                    [Conversation]="BriefingConversation"
+                    [ConversationId]="BriefingConversationId"
+                    [IsNewConversation]="false"
+                    [SuppressNewConversationEmptyState]="true"
+                    [AllowMentions]="false"
+                    [OverlayMode]="false"
+                    [ShowExportButton]="false"
+                    [ShowShareButton]="false"
+                    [ShowArtifactIndicator]="false"
+                    [ShowAgentPicker]="false"
+                    [ShowAgentModePicker]="false"
+                    [ReadOnly]="true"
+                    ReadOnlyMessage="Briefings are written by the wake routine. To change what it checks or when, ask your Chief of Staff in chat or use the Routines app."
+                    ApplicationScope="Application"
+                    [ApplicationId]="BriefingApplicationId">
+                </mj-conversation-chat-area>
+            </div>
+        }
+    </mj-slide-panel>
 </mj-page-layout>
 
 @if (ShowRequestDialog && SelectedRequest) {
