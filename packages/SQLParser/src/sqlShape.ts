@@ -1,6 +1,6 @@
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
-import type { SQLLexToken } from './sqlLexer.js';
+import type { LexDialect, SQLLexToken } from './sqlLexer.js';
 
 /** One common table expression from a leading `WITH` clause, as written. */
 export interface LeadingCTEDefinition {
@@ -29,8 +29,9 @@ export interface LeadingCTEs {
  * using positions in the original text, so every part is returned exactly as written. Leading
  * comments are skipped. Returns `null` when the statement does not start with `WITH`, or when the
  * clause cannot be read (an unbalanced parenthesis, a missing `AS`).
+ * @deprecated Use `SqlDocument.Parse(sql, dialect).CTEs()` or the `HoistCTEs` transform.
  */
-export function SplitLeadingCTEs(sql: string, dialect: SQLParserDialect): LeadingCTEs | null {
+export function SplitLeadingCTEs(sql: string, dialect: LexDialect): LeadingCTEs | null {
     const tokens = WithoutLeadingSemicolons(SignificantTokens(LexSQL(sql, dialect)));
     if (!IsKeyword(tokens[0], 'WITH')) return null;
     let i = 1;
@@ -103,6 +104,9 @@ export interface ReadOnlyQueryCheck {
  * This is a statement-kind check, not a sandbox. A read query can still call functions with side
  * effects (`set_config`, `pg_sleep`); running caller-supplied SQL read-only and under a statement
  * timeout is what contains those.
+ * This check reads tokens only, so a construct the structural parser cannot read never makes a read query
+ * fail it. `SqlDocument.Parse(sql, dialect).IsReadOnly()` is stricter (it also refuses anything it cannot
+ * read), and `StrictFragmentValidator.ValidateReadOnlyStatement` is the choice for caller-supplied SQL.
  */
 export function IsReadOnlyQuery(sql: string, dialect: SQLParserDialect): ReadOnlyQueryCheck {
     const { Statement: statement, Stacked: stacked } = firstStatement(WithoutLeadingSemicolons(SignificantTokens(LexSQL(sql, dialect))));
@@ -155,7 +159,7 @@ function checkWithStatement(sql: string, dialect: SQLParserDialect): ReadOnlyQue
 
 /** A SELECT is a read unless it writes its rows into a table with a top-level `INTO`. */
 function checkSelect(statement: SQLLexToken[]): ReadOnlyQueryCheck {
-    const outerDepth = Math.min(...statement.map(t => t.Depth));
+    const outerDepth = statement.reduce((lowest, t) => Math.min(lowest, t.Depth), Number.POSITIVE_INFINITY);
     const into = statement.find(t => t.Depth === outerDepth && IsKeyword(t, 'INTO'));
     return into ? refuse('it writes its result into a table (SELECT … INTO)') : ACCEPT;
 }

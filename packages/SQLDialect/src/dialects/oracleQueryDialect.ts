@@ -36,6 +36,7 @@ export const ORACLE_LEXICAL: DialectLexicalRules = Object.freeze({
 export const ORACLE_GRAMMAR: DialectGrammar = Object.freeze({
     ...ANSI_GRAMMAR,
     ParserGrammar: null,
+    DefaultSchema: null,
     RecursiveKeyword: null,
     SetOperatorKeywords: Object.freeze(['UNION', 'INTERSECT', 'MINUS', 'EXCEPT']),
     CorrelatedJoin: 'both',

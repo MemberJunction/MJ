@@ -41,6 +41,7 @@ export const SNOWFLAKE_LEXICAL: DialectLexicalRules = Object.freeze({
 export const SNOWFLAKE_GRAMMAR: DialectGrammar = Object.freeze({
     ...ANSI_GRAMMAR,
     ParserGrammar: 'Snowflake',
+    DefaultSchema: 'PUBLIC',
     RowCapForms: Object.freeze<RowCapForm[]>(['top', 'limit-offset', 'offset-fetch']),
     SetOperatorKeywords: Object.freeze(['UNION', 'INTERSECT', 'EXCEPT', 'MINUS']),
     WriteStatementKeywords: Object.freeze([

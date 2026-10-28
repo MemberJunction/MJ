@@ -26,6 +26,12 @@ export interface DialectGrammar {
      * node-sql-parser has none.
      */
     readonly ParserGrammar: string | null;
+    /**
+     * The schema an unqualified table name resolves to when the session has not changed it, such
+     * as `'dbo'` or `'public'`; `null` when unqualified names resolve against a database or the
+     * current user rather than a fixed schema. Absent on dialects that do not say.
+     */
+    readonly DefaultSchema?: string | null;
     /** The row-cap forms the dialect accepts. */
     readonly RowCapForms: readonly RowCapForm[];
     /** Whether ORDER BY is legal inside a CTE definition without TOP, OFFSET or FOR XML. */

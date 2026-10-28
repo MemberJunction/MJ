@@ -1,4 +1,4 @@
-import { LexSQL, SignificantTokens, SQLParser, type SQLLexToken } from "@memberjunction/sql-parser";
+import { LexSQL, SignificantTokens, SQLParser, StrictFragmentValidator, type SQLLexToken } from "@memberjunction/sql-parser";
 import {
     GetQueryDialect,
     QueryDialect,
@@ -46,8 +46,9 @@ export function GetScreenDialect(key: SqlDialectKey): QueryDialect {
 }
 
 /**
- * The dialect object handed to `SQLParser`: a platform dialect as itself, otherwise an object
- * carrying the query dialect's facets plus the members the parser's older interface reads.
+ * The dialect object handed to the strict parser (`StrictFragmentValidator`): a platform dialect
+ * as itself, otherwise an object carrying the query dialect's facets plus the members the
+ * parser's older interface reads.
  */
 function parserDialectFor(dialect: QueryDialect, grammar: string): SQLParserDialect & ParserDialect {
     if (dialect instanceof SQLDialect && dialect.Grammar.ParserGrammar === grammar) {
@@ -67,53 +68,6 @@ function parserDialectFor(dialect: QueryDialect, grammar: string): SQLParserDial
         QueryHintKeyword: dialect.Grammar.QueryHintKeyword,
         CallerSQLForbiddenFunctions: dialect.Grammar.CallerSQLForbiddenFunctions,
     };
-}
-
-/**
- * AST node `type` values that represent a write / DDL / DCL statement. Mirrors the parser's own write
- * set; used to catch writes the parser reports only at the TOP level (see {@link astContainsWriteNode}).
- */
-const WRITE_NODE_TYPES = new Set<string>([
-    "insert", "update", "delete", "merge", "replace", "drop", "create", "alter", "truncate",
-    "rename", "call", "exec", "execute", "grant", "revoke", "use", "load", "copy", "do",
-]);
-
-/**
- * Deep-walk a node-sql-parser AST and report whether ANY node is a write/DDL statement. `HasWriteStatement`
- * only inspects TOP-level statement types, so a write hidden in a CTE body — e.g.
- * `WITH x AS (INSERT ... RETURNING *) SELECT * FROM x`, which parses as a top-level `select` — evades it.
- * Walking every node catches writes nested anywhere (CTE, subquery). Identifiers can't false-positive:
- * this matches the node `type`, and a column/table literally named `update` is an identifier node, not
- * an `update` node.
- */
-function astContainsWriteNode(node: unknown): boolean {
-    if (!node || typeof node !== "object") {
-        return false;
-    }
-    if (Array.isArray(node)) {
-        return node.some(astContainsWriteNode);
-    }
-    const obj = node as Record<string, unknown>;
-    const type = obj.type;
-    if (typeof type === "string" && WRITE_NODE_TYPES.has(type.toLowerCase())) {
-        return true;
-    }
-    return Object.values(obj).some(astContainsWriteNode);
-}
-
-/**
- * True only when the parsed AST is a SINGLE statement carrying a recognized (string) `type`. A native
- * read must be exactly one statement; node-sql-parser mis-parses some write forms (notably T-SQL
- * `WITH ... INSERT`) into an ARRAY of `type: null` nodes that slip past the type-based checks — so
- * anything that isn't a single, typed statement is refused under uncertainty.
- */
-function isSingleTypedStatement(ast: unknown): boolean {
-    const statements = Array.isArray(ast) ? ast : [ast];
-    if (statements.length !== 1) {
-        return false;
-    }
-    const stmt = statements[0];
-    return !!stmt && typeof stmt === "object" && typeof (stmt as Record<string, unknown>).type === "string";
 }
 
 /**
@@ -232,43 +186,44 @@ function assertLexicalRead(significant: SQLLexToken[], dialect: QueryDialect): v
 }
 
 /**
- * Parses the statement with the dialect's grammar and throws unless it is one read: parseable,
- * no write statement at any depth, no SELECT … INTO.
+ * Parses the statement with the dialect's grammar ({@link StrictFragmentValidator}) and throws
+ * unless it is one read: parseable, no write statement at any depth, no SELECT … INTO, exactly
+ * one typed statement.
  */
 function assertParsedRead(text: string, parserDialect: SQLParserDialect): void {
-    const parser = new SQLParser(text, parserDialect);
-    if (!parser.IsValid) {
+    const parsed = StrictFragmentValidator.ValidateReadOnlyStatement(text, parserDialect);
+    if (!parsed.Parsed) {
         throw new Error(
             "External native query rejected: SQL could not be parsed/validated as read-only — refusing under uncertainty (External Data Sources are read-only).",
         );
     }
-    if (parser.HasWriteStatement) {
+    if (parsed.HasWriteStatement) {
         throw new Error(
             "External native query rejected: write/DDL statements are not permitted — External Data Sources are read-only.",
         );
     }
     // `SELECT ... INTO <newtable>` (and MySQL's `INTO OUTFILE`) parses as a `select`, so
-    // HasWriteStatement misses it; the parser exposes it as StatementKind 'select-into'.
-    if (parser.StatementKind === "select-into") {
+    // HasWriteStatement misses it; the parser reports it as StatementKind 'select-into'.
+    if (parsed.StatementKind === "select-into") {
         throw new Error(
             "External native query rejected: SELECT ... INTO creates a table — External Data Sources are read-only.",
         );
     }
-    assertAstIsSingleRead(parser.AST);
+    assertSingleRead(parsed.ContainsNestedWrite, parsed.IsSingleTypedStatement);
 }
 
 /**
- * Fail-closed AST checks. The type-based checks only see the TOP-level statement, so they miss a
- * write hidden inside a CTE body and forms the parser mis-parses to untyped nodes (T-SQL
- * `WITH ... INSERT` → an array of `type: null` nodes).
+ * Fail-closed checks over the whole parse. The type-based checks only see the TOP-level
+ * statement, so they miss a write hidden inside a CTE body and forms the parser mis-parses to
+ * untyped nodes (T-SQL `WITH ... INSERT` reads as several untyped statements).
  */
-function assertAstIsSingleRead(ast: unknown): void {
-    if (astContainsWriteNode(ast)) {
+function assertSingleRead(containsNestedWrite: boolean, isSingleTypedStatement: boolean): void {
+    if (containsNestedWrite) {
         throw new Error(
             "External native query rejected: a write/DDL statement nested in a CTE or subquery is not permitted — External Data Sources are read-only.",
         );
     }
-    if (!isSingleTypedStatement(ast)) {
+    if (!isSingleTypedStatement) {
         throw new Error(
             "External native query rejected: only a single, well-formed read statement is allowed — refusing under uncertainty (External Data Sources are read-only).",
         );
@@ -392,12 +347,11 @@ export function AssertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, 
     const structureDialect = dialect.Grammar.ParserGrammar === null ? GetQueryDialect(FALLBACK_CLAUSE_DIALECT) : dialect;
     const grammar = structureDialect.Grammar.ParserGrammar ?? "";
     const body = grammarText(tokens, grammar);
-    const wrapped =
+    const parsed =
         kind === "where"
-            ? `SELECT 1 FROM __mj_clause_screen WHERE (${body})`
-            : `SELECT 1 FROM __mj_clause_screen ORDER BY ${body}`;
-    const parser = new SQLParser(wrapped, parserDialectFor(structureDialect, grammar));
-    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== "select") {
+            ? StrictFragmentValidator.ValidateFilter(body, parserDialectFor(structureDialect, grammar))
+            : StrictFragmentValidator.ValidateOrderBy(body, parserDialectFor(structureDialect, grammar));
+    if (!parsed.Parsed || parsed.HasWriteStatement || parsed.StatementKind !== "select") {
         throw new Error(
             `External ${kind} clause rejected: not a safe read-only ${kind} fragment — refusing under uncertainty.`,
         );

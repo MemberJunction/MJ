@@ -45,6 +45,7 @@ const SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
 export const SQL_SERVER_GRAMMAR: DialectGrammar = Object.freeze({
     ...ANSI_GRAMMAR,
     ParserGrammar: 'TransactSQL',
+    DefaultSchema: 'dbo',
     RowCapForms: Object.freeze<RowCapForm[]>(['top', 'offset-fetch']),
     AllowsOrderByInCTE: false,
     AllowsOrderByInDerivedTable: false,

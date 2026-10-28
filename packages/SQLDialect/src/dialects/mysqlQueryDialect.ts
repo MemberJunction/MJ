@@ -53,6 +53,7 @@ export const MYSQL_LEXICAL: DialectLexicalRules = Object.freeze({
 export const MYSQL_GRAMMAR: DialectGrammar = Object.freeze({
     ...ANSI_GRAMMAR,
     ParserGrammar: 'MySQL',
+    DefaultSchema: null,
     RowCapForms: Object.freeze<RowCapForm[]>(['limit-offset']),
     WriteStatementKeywords: Object.freeze([
         ...ANSI_WRITE_STATEMENT_KEYWORDS,

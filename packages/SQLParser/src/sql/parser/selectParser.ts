@@ -151,9 +151,10 @@ export class SelectParser {
             if (itemEnd === ctx.Pos) break;
             items.push(this.selectItem(ctx.Pos, itemEnd));
             ctx.Pos = itemEnd;
-            if (!ctx.T.IsChar(ctx.Pos, ',')) break;
+            if (!ctx.T.IsChar(ctx.Pos, ',')) return items;
             ctx.Pos++;
         }
+        if (items.length > 0) ctx.ReportEmpty(ctx.Pos, 'The select list ends with a comma.');
         return items;
     }
 
@@ -271,6 +272,7 @@ export class SelectParser {
         const start = ctx.Pos;
         ctx.Pos += keywordLength;
         const conditionEnd = ctx.ExpressionEnd(ctx.Pos, end);
+        if (conditionEnd === ctx.Pos) ctx.ReportEmpty(start, `This ${ctx.T.Upper(start)} has no condition.`);
         const condition = ctx.Expression(ctx.Pos, conditionEnd);
         ctx.Pos = conditionEnd;
         return Object.freeze({ Kind: kind, Span: ctx.Span(start, ctx.Pos), Condition: condition });
@@ -293,13 +295,17 @@ export class SelectParser {
         ctx.Pos += 2;
         if (ctx.T.IsWord(ctx.Pos, 'ALL') || ctx.T.IsWord(ctx.Pos, 'DISTINCT')) ctx.Pos++;
         const items: SqlExpression[] = [];
+        let trailingComma = false;
         while (ctx.Pos < end) {
             const itemEnd = ctx.ExpressionEnd(ctx.Pos, end, { Comma: true, Words: ROLLUP_WORDS });
-            if (itemEnd > ctx.Pos) items.push(ctx.Expression(ctx.Pos, itemEnd));
+            if (itemEnd === ctx.Pos) break;
+            items.push(ctx.Expression(ctx.Pos, itemEnd));
             ctx.Pos = itemEnd;
-            if (!ctx.T.IsChar(ctx.Pos, ',')) break;
+            trailingComma = ctx.T.IsChar(ctx.Pos, ',');
+            if (!trailingComma) break;
             ctx.Pos++;
         }
+        if (items.length === 0 || trailingComma) ctx.ReportEmpty(ctx.Pos, items.length === 0 ? 'This GROUP BY names nothing.' : 'The GROUP BY list ends with a comma.');
         if (ctx.T.IsWord(ctx.Pos, 'WITH') && (ctx.T.IsWord(ctx.Pos + 1, 'ROLLUP') || ctx.T.IsWord(ctx.Pos + 1, 'CUBE'))) ctx.Pos += 2;
         return Object.freeze({ Kind: 'GroupBy', Span: ctx.Span(start, ctx.Pos), Items: Object.freeze(items) });
     }

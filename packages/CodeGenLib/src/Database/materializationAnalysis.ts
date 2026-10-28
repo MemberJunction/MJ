@@ -1,6 +1,6 @@
 import { MaterializedColumnSpec } from './codeGenDatabaseProvider';
-import { SQLParser, type SQLSelectColumn } from '@memberjunction/sql-parser';
-import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { SQLParser, SqlDocument, type SQLSelectColumn } from '@memberjunction/sql-parser';
+import type { SQLDialect, SQLParserDialect } from '@memberjunction/sql-dialect';
 import {
     IsObject, NodeType, qualifiedColumn, IdentifiersEqual, IsSetOperationRoot, SoleStatement,
     type AstNode, type AstObject,
@@ -647,4 +647,26 @@ export function DetectAdditiveMeasures(sql: string): boolean {
 /** @deprecated Use {@link DetectAdditiveMeasures}. */
 export function detectAdditiveMeasures(sql: string): boolean {
     return DetectAdditiveMeasures(sql);
+}
+
+/** How a materialized query result is refreshed. */
+export type MaterializationRefreshStrategy = 'FullRebuild' | 'DirtyGroupRecompute' | 'Incremental';
+
+/**
+ * The refresh strategy CodeGen records for a materialized query. A keyed aggregation over exactly
+ * one source table can be refreshed in place (`Incremental` when its measures are purely additive,
+ * `DirtyGroupRecompute` otherwise); everything else is rebuilt in full. A query that starts with a
+ * WITH clause is always rebuilt in full: one watermark on the table its CTEs read cannot localize
+ * the groups the outer query builds from them.
+ */
+export function ChooseMaterializationRefreshStrategy(opts: {
+    sql: string;
+    dialect: SQLDialect;
+    isKeyed: boolean;
+}): MaterializationRefreshStrategy {
+    const { sql, dialect, isKeyed } = opts;
+    if (!isKeyed || !sql) return 'FullRebuild';
+    const cteHeaded = SqlDocument.Parse(sql, dialect).CTEs().Value.some((cte) => cte.Leading);
+    if (cteHeaded || SQLParser.ExtractTableRefs(sql, dialect).length !== 1) return 'FullRebuild';
+    return DetectAdditiveMeasures(sql) ? 'Incremental' : 'DirtyGroupRecompute';
 }

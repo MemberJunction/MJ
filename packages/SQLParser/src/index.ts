@@ -32,6 +32,8 @@ export type {
     SQLParseOptions,
     SQLStatementKind,
     RowCapInfo,
+    CheckedSelectColumns,
+    CheckedColumnReferences,
 } from './sql-parser.js';
 
 // Re-export node-sql-parser's AST type so consumers don't need a direct dependency
@@ -227,3 +229,15 @@ export { StripOrderBy, ReplaceSelectList, AppendTail, SetRowCap } from './edit/c
 export type { AppendTailOptions } from './edit/clauseTransforms.js';
 export { HoistCTEs, RenameCTE, WrapAsDerivedTable, OutputOrderBy } from './edit/cteTransforms.js';
 export type { HoistedCTE, HoistedCTEs, WrapOptions } from './edit/cteTransforms.js';
+
+// ─── StrictFragmentValidator ───
+export { StrictFragmentValidator } from './strict/strictFragmentValidator.js';
+export type {
+    StrictRelation,
+    StrictStatementReads,
+    StrictRefusal,
+    StrictParseOptions,
+    StrictFilterOptions,
+    StrictValidationResult,
+    StrictAggregateResult,
+} from './strict/strictTypes.js';

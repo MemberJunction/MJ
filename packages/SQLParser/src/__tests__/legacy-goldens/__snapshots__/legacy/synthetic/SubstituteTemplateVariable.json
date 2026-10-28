@@ -191,7 +191,7 @@
   "ss/tpl/inside-bracket-ident": "SELECT t.['golden'] FROM dbo.Things t",
   "ss/tpl/as-table-name": "SELECT ID FROM 'golden'.{{ tableName }}",
   "ss/tpl/inside-line-comment": "SELECT ID FROM dbo.Orders -- filtered by 'golden'\nWHERE Status = 'golden'",
-  "ss/tpl/inside-block-comment": "SELECT ID /* 'golden' and {% if x %} */ FROM dbo.Orders",
+  "ss/tpl/inside-block-comment": null,
   "ss/tpl/template-comment": {"$patch":{"keep":[86,0],"text":"'golden'"}},
   "ss/tpl/doc-comment-fields": null,
   "pg/tpl/inside-quoted-ident": "SELECT t.\"'golden'\" FROM things t",

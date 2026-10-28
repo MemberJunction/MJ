@@ -64,6 +64,11 @@ export class ParseContext {
         this.Diagnostics.push(MakeDiagnostic(code, severity, span, message, fixHint));
     }
 
+    /** Reports that the clause or list at token `at` is missing a part it must have. */
+    ReportEmpty(at: number, message: string): void {
+        this.Report(SqlDocumentDiagnosticCodes.EmptyClause, 'Error', this.T.PointAt(at), message);
+    }
+
     /** An Unknown node over tokens `start` to `end` (exclusive), with a diagnostic. */
     Unknown(start: number, end: number, reason: string, code: string = SqlDocumentDiagnosticCodes.UnknownSyntax): UnknownNode {
         const span = end > start ? this.T.SpanOf(start, end - 1) : this.T.PointAt(start);

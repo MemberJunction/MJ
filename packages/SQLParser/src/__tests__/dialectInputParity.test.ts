@@ -151,10 +151,10 @@ describe('P6: a dialect string gives the same result as the dialect object', () 
     ];
 
     for (const [name, extractor, sql, platform] of DIFFERING) {
-        // Pinned: one dialect input with one behaviour; a string and a SQLDialect object must not select
+        // Decided: one dialect input with one behaviour; a string and a SQLDialect object must not select
         // different code paths (DISCUSSION §6, 2026-10-27: public API frozen, behaviour same or better; #5770 item 2).
-        // P6. Observed today: the last column of DIFFERING, per row.
-        it.fails(`${extractor} on ${platform} "${name}" gives the same result for '${PARSER_DIALECT_STRING[platform]}' as for the dialect object`, () => {
+        // P6. Before the redesign: the last column of DIFFERING, per row.
+        it(`${extractor} on ${platform} "${name}" gives the same result for '${PARSER_DIALECT_STRING[platform]}' as for the dialect object`, () => {
             const [[, dialect]] = dialectObjects[platform];
             expect(callExtractor(extractor, sql, PARSER_DIALECT_STRING[platform])).toEqual(callExtractor(extractor, sql, dialect));
         });

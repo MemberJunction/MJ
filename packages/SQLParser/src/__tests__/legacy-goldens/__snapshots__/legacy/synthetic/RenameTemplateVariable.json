@@ -191,7 +191,7 @@
   "ss/tpl/inside-bracket-ident": "SELECT t.[{{columnName_2}}] FROM dbo.Things t",
   "ss/tpl/as-table-name": "SELECT ID FROM {{schemaName_2}}.{{ tableName }}",
   "ss/tpl/inside-line-comment": "SELECT ID FROM dbo.Orders -- filtered by {{status_2}}\nWHERE Status = {{status_2 | sqlString}}",
-  "ss/tpl/inside-block-comment": "SELECT ID /* {{ignored_2}} and {% if x %} */ FROM dbo.Orders",
+  "ss/tpl/inside-block-comment": null,
   "ss/tpl/template-comment": {"$patch":{"keep":[88,2],"text":"status_2 | sqlString"}},
   "ss/tpl/doc-comment-fields": null,
   "pg/tpl/inside-quoted-ident": "SELECT t.\"{{columnName_2}}\" FROM things t",

@@ -16,6 +16,9 @@ export type BranchValue =
 /** Looks up the branch value of a parameter; `undefined` when it has none. */
 export type BranchLookup = (name: string) => BranchValue | undefined;
 
+/** Looks up the value of a `loop.<member>`, such as `last`; `undefined` when it cannot be known. */
+export type LoopMemberLookup = (member: string) => TemplateLiteralValue | undefined;
+
 /** What an expression is known to evaluate to. */
 type Abstract =
     | { readonly Kind: 'Absent' }
@@ -32,7 +35,16 @@ const SAMPLE: Abstract = { Kind: 'Sample' };
  * arithmetic on literals follow the template engine's (JavaScript's) rules.
  */
 export class BranchEvaluator {
-    constructor(private readonly lookup: BranchLookup, private readonly opaqueNames: ReadonlySet<string>) {}
+    /**
+     * @param lookup - The branch value of each parameter.
+     * @param opaqueNames - Names whose value cannot be known: loop and `{% set %}` variables.
+     * @param loopMembers - The values of `loop.<member>`, when a caller knows the iteration; without it they are unknown.
+     */
+    constructor(
+        private readonly lookup: BranchLookup,
+        private readonly opaqueNames: ReadonlySet<string>,
+        private readonly loopMembers: LoopMemberLookup | null = null,
+    ) {}
 
     /** Whether the expression is truthy: `true`, `false`, or `null` when it cannot be known. */
     Truth(expression: TemplateExpression): boolean | null {
@@ -44,6 +56,7 @@ export class BranchEvaluator {
             case 'Literal': return { Kind: 'Value', Value: expression.Value };
             case 'Name': return this.evaluateName(expression.Name);
             case 'Context': return SAMPLE;
+            case 'LoopMember': return this.evaluateLoopMember(expression.Member);
             case 'Unary': return this.evaluateUnary(expression.Operator, this.evaluate(expression.Operand));
             case 'Binary': return this.evaluateBinary(expression.Operator, expression.Left, expression.Right);
             default: return UNKNOWN;
@@ -56,6 +69,11 @@ export class BranchEvaluator {
         if (value === undefined || value.Kind === 'Absent') return { Kind: 'Absent' };
         if (value.Kind === 'Sample') return SAMPLE;
         return { Kind: 'Value', Value: value.Value };
+    }
+
+    private evaluateLoopMember(member: string): Abstract {
+        const value = this.loopMembers?.(member);
+        return value === undefined ? UNKNOWN : { Kind: 'Value', Value: value };
     }
 
     private evaluateUnary(operator: string, operand: Abstract): Abstract {

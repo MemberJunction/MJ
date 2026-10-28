@@ -77,45 +77,45 @@ describe('P1: a table ref is never a CTE name', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(IN_SUBQUERY_PG, pg))).toContain('real_t');
     });
 
-    // Pinned: CTE references never come back as tables (DISCUSSION §6, 2026-10-27; COMPAT-MAP §1.2 B1). P1.
-    // Observed today: ['Real', 'A'] — the CTE A is reported as table dbo.A.
-    it.fails('does not report a top-level CTE as a table (SQL Server, AST path)', () => {
+    // Decided: CTE references never come back as tables (DISCUSSION §6, 2026-10-27; COMPAT-MAP §1.2 B1). P1.
+    // Before the redesign: ['Real', 'A'] — the CTE A is reported as table dbo.A.
+    it('does not report a top-level CTE as a table (SQL Server, AST path)', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(SIMPLE_SS, ss))).toEqual(['Real']);
     });
 
-    // Pinned: CTE references never come back as tables (DISCUSSION §6, 2026-10-27). P1, #5770 item 6.
-    // Observed today: ['crm.vwMembers', 'dbo.S'].
-    it.fails('does not report a CTE as a default-schema table beside a schema-qualified source', () => {
+    // Decided: CTE references never come back as tables (DISCUSSION §6, 2026-10-27). P1, #5770 item 6.
+    // Before the redesign: ['crm.vwMembers', 'dbo.S'].
+    it('does not report a CTE as a default-schema table beside a schema-qualified source', () => {
         expect(qualifiedNames(SQLParser.ExtractTableRefs(SCHEMA_SS, ss))).toEqual(['crm.vwMembers']);
     });
 
-    // Pinned: CTE references never come back as tables (DISCUSSION §6, 2026-10-27). P1.
-    // Observed today: ['Real', 'vwUsers'] — a CTE named like a view is reported as view dbo.vwUsers.
-    it.fails('does not report a CTE named like a view as that view', () => {
+    // Decided: CTE references never come back as tables (DISCUSSION §6, 2026-10-27). P1.
+    // Before the redesign: ['Real', 'vwUsers'] — a CTE named like a view is reported as view dbo.vwUsers.
+    it('does not report a CTE named like a view as that view', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(LIKE_A_VIEW_SS, ss))).toEqual(['Real']);
     });
 
-    // Pinned: CTE references never come back as tables, on the fallback too (DISCUSSION §6, 2026-10-27). P1.
-    // Observed today: ['Real', 'A'] from the regex fallback.
-    it.fails('does not report a CTE as a table when the statement goes to the text fallback', () => {
+    // Decided: CTE references never come back as tables, on the fallback too (DISCUSSION §6, 2026-10-27). P1.
+    // Before the redesign: ['Real', 'A'] from the regex fallback.
+    it('does not report a CTE as a table when the statement goes to the text fallback', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(FALLBACK_SS, ss))).toEqual(['Real']);
     });
 
-    // Pinned: CTEs are scoped wherever they are declared, including nested WITH on PostgreSQL
-    // (DISCUSSION §6, 2026-10-27). P1, #5770 item 4. Observed today: ['real_t', 'inner_q', 'outer_q'].
-    it.fails('does not report a CTE declared inside another CTE body (PostgreSQL nested WITH)', () => {
+    // Decided: CTEs are scoped wherever they are declared, including nested WITH on PostgreSQL
+    // (DISCUSSION §6, 2026-10-27). P1, #5770 item 4. Before the redesign: ['real_t', 'inner_q', 'outer_q'].
+    it('does not report a CTE declared inside another CTE body (PostgreSQL nested WITH)', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(NESTED_PG, pg))).toEqual(['real_t']);
     });
 
-    // Pinned: CTEs are scoped wherever they are declared (DISCUSSION §6, 2026-10-27). P1, #5770 item 5.
-    // Observed today: ['real_t', 'q'].
-    it.fails('does not report a CTE declared inside a derived table (PostgreSQL WITH in a subquery)', () => {
+    // Decided: CTEs are scoped wherever they are declared (DISCUSSION §6, 2026-10-27). P1, #5770 item 5.
+    // Before the redesign: ['real_t', 'q'].
+    it('does not report a CTE declared inside a derived table (PostgreSQL WITH in a subquery)', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(IN_SUBQUERY_PG, pg))).toEqual(['real_t']);
     });
 
-    // Pinned: Parse reports the same tables as ExtractTableRefs, without CTE names (DISCUSSION §6, 2026-10-27). P1.
-    // Observed today: Parse().Tables is ['Real', 'A'].
-    it.fails('does not report a CTE as a table from Parse()', () => {
+    // Decided: Parse reports the same tables as ExtractTableRefs, without CTE names (DISCUSSION §6, 2026-10-27). P1.
+    // Before the redesign: Parse().Tables is ['Real', 'A'].
+    it('does not report a CTE as a table from Parse()', () => {
         expect(tableNames(SQLParser.Parse(SIMPLE_SS, ss).Tables)).toEqual(['Real']);
     });
 });
@@ -141,19 +141,19 @@ describe('P2: no dbo schema on PostgreSQL', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(UNQUALIFIED_PG_FALLBACK, pg))).toEqual(['users']);
     });
 
-    // Pinned: the deprecated wrapper fills the dialect default schema, public on PostgreSQL, never dbo
-    // (DISCUSSION §6, 2026-10-27). P2. Observed today: SchemaName 'dbo'.
-    it.fails('gives an unqualified PostgreSQL ref the schema public (AST path)', () => {
+    // Decided: the deprecated wrapper fills the dialect default schema, public on PostgreSQL, never dbo
+    // (DISCUSSION §6, 2026-10-27). P2. Before the redesign: SchemaName 'dbo'.
+    it('gives an unqualified PostgreSQL ref the schema public (AST path)', () => {
         expect(qualifiedNames(SQLParser.ExtractTableRefs(UNQUALIFIED_PG, pg))).toEqual(['public.users']);
     });
 
-    // Pinned: as above, on the fallback path (DISCUSSION §6, 2026-10-27). P2. Observed today: SchemaName 'dbo'.
-    it.fails('gives an unqualified PostgreSQL ref the schema public (text fallback)', () => {
+    // Decided: as above, on the fallback path (DISCUSSION §6, 2026-10-27). P2. Before the redesign: SchemaName 'dbo'.
+    it('gives an unqualified PostgreSQL ref the schema public (text fallback)', () => {
         expect(qualifiedNames(SQLParser.ExtractTableRefs(UNQUALIFIED_PG_FALLBACK, pg))).toEqual(['public.users']);
     });
 
-    // Pinned: as above, through Parse() (DISCUSSION §6, 2026-10-27). P2. Observed today: schemas ['__mj', 'dbo'].
-    it.fails('never reports dbo for any PostgreSQL ref from Parse()', () => {
+    // Decided: as above, through Parse() (DISCUSSION §6, 2026-10-27). P2. Before the redesign: schemas ['__mj', 'dbo'].
+    it('never reports dbo for any PostgreSQL ref from Parse()', () => {
         expect(SQLParser.Parse(MIXED_PG, pg).Tables.map((t) => t.SchemaName)).toEqual(['__mj', 'public']);
     });
 });
@@ -174,21 +174,21 @@ describe('P3: comments and string literals never yield a ref', () => {
         expect(columnRefNames(AST_SS, ss)).toEqual(['a', 'b']);
     });
 
-    // Pinned: comments never reach the text fallback (DISCUSSION §6, 2026-10-27; COMPAT-MAP §1.2 B3). P3, #5770 item 7.
-    // Observed today: ['Real', 'Ghost', 'Spook', 'Phantom'].
-    it.fails('ignores comments and strings on the SQL Server text fallback', () => {
+    // Decided: comments never reach the text fallback (DISCUSSION §6, 2026-10-27; COMPAT-MAP §1.2 B3). P3, #5770 item 7.
+    // Before the redesign: ['Real', 'Ghost', 'Spook', 'Phantom'].
+    it('ignores comments and strings on the SQL Server text fallback', () => {
         expect(parsesDirectly(FALLBACK_SS, ss)).toBe(false);
         expect(tableNames(SQLParser.ExtractTableRefs(FALLBACK_SS, ss))).toEqual(['Real']);
     });
 
-    // Pinned: as above (DISCUSSION §6, 2026-10-27). P3. Observed today: ['real_t', 'ghost', 'spook', 'phantom'].
-    it.fails('ignores comments and strings on the PostgreSQL text fallback', () => {
+    // Decided: as above (DISCUSSION §6, 2026-10-27). P3. Before the redesign: ['real_t', 'ghost', 'spook', 'phantom'].
+    it('ignores comments and strings on the PostgreSQL text fallback', () => {
         expect(parsesDirectly(FALLBACK_PG, pg)).toBe(false);
         expect(tableNames(SQLParser.ExtractTableRefs(FALLBACK_PG, pg))).toEqual(['real_t']);
     });
 
-    // Pinned: as above, through Parse() (DISCUSSION §6, 2026-10-27). P3. Observed today: ['Real', 'Ghost', 'Spook', 'Phantom'].
-    it.fails('ignores comments and strings in Parse() on the text fallback', () => {
+    // Decided: as above, through Parse() (DISCUSSION §6, 2026-10-27). P3. Before the redesign: ['Real', 'Ghost', 'Spook', 'Phantom'].
+    it('ignores comments and strings in Parse() on the text fallback', () => {
         expect(tableNames(SQLParser.Parse(FALLBACK_SS, ss).Tables)).toEqual(['Real']);
     });
 });
@@ -216,31 +216,31 @@ describe('P4: quoted identifiers and FROM inside functions', () => {
         expect(refs[0].SchemaName).toBe('crm');
     });
 
-    // Pinned: the text fallback never reads `EXTRACT/SUBSTRING/TRIM … FROM` or `IS DISTINCT FROM` as a ref
+    // Decided: the text fallback never reads `EXTRACT/SUBSTRING/TRIM … FROM` or `IS DISTINCT FROM` as a ref
     // (DISCUSSION §6, 2026-10-27; COMPAT-MAP §1.2 B3). P4, #5770 item 11.
-    // Observed today: ['joindate', '1', 'name', 'members', 'b'].
-    it.fails('reads no table from EXTRACT/SUBSTRING/TRIM … FROM or IS DISTINCT FROM (PostgreSQL text fallback)', () => {
+    // Before the redesign: ['joindate', '1', 'name', 'members', 'b'].
+    it('reads no table from EXTRACT/SUBSTRING/TRIM … FROM or IS DISTINCT FROM (PostgreSQL text fallback)', () => {
         expect(parsesDirectly(FUNCS_PG_FALLBACK, pg)).toBe(false);
         expect(tableNames(SQLParser.ExtractTableRefs(FUNCS_PG_FALLBACK, pg))).toEqual(['members']);
     });
 
-    // Pinned: PG double-quoted identifiers are read on every path (DISCUSSION §6, 2026-10-27). P4.
-    // Observed today: [] — the regex fallback skips every "quoted" name.
-    it.fails('reads double-quoted refs on the PostgreSQL text fallback', () => {
+    // Decided: PG double-quoted identifiers are read on every path (DISCUSSION §6, 2026-10-27). P4.
+    // Before the redesign: [] — the regex fallback skips every "quoted" name.
+    it('reads double-quoted refs on the PostgreSQL text fallback', () => {
         expect(parsesDirectly(QUOTED_PG_FALLBACK, pg)).toBe(false);
         expect(SQLParser.ExtractTableRefs(QUOTED_PG_FALLBACK, pg).map((t) => `${t.SchemaName}.${t.TableName}`))
             .toEqual(['crm.Members', 'public.Other']);
     });
 
-    // Pinned: `TRIM(… FROM …)` is not a table ref (DISCUSSION §6, 2026-10-27). P4 (SQL Server half).
-    // Observed today: ['Name', 'Members'] — node-sql-parser rejects TRIM … FROM on TransactSQL, and the fallback reads `FROM Name`.
-    it.fails('reads no table from TRIM(… FROM …) on SQL Server', () => {
+    // Decided: `TRIM(… FROM …)` is not a table ref (DISCUSSION §6, 2026-10-27). P4 (SQL Server half).
+    // Before the redesign: ['Name', 'Members'] — node-sql-parser rejects TRIM … FROM on TransactSQL, and the fallback reads `FROM Name`.
+    it('reads no table from TRIM(… FROM …) on SQL Server', () => {
         expect(tableNames(SQLParser.ExtractTableRefs(TRIM_SS, ss))).toEqual(['Members']);
     });
 
-    // Pinned: column refs are identifier paths in every clause (COMPAT-MAP §1.2 ExtractColumnRefs). P4.
-    // Observed today: ['ID', 'A'] — the right-hand side of IS DISTINCT FROM is dropped.
-    it.fails('reads both operands of IS DISTINCT FROM as column refs', () => {
+    // Decided: column refs are identifier paths in every clause (COMPAT-MAP §1.2 ExtractColumnRefs). P4.
+    // Before the redesign: ['ID', 'A'] — the right-hand side of IS DISTINCT FROM is dropped.
+    it('reads both operands of IS DISTINCT FROM as column refs', () => {
         const sql = 'SELECT "ID" FROM "Members" WHERE "A" IS DISTINCT FROM "B"';
         expect(columnRefNames(sql, pg)).toEqual(expect.arrayContaining(['ID', 'A', 'B']));
     });
@@ -263,34 +263,37 @@ describe('P5: ExtractCTEs returns exact slices of the input', () => {
         expect(sql).toContain(result.MainStatement);
     }
 
-    it('returns exact slices on the paren-scan path (PostgreSQL, unquoted names)', () => {
+    // UsedASTParsing now means "the structural parse was complete" (COMPAT-MAP §1.2 Parse; DISCUSSION §6,
+    // 2026-10-27; P12). Both statements parse completely, so it is true; before the redesign they went to the
+    // paren scan and reported false.
+    it('returns exact slices for unquoted names (PostgreSQL)', () => {
         const sql = 'WITH a AS (SELECT id FROM real_t), b AS (SELECT id FROM a) SELECT id FROM b';
-        expect(SQLParser.ExtractCTEs(sql, pg)?.UsedASTParsing).toBe(false);
+        expect(SQLParser.ExtractCTEs(sql, pg)?.UsedASTParsing).toBe(true);
         expectExactSlices(sql, pg);
     });
 
-    it('returns exact slices on the paren-scan path (SQL Server, statement the AST rejects)', () => {
+    it('returns exact slices for a statement node-sql-parser rejects (SQL Server, TRY_CAST)', () => {
         const sql = 'WITH A AS (SELECT TRY_CAST(x AS INT) AS v FROM Real) SELECT v FROM A';
-        expect(SQLParser.ExtractCTEs(sql, ss)?.UsedASTParsing).toBe(false);
+        expect(SQLParser.ExtractCTEs(sql, ss)?.UsedASTParsing).toBe(true);
         expectExactSlices(sql, ss);
     });
 
-    // Pinned: extraction returns the caller's text, not regenerated text (DISCUSSION §6, 2026-10-27, O1;
+    // Decided: extraction returns the caller's text, not regenerated text (DISCUSSION §6, 2026-10-27, O1;
     // COMPAT-MAP §1.2 ExtractCTEs). P5, #5770 item 1.
-    // Observed today: body 'SELECT [n] FROM (VALUES (0), (1)) AS [v(n)]' (invalid SQL) and main 'SELECT * FROM [Q]'.
-    it.fails('keeps a VALUES derived-table column list as written', () => {
+    // Before the redesign: body 'SELECT [n] FROM (VALUES (0), (1)) AS [v(n)]' (invalid SQL) and main 'SELECT * FROM [Q]'.
+    it('keeps a VALUES derived-table column list as written', () => {
         expectExactSlices('WITH Q AS (SELECT n FROM (VALUES (0),(1)) AS v(n)) SELECT * FROM Q', ss);
     });
 
-    // Pinned: as above (DISCUSSION §6, 2026-10-27, O1). P5, #5770 item 3.
-    // Observed today: body 'SELECT DATEPART([YEAR], GETDATE()) AS [Y]'.
-    it.fails('keeps a DATEPART body as written', () => {
+    // Decided: as above (DISCUSSION §6, 2026-10-27, O1). P5, #5770 item 3.
+    // Before the redesign: body 'SELECT DATEPART([YEAR], GETDATE()) AS [Y]'.
+    it('keeps a DATEPART body as written', () => {
         expectExactSlices('WITH Q AS (SELECT DATEPART(YEAR, GETDATE()) AS Y) SELECT * FROM Q', ss);
     });
 
-    // Pinned: as above (DISCUSSION §6, 2026-10-27, O1). P5.
-    // Observed today: body 'SELECT [ID] FROM [Real]' and main 'SELECT [ID] FROM [A]' — brackets added to plain names.
-    it.fails('keeps plain SQL Server names unquoted', () => {
+    // Decided: as above (DISCUSSION §6, 2026-10-27, O1). P5.
+    // Before the redesign: body 'SELECT [ID] FROM [Real]' and main 'SELECT [ID] FROM [A]' — brackets added to plain names.
+    it('keeps plain SQL Server names unquoted', () => {
         expectExactSlices('WITH A AS (SELECT ID FROM Real) SELECT ID FROM A', ss);
     });
 });
@@ -325,20 +328,23 @@ describe('P7: a parse failure is distinguishable from an empty result', () => {
         expect(SQLParser.Parse(VALID_NO_COLUMN_REFS, ss).UsedASTParsing).toBe(true);
     });
 
-    // Pinned: a failure is distinguishable from an empty result, through an additive checked sibling
-    // (COMPAT-MAP §1.2 ExtractSelectColumns, DISCUSSION §6, 2026-10-27, O2). P7, #5683.
-    // Intended replacement once it exists: `expect(SQLParser.ExtractSelectColumnsChecked(sql, dialect).Complete).toBe(false)`.
-    // Observed today: both calls return [].
-    it.fails.each(INVALID)('ExtractSelectColumns on %s does not look like a valid statement with no select list', (_name, sql, dialect) => {
-        expect(SQLParser.ExtractSelectColumns(sql, dialect))
-            .not.toEqual(SQLParser.ExtractSelectColumns(VALID_NO_SELECT_LIST[key(dialect)], dialect));
+    // Decided: a failure is distinguishable from an empty result, through an additive checked sibling; the
+    // deprecated ExtractSelectColumns keeps returning [] (COMPAT-MAP §1.2 ExtractSelectColumns, DISCUSSION §6,
+    // 2026-10-27, O2). P7, #5683. Before the redesign: both calls returned [] and nothing told them apart.
+    it.each(INVALID)('ExtractSelectColumnsChecked on %s reports an incomplete read, unlike a valid statement with no select list', (_name, sql, dialect) => {
+        expect(SQLParser.ExtractSelectColumns(sql, dialect)).toEqual([]);
+        expect(SQLParser.ExtractSelectColumnsChecked(sql, dialect).Complete).toBe(false);
+        expect(SQLParser.ExtractSelectColumnsChecked(VALID_NO_COLUMN_REFS, dialect)).toEqual({
+            Columns: [{ OutputName: 'EXPR', SourceColumn: 'EXPR', TableQualifier: null, IsExpression: true }], Complete: true, Diagnostics: [],
+        });
     });
 
-    // Pinned: as above, for ExtractColumnRefs (COMPAT-MAP §1.2, DISCUSSION §6, 2026-10-27). P7, #5683.
-    // Intended replacement: a checked sibling of ExtractColumnRefs reporting `Complete: false`.
-    // Observed today: both calls return [].
-    it.fails.each(INVALID)('ExtractColumnRefs on %s does not look like a valid statement with no column refs', (_name, sql, dialect) => {
-        expect(SQLParser.ExtractColumnRefs(sql, dialect)).not.toEqual(SQLParser.ExtractColumnRefs(VALID_NO_COLUMN_REFS, dialect));
+    // Decided: as above, for ExtractColumnRefs (COMPAT-MAP §1.2, DISCUSSION §6, 2026-10-27). P7, #5683.
+    // Before the redesign: both calls returned [].
+    it.each(INVALID)('ExtractColumnRefsChecked on %s reports an incomplete read, unlike a valid statement with no column refs', (_name, sql, dialect) => {
+        expect(SQLParser.ExtractColumnRefs(sql, dialect)).toEqual([]);
+        expect(SQLParser.ExtractColumnRefsChecked(sql, dialect).Complete).toBe(false);
+        expect(SQLParser.ExtractColumnRefsChecked(VALID_NO_COLUMN_REFS, dialect)).toEqual({ Columns: [], Complete: true, Diagnostics: [] });
     });
 });
 
@@ -374,43 +380,43 @@ describe('P8: TRY_*, WITHIN GROUP, COLLATE and FOR JSON subqueries are extracted
         expect(tableNames(SQLParser.ExtractTableRefs('SELECT TRY_PARSE(a AS INT) AS v, b FROM Real', ss))).toEqual(['Real']);
     });
 
-    // Pinned: the public extractors return columns for SQL node-sql-parser rejects (DISCUSSION §6, 2026-10-27,
-    // node-sql-parser's role (2); COMPAT-MAP §1.2). P8, #5683. Observed today: [].
-    it.fails('extracts TRY_CAST select columns', () => {
+    // Decided: the public extractors return columns for SQL node-sql-parser rejects (DISCUSSION §6, 2026-10-27,
+    // node-sql-parser's role (2); COMPAT-MAP §1.2). P8, #5683. Before the redesign: [].
+    it('extracts TRY_CAST select columns', () => {
         expect(selectNames('SELECT TRY_CAST(a AS INT) AS v, b FROM Real', ss)).toEqual(['v', 'b']);
     });
 
-    // Pinned: as above. P8. Observed today: [].
-    it.fails('extracts TRY_CAST column refs', () => {
+    // Decided: as above. P8. Before the redesign: [].
+    it('extracts TRY_CAST column refs', () => {
         expect(columnRefNames('SELECT TRY_CAST(a AS INT) AS v, b FROM Real', ss)).toEqual(['a', 'b']);
     });
 
-    // Pinned: as above. P8. Observed today: [].
-    it.fails('extracts TRY_PARSE select columns', () => {
+    // Decided: as above. P8. Before the redesign: [].
+    it('extracts TRY_PARSE select columns', () => {
         expect(selectNames('SELECT TRY_PARSE(a AS INT) AS v, b FROM Real', ss)).toEqual(['v', 'b']);
     });
 
-    // Pinned: column refs are identifier paths, not type names (COMPAT-MAP §1.2 ExtractColumnRefs). P8.
-    // Observed today: ['INT', 'a', 'b'] — the TRY_CONVERT target type is reported as a column.
-    it.fails('does not report the TRY_CONVERT target type as a column ref', () => {
+    // Decided: column refs are identifier paths, not type names (COMPAT-MAP §1.2 ExtractColumnRefs). P8.
+    // Before the redesign: ['INT', 'a', 'b'] — the TRY_CONVERT target type is reported as a column.
+    it('does not report the TRY_CONVERT target type as a column ref', () => {
         expect(columnRefNames('SELECT TRY_CONVERT(INT, a) AS v, b FROM Real', ss)).toEqual(['a', 'b']);
     });
 
-    // Pinned: as above. P8, #5770 item 10. Observed today: [].
-    it.fails('extracts STRING_AGG … WITHIN GROUP select columns on SQL Server', () => {
+    // Decided: as above. P8, #5770 item 10. Before the redesign: [].
+    it('extracts STRING_AGG … WITHIN GROUP select columns on SQL Server', () => {
         const sql = "SELECT STRING_AGG(Name, ',') WITHIN GROUP (ORDER BY Name) AS names FROM Real";
         expect(selectNames(sql, ss)).toEqual(['names']);
     });
 
-    // Pinned: column refs come from every clause, including WITHIN GROUP's ORDER BY (COMPAT-MAP §1.2). P8.
-    // Observed today: ['name'] — x is missing.
-    it.fails('reads the WITHIN GROUP ORDER BY column as a ref on PostgreSQL', () => {
+    // Decided: column refs come from every clause, including WITHIN GROUP's ORDER BY (COMPAT-MAP §1.2). P8.
+    // Before the redesign: ['name'] — x is missing.
+    it('reads the WITHIN GROUP ORDER BY column as a ref on PostgreSQL', () => {
         const sql = "SELECT string_agg(name, ',') AS names, percentile_cont(0.5) WITHIN GROUP (ORDER BY x) AS med FROM real_t";
         expect(columnRefNames(sql, pg)).toEqual(expect.arrayContaining(['name', 'x']));
     });
 
-    // Pinned: as above. P8, #5683. Observed today: [] — a multi-column FOR JSON PATH subquery sends the whole statement to the fallback.
-    it.fails('extracts the select columns around a multi-column FOR JSON PATH subquery', () => {
+    // Decided: as above. P8, #5683. Before the redesign: [] — a multi-column FOR JSON PATH subquery sends the whole statement to the fallback.
+    it('extracts the select columns around a multi-column FOR JSON PATH subquery', () => {
         const sql = 'SELECT r.ID, (SELECT o.A, o.B FROM Other o WHERE o.RID = r.ID FOR JSON PATH) AS kids FROM Real r';
         expect(selectNames(sql, ss)).toEqual(['ID', 'kids']);
     });
@@ -435,19 +441,19 @@ describe('P12: UsedASTParsing is accurate', () => {
         expect(new SQLParser(BRACKET_CTE_SS, ss).IsValid).toBe(true);
     });
 
-    // Pinned: UsedASTParsing means "the structural parse was complete" (COMPAT-MAP §1.2 Parse; DISCUSSION §6, 2026-10-27). P12, #5770.
-    // Observed today: false — extractCTEsViaAST reads TransactSQL's AST shape, so every CTE-headed PostgreSQL query reports the fallback.
-    it.fails('reports a complete parse for a CTE-headed PostgreSQL query in ExtractCTEs', () => {
+    // Decided: UsedASTParsing means "the structural parse was complete" (COMPAT-MAP §1.2 Parse; DISCUSSION §6, 2026-10-27). P12, #5770.
+    // Before the redesign: false — extractCTEsViaAST reads TransactSQL's AST shape, so every CTE-headed PostgreSQL query reports the fallback.
+    it('reports a complete parse for a CTE-headed PostgreSQL query in ExtractCTEs', () => {
         expect(SQLParser.ExtractCTEs(CTE_PG, pg)?.UsedASTParsing).toBe(true);
     });
 
-    // Pinned: as above. P12, #5770. Observed today: false — the bracket-quoted CTE name is read by the paren scan.
-    it.fails('reports a complete parse for a bracket-quoted CTE name in ExtractCTEs', () => {
+    // Decided: as above. P12, #5770. Before the redesign: false — the bracket-quoted CTE name is read by the paren scan.
+    it('reports a complete parse for a bracket-quoted CTE name in ExtractCTEs', () => {
         expect(SQLParser.ExtractCTEs(BRACKET_CTE_SS, ss)?.UsedASTParsing).toBe(true);
     });
 
-    // Pinned: as above. P12. Observed today: UsedASTParsing false, and Tables ['Real', 'My'] (alias 'CTE') from the regex.
-    it.fails('reports a complete parse, and the right tables, for a bracket-quoted CTE name in Parse()', () => {
+    // Decided: as above. P12. Before the redesign: UsedASTParsing false, and Tables ['Real', 'My'] (alias 'CTE') from the regex.
+    it('reports a complete parse, and the right tables, for a bracket-quoted CTE name in Parse()', () => {
         const result = SQLParser.Parse(BRACKET_CTE_SS, ss);
         expect({ UsedASTParsing: result.UsedASTParsing, Tables: tableNames(result.Tables) })
             .toEqual({ UsedASTParsing: true, Tables: ['Real'] });

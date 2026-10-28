@@ -260,6 +260,8 @@ class ExpressionScanner {
             return INTERVAL_UNITS.has(this.t.Upper(i + 2)) ? i + 3 : i + 2;
         }
         if (upper === 'AT' && this.t.IsWord(i + 1, 'TIME') && this.t.IsWord(i + 2, 'ZONE')) return i + 3;
+        if (upper === 'WITHIN' && this.t.IsWord(i + 1, 'GROUP') && this.t.IsChar(i + 2, '(')) return i + 1;
+        if (upper === 'ARRAY' && this.t.IsChar(i + 1, '[')) return i + 1;
         if (this.t.IsChar(i - 1, ':') && this.t.IsChar(i - 2, ':')) return this.skipType(i);
         if (this.colonPlaceholders && this.t.IsChar(i - 1, ':') && !this.isValueEnd(i - 2)) return i + 1;
         const frame = this.top();

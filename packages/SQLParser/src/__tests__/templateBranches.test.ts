@@ -90,32 +90,32 @@ describe('P10: structural {% if %} / {% else %} branches', () => {
         expect(sortedTableNames(TWO_WHERES_SS, ss)).toEqual(['Accounts']);
     });
 
-    // Pinned: MJ's interpreter owns template facts, including branches; branch-dependent output is the union of
-    // branch renders (DISCUSSION §6, 2026-10-27). P10. Observed today: [] — the two WHEREs fail the parse.
-    it.fails('extracts the select list when the branches are alternative WHERE clauses (SQL Server)', () => {
+    // Decided: MJ's interpreter owns template facts, including branches; branch-dependent output is the union of
+    // branch renders (DISCUSSION §6, 2026-10-27). P10. Before the redesign: [] — the two WHEREs fail the parse.
+    it('extracts the select list when the branches are alternative WHERE clauses (SQL Server)', () => {
         expect(selectNames(TWO_WHERES_SS, ss)).toEqual(['ID', 'Name']);
     });
 
-    // Pinned: as above. P10. Observed today: [].
-    it.fails('extracts the column refs of every WHERE branch (SQL Server)', () => {
+    // Decided: as above. P10. Before the redesign: [].
+    it('extracts the column refs of every WHERE branch (SQL Server)', () => {
         expect(columnRefNames(TWO_WHERES_SS, ss)).toEqual(expect.arrayContaining(['ID', 'Name', 'Region', 'Active']));
     });
 
-    // Pinned: as above. P10. Observed today: select [] and tables [] (the fallback cannot read "quoted" names).
-    it.fails('extracts the select list and table when the branches are alternative WHERE clauses (PostgreSQL)', () => {
+    // Decided: as above. P10. Before the redesign: select [] and tables [] (the fallback cannot read "quoted" names).
+    it('extracts the select list and table when the branches are alternative WHERE clauses (PostgreSQL)', () => {
         expect({ select: selectNames(TWO_WHERES_PG, pg), tables: sortedTableNames(TWO_WHERES_PG, pg) })
             .toEqual({ select: ['ID', 'Name'], tables: ['Accounts'] });
     });
 
-    // Pinned: as above (the tables read in JOINs are template facts MJ owns). P10.
-    // Observed today: ['Accounts', 'Territories'] — the else branch's JOIN replaces the if branch's under the shared alias x.
-    it.fails('reports the tables of every JOIN branch', () => {
+    // Decided: as above (the tables read in JOINs are template facts MJ owns). P10.
+    // Before the redesign: ['Accounts', 'Territories'] — the else branch's JOIN replaces the if branch's under the shared alias x.
+    it('reports the tables of every JOIN branch', () => {
         expect(sortedTableNames(TWO_JOINS_SS, ss)).toEqual(['Accounts', 'Regions', 'Territories']);
     });
 
-    // Pinned: as above, and CTE names are not tables (DISCUSSION §6, 2026-10-27). P10 (with P1).
-    // Observed today: ['FilteredSource', 'Source'] — the two FROM branches are glued into one name.
-    it.fails('reports only the base table when the CTE is optional', () => {
+    // Decided: as above, and CTE names are not tables (DISCUSSION §6, 2026-10-27). P10 (with P1).
+    // Before the redesign: ['FilteredSource', 'Source'] — the two FROM branches are glued into one name.
+    it('reports only the base table when the CTE is optional', () => {
         expect(sortedTableNames(OPTIONAL_CTE_SS, ss)).toEqual(['Source']);
     });
 });

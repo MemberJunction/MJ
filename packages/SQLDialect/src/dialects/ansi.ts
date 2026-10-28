@@ -33,6 +33,7 @@ export const ANSI_WRITE_STATEMENT_KEYWORDS: readonly string[] = Object.freeze([
  */
 export const ANSI_GRAMMAR: DialectGrammar = Object.freeze({
     ParserGrammar: null,
+    DefaultSchema: null,
     RowCapForms: Object.freeze<RowCapForm[]>(['offset-fetch']),
     AllowsOrderByInCTE: true,
     AllowsOrderByInDerivedTable: true,

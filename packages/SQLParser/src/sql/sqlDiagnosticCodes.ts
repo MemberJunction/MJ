@@ -7,6 +7,8 @@ export const SqlDocumentDiagnosticCodes = {
     UnbalancedParenthesis: 'SQL_UNBALANCED_PARENTHESIS',
     /** A clause, source or statement the parser does not recognise; it is kept as an Unknown node. */
     UnknownSyntax: 'SQL_UNKNOWN_SYNTAX',
+    /** A clause or list with nothing where something must be: `WHERE` with no condition, `FROM` with no source, a trailing comma. */
+    EmptyClause: 'SQL_EMPTY_CLAUSE',
     /** Text after a complete query that belongs to no clause. */
     UnexpectedToken: 'SQL_UNEXPECTED_TOKEN',
     /** A statement or nested body that is not a query (`INSERT`, `EXEC`, `DELETE … RETURNING`); it is kept whole. */

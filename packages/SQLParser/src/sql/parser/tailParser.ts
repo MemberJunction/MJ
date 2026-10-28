@@ -56,14 +56,17 @@ export class TailParser {
         const start = ctx.Pos;
         ctx.Pos += 2;
         const items: OrderByItem[] = [];
+        let trailingComma = false;
         while (ctx.Pos < end) {
             const itemEnd = ctx.ExpressionEnd(ctx.Pos, end, { Comma: true });
             if (itemEnd === ctx.Pos) break;
             items.push(this.orderByItem(ctx.Pos, itemEnd));
             ctx.Pos = itemEnd;
-            if (!ctx.T.IsChar(ctx.Pos, ',')) break;
+            trailingComma = ctx.T.IsChar(ctx.Pos, ',');
+            if (!trailingComma) break;
             ctx.Pos++;
         }
+        if (items.length === 0 || trailingComma) ctx.ReportEmpty(ctx.Pos, items.length === 0 ? 'This ORDER BY names nothing.' : 'The ORDER BY list ends with a comma.');
         return Object.freeze({ Kind: 'OrderBy', Span: ctx.Span(start, ctx.Pos), Items: Object.freeze(items) });
     }
 

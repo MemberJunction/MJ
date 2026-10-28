@@ -46,6 +46,7 @@ export const DATABRICKS_LEXICAL: DialectLexicalRules = Object.freeze({
 export const DATABRICKS_GRAMMAR: DialectGrammar = Object.freeze({
     ...ANSI_GRAMMAR,
     ParserGrammar: 'Hive',
+    DefaultSchema: 'default',
     RowCapForms: Object.freeze<RowCapForm[]>(['limit-offset']),
     SetOperatorKeywords: Object.freeze(['UNION', 'INTERSECT', 'EXCEPT', 'MINUS']),
     WriteStatementKeywords: Object.freeze([

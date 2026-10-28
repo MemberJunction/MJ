@@ -223,8 +223,8 @@
   "ss/comp/in-cte": [{"categoryPath":"Demo","parameters":[],"queryName":"Base Widgets","raw":"{{query:\"Demo/Base Widgets\"}}","type":"mj_composition_ref"}],
   "ss/comp/inside-if": [{"categoryPath":"Sales","parameters":[{"isPassThrough":true,"key":"TargetYear","value":"TargetYear"}],"queryName":"By Year","raw":"{{query:\"Sales/By Year(TargetYear=TargetYear)\"}}","type":"mj_composition_ref"}],
   "ss/comp/inside-for": [{"categoryPath":"Sales","parameters":[{"isPassThrough":true,"key":"TargetYear","value":"y"}],"queryName":"By Year","raw":"{{query:\"Sales/By Year(TargetYear=y)\"}}","type":"mj_composition_ref"}],
-  "ss/comp/inside-comment": [{"categoryPath":"Old","parameters":[],"queryName":"Thing","raw":"{{query:\"Old/Thing\"}}","type":"mj_composition_ref"}],
-  "ss/comp/nested-tag-arg": [{"categoryPath":"","parameters":[],"queryName":"\"","raw":"{{query:\"Path/Q(startDate={{StartDate}}","type":"mj_composition_ref"}],
+  "ss/comp/inside-comment": [],
+  "ss/comp/nested-tag-arg": [{"categoryPath":"Path","parameters":[{"isPassThrough":true,"key":"startDate","value":"{{StartDate}}"}],"queryName":"Q","raw":"{{query:\"Path/Q(startDate={{StartDate}})\"}}","type":"mj_composition_ref"}],
   "ss/comp/with-own-filter": [{"categoryPath":"Demo","parameters":[],"queryName":"Base Widgets","raw":"{{query:\"Demo/Base Widgets\"}}","type":"mj_composition_ref"}],
   "pg/comp/no-args": [{"categoryPath":"Demo","parameters":[],"queryName":"Base Widgets","raw":"{{query:\"Demo/Base Widgets\"}}","type":"mj_composition_ref"}],
   "pg/comp/pass-through": [{"categoryPath":"Sales","parameters":[{"isPassThrough":true,"key":"TargetYear","value":"TargetYear"}],"queryName":"By Year","raw":"{{query:\"Sales/By Year(TargetYear=TargetYear)\"}}","type":"mj_composition_ref"}]

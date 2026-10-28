@@ -54,6 +54,7 @@ const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
 export const POSTGRESQL_GRAMMAR: DialectGrammar = Object.freeze({
     ...ANSI_GRAMMAR,
     ParserGrammar: 'PostgresQL',
+    DefaultSchema: 'public',
     RowCapForms: Object.freeze<RowCapForm[]>(['limit-offset', 'offset-fetch']),
     WriteStatementKeywords: Object.freeze([
         ...ANSI_WRITE_STATEMENT_KEYWORDS,

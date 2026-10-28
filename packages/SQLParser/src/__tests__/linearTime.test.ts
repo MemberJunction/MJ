@@ -305,13 +305,23 @@ const UNCLOSED_TAG_PINS: ReadonlyArray<readonly [string, boolean, (sql: string) 
     ['ExtractSelectColumns', false, (sql) => SQLParser.ExtractSelectColumns(sql, ss)],
 ];
 
-describe('P11 pins: the MJ template lexer on unclosed tags', () => {
+/**
+ * The frozen template-layer statics. They keep the original MJ lexer, unclosed-tag rescans included,
+ * so their output cannot drift (DISCUSSION §6, 2026-10-27: Astify/Analyze/Substitute/Tokenize frozen);
+ * their pins stay pinned.
+ */
+const FROZEN_TEMPLATE_METHODS: ReadonlySet<string> = new Set(['Tokenize', 'Analyze', 'Substitute']);
+
+describe('P11: the template methods on unclosed tags', () => {
     for (const [method, pinExpressionTags, run] of UNCLOSED_TAG_PINS) {
-        // Pinned: linear time on adversarial input for every public method (DISCUSSION §5.1 P11, #5571; the new
-        // L0 lexer replaces MJLexer behind these methods, DISCUSSION §6, 2026-10-27). P11.
-        // Observed today: about 3.8x per doubling for the lexer-only methods (Tokenize 3.1 → 11.6 → 44 ms at 1000/2000/4000
-        // `{% if x `), about 3.4x for Parse and ExtractSelectColumns, which also run node-sql-parser.
-        it.fails(`${method} on many unclosed {% if %} openers`, PIN_OPTIONS, () => {
+        const frozen = FROZEN_TEMPLATE_METHODS.has(method);
+        const test = frozen ? it.fails : it;
+        const options = frozen ? PIN_OPTIONS : TEST_OPTIONS;
+        // Decided: linear time on adversarial input for every public method (DISCUSSION §5.1 P11, #5571; the new
+        // L0 lexer replaces MJLexer behind the reviewed methods, DISCUSSION §6, 2026-10-27). P11. The frozen
+        // methods stay pinned. Before the redesign: about 3.8x per doubling for the lexer-only methods (Tokenize
+        // 3.1 → 11.6 → 44 ms at 1000/2000/4000 `{% if x `), about 3.4x for Parse and ExtractSelectColumns.
+        test(`${method} on many unclosed {% if %} openers`, options, () => {
             expectLinearTimeWarm(pinExpressionTags ? [1000, 2000, 4000] : [2000, 4000, 8000], (n) => {
                 const text = SHAPES.unclosedBlockTags(n);
                 return () => run(text);
@@ -319,8 +329,8 @@ describe('P11 pins: the MJ template lexer on unclosed tags', () => {
         });
 
         if (!pinExpressionTags) continue;
-        // Pinned: as above. P11. Observed today: about 3.8x per doubling (Tokenize 2.9 → 10.8 → 42 ms at 8000/16000/32000 `{{ x `).
-        it.fails(`${method} on many unclosed {{ openers`, PIN_OPTIONS, () => {
+        // Decided: as above. P11. Before the redesign: about 3.8x per doubling (Tokenize 2.9 → 10.8 → 42 ms at 8000/16000/32000 `{{ x `).
+        test(`${method} on many unclosed {{ openers`, options, () => {
             expectLinearTimeWarm([8000, 16000, 32000], (n) => {
                 const text = SHAPES.unclosedExpressionTags(n);
                 return () => run(text);
@@ -329,7 +339,7 @@ describe('P11 pins: the MJ template lexer on unclosed tags', () => {
     }
 });
 
-describe('P11 pins: superlinear on ordinary templates', () => {
+describe('P11: ordinary templates', () => {
     it('RenameTemplateVariable renames the variable in its {% if %} and its expression (setup for the pin below)', () => {
         const renamed = SQLParser.RenameTemplateVariable(SHAPES.manyTags(3), 'p1', 'q1');
         expect(renamed).toContain('{% if q1 %}');
@@ -337,10 +347,9 @@ describe('P11 pins: superlinear on ordinary templates', () => {
         expect(renamed).not.toMatch(/\bp1\b/);
     });
 
-    // Pinned: linear time on adversarial input for every public method (DISCUSSION §5.1 P11, #5571). P11.
-    // Observed today: about 3.6x per doubling — 85 → 294 → 1138 ms at 4000/8000/16000 optional predicates (the
-    // protect version of this case failed with retries before it was moved here).
-    it.fails('RenameTemplateVariable on many {% if %} predicates', PIN_OPTIONS, () => {
+    // Decided: linear time on adversarial input for every public method (DISCUSSION §5.1 P11, #5571). P11.
+    // Before the redesign: about 3.6x per doubling — 85 → 294 → 1138 ms at 4000/8000/16000 optional predicates.
+    it('RenameTemplateVariable on many {% if %} predicates', TEST_OPTIONS, () => {
         expectLinearTimeWarm([1000, 2000, 4000], (n) => {
             const text = SHAPES.manyTags(n);
             return () => SQLParser.RenameTemplateVariable(text, 'p1', 'q1');
@@ -348,14 +357,14 @@ describe('P11 pins: superlinear on ordinary templates', () => {
     });
 });
 
-describe('P11 pins: inputs too large for a spread argument list', () => {
+describe('P11: inputs too large for a spread argument list', () => {
     it('IsReadOnlyQuery answers for a statement of a few thousand tokens (setup for the pin below)', () => {
         expect(IsReadOnlyQuery(`SELECT ${'1, '.repeat(2000)}1`, ss)).toEqual({ IsReadOnly: true, Reason: null });
     });
 
-    // Pinned: every public method handles adversarial input without failing (DISCUSSION §5.1 P11, #5571). P11.
-    // Observed today: RangeError "Maximum call stack size exceeded" — checkSelect spreads every token into Math.min(...).
-    it.fails('IsReadOnlyQuery answers for a SELECT of 300,000 tokens', PIN_OPTIONS, () => {
+    // Decided: every public method handles adversarial input without failing (DISCUSSION §5.1 P11, #5571). P11.
+    // Before the redesign: RangeError "Maximum call stack size exceeded" — checkSelect spread every token into Math.min(...).
+    it('IsReadOnlyQuery answers for a SELECT of 300,000 tokens', TEST_OPTIONS, () => {
         expect(IsReadOnlyQuery(`SELECT ${'1, '.repeat(150_000)}1`, ss)).toEqual({ IsReadOnly: true, Reason: null });
     });
 });

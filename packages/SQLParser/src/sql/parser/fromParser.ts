@@ -25,6 +25,8 @@ export class FromParser {
             if (!ctx.T.IsChar(ctx.Pos, ',')) break;
             ctx.Pos++;
         }
+        if (sources.length === 0) ctx.ReportEmpty(start, 'This FROM names no source.');
+        else if (ctx.T.IsChar(ctx.Pos - 1, ',')) ctx.ReportEmpty(ctx.Pos, 'The FROM list ends with a comma.');
         return Object.freeze({ Kind: 'From', Span: ctx.Span(start, ctx.Pos), Sources: Object.freeze(sources) });
     }
 

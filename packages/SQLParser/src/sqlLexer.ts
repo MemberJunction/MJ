@@ -106,6 +106,7 @@ const DIGIT = /[0-9]/;
  * backslash escapes, dollar quoting, Oracle `q'…'` quoting), quoted identifier forms and comment
  * forms (`--`, `#`, `//`, nested or flat block comments) exist. An unterminated literal or
  * comment runs to the end of the input.
+ * @deprecated Use `SqlTokens.Lex(sql, dialect)`, which also reads MJ template tags.
  */
 export function LexSQL(sql: string, dialect: LexDialect): SQLLexToken[] {
     const rules = compile(rulesFor(dialect));
@@ -277,12 +278,18 @@ function skipTaggedDollarQuoted(sql: string, i: number): number {
     return close === -1 ? sql.length : close + delimiter.length;
 }
 
-/** Tokens that carry meaning: everything except whitespace and comments. */
+/**
+ * Tokens that carry meaning: everything except whitespace and comments.
+ * @deprecated Use `SqlTokens.Lex(sql, dialect).Significant()`.
+ */
 export function SignificantTokens(tokens: SQLLexToken[]): SQLLexToken[] {
     return tokens.filter(t => t.Kind !== 'whitespace' && t.Kind !== 'comment');
 }
 
-/** Whether a token is the given keyword, ignoring case. */
+/**
+ * Whether a token is the given keyword, ignoring case.
+ * @deprecated Compare `SqlToken.Text` of a `Word` token from `SqlTokens`.
+ */
 export function IsKeyword(token: SQLLexToken | undefined, keyword: string): boolean {
     return token?.Kind === 'word' && token.Text.toUpperCase() === keyword;
 }
