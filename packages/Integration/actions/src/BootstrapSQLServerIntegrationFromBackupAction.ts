@@ -230,10 +230,10 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             };
 
             // 3-5. Credential, Inspect, Restore
-            await this.runRestorePhase(ctx, backupUrls);
+            await this.RunRestorePhase(ctx, backupUrls);
 
             // 6-9. Load, Watermarks, Cleanup
-            const outputs = await this.runLoadPhase(ctx, {
+            const outputs = await this.RunLoadPhase(ctx, {
                 BatchSize: batchSize,
                 TruncateTargetBeforeLoad: truncateTargetBeforeLoad,
                 EntityMapIDs: entityMapIDs,
@@ -287,7 +287,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * `ContainerUrl`, `BackupStartDate`, `BackupDatabaseName`, `Runner` and `StagingDbCreated` on `ctx`
      * as each becomes known, so the caller's failure cleanup and disposal see exactly what was created.
      */
-    protected async runRestorePhase(ctx: BootstrapRunContext, backupUrls: string[]): Promise<void> {
+    protected async RunRestorePhase(ctx: BootstrapRunContext, backupUrls: string[]): Promise<void> {
         const { Params: params, Progress: progress, Executor: sqlExecutor, StagingDatabaseName: stagingDbName } = ctx;
 
         // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
@@ -335,7 +335,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * `ctx.Runner`, opening one onto `ctx` when the restore ran elsewhere. Returns the action's outputs;
      * their `DurationSeconds` covers this phase only.
      */
-    protected async runLoadPhase(
+    protected async RunLoadPhase(
         ctx: BootstrapRunContext,
         options: { BatchSize: number; TruncateTargetBeforeLoad: boolean; EntityMapIDs?: string[]; DropStagingDbOnComplete: boolean; BackupStartDate: Date }
     ): Promise<Record<string, string | number | boolean>> {
