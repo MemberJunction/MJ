@@ -39,3 +39,5 @@ Add SQL Server backup bootstrap integration actions, Azure blob inspection, and 
   - Server-side multi-stripe backup header and file list inspector returning point-in-time timestamp, database name, backup size, and file details.
 - **`BaseIntegrationAction`**:
   - Abstract base class with shared parameter extraction, SAS credential resolution, container URL parsing, and backup inspection helpers.
+- **`Restore SQL Server Backup To Staging`**, **`Load SQL Server Integration From Staging`** and **`Drop SQL Server Staging Database`**:
+  - The bootstrap split into restore, load and drop phases so a server-side job can seed an integration from a backup archive, retry a failed load against the kept staging database, and always clean up. Documented in the package README with the two product decisions (one SQL Server connection per workspace; seeded entities keep no record-change history).

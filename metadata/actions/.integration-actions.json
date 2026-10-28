@@ -567,6 +567,653 @@
   },
   {
     "fields": {
+      "Name": "Restore SQL Server Backup To Staging",
+      "Description": "First phase of seeding a SQL Server integration from a backup archive: restores the backup (Azure Blob URLs or local paths) into a named staging database and stops. A server-side job runs this, then Load SQL Server Integration From Staging, then Drop SQL Server Staging Database.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "Restore SQL Server Backup To Staging",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-box-open"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the Company Integration record being seeded",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F0073FF4-5E1F-40F2-B121-BD6EF377F962"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupUrls",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated or JSON array of Azure Blob URLs or local disk paths to the backup stripe files (.bak)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CC5298C5-652B-4C9B-A407-407B4E608D50"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the staging database to restore into; it must not already exist",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "65186308-90E6-499A-B898-B319EF446A5C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SasToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shared Access Signature token for authenticating against the Azure Blob Storage container (not required for local disk)",
+            "IsRequired": false,
+            "LogValue": false
+          },
+          "primaryKey": {
+            "ID": "DA2EE94C-AE65-4FD6-BEC5-000A9A9B8AA2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageCredentialID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ: Credentials record whose SasToken (or Secret/Key) value holds the container SAS token; used when SasToken is not supplied",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1BA890CF-FE0C-4192-A591-00786C6604B5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetDataFileDirectory",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path on the SQL Server host where staging database .mdf/.ndf data files should be relocated",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CFFC1DF2-272C-47C5-ADD0-F9B8D5725C14"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetLogFileDirectory",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path on the SQL Server host where staging database .ldf log files should be relocated",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4A3371FA-6E10-48B4-BE30-E3679C680F4E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProgressRunID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the integration progress run to report the restore stages to",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "11A0B32D-6397-423B-9BEC-2D2978B3E39E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupStartDate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The exact UTC start date (ISO) of the backup, from the backup file header; the load phase seeds sync watermarks to it",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E7BEDCFB-C531-4BFE-9593-1DBE1DAD6713"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupDatabaseName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the source database recorded in the backup header",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EE404A8E-F59C-417E-84AF-830C1964090B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the restored staging database",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E4CDEFA9-3AAF-4F2B-A40D-B48E897D9C3A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContainerUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Storage container whose SQL Server credential was registered for the restore (empty for local paths); pass it to the load or drop phase to remove the credential",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "575FC506-D8ED-4D19-A2D6-BBF2830C96FA"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Backup restored into the staging database",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "1095FB1F-1D19-44C2-9280-6AA854BE0E0D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "A required parameter (CompanyIntegrationID, BackupUrls or StagingDatabaseName) was missing",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "2C5E3255-51B5-4DB3-A0B4-E5D307E94189"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "A parameter was invalid, such as BackupUrls containing no valid URL or path",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "63075DDF-673B-474B-B88C-78F22AB3FFEE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RESTORE_FAILED",
+            "Description": "An error occurred during backup header inspection or database restore",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "80777FA7-2C9B-4FAE-B349-56B6EC7653BD"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "74BB331B-A813-4B9D-8827-DC0C9FE16F70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Load SQL Server Integration From Staging",
+      "Description": "Second phase of seeding a SQL Server integration from a backup archive: loads every active entity map's table from a restored staging database into the target MemberJunction tables and seeds the loaded maps' watermarks to the backup start date.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "Load SQL Server Integration From Staging",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-truck-ramp-box"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the Company Integration record being seeded",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B8605909-C57F-443F-84A1-4835CFDB7939"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the restored staging database; it must exist",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9EF76203-915A-46D3-A46B-7F7A1736E2CA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupStartDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UTC start date (ISO) of the backup, as reported by the restore phase; watermarks are seeded to it",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9E808A97-C1F9-4295-BC3B-BCD26F662C35"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BatchSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "500000",
+            "Description": "Number of rows per batch for chunked ETL transfers. Default is 500,000; 0 loads unchunked",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EC1C2B6A-08B4-443E-B01E-B34C64693121"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TruncateTargetBeforeLoad",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "false",
+            "Description": "Set to 'true' to truncate target tables before loading, allowing safe re-runs. If false and a target table contains rows, the map load fails.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "08A2AAA5-0FE0-4173-B002-77E9D2F9A931"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityMapIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional comma-separated or JSON array of Company Integration Entity Map IDs to restrict the load to. If omitted, all active maps are loaded",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9B3A9663-44E2-445B-9394-B52FC15B2109"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DropStagingDbOnComplete",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "false",
+            "Description": "Whether to drop the staging database after a successful load. Default is false",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AD6F3E33-D5E1-44E3-BEBB-BF052EECCD06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContainerUrl",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Storage container whose SQL Server credential is dropped together with the staging database",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EFBF477D-FD65-4D3D-9A67-5CE87ECD250A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProgressRunID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the integration progress run to report the load stages to",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "38C1B4C9-9501-4CAD-9C4D-E7F996E43804"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupStartDate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The backup start date the watermarks were seeded to",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6A23D236-106A-4E85-8D75-47CD07DEEDED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the staging database that was loaded",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6D5CE570-A1C3-4194-9B16-5A8CF97DC029"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TablesProcessed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of entity map tables loaded into their target tables",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9010BF07-175D-4281-88E9-274941E8A742"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalRowsTransferred",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total count of records transferred from staging tables into target MemberJunction tables across all maps",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "89559C23-FB3A-445C-A2C8-C17570A7636D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationSeconds",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total execution duration in seconds covering the load and watermark seeding",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9E64F7B8-A2C5-4E96-94A3-EDC31455AC62"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseDropped",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating whether the staging database was dropped after the load",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9BCA9834-8B64-4D2F-B1FE-DFFF09CCC0A2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Staging data loaded into the target tables and watermarks seeded",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "8152FC79-93A5-4F45-8D4D-55B6BC8BEF4E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "A required parameter (CompanyIntegrationID, StagingDatabaseName or BackupStartDate) was missing",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "74FB0A1B-9666-4855-9892-1E34619693B4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "BackupStartDate was not a valid date",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "0FFF2184-03D0-457A-9037-6DFDCC08C0FC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STAGING_NOT_FOUND",
+            "Description": "The named staging database does not exist on this instance",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "D0B75E5B-B618-41C7-9C80-E997C42EF899"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LOAD_FAILED",
+            "Description": "An error occurred during the ETL load or watermark seeding; the staging database is kept so the load can be retried",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "F4E89378-AACE-448E-B8E3-7B3462161C21"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "85C90B32-BC3A-45A6-B47D-F1187E3BEB5B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Drop SQL Server Staging Database",
+      "Description": "Last phase of seeding a SQL Server integration from a backup archive: drops the staging database and, when the restore read from storage, its SQL Server storage credential. Dropping a database that no longer exists succeeds.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "Drop SQL Server Staging Database",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-trash-can"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the staging database to drop",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "16641D24-096A-464C-94C7-B41D37EC7842"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContainerUrl",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Storage container whose SQL Server credential is dropped too",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "22585AEC-D194-4B0F-90F1-B917F7A76DFE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the Company Integration record; recorded on the progress run's manifest only",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "28BB6592-F16E-4D5E-97C3-9FF0CEDA9A46"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProgressRunID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the integration progress run to report the cleanup stage to",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "24C10017-B526-4166-8F1C-177172C662AB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseDropped",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "1 when the staging database was dropped (or was already absent)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "340BFDF8-3022-4A3D-9AF4-0949CA08F48D"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Staging database dropped",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "207A50E7-CEF4-4C03-8F89-3ED6F3443F07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "Parameter StagingDatabaseName was missing",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "F6CB6C7C-2888-4D5D-A22B-EB538A7B9DA1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DROP_FAILED",
+            "Description": "An error occurred while dropping the staging database or its storage credential",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "CC42BEE6-7454-4543-B507-A09EFB1B3CDA"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "047C5130-6E10-49FB-8B1F-F79A4DB3F909"
+    }
+  },
+  {
+    "fields": {
       "Name": "List Azure Backup Blobs",
       "Description": "Queries an Azure Blob Storage container via the Azure REST API to discover available backup (.bak) files for bootstrap integration.",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
@@ -736,7 +1383,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "ID of the Company Integration being inspected",
-            "IsRequired": true
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "93619581-FF51-494E-AD5F-DDE65EC3B792"

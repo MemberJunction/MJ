@@ -1065,11 +1065,14 @@ import {
     HereGeocodingProvider,
 } from '@memberjunction/geo-core';
 
-// @memberjunction/integration-actions (4 classes)
+// @memberjunction/integration-actions (7 classes)
 import {
     BootstrapSQLServerIntegrationFromBackupAction,
+    DropSQLServerStagingDatabaseAction,
     InspectSQLServerBackupAction,
     ListAzureBackupBlobsAction,
+    LoadSQLServerIntegrationFromStagingAction,
+    RestoreSQLServerBackupToStagingAction,
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
@@ -2499,8 +2502,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GoogleGeocodingProvider,
     HereGeocodingProvider,
     BootstrapSQLServerIntegrationFromBackupAction,
+    DropSQLServerStagingDatabaseAction,
     InspectSQLServerBackupAction,
     ListAzureBackupBlobsAction,
+    LoadSQLServerIntegrationFromStagingAction,
+    RestoreSQLServerBackupToStagingAction,
     RunSyncAction,
     AIActionQueue,
     EntityAIActionQueue,
@@ -2557,13 +2563,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
-    GetRubricConsensusAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
+    GetRubricConsensusAction,
     GetRubricSubjectAction,
     HumanRubricEvaluator,
     LLMRubricEvaluator,
@@ -2761,13 +2767,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
-    MJUserViewEntityServer,
-    MJVectorIndexEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJUserRoutineRecipientEntityServer,
+    MJUserViewEntityServer,
+    MJVectorIndexEntityServer,
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
@@ -2965,13 +2971,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
-    MJWorkQueueSubscriptionEntityServer,
-    MJWorkQueueTopicEntityServer,
-    MJWorkQueueTransportEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    MJWorkQueueSubscriptionEntityServer,
+    MJWorkQueueTopicEntityServer,
+    MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
     WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
@@ -3005,7 +3011,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1216;
+export const CLASS_REGISTRATIONS_COUNT = 1219;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

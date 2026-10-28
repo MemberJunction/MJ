@@ -106,7 +106,7 @@ Inspects SQL Server backup files (.bak) from Azure Blob Storage or local disk by
 
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
-| `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being inspected |
+| `CompanyIntegrationID` | Input | string | No | ID of the Company Integration being inspected |
 | `BackupUrls` | Input | string | Yes | Single backup URL/path or comma-separated list of URLs/paths for striped sets |
 | `SasToken` | Input | string | No | Shared Access Signature token for Azure Blob container access (redacted from logs) |
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
@@ -120,6 +120,84 @@ Inspects SQL Server backup files (.bak) from Azure Blob Storage or local disk by
 - `MISSING_PARAMETER` — Required parameters missing
 - `INVALID_PARAMETER` — BackupUrls contains no valid URLs or paths
 - `INSPECTION_FAILED` — SQL Server error during inspection
+
+---
+
+## Archive seed
+
+Seeding an integration from a SQL Server backup archive runs as three separate actions so a server-side job can drive each phase, retry the load without restoring again, and always clean up. The job calls them in order: restore, load, drop. They share the progress run passed as `ProgressRunID`; the calling job owns that run and completes it, and a failure in any phase fails it.
+
+### 5. Restore SQL Server Backup To Staging
+
+**Action Name**: `Restore SQL Server Backup To Staging`
+
+Restores the backup into a named staging database and stops. The staging database must not already exist.
+
+| Parameter | Direction | Type | Required | Description |
+|-----------|-----------|------|----------|-------------|
+| `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being seeded |
+| `BackupUrls` | Input | string | Yes | One backup URL or path, or a comma-separated list for a striped backup |
+| `StagingDatabaseName` | Input | string | Yes | Database to restore into |
+| `SasToken` | Input | string | No | SAS token for Azure Blob container access (redacted from logs) |
+| `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
+| `TargetDataFileDirectory` | Input | string | No | Where the staging data files go |
+| `TargetLogFileDirectory` | Input | string | No | Where the staging log file goes |
+| `ProgressRunID` | Input | string | No | Integration progress run to report stages to |
+| `BackupStartDate` | Output | string | — | ISO UTC time the backup began; the load phase seeds watermarks to it |
+| `BackupDatabaseName` | Output | string | — | Source database recorded in the backup header |
+| `StagingDatabaseName` | Output | string | — | The restored staging database |
+| `ContainerUrl` | Output | string | — | Storage container whose SQL Server credential was registered (empty for local paths) |
+
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupUrls holds no valid URL or path), `RESTORE_FAILED`
+
+### 6. Load SQL Server Integration From Staging
+
+**Action Name**: `Load SQL Server Integration From Staging`
+
+Loads every active entity map's table from the staging database into the target tables and seeds the loaded maps' watermarks to `BackupStartDate`. A failed load keeps the staging database so it can be retried.
+
+| Parameter | Direction | Type | Required | Description |
+|-----------|-----------|------|----------|-------------|
+| `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being seeded |
+| `StagingDatabaseName` | Input | string | Yes | The restored staging database; it must exist |
+| `BackupStartDate` | Input | string | Yes | ISO UTC backup start, as the restore phase reported it |
+| `BatchSize` | Input | number | No | Chunk size for large tables (default 500,000; 0 for unchunked) |
+| `TruncateTargetBeforeLoad` | Input | string | No | `'true'` empties each target first (default `'false'`) |
+| `EntityMapIDs` | Input | string | No | Entity map IDs to restrict the load to |
+| `DropStagingDbOnComplete` | Input | string | No | `'true'` drops the staging database afterwards (default `'false'`) |
+| `ContainerUrl` | Input | string | No | Container whose SQL Server credential is dropped with the staging database |
+| `ProgressRunID` | Input | string | No | Integration progress run to report stages to |
+| `BackupStartDate` | Output | string | — | The date the watermarks were seeded to |
+| `StagingDatabaseName` | Output | string | — | The staging database that was loaded |
+| `TablesProcessed` | Output | number | — | Entity map tables loaded |
+| `TotalRowsTransferred` | Output | number | — | Rows moved into the target tables |
+| `DurationSeconds` | Output | number | — | Execution time of the phase |
+| `StagingDatabaseDropped` | Output | boolean | — | Whether the staging database was dropped |
+
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate is not a valid date), `STAGING_NOT_FOUND`, `LOAD_FAILED`
+
+### 7. Drop SQL Server Staging Database
+
+**Action Name**: `Drop SQL Server Staging Database`
+
+Drops the staging database and, when the restore read from storage, its SQL Server storage credential. Dropping a database that no longer exists succeeds, so the job can always run this phase.
+
+| Parameter | Direction | Type | Required | Description |
+|-----------|-----------|------|----------|-------------|
+| `StagingDatabaseName` | Input | string | Yes | The staging database to drop |
+| `ContainerUrl` | Input | string | No | Container whose SQL Server credential is dropped too |
+| `CompanyIntegrationID` | Input | string | No | Recorded on the progress run's manifest only |
+| `ProgressRunID` | Input | string | No | Integration progress run to report the stage to |
+| `StagingDatabaseDropped` | Output | number | — | `1` once the database is gone |
+
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `DROP_FAILED`
+
+### Product decisions
+
+These are decisions of the current release, recorded so they can be revisited.
+
+- **A. One SQL Server connection per workspace.** The archive seed refuses to start when another SQL Server company integration exists. Per-connection catalog and schema scoping is a follow-up.
+- **B. Seeded entities carry no record-change history.** Seeded entities keep `AllowDirectSQLInsert = true`, with `TrackRecordChanges` and `TrustServerCacheCompletely` off permanently, so they have no record-change history and the Bootstrap re-seed keeps working.
 
 ---
 
