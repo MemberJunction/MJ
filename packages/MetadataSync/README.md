@@ -1347,12 +1347,13 @@ SQL logging captures all database operations during push commands for creating m
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | false | Enable SQL logging during push operations |
-| `outputDirectory` | string | "./sql_logging" | Directory for SQL log files |
+| `outputDirectory` | string | "./sql-log-push" | Directory for SQL log files, relative to the sync root |
 | `formatAsMigration` | boolean | false | Format as Flyway migration files |
 | `schemaPlaceholders` | `{ schema, placeholder }[]` | undefined | With `formatAsMigration`, the schema names to rewrite and the Flyway placeholder for each, e.g. an Open App's schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Falls back to `SQLOutput.schemaPlaceholders` in `mj.config.cjs`; without either, `__mj` becomes `${flyway:defaultSchema}`. A schema name followed by `.` is rewritten wherever it appears, string data included |
 | `escapeFlywaySyntax` | boolean | false | Escape `${...}` in captured string data so Flyway does not read it as a placeholder. Always on with `formatAsMigration` |
 | `filterPatterns` | string[] | undefined | Patterns to filter SQL statements |
 | `filterType` | "exclude" or "include" | "exclude" | How to apply filter patterns |
+| `variableBatchThreshold` | number | 200 | Number of `DECLARE @...` variables to accumulate before emitting a batch separator (avoids SQL Server's 10,000-variable batch limit). `0` emits a separator per statement |
 
 **Filter Pattern Types:**
 - **Regex patterns**: Start with `/` and optionally end with flags (e.g., `/spCreate.*Run/i`)

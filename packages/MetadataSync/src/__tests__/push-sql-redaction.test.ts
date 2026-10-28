@@ -122,6 +122,30 @@ describe('push SQL log redaction', () => {
     return logPath;
   }
 
+  describe('variableBatchThreshold', () => {
+    async function openWith(threshold: number | undefined): Promise<void> {
+      const config = { version: '1.0', sqlLogging: { enabled: true, outputDirectory: './sql', variableBatchThreshold: threshold } } as SyncConfig;
+      service['syncConfig'] = config;
+      capturedOptions = undefined;
+      await service['startSqlLogging'](new SQLLogger(config), {}, dir, { onWarn: () => undefined });
+    }
+
+    it('defaults to 200 when not configured', async () => {
+      await openWith(undefined);
+      expect(capturedOptions?.variableBatchThreshold).toBe(200);
+    });
+
+    it('passes 0 through (legacy per-statement batching)', async () => {
+      await openWith(0);
+      expect(capturedOptions?.variableBatchThreshold).toBe(0);
+    });
+
+    it('passes a configured value through', async () => {
+      await openWith(50);
+      expect(capturedOptions?.variableBatchThreshold).toBe(50);
+    });
+  });
+
   it('opens the SQL log with the redactor transform', () => {
     expect(fakeProvider.CreateSqlLogger).toHaveBeenCalled();
     expect(capturedOptions?.statementTypes).toBe('mutations');
