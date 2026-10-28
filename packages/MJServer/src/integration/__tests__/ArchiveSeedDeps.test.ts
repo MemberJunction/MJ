@@ -97,3 +97,40 @@ describe('DefaultArchiveSeedDeps().Store', () => {
     expect(passedProvider).toBe(provider);
   });
 });
+
+describe('DefaultArchiveSeedDeps().Records.CreateCompanyIntegration', () => {
+  interface RecordingCompanyIntegration {
+    ID: string;
+    CompanyID?: string;
+    IntegrationID?: string;
+    Name?: string;
+    Configuration?: string;
+    IsActive?: boolean;
+    SavedIsActive?: boolean;
+    NewRecord(): void;
+    Save(): Promise<boolean>;
+  }
+
+  it('creates the seeded company integration inactive', async () => {
+    const entity: RecordingCompanyIntegration = {
+      ID: 'ci-new',
+      NewRecord() {},
+      async Save() {
+        this.SavedIsActive = this.IsActive;
+        return true;
+      },
+    };
+    const getEntityObject = vi.fn(async () => entity);
+    const provider = { GetEntityObject: getEntityObject } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    const id = await DefaultArchiveSeedDeps().Records.CreateCompanyIntegration(
+      { CompanyID: 'co-1', IntegrationID: 'int-1', Name: 'Archive', Configuration: '{}' },
+      { ID: 'u-1' } as UserInfo,
+      provider,
+    );
+
+    expect(id).toBe('ci-new');
+    expect(getEntityObject).toHaveBeenCalledWith('MJ: Company Integrations', expect.anything());
+    expect(entity.SavedIsActive).toBe(false);
+  });
+});

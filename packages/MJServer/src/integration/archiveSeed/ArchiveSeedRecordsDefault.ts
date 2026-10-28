@@ -87,7 +87,8 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     ci.IntegrationID = values.IntegrationID;
     ci.Name = values.Name;
     ci.Configuration = values.Configuration;
-    ci.IsActive = true;
+    // Inactive while seeding: its data source is the temporary archive, then a Disabled deferred one.
+    ci.IsActive = false;
     await SaveOrThrow(ci, `Failed to create Company Integration '${values.Name}'`);
     return ci.ID;
   }
