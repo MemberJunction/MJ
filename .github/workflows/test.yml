@@ -1072,7 +1072,7 @@ jobs:
       # Backstop-only: PR runs must not delete shared seeds, and fork PRs have a read-only token
       # anyway. Best-effort throughout — a merge that built and tested cleanly must never go red
       # because a cache delete failed.
-      - name: Prune old turbo seed caches
+      - name: Prune old turbo-v1 seed caches
         if: github.event_name == 'push' || github.event_name == 'schedule'
         continue-on-error: true
         env:
@@ -1089,7 +1089,7 @@ jobs:
 
           TOTAL=$(jq '[.[] | .actions_caches[]] | length' /tmp/caches.json)
           SEEDS=$(jq '[.[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-"))] | length' /tmp/caches.json)
-          echo "caches: $TOTAL total, $SEEDS turbo seeds, keeping the newest $KEEP"
+          echo "caches: $TOTAL total, $SEEDS turbo-v1 seeds, keeping the newest $KEEP"
 
           # Guard: if the filter matched nothing, do nothing. Protects against a key-naming
           # change silently turning this into either a no-op or, worse, a broad delete.
@@ -1117,7 +1117,7 @@ jobs:
           done < /tmp/prune.txt
 
           echo "Pruned $DELETED seed cache(s), freeing $((FREED / 1073741824)) GB; $FAILED failed."
-          echo "Pruned **$DELETED** turbo seed cache(s), freeing **$((FREED / 1073741824)) GB**" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pruned **$DELETED** turbo-v1 seed cache(s), freeing **$((FREED / 1073741824)) GB**" >> "$GITHUB_STEP_SUMMARY"
           if [ "$FAILED" -gt 0 ]; then
             echo "::warning::$FAILED seed cache(s) could not be deleted — they will age out via LRU."
           fi
