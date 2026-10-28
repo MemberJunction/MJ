@@ -139,7 +139,11 @@ export interface EvaluationProtocolSpec {
 
 /** A calendar day, yyyy-mm-dd (the holdout cutoff and end). */
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-const SECONDARY_METRICS: readonly SecondaryMetric[] = ['auc', 'accuracy', 'f1', 'precision', 'recall', 'r2', 'calibration-slope'];
+/** Every `SecondaryMetric`; `satisfies` refuses a value that is not one. */
+const SECONDARY_METRICS = ['auc', 'accuracy', 'f1', 'precision', 'recall', 'r2', 'calibration-slope'] as const satisfies readonly SecondaryMetric[];
+/** Compile-time completeness: a `SecondaryMetric` added without listing it in SECONDARY_METRICS breaks the build. */
+const secondaryMetricsComplete: [Exclude<SecondaryMetric, (typeof SECONDARY_METRICS)[number]>] extends [never] ? true : never = true;
+void secondaryMetricsComplete;
 
 /** The `MJ: Evaluation Protocols` columns the checks read (the generated entity satisfies this structurally). */
 export interface EvaluationProtocolColumns {
@@ -206,6 +210,8 @@ export class EvaluationProtocol {
   /** The scalar columns with one admissible value or range, and the version-1 lineage root. */
   private static checkFixedColumns(row: EvaluationProtocolColumns, problems: string[]): void {
     if (row.HoldoutAccessBudget !== 1) problems.push('HoldoutAccessBudget must be 1');
+    if (!Number.isInteger(row.Seed) || row.Seed < 0) problems.push('Seed must be an integer >= 0');
+    if (!Number.isInteger(row.Version) || row.Version < 1) problems.push('Version must be an integer >= 1');
     if (!EvaluationProtocol.IsGuardFieldsEditableBy(row.GuardFieldsEditableBy)) problems.push('GuardFieldsEditableBy must be non-agent or human-only');
     if (!Number.isInteger(row.MinMinorityClassRows) || row.MinMinorityClassRows < 1) problems.push('MinMinorityClassRows must be an integer >= 1');
     // Case-insensitive UUID comparison (SQL Server returns upper-case UUIDs, PostgreSQL lower-case).
@@ -292,8 +298,8 @@ export class EvaluationProtocol {
     const retrainTriggers = EvaluationProtocol.parseRetrainTriggers(EvaluationProtocol.arrayOf(row.RetrainTriggers, 'RetrainTriggers', errors), errors);
     const search = EvaluationProtocol.parseSearch(EvaluationProtocol.objectOf(row.SearchStrategy, 'SearchStrategy', errors), errors);
     const budgets = EvaluationProtocol.parseBudgets(EvaluationProtocol.objectOf(row.Budgets, 'Budgets', errors), errors);
+    // An invalid value is already reported by the shape check.
     const guardFieldsEditableBy = EvaluationProtocol.IsGuardFieldsEditableBy(row.GuardFieldsEditableBy) ? row.GuardFieldsEditableBy : null;
-    if (guardFieldsEditableBy === null) errors.push('GuardFieldsEditableBy must be non-agent or human-only');
     const authoredBy = EvaluationProtocol.parseAuthoredBy(row.AuthoredBy, errors);
 
     if (
@@ -415,7 +421,12 @@ export class EvaluationProtocol {
       const cutoff = JsonParse.JsonString(v, 'cutoff');
       const endRaw = v['holdoutEnd'];
       const holdoutEnd = endRaw === undefined || endRaw === null ? null : JsonParse.JsonString(v, 'holdoutEnd');
-      const reportObj = v['newEntityReport'] === null || v['newEntityReport'] === undefined ? null : JsonParse.JsonObjectField(v, 'newEntityReport');
+      const reportRaw = v['newEntityReport'];
+      if (reportRaw !== undefined && reportRaw !== null && !JsonParse.IsJsonObject(reportRaw)) {
+        errors.push('HoldoutSplit.newEntityReport must be null or {groupKey, holdoutFraction in (0,1)}');
+        return null;
+      }
+      const reportObj = reportRaw === undefined || reportRaw === null ? null : reportRaw;
       const groupKey = reportObj === null ? null : JsonParse.JsonString(reportObj, 'groupKey');
       const fraction = reportObj === null ? null : JsonParse.JsonNumber(reportObj, 'holdoutFraction');
       const reportOk = reportObj === null || (groupKey !== null && fraction !== null && fraction > 0 && fraction < 1);
@@ -546,8 +557,13 @@ export class EvaluationProtocol {
   }
 
   private static parsePromotion(v: JsonObject, errors: string[]): PromotionRule | null {
+    const rawComparators = JsonParse.JsonArrayField(v, 'comparators');
+    if (rawComparators === null) {
+      errors.push('Promotion.comparators must be an array of baseline specs');
+      return null;
+    }
     const comparators: BaselineSpec[] = [];
-    for (const c of JsonParse.JsonArrayField(v, 'comparators') || []) {
+    for (const c of rawComparators) {
       const b = JsonParse.IsJsonObject(c) ? EvaluationProtocol.parseBaseline(c) : null;
       if (b === null) {
         errors.push('Promotion.comparators entries must be baseline specs');

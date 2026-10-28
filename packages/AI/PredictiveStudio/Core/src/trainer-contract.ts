@@ -155,7 +155,9 @@ export interface ResidualDiagnostics {
 /** What a run spent against its protocol's budgets. */
 export interface RunCost {
   readonly computeSeconds: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** AI model tokens the run consumed (0 for a run that calls no AI model). */
   readonly tokens: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** US dollars the sidecar attributes to the run; the engine prices compute time separately from `computeSeconds`. */
   readonly usd: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly budget: Budgets;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly stoppedByBudget: boolean;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -170,9 +172,11 @@ export interface PredictionIntervalCoverage {
 
 /** One outer origin of a rolling-origin backtest (period ordinals at the unit's period). */
 export interface RollingOriginResult {
+  /** The origin's 1-based ordinal, earliest origin first. */
   readonly k: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly lastTrainPeriod: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly testPeriods: readonly number[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The MASE denominator: the seasonal-naive in-sample MAE of this origin's training window only, in target units. */
   readonly scale: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** MASE per forecaster at this origin: `model`, `naive`, `seasonalNaive`, `mean`. */
   readonly mase: Readonly<Record<string, number>>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -190,14 +194,15 @@ export interface ForecastEvaluation {
   };
 }
 
-/**
- * The blocked/grouped inner score beside a random-row K-fold score on the same rows; `inflation` shows how much a
- * random-row split would have overstated the model.
- */
+/** The blocked/grouped inner score beside a random-row K-fold score on the same rows, both in the primary score's units. */
 export interface SplitContrast {
   readonly rows: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly blockedGroupedScore: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly randomRowScore: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * A difference, not a ratio: `blockedGroupedScore − randomRowScore`, in the primary score's units. For a loss
+   * (every primary score is one) a positive value is how much the random-row split understated the loss.
+   */
   readonly inflation: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
@@ -213,8 +218,10 @@ export type TrainerResult =
       readonly computeSeconds: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly innerScores: readonly CandidateInnerScore[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly finalist: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      /** The single holdout access: when (ISO instant), how often (once) and for which finalist. */
       readonly holdoutAccess: { readonly accessedAt: string; readonly count: 1; readonly finalist: string };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       readonly holdout: { readonly primary: MetricWithInterval; readonly secondary: readonly MetricWithInterval[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly baselines: readonly BaselineResult[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       /** Keyed `modelVsDummy`, `<member>VsDummy` and `modelVs:<member>`, as the reference pipeline keys them (reserved member names). */
       readonly comparisons: Readonly<Record<string, PairedComparison>>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       /** The sidecar's transcribed decision; the stored decision is computed in TypeScript by the gate rules. */
@@ -241,7 +248,7 @@ export type TrainerResult =
       readonly residualDiagnostics: ResidualDiagnostics | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
       /** The forecast evaluation of a rolling-origin run; null otherwise. */
       readonly forecast: ForecastEvaluation | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-      /** The blocked/grouped versus random-row inner-score contrast; null when the inner split is random-row. */
+      /** The blocked versus random-row inner-score contrast; null unless the inner validation is blocked-time. */
       readonly innerSplitContrast: SplitContrast | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
     }
   | {

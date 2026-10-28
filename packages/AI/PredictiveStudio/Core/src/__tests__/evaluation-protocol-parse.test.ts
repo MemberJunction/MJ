@@ -68,4 +68,33 @@ describe('ParseEvaluationProtocolRow', () => {
     expect(r.Ok).toBe(false);
     if (r.Ok === false) expect(r.Errors).toContain('PredictionIntervals.nominalCoverage must be a non-empty array of numbers strictly between 0 and 1');
   });
+
+  it('refuses a newEntityReport that is present but not an object', () => {
+    const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'D', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: 'yes' }) }));
+    expect(r.Ok).toBe(false);
+    if (r.Ok === false) expect(r.Errors).toContain('HoldoutSplit.newEntityReport must be null or {groupKey, holdoutFraction in (0,1)}');
+  });
+
+  it('refuses Promotion without a comparators array', () => {
+    const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ Promotion: JSON.stringify({ incumbent: 'none', margin: 0, lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' }) }));
+    expect(r.Ok).toBe(false);
+    if (r.Ok === false) expect(r.Errors).toContain('Promotion.comparators must be an array of baseline specs');
+  });
+
+  it('refuses a negative or fractional Seed and a Version below 1, naming each column', () => {
+    const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ Seed: -1, Version: 0 }));
+    expect(r.Ok).toBe(false);
+    if (r.Ok === false) {
+      expect(r.Errors).toContain('Seed must be an integer >= 0');
+      expect(r.Errors).toContain('Version must be an integer >= 1');
+    }
+    const fractional = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ Seed: 1.5 }));
+    expect(fractional.Ok === false && fractional.Errors.includes('Seed must be an integer >= 0')).toBe(true);
+  });
+
+  it('reports an invalid GuardFieldsEditableBy once', () => {
+    const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ GuardFieldsEditableBy: 'anyone' }));
+    expect(r.Ok).toBe(false);
+    if (r.Ok === false) expect(r.Errors.filter((e) => e.startsWith('GuardFieldsEditableBy'))).toEqual(['GuardFieldsEditableBy must be non-agent or human-only']);
+  });
 });
