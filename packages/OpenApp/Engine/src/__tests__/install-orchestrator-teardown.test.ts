@@ -81,7 +81,7 @@ vi.mock('@memberjunction/core', () => ({
     DatabaseProviderBase: class {},
 }));
 
-import { RemoveApp } from '../install/install-orchestrator.js';
+import { DropSchemaAndReport, RemoveApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { DropAppSchema } from '../install/schema-manager.js';
 import { DownloadMigrations } from '../github/github-client.js';
@@ -380,5 +380,99 @@ describe('RemoveApp — schema-drop refusal names the remedy that matches the cl
         await RemoveApp({ AppName: 'bcsaas-app', AllowDoubleUnderscoreSchema: true }, ctxFor('postgresql'));
 
         expect(DropAppSchema).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('RemoveApp — the configured MJ core schema is never dropped (#4559)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(FindDependentApps).mockResolvedValue([]);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(UpdateAppRecord).mockResolvedValue(undefined);
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-core', Name: 'core-squatter', Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps', SchemaName: 'acme_core', Status: 'Active',
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1, name: 'core-squatter', displayName: 'Core Squatter',
+                description: 'Adopted the configured core schema.', version: '1.0.0',
+                publisher: { name: 'Acme' }, repository: 'https://github.com/acme/mj-apps',
+                mjVersionRange: '>=5.0.0 <6.0.0', schema: { name: 'acme_core' },
+            }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+    });
+
+    it('refuses to drop the schema the deployment runs MJ core under, and names --keep-data', async () => {
+        const context = { ...ctxFor('sqlserver'), MJCoreSchema: 'acme_core' } as unknown as OrchestratorContext;
+
+        const result = await RemoveApp({ AppName: 'core-squatter', AllowDoubleUnderscoreSchema: true }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved by MemberJunction/);
+        expect(result.ErrorMessage).toMatch(/--keep-data/);
+        expect(DropAppSchema).not.toHaveBeenCalled();
+    });
+});
+
+describe('DropSchemaAndReport — one drop-and-report for rollback and remove (#4560)', () => {
+    const progress: { Phase: string; Message: string }[] = [];
+    const errors: { Phase: string; Message: string }[] = [];
+    const reportingCtx = (): OrchestratorContext => ({
+        ...ctxFor('sqlserver'),
+        Callbacks: {
+            OnProgress: (phase: string, message: string) => { progress.push({ Phase: phase, Message: message }); },
+            OnError: (phase: string, message: string) => { errors.push({ Phase: phase, Message: message }); },
+        },
+    } as unknown as OrchestratorContext);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        progress.length = 0;
+        errors.length = 0;
+    });
+
+    it("names --dangerously-ignore-dbl-underscore-schema-rule under the caller's phase for an overridable name", async () => {
+        const result = await DropSchemaAndReport('__bcsaas', 'bcsaas-app', 'Rollback', {}, reportingCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/--dangerously-ignore-dbl-underscore-schema-rule/);
+        expect(errors).toHaveLength(1);
+        expect(errors[0].Phase).toBe('Rollback');
+        expect(errors[0].Message).toMatch(/--dangerously-ignore-dbl-underscore-schema-rule/);
+        expect(DropAppSchema).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed drop as a failure, never as success', async () => {
+        vi.mocked(DropAppSchema).mockResolvedValue({ Success: false, ErrorMessage: "Failed to drop schema 'mj_x': deadlock victim" });
+
+        const result = await DropSchemaAndReport('mj_x', 'x-app', 'Schema', {}, reportingCtx());
+
+        expect(result).toEqual({ Success: false, ErrorMessage: "Failed to drop schema 'mj_x': deadlock victim" });
+        expect(errors.some((e) => e.Phase === 'Schema' && e.Message.includes('deadlock victim'))).toBe(true);
+        expect(progress.some((p) => p.Message.includes('dropped successfully'))).toBe(false);
+    });
+
+    it('turns a thrown drop error into a reported failure', async () => {
+        vi.mocked(DropAppSchema).mockRejectedValue(new Error('connection lost'));
+
+        const result = await DropSchemaAndReport('mj_x', 'x-app', 'Rollback', {}, reportingCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/connection lost/);
+        expect(errors.some((e) => e.Phase === 'Rollback' && e.Message.includes('connection lost'))).toBe(true);
+    });
+
+    it('reports success under the caller phase and forwards the core schema to DropAppSchema', async () => {
+        vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
+
+        const result = await DropSchemaAndReport('mj_x', 'x-app', 'Rollback', { CoreSchema: 'acme_core' }, reportingCtx());
+
+        expect(result.Success).toBe(true);
+        expect(DropAppSchema).toHaveBeenCalledWith('mj_x', expect.anything(), { CoreSchema: 'acme_core' });
+        expect(progress).toContainEqual({ Phase: 'Rollback', Message: "Schema 'mj_x' dropped successfully" });
+        expect(errors).toEqual([]);
     });
 });

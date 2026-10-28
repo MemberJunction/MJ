@@ -17,7 +17,8 @@
  * times (and in the wrong order).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // ── Stub every external collaborator the install path touches ──────────────
 // The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
@@ -506,6 +507,179 @@ describe('InstallApp — compensation when migrations fail', () => {
             errors.some((e) => e.Phase === 'Rollback' && e.Message.includes('mj_connector_hubspot') && e.Message.includes('schema is not empty')),
         ).toBe(true);
         expect(progressMessages.some((m) => m.includes('dropped successfully'))).toBe(false);
+    });
+});
+
+/**
+ * #3506: the compensation's teardown step running real (stubbed-provider) SQL.
+ *
+ * Teardown and schema drop each fail where the other succeeds — a core row pinned by an FK from
+ * the app's schema blocks teardown until the drop; a teardown script reading an app table needs
+ * the schema. So compensation runs teardown with the schema intact and, if that fails, once more
+ * after the drop. The scripts are downloaded before the migrations run, so a rollback after a
+ * network failure needs no second download.
+ */
+describe('InstallApp — compensation teardown runs the downloaded scripts (#3506)', () => {
+    const manifestJson = JSON.stringify({
+        manifestVersion: 1, name: 'connector-hubspot', displayName: 'HubSpot Connector',
+        description: 'HubSpot connector test app description', version: '1.0.0', publisher: { name: 'Test' },
+        repository: 'https://github.com/MemberJunction/Integrations', mjVersionRange: '>=5.0.0 <6.0.0',
+        schema: { name: 'mj_connector_hubspot', createIfNotExists: true },
+        migrations: { directory: 'migrations', teardownDirectory: 'teardown', engine: 'skyway' },
+        packages: {},
+    });
+    const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
+    const TEARDOWN_SQL = "DELETE FROM [${mjSchema}].[Integration] WHERE ID = 'int-1';";
+    const RESOLVED_SQL = "DELETE FROM [__mj].[Integration] WHERE ID = 'int-1';";
+    const warnings: string[] = [];
+    const errors: { Phase: string; Message: string }[] = [];
+
+    /** Records the order of teardown statements and schema drops across the rollback. */
+    const events: string[] = [];
+    let teardownOutcomes: Array<'ok' | 'fail'> = [];
+    const executeSQL = vi.fn(async (sql: string) => {
+        if (sql === RESOLVED_SQL) {
+            const outcome = teardownOutcomes.shift() ?? 'ok';
+            events.push(`teardown:${outcome}`);
+            if (outcome === 'fail') {
+                throw new Error('The DELETE statement conflicted with the REFERENCE constraint (547)');
+            }
+        }
+        return [];
+    });
+    const rollbackTransaction = vi.fn(async () => {});
+    const ctx = () => ({
+        ...context,
+        DatabaseProvider: {
+            Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s },
+            ExecuteSQL: executeSQL,
+            BeginTransaction: vi.fn(async () => {}),
+            CommitTransaction: vi.fn(async () => {}),
+            RollbackTransaction: rollbackTransaction,
+        },
+        DatabaseConfig: {},
+        Callbacks: {
+            OnWarn: (_phase: string, message: string) => { warnings.push(message); },
+            OnError: (phase: string, message: string) => { errors.push({ Phase: phase, Message: message }); },
+        },
+    } as unknown as OrchestratorContext);
+
+    const teardownDownloads = () => vi.mocked(DownloadMigrations).mock.calls.filter((c) => c[2] === 'teardown');
+    const teardownStatements = () => executeSQL.mock.calls.filter((c) => c[0] === RESOLVED_SQL).length;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        warnings.length = 0;
+        errors.length = 0;
+        events.length = 0;
+        teardownOutcomes = [];
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(DropAppSchema).mockImplementation(async () => {
+            events.push('drop');
+            return { Success: true };
+        });
+        vi.mocked(FindInstalledApp).mockResolvedValue(null);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: manifestJson });
+        // Only the teardown folder carries a script; the migration download stays empty.
+        vi.mocked(DownloadMigrations).mockImplementation(async (_repo, _ver, dir: string, localDir: string) => {
+            if (dir !== 'teardown') {
+                return { Success: true, LocalPath: localDir, Files: [] };
+            }
+            writeFileSync(join(localDir, 'V1__teardown.sql'), TEARDOWN_SQL);
+            return { Success: true, LocalPath: localDir, Files: ['V1__teardown.sql'] };
+        });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: false, ErrorMessage: 'deadlock victim (1205)' });
+    });
+
+    it('downloads the teardown scripts before the migrations run', async () => {
+        await InstallApp({ Source: source }, ctx());
+        expect(teardownDownloads()).toHaveLength(1);
+        const downloadOrder = vi.mocked(DownloadMigrations).mock.invocationCallOrder[
+            vi.mocked(DownloadMigrations).mock.calls.findIndex((c) => c[2] === 'teardown')
+        ];
+        expect(downloadOrder).toBeLessThan(vi.mocked(RunAppMigrations).mock.invocationCallOrder[0]);
+    });
+
+    it('runs teardown with the schema intact, then drops the schema, without a second download', async () => {
+        const r = await InstallApp({ Source: source }, ctx());
+
+        expect(r.Success).toBe(false);
+        expect(events).toEqual(['teardown:ok', 'drop']);
+        expect(teardownDownloads()).toHaveLength(1);
+        // The stubbed core module fails the entity-metadata step; only teardown and drop matter here.
+        expect(errors.filter((e) => /Teardown|Schema '/.test(e.Message))).toEqual([]);
+    });
+
+    it('runs teardown once more after the drop when the first attempt fails, and reports no error when the retry succeeds', async () => {
+        teardownOutcomes = ['fail', 'ok'];
+
+        const r = await InstallApp({ Source: source }, ctx());
+
+        expect(r.Success).toBe(false);
+        expect(events).toEqual(['teardown:fail', 'drop', 'teardown:ok']);
+        expect(rollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(teardownDownloads()).toHaveLength(1);
+        expect(errors.filter((e) => e.Message.includes('Teardown failed'))).toEqual([]);
+    });
+
+    it('reports both failures when the teardown fails before and after the drop', async () => {
+        teardownOutcomes = ['fail', 'fail'];
+
+        await InstallApp({ Source: source }, ctx());
+
+        expect(events).toEqual(['teardown:fail', 'drop', 'teardown:fail']);
+        const teardownError = errors.find((e) => e.Phase === 'Rollback' && e.Message.includes('Teardown failed'));
+        expect(teardownError?.Message).toMatch(/before and after dropping schema 'mj_connector_hubspot'/);
+        expect(teardownError?.Message).toMatch(/With the schema: .*547.*Without it: .*547/);
+    });
+
+    it('does not retry the teardown when the schema could not be dropped', async () => {
+        teardownOutcomes = ['fail', 'ok'];
+        vi.mocked(DropAppSchema).mockImplementation(async () => {
+            events.push('drop');
+            return { Success: false, ErrorMessage: 'schema is not empty' };
+        });
+
+        await InstallApp({ Source: source }, ctx());
+
+        expect(events).toEqual(['teardown:fail', 'drop']);
+        expect(errors.some((e) => e.Phase === 'Rollback' && e.Message.startsWith('Teardown failed during rollback:'))).toBe(true);
+    });
+
+    it('downloads the scripts at rollback when the install-time download failed', async () => {
+        let teardownCalls = 0;
+        vi.mocked(DownloadMigrations).mockImplementation(async (_repo, _ver, dir: string, localDir: string) => {
+            if (dir !== 'teardown') {
+                return { Success: true, LocalPath: localDir, Files: [] };
+            }
+            teardownCalls++;
+            if (teardownCalls === 1) {
+                return { Success: false, ErrorMessage: 'ECONNRESET' };
+            }
+            writeFileSync(join(localDir, 'V1__teardown.sql'), TEARDOWN_SQL);
+            return { Success: true, LocalPath: localDir, Files: ['V1__teardown.sql'] };
+        });
+
+        await InstallApp({ Source: source }, ctx());
+
+        expect(warnings.some((w) => w.includes('ECONNRESET') && w.includes('A rollback will try to download them again'))).toBe(true);
+        expect(teardownDownloads()).toHaveLength(2);
+        expect(events).toEqual(['teardown:ok', 'drop']);
+    });
+
+    it('removes the downloaded teardown scripts once the install returns', async () => {
+        await InstallApp({ Source: source }, ctx());
+        const tempDir = teardownDownloads()[0][3] as string;
+        expect(existsSync(tempDir)).toBe(false);
+    });
+
+    it('does not download teardown scripts for a schema it did not create', async () => {
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        await InstallApp({ Source: source }, ctx());
+        expect(teardownDownloads()).toHaveLength(0);
     });
 });
 
@@ -1142,6 +1316,34 @@ describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/reserved/i);
     });
+
+    it('refuses to adopt the configured MJ core schema when core runs under a non-default name (#4559)', async () => {
+        const manifest = JSON.stringify({
+            manifestVersion: 1,
+            name: 'squatter3',
+            displayName: 'squatter3',
+            description: 'app claiming the configured core schema',
+            version: '1.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/squatter3',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: 'acme_core' },
+            packages: {},
+            dependencies: {},
+        });
+        serveManifests({ 'https://github.com/test/squatter3': manifest });
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+
+        const result = await InstallApp(
+            { Source: 'https://github.com/test/squatter3' },
+            { ...context, MJCoreSchema: 'acme_core' } as unknown as OrchestratorContext,
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved by MemberJunction/);
+        expect(vi.mocked(SchemaExists)).not.toHaveBeenCalled();
+        expect(installSequence).toEqual([]);
+    });
 });
 
 describe('reserved-schema guard on the UPGRADE path', () => {
@@ -1207,6 +1409,19 @@ describe('reserved-schema guard on the UPGRADE path', () => {
             expect(result.ErrorMessage, reserved).toMatch(/reserved/i);
             expect(vi.mocked(RunAppMigrations), `${reserved} must not reach migrations`).not.toHaveBeenCalled();
         }
+    });
+
+    it('refuses to upgrade into the configured MJ core schema (#4559)', async () => {
+        serveManifests({ 'https://github.com/test/app-x': v2WithSchema('acme_core') });
+
+        const result = await UpgradeApp(
+            { AppName: 'app-x' },
+            { ...upContext, MJCoreSchema: 'acme_core' } as unknown as OrchestratorContext,
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved by MemberJunction/);
+        expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
     });
 
     it('still upgrades normally into a legitimate schema name', async () => {

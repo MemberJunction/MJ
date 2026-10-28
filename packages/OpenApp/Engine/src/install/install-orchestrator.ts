@@ -16,7 +16,7 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
+import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation, type SchemaOperationResult, type ValidateSchemaNameOptions } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
 import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
@@ -206,6 +206,8 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   const { Callbacks } = context;
   let createdAppId: string | undefined;
   let manifest: MJAppManifest | undefined;
+  // Downloaded before migrations run so a rollback needs no network (#3506); removed in `finally`.
+  let teardownScripts: TeardownScripts | undefined;
 
   // In-repo subpath for multi-app repos. Explicit option wins; otherwise derive it
   // from the Source URL (e.g. `.../Integrations/CRM/HubSpot`). undefined = repo root.
@@ -365,9 +367,12 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
       // Step 8: Run migrations
       if (manifest.migrations && manifest.schema) {
+        if (schemaCreated) {
+          teardownScripts = await PrefetchTeardownScripts(manifest, context, subpath);
+        }
         const migrationResult = await HandleMigrations(manifest, context, subpath);
         if (!migrationResult.Success) {
-          await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks, subpath);
+          await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks, subpath, teardownScripts);
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
         }
       }
@@ -376,7 +381,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       Callbacks?.OnProgress?.('Record', 'Recording app installation...');
       const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks, undefined, subpath);
       if (!recordResult.Success) {
-        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks, subpath);
+        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks, subpath, teardownScripts);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
       }
       createdAppId = recordResult.AppId;
@@ -539,6 +544,8 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     }
     Callbacks?.OnError?.('Install', message);
     return BuildFailureResult('Install', options.Source, '', phase, startTime, message);
+  } finally {
+    ReleaseTeardownScripts(teardownScripts, context);
   }
 }
 
@@ -611,6 +618,14 @@ async function RecordInstallationAtomically(
  *   3. the app's schema, which takes its `flyway_schema_history` with it so a retry starts
  *      from a clean slate rather than resuming a half-applied set.
  *
+ * Steps 2 and 3 have no order that always works: with the schema in place, a core row pinned by
+ * an FK from the app's own schema blocks teardown; with the schema gone, a teardown script that
+ * reads an app table fails. So teardown runs with the schema intact and, if it fails, runs once
+ * more after the drop. That is safe because teardown is idempotent (inverse DELETEs) and all its
+ * files share one transaction, so a failed attempt leaves nothing half-done (#3506). The scripts
+ * come from `teardownScripts`, downloaded before the migrations ran, so a rollback after a
+ * network failure still has them; without them they are downloaded here.
+ *
  * Gated on `schemaWasCreated`: we only tear down a schema this run actually created, never
  * a reused or adopted one (which may hold data we did not put there). Because we created it,
  * no other installed app can legitimately share it, so no co-tenant check is needed here —
@@ -627,6 +642,7 @@ async function CompensateSchemaOnFailure(
   allowDoubleUnderscore: boolean,
   callbacks?: AppInstallCallbacks,
   subpath?: string,
+  teardownScripts?: TeardownScripts,
 ): Promise<void> {
   if (!schemaWasCreated || !manifest.schema) {
     return;
@@ -652,46 +668,106 @@ async function CompensateSchemaOnFailure(
 
   // 2. Rows the app's seed migrations wrote into the SHARED core schema. Dropping the app's
   //    own schema cannot reach these, so without teardown they orphan on a failed install.
-  if (manifest.migrations?.teardownDirectory) {
-    try {
-      const teardownResult = await HandleTeardown(manifest, context, subpath);
-      if (!teardownResult.Success) {
-        callbacks?.OnError?.('Rollback', `Teardown failed during rollback: ${teardownResult.ErrorMessage ?? 'unknown error'}`);
-      }
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      callbacks?.OnError?.('Rollback', `Teardown failed during rollback: ${msg}`);
+  // 3. The app's own schema (and with it, its migration history table).
+  const dropOptions: ValidateSchemaNameOptions = { allowDoubleUnderscore, CoreSchema: context.MJCoreSchema };
+  if (!manifest.migrations?.teardownDirectory) {
+    if (manifest.migrations) {
+      // Be explicit rather than silently claiming a clean rollback: an app with migrations but no
+      // teardown directory has no way to retire whatever those migrations seeded into the shared
+      // core schema. State the operational consequence, not just the fact — apps seed those rows
+      // with fixed GUIDs via the generated `spCreate*` procedures, which are unconditional INSERTs
+      // (no existence guard), so re-running the same seed migration against surviving rows raises a
+      // primary-key violation and the reinstall fails there.
+      callbacks?.OnWarn?.(
+        'Rollback',
+        `'${manifest.name}' declares migrations but no teardownDirectory — rows its migrations wrote to the shared core schema WILL remain after this rollback. ` +
+          `If those rows were seeded with fixed IDs, reinstalling this app may fail with a primary-key violation until they are removed manually.`,
+      );
     }
-  } else if (manifest.migrations) {
-    // Be explicit rather than silently claiming a clean rollback: an app with migrations but no
-    // teardown directory has no way to retire whatever those migrations seeded into the shared
-    // core schema. State the operational consequence, not just the fact — apps seed those rows
-    // with fixed GUIDs via the generated `spCreate*` procedures, which are unconditional INSERTs
-    // (no existence guard), so re-running the same seed migration against surviving rows raises a
-    // primary-key violation and the reinstall fails there.
-    callbacks?.OnWarn?.(
-      'Rollback',
-      `'${manifest.name}' declares migrations but no teardownDirectory — rows its migrations wrote to the shared core schema WILL remain after this rollback. ` +
-        `If those rows were seeded with fixed IDs, reinstalling this app may fail with a primary-key violation until they are removed manually.`,
-    );
+    await DropSchemaAndReport(schemaName, manifest.name, 'Rollback', dropOptions, context);
+    return;
   }
 
-  // 3. The app's own schema (and with it, its migration history table).
-  try {
-    callbacks?.OnProgress?.('Rollback', `Dropping schema '${schemaName}'...`);
-    // DropAppSchema reports failure by RETURNING { Success: false, ErrorMessage } — it does not
-    // throw (see the catch at the end of DropAppSchema in schema-manager.ts) — so the catch below
-    // alone would never see a failed drop. The result must be inspected explicitly.
-    const dropResult = await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
-    if (!dropResult.Success) {
-      callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${dropResult.ErrorMessage ?? 'unknown error'}`);
-    } else {
-      callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
-    }
-  } catch (rollbackError: unknown) {
-    const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-    callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${msg}`);
+  const firstAttempt = await RunRollbackTeardown(manifest, context, teardownScripts, subpath);
+  const dropResult = await DropSchemaAndReport(schemaName, manifest.name, 'Rollback', dropOptions, context);
+  if (firstAttempt.Success) {
+    return;
   }
+  if (!dropResult.Success) {
+    // The schema is still there, so a second attempt would meet the same state as the first.
+    callbacks?.OnError?.('Rollback', `Teardown failed during rollback: ${firstAttempt.ErrorMessage ?? 'unknown error'}`);
+    return;
+  }
+  callbacks?.OnProgress?.('Rollback', `Teardown failed with schema '${schemaName}' in place; running it again now that the schema is dropped...`);
+  const secondAttempt = await RunRollbackTeardown(manifest, context, teardownScripts, subpath);
+  if (!secondAttempt.Success) {
+    callbacks?.OnError?.(
+      'Rollback',
+      `Teardown failed during rollback, before and after dropping schema '${schemaName}'. ` +
+        `With the schema: ${firstAttempt.ErrorMessage ?? 'unknown error'}. Without it: ${secondAttempt.ErrorMessage ?? 'unknown error'}`,
+    );
+  }
+}
+
+/**
+ * One rollback teardown attempt: runs the pre-downloaded scripts when there are any, otherwise
+ * downloads and runs them. Never throws — a thrown error becomes a failed result.
+ */
+async function RunRollbackTeardown(
+  manifest: MJAppManifest,
+  context: OrchestratorContext,
+  teardownScripts: TeardownScripts | undefined,
+  subpath: string | undefined,
+): Promise<InternalResult> {
+  try {
+    return teardownScripts
+      ? await RunTeardownScripts(manifest, context, teardownScripts)
+      : await HandleTeardown(manifest, context, subpath);
+  } catch (error: unknown) {
+    return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Drops an app's schema and reports the outcome through `context.Callbacks` under `phase` — the
+ * one copy shared by install rollback and remove, so neither can report a failed drop as success.
+ *
+ * Validates the name first so a refusal is told through {@link BuildSchemaDropRefusalMessage},
+ * which names the remedy that matches why it was refused. `DropAppSchema` reports failure by
+ * returning `Success: false`, not by throwing, so its result is inspected; a throw is caught and
+ * reported the same way.
+ *
+ * @returns `Success: false` with the refusal message or the drop's error when the schema was not dropped
+ */
+export async function DropSchemaAndReport(
+  schemaName: string,
+  appName: string,
+  phase: string,
+  options: ValidateSchemaNameOptions,
+  context: OrchestratorContext,
+): Promise<SchemaOperationResult> {
+  const callbacks = context.Callbacks;
+  const nameCheck = ValidateSchemaName(schemaName, options);
+  if (!nameCheck.Success) {
+    const refusal = BuildSchemaDropRefusalMessage(nameCheck, appName, schemaName);
+    callbacks?.OnError?.(phase, refusal);
+    return { Success: false, ErrorMessage: refusal };
+  }
+
+  callbacks?.OnProgress?.(phase, `Dropping schema '${schemaName}'...`);
+  let result: SchemaOperationResult;
+  try {
+    result = await DropAppSchema(schemaName, context.DatabaseProvider, options);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    result = { Success: false, ErrorMessage: `Failed to drop schema '${schemaName}': ${message}` };
+  }
+  if (!result.Success) {
+    callbacks?.OnError?.(phase, `Schema '${schemaName}' was not dropped: ${result.ErrorMessage ?? 'unknown error'}`);
+    return result;
+  }
+  callbacks?.OnProgress?.(phase, `Schema '${schemaName}' dropped successfully`);
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -789,6 +865,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     if (manifest.schema) {
       const schemaValidation = ValidateSchemaName(manifest.schema.name, {
         allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+        CoreSchema: context.MJCoreSchema,
       });
       if (!schemaValidation.Success) {
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, schemaValidation.ErrorMessage ?? 'Invalid schema name');
@@ -1292,26 +1369,13 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
 
       let schemaDropError: string | undefined;
       if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
-        // Check the name here, where the remove-specific remedies are still available, and say
-        // which one applies (see `BuildSchemaDropRefusalMessage`). `DropAppSchema` still validates
-        // for itself; this exists so a refusal names the operator's way out instead of being a
-        // wall — or, for the overridable case, so it is not a dead end at all.
-        const nameCheck = ValidateSchemaName(existingApp.SchemaName, {
+        // A refusal names the operator's way out (see `BuildSchemaDropRefusalMessage`) instead of
+        // being a wall — or, for the overridable case, is not a dead end at all.
+        const dropResult = await DropSchemaAndReport(existingApp.SchemaName, existingApp.Name, 'Schema', {
           allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
-        });
-        if (!nameCheck.Success) {
-          schemaDropError = BuildSchemaDropRefusalMessage(nameCheck, existingApp.Name, existingApp.SchemaName);
-          Callbacks?.OnError?.('Schema', schemaDropError);
-        } else {
-          Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-          const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
-            allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
-          });
-          if (!dropResult.Success) {
-            schemaDropError = dropResult.ErrorMessage;
-            Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
-          }
-        }
+          CoreSchema: context.MJCoreSchema,
+        }, context);
+        schemaDropError = dropResult.Success ? undefined : dropResult.ErrorMessage;
       }
 
       // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
@@ -1777,7 +1841,10 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   // `__mj_UDT`) exist in every MJ database. Adopting one would hand it to `mj app remove`,
   // which DROPs the app's schema. CreateAppSchema validates again on the create path; that
   // duplication is deliberate — it is an exported function and must guard its own contract.
-  const validation = ValidateSchemaName(manifest.schema.name, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
+  const validation = ValidateSchemaName(manifest.schema.name, {
+    allowDoubleUnderscore: options.AllowDoubleUnderscore,
+    CoreSchema: context.MJCoreSchema,
+  });
   if (!validation.Success) {
     return { Success: false, ErrorMessage: validation.ErrorMessage };
   }
@@ -1960,6 +2027,39 @@ function CleanupTempDir(tempDir: string, phase: string, context: OrchestratorCon
  * core schema. No-op when the manifest declares no teardownDirectory.
  */
 async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
+  const download = await DownloadTeardownScripts(manifest, context, subpath);
+  if (!download.Success || !download.Scripts) {
+    return download;
+  }
+  try {
+    return await RunTeardownScripts(manifest, context, download.Scripts);
+  } finally {
+    // The downloaded teardown scripts have been executed above; don't leave them in the OS temp dir.
+    ReleaseTeardownScripts(download.Scripts, context);
+  }
+}
+
+/** An app's teardown scripts, downloaded into an engine-created temp directory. */
+interface TeardownScripts {
+  /** The temp directory holding the scripts; removed by {@link ReleaseTeardownScripts}. */
+  TempDir: string;
+  /** The repository folder they came from (platform-aware), for messages. */
+  SourceDir: string;
+  /** The `.sql` file names, sorted so a numbered teardown runs in order. */
+  Files: string[];
+}
+
+/** Result of {@link DownloadTeardownScripts}. `Scripts` is absent when the manifest declares no teardownDirectory. */
+interface TeardownDownloadResult extends InternalResult {
+  Scripts?: TeardownScripts;
+}
+
+/**
+ * Downloads the app's `migrations.teardownDirectory` (`<teardownDirectory>-pg/` on PostgreSQL),
+ * subpath-aware. The caller owns the returned directory and releases it with
+ * {@link ReleaseTeardownScripts}; on a failed download it is already removed.
+ */
+async function DownloadTeardownScripts(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<TeardownDownloadResult> {
   const teardownDir = manifest.migrations?.teardownDirectory;
   if (!teardownDir) {
     return { Success: true };
@@ -1973,41 +2073,78 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
     const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath, manifest.name);
     if (!download.Success) {
+      CleanupTempDir(tempDir, 'Metadata', context);
       return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
     }
     // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
     const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
-    if (files.length === 0) {
-      context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
-      return { Success: true };
-    }
-
-    const mjSchema = context.MJCoreSchema ?? '__mj';
-    context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
-    // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
-    // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
-    // files committed, some not) — which would orphan rows AND block a clean reinstall.
-    await context.DatabaseProvider.BeginTransaction();
-    try {
-      for (const file of files) {
-        const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
-        if (sql.trim()) {
-          await context.DatabaseProvider.ExecuteSQL(sql);
-        }
-      }
-      await context.DatabaseProvider.CommitTransaction();
-    } catch (error: unknown) {
-      await context.DatabaseProvider.RollbackTransaction();
-      const message = error instanceof Error ? error.message : String(error);
-      return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
-    }
-
-    context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
-    return { Success: true };
-  } finally {
-    // The downloaded teardown scripts have been executed above; don't leave them in the OS temp dir.
+    return { Success: true, Scripts: { TempDir: tempDir, SourceDir: dir, Files: files } };
+  } catch (error: unknown) {
     CleanupTempDir(tempDir, 'Metadata', context);
+    throw error;
   }
+}
+
+/**
+ * Install-time download of the teardown scripts, before the migrations run, so a rollback can
+ * run them without the network (#3506). A failed download does not fail the install: it is
+ * warned, and a rollback falls back to downloading them itself.
+ */
+async function PrefetchTeardownScripts(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<TeardownScripts | undefined> {
+  try {
+    const download = await DownloadTeardownScripts(manifest, context, subpath);
+    if (!download.Success) {
+      context.Callbacks?.OnWarn?.('Migration', `${download.ErrorMessage ?? 'Failed to download teardown scripts'}. A rollback will try to download them again.`);
+    }
+    return download.Scripts;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.('Migration', `Failed to download teardown scripts: ${message}. A rollback will try to download them again.`);
+    return undefined;
+  }
+}
+
+/** Removes the temp directory of downloaded teardown scripts. No-op for `undefined`. */
+function ReleaseTeardownScripts(scripts: TeardownScripts | undefined, context: OrchestratorContext): void {
+  if (scripts) {
+    CleanupTempDir(scripts.TempDir, 'Metadata', context);
+  }
+}
+
+/**
+ * Runs downloaded teardown scripts in filename order via the live provider, all in one
+ * transaction, with `${mjSchema}` resolved to the core schema. Leaves the files in place, so the
+ * same scripts can run again.
+ */
+async function RunTeardownScripts(manifest: MJAppManifest, context: OrchestratorContext, scripts: TeardownScripts): Promise<InternalResult> {
+  const files = scripts.Files;
+  if (files.length === 0) {
+    context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${scripts.SourceDir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
+    return { Success: true };
+  }
+
+  const mjSchema = context.MJCoreSchema ?? '__mj';
+  context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
+  // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
+  // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
+  // files committed, some not) — which would orphan rows AND block a clean reinstall.
+  await context.DatabaseProvider.BeginTransaction();
+  try {
+    for (const file of files) {
+      const sql = readFileSync(join(scripts.TempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
+      if (sql.trim()) {
+        await context.DatabaseProvider.ExecuteSQL(sql);
+      }
+    }
+    await context.DatabaseProvider.CommitTransaction();
+  } catch (error: unknown) {
+    await context.DatabaseProvider.RollbackTransaction();
+    const message = error instanceof Error ? error.message : String(error);
+    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
+  }
+
+  context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
+  return { Success: true };
 }
 
 /**
