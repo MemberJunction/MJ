@@ -1,5 +1,87 @@
 # @memberjunction/db-auto-doc
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- 10a460b: Every LLM call in this package was unbounded — no timeout, no deadline, no AbortSignal at any of the six provider call sites. The retry loops cannot substitute for one: they only run once a promise settles, and a provider that accepts the socket then stops sending never settles one, so a stall bypassed retry, backoff and error reporting alike and simply parked the run. A shared `withCallDeadline` applies the bound two ways at once — the request is ABORTED through `ChatParams.cancellationToken`, which the drivers forward to their SDKs, and the awaited promise is REJECTED so a driver that ignores the signal still cannot park a caller. Configurable as `ai.callTimeoutMs`, default 120000; `0` restores the previous behaviour exactly. Applied to `PromptEngine.executeWithRetry`, `LLMSanityChecker`, `LLMDiscoveryValidator`, `TableNormalizer` and each embedding batch in the organic-key pass.
+
+  **The shipped default configuration handed a Gemini key to `OpenAIEmbedding`.** Two independent causes: `EmbeddingProvider`'s driver map had no `gemini` entry, so even an explicit `embedding.provider: 'gemini'` threw "not supported"; and `SemanticPhase` defaulted to the literal `'openai'` while `AIConfig.provider` defaults to `gemini` and the same key is passed to both. `gemini` → `GeminiEmbedding` is now registered (the model is left to the driver, which already defaults it), and an absent `embedding.provider` resolves to the embedding driver of the SAME vendor as the LLM key — the one credential the operator has definitely supplied. A vendor with no embedding driver (anthropic, groq, openrouter, …) now raises a named error asking for an explicit choice; that is not a new failure, since sending its key to `OpenAIEmbedding` failed too, just opaquely and blamed on the wrong service. `local` is never inferred — it needs no key, so it would "work" for every vendor while silently swapping a hosted embedding model for a small on-disk one.
+
+  **`TableNormalizer` — the largest fan-out in the organic-key pass — is now bounded on all three axes.** It had no call deadline (one stalled table parked a worker for the rest of the run; with concurrency 8, eight stalls parked the pass), no backoff at all (retries fired immediately, three times per table, from every worker at once — the shape that turns one 429 into a burst), and no token cap, because `organicKeyDetection.tokenBudget` was declared in the config type and read nowhere. Transport failures now back off exponentially with jitter, sharing the `ai.retry` knobs with `PromptEngine`; parse failures deliberately do not, since nothing upstream is recovering from a malformed body. The token budget stops scheduling further tables once the running total exceeds it, and the result reports `budgetExhausted` and `tablesSkippedForBudget` — surfaced through `SemanticPhaseResult.summary` — because normalizing 300 of 500 tables and reporting that as a finding about the schema is its own defect.
+
+  **The embedding provider is resolved before the normalization calls are paid for.** The named error for a vendor with no embedding driver, and a missing driver package, used to surface only after every table had been normalized; they now stop the organic-key pass before its first LLM call.
+
+- 1cbd9d0: DBAutoDoc's PK detection now uses existing unique indexes as evidence for tables with no declared primary key (`relationshipDiscovery.indexBackedCandidates`, default true):
+  - A unique, unfiltered index on NOT NULL columns becomes a candidate even when the statistics can't show uniqueness, for example on an empty table. It's scored with an index boost, so naming, type, the name blacklist and column position still pick between several unique columns.
+  - A unique index on a nullable column only adds a smaller boost to a column that already passes the statistical checks.
+  - Multi-column unique indexes are considered as composite keys when no single column qualifies (junction tables, for example). Next to a qualifying single-column key they're treated as alternate keys and not added, because discovery flags every candidate's columns as primary key.
+
+  PK candidates record the index that backs them (`evidence.backingIndex`).
+
+- e859749: Follow-ups from the review of #5791. No behavior change.
+  - Reworded the `indexBackedCandidates` doc: composite unique indexes are only considered when no single column qualifies.
+  - The `useExistingIndexes` handling at the start of a run moved into a tested `PrepareIndexesForRun` helper. When it's off, indexes left in a resumed state are dropped.
+  - New tests for that helper and for `PKDetector` replacing a lower-confidence composite with an index-backed one on the same columns.
+- 45136f6: Organic keys are emitted hub-and-spoke instead of as all-pairs cliques (#4538).
+
+  Every member of an organic-key cluster used to get every other member as a related entity, so spokes grew with the square of cluster size. On one production deployment, most of those pairs were co-references: two tables that both hold a customer key, many-to-many, which multiply rows when joined.
+  - **Hubs.** The members whose column is their table's primary key own the value. A hub links to every other member; any other member links only to the hubs. A 10-member cluster now emits 18 spokes instead of 90.
+  - **Transitive spokes follow the same rule.** Only a hub gets bridge-view spokes, since a non-hub reaching another table through a bridge (orders to registration via the customer key) is a co-reference. A table already linked directly is not added again through a bridge.
+  - **No owner, no key.** A concept no member owns as a primary key is not emitted, since every pair in it would be a co-reference. The compose step reports these as `SkippedUnanchored`, and the detector summary as `conceptsSkippedUnanchored`.
+  - **New option:** `TranslateOptions.OnUnanchored`.
+
+- 1b21a0e: The primary- and foreign-key passes now see the operator's seed context.
+
+  `seedContext.customInstructions`, which also carries the text of `seedContext.file` / `files`, reached only the table-analysis prompt. The passes that decide keys never saw it: the discovery validator, PK pruning and FK pruning. A data-layout summary helps those passes most.
+  - A per-table pass (discovery validator, `pk-pruning-table`, `fk-pruning-table`) gets the paragraphs that name its table. The whole-schema passes (`pk-pruning-holistic`, `fk-pruning-holistic`) get the full text. The notes are framed as evidence that does not override the data and constraints.
+  - New setting `seedContext.keyPassMaxChars` caps the text sent to each of these prompts (default 6000; `0` sends none), so a long document doesn't multiply cost by the table count.
+  - New export: `SeedContextExcerpt`.
+  - `DBAutoDocAPI` now passes its `seedContext` on to the analysis. `buildFullConfig` never copied it, so programmatic callers got no seed context in any prompt, table analysis included. Its type also accepts `keyPassMaxChars`.
+
+- 45136f6: Verify a key against the data before emitting it. Every key DBAutoDoc writes into `additionalSchemaInfo` is a claim that a join works, and until now only one of the three paths that emit keys ever checked that claim: `FKDetector` probed via `testValueOverlap` and its 75% containment gate, while the organic-key path (LLM concept naming plus embedding distance) and the LLM-proposed FK path emitted whatever they formed. The LLM path was the worse of the two — it wrote a literal `valueOverlap: 0` placeholder, set `status: 'confirmed'`, and stamped `column.isForeignKey`, which reaches `additionalSchemaInfo` through `collectIntrospectedFKs`, a branch with no confidence, status or containment filter at all. A key that matches nothing is worse than a missing key: the join it generates returns an empty result with no error, indistinguishable from a true negative.
+
+  **PostgreSQL was worse still, and this is the headline.** `PostgreSQLDriver.testValueOverlap` sampled with `SELECT DISTINCT <col> … ORDER BY RANDOM() LIMIT n`, which is not valid PostgreSQL — an `ORDER BY` expression on a `SELECT DISTINCT` must appear in the select list. The statement raised for **every column pair**, same-type or not; `catch { return 0 }` turned that into 0% overlap; and the 75% gate read 0% as a refutation. The statistical FK detector was therefore completely inert on PostgreSQL, so the only foreign keys surviving a PostgreSQL run were the LLM-proposed ones that nothing probed. SQL Server used `DISTINCT TOP n` with no sort and always worked, which is why this was invisible to anyone testing there.
+  - **New `JoinProbe`** — a bounded, count-only containment probe shared by both emitting paths. It returns three distinct outcomes, and keeping the last two apart is the point: `Verified` (containment at or above the floor), `Refuted` (the probe RAN and measured below it — not emitted), `Unprobed` (no permission, timeout, budget exhausted, incomparable types, missing object — emitted, stamped, never called verified). Emitting on `Unprobed` is deliberate: refusing whenever a probe cannot run converts a permissions problem into silent total key loss, which is its own defect. The engine refuses only on measured refutation; it never refuses out of ignorance and never claims a verification it did not perform.
+  - **Bounded three ways**, all configurable under `analysis.keyVerification`: `sampleSize` distinct child values per probe (default 1000), `maxProbes` per run (default 500, after which candidates are `Unprobed`), and `probeTimeoutMs` per probe (default 5000). One verifier instance is shared by the analysis engine and the organic detector, so the cap bounds the run rather than each path separately.
+  - **Counts only, never a value.** `ProbeJoinContainment` returns two integers; the result type carries no value-bearing field. Failure reasons are persisted next to the key they explain, so they are classified into a fixed set and sanitized — database errors routinely quote the offending value, and none of that may reach the output file.
+  - **New driver method `ProbeJoinContainment`** on all three drivers, returning a discriminated union so a failed probe can never be read as zero containment. Both sides are cast to text/`NVARCHAR`/`CHAR`, which makes the commonest soft-key shape probeable at all — a connector storing another system's `uuid` in a `varchar` column raises `operator does not exist: text = uuid` on PostgreSQL, and that key was previously invisible.
+  - **`ORDER BY RANDOM()` removed** from `PostgreSQLDriver.testValueOverlap`, which is what made the existing FK path work on PostgreSQL for the first time.
+  - **Selectivity prefilter corrected.** The low-cardinality gate read `distinct < MIN && ratio < MIN` — a conjunction, so clearing _either_ floor was enough to be treated as identity-bearing, and the gate never removed anything it was written to remove: a boolean on a 100-row table (2 distinct, ratio 0.02) was kept, and so was a `payment_method_id` with 33 distinct over 24,000 rows. It now drops any column under 50 distinct values, which removes both. The distinct-to-rows ratio is no longer a gate: it reads low for spoke columns on busy tables (40,000 members over 2.5M attendance rows is 0.016), which repeat per member rather than being categories. Columns with no statistics still fail open — the gate is a cost filter, and the probe is what establishes correctness.
+  - **The organic-key probe compares values the way the key will.** Each side is normalized with its member's strategy (`LowerCaseTrim`, `Trim`, `ExactMatch`) before comparing, so an email key matched case-insensitively is not refuted on PostgreSQL for differing in case, and PostgreSQL and SQL Server agree on the same data. A member whose key needs a `Custom` expression is not probed (the expression is model-written SQL) and is kept as `Unprobed`.
+  - **A refuted LLM-proposed FK no longer demotes a primary key.** The probe now runs before an unconfirmed PK candidate on the same column is rejected, so only a proposal the data does not contradict counts as evidence against the PK.
+  - **`AutoCreateRelatedViewOnForm` now defaults to FALSE** and is opt-in via `organicKeyDetection.autoCreateRelatedViewOnForm`. It was a hardcoded `true`, so every emitted key auto-created a related-record grid per spoke — roughly 22 per key on a real run — each one a value-join on a column nothing had verified.
+  - **Provenance per key.** Emitted keys carry `{ Provenance, Verification, VerifiedAt, MatchedRows, SampledRows, VerificationNote }`, so a verified key is distinguishable from an inferred one and a wrong inference can be traced to whichever stage authored it. A genuinely introspected constraint carries no stamp — claiming a verification nobody performed would be the same defect in reverse.
+
+  Behavior is preserved wherever no probe is available: with no driver or no verifier, keys are emitted exactly as before, marked `Unprobed` rather than presented as checked.
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [cc41d33]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [663ff80]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes
