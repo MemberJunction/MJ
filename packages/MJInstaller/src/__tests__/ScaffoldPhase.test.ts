@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
 import { createMockFileSystem, createMockGitHubProvider, createMockProcessRunner } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleVersionInfo } from './mocks/fixtures.js';
@@ -362,14 +363,20 @@ describe('ScaffoldPhase', () => {
       await phase.Run(monorepoCtx());
       expect(mockProcessRunner.Run).toHaveBeenCalledWith(
         'git',
-        ['clone', '--depth', '1', '--branch', 'v5.2.0', 'https://github.com/MemberJunction/MJ.git', 'MJ'],
+        ['clone', '--depth', '1', '--branch', 'v5.2.0', '--', 'https://github.com/MemberJunction/MJ.git', 'MJ'],
         expect.objectContaining({ Cwd: '/tmp/mj-install-test' })
       );
     });
 
+    it.each(['--upload-pack=touch x', 'v5.2.0 && echo hi', 'v5.2.0;rm'])('refuses to clone the unsafe tag %s', async (tag) => {
+      mockGitHub.GetReleaseByTag.mockResolvedValue({ ...sampleVersionInfo(), Tag: tag });
+      await expect(phase.Run(makeContext({ Tag: tag, InstallMode: 'monorepo' }))).rejects.toMatchObject({ Code: 'CLONE_FAILED' });
+      expect(mockProcessRunner.Run).not.toHaveBeenCalled();
+    });
+
     it('copies the clone into the target dir and removes the temp dir', async () => {
       await phase.Run(monorepoCtx());
-      expect(mockFs.CopyDirectory).toHaveBeenCalledWith('/tmp/mj-install-test/MJ', '/test/install');
+      expect(mockFs.CopyDirectory).toHaveBeenCalledWith(path.join('/tmp/mj-install-test', 'MJ'), '/test/install');
       expect(mockFs.RemoveDir).toHaveBeenCalledWith('/tmp/mj-install-test');
     });
 
@@ -408,10 +415,10 @@ describe('ScaffoldPhase', () => {
     });
 
     it('restores a user-populated install.config.json after the copy', async () => {
-      mockFs.FileExists.mockImplementation(async (p: string) => p === '/test/install/install.config.json');
+      mockFs.FileExists.mockImplementation(async (p: string) => p === path.join('/test/install', 'install.config.json'));
       mockFs.ReadText.mockResolvedValue('{"DatabaseHost":"db"}');
       await phase.Run(monorepoCtx());
-      expect(mockFs.WriteText).toHaveBeenCalledWith('/test/install/install.config.json', '{"DatabaseHost":"db"}');
+      expect(mockFs.WriteText).toHaveBeenCalledWith(path.join('/test/install', 'install.config.json'), '{"DatabaseHost":"db"}');
     });
 
     it('does not throw if removing the temp dir fails (non-critical cleanup)', async () => {

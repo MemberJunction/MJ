@@ -36,6 +36,11 @@ import type { VersionInfo } from '../models/VersionInfo.js';
 /** Default canonical MemberJunction clone URL used for the sparse fetch and the monorepo clone. */
 const DEFAULT_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
 
+/** A git tag or branch name safe to pass to git: no leading dash, no shell metacharacters. */
+const SAFE_GIT_REF = /^[A-Za-z0-9][A-Za-z0-9._\/-]*$/;
+/** An https repository URL safe to pass to git (the process runner uses a shell on Windows). */
+const SAFE_REPO_URL = /^https:\/\/[A-Za-z0-9.-]+(?::[0-9]+)?(?:\/[A-Za-z0-9._~-]+)+\/?$/;
+
 /** Folder name the monorepo clone is created under inside its temp directory. */
 const MONOREPO_CLONE_DIR = 'MJ';
 
@@ -255,11 +260,20 @@ export class ScaffoldPhase {
       Message: `Cloning ${version.Tag} from ${repoUrl}...`,
     });
 
+    if (!SAFE_GIT_REF.test(version.Tag) || !SAFE_REPO_URL.test(repoUrl)) {
+      throw new InstallerError(
+        'scaffold',
+        'CLONE_FAILED',
+        `Refusing to clone: tag "${version.Tag}" or repository URL "${repoUrl}" is not in a form that is safe to pass to git.`,
+        'Use a plain release tag (for example v6.2.0) and an https repository URL.'
+      );
+    }
+
     const tempDir = await this.fileSystem.CreateTempDir('mj-clone-');
     try {
       const result = await this.processRunner.Run(
         'git',
-        ['clone', '--depth', '1', '--branch', version.Tag, repoUrl, MONOREPO_CLONE_DIR],
+        ['clone', '--depth', '1', '--branch', version.Tag, '--', repoUrl, MONOREPO_CLONE_DIR],
         { Cwd: tempDir, TimeoutMs: 1_800_000 }
       );
       if (result.ExitCode !== 0) {
