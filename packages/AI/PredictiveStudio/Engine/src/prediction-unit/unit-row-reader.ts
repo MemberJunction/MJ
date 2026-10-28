@@ -12,6 +12,7 @@ import { TaskTypeRules, PredictionUnit, type LabelRule, type PredictionUnitSpec,
 import type { ICountingDataAccess, SourceRow } from '../feature-assembly/data-access';
 import { CompleteReader } from '../feature-assembly/read-policy';
 import type { AssemblyEntityInfo, IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import type { AssemblyRowRef } from '../feature-assembly/as-of/as-of-assembler';
 import { UtcDay, type CellValue } from './utc-day';
 
 export type CanonicalLabelValue = string | number;
@@ -178,17 +179,14 @@ export class PredictionUnitRowReader {
       const windowStart = UtcDay.AddUtcDays(decision, unit.label.gapDays);
       const windowEnd = UtcDay.AddUtcDays(windowStart, unit.label.windowDays);
       if (windowEnd.getTime() > cutoff.getTime()) { censored++; continue; }
-      const entityKey = unit.rows.kind === 'grain' ? rowId : PredictionUnitRowReader.requireKey(row[unit.rows.foreignKey], `${rowEntity.Name}.${unit.rows.foreignKey} of ${rowId}`);
-      const label = labeler(row, entityKey, decision, windowStart, windowEnd);
+      const ref = PredictionUnitRowReader.UnitRowRef(unit, rowEntity, row, decision);
+      const label = labeler(row, ref.EntityKey, decision, windowStart, windowEnd);
       if (label.Known) { labelKnown++; continue; }
       if (label.Label === null) { emptyLabel++; continue; }
       resolved.push({
-        RowId: rowId,
-        EntityKey: entityKey,
-        DecisionDate: decision,
+        ...ref,
         WindowEnd: windowEnd,
-        GroupKey: unit.groupKey ? PredictionUnitRowReader.requireKey(row[unit.groupKey], `${rowEntity.Name}.${unit.groupKey} of ${rowId}`).toLowerCase() : entityKey.toLowerCase(),
-        Period: unit.rows.kind === 'grain-x-periods' ? decision : unit.temporal ? UtcDay.ToUtcDay(row[unit.temporal.timeColumn]) : null,
+        GroupKey: unit.groupKey ? PredictionUnitRowReader.requireKey(row[unit.groupKey], `${rowEntity.Name}.${unit.groupKey} of ${rowId}`).toLowerCase() : ref.EntityKey.toLowerCase(),
         Label: label.Label,
         Source: row,
       });
@@ -212,6 +210,19 @@ export class PredictionUnitRowReader {
 
   private decisionDate(unit: PredictionUnitSpec, row: SourceRow): Date | null {
     return PredictionUnitRowReader.UnitDecisionDate(unit, row);
+  }
+
+  /**
+   * A row as the assembly reads it, by the one rule training and scoring share: its key (the primary key), its entity
+   * key (the key itself for a grain unit, else the grain foreign key), the given decision day and its period (the
+   * period date of a grain × periods unit, else the Temporal Spec's time column, else null). Keys read as text; a date
+   * key reads as its UTC day.
+   */
+  public static UnitRowRef(unit: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, row: SourceRow, decision: Date): AssemblyRowRef {
+    const rowId = PredictionUnitRowReader.requireKey(row[rowEntity.PrimaryKey], `${rowEntity.Name}.${rowEntity.PrimaryKey}`);
+    const entityKey = unit.rows.kind === 'grain' ? rowId : PredictionUnitRowReader.requireKey(row[unit.rows.foreignKey], `${rowEntity.Name}.${unit.rows.foreignKey} of ${rowId}`);
+    const period = unit.rows.kind === 'grain-x-periods' ? UtcDay.ToUtcDay(row[unit.rows.periodDate]) : unit.temporal ? UtcDay.ToUtcDay(row[unit.temporal.timeColumn]) : null;
+    return { RowId: rowId, EntityKey: entityKey, DecisionDate: decision, Period: period };
   }
 
   /**

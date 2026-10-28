@@ -8,6 +8,7 @@
  */
 
 export * from './types';
+export * from './unit-model-lineage';
 export * from './artifact-store';
 export * from './seams';
 export * from './as-of-refusal';

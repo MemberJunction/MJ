@@ -114,3 +114,18 @@ describe('PredictionUnitRowReader', () => {
     }
   });
 });
+
+describe('PredictionUnitRowReader.UnitRowRef — the one row rule training and scoring share', () => {
+  it('keys a row by a Date-typed foreign key as its UTC day, exactly as the reader keys its own rows', async () => {
+    const day = (person: string) => new Date(`2020-01-0${'ABCD'.indexOf(person) + 1}T00:00:00Z`);
+    const dated: Record<string, SourceRow[]> = { ...tables, Periods: tables.Periods.map((r) => ({ ...r, PersonID: day(String(r.PersonID)) })) };
+    const out = await new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(dated), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
+    expect(out.Status).toBe('read');
+    if (out.Status !== 'read') return;
+    const a1 = out.Rows.find((r) => r.RowId === 'a1');
+    expect(a1?.EntityKey).toBe('2020-01-01');
+    const source = dated.Periods.find((r) => r.ID === 'a1')!;
+    const ref = PredictionUnitRowReader.UnitRowRef(unit, entities.Periods, source, a1!.DecisionDate);
+    expect(ref).toEqual({ RowId: a1!.RowId, EntityKey: a1!.EntityKey, DecisionDate: a1!.DecisionDate, Period: a1!.Period });
+  });
+});

@@ -37,6 +37,11 @@ import type {
   SourceRow,
 } from '../../feature-assembly';
 import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
+import { MLModelInferenceProcessor } from '../../scoring/ml-model-inference-processor';
+import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
+import type { MLInferenceDeps } from '../../scoring/types';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { FakePredictionUnitStore, UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 
 /**
@@ -657,6 +662,35 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const byId = new Map(assembly.Assembled.Rows.map((r) => [r.RowId, r.Values]));
     expect(byId.get('y2024-2')).toEqual([UnitYearsWorld.EventsAttended(2, 2024), 'Active']);
     expect(byId.get('y2025-2')).toEqual([UnitYearsWorld.EventsAttended(2, 2025), 'Lapsed']);
+  });
+
+  it('round-trips the stored lineage: the scoring path reads back what training wrote and assembles the same values', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
+    const { engine, deps, pipeline, models } = unitHarness(years, unitColumns, steps);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const trained = models[0];
+    trained.Status = 'Validated';
+    trained.ArtifactFileID = 'file-1';
+    const artifacts = new InMemoryArtifactLoader();
+    artifacts.set('file-1', new TextEncoder().encode('model-bytes'));
+    const scoringDeps: MLInferenceDeps = {
+      // One deliberate test-double cast at the seam: the model row training wrote, read back as scoring loads it.
+      modelLoader: { loadModel: async () => ({ ...trained, PipelineID: pipeline.ID } as unknown as MJMLModelEntity) },
+      artifactLoader: artifacts,
+      sidecar: { predict: async () => ({ predictions: [] }) },
+      pipelineUnits: { PredictionUnitIDOf: async (id: string) => (id === pipeline.ID ? UnitYearsWorld.UnitID : null) },
+      predictionUnits: deps.predictionUnits,
+      assemblyMetadata: deps.assemblyMetadata,
+      dataAccess: deps.dataAccess,
+    };
+    const context: RecordProcessorContext = { ContextUser: fakeUser, Provider: fakeProvider };
+    const scored = await new MLModelInferenceProcessor({ modelId: trained.ID, deps: scoringDeps }).AssembleForScoring([{ ID: 'y2024-2' }, { ID: 'y2025-2' }], context, 'unit-rule');
+    const training = await engine.AssembleForTraining(pipeline.ID, deps);
+    expect(scored.Status).toBe('assembled');
+    if (scored.Status !== 'assembled' || training.Assembled.Status !== 'assembled') return;
+    const byId = new Map(training.Assembled.Rows.map((r) => [r.RowId, r.Values]));
+    expect(scored.Rows.map((r) => r.Values)).toEqual([byId.get('y2024-2'), byId.get('y2025-2')]);
+    expect(scored.Rows[0].Values[1]).toBe('Active');
   });
 
   it('refuses a one-class target before calling the sidecar and records the refusal on the run', async () => {

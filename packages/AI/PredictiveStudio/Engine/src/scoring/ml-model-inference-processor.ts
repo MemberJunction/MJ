@@ -89,7 +89,8 @@ import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { UtcDay } from '../prediction-unit/utc-day';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainingRefusedError } from '../training/training-refusal';
-import type { UnitModelLineage } from '../training/types';
+import { UnitModelLineageParser } from '../training/unit-model-lineage';
+import { RunViewPipelineUnitLookup } from './seams';
 import {
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
@@ -341,6 +342,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
   private async buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    // The unit part first: a unit model with an unreadable Lineage fails here, before anything else reads the Lineage.
+    const unit = await this.loadUnitModel(model, context);
     let pipeline = this.resolvePipelineConfig(model);
     if ((pipeline.featureSteps.Steps.length === 0 || !pipeline.targetEntityName) && model.PipelineID) {
       pipeline = await this.loadPipelineFallback(model.PipelineID, pipeline, context);
@@ -358,22 +361,26 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
       outcomeConfig: pipeline.outcomeConfig,
-      unit: await this.loadUnitModel(model, context),
+      unit,
     };
   }
 
   /**
    * The unit a model was trained on, with the feature columns and categorical levels its Lineage stored; null for a
-   * model trained without a unit. A unit model whose Lineage lacks its feature columns, or whose unit cannot be loaded
-   * or parsed, cannot be scored the way it was trained and fails loudly.
+   * model whose pipeline points at no unit. The pipeline decides, never the Lineage: a unit pipeline's model whose
+   * Lineage is missing or fails validation, or whose unit cannot be loaded or parsed, fails loudly naming the model and
+   * the first problem; it is never scored through the legacy current-value path.
    */
   private async loadUnitModel(model: MJMLModelEntity, context: RecordProcessorContext): Promise<LoadedUnitModel | null> {
-    const lineage = parseJson<Partial<UnitModelLineage>>(model.Lineage, {});
-    const unitId = lineage.predictionUnitId;
-    if (!unitId) return null;
-    if (!Array.isArray(lineage.featureSpec)) {
-      throw new Error(`MLModelInferenceProcessor: model '${model.ID}' was trained on Prediction Unit ${unitId} but its Lineage has no featureSpec, so its features cannot be assembled as they were in training`);
+    if (!model.PipelineID) return null;
+    const lookup = this.deps.pipelineUnits || new RunViewPipelineUnitLookup();
+    const pipelineUnitId = await lookup.PredictionUnitIDOf(model.PipelineID, context.ContextUser, context.Provider);
+    if (!pipelineUnitId) return null;
+    const lineage = UnitModelLineageParser.ParseUnitModelLineage(model.Lineage);
+    if (lineage.Ok === false) {
+      throw new Error(`MLModelInferenceProcessor: model '${model.ID}' belongs to a Prediction Unit pipeline but its Lineage cannot be read: ${lineage.Errors[0]}`);
     }
+    const unitId = lineage.Value.predictionUnitId;
     const store = this.deps.predictionUnits || new RunViewPredictionUnitStore(context.Provider, context.ContextUser);
     const row = await store.Load(unitId);
     if (!row) throw new Error(`MLModelInferenceProcessor: Prediction Unit ${unitId} of model '${model.ID}' was not found`);
@@ -381,9 +388,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (parsed.Ok === false) throw new Error(`MLModelInferenceProcessor: Prediction Unit ${unitId} of model '${model.ID}' is invalid: ${parsed.Errors.join('; ')}`);
     return {
       Spec: parsed.Value,
-      Features: lineage.featureSpec,
-      RowEntity: lineage.unitRowEntity || PredictionUnit.UnitRowEntityName(parsed.Value.rows),
-      CategoryLevels: new Map(Object.entries(lineage.categoryLevels || {})),
+      Features: lineage.Value.featureSpec,
+      RowEntity: lineage.Value.unitRowEntity,
+      CategoryLevels: new Map(Object.entries(lineage.Value.categoryLevels)),
     };
   }
 
@@ -591,17 +598,12 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     return [...new Set(fields)];
   }
 
-  /** One scoped row as the assembler reads it: its key, entity key, decision date and period, as the unit reader sets them. */
+  /** One scoped row as the assembler reads it, by the unit row rule the training reader uses; `asOf` sets its decision day. */
   private static rowRef(spec: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, row: SourceRow | undefined, key: string, asOf: 'unit-rule' | Date): AssemblyRowRef {
     if (!row) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${key} was not read`);
-    const rowId = String(row[rowEntity.PrimaryKey]);
     const decision = asOf === 'unit-rule' ? PredictionUnitRowReader.UnitDecisionDate(spec, row) : UtcDay.ToUtcDay(asOf);
-    if (decision === null) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${rowId} has no decision date under its Prediction Unit's rule`);
-    // `??`: a foreign key of 0 is a real key; only an absent one becomes '' and fails below.
-    const entityKey = spec.rows.kind === 'grain' ? rowId : String(row[spec.rows.foreignKey] ?? '');
-    if (entityKey === '') throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${rowId} has no ${spec.rows.kind === 'grain' ? rowEntity.PrimaryKey : spec.rows.foreignKey}`);
-    const period = spec.rows.kind === 'grain-x-periods' ? UtcDay.ToUtcDay(row[spec.rows.periodDate]) : spec.temporal ? UtcDay.ToUtcDay(row[spec.temporal.timeColumn]) : null;
-    return { RowId: rowId, EntityKey: entityKey, DecisionDate: decision, Period: period };
+    if (decision === null) throw new Error(`MLModelInferenceProcessor: ${rowEntity.Name} ${key} has no decision date under its Prediction Unit's rule`);
+    return PredictionUnitRowReader.UnitRowRef(spec, rowEntity, row, decision);
   }
 
   /** A unit with a Temporal Spec reads its lags from the unit's resolved rows, built the way training builds them. */

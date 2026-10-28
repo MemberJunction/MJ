@@ -10,12 +10,13 @@
  */
 
 import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
 
-import type { IMLModelLoader, ISidecarPredictor } from './types';
+import type { IMLModelLoader, IPipelineUnitLookup, ISidecarPredictor } from './types';
 
 /**
  * `RunView`-backed {@link IMLModelLoader}. Loads the model as a full
@@ -43,6 +44,22 @@ export class RunViewMLModelLoader implements IMLModelLoader {
       return null;
     }
     return result.Results[0];
+  }
+}
+
+/**
+ * `RunView`-backed {@link IPipelineUnitLookup}: one narrow read of the pipeline's `PredictionUnitID`. A read failure
+ * throws, since a model whose pipeline cannot be read cannot be told apart from a legacy one.
+ */
+export class RunViewPipelineUnitLookup implements IPipelineUnitLookup {
+  /** @inheritdoc */
+  public async PredictionUnitIDOf(pipelineId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<string | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLTrainingPipelineEntity, 'ID' | 'PredictionUnitID'>>(
+      { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID='${EscapeSQLString(pipelineId)}'`, Fields: ['ID', 'PredictionUnitID'], MaxRows: 1 },
+      contextUser,
+    );
+    if (!result.Success) throw new Error(`Reading ML Training Pipeline ${pipelineId} failed: ${result.ErrorMessage || 'unknown error'}`);
+    return result.Results[0]?.PredictionUnitID || null;
   }
 }
 

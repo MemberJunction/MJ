@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
@@ -28,6 +28,7 @@ import { TrainingRefusedError } from '../../training/training-refusal';
 import type { TrainingDeps } from '../../training/types';
 import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
 import { FakePredictionUnitStore, UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
+import { PredictionUnitRowReader } from '../../prediction-unit/unit-row-reader';
 import type {
   IFeatureDataAccess,
   FetchRowsParams,
@@ -60,6 +61,7 @@ const FROZEN_PREPROCESSING = { 'standardize.tenure': { mean: 5, std: 2.5 }, 'one
 /** A model fake exposing exactly the fields the processor reads. */
 class FakeMLModel {
   public ID = 'model-1';
+  public PipelineID: string | null = null;
   public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
   public FittedPreprocessing: string | null = JSON.stringify(FROZEN_PREPROCESSING);
@@ -373,21 +375,26 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     };
   }
 
+  /** The pipeline → unit lookup: `pipe-u` points at the unit world's unit; any other pipeline has none. */
+  const pipelineUnits = { PredictionUnitIDOf: async (pipelineId: string) => (pipelineId === 'pipe-u' ? UnitYearsWorld.UnitID : null) };
+
   /** A Validated unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
-  async function unitModel(): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
+  async function unitModel(lineageOverride?: string): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
     const dataAccess = new TableDataAccess(UnitYearsWorld.Tables());
     const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess));
     if (training.Assembled.Status !== 'assembled') throw new Error('training assembly refused');
     const model = new FakeMLModel();
     model.Status = 'Validated';
+    model.PipelineID = 'pipe-u';
     model.FeatureSchema = JSON.stringify(training.Assembled.Columns.map((c) => ({ Name: c.Name, Kind: c.Encoding === 'categorical' ? 'categorical' : 'numeric' })));
     model.Lineage = JSON.stringify({
       predictionUnitId: UnitYearsWorld.UnitID, predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Years',
       featureSpec: training.Features, categoryLevels: Object.fromEntries(training.Assembled.CategoryLevels),
       targetEntityName: 'Years', sourceBindings: [], featureSteps: steps, asOfStrategy: { Mode: 'none' },
     });
+    if (lineageOverride !== undefined) model.Lineage = lineageOverride;
     const { deps, sidecar } = buildDeps(model);
-    return { deps: { ...deps, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
+    return { deps: { ...deps, pipelineUnits, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
   }
 
   it('refuses in Preflight a scope whose entity is not the unit row entity, as a typed refusal', async () => {
@@ -418,6 +425,40 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const { deps } = await unitModel();
     const scored = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'y2025-2' }], ctx(), new Date('2024-12-31T00:00:00Z'));
     expect(scored.Status === 'assembled' && scored.Rows[0].Values[1]).toBe('Active');
+  });
+
+  it('refuses to load a unit pipeline\'s model whose Lineage is not JSON, naming the model (never the current-value path)', async () => {
+    const { deps } = await unitModel('{not json');
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'/);
+  });
+
+  it('refuses to load a unit pipeline\'s model whose featureSpec entry has no encoding, naming the entry', async () => {
+    const lineage = { predictionUnitId: 'U-1', predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Years', categoryLevels: {}, featureSpec: [{ name: 'EventsAttended', source: { kind: 'immutable-field', entity: 'Years', field: 'EventsAttended', keyField: null }, missing: { impute: 'median', indicator: true, constant: null } }] };
+    const { deps } = await unitModel(JSON.stringify(lineage));
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*featureSpec\[0\].*encoding/);
+  });
+
+  it('refuses to load a unit pipeline\'s model whose Lineage has no unit part', async () => {
+    const { deps } = await unitModel(JSON.stringify({ targetEntityName: 'Years', featureSteps: steps }));
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx())).rejects.toThrow(/model 'model-1'.*predictionUnitId/);
+  });
+
+  it('loads a model whose pipeline has no unit as a legacy model (no as-of assembly)', async () => {
+    const { deps } = buildDeps(new FakeMLModel());
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps: { ...deps, pipelineUnits } }, new TestAssembler(new InMemoryDataAccess()));
+    await expect(processor.Preflight(CTX)).resolves.toBeUndefined();
+    await expect(processor.AssembleForScoring([{ ID: 'm1' }], CTX, 'unit-rule')).rejects.toThrow(/not trained on a Prediction Unit/);
+  });
+
+  it('dates and keys every scoped row with the unit row rule the training reader uses', async () => {
+    const { deps } = await unitModel();
+    const spy = vi.spyOn(PredictionUnitRowReader, 'UnitRowRef');
+    try {
+      await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'y2024-2' }, { ID: 'y2025-0' }], ctx(), 'unit-rule');
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('scores a batch through the as-of assembly, sending the as-of values to the sidecar', async () => {

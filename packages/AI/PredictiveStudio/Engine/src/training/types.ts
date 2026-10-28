@@ -24,7 +24,6 @@ import type {
   AsOfStrategy,
   OutcomeConfig,
   EvaluationRecord,
-  FeatureColumnSpec,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -241,24 +240,6 @@ export interface ModelTrainingLineage {
   assembledAt: string;
   /** How the stored metrics were measured (`EvaluationLineage.Key`). */
   evaluation: EvaluationRecord;
-}
-
-/**
- * The part of `MJ: ML Models.Lineage` a model trained on a Prediction Unit adds: the unit version it was trained on,
- * the typed feature columns its matrix was assembled from and the kept levels of each categorical column. Scoring
- * reads these back to assemble the same columns, folded the same way.
- */
-export interface UnitModelLineage {
-  predictionUnitId: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
-  predictionUnitVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
-  labelVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
-  featureSpecVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
-  /** The entity whose records the unit rows are (the entity a scoring scope must hold). */
-  unitRowEntity: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
-  /** The typed columns the matrix was assembled from, in order. */
-  featureSpec: FeatureColumnSpec[];  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
-  /** The kept levels of each categorical column, by column name; scoring folds every other value into the fold level. */
-  categoryLevels: Record<string, string[]>;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

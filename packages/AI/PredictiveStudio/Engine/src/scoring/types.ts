@@ -99,6 +99,15 @@ export interface ISidecarPredictor {
 }
 
 /**
+ * Which Prediction Unit a model's pipeline points at. Scoring asks before reading a model's Lineage, so a unit model
+ * whose Lineage is missing or malformed fails loudly instead of being scored as a legacy model.
+ */
+export interface IPipelineUnitLookup {
+  /** The pipeline's `PredictionUnitID`, or null for a pipeline without a unit. */
+  PredictionUnitIDOf(pipelineId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<string | null>;
+}
+
+/**
  * The frozen inference contract resolved off a loaded `MJ: ML Models` row — the
  * artifact bytes plus everything the sidecar needs to *apply* (never re-fit) the
  * model. Cached warm per processor run and reused across every record in a batch.
@@ -132,7 +141,7 @@ export interface LoadedModel {
    * For a model trained on a Prediction Unit: the unit version, the typed feature columns and the kept categorical
    * levels its Lineage stored, and the unit's row entity. Null for a model trained without a unit (the legacy path).
    */
-  unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: LoadedModel's members are camelCase; one casing per interface
+  unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** What scoring needs to assemble a unit model's features exactly as training did. */
@@ -157,14 +166,16 @@ export interface MLInferenceDeps {
   artifactLoader: IArtifactLoader;
   /** Sidecar `/predict` seam. */
   sidecar: ISidecarPredictor;
+  /** Which unit a model's pipeline points at; defaults to a `RunViewPipelineUnitLookup` on the run's provider. */
+  pipelineUnits?: IPipelineUnitLookup;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Prediction Unit store a unit model's unit is loaded from; defaults to a `RunViewPredictionUnitStore` on the run's provider. */
-  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Entity metadata a unit model's assembly resolves against; defaults to a `ProviderAssemblyMetadata` on the run's provider. */
-  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** The counting data access a unit model's rows are read through; defaults to a `RunViewDataAccess` on the run's provider. */
-  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** The Record Changes history a unit model's assembly replays; defaults to a complete-read `RunViewRecordHistoryReader` over `dataAccess`. */
-  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**

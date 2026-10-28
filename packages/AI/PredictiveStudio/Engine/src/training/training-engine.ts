@@ -87,22 +87,23 @@ import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingRefusedError } from './training-refusal';
 import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
-import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, UnitModelLineage } from './types';
+import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage } from './types';
+import type { UnitModelLineage } from './unit-model-lineage';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
 export interface ResolvedPipeline {
-  pipeline: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  targetEntityName: string;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  targetVariable: string;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  problemType: ProblemType;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  algorithmDriverKey: string;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  hyperparameters: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  sourceBindings: SourceBinding[];  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  featureSteps: FeatureStepGraph;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  asOf: AsOfStrategy;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  leakageGuard: LeakageGuard;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  validation: ValidationStrategy;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
-  outcomeConfig: OutcomeConfig;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  pipeline: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  targetEntityName: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  targetVariable: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  problemType: ProblemType;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  algorithmDriverKey: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  hyperparameters: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  sourceBindings: SourceBinding[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  featureSteps: FeatureStepGraph;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  asOf: AsOfStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  leakageGuard: LeakageGuard;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  validation: ValidationStrategy;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  outcomeConfig: OutcomeConfig;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** The unit rows a complete read returned. */
