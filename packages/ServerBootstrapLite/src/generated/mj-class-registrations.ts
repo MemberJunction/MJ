@@ -222,7 +222,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (459 classes)
+// @memberjunction/core-entities (460 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -650,6 +650,7 @@ import {
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -1947,6 +1948,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -2584,7 +2586,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1098;
+export const CLASS_REGISTRATIONS_COUNT = 1099;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

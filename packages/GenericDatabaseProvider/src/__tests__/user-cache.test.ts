@@ -942,6 +942,25 @@ describe('UserCache', () => {
             expect(stub.Queries).toHaveLength(0);
         });
 
+        it('caches every row an email matched, so the login path can see a duplicate', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            const rows = [
+                { ID: 'id2', Name: 'Bob', Email: 'bob@example.com' },
+                { ID: 'id3', Name: 'Bob Again', Email: 'BOB@example.com' },
+            ];
+            stub.ExecuteSQL.mockImplementation(async (query: string) => {
+                if (query.includes('UNION ALL')) return [{ Scope: 'users', RowCount: 2, MaxUpdatedAt: '' }, { Scope: 'roles', RowCount: 0, MaxUpdatedAt: '' }];
+                if (query.includes('vwUserRoles')) return [];
+                return rows;
+            });
+
+            const found = await UserCache.Instance.FindUser({ Email: 'bob@example.com' });
+
+            expect(found?.ID).toBe('id2');
+            expect(UserCache.Instance.Users.map(u => u.ID)).toEqual(expect.arrayContaining(['id2', 'id3']));
+        });
+
         it('asks the database once for a user that does not exist, then remembers', async () => {
             const stub = makeProviderStub({ users: [], roles: [] });
             await UserCache.Instance.Refresh(stub.Provider);

@@ -55,6 +55,14 @@ export interface IAuthProvider {
   extractUserInfo(payload: JwtPayload): AuthUserInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
+   * Returns the provider's stable ID for the signed-in account, which the server binds to a User
+   * record together with the token's issuer. Return undefined when the token has no ID that stays
+   * the same across logins, or when the provider mints tokens for a User record itself. Optional
+   * so third-party providers written before this existed keep compiling; they get no binding.
+   */
+  ExtractSubject?(payload: JwtPayload): string | undefined;
+
+  /**
    * Releases any resources (keep-alive HTTP agent, JWKS client) this provider instance holds.
    * Optional so implementations with nothing to release don't need a no-op override. Called by
    * {@link AuthProviderFactory} before an existing provider is replaced (`register()`) or the

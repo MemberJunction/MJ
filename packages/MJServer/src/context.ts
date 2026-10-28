@@ -5,7 +5,8 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
+import { GetSigningKeys, GetSystemUser, GetValidationOptions, ExtractUserInfoFromPayload } from './auth/index.js';
+import { BuildLoginIdentity, RecordBindingLogin, ResolveLoginUser, type ResolvedLoginUser } from './auth/loginIdentityBinding.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { EmailsMatch, ResolveLoginEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
@@ -152,13 +153,19 @@ async function writeSessionAudit(args: {
  * rewrite is reported as such; any other difference means the lookup reached another person's
  * record. Anonymous magic-link sessions run as a synthetic principal by design and are skipped.
  */
-function reportLoginIdentity(loginEmail: LoginEmailResolution, sessionUser: UserInfo): boolean {
+function reportLoginIdentity(loginEmail: LoginEmailResolution, sessionUser: UserInfo, resolved: ResolvedLoginUser): boolean {
   if (sessionUser.IsMagicLinkAnonymous || EmailsMatch(loginEmail.TokenEmail, sessionUser.Email)) {
     return false;
   }
   if (loginEmail.Remapped) {
     console.warn(
       `[Auth] USER_EMAIL_MAP remapped login '${loginEmail.TokenEmail}' to '${loginEmail.LookupEmail}'; the session runs as user ${sessionUser.ID} (${sessionUser.Email})`,
+    );
+  } else if (resolved.Source === 'binding') {
+    // The provider account is bound to this user, so the binding wins; the email on one side changed.
+    console.warn(
+      `[Auth] Login identity '${loginEmail.TokenEmail ?? ''}' is bound to user ${sessionUser.ID}, whose record email is ${sessionUser.Email}; ` +
+        `the session runs as the bound user. Update the record's email if the person's address changed.`,
     );
   } else {
     console.warn(
@@ -554,13 +561,17 @@ export const GetUserPayload = async (
     const loginEmail = ResolveLoginEmail(userInfo, userEmailMap);
     const email = loginEmail.LookupEmail;
     
-    const userRecord = await VerifyUserRecord(
-      email, 
-      userInfo.firstName, 
-      userInfo.lastName, 
-      requestDomain, 
-      readWriteDataSource
-    );
+    // Match the login to a User by its provider account first, and by email only when the account
+    // is not bound yet (see auth/loginIdentityBinding.ts).
+    const resolvedLogin = await ResolveLoginUser({
+      Identity: BuildLoginIdentity(payload.iss, userInfo.subject, userInfo.providerName),
+      LoginEmail: loginEmail,
+      FirstName: userInfo.firstName,
+      LastName: userInfo.lastName,
+      RequestDomain: requestDomain,
+      DataSource: readWriteDataSource,
+    });
+    const userRecord = resolvedLogin.User;
 
     if (!userRecord) {
       console.error(`User ${email} not found`);
@@ -579,7 +590,8 @@ export const GetUserPayload = async (
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
     if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
-      const identityMismatch = reportLoginIdentity(loginEmail, sessionUser);
+      const identityMismatch = reportLoginIdentity(loginEmail, sessionUser, resolvedLogin);
+      RecordBindingLogin(resolvedLogin.BindingID);
       void writeSessionAudit({
         user: sessionUser,
         auditTypeName: SESSION_AUDIT_TYPE,
@@ -596,6 +608,8 @@ export const GetUserPayload = async (
           resolvedUserEmail: sessionUser.Email ?? null,
           remappedByUserEmailMap: loginEmail.Remapped,
           identityMismatch,
+          resolvedBy: resolvedLogin.Source,
+          identityBindingID: resolvedLogin.BindingID ?? null,
         },
       });
     }

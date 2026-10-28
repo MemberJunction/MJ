@@ -27,6 +27,14 @@ export class MagicLinkProvider extends BaseAuthProvider {
   /**
    * Extracts user identity from a MJ-issued magic-link JWT payload.
    */
+  /**
+   * MJ mints magic-link tokens itself, and their `sub` names the invite, not a person, so a login
+   * through one is never bound.
+   */
+  ExtractSubject(_payload: JwtPayload): string | undefined {
+    return undefined;
+  }
+
   extractUserInfo(payload: JwtPayload): AuthUserInfo {
     const email = payload.email as string | undefined;
     const fullName = payload.name as string | undefined;

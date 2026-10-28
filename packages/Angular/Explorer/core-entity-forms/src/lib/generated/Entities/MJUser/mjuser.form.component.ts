@@ -145,6 +145,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
             { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false },
             { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
+            { sectionKey: 'mJUserExternalIdentities', sectionName: 'User External Identities', isExpanded: false },
             { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false }
         ]);
     }

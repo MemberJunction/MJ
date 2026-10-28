@@ -207,6 +207,13 @@ export interface AuthUserInfo {
    * Unique user identifier from the auth provider
    */
   userId?: string;
+
+  /**
+   * The provider's stable account ID used to bind a login to a User record (with the token's
+   * issuer). Set by the server from {@link IAuthProvider.ExtractSubject}, not by `extractUserInfo`.
+   * Undefined when the provider has no stable ID or issues tokens for a User record directly.
+   */
+  subject?: string; // case-violation-ok-legacy-back-compat: matches the camelCase members of this published shape
   
   /**
    * User's roles or groups

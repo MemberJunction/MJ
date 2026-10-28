@@ -37,6 +37,19 @@ export class MSALProvider extends BaseAuthProvider {
   /**
    * Extracts user information from MSAL/Azure AD JWT payload
    */
+  /**
+   * Entra's `sub` is pairwise: it differs for each app registration, so Explorer and the CLI under
+   * different client IDs would see two subjects for one person. The object ID (`oid`) is the same in
+   * every app of a tenant, so the subject is `tid:oid`. A token without both claims gets no subject
+   * rather than falling back to `sub`: mixing the two forms would give one person two subjects from
+   * the same issuer, which the server refuses.
+   */
+  ExtractSubject(payload: JwtPayload): string | undefined {
+    const tid = payload.tid;
+    const oid = payload.oid;
+    return typeof tid === 'string' && tid && typeof oid === 'string' && oid ? `${tid}:${oid}` : undefined;
+  }
+
   extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // MSAL/Azure AD uses some custom claims
     const email = payload.email as string | undefined || payload.preferred_username as string | undefined;

@@ -82,6 +82,13 @@ export class LocalDevProvider extends BaseAuthProvider {
   /**
    * Extracts user identity from a local-dev JWT payload.
    */
+  /**
+   * MJ mints local-dev tokens itself from a User record, so there is no outside account to bind.
+   */
+  ExtractSubject(_payload: JwtPayload): string | undefined {
+    return undefined;
+  }
+
   extractUserInfo(payload: JwtPayload): AuthUserInfo {
     const email = payload.email as string | undefined;
     const fullName = payload.name as string | undefined;

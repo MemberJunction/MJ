@@ -414,6 +414,7 @@ import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.c
 import { MJThemeFormComponent } from "./Entities/MJTheme/mjtheme.form.component";
 import { MJUserApplicationEntityFormComponent } from "./Entities/MJUserApplicationEntity/mjuserapplicationentity.form.component";
 import { MJUserApplicationFormComponent } from "./Entities/MJUserApplication/mjuserapplication.form.component";
+import { MJUserExternalIdentityFormComponent } from "./Entities/MJUserExternalIdentity/mjuserexternalidentity.form.component";
 import { MJUserFavoriteFormComponent } from "./Entities/MJUserFavorite/mjuserfavorite.form.component";
 import { MJUserFormComponent } from "./Entities/MJUser/mjuser.form.component";
 import { MJUserNotificationFormComponent } from "./Entities/MJUserNotification/mjusernotification.form.component";
@@ -488,7 +489,8 @@ declarations: [
     MJKnowledgeHubSavedSearchFormComponent,
     MJMagicLinkInviteFormComponent,
     MJMaterializedResultFormComponent,
-    MJMeetingParticipantFormComponent
+    MJMeetingParticipantFormComponent,
+    MJUserExternalIdentityFormComponent
 ],
 imports: [
     CommonModule,
