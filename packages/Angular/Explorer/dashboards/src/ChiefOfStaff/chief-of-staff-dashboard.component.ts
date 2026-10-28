@@ -7,7 +7,7 @@ import {
     inject,
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { filter, takeUntil } from 'rxjs/operators';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 import { CompositeKey, EntityInfo, LogError, RunView, RunViewParams } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -61,6 +61,7 @@ import {
     ValidateHealthFilterParam,
     ValidateSearchQueryParam,
 } from './chief-of-staff-agent-context';
+import { IsCockpitEntityChange } from './chief-of-staff-live-refresh';
 
 /** OpenApp entity the cockpit reads and edits for priorities and OKRs. Not a core entity: never assume its key is `ID`. */
 
@@ -337,8 +338,41 @@ export class ChiefOfStaffDashboardComponent
             filter((c) => c === this),
             takeUntil(this.destroy$),
         ).subscribe(() => this.publishAgentContext());
+        this.subscribeToLiveEntityChanges();
 
         this.NotifyLoadComplete();
+    }
+
+    /** A change arrived while the tab was detached; reload once when it is shown again. */
+    private liveReloadPending = false;
+
+    /**
+     * Reloads the cockpit when an entity it shows changes anywhere. MJAPI broadcasts every save
+     * and delete to browsers, including saves made by server-side code (a wake run creating an
+     * approval request, a run row, a task), and the client raises each as a `remote-invalidate`
+     * BaseEntity event. A burst of events is one reload. A detached tab does not reload in the
+     * background; it reloads once when it is shown again.
+     */
+    private subscribeToLiveEntityChanges(): void {
+        MJGlobal.Instance.GetEventListener(false).pipe(
+            filter((event) => IsCockpitEntityChange(event)),
+            debounceTime(750),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            if (this.navigationService.IsResourceDetached(this)) {
+                this.liveReloadPending = true;
+                return;
+            }
+            void this.LoadCockpitData();
+        });
+
+        this.navigationService.ResourceReattached$.pipe(
+            filter((c) => c === this && this.liveReloadPending),
+            takeUntil(this.destroy$),
+        ).subscribe(() => {
+            this.liveReloadPending = false;
+            void this.LoadCockpitData();
+        });
     }
 
     override ngOnDestroy(): void {
