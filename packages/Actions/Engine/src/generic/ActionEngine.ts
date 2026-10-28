@@ -960,7 +960,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          this.ParamDefinitionsFor(params),
          params.Provenance?.EntityActionParams
       );
-      const resultCode = result.Result?.ResultCode;
+      // The action's own code when it matches none of its metadata result codes (`Result` is then undefined),
+      // so the execution log keeps a custom code instead of recording none.
+      const resultCode = result.Result?.ResultCode ?? result.ResultCode;
       const message = result.Message;
       // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
       // INSIDE the post-INSERT task (after the 'started' INSERT lands), so it can never be reverted by

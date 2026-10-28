@@ -66,6 +66,18 @@ describe('ExecBlockRule', () => {
       expect(result).toMatch(/n\.nspname = '__mj'/);
     });
 
+    it('lower-cases an unquoted schema, which is how PostgreSQL stores it (#5864)', () => {
+      const sql = execBlock('UpdateEntity', 5).replace('[__mj]', '[__mj_BizAppsSales]');
+      expect(convert(sql)).toMatch(/n\.nspname = '__mj_bizappssales'/);
+    });
+
+    it('keeps the case of a quoted schema (#5864)', () => {
+      const sql = execBlock('UpdateEntity', 5).replace('[__mj]', '"MixedCase"');
+      const result = convert(sql);
+      expect(result).toMatch(/n\.nspname = 'MixedCase'/);
+      expect(result).toMatch(/PERFORM "MixedCase"\."spUpdateEntity"/);
+    });
+
     it('emits JSON-arg unconditionally when the CALL ALONE exceeds the limit', () => {
       // Above the limit no typed-arg function can exist on PostgreSQL at all, so there is
       // nothing to resolve -- emitting the lookup would be dead weight.
