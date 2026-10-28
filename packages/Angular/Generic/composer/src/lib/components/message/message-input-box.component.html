@@ -25,6 +25,18 @@
 
     <!-- Action row: its own strip below the editor (not floating over it), so text never runs behind a button -->
     <div class="composer-actions">
+      <!-- Status line, left of the action row: what the host is waiting on ("Sage is working"). A polite
+           live region; the elapsed time is a pill in an aria-hidden child so its ticking is never announced. -->
+      @if (StatusText) {
+        <div class="send-slot-status" [class.send-slot-status--stopping]="SendSlotMode === 'stopping'" role="status" aria-live="polite">
+          <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+          <span class="send-slot-status-text">{{ StatusText }}</span>
+          @if (StatusElapsed) {
+            <span class="send-slot-status-elapsed" aria-hidden="true">{{ StatusElapsed }}</span>
+          }
+        </div>
+      }
+
       @if (EnableAttachments || EnableRealtime || EnablePlanMode || EnableSkills) {
         <div class="attach-buttons">
           @if (EnableSkills) {
@@ -91,14 +103,34 @@
         </div>
       }
 
-      <!-- Send Button (Icon Only) -->
+      <!-- The send slot. ONE button in every mode (send / stop / stopping) so focus is kept across the
+           change; see SendSlotMode. -->
       <button
         class="send-button-icon"
-        [disabled]="!CanSend"
-        (click)="OnSendClick()"
-        title="Send message (Enter)"
+        [class.send-button-icon--stop]="SendSlotMode === 'stop'"
+        [class.send-button-icon--stop-all]="IsStopAll"
+        [class.send-button-icon--stopping]="SendSlotMode === 'stopping'"
+        [disabled]="SendSlotDisabled"
+        (click)="OnSendSlotClick()"
+        [title]="SendSlotLabel"
+        [attr.aria-label]="SendSlotLabel"
+        [attr.aria-busy]="SendSlotMode === 'stopping' ? true : null"
         >
-        <i class="fa-solid fa-paper-plane"></i>
+        @switch (SendSlotMode) {
+          @case ('stop') {
+            <i class="fa-solid fa-stop" aria-hidden="true"></i>
+            @if (IsStopAll) {
+              <span class="send-slot-label">Stop all</span>
+              <span class="send-slot-count">{{ StopCount }}</span>
+            }
+          }
+          @case ('stopping') {
+            <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+          }
+          @default {
+            <i class="fa-solid fa-paper-plane"></i>
+          }
+        }
       </button>
     </div>
   </div>

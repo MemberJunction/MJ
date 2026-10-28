@@ -9,6 +9,7 @@ import {
     ProviderType,
     CompositeKey,
     EntityDependency,
+    GetRecordDependenciesOptions,
     BaseEntity,
     BaseEntityResult,
     SaveSQLResult,
@@ -22,10 +23,11 @@ import {
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
+    EntitySaveOptions,
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
@@ -159,19 +161,33 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return unionParts.join(' UNION ALL ');
     }
 
-    protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+    protected override BuildHardLinkDependencySQL(
+        entityDependenciesOrName: EntityDependency[] | string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo,
+    ): string {
+        const entityDependencies = this.resolveEntityDependencies(entityDependenciesOrName);
         let sSQL = '';
         for (const dep of entityDependencies) {
             const entityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.EntityName?.trim().toLowerCase());
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
+            if (!this.shouldIncludeDependencyEntity(relatedEntityInfo, options, contextUser)) continue;
+
+            const fkField = relatedEntityInfo.Fields.find(f => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
+            if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
 
             const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
+            const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
             const pkParts: string[] = [];
-            for (const pk of entityInfo.PrimaryKeys) {
+            for (const pk of pksToProject) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
             }
             const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
+            const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [dep.FieldName]);
+            const rawVal = String(compositeKey.GetValueByIndex(0) ?? '');
+            const escapedVal = quotes.length > 0 ? rawVal.replace(/'/g, "''") : rawVal;
 
             if (sSQL.length > 0) sSQL += ' UNION ALL ';
             sSQL += 'SELECT '
@@ -181,13 +197,18 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + "'" + dep.FieldName + '\' AS "FieldName", '
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
-                + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, sourceObject) + ' '
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + escapedVal + quotes;
         }
         return sSQL;
     }
 
-    protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+    protected override BuildSoftLinkDependencySQL(
+        entityName: string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo,
+    ): string {
         // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
         // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
         // link, which is a different thing entirely.
@@ -195,11 +216,19 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (!targetEntity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
-        // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+        // Single-primary-key records referenced by polymorphic tables may store either the canonical
+        // `ID|<guid>` encoding (`CompositeKey.ToRecordID()`) OR the bare primary key value (`<guid>`).
         const targetRecordID = compositeKey.ToRecordID().replace(/'/g, "''");
+        const bareValue =
+            compositeKey.KeyValuePairs.length === 1
+                ? String(compositeKey.KeyValuePairs[0].Value ?? '').replace(/'/g, "''")
+                : '';
 
         let sSQL = '';
         this.Entities.forEach(entity => {
+            if (!this.shouldIncludeDependencyEntity(entity, options, contextUser)) {
+                return;
+            }
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -208,6 +237,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
             entity.Fields.filter(f => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach(f => {
                 if (sSQL.length > 0) sSQL += ' UNION ALL ';
+                const sourceObject = this.resolveDependencySourceObject(entity, [f.Name, f.EntityIDFieldName]);
+                const recordIDPredicate =
+                    bareValue && bareValue !== targetRecordID
+                        ? pgDialect.QuoteIdentifier(f.Name) + " IN ('" + targetRecordID + "', '" + bareValue + "')"
+                        : pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
                 // Both literals are always quoted regardless of any primary key type: the discriminator
                 // column is a uuid FK to __mj.Entity and the payload column is text. Deriving quoting from
                 // the holder's primary key type emitted unquoted literals for an integer-keyed holder.
@@ -218,9 +252,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                     + "'" + f.Name + '\' AS "FieldName", '
                     + 'true AS "IsSoftLink", '
                     + "'" + f.EntityIDFieldName + '\' AS "EntityIDFieldName" '
-                    + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
+                    + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, sourceObject) + ' '
                     + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + " = '" + targetEntity.ID + "'"
-                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
+                    + ' AND ' + recordIDPredicate;
             });
         });
         return sSQL;
@@ -827,9 +861,13 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     /**
      * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
      * when transaction variables require regenerating the SQL instruction.
+     *
+     * @param client - The client whose transaction the save will run in, when one is already
+     *   open. A read the save's Record Change snapshot needs runs on it, so it sees that
+     *   transaction's earlier writes.
      */
-    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
-        return this.GenerateSaveSQL(entity, isNew, user);
+    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo, client?: pg.PoolClient): Promise<SaveSQLResult> {
+        return this.GenerateSaveSQLReadingOn(entity, isNew, user, client);
     }
 
     // GenerateSaveSQL is now inherited from GenericDatabaseProvider — the
@@ -949,12 +987,22 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
+     *
+     * When `returnContext.needsDatestampProjection` is true (either passed by
+     * `GenericDatabaseProvider.GenerateSaveSQL` or resolved from `options`),
+     * delegates to {@link ProjectSaveCallToDatestamps}.
      */
     protected override WrapSaveCallForResult(
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment {
+        const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+        if (resolvedReturn.needsDatestampProjection) {
+            return this.ProjectSaveCallToDatestamps(binding, entity, spName, resolvedReturn);
+        }
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
         }
@@ -966,20 +1014,43 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Projects a PG save function call down to `returnContext.datestampSelectColumnsSQL`
+     * (`SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`) when
+     * `options.SaveReturnMode === 'datestamps_only'` is passed at runtime on an entity
+     * whose compiled function returns the full view.
+     */
+    protected override ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
+    ): SaveSQLFragment {
+        if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
+            throw new Error(`PostgreSQLDataProvider.ProjectSaveCallToDatestamps: unexpected binding kind '${binding.kind}'`);
+        }
+        const sql = `SELECT ${returnContext.datestampSelectColumnsSQL} FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
+        return { sql, parameters: [...binding.values] };
+    }
+
+    /**
      * Wraps a PG save SQL with the record-change CTE chain. The
      * `save_result` CTE captures the inserted/updated row; `record_change`
      * inserts the audit row with the SQL-side `RecordID` expression
-     * derived from `save_result`'s PK column(s).
+     * derived from `save_result`'s PK column(s), and the outer `SELECT`
+     * returns `returnContext.finalSelectColumnsSQL` from `save_result`.
      */
     protected override WrapSaveCallWithRecordChange(
         saveSQL: SaveSQLFragment,
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment {
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
         }
+        const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
@@ -994,7 +1065,7 @@ record_change AS (
     FROM save_result
     RETURNING "ID"
 )
-SELECT * FROM save_result`;
+SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
         const parameters = [
             ...baseValues,
             payload.entityID,
@@ -1028,7 +1099,7 @@ SELECT * FROM save_result`;
         const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
         if (this.ShouldTrackRecordChanges(entityInfo) && options?.SkipRecordChanges !== true) {
-            const oldData = entity.GetAll(false);
+            const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
             const recordID = this.buildRecordIDFromEntity(entity);
             // Delete: newData is null so the payload renders Source/lineage from
             // the entity's RestoreContext (usually NULL — supported for symmetry).

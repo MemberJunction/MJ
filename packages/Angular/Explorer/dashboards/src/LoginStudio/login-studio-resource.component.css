@@ -1,0 +1,305 @@
+/* Login Studio: the editor's three columns (blocks | preview | settings), then a picture of the Explorer
+   login screen inside the preview frame, drawn with this screen's own classes and the --mj-login-* tokens. */
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ls__alert { margin-bottom: var(--mj-space-4); }
+
+.ls__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mj-space-2);
+}
+
+.ls__hint {
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+/* ============================== THE EDITOR ============================== */
+
+.ls {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr) 20rem;
+  grid-template-areas: 'palette stage side';
+  gap: var(--mj-space-4);
+  align-items: start;
+}
+
+.ls__heading {
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+}
+
+/* ── blocks ── */
+.ls__palette {
+  grid-area: palette;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+.ls__palette-list {
+  display: grid;
+  gap: var(--mj-space-2);
+}
+/* Layout only: the tile's look is mjButton's. */
+.ls__tile {
+  justify-content: flex-start;
+  width: 100%;
+  cursor: grab;
+}
+.ls__tile i {
+  width: 1.25rem;
+  text-align: center;
+}
+/* Dragged out, the tile keeps its place in the palette (a drop creates a block; it moves nothing). */
+.ls__tile.cdk-drag-placeholder { opacity: 0.4; }
+.ls__tile.cdk-drag-preview {
+  width: 10rem;
+  box-shadow: var(--mj-shadow-lg);
+}
+
+/* ── preview ── */
+.ls__stage {
+  grid-area: stage;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3);
+  min-width: 0;
+}
+.ls__stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mj-space-3);
+}
+
+/* A 16:10 desktop screen, no taller than the window has room for, or a phone. */
+.ls__frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: calc(min(62vh, 44rem) * 1.6);
+  aspect-ratio: 16 / 10;
+  margin-inline: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  background: var(--mj-login-panel-bg);
+}
+.ls__frame--phone {
+  width: 24rem;
+  max-width: 100%;
+  height: 46rem;
+  margin-inline: auto;
+  border-radius: var(--mj-radius-xl);
+}
+
+/* ── settings ── */
+.ls__side {
+  grid-area: side;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 10rem);
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  background: var(--mj-bg-surface);
+}
+.ls__side-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface);
+}
+.ls__side-head > i { color: var(--mj-text-secondary); }
+.ls__side-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+/* ============================== THE PICTURE OF THE LOGIN SCREEN ============================== */
+
+.lp {
+  display: flex;
+  height: 100%;
+}
+/* Desktop: the page laid out at a real screen's size (DESKTOP_WIDTH in the component), then scaled to the
+   frame, so type and spacing shrink in proportion. At 1:1 a frame this narrow would draw a layout no
+   visitor gets at that width. */
+.lp:not(.lp--stacked) {
+  box-sizing: border-box;
+  width: 1440px;
+  height: 900px;
+  transform-origin: top left;
+}
+.lp--reverse { flex-direction: row-reverse; }
+
+.lp__banner {
+  box-sizing: border-box;
+  display: flex;
+  flex: var(--mj-login-banner-flex) 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: var(--mj-space-10) var(--mj-space-8);
+  background: var(--mj-login-banner-bg);
+  color: var(--mj-login-banner-text);
+}
+.lp__banner--center { align-items: center; }
+.lp__brand {
+  width: 100%;
+  margin-block: auto;
+}
+
+.lp__panel {
+  box-sizing: border-box;
+  display: flex;
+  flex: var(--mj-login-panel-flex) 1 0;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  padding: var(--mj-space-8) var(--mj-space-6);
+  background: var(--mj-login-panel-bg);
+  color: var(--mj-login-panel-text);
+}
+.lp__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3);
+  width: 100%;
+  max-width: var(--mj-login-picker-max-width);
+  margin-block: auto;
+}
+
+.lp__picker {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--mj-space-3);
+  padding-block: var(--mj-space-2);
+}
+/* As <mj-login-picker> draws its heading. */
+.lp__heading {
+  font-size: var(--mj-text-2xl);
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-login-panel-text);
+}
+.lp__signin {
+  display: block;
+  padding: var(--mj-space-3);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  font-weight: var(--mj-font-semibold);
+  text-align: center;
+}
+
+.lp__region-label {
+  display: block;
+  margin-bottom: calc(-1 * var(--mj-space-2));
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.lp__banner .lp__region-label { margin-bottom: var(--mj-space-1); }
+.lp__default-note {
+  margin: var(--mj-space-2) 0 0;
+  font-size: var(--mj-text-xs);
+  opacity: 0.75;
+}
+
+/* Centered: one column on the banner background, the sign-in options a card on top of it. */
+.lp--centered {
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  padding: var(--mj-space-8) var(--mj-space-4);
+  background: var(--mj-login-banner-bg);
+}
+.lp--centered .lp__banner {
+  flex: 0 0 auto;
+  width: 100%;
+  overflow: visible;
+  padding: 0 0 var(--mj-space-6);
+  background: none;
+  align-items: center;
+}
+.lp--centered .lp__panel {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: var(--mj-login-centered-card-width);
+  overflow: visible;
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-lg);
+}
+
+/* Stacked (the phone preview: the login screen at 480px and below, where the banner is 50dvh): the banner
+   shortens above the sign-in column. */
+.lp--stacked { flex-direction: column; }
+.lp--stacked:not(.lp--centered) .lp__banner {
+  flex: 0 0 auto;
+  height: 50%;
+  padding: var(--mj-space-4);
+  align-items: center;
+}
+.lp--stacked:not(.lp--centered) .lp__brand { margin-block: auto 0; }
+.lp--stacked:not(.lp--centered) .lp__panel {
+  flex: 1 1 auto;
+  padding: var(--mj-space-6) var(--mj-space-4);
+}
+
+/* The story panel and the sign-in column are selectable (their settings and colors open in the
+   inspector): a pointer says so, and the selected one is outlined. Inset, because both scroll. */
+.lp__banner,
+.lp__panel,
+.lp--centered { cursor: pointer; }
+.lp__surface-on,
+.lp--surface-on { box-shadow: inset 0 0 0 2px var(--mj-brand-primary); }
+.lp--centered .lp__panel.lp__surface-on { box-shadow: var(--mj-shadow-lg), 0 0 0 2px var(--mj-brand-primary); }
+
+/* ============================== NARROWER ============================== */
+
+@media (max-width: 1280px) {
+  .ls {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    grid-template-areas:
+      'palette palette'
+      'stage side';
+  }
+  .ls__palette { position: static; }
+  .ls__palette-list { grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .ls {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'palette' 'stage' 'side';
+  }
+  .ls__side {
+    position: static;
+    max-height: none;
+  }
+}

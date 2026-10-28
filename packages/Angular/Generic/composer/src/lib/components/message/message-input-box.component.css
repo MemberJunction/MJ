@@ -104,6 +104,71 @@
   opacity: 0.5;
 }
 
+/* The send slot as a stop control. Same element, same place; red says what a click does now. */
+.send-button-icon--stop {
+  background: var(--mj-status-error);
+  color: var(--mj-brand-on-primary);
+}
+.send-button-icon--stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-status-error) 85%, var(--mj-text-primary));
+}
+/* "Stop all N": the square widens into a labelled button. */
+.send-button-icon--stop-all {
+  width: auto;
+  padding: 0 12px;
+  gap: 8px;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.send-slot-count {
+  background: color-mix(in srgb, var(--mj-brand-on-primary) 22%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: var(--mj-text-xs);
+}
+/* Stopping: neutral and waiting, not greyed-out like an empty Send. */
+.send-button-icon--stopping:disabled {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
+  cursor: default;
+  opacity: 1;
+}
+
+/* Status line: the left side of the action row, shrinking (with an ellipsis) before the buttons do. */
+.send-slot-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-right: auto;
+  padding-left: 5px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+.send-slot-status--stopping {
+  color: var(--mj-text-muted);
+}
+.send-slot-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The elapsed time as a pill: the reply time pill's geometry, on the info status pair, which has
+   its own dark-mode values (a brand tint on a dark surface is not legible). */
+.send-slot-status-elapsed {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+}
+
 /* Attach buttons container */
 .attach-buttons {
   display: flex;
@@ -183,6 +248,10 @@
   }
   .composer-actions {
     padding: 0 5px 5px;
+  }
+  /* The status line drops its elapsed time; "Sage is working" is enough at this width. */
+  .send-slot-status-elapsed {
+    display: none;
   }
   .send-button-icon {
     width: 32px;

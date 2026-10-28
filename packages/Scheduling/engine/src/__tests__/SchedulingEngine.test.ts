@@ -117,9 +117,10 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationChannel: {}
 }));
 
-vi.mock('@memberjunction/scheduling-engine-base', async () => {
-    // Real rxjs Subject so JobsChanged$ is genuinely subscribable and the wake-on-
-    // activation path can be exercised by tests via the __emitJobsChanged() helper.
+// The scheduling engine base the engine reads jobs and its provider from (the mocked module's Instance). Hoisted so
+// the tests read the same typed object. A real rxjs Subject so JobsChanged$ is genuinely subscribable and the
+// wake-on-activation path can be exercised via __emitJobsChanged().
+const { fakeBase } = await vi.hoisted(async () => {
     const { Subject } = await import('rxjs');
     const jobsChanged = new Subject<void>();
     const fakeBase = {
@@ -149,17 +150,20 @@ vi.mock('@memberjunction/scheduling-engine-base', async () => {
         RunViewProviderToUse: {}
     };
 
-    return {
-        SchedulingEngineBase: {
-            get Instance() { return fakeBase; }
-        }
-    };
+    return { fakeBase };
 });
+
+vi.mock('@memberjunction/scheduling-engine-base', () => ({
+    SchedulingEngineBase: {
+        get Instance() { return fakeBase; }
+    }
+}));
 
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
         GetNextRunTime: vi.fn().mockReturnValue(new Date('2025-06-01T00:00:00Z')),
-        IsExpressionDue: vi.fn().mockReturnValue(false)
+        IsExpressionDue: vi.fn().mockReturnValue(false),
+        GetMinIntervalMs: vi.fn().mockReturnValue(86_400_000)
     }
 }));
 
@@ -170,13 +174,12 @@ vi.mock('../NotificationManager', () => ({
 }));
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
-import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { CronExpressionHelper } from '../CronExpressionHelper';
 
 describe('SchedulingEngine', () => {
     let engine: SchedulingEngine;
     // Access the mock base for setting up test state
-    const mockBase = SchedulingEngineBase.Instance as Record<string, unknown>;
+    const mockBase = fakeBase;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -187,6 +190,7 @@ describe('SchedulingEngine', () => {
         // initializeNextRunTimes branch tests can't observe the cron-tick path.
         (CronExpressionHelper.GetNextRunTime as ReturnType<typeof vi.fn>).mockReturnValue(new Date('2025-06-01T00:00:00Z'));
         (CronExpressionHelper.IsExpressionDue as ReturnType<typeof vi.fn>).mockReturnValue(false);
+        (CronExpressionHelper.GetMinIntervalMs as ReturnType<typeof vi.fn>).mockReturnValue(86_400_000);
         // Access the singleton and reset its state
         engine = SchedulingEngine.Instance;
         // Stop any existing polling
@@ -521,6 +525,104 @@ describe('SchedulingEngine', () => {
             await callInitialize([job]);
             expect(job.NextRunAt).toBe(existing);
             expect(job.Save).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('a job activated while polling (null NextRunAt)', () => {
+        const buildJob = (overrides: Partial<Record<string, unknown>>): Record<string, unknown> => ({
+            ID: 'job-activated',
+            Name: 'Activated Job',
+            Status: 'Active',
+            CronExpression: '0 4 * * *',
+            Timezone: 'UTC',
+            NextRunAt: null,
+            LastRunAt: null,
+            RunImmediatelyIfNeverRun: false,
+            Save: vi.fn().mockResolvedValue(true),
+            ...overrides,
+        });
+        const flushMicrotasks = async () => {
+            for (let i = 0; i < 25; i++) {
+                await Promise.resolve();
+            }
+        };
+        const executeSQL = () => (mockBase.ProviderToUse as { ExecuteSQL: ReturnType<typeof vi.fn> }).ExecuteSQL;
+        beforeEach(() => {
+            // buildLockSprocCall renders the call through the provider's dialect; the shared mock has none.
+            Object.assign(mockBase.ProviderToUse as Record<string, unknown>, {
+                PlatformKey: 'sqlserver',
+                Dialect: { ProcedureCallSyntax: (schema: string, name: string, placeholders: string[]) => `EXEC [${schema}].[${name}] ${placeholders.join(', ')}` },
+            });
+        });
+        type IsJobDue = (job: Record<string, unknown>, evalTime: Date) => boolean;
+        const isJobDue = (job: Record<string, unknown>, evalTime: Date) =>
+            (SchedulingEngine.prototype as unknown as { isJobDue: IsJobDue }).isJobDue.call(engine, job, evalTime);
+
+        it('gets a NextRunAt through the targeted sproc, not Save(), and becomes due', async () => {
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            const running = buildJob({ ID: 'job-running', Name: 'Running Job', NextRunAt: new Date('2026-02-01T00:00:00Z') });
+            mockBase.ScheduledJobs = [running];
+            await engine.StartPolling(mockUser);
+            expect(engine.IsPolling).toBe(true);
+            executeSQL().mockClear();
+
+            // An admin flips a second job from Disabled to Active: the base reconciles its set and fires JobsChanged$.
+            const activated = buildJob({});
+            mockBase.ScheduledJobs = [running, activated];
+            (mockBase as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            const nextTick = new Date('2025-06-01T00:00:00Z');
+            expect(activated.NextRunAt).toEqual(nextTick);
+            expect(activated.Save).not.toHaveBeenCalled();
+            const sprocCalls = executeSQL().mock.calls.filter((c) => String(c[0]).includes('spSetScheduledJobNextRunAt'));
+            expect(sprocCalls).toHaveLength(1);
+            expect(sprocCalls[0][1]).toEqual(['job-activated', nextTick]);
+            expect(isJobDue(activated, nextTick)).toBe(true);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
+        });
+
+        it('honours RunImmediatelyIfNeverRun and leaves jobs that already have a NextRunAt alone', async () => {
+            vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            const running = buildJob({ ID: 'job-running', Name: 'Running Job', NextRunAt: new Date('2026-02-01T00:00:00Z') });
+            mockBase.ScheduledJobs = [running];
+            await engine.StartPolling(mockUser);
+            executeSQL().mockClear();
+
+            const immediate = buildJob({ ID: 'job-now', Name: 'Now Job', RunImmediatelyIfNeverRun: true });
+            mockBase.ScheduledJobs = [running, immediate];
+            (mockBase as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            expect((immediate.NextRunAt as Date).toISOString()).toBe('2026-01-15T12:00:00.000Z');
+            expect(running.NextRunAt).toEqual(new Date('2026-02-01T00:00:00Z'));
+            expect(executeSQL().mock.calls.filter((c) => String(c[0]).includes('spSetScheduledJobNextRunAt'))).toHaveLength(1);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
+        });
+
+        it('keeps the job unseeded in memory when the sproc fails, and does not throw', async () => {
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            const running = buildJob({ ID: 'job-running', Name: 'Running Job', NextRunAt: new Date('2026-02-01T00:00:00Z') });
+            mockBase.ScheduledJobs = [running];
+            await engine.StartPolling(mockUser);
+            executeSQL().mockImplementation(async (sql: string) => {
+                if (String(sql).includes('spSetScheduledJobNextRunAt')) throw new Error('permission denied');
+                return [{ permission_name: 'EXECUTE' }];
+            });
+
+            const activated = buildJob({});
+            mockBase.ScheduledJobs = [running, activated];
+            (mockBase as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            expect(activated.NextRunAt).toBeNull();
+            expect(engine.IsPolling).toBe(true);
+            executeSQL().mockResolvedValue([{ permission_name: 'EXECUTE' }]);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
         });
     });
 

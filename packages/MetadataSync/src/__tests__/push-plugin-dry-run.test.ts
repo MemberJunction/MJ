@@ -2,9 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { PushResult } from '../services/PushService';
+import type { PushResult, PushCallbacks } from '../services/PushService';
 
 let pushResult: PushResult;
+let pushWarnings: string[] = [];
+let validationOptions: Record<string, unknown> | null = null;
+
+const passingValidation = { isValid: true, errors: [], warnings: [] };
 
 // The plugin dynamic-imports the engine; stand in for everything but the formatter.
 vi.mock('../index.js', async () => {
@@ -14,12 +18,24 @@ vi.mock('../index.js', async () => {
   return {
     FormattingService,
     PushService: class {
-      async push(): Promise<PushResult> {
+      async push(_options: unknown, callbacks?: PushCallbacks): Promise<PushResult> {
+        for (const message of pushWarnings) callbacks?.onWarn?.(message);
         return pushResult;
       }
     },
-    ValidationService: class {},
+    ValidationService: class {
+      constructor(options: Record<string, unknown>) {
+        validationOptions = options;
+      }
+      async ValidateDirectory(): Promise<typeof passingValidation> {
+        return passingValidation;
+      }
+      async validateDirectory(): Promise<typeof passingValidation> {
+        return passingValidation;
+      }
+    },
     SyncStateManager: class {},
+    FindSyncRootDir: (dir: string) => dir,
     loadMJConfig: () => ({}),
     loadSyncConfig: async () => null,
     initializeProvider: async () => undefined,
@@ -94,5 +110,116 @@ describe('mj sync push labels a dry run in its text output', () => {
     expect(output).toContain('✓ Push completed successfully');
     expect(output).not.toMatch(/dry run/i);
     expect(report()).not.toContain('DRY RUN');
+  });
+});
+
+describe('mj sync push reports folders that pushWhen skipped', () => {
+  it('lists each skipped folder and its reason in the JSON data', async () => {
+    pushResult = {
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+      deleted: 0,
+      skipped: 0,
+      deferred: 0,
+      errors: 0,
+      warnings: [],
+      changeLog: [],
+      SkippedDirectories: [{ Directory: path.join(process.cwd(), 'demo-agents'), Reason: 'DEMO_ENABLED is not set' }],
+    };
+    const plugin = Object.create(SyncPushPlugin.prototype) as Record<string, unknown>;
+    plugin.parsedFlags = { 'no-validate': true };
+    plugin.Host = {
+      Format: 'json',
+      Verbose: false,
+      StartStep: () => undefined,
+      SucceedStep: () => undefined,
+      FailStep: () => undefined,
+      Log: () => undefined,
+    };
+
+    const result = await (plugin as unknown as {
+      Execute(): Promise<{ data: { skippedDirectories: Array<{ directory: string; reason: string }> } }>;
+    }).Execute();
+
+    expect(result.data.skippedDirectories).toEqual([{ directory: 'demo-agents', reason: 'DEMO_ENABLED is not set' }]);
+  });
+});
+
+describe('mj sync push lists each warning once', () => {
+  afterEach(() => {
+    pushWarnings = [];
+  });
+
+  it('drops a result warning that a callback already reported', async () => {
+    pushWarnings = ['⚠️  A', '⚠️  A'];
+    pushResult = {
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+      deleted: 0,
+      skipped: 0,
+      deferred: 0,
+      errors: 0,
+      warnings: ['A', 'B'],
+      changeLog: [],
+    };
+    const plugin = Object.create(SyncPushPlugin.prototype) as Record<string, unknown>;
+    plugin.parsedFlags = { 'no-validate': true };
+    plugin.Host = {
+      Format: 'json',
+      Verbose: false,
+      StartStep: () => undefined,
+      SucceedStep: () => undefined,
+      FailStep: () => undefined,
+      Log: () => undefined,
+    };
+
+    const result = await (plugin as unknown as { Execute(): Promise<{ warnings: string[] }> }).Execute();
+
+    expect(result.warnings).toEqual(['⚠️  A', 'B']);
+  });
+});
+
+describe('mj sync push validation options', () => {
+  beforeEach(() => {
+    validationOptions = null;
+    pushResult = {
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+      deleted: 0,
+      skipped: 0,
+      deferred: 0,
+      errors: 0,
+      warnings: [],
+      changeLog: [],
+    };
+  });
+
+  async function runJsonPush(flags: Record<string, unknown>): Promise<void> {
+    const plugin = Object.create(SyncPushPlugin.prototype) as Record<string, unknown>;
+    plugin.parsedFlags = { 'no-validate': false, ...flags };
+    plugin.Host = {
+      Format: 'json',
+      Verbose: false,
+      StartStep: () => undefined,
+      SucceedStep: () => undefined,
+      FailStep: () => undefined,
+      Log: () => undefined,
+    };
+    await (plugin as unknown as { Execute(): Promise<unknown> }).Execute();
+  }
+
+  it('honors pushWhen and validates child folders only without --dir', async () => {
+    await runJsonPush({});
+
+    expect(validationOptions).toMatchObject({ HonorPushWhen: true, ValidateChildFoldersOnly: true });
+  });
+
+  it('validates the given folder itself with --dir', async () => {
+    await runJsonPush({ dir: '.' });
+
+    expect(validationOptions).toMatchObject({ HonorPushWhen: true, ValidateChildFoldersOnly: false });
   });
 });

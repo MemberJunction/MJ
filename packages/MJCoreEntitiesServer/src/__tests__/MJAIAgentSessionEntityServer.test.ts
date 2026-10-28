@@ -32,6 +32,7 @@ vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJAIAgentSessionEntity. */
     class StubSessionEntity {
         public IsSaved = true;
+        public ContextCurrentUser: unknown = null;
         public Config_: string | null = null;
         public ConfigField: StubConfigField | null = { Dirty: true, OldValue: null };
 
@@ -39,8 +40,11 @@ vi.mock('@memberjunction/core-entities', () => {
             return { Success: true, Errors: [] };
         }
 
-        public GetFieldByName(name: string): StubConfigField | null {
-            return name === 'Config' ? this.ConfigField : null;
+        /** Fields other than Config, by name; a test fills it. */
+        public Fields = new Map<string, { Dirty: boolean }>();
+
+        public GetFieldByName(name: string): unknown {
+            return name === 'Config' ? this.ConfigField : (this.Fields.get(name) ?? null);
         }
     }
     return { MJAIAgentSessionEntity: StubSessionEntity };
@@ -235,5 +239,66 @@ describe('MJAIAgentSessionEntityServer.Validate', () => {
         } finally {
             base.Validate = original;
         }
+    });
+});
+
+describe('MJAIAgentSessionEntityServer.Validate — ConversationID is not rewritable by an anonymous caller (#4931)', () => {
+    /** A session whose Config is untouched, so only the ConversationID rule can refuse. */
+    function sessionWithConversationEdit(opts: { saved: boolean; conversationIdDirty: boolean; anonymous: boolean }): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: opts.saved, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; Fields: Map<string, { Dirty: boolean }> };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: opts.anonymous };
+        stub.Fields.set('ConversationID', { Dirty: opts.conversationIdDirty });
+        return entity;
+    }
+
+    it('refuses an anonymous caller re-pointing an existing session at another conversation', () => {
+        const result = sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: true }).Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('ConversationID');
+    });
+
+    it('allows an anonymous caller to set ConversationID when it creates the session (SessionManager.persistNewSession)', () => {
+        expect(sessionWithConversationEdit({ saved: false, conversationIdDirty: true, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows an anonymous caller saving other fields (heartbeat, close)', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: false, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows a named caller changing ConversationID', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: false }).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJAIAgentSessionEntityServer.Validate — a transaction variable cannot set a guarded field after the check (#4931)', () => {
+    type GroupVar = { EntityObject: unknown; Type: 'Define' | 'Use'; FieldName: string };
+    /** A saved session with untouched fields, enrolled in a group with these variables. */
+    function inGroup(anonymous: boolean, variables: (self: unknown) => GroupVar[]): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: true, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; TransactionGroup?: unknown };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: anonymous };
+        stub.TransactionGroup = { Variables: variables(entity) };
+        return entity;
+    }
+
+    it("refuses an anonymous caller whose 'Use' variable will set ConversationID or ID at submit", () => {
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(false);
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'id' }]).Validate().Success).toBe(false);
+    });
+
+    it("refuses an untrusted 'Use' variable on Config, whose protected keys are compared only at Validate", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(false);
+    });
+
+    it("refuses an untrusted 'Use' variable on ID, which re-points the update (and its Config) at another user's session", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ID' }]).Validate().Success).toBe(false);
+    });
+
+    it("allows a 'Use' variable on Config inside a trusted scope, and a 'Use' variable on another row", async () => {
+        await RunWithTrustedSessionConfigWrites(async () => {
+            expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(true);
+        });
+        expect(inGroup(true, () => [{ EntityObject: {}, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(true);
     });
 });

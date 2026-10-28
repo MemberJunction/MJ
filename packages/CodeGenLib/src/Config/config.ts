@@ -20,6 +20,13 @@ const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 const configSearchResult = explorer.search(process.cwd());
 
 /**
+ * Absolute path of the mj.config file cosmiconfig found (undefined when none was found).
+ * Updated by {@link InitializeConfig}. Relative paths in the config, such as
+ * `additionalSchemaInfo`, resolve against this file's directory.
+ */
+export let ConfigFilePath: string | undefined = configSearchResult?.filepath;
+
+/**
  * Represents a general configuration setting with name-value pairs
  */
 export type SettingInfo = z.infer<typeof settingInfoSchema>;
@@ -274,10 +281,10 @@ const advancedGenerationSchema = z.object({
       enabled: false,
     },
     {
-      name: 'FormLayout',
+      name: 'FormLayoutGeneration',
       description:
         'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-      enabled: false,
+      enabled: true,
     },
     {
       name: 'FormTabs',
@@ -293,6 +300,9 @@ const advancedGenerationSchema = z.object({
     },
   ]),
 });
+
+/** The advanced-generation config schema, exported so its defaults can be checked against `DEFAULT_CODEGEN_CONFIG`. */
+export const AdvancedGenerationSchema = advancedGenerationSchema;
 
 export type IntegrityCheckConfig = z.infer<typeof IntegrityCheckConfigSchema>;
 
@@ -539,6 +549,39 @@ const configInfoSchema = z.object({
    * apps that happened to be installed on the publisher database.
    */
   includeSchemas: z.string().array().optional(),
+  /**
+   * Field names to KEEP OUT of generated base views. Empty by default, and an empty list changes
+   * nothing: the base view is emitted as `SELECT alias.*` exactly as before, byte for byte.
+   *
+   * WHAT THIS IS FOR. A base view is what every read goes through — `RunView`, `BaseEntity.Load`,
+   * every grid and form. `SELECT alias.*` means a column no component ever reads is still fetched,
+   * deserialised and held in memory on every one of those reads. Measured on one integration mirror:
+   * a single JSON bookkeeping column was 52–70% of the table's stored bytes (96 MB of one table's
+   * 137 MB), and nothing in the UI read it.
+   *
+   * Entries are matched case-insensitively and may be either a bare field name (applies to every
+   * entity that has a column of that name) or `EntityName.FieldName` (that entity only). An entity
+   * with no matching column is emitted unchanged — the explicit column list appears ONLY for
+   * entities that actually have something excluded, so the blast radius is exactly the entities you
+   * name and nothing else.
+   *
+   * TWO THINGS TO KNOW BEFORE SETTING IT.
+   *
+   * 1. An excluded column is GONE from every MJ read of that entity. `entity.Get('Field')` returns
+   *    undefined. Writes are unaffected (they go through the CRUD routines against the base table),
+   *    but any code path that reads the column through metadata must be repointed first.
+   * 2. CodeGen's own field prune (`spDeleteUnneededEntityFields`) asks "is this column in the base
+   *    VIEW?", so an excluded column's `EntityField` row would be deleted on the next run. CodeGen
+   *    passes the exclusions to the prune as a protected list to prevent that — and REFUSES to apply
+   *    an exclusion at all on a database whose prune routine does not accept that list, rather than
+   *    trading a memory win for silent metadata loss. Watch the run log: an exclusion that was
+   *    refused says so.
+   *
+   * The view also stops auto-absorbing NEW physical columns for the entities that carry an
+   * exclusion, because an explicit column list is enumerated at generation time. CodeGen re-enumerates
+   * on every run, so a new column appears after the next run rather than immediately.
+   */
+  baseViewExcludedFields: z.string().array().default([]),
   /**
    * When true, CodeGen cascade-delete SQL walks FKs pointing at the entity in
    * EVERY schema in metadata. Default false: only same-schema children.
@@ -1112,6 +1155,7 @@ export function InitializeConfig(cwd: string): ConfigInfo {
   CurrentWorkingDirectory = cwd;
 
   const userConfigResult = explorer.search(CurrentWorkingDirectory);
+  ConfigFilePath = userConfigResult?.filepath;
   const mergedConfig = userConfigResult?.config
     ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
     : DEFAULT_CODEGEN_CONFIG;
@@ -1158,6 +1202,61 @@ export function InitializeConfig(cwd: string): ConfigInfo {
 /** @deprecated Use {@link InitializeConfig}. */
 export function initializeConfig(cwd: string): ConfigInfo {
   return InitializeConfig(cwd);
+}
+
+/** Environment variable that overrides the configured `additionalSchemaInfo` path. */
+export const ADDITIONAL_SCHEMA_INFO_PATH_ENV = 'RSU_ADDITIONAL_SCHEMA_INFO_PATH';
+
+/**
+ * Inputs to {@link ResolveAdditionalSchemaInfoPathFrom}. Kept separate from module state so
+ * the resolution rule can be tested and reused without a loaded config.
+ */
+export interface AdditionalSchemaInfoPathInputs {
+  /** The `additionalSchemaInfo` value from mj.config, if any. */
+  ConfiguredPath?: string;
+  /** Absolute path of the mj.config file the value came from, if one was found. */
+  ConfigFilePath?: string;
+  /** Value of `RSU_ADDITIONAL_SCHEMA_INFO_PATH`, if set. */
+  EnvOverride?: string;
+  /** Directory relative paths fall back to when there is no config file (env override, or no config file found). */
+  WorkingDirectory: string;
+}
+
+/**
+ * Resolves the additionalSchemaInfo path to an absolute path (#5858).
+ *
+ * Order: the `RSU_ADDITIONAL_SCHEMA_INFO_PATH` env override (relative values resolve against
+ * the working directory), then the configured path, resolved against the directory of the
+ * mj.config file that declared it (or the working directory when no file was found).
+ * Absolute paths are kept as-is. Returns undefined when neither is set.
+ *
+ * Resolving against the config file's directory, not process.cwd(), is what keeps the RSU
+ * writer and the CodeGen reader on the same file when they start in different directories.
+ */
+export function ResolveAdditionalSchemaInfoPathFrom(inputs: AdditionalSchemaInfoPathInputs): string | undefined {
+  const envOverride = inputs.EnvOverride?.trim();
+  if (envOverride) {
+    return path.resolve(inputs.WorkingDirectory, envOverride);
+  }
+  const configured = inputs.ConfiguredPath?.trim();
+  if (!configured) {
+    return undefined;
+  }
+  const baseDir = inputs.ConfigFilePath ? path.dirname(inputs.ConfigFilePath) : inputs.WorkingDirectory;
+  return path.resolve(baseDir, configured);
+}
+
+/**
+ * The absolute additionalSchemaInfo path CodeGen reads and RSU writes, from the loaded config
+ * (see {@link ResolveAdditionalSchemaInfoPathFrom}). Undefined when not configured.
+ */
+export function ResolveAdditionalSchemaInfoPath(): string | undefined {
+  return ResolveAdditionalSchemaInfoPathFrom({
+    ConfiguredPath: configInfo.additionalSchemaInfo,
+    ConfigFilePath,
+    EnvOverride: process.env[ADDITIONAL_SCHEMA_INFO_PATH_ENV],
+    WorkingDirectory: CurrentWorkingDirectory,
+  });
 }
 
 /**

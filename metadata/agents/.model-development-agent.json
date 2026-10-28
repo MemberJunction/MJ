@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Model Development Agent",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-      "Description": "Conversational Loop orchestrator for Predictive Studio. Collaborates with a business user to build a strongly-typed ModelingPlanSpec via three specialist sub-agents (Goal Analyst, Data Scout, Experiment Designer), gates on explicit user approval, then drives the deterministic experiment session through the Run Experiment Session action (train/score/leaderboard/prune within budget), enforces the leakage warn/sign-off rule before any promotion, and authors an ML Experiment Results artifact with drill-through to the winning models. Mirrors the Agent Manager pattern: collaborate -> typed plan -> approve -> deterministic execution -> LLM report.",
+      "Description": "Conversational Loop orchestrator for Predictive Studio. Collaborates with a business user to build a strongly-typed ModelingPlanSpec via three specialist sub-agents (Goal Analyst, Data Scout, Experiment Designer), gates on explicit user approval, then hands the approved plan to the deterministic Pipeline Builder (experiment sessions are switched off), enforces the leakage warn/sign-off rule before any promotion, and authors an ML Experiment Results artifact with drill-through to the winning models. Mirrors the Agent Manager pattern: collaborate -> typed plan -> approve -> deterministic execution -> LLM report.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -43,7 +43,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Run Experiment Session",
-            "Status": "Active"
+            "Status": "Revoked"
           },
           "primaryKey": {
             "ID": "FAD46DFB-852D-4D5D-8ECB-3195868752F5"

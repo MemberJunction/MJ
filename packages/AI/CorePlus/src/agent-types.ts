@@ -11,7 +11,7 @@
  */
 
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
+import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
@@ -576,6 +576,16 @@ export type ArtifactDirective = {
     description?: string;
 };
 
+/** A native call to one of an agent's own tools, as the loop carries it from the turn to execution. */
+export interface AgentToolCallRequest {
+    /** The provider's call id, answered by the call's tool result. */
+    toolCallId: string;
+    /** The declared tool name. */
+    toolName: string;
+    /** The parsed arguments the model sent. */
+    arguments: Record<string, unknown>;
+}
+
 /**
  * Represents the next step determination from an agent type.
  * 
@@ -658,9 +668,25 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         toolCalls: ChatToolCall[];
         /** Whether results go back as native tool-result turns — the runner's recorded decision. */
         sendResultsNatively: boolean;
+        /**
+         * The provider's reasoning blocks from the turn, replayed with the call turn so the model
+         * keeps its reasoning across the tool loop. Opaque to the loop.
+         */
+        reasoning?: ChatReasoningBlock[];
     };
     /** On the payload-only Retry, the call id of the `payload_change_request` being answered. */
     payloadToolCallId?: string;
+    /**
+     * Native calls to the agent's own tools on this turn, in the order the model made them. The
+     * loop runs them before the step itself, each as a `Tool` run step, and answers each call with
+     * its result. Can accompany any step a tool-call turn produces.
+     */
+    agentToolCalls?: AgentToolCallRequest[];
+    /**
+     * Native calls on this turn the loop chose not to run, each answered with an error result
+     * carrying its reason, so the model can make the call again on a later turn.
+     */
+    declinedToolCalls?: Array<{ toolCallId: string; toolName: string; reason: string }>;
     /** Message to send to user when step is 'chat' */
     message?: string;
     /**
@@ -1029,6 +1055,14 @@ export interface InputArtifact {
     name: string;
     typeName: string;
     content: string | Buffer;
+    /** Optional MJ: Artifacts record ID (UUID) when backed by a persisted artifact. */
+    artifactId?: string;
+    /** Optional MJ: Artifact Versions record ID (UUID) when backed by a persisted artifact version. */
+    versionId?: string;
+    /** Optional 1-based version number on the parent artifact (e.g., 1, 2, 3). */
+    versionNumber?: number;
+    /** Optional human-readable description of the artifact or version. */
+    description?: string;
     /** MIME type of the artifact content (e.g., 'application/pdf').
      *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
     mimeType?: string;
@@ -1047,6 +1081,77 @@ export interface InputArtifact {
     deliveryMode?: 'Inline' | 'ToolsOnly';
     /** Per-instance override that forces ToolsOnly regardless of type default. */
     forceToolsOnly?: boolean;
+}
+
+/**
+ * How a run's audience bounds what the run may show. See {@link ExecuteAgentParams.Audience}.
+ * - `'Caller'` — the caller's own reach, exactly as if no audience were set. `UserIDs` must be empty.
+ * - `'Intersection'` — only what the caller **and** every user in `UserIDs` may see.
+ *
+ * Union, anchor and narrowing modes are not offered: a run bounded by a shared record or a tenant
+ * uses `PrimaryScope*` / `SecondaryScopes`.
+ *
+ * @since 6.2.0
+ */
+export type AgentAudienceMode = 'Caller' | 'Intersection';
+
+/**
+ * The people, besides the caller, who will see a run's output. See {@link ExecuteAgentParams.Audience}.
+ *
+ * @since 6.2.0
+ */
+export interface AgentRunAudience {
+    /** How the audience bounds the run. */
+    Mode: AgentAudienceMode;
+    /**
+     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
+     * conversation, its other participants. Required and non-empty, with no blank entry, for
+     * `'Intersection'`; empty for `'Caller'`. Listing the caller, or an ID twice, is harmless. Each ID
+     * must name an existing user: a run whose audience names an unknown ID is refused.
+     */
+    UserIDs: string[];
+}
+
+/**
+ * How a run carries forward the work of a predecessor the user stopped.
+ * - `'full_stack'`: the stopped run's own message stack (its prompts' turns, its action invocations and
+ *   results, delegations) is resumed into this run in the same shape the loop builds while running, so
+ *   the agent picks up where it left off. Falls back to `'summary'` when the stack cannot be resumed.
+ * - `'summary'`: the stopped run's completed action and tool results are rendered into one
+ *   carried-forward message.
+ *
+ * The default is `'full_stack'` (`BaseAgent.DefaultStopContinuationMode`); a caller sets
+ * `ExecuteAgentParams.stopContinuationMode` only to choose `'summary'`.
+ */
+export type StopContinuationMode = 'full_stack' | 'summary';
+
+/**
+ * Configuration for background post-run conversation compaction, memory extraction,
+ * and scratchpad pruning after an agent run completes (`finalizeAgentRun`), so the
+ * next user turn starts with a pre-compacted message window and zero compaction latency.
+ *
+ * When enabled via {@link ExecuteAgentParams.compactAfterRun}, `BaseAgent.finalizeAgentRun`
+ * runs post-run maintenance after flushing step saves and persisting the run record:
+ * 1. **Message Window Pre-Compaction**: Compacts older conversation messages when the
+ *    conversation length reaches {@link messageCountThreshold} (default: `20`), preserving
+ *    the initial goal message (`index 0`) and the most recent messages.
+ * 2. **Scratchpad Pruning**: When {@link maxScratchpadNotes} is specified, prunes excess
+ *    low-priority scratchpad note lines and completed tasks down to the configured limit.
+ * 3. **Memory Extraction Trigger**: When {@link extractMemories} is enabled (default: `true`)
+ *    and the run succeeded, triggers asynchronous memory extraction via `MemoryManagerAgent`.
+ *
+ * All post-run maintenance runs inside defensive error boundaries so failures are logged
+ * diagnostically without ever failing a completed agent run.
+ */
+export interface AgentPostRunCompactionConfig {
+    /** Whether post-run compaction is enabled */
+    enabled: boolean;
+    /** Minimum conversation message count before post-run compaction triggers (default: 20) */
+    messageCountThreshold?: number;
+    /** Whether to trigger async note/example extraction via MemoryManager (default: true) */
+    extractMemories?: boolean;
+    /** Maximum number of scratchpad notes to retain after pruning expired/excess notes (optional) */
+    maxScratchpadNotes?: number;
 }
 
 /**
@@ -1179,8 +1284,36 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
      */
     parentActivatedSkillIDs?: readonly string[];
-    /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
+    /**
+     * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
+     *
+     * Its reserved keys (`RESERVED_AGENT_RUN_DATA_KEYS`: `PrimaryScopeEntityName`, `PrimaryScopeEntityID`,
+     * `PrimaryScopeRecordID`, `SecondaryScopes`, `__agentTypePromptParams`) are read only when
+     * {@link TrustReservedRunData} is set; otherwise `BaseAgent.Execute` removes them. Set a run's scope with
+     * {@link PrimaryScopeEntityName}, {@link PrimaryScopeRecordID} and {@link SecondaryScopes} instead.
+     */
     data?: Record<string, any>;
+    /**
+     * **Server-only — never set it from client input.** Lets this run read the reserved keys of {@link data}: the
+     * fallbacks for the run's scope (`PrimaryScopeEntityName`, `PrimaryScopeEntityID`, `PrimaryScopeRecordID`,
+     * `SecondaryScopes`) and its highest-precedence agent-type parameters (`__agentTypePromptParams`, which can turn
+     * on capabilities such as the Loop type's `enableTaskGraphs`).
+     *
+     * Without it, `BaseAgent.Execute` removes those keys from `data` before the run starts and logs their names
+     * (never their values). So whatever reaches `data` from a browser, an action call (Execute Agent, including one a
+     * model makes inside a run), an MCP or A2A request or a Runtime Action script cannot choose a run's tenant, the
+     * memory it reads or what it may do — whichever entry point started it.
+     *
+     * Server code sets a run's scope with the first-class fields — {@link PrimaryScopeEntityName},
+     * {@link PrimaryScopeRecordID}, {@link SecondaryScopes} — which need no marker. Set this only when `data` itself
+     * comes from a caller the server has authenticated as trusted: MJServer's agent-run resolvers set it for the
+     * system user and for an API key that holds the `agent:trusted` scope (never for a widget guest), and a sub-agent
+     * inherits its parent's value
+     * (the model-authored `templateParameters` merged into the child's `data` lose the reserved keys regardless).
+     *
+     * @since 6.2.0
+     */
+    TrustReservedRunData?: boolean;
     /**
      * Optional input artifacts for this run. Consumed by the agent's
      * ArtifactToolManager: each artifact is registered, surfaced in the
@@ -1279,6 +1412,60 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     CredentialScope?: AICredentialScope;
     /**
+     * Everyone besides the caller who will see this run's output — a shared conversation's other
+     * participants. With `Mode: 'Intersection'` the run may show only what the caller **and** every
+     * reader may see: the caller's reach is the ceiling, each reader's reach lowers it. Omitted (or
+     * `'Caller'`), the run is bounded by the caller alone, as before.
+     *
+     * **Server-only.** Set it from the host's own record of who is in the room (the conversation's
+     * participants), never from client input: it is a typed field and is never read from `data`, so
+     * nothing a client sends through GraphQL, MCP or A2A (whose agent runners pass named fields and put
+     * client JSON in `data`) can set or clear it.
+     *
+     * **Validation fails the run** before any prompt, as a refused permission does: an unknown `Mode`
+     * (including a name `Object.prototype` carries, such as `'toString'`); `'Intersection'` whose
+     * `UserIDs` is empty, not an array, or holds a blank entry; `'Caller'` with any `UserIDs`; or an ID
+     * no user has (after one refresh of the server's user cache). An inactive user is accepted: a reader
+     * only narrows what the run may show. Every gate below fires only when the audience adds a reader
+     * **other than the caller**, so an `'Intersection'` whose only reader is the caller behaves exactly
+     * as `'Caller'`.
+     *
+     * **What it bounds.** Each run (sub-agents included — they inherit it and re-hydrate the IDs) loads
+     * the readers from the user cache and then:
+     * - pre-execution RAG checks every reader's scope permission (a refused reader skips that scope and
+     *   writes a `Forbidden` search-log row naming them) and passes the readers to the search, which
+     *   keeps only results every reader may read;
+     * - agent notes and examples are injected only when shared (`UserID` empty); scope matching still applies;
+     * - agent data-source preloading and the previous turn's tool-result carry-forward are skipped;
+     * - every action call carries `RunActionParams.Audience`. Only the Search and Scoped Search actions
+     *   declare they can honour it; any other action is refused (`AUDIENCE_UNSUPPORTED`) without running
+     *   and is locked out for the run (the model is told it is unavailable in a shared conversation), so an
+     *   agent with other actions is limited to search in a shared room. A malformed audience on an action
+     *   call refuses every action;
+     * - task graphs are not offered, and one the model writes anyway is refused (they are withheld in a
+     *   tenant-scoped run too: a graph runs outside the run's scope);
+     * - client tools are not offered and a client-tools step is refused (they run in the caller's browser),
+     *   and the caller's app context (`data.appContext`) is not injected into the prompt;
+     * - memory writes are not saved (a write's reply is read against the caller's own notes);
+     * - no out-of-conversation `MJ: AI Agent Requests` row is raised for a Chat or Plan step: answered on
+     *   the dashboard or through the API, it would resume the run without the audience. The room answers in
+     *   the conversation, where the host starts the next run with the audience;
+     * - session-driven (realtime / voice / bridge) agent types are refused.
+     *
+     * **Not covered (documented limits).**
+     * - Scope expansion queries and `ServerDerived` dimensions resolve for the caller only
+     *   (`ScopeDimensionResolver` binds one `UserID`); the per-reader result filter covers scopes whose
+     *   lanes carry per-user row filters.
+     * - A run is never resumed with its audience (`MJAIAgentRequestEntityServer.resumeAgent` has no field to
+     *   read it from), so a run with one raises no request to resume from (above); persisting the audience
+     *   needs a column, an open design point shared with bound action parameters. An agent with
+     *   `RequirePlanMode` therefore cannot have a plan approved in a shared conversation.
+     * - The conversation history and artifacts the host passes in are the host's to choose.
+     *
+     * @since 6.2.0
+     */
+    Audience?: AgentRunAudience;
+    /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
      * agents to maintain context across multiple interactions.
@@ -1344,6 +1531,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * How this run carries forward a predecessor the user stopped (see {@link StopContinuationMode}).
+     * Defaults to `'full_stack'`: the stopped run's message stack is resumed so the agent continues
+     * where it left off. `'summary'` carries only its completed results, for callers that want that.
+     */
+    stopContinuationMode?: StopContinuationMode;
 
     /**
      * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless
@@ -1700,6 +1894,49 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     subAgentChanges?: SubAgentChange[];
 
     /**
+     * Optional values the caller fixes for actions' input parameters, keyed by Action ID and then by
+     * parameter name (IDs compare as UUIDs, names case-insensitively).
+     *
+     * A bound parameter is **hidden from the model**: it is left out of the action's description in the
+     * prompt catalog and out of its native tool schema. At dispatch the bound value is used whatever the
+     * model (or a Flow step's input mapping) sent under that name; a value the model wrote is discarded
+     * and the override is logged with the run and step IDs. A required parameter bound to `null` or
+     * `undefined` refuses the action; an optional one bound to nothing is hidden and the action gets no
+     * value for it. A name that is not one of the action's input parameters refuses the action too, so a
+     * misspelled binding fails loudly instead of leaving the parameter open to the model, and a key that
+     * is not a known Action ID fails the run at its start. A refused action is locked out for the rest of
+     * the run and the model is told only that it is unavailable. Bindings reach every sub-agent run
+     * unchanged, the way {@link actionChanges} do; the action's execution log marks each bound parameter
+     * (`ActionParam.Bound`); and the action `Context` carries them as `BoundActionParams`, so the actions
+     * that describe other actions hide the same names.
+     *
+     * This is how a host fixes *which record* an action acts on (a space's chapter, a tenant, a folder)
+     * so the model can neither see nor choose it, within these **limits**. Server-side only: no GraphQL
+     * input reaches this field. A run with bindings has task graphs withheld (`enableTaskGraphs` is
+     * ignored), because a graph's action nodes are dispatched outside the agent's binding gate. A run
+     * stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another
+     * (`lastRunId`, including a resume from a stored request) applies them when its caller passes none;
+     * a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do
+     * not parse to an object) fails the continuing run. {@link actionChanges} are not persisted, so a
+     * resumed run starts without them. The realtime client-direct action path and the `Execute Agent`
+     * action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that
+     * refuses them) dispatch without forwarding `boundActionParams`, so do not grant them to a bound
+     * agent. An action's own message text may mention a bound value.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent,
+     *   conversationMessages,
+     *   boundActionParams: { [listMembersActionID]: { ChapterID: space.ChapterID } }
+     * };
+     * ```
+     *
+     * @since 6.2.0
+     */
+    boundActionParams?: BoundActionParams;  // case-violation-ok-legacy-back-compat: named to match its siblings actionChanges and subAgentChanges, which predate the rule, and the plan (#4789 § 2) that names it
+
+    /**
      * Optional agent-type-specific execution parameters.
      *
      * Different agent types can define their own parameter interfaces for
@@ -1806,7 +2043,162 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     maxExecutionTimeMs?: number;
 
+    /**
+     * Shared cumulative budget and live usage counters across an entire root-to-leaf
+     * agent execution tree (including sequential child/related sub-agents and parallel
+     * sub-agent fan-outs).
+     *
+     * When omitted on a root agent run, `BaseAgent.Execute()` automatically initializes
+     * a root `AgentTreeBudget` instance (seeding any limits from `maxTreeSteps`,
+     * `maxTreeTokens`, `maxTreeCost`, and `maxTreeDurationMs`) and propagates the
+     * shared object reference to every sub-agent invocation via `ExecuteAgentParams.treeBudget`.
+     *
+     * Because the budget object is passed by reference in-process, all agents in the
+     * hierarchy increment and evaluate the exact same live counters (`totalSteps`,
+     * `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`), preventing deep or
+     * wide sub-agent trees from multiplying per-agent guardrails without bound.
+     *
+     * @example
+     * ```typescript
+     * const treeBudget: AgentTreeBudget = {
+     *   maxTreeSteps: 25,
+     *   maxTreeTokens: 100_000,
+     *   maxTreeCost: 2.50,
+     *   maxTreeDurationMs: 120_000,
+     *   totalSteps: 0,
+     *   totalTokens: 0,
+     *   totalCost: 0,
+     *   startedAtMs: Date.now()
+     * };
+     * const result = await runner.RunAgent({
+     *   agent: rootAgent,
+     *   conversationMessages: messages,
+     *   contextUser,
+     *   treeBudget
+     * });
+     * ```
+     */
+    treeBudget?: AgentTreeBudget;
+
+    /**
+     * Convenience top-level limit for the maximum total steps allowed across the entire
+     * root-to-leaf agent execution tree (root agent + all sequential and parallel sub-agents).
+     *
+     * Unlike per-agent `MaxIterationsPerRun` (which applies independently to each individual
+     * agent run), `maxTreeSteps` caps the cumulative number of steps created across the
+     * whole hierarchy. When `treeBudget` is not pre-initialized by the caller, `BaseAgent`
+     * copies this value into `treeBudget.maxTreeSteps`.
+     */
+    maxTreeSteps?: number;
+
+    /**
+     * Convenience top-level limit for the maximum cumulative tokens (prompt + completion)
+     * allowed across the entire root-to-leaf agent execution tree.
+     *
+     * Unlike per-agent `MaxTokensPerRun`, `maxTreeTokens` caps the combined token consumption
+     * across the root agent and all descendant sub-agents. When `treeBudget` is not
+     * pre-initialized by the caller, `BaseAgent` copies this value into `treeBudget.maxTreeTokens`.
+     */
+    maxTreeTokens?: number;
+
+    /**
+     * Convenience top-level limit for the maximum cumulative LLM cost (in USD) allowed
+     * across the entire root-to-leaf agent execution tree.
+     *
+     * Unlike per-agent `MaxCostPerRun`, `maxTreeCost` caps the combined cost accumulated
+     * across the root agent and all descendant sub-agents. When `treeBudget` is not
+     * pre-initialized by the caller, `BaseAgent` copies this value into `treeBudget.maxTreeCost`.
+     */
+    maxTreeCost?: number;
+
+    /**
+     * Convenience top-level limit for the maximum wall-clock duration (in milliseconds)
+     * allowed across the entire root-to-leaf agent execution tree, measured from the
+     * root run's `startedAtMs` timestamp.
+     *
+     * When `treeBudget` is not pre-initialized by the caller, `BaseAgent` copies this
+     * value into `treeBudget.maxTreeDurationMs`.
+     */
+    maxTreeDurationMs?: number;
+
+    /**
+     * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
+     * configuration.
+     *
+     * When set to `true` or an {@link AgentPostRunCompactionConfig} with `enabled: true`,
+     * `BaseAgent.finalizeAgentRun` executes post-run maintenance after flushing step saves
+     * and saving the completed `AIAgentRun` record:
+     * - Compacts older messages in `conversationMessages` when the message count reaches
+     *   `messageCountThreshold` (default: `20`), preserving the initial goal message
+     *   (`index 0`) and the most recent messages.
+     * - Prunes excess scratchpad notes and completed tasks down to `maxScratchpadNotes`
+     *   when specified.
+     * - Triggers asynchronous memory extraction via `MemoryManagerAgent` when
+     *   `extractMemories` is enabled (default: `true`) and the run succeeded.
+     *
+     * Moving compaction to the end of `finalizeAgentRun` shifts maintenance off the
+     * critical user-waiting path so the next user turn starts with a pre-compacted
+     * message window and zero pre-turn compaction latency. Errors during post-run
+     * maintenance are caught and logged diagnostically without ever failing the run.
+     *
+     * @example
+     * ```typescript
+     * // Enable with defaults (messageCountThreshold: 20, extractMemories: true)
+     * const result = await agent.Execute({
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   compactAfterRun: true
+     * });
+     *
+     * // Fine-grained post-run compaction and scratchpad pruning
+     * const result = await agent.Execute({
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   compactAfterRun: {
+     *     enabled: true,
+     *     messageCountThreshold: 12,
+     *     extractMemories: true,
+     *     maxScratchpadNotes: 10
+     *   }
+     * });
+     * ```
+     */
+    compactAfterRun?: boolean | AgentPostRunCompactionConfig;
+
 }
+
+/**
+ * Shared cumulative budget and live usage counters across an entire root-to-leaf
+ * agent execution tree (including sequential and parallel sub-agents).
+ *
+ * A single `AgentTreeBudget` instance is created at the root of an agent execution
+ * (or supplied by the caller on `ExecuteAgentParams.treeBudget`) and passed by
+ * reference into every child, related, and parallel sub-agent invocation. Every
+ * agent in the hierarchy increments the shared counters (`totalSteps`, `totalTokens`,
+ * `totalCost`) and checks the shared ceilings (`maxTreeSteps`, `maxTreeTokens`,
+ * `maxTreeCost`, `maxTreeDurationMs`) before and after executing steps.
+ */
+export interface AgentTreeBudget {
+    /** Maximum total steps allowed across the entire root-to-leaf agent tree */
+    maxTreeSteps?: number;
+    /** Maximum total tokens (prompt + completion) allowed across the entire agent tree */
+    maxTreeTokens?: number;
+    /** Maximum cumulative LLM cost (in USD) allowed across the entire agent tree */
+    maxTreeCost?: number;
+    /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
+    maxTreeDurationMs?: number;
+    /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
+    totalSteps: number;
+    /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
+    totalTokens: number;
+    /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
+    totalCost: number;
+    /** Epoch timestamp (Date.now()) when the root agent run started */
+    startedAtMs: number;
+    /** Set to the breach reason once any tree limit is exceeded */
+    breachedReason?: string;
+}
+
 
 /**
  * Context data provided to agent prompts during execution.
@@ -1826,6 +2218,10 @@ export type AgentContextData = {
     subAgentCount: number;
     /** Markdown formatted list of sub-agent names and descriptions */
     subAgentDetails: string;
+    /** Number of directly discoverable, user-runnable top-level agents preloaded into context */
+    availableAgentCount?: number;
+    /** Compact markdown formatted directory of user-runnable top-level agents (name + 1-line summary) */
+    availableAgentDetails?: string;
     /** Number of actions available to this agent */
     actionCount: number;
     /** Markdown formatted details of available actions (name, params, result codes) */
@@ -1988,6 +2384,14 @@ export interface ExpandMessageRequest {
     /** Optional reason for expanding the message */
     reason?: string;
 }
+
+/**
+ * Values fixed by the caller for actions' input parameters: Action ID → parameter name → value.
+ * {@link ExecuteAgentParams.boundActionParams} states the rules the agent applies to them.
+ *
+ * @since 6.2.0
+ */
+export type BoundActionParams = Record<string, Record<string, unknown>>;
 
 /**
  * Scope options for runtime action changes.

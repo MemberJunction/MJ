@@ -8,6 +8,7 @@ import type {
     ExternalRecord,
     DefaultFieldMapping,
     SourceSchemaInfo,
+    SourceObjectInfo,
     IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
@@ -877,7 +878,10 @@ export abstract class BaseIntegrationConnector {
             CompanyIntegration: companyIntegration,
             ObjectName: objectName,
             WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
-            BatchSize: batchSize,
+            // A sample that stops at `maxRecords` never needs a page bigger than that. With the
+            // default page of 500 and a target of 50, every connector that honours BatchSize
+            // fetched ten times the rows it kept, per object, on every discovery.
+            BatchSize: maxRecords > 0 ? Math.min(batchSize, maxRecords) : batchSize,
             ContextUser: contextUser,
             // TELL THE CONNECTOR WHAT THIS CALL IS FOR. Stopping after `maxRecords` here only works
             // when one FetchChanges is one page; a connector that fans out internally (one request
@@ -1090,7 +1094,15 @@ export abstract class BaseIntegrationConnector {
         const objects = wanted ? allObjects.filter(o => wanted.has(o.Name)) : allObjects;
         // §7 — a SCOPED introspection (ObjectNames filter) is never authoritative over the whole surface,
         // so it can never drive deactivation even if the connector affirms authoritative discovery.
-        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted };
+        // OnObject (see IntrospectSchemaOptions) lets the caller take each object as it is built; the
+        // object is then released instead of accumulated, so peak memory is the describes in flight
+        // rather than the whole catalog. No handler → accumulate and return, exactly as before.
+        const onObject = options?.OnObject;
+        const result: SourceSchemaInfo = {
+            Objects: [],
+            IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted,
+            Streamed: !!onObject,
+        };
 
         // Parallel describe via the SAME control law the sync engine uses for its layers —
         // `RunAdaptive` + `AdaptiveConcurrencyController` (AIMD). Discovery IS the sync read path with
@@ -1171,7 +1183,7 @@ export abstract class BaseIntegrationConnector {
             }));
             // Single-threaded async → these mutations are atomic across concurrent introspectOne calls
             // (same safety the sync engine's per-map aggregate mutations rely on).
-            result.Objects.push({
+            const built: SourceObjectInfo = {
                 ExternalName: obj.Name,
                 ExternalLabel: obj.Label,
                 Description: obj.Description,
@@ -1202,7 +1214,13 @@ export abstract class BaseIntegrationConnector {
                 Relationships: fields
                     .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
                     .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
-            });
+            };
+            if (onObject) {
+                // The caller persists it; it is deliberately NOT retained here — that is the point.
+                await onObject(built);
+            } else {
+                result.Objects.push(built);
+            }
             succeeded++;
             const done = succeeded + skipped;
             if (done % 100 === 0 || done === total) {

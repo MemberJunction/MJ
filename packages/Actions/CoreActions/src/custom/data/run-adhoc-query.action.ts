@@ -88,11 +88,14 @@ export class RunAdhocQueryAction extends BaseAction {
             const maxRows = this.positiveOrDefault(this.getNumericParam(params, "maxrows", 1000), 1000);
             const requestedTimeout = this.getNumericParam(params, "timeout", 0);
             const timeout = authorizer.ClampTimeoutSeconds(requestedTimeout > 0 ? requestedTimeout : undefined);
-            const dataFormat = this.getStringParam(params, "dataformat") || 'csv';
+            // A rendered copy of the rows is produced only when the caller asked for one. With no format the
+            // rows go out once, in `Results`; a default rendering alongside it put every result set into an
+            // agent's context twice.
+            const dataFormat = this.getStringParam(params, "dataformat") || this.getStringParam(params, "outputformat");
             const analysisRequest = this.getStringParam(params, "analysisrequest");
             const returnType = this.getStringParam(params, "returntype") ||
                 (analysisRequest ? 'data and analysis' : 'data only');
-            const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 50); // Default: 50 chars, 0 = no limit
+            const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 200); // Default: 200 chars, 0 = no limit
 
             // Normalize literal escape sequences — agent-generated SQL may have
             // literal \n instead of real newlines from double-escaped JSON
@@ -150,6 +153,8 @@ export class RunAdhocQueryAction extends BaseAction {
                         ? this.trimResultColumns(results, columnMaxLength)
                         : results;
                     formattedData = JSON.stringify(trimmedResults, null, 2);
+                } else if (dataFormat === 'markdown' || dataFormat === 'table') {
+                    formattedData = this.formatAsMarkdownTable(results, columnMaxLength);
                 }
 
                 // Perform analysis if requested
@@ -200,11 +205,37 @@ export class RunAdhocQueryAction extends BaseAction {
                     warnings,
                     returnType,
                     formattedData,
-                    analysis
+                    analysis,
+                    columnMaxLength
                 );
 
+                // Populate structured output parameters on params.Params so Flow steps and callers can map them
+                this.setOutputParam(params, "Results", results);
+                if (formattedData !== undefined) {
+                    this.setOutputParam(params, "FormattedResults", formattedData);
+                }
+                this.setOutputParam(params, "RowCount", results.length);
+                this.setOutputParam(params, "Columns", columns);
+                this.setOutputParam(params, "ExecutionTimeMs", executionTimeMs);
+                this.setOutputParam(params, "TotalTimeMs", totalExecutionTime);
+                this.setOutputParam(params, "WasTruncated", wasTruncated);
+                if (analysis !== undefined) {
+                    this.setOutputParam(params, "Analysis", analysis);
+                }
+
                 // Build result object based on return type
-                const resultData = {
+                const resultData: ActionResultSimple & {
+                    Columns?: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>;
+                    RowCount?: number;
+                    ExecutionTimeMs?: number;
+                    TotalTimeMs?: number;
+                    WasTruncated?: boolean;
+                    ValidationWarnings?: string[];
+                    Query?: string;
+                    Results?: unknown;
+                    Analysis?: string;
+                    AnalysisError?: string;
+                } = {
                     Success: true,
                     ResultCode: "SUCCESS",
                     Message: message,
@@ -215,20 +246,19 @@ export class RunAdhocQueryAction extends BaseAction {
                     WasTruncated: wasTruncated,
                     ValidationWarnings: warnings,
                     Query: normalizedQuery
-                } as ActionResultSimple;
+                };
 
                 // Add data and/or analysis to results based on returnType
                 if (returnType === 'data only' || returnType === 'data and analysis') {
-                    (resultData as any).Results = formattedData || results;
+                    resultData.Results = formattedData || results;
                 }
                 if (returnType === 'analysis only' || returnType === 'data and analysis') {
-                    (resultData as any).Analysis = analysis;
+                    resultData.Analysis = analysis;
                 }
                 // The data still stands; say why there is no analysis instead of leaving it silently empty.
                 if (analysisError) {
-                    const withError = resultData as ActionResultSimple & { AnalysisError?: string };
-                    withError.AnalysisError = analysisError;
-                    withError.Message = `${withError.Message}\n\nThe analysis could not be produced: ${analysisError}`;
+                    resultData.AnalysisError = analysisError;
+                    resultData.Message = `${resultData.Message}\n\nThe analysis could not be produced: ${analysisError}`;
                 }
 
                 return resultData;
@@ -377,7 +407,7 @@ export class RunAdhocQueryAction extends BaseAction {
                 if (columnMaxLength > 0 && value != null) {
                     const stringValue = String(value);
                     if (stringValue.length > columnMaxLength) {
-                        value = stringValue.substring(0, columnMaxLength) + '...';
+                        value = stringValue.substring(0, columnMaxLength) + '[...truncated]';
                     }
                 }
                 return this.formatCSVValue(value);
@@ -401,7 +431,7 @@ export class RunAdhocQueryAction extends BaseAction {
      * - All string values are quoted and escaped
      * - Numbers and booleans are converted to strings and quoted
      */
-    private formatCSVValue(value: any): string {
+    private formatCSVValue(value: unknown): string {
         if (value == null) {
             return '""';
         }
@@ -416,6 +446,36 @@ export class RunAdhocQueryAction extends BaseAction {
         return `"${escaped}"`;
     }
 
+    private formatAsMarkdownTable(results: Record<string, unknown>[], columnMaxLength: number = 0): string {
+        if (results.length === 0) return '*No rows returned*';
+
+        const headers = Object.keys(results[0]);
+        const headerRow = `| ${headers.join(' | ')} |`;
+        const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
+
+        let wasColumnTruncated = false;
+        const dataRows = results.map(row => {
+            const values = headers.map(header => {
+                let value = row[header];
+                if (value == null) return '';
+
+                let strVal = String(value);
+                if (columnMaxLength > 0 && strVal.length > columnMaxLength) {
+                    strVal = strVal.substring(0, columnMaxLength) + '[...truncated]';
+                    wasColumnTruncated = true;
+                }
+                return strVal.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+            });
+            return `| ${values.join(' | ')} |`;
+        });
+
+        const table = [headerRow, separatorRow, ...dataRows].join('\n');
+        if (wasColumnTruncated) {
+            return `${table}\n\n*Note: Column values longer than ${columnMaxLength} characters were truncated with \`[...truncated]\`. Pass \`ColumnMaxLength: 0\` for full values.*`;
+        }
+        return table;
+    }
+
     /**
      * Trims columns in result set to maximum length
      * Used for JSON format results to prevent verbose fields from overwhelming context
@@ -423,12 +483,12 @@ export class RunAdhocQueryAction extends BaseAction {
      * @param maxLength Maximum length for string values
      * @returns New array with trimmed values
      */
-    private trimResultColumns(results: any[], maxLength: number): any[] {
+    private trimResultColumns(results: Record<string, unknown>[], maxLength: number): Record<string, unknown>[] {
         return results.map(row => {
-            const trimmedRow: any = {};
+            const trimmedRow: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(row)) {
                 if (value != null && typeof value === 'string' && value.length > maxLength) {
-                    trimmedRow[key] = value.substring(0, maxLength) + '...';
+                    trimmedRow[key] = value.substring(0, maxLength) + '[...truncated]';
                 } else {
                     trimmedRow[key] = value;
                 }
@@ -551,11 +611,31 @@ export class RunAdhocQueryAction extends BaseAction {
         return defaultValue;
     }
 
+    private setOutputParam(params: RunActionParams, name: string, value: unknown): void {
+        const existing = params.Params.find(
+            p => p.Name.toLowerCase() === name.toLowerCase() && (p.Type === 'Output' || p.Type === 'Both')
+        );
+        if (existing) {
+            existing.Value = value;
+        } else {
+            params.Params.push({ Name: name, Type: 'Output', Value: value });
+        }
+    }
+
+    /** The `## Data` section: where the rows are, never the rows. */
+    private describeDataLocation(rowCount: number, hasFormattedResults: boolean): string {
+        if (rowCount === 0) {
+            return `## Data\n*No rows returned*`;
+        }
+        const alsoFormatted = hasFormattedResults ? ' (also rendered in the `FormattedResults` output parameter)' : '';
+        return `## Data\n${rowCount.toLocaleString()} row${rowCount !== 1 ? 's' : ''} in the \`Results\` output parameter${alsoFormatted}.`;
+    }
+
     /**
      * Build detailed message with query results for agent consumption
      */
     private buildDetailedMessage(
-        results: any[],
+        results: Record<string, unknown>[],
         columns: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>,
         executionTimeMs: number,
         totalTimeMs: number,
@@ -563,7 +643,8 @@ export class RunAdhocQueryAction extends BaseAction {
         warnings: string[],
         returnType: string,
         formattedData?: string,
-        analysis?: string
+        analysis?: string,
+        columnMaxLength: number = 0
     ): string {
         const lines: string[] = [];
 
@@ -575,6 +656,9 @@ export class RunAdhocQueryAction extends BaseAction {
 
         if (wasTruncated) {
             lines.push(`**Note:** Results were truncated to maximum row limit`);
+        }
+        if (columnMaxLength > 0 && formattedData?.includes('[...truncated]')) {
+            lines.push(`**Note:** Column values longer than ${columnMaxLength} characters were truncated with \`[...truncated]\`. Pass \`ColumnMaxLength: 0\` for full values.`);
         }
 
         lines.push(`\n---\n`);
@@ -605,26 +689,12 @@ export class RunAdhocQueryAction extends BaseAction {
             lines.push('');
         }
 
-        // Results Data (if applicable)
+        // The rows themselves are NOT repeated here. They go out in the Results output parameter (and in
+        // FormattedResults when a format was asked for), which an agent reads alongside this message; a
+        // copy in the message put every result set into the context a second (and third) time.
         if (returnType === 'data only' || returnType === 'data and analysis') {
-            if (results.length > 0) {
-                lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
-                if (formattedData) {
-                    lines.push('```');
-                    lines.push(formattedData);
-                    lines.push('```');
-                } else {
-                    lines.push('```json');
-                    lines.push(JSON.stringify(results, null, 2));
-                    lines.push('```');
-                }
-            } else {
-                lines.push(`## Data\n*No rows returned*`);
-            }
+            lines.push(this.describeDataLocation(results.length, formattedData !== undefined));
         }
-
-        lines.push(`\n---`);
-        lines.push(`\n**The full result set is available in the Results output parameter for further processing.**`);
 
         return lines.join('\n');
     }

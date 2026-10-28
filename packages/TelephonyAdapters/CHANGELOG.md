@@ -1,5 +1,233 @@
 # @memberjunction/telephony-adapters
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- d26183d: Fix CodeQL insecure-randomness and filesystem-race findings in runtime code (#5574).
+  - **Open App installs** download migration and teardown SQL into a fresh private temp directory (`mkdtempSync`) instead of a predictable `mj-app-<name>-<timestamp>` path that reused any directory already there.
+  - **Password generation** picks and shuffles characters with `crypto.randomInt`, removing the modulo bias of `randomBytes % length`.
+  - **Number pool `Random` selection** and the **Pi harness session id** use `node:crypto` instead of `Math.random`.
+  - **SQL log reads** drop the existence check before reading; a missing file is still reported through the existing `ENOENT` handling.
+
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [fd780a9]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [db50c6b]
+- Updated dependencies [afc1e0e]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [17c36d1]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [9d1eb6a]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [542795b]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [1d29837]
+- Updated dependencies [006a5e7]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [e1f2583]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-agents@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/server-extensions-core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/livekit-room-server@6.2.0-edge.5
+  - @memberjunction/ai-bridge-base@6.2.0-edge.5
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.5
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.5
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.5
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.5
+  - @memberjunction/ai-bridge-server@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- aaf74ca: A realtime agent start that fails now records the failure on the agent's co-agent run, and a LiveKit room start that can't give the user a token starts nothing.
+  - The co-agent run of an agent whose start failed read `Completed`: closing its model session finalized the run as a success, whatever the reason for the close. The LiveKit room coordinator and the phone-call starter now finalize the run as `Failed` first, with the start's error as the `ErrorMessage` of the run, its prompt run and its step; the close then finalizes nothing more.
+  - `BridgeRealtimeRuntime.Finalize` and `RealtimeClientSessionService.FinalizeCoAgentRun` take an optional error message for a failed finalize.
+  - `LiveKitAgentRoomCoordinator.SetFailedStartRecorder` binds how a failed start is recorded; MJServer binds it to the session runtime's `Finalize(false, error)`. Unbound, a failed start's run reads `Completed`, as before.
+  - `StartLiveKitAgentRoomSession` mints the user's client token before it starts the agent. Minted after the agent joined, a token that couldn't be minted failed the start with the agent left in the room, its agent session `Active`, and no bridge id for the UI to stop it by.
+
+- 8704df6: A phone call never asks the model for an avatar. A caller hears the agent and sees no video, but a voiced agent whose persona has a face still asked for its avatar on a phone call: on a carrier call (Twilio, Vonage, RingCentral) the Gemini driver refused it as `bridged` and logged that on every call, and on a call that reached a LiveKit room through SIP the room coordinator asked for room delivery whenever its host could publish, so the model rendered avatar video, billed per minute, that the caller never saw. The session prep now decides before the driver: a session marked as a phone call (`PrepareClientSessionInput.PhoneCall`, set from `params.data.realtimePhoneCall`, which `CreateBridgeRealtimeSession` sets from `BridgeRealtimeSessionContext.PhoneCall`) carries no avatar request, keeps the avatar persona's voice so the agent sounds the same as in a call that shows its face, and the default model walk prefers no avatar model for it. The telephony call starter marks every carrier call as a phone call; the room call starter passes its channel to the coordinator (`AgentRoomHostOptions.Channel`), which on `'phone'` skips the native module's avatar probe, passes no room delivery, and marks the session (`RealtimeSessionStartContext.PhoneCall`). Core gains the reason `'phone'` (`RealtimeAvatarUnavailableReason`, read by `ParseRealtimeAvatarStatus` and the bot attribute reader); a phone call's bridged session reports `{ Requested: true, Granted: false, Reason: 'phone' }` as its `AvatarStatus`, so a SIP call's bot joins with `mj.agentAvatar` `audio-only:phone`, and the notice reads "Audio only for {Agent}: the avatar isn't shown on phone calls" (`ng-realtime-media` and the mobile app's copy). The `bridged` reason now covers only a server-side session whose host can't publish video into a room. Integration check RD13 also checks that a phone call in a room that could publish the avatar asks for none and keeps the persona's voice.
+- aee2d53: Full-duplex realtime models improvements, speech-tuned Meet room options, audio telemetry, and disconnect reason handling:
+  - **FullDuplex metadata**: Added `FullDuplex?: boolean` to Realtime section of `IAIModelConfiguration` with cascaded metadata resolution and helper `ResolveIsModelFullDuplex`. Seeded metadata for full-duplex models (Gemini 3.8 Live family, GPT-Live 1).
+  - **Coordinator turn-taking tools & ResolveHostTools seam**: Withhold turn-taking tools (`turnTakingTools = []`) when model is full-duplex. Added `ResolveHostTools` callback seam to `PrepareClientSessionInput` allowing dynamic resolution of host tools based on resolved model/vendor/driver before session startup.
+  - **Energy gate bypass**: Bypassed `FullDuplexTurnGate` and `HumanSpeechDetector` for full-duplex models by default unless `MJ_REALTIME_MODERATOR_MODE=on`.
+  - **Speech-tuned Meet RoomOptions**: Configured speech defaults (`dtx: false`, `red: true`, `audioPreset: AudioPresets.speech`, `audioCaptureDefaults`) overridable via `RoomOptions` input.
+  - **Audio telemetry**: Added inbound inter-frame gap histogram per participant, outbound `queuedDuration` and underrun tracking, event-loop delay p99 (`perf_hooks.monitorEventLoopDelay`) with 30s rolling window, and speech-to-audio latency logging.
+  - **LiveKit disconnect reason**: Mapped `null`/`undefined` disconnect reason from `livekit-client` to `'connection-lost'` rather than `'client-initiated'`.
+  - **Interaction lifecycle**: Added optional `Status` override on `CloseInteractionParams`.
+
+- 5fcc7b0: A Teams meeting agent's `MJ: AI Agent Sessions` row now closes when the bot's bridge ends (#5427). Before, the session a Teams join (`StartTeamsMeetingSession`) created stayed `Active` after the bot left the meeting, until the janitor's staleness sweep closed it, 15 minutes or more later, as `Janitor`.
+  - `TeamsMeetingsService` passes the bridge engine an end-of-session hook, as phone and room calls do. Once the bridge has ended, whatever ended it (the meeting ended, everyone left, the engine reaped the bridge, the model session was lost), the hook closes the session through `CloseAgentSessionRow` with the bridge's reason: `Explicit` for a stop or `HostEnded`, otherwise the bridge's own (`Error`, `Janitor`, `Shutdown`). A session already closed keeps its reason.
+  - A scheduled join's session, which the calendar watcher creates and passes in, is left open as before.
+
+- ed8a189: feat(telephony): add ILiveKitSipInboundHandler hook and multi-observer support to RoomHandoffEngine
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [1aa4e00]
+- Updated dependencies [acf0f5b]
+- Updated dependencies [b73b878]
+- Updated dependencies [989f7fe]
+- Updated dependencies [b699a37]
+- Updated dependencies [bd0ee83]
+- Updated dependencies [fd2a410]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [59d47d5]
+- Updated dependencies [aaf74ca]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [1b4c9f5]
+- Updated dependencies [1c76559]
+- Updated dependencies [97bbca4]
+- Updated dependencies [c28e243]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [69bf67c]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [35d3c95]
+- Updated dependencies [dbc3462]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [7177e09]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [45359c6]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [8ed4049]
+- Updated dependencies [6c8798b]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [a66f4b0]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [bc0e36f]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [ed8a189]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [d2ccfef]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-agents@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/livekit-room-server@6.2.0-edge.4
+  - @memberjunction/ai-bridge-base@6.2.0-edge.4
+  - @memberjunction/ai-bridge-server@6.2.0-edge.4
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.4
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.4
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.4
+  - @memberjunction/server-extensions-core@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

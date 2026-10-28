@@ -11,7 +11,7 @@
  * @since 2.76.0
  */
 
-import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
     CollectDecisionStepKeys,
     DecisionHoldReason,
@@ -122,6 +122,9 @@ export class FlowExecutionState {
 
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /** Remaining starting step IDs queued for execution in inRun mode when a flow has multiple starting steps */
+    pendingStartStepIds?: string[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Where this run's steps execute. Decided once by `DetermineInitialStep` and read by every
@@ -371,9 +374,11 @@ export class FlowAgentType extends BaseAgentType {
                         errorMessage: 'No starting steps defined for flow agent'
                     });
                 }
+
+                if (startingSteps.length > 1) {
+                    flowState.pendingStartStepIds = startingSteps.slice(1).map((s) => s.ID);
+                }
                 
-                // For now, execute the first starting step
-                // Future enhancement: support parallel starting steps
                 return await this.createStepForFlowNode(params, startingSteps[0], payload, flowState);
             }
             
@@ -384,31 +389,51 @@ export class FlowAgentType extends BaseAgentType {
             if (currentStep?.StepType === 'Prompt' && promptResult) {
 
                 // Parse the prompt result as JSON
-                const promptResponse = this.parseJSONResponse<any>(promptResult);
+                const promptResponse = this.parseJSONResponse<Record<string, unknown>>(promptResult);
+                let stepResultValue: unknown = promptResponse;
 
-                if (promptResponse) {
+                if (promptResponse && typeof promptResponse === 'object') {
+                    const nextStepCandidate = promptResponse.nextStep as { type?: string } | undefined;
                     // Check if the prompt response contains a Chat step request
                     // This handles the case where a Prompt step wants to return a message to the user
-                    if (promptResponse.nextStep?.type === 'Chat' ||
-                        (promptResponse.taskComplete && promptResponse.message)) {
+                    if (nextStepCandidate?.type === 'Chat' ||
+                        (promptResponse.taskComplete && typeof promptResponse.message === 'string')) {
                         // Return a Chat step to bubble the message back to the user
                         return this.createNextStep('Chat', {
-                            message: promptResponse.message || 'Response from flow prompt step',
-                            reasoning: promptResponse.reasoning,
-                            confidence: promptResponse.confidence,
+                            message: (promptResponse.message as string) || 'Response from flow prompt step',
+                            reasoning: promptResponse.reasoning as string | undefined,
+                            confidence: promptResponse.confidence as number | undefined,
                             terminate: true, // Always terminate for chat responses
                             newPayload: payload,
                             previousPayload: payload
                         });
                     }
 
+                    if (typeof promptResponse.message === 'string' && promptResponse.message.trim().length > 0) {
+                        flowState.specialFields = {
+                            ...flowState.specialFields,
+                            message: promptResponse.message
+                        };
+                    }
+
                     // Deep merge the prompt response into the current payload
                     // This preserves existing nested properties while adding/updating from the prompt
                     // Example: If payload has {decision: {Y: 4, Z: 2}} and prompt returns {decision: {x: "string"}},
                     // the result will be {decision: {x: "string", Y: 4, Z: 2}} instead of losing Y and Z
-                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse);
+                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse as Partial<P>);
                     // Copy merged result back to payload reference (modifying in place for consistency)
-                    Object.assign(payload, mergedPayload);
+                    Object.assign(payload as Record<string, unknown>, mergedPayload);
+                } else if (promptResult.success) {
+                    const textResult = typeof promptResult.result === 'string'
+                        ? promptResult.result
+                        : (typeof promptResult.rawResult === 'string' ? promptResult.rawResult : undefined);
+                    if (textResult && textResult.trim().length > 0) {
+                        stepResultValue = textResult;
+                        flowState.specialFields = {
+                            ...flowState.specialFields,
+                            message: textResult
+                        };
+                    }
                 }
 
                 // Store the prompt step result so path conditions can access it
@@ -416,7 +441,7 @@ export class FlowAgentType extends BaseAgentType {
                 const promptStepResult = {
                     Success: true,
                     step: 'Success',
-                    result: promptResponse,
+                    result: stepResultValue,
                     rawResult: promptResult
                 };
                 flowState.stepResults.set(flowState.currentStepId, promptStepResult);
@@ -439,9 +464,19 @@ export class FlowAgentType extends BaseAgentType {
             const paths = selection.Paths;
 
             if (paths.length === 0) {
+                // If this workflow has additional starting steps that have not run yet, advance to the next one
+                const pendingStart = await this.popNextPendingStartStep(flowState);
+                if (pendingStart) {
+                    return await this.createStepForFlowNode(params, pendingStart, payload, flowState);
+                }
+
                 // No valid paths - flow is complete
                 return this.createSuccessStep({
-                    message: 'Flow completed - no more paths to follow'
+                    message: flowState.specialFields?.message || 'Flow completed - no more paths to follow',
+                    reasoning: flowState.specialFields?.reasoning,
+                    confidence: flowState.specialFields?.confidence,
+                    newPayload: payload,
+                    previousPayload: payload
                 });
             }
             
@@ -452,6 +487,11 @@ export class FlowAgentType extends BaseAgentType {
                 return this.createNextStep('Failed', {
                     errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
                 });
+            }
+
+            const deferredStartStep = await this.deferJoinStepIfPendingStarts(nextStep, flowState, params, payload);
+            if (deferredStartStep) {
+                return deferredStartStep;
             }
             
             // Check if the step is active
@@ -503,6 +543,18 @@ export class FlowAgentType extends BaseAgentType {
         
         // Inject standard payload
         prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = payload || {};
+        if (prompt.data.payload === undefined) {
+            prompt.data.payload = payload || {};
+        }
+        if (prompt.data.userMessage === undefined && Array.isArray(prompt.conversationMessages)) {
+            const lastUserContent = ConversationMessageResolver.Resolve(
+                'conversation.user.last.content',
+                prompt.conversationMessages
+            );
+            if (lastUserContent !== undefined) {
+                prompt.data.userMessage = lastUserContent;
+            }
+        }
         
         // Add flow-specific context from our state tracking
         if (agentInfo.agentRunId) {
@@ -811,8 +863,12 @@ export class FlowAgentType extends BaseAgentType {
                         }
                     } else {
                         // Regular payload mapping
+                        // Strip optional leading "payload." prefix so both "customerData" and "payload.customerData" map to payload.customerData
+                        const normalizedPayloadPath = payloadPath.toLowerCase().startsWith('payload.')
+                            ? payloadPath.slice('payload.'.length)
+                            : payloadPath;
                         // Parse the path and build nested object
-                        const pathParts = payloadPath.split('.');
+                        const pathParts = normalizedPayloadPath.split('.');
                         let current = updateObj;
 
                         for (let i = 0; i < pathParts.length - 1; i++) {
@@ -1451,8 +1507,15 @@ export class FlowAgentType extends BaseAgentType {
         // Extract output parameters from the action result
         const actionResult = actionResults[0];
         const outputParams: Record<string, unknown> = {};
+
+        // Seed with properties from actionResult.Result (e.g., Message, ResultCode, Success)
+        if (actionResult.Result && typeof actionResult.Result === 'object') {
+            for (const [key, val] of Object.entries(actionResult.Result)) {
+                outputParams[key] = val;
+            }
+        }
         
-        // Filter for output parameters (Type === 'Output' or 'Both')
+        // Filter for output parameters (Type === 'Output' or 'Both'), overriding Result fields when present
         if (actionResult.Params) {
             for (const param of actionResult.Params) {
                 if (param.Type === 'Output' || param.Type === 'Both') {
@@ -1745,7 +1808,7 @@ export class FlowAgentType extends BaseAgentType {
             return await this.createStepForFlowNode(params, validStep, payloadToUse, flowState);
         }
 
-        // Default behavior: start at the configured entry point
+        // Default behavior: start at the configured entry point(s)
         const startingSteps = await this.getStartingSteps(flowState.agentId);
 
         if (startingSteps.length === 0) {
@@ -1754,9 +1817,76 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
-        // Execute the first starting step
-        // Future enhancement: support parallel starting steps
+        if (startingSteps.length > 1) {
+            flowState.pendingStartStepIds = startingSteps.slice(1).map((s) => s.ID);
+        }
+
         return await this.createStepForFlowNode(params, startingSteps[0], payloadToUse, flowState);
+    }
+
+    /**
+     * Dequeues the next active uncompleted starting step when a workflow has multiple starting steps.
+     *
+     * @private
+     */
+    private async popNextPendingStartStep(flowState: FlowExecutionState): Promise<MJAIAgentStepEntity | null> {
+        // Built once: nothing in this loop completes a step. A UUIDSet matches IDs case-insensitively.
+        const completedStepIds = new UUIDSet(flowState.completedStepIds);
+        while (flowState.pendingStartStepIds && flowState.pendingStartStepIds.length > 0) {
+            const nextStartId = flowState.pendingStartStepIds.shift()!;
+            if (completedStepIds.Has(nextStartId)) {
+                continue;
+            }
+            const nextStartStep = await this.getStepById(nextStartId);
+            if (nextStartStep && nextStartStep.Status === 'Active') {
+                return nextStartStep;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * When `nextStep` is a join step with uncompleted incoming prerequisites and additional
+     * starting steps are still queued in `flowState.pendingStartStepIds`, defers `nextStep`
+     * by re-queuing its ID after the remaining starting steps and advancing to the next
+     * pending start step first.
+     */
+    private async deferJoinStepIfPendingStarts<P = unknown>(
+        nextStep: MJAIAgentStepEntity,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>,
+        payload: P
+    ): Promise<BaseAgentNextStep<P> | null> {
+        if (!flowState.pendingStartStepIds || flowState.pendingStartStepIds.length === 0) {
+            return null;
+        }
+        const completedStepIds = new UUIDSet(flowState.completedStepIds);
+        const hasOtherPendingStep = flowState.pendingStartStepIds.some(
+            (id) => !UUIDsEqual(id, nextStep.ID) && !completedStepIds.Has(id)
+        );
+        if (!hasOtherPendingStep) {
+            return null;
+        }
+
+        const repo = new AIEngineGraphRepository(flowState.agentId);
+        const incomingOrigins = repo.GetIncomingEdges(nextStep.ID).map((e) => e.originNodeId);
+        if (incomingOrigins.length <= 1) {
+            return null;
+        }
+        const hasIncompleteJoinOrigin = incomingOrigins.some((originId) => !completedStepIds.Has(originId));
+        if (!hasIncompleteJoinOrigin) {
+            return null;
+        }
+
+        const pendingStart = await this.popNextPendingStartStep(flowState);
+        if (!pendingStart) {
+            return null;
+        }
+
+        if (!flowState.pendingStartStepIds.some((id) => UUIDsEqual(id, nextStep.ID))) {
+            flowState.pendingStartStepIds.push(nextStep.ID);
+        }
+        return await this.createStepForFlowNode(params, pendingStart, payload, flowState);
     }
 
     /**
@@ -1880,6 +2010,12 @@ export class FlowAgentType extends BaseAgentType {
                 });
             }
 
+            // If this workflow has additional starting steps that have not run yet, advance to the next one
+            const pendingStart = await this.popNextPendingStartStep(flowState);
+            if (pendingStart) {
+                return await this.createStepForFlowNode(params, pendingStart, currentPayload, flowState);
+            }
+
             // Otherwise, flow completed successfully
             LogStatusEx({
                 message: '✅ Flow Agent: Flow completed successfully - no more paths to follow',
@@ -1905,6 +2041,11 @@ export class FlowAgentType extends BaseAgentType {
             return this.createNextStep('Failed', {
                 errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
             });
+        }
+
+        const deferredStartStep = await this.deferJoinStepIfPendingStarts(nextStep, flowState, params, currentPayload);
+        if (deferredStartStep) {
+            return deferredStartStep;
         }
 
         // Log when we're navigating to a recovery path after a failure

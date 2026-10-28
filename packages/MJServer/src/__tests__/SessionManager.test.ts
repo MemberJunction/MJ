@@ -29,6 +29,16 @@ vi.mock('@memberjunction/ai-agents', () => ({
     },
 }));
 
+// --- Mock the recording assembly scheduler so a close's assembly request is observable (#5294) ---
+const scheduleAssemblyMock = vi.fn();
+vi.mock('../realtimeSessions/RecordingAssemblyScheduler.js', () => ({
+    RecordingAssemblyScheduler: {
+        get Instance() {
+            return { ScheduleAssembly: scheduleAssemblyMock };
+        },
+    },
+}));
+
 // --- Mock RunView.FromMetadataProvider so channel sweeps and run-id lookups are controllable,
 //     while leaving the rest of @memberjunction/core intact. RunViews runs each view through runViewMock. ---
 const runViewMock = vi.fn();
@@ -135,6 +145,7 @@ beforeEach(() => {
     hostSessionClosedMock.mockResolvedValue(undefined);
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
+    scheduleAssemblyMock.mockReset();
     getSystemUserMock.mockReset();
     getSystemUserMock.mockReturnValue(undefined);
 });
@@ -175,6 +186,64 @@ describe('SessionManager.CreateSession', () => {
         expect(result.HostInstanceID).toBeTypeOf('string');
     });
 
+    describe('anonymous ExternalID stamp: MagicLinkScope.ResourceID when the token carries one, else mj_sid', () => {
+        async function stampFor(anon: Record<string, unknown>): Promise<unknown> {
+            hasPermissionMock.mockResolvedValue(true);
+            const conversation = makeSessionEntity({ ID: 'conv-anon' });
+            const session = makeSessionEntity({ ID: 'session-anon' });
+            const { provider } = makeProvider((name) => (name === 'MJ: Conversations' ? conversation : session));
+            const anonUser = { ID: 'user-anon', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, ...anon } as unknown as UserInfo;
+            await new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon' }, anonUser, provider);
+            return conversation.ExternalID;
+        }
+
+        it('widget guest (ResourceID == mj_sid): stamps the sessionId', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'sid-w', MagicLinkScope: { ResourceID: 'sid-w' } })).toBe('sid-w');
+        });
+
+        it('anonymous invite WITH a ResourceID: stamps the ResourceID, so scope RLS ({{ScopeResourceID}}) still finds the row', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'visitor-sid-1', MagicLinkScope: { ResourceID: 'invite-scope-R' } })).toBe('invite-scope-R');
+        });
+
+        it('anonymous invite WITHOUT a ResourceID: stamps the per-redemption mj_sid', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'visitor-sid-2' })).toBe('visitor-sid-2');
+        });
+    });
+
+    it('stamps conversation ExternalID with MagicLinkScope.ResourceID for a non-anonymous scoped principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-scoped' });
+        const session = makeSessionEntity({ ID: 'session-scoped' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const scopedUser = {
+            ID: 'user-scoped',
+            Email: 'scoped@example.com',
+            IsMagicLinkAnonymous: false,
+            MagicLinkScope: { ResourceID: 'resource-scoped-1' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-scoped' }, scopedUser, provider);
+
+        expect(conversation.ExternalID).toBe('resource-scoped-1');
+    });
+
+    it('does not set conversation ExternalID for a named principal without scope', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-named' });
+        const session = makeSessionEntity({ ID: 'session-named' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1' }, makeUser(), provider);
+
+        expect(conversation.ExternalID).toBeUndefined();
+    });
+
     it('reuses a supplied conversation without creating a new one', async () => {
         hasPermissionMock.mockResolvedValue(true);
         const session = makeSessionEntity({ ID: 'session-x' });
@@ -190,6 +259,43 @@ describe('SessionManager.CreateSession', () => {
         // Only one entity (the session) should have been requested — no Conversation.
         expect(handedOut.length).toBe(1);
         expect(session.ConversationID).toBe('conv-existing');
+    });
+
+    describe('an anonymous caller binding a session to an existing conversation (#4931)', () => {
+        const anonUser = { ID: 'user-anon', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-a', MagicLinkScope: { ResourceID: 'sid-a' } } as unknown as UserInfo;
+
+        function providerWith(conversation: FakeEntity, session: FakeEntity) {
+            return makeProvider((name) => (name === 'MJ: Conversations' ? conversation : session));
+        }
+
+        it('refuses another visitor\'s conversation and writes no session row', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-b', ExternalID: 'sid-b' }), session);
+            await expect(
+                new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-b' }, anonUser, provider),
+            ).rejects.toBeInstanceOf(SessionAuthorizationError);
+            expect(session.Save).not.toHaveBeenCalled();
+        });
+
+        it('refuses a conversation it cannot read', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-hidden', Load: vi.fn(async () => false) }), session);
+            await expect(
+                new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-hidden' }, anonUser, provider),
+            ).rejects.toBeInstanceOf(SessionAuthorizationError);
+            expect(session.Save).not.toHaveBeenCalled();
+        });
+
+        it('binds to its own conversation (ExternalID equals its scope identity)', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-a', ExternalID: 'sid-a' }), session);
+            await new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-a' }, anonUser, provider);
+            expect(session.ConversationID).toBe('conv-a');
+            expect(session.Save).toHaveBeenCalled();
+        });
     });
 
     it('throws (with the entity error detail) when the Conversation save fails — no session row attempted', async () => {
@@ -563,6 +669,22 @@ describe('SessionManager.Heartbeat', () => {
         const ok = await mgr.Heartbeat('session-1', makeUser(), provider);
         expect(ok).toBe(false);
         expect(session.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionManager.CloseSession — recording assembly (#5294)', () => {
+    it('CloseSession of a recorded session asks for its assembly now (the hidden-tab deferral ends with the call)', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', RecordingStartedAt: new Date(0) });
+        const { provider } = makeProvider(() => session);
+        await new SessionManager().CloseSession('session-1', makeUser(), provider);
+        expect(scheduleAssemblyMock).toHaveBeenCalledWith('session-1', 0, false);
+    });
+
+    it('CloseSession of a session that was not recorded asks for no assembly', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', RecordingStartedAt: null });
+        const { provider } = makeProvider(() => session);
+        await new SessionManager().CloseSession('session-1', makeUser(), provider);
+        expect(scheduleAssemblyMock).not.toHaveBeenCalled();
     });
 });
 

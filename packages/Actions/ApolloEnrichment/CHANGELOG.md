@@ -1,5 +1,108 @@
 # Change Log - @memberjunction/actions-apollo
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/actions@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/credentials@6.2.0-edge.5
+  - @memberjunction/network-utils@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- eba8ade: Apollo enrichment rework. New `ApolloPeopleClient` (`people/bulk_match` ten at a time with header
+  auth, `organizations/enrich`, positional correlation, employment split from education, typed
+  `ApolloRateLimitError`/`ApolloAuthError`/`ApolloRequestError`, one ≤60 s retry on a per-minute limit
+  and never a longer sleep) over a shared `ApolloHttp` helper that `ApolloRESTClient` now uses too.
+  Both enrichment actions run on it and fix the known bugs: quoted key predicates and real composite
+  keys on the configured entities, saves that no longer short-circuit after a failure, values stored
+  unescaped, keyset paging on the contacts filter, every record sent stamped (misses included),
+  education written from its own mapping with only the mapped columns, hourly limits returned as
+  `RATE_LIMIT_EXCEEDED` at once, people discovery through `mixed_people/api_search` then
+  `bulk_match` by id (the old `mixed_people/search` answers 422), and an optional `CompanyID` param
+  on both actions. `ApolloRESTClient.searchPeople` reads the current `api_search` shape (top-level
+  `total_entries`, obfuscated people) and takes `locations` and `keywords`; `Apollo - Search People`
+  gains `Locations`, `Keywords` and a `TotalEntries` output. Adds the `Apollo` row to
+  `MJ: Integrations` so the per-company credential path can resolve, and fixes the README's
+  history-mapping keys.
+
+### Patch Changes
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/credentials@6.2.0-edge.4
+  - @memberjunction/network-utils@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

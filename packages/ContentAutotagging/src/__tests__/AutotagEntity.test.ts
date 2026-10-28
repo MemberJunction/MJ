@@ -137,7 +137,9 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagEngineBase: { Instance: { Config: vi.fn() } }
 }));
 
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AutotagEntity } from '../Entity/generic/AutotagEntity';
+import { EntityInfo } from '@memberjunction/core';
 
 describe('AutotagEntity', () => {
     let provider: AutotagEntity;
@@ -145,6 +147,8 @@ describe('AutotagEntity', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         provider = new AutotagEntity();
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue(undefined);
         mockEngineInstance.TaxonomyContext = null;
         mockEngineInstance.OnContentItemTagSaved = null;
     });
@@ -185,10 +189,8 @@ describe('AutotagEntity', () => {
             };
             mockEngineInstance.getAllContentSources.mockResolvedValueOnce([source]);
 
-            // SetContentItemsToProcess returns 0 new items (no modified entity records)
-            // — first call: LoadEntityDocument returns null → 0 new items
+            // SetContentItemsToProcess returns 0 new items: the Entity Document is not in the cache.
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [] })
                 // GetUntaggedContentItems: returns 3 untagged items
                 .mockResolvedValueOnce({
                     Success: true,
@@ -364,6 +366,10 @@ describe('AutotagEntity', () => {
             EntityID: 'ent-1'
         };
 
+        beforeEach(() => {
+            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue(mockEntityDoc as never);
+        });
+
         const mockRecord = {
             PrimaryKey: { Values: () => 'rec-1' },
             GetAll: () => ({ Name: 'John Doe', Email: 'john@example.com' }),
@@ -375,7 +381,6 @@ describe('AutotagEntity', () => {
 
             // Set up RunView to return entity doc, no existing ERDs, no existing items, and one modified record
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [mockRecord] })    // GetModifiedRecords
                 .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems
@@ -400,7 +405,6 @@ describe('AutotagEntity', () => {
             };
 
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] })     // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [mockRecord] })         // GetModifiedRecords
                 .mockResolvedValueOnce({ Success: true, Results: [existingERD] })        // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [existingContentItem] }); // LoadExistingContentItems
@@ -430,7 +434,6 @@ describe('AutotagEntity', () => {
             mockParse.mockReset();
             mockParse.mockResolvedValue('Rendered template text for the record.');
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [row] })           // GetModifiedRecords
                 .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems
@@ -443,6 +446,101 @@ describe('AutotagEntity', () => {
             expect(erd.EntityID).toBe('ent-1');
             expect(erd.RecordID).toBe('OrderID|11055||LineNo|3');
             expect(result[0].Name).toBe('Widget');
+        });
+    });
+
+    // ========================================================================
+    // Field-level security: restricted fields never reach shared derived text
+    // ========================================================================
+
+    // The rendered text becomes a shared Entity Record Document, a Content Item's Text and name, and
+    // the tagging LLM's prompt. None of those is projected per reader, so a field restricted for ANY
+    // role must be gone from the record before anything is rendered from it.
+    describe('field-level security', () => {
+        const rules = (staffRead: string) => [
+            { ID: `p-hr-${staffRead}`, RoleID: 'role-hr', ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+            { ID: `p-st-${staffRead}`, RoleID: 'role-staff', ReadAccess: staffRead, UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+        ];
+        const field = (name: string, staffRead: string, extra: Record<string, unknown> = {}) => ({
+            ID: `F-${name}`, EntityID: 'ent-1', Name: name, Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: rules(staffRead), ...extra,
+        });
+        const employees = new EntityInfo({
+            ID: 'ent-1', Name: 'Employees', EnableFieldLevelSecurity: true, Permissions: [],
+            Fields: [
+                field('ID', 'Allow', { IsPrimaryKey: true }),
+                field('CodeName', 'Deny', { IsNameField: true, Sequence: 1 }),
+                field('Department', 'Allow'),
+                field('Salary', 'Deny'),
+            ],
+        });
+
+        it('renders, names and stores the record without fields restricted for any role', async () => {
+            Object.defineProperty(provider, 'ProviderToUse', {
+                configurable: true,
+                get: () => ({ EntityByID: () => employees, GetEntityObject: mockGetEntityObject }),
+            });
+            (provider as unknown as { engine: typeof mockEngineInstance }).engine = mockEngineInstance;
+            mockRunView.mockReset();
+            mockParse.mockReset();
+            mockParse.mockResolvedValue('Rendered template text for the record.');
+            const row = { ID: 'emp-1', CodeName: 'Nightingale', Department: 'Research', Salary: 250000 };
+            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue({
+                ID: 'doc-1', Name: 'Employee Doc', TemplateID: 'tmpl-1', VectorIndexID: 'vi-1', EntityID: 'ent-1',
+            } as never);
+            mockRunView
+                .mockResolvedValueOnce({ Success: true, Results: [row] })   // modified records
+                .mockResolvedValueOnce({ Success: true, Results: [] })      // existing ERDs
+                .mockResolvedValueOnce({ Success: true, Results: [] });     // existing content items
+
+            const result = await provider.SetContentItemsToProcess([{
+                ID: 'src-1', Name: 'Employee Source', EntityID: 'ent-1', EntityDocumentID: 'doc-1', Configuration: null,
+                ContentTypeID: 'ct-1', ContentFileTypeID: 'cft-1', ContentSourceTypeID: 'cst-1', URL: null,
+            } as never]);
+
+            expect(result).toHaveLength(1);
+            const renderedRecord = mockParse.mock.calls[0][2] as Record<string, unknown>;
+            expect(renderedRecord).toEqual({ ID: 'emp-1', Department: 'Research' });
+            // The Content Item name comes from the (restricted) name field, so it falls back to the source name.
+            expect(result[0].Name).toBe('Employee Source');
+            const erd = await mockGetEntityObject.mock.results[0].value as { RecordID?: string };
+            expect(erd.RecordID).toBe('emp-1');
+        });
+    });
+
+    // ========================================================================
+    // Entity Record Documents reads skip the server RunView cache
+    // ========================================================================
+
+    // On the server a cached RunView widens Fields to every column (DocumentText, VectorJSON) so its
+    // slot can serve any field set. These reads are single-use or find-or-create, so they bypass it.
+    describe('Entity Record Documents reads', () => {
+        it('loads existing ERDs for the upsert straight from the database', async () => {
+            mockRunView.mockResolvedValueOnce({ Success: true, Results: [{ RecordID: 'rec-1' }] });
+
+            const map = await provider['loadExistingERDs']('doc-1', 'ent-1');
+
+            expect(map.get('rec-1')).toEqual({ RecordID: 'rec-1' });
+            const params = mockRunView.mock.calls[0][0];
+            expect(params.EntityName).toBe('MJ: Entity Record Documents');
+            expect(params.ExtraFilter).toBe("EntityDocumentID='doc-1' AND EntityID='ent-1'");
+            expect(params.ResultType).toBe('entity_object');
+            expect(params.BypassCache).toBe(true);
+        });
+
+        it('looks up the source record of a bridged tag by ERD ID with only the fields it reads', async () => {
+            mockRunView
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'ci-1', ContentSourceID: 'src-1', EntityRecordDocumentID: 'erd-1' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'erd-1', EntityID: 'ent-1', RecordID: 'rec-1' }] });
+            const contentItemTag = { ItemID: 'ci-1', Tag: 'Technology', Weight: 0.9, TagID: null, Save: vi.fn().mockResolvedValue(true) };
+
+            await provider['bridgeContentItemTagToTaxonomy'](contentItemTag as never, null, { ID: 'user-1' } as never);
+
+            const params = mockRunView.mock.calls[1][0];
+            expect(params.EntityName).toBe('MJ: Entity Record Documents');
+            expect(params.ExtraFilter).toBe("ID='erd-1'");
+            expect(params.Fields).toEqual(['ID', 'EntityID', 'RecordID']);
+            expect(params.BypassCache).toBe(true);
+            expect(mockTagEngineInstance.CreateTaggedItem).toHaveBeenCalledWith('tag-resolved', 'ent-1', 'rec-1', expect.anything(), expect.anything());
         });
     });
 });

@@ -182,6 +182,11 @@ module.exports = {
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
 
+  // Template data that prompt runs store — see "Prompt run template data" below
+  aiPromptRuns: {
+    templateDataCapture: 'None',  // 'None' | 'Referenced' | 'Full'
+  },
+
   // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
   // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
   realtime: {
@@ -196,6 +201,18 @@ module.exports = {
   },
 };
 ```
+
+### Prompt run template data (`aiPromptRuns`)
+
+`aiPromptRuns.templateDataCapture` is the server default for the template inputs that a prompt run stores in `AIPromptRun.Messages`:
+
+| Value | What a run stores |
+|---|---|
+| `'None'` (default) | Top-level key names and byte sizes only, no values |
+| `'Referenced'` | Only the keys that the prompt's templates read |
+| `'Full'` | All keys |
+
+A value on the prompt (`AIPrompt.TemplateDataCapture`) or on the call (`AIPromptParams.TemplateDataCapture`) overrides it. MJServer checks the value when it starts: any other value stops MJAPI with `Configuration validation failed`. For the full rules, see [Template data capture](../AI/Prompts/README.md#template-data-capture) in the AI Prompts README.
 
 ### Debugging GraphQL requests
 
@@ -612,6 +629,8 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `BeforeUpdate()` / `AfterUpdate()` | Lifecycle hooks for update |
 | `BeforeDelete()` / `AfterDelete()` | Lifecycle hooks for delete |
 
+`UpdateRecord()` supports both full-record and **delta-only** `Update<Type>Input` mutations (where `GraphQLDataProvider.Save()` sends only primary keys and dirty writable fields in `input` and `input.OldValues___`). When `hasCompleteOldValues()` detects a partial `OldValues___` delta, `MustLoadTruthFromDatabase()` ensures `InnerLoad` populates the full baseline row from the database before `TestAndSetClientOldValuesToDBValues()` checks dirty fields for concurrent modifications and applies `entityObject.SetMany(clientNewValues)`.
+
 ## REST API
 
 In addition to GraphQL, MJServer provides a REST API at `/api/v1/`. By default it is disabled and can be enabled via configuration.
@@ -949,7 +968,33 @@ databaseSettings: {
 
 ### Authentication Token Caching
 
-Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
+Validated JWT tokens are cached using an LRU cache (`AuthCache`), storing both the `UserPayload` and the decoded `jwt.JwtPayload` claims to avoid repeated cryptographic verification and base64 decoding for the same token within its lifetime.
+
+### Scalability & Cache Broadcast Architecture
+
+MJServer implements a 4-pillar horizontal and vertical scalability architecture. For full details, refer to the **[Server Scaling and Broadcast Architecture Guide](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)**.
+
+#### 1. Pluggable Cache Invalidation Broadcast Providers (`CacheInvalidationBroadcastManager`)
+Every entity save/delete is assigned a monotonically increasing sequence number (`X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP headers + `Sequence` field on `CacheInvalidationNotification`) and stored in a bounded ring buffer for deterministic client delta catch-up (`GetCacheInvalidationsSince(sinceSequence)`).
+
+Permission and RLS filtering is coalesced by **Role Fingerprint Bucket** ($O(\text{Roles})$ instead of $O(\text{Subscribers})$), and can be offloaded to managed cloud WebSocket planes registered via `@RegisterClass(BaseCacheInvalidationBroadcastProvider, ...)`:
+- **`SequencedRoleBucket`** (default): In-process + Redis Pub/Sub role-bucket memoization.
+- **`AzureWebPubSub`**: Offloads fan-out to Azure Web PubSub groups (`mj.role.<roleFingerprint>`).
+- **`AWSIoTCore`**: Offloads fan-out to AWS IoT Core MQTT topics (`mj/cache/role/<roleFingerprint>`).
+- **`GCPPubSub`**: Publishes role-bucketed messages to Google Cloud Pub/Sub topics with `roleFingerprint` attributes.
+
+#### 2. $O(1)$ Session-Scoped `PushStatusUpdates` Routing
+`PushStatusUpdates(sessionId)` routes status messages directly to per-session topics (`PUSH_STATUS_UPDATES:session:<sessionId>`) via `CreateSessionRoutingPubSub` and memoizes parsed JSON payloads via a `WeakMap` (`ParseStatusUpdateMessage`), eliminating $O(N \times M)$ cross-session filter scans and JSON re-parsing.
+
+#### 3. Zero-Copy Per-Request Context & Root-Only Middleware
+- **Root-Only `VariablesLoggingMiddleware`**: Applied exclusively to root `Query`, `Mutation`, and `Subscription` fields (`ApplyRootVariablesLoggingMiddleware`) rather than `globalMiddlewares`, avoiding per-field promise allocations on large result sets.
+- **Prototype-Delegated Metadata Shell**: Per-request providers reuse the global metadata graph via `Object.create(shared)` (`ProviderBase.CreateSharedMetadataShell`) and defer RxJS transaction subject allocation until `BeginTransaction()` is invoked.
+
+#### 4. Horizontal Scaling via `MJ_SERVER_ROLE`
+Split interactive GraphQL/REST traffic from background jobs across multi-replica deployments using `serverRole` (`MJ_SERVER_ROLE`):
+- **`all`** (default): Runs HTTP/GraphQL/WebSocket servers and all background workers (`ScheduledJobsService`, `KnowledgeHubIndexingBootstrap`, `ApplicationTrackRecordSyncBootstrap`).
+- **`api`**: Serves interactive HTTP/GraphQL/WebSocket traffic only; skips background cron and indexing workers.
+- **`worker`**: Runs background workers and a lightweight `/health` probe; skips interactive GraphQL/REST/MCP/A2A route mounting.
 
 ## Server Extensions
 
@@ -970,6 +1015,7 @@ For full architecture details, refer to the **[Server Extensions Guide](../../gu
 5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
 6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
 7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
+8. MJServer's global CORS middleware runs before every extension. An extension with its own origin policy sets `OwnsCORS: true` in its config; global CORS then skips its `RootPath`, so its preflights reach the extension and no origin is reflected onto its responses. See the guide's "Owning CORS for Your RootPath" section. Express's `X-Powered-By` header is disabled app-wide.
 
 ### Configuration
 

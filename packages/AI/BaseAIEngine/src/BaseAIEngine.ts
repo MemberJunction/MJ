@@ -1,5 +1,6 @@
+import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
+import { UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
 import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
@@ -7,6 +8,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity,
          MJAIAgentPromptEntity,
          MJAIAgentTypeEntity,
+         MJAIAgentRequestTypeEntity,
          MJAIVendorEntity,
          MJAIModelVendorEntity,
          MJAIModelTypeEntity,
@@ -123,6 +125,17 @@ export interface EffectiveAgentPersona {
     SpeakingStyle: string | null;
 }
 
+/**
+ * Compact summary entry for a directly discoverable, user-runnable AI agent.
+ * Cached per user on AIEngineBase so orchestrator prompts and task-graph validators
+ * can access a user's permitted agent directory in O(1) without recomputing permissions.
+ */
+export interface UserRunnableAgentSummary {
+    ID: string;
+    Name: string;
+    Description: string;
+}
+
 // Default fallback values when no metadata is configured
 const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
@@ -180,6 +193,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agents: MJAIAgentEntityExtended[] = [];
     private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
     private _agentTypes: MJAIAgentTypeEntity[] = [];
+    private _agentRequestTypes: MJAIAgentRequestTypeEntity[] = [];
     private _vendorTypeDefinitions: MJAIVendorTypeDefinitionEntity[] = [];
     private _vendors: MJAIVendorEntity[] = [];
     private _modelVendors: MJAIModelVendorEntity[] = [];
@@ -219,6 +233,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _configurationChainCache: Map<string, MJAIConfigurationEntity[]> = new Map();
 
     /**
+     * Per-user cache of directly discoverable, active, user-runnable agent summaries.
+     * Key: normalized user ID. Invalidated whenever agents or agent permissions change.
+     */
+    private _userRunnableAgentDirectoryCache: Map<string, UserRunnableAgentSummary[]> = new Map();
+    private _userRunnableAgentsRef: MJAIAgentEntityExtended[] | null = null;
+    private _userRunnableAgentsLen = -1;
+    private _userRunnablePermissionsRef: MJAIAgentPermissionEntity[] | null = null;
+    private _userRunnablePermissionsLen = -1;
+
+    /**
      * Memoized ID of the "Inference Provider" vendor-type definition. `undefined` means
      * "not yet computed"; `null` means "computed and not found". Reset on every (re)load
      * via {@link AdditionalLoading}. Vendor-type definitions are static seed data, so this
@@ -240,6 +264,42 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _configurationsByID: Map<string, MJAIConfigurationEntity> | null = null;
     private _modelVendorsByModelID: Map<string, MJAIModelVendorEntity[]> | null = null;
     private _promptModelsByPromptID: Map<string, MJAIPromptModelEntity[]> | null = null;
+
+    private _agentsByID: Map<string, MJAIAgentEntityExtended> | null = null;
+    private _agentsByName: Map<string, MJAIAgentEntityExtended> | null = null;
+    private _childAgentsByParentID: Map<string, MJAIAgentEntityExtended[]> | null = null;
+    private _agentsIndexedRef: MJAIAgentEntityExtended[] | null = null;
+    private _agentsIndexedLen = -1;
+
+    private _agentRelationshipsByAgentID: Map<string, MJAIAgentRelationshipEntity[]> | null = null;
+    private _agentRelationshipsIndexedRef: MJAIAgentRelationshipEntity[] | null = null;
+    private _agentRelationshipsIndexedLen = -1;
+
+    private _modelPriceUnitTypesByID: Map<string, MJAIModelPriceUnitTypeEntity> | null = null;
+    private _modelPriceUnitTypesIndexedRef: MJAIModelPriceUnitTypeEntity[] | null = null;
+    private _modelPriceUnitTypesIndexedLen = -1;
+
+    private _agentConfigurationsByAgentID: Map<string, MJAIAgentConfigurationEntity[]> | null = null;
+    private _agentConfigurationsIndexedRef: MJAIAgentConfigurationEntity[] | null = null;
+    private _agentConfigurationsIndexedLen = -1;
+
+    private _configurationParamsByConfigID: Map<string, MJAIConfigurationParamEntity[]> | null = null;
+    private _configurationParamsIndexedRef: MJAIConfigurationParamEntity[] | null = null;
+    private _configurationParamsIndexedLen = -1;
+
+    private _modalitiesByID: Map<string, MJAIModalityEntity> | null = null;
+    private _modalitiesByName: Map<string, MJAIModalityEntity> | null = null;
+    private _modalitiesIndexedRef: MJAIModalityEntity[] | null = null;
+    private _modalitiesIndexedLen = -1;
+
+    private _agentStepsByID: Map<string, MJAIAgentStepEntity> | null = null;
+    private _agentStepsByAgentID: Map<string, MJAIAgentStepEntity[]> | null = null;
+    private _agentStepsIndexedRef: MJAIAgentStepEntity[] | null = null;
+    private _agentStepsIndexedLen = -1;
+
+    private _agentStepPathsByOriginStepID: Map<string, MJAIAgentStepPathEntity[]> | null = null;
+    private _agentStepPathsIndexedRef: MJAIAgentStepPathEntity[] | null = null;
+    private _agentStepPathsIndexedLen = -1;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
@@ -331,6 +391,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentTypes',
                 EntityName: 'MJ: AI Agent Types',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentRequestTypes',
+                EntityName: 'MJ: AI Agent Request Types',
                 CacheLocal: true
             },
             {
@@ -480,13 +545,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         ];
         this.appendRealtimeRegistryConfigs(params, provider);
 
-        // make sure engines we depend on downstream are loaded up before we load
-        await Promise.all([
+        // Load dependent engines in parallel with our own entity configs so AIEngineBase's
+        // 51 entity configs coalesce into the initial startup RunViews batch instead of
+        // waiting for TemplateEngineBase/ArtifactMetadataEngine to finish first.
+        const [, , loadResult] = await Promise.all([
             TemplateEngineBase.Instance.Config(false, contextUser),
-            ArtifactMetadataEngine.Instance.Config(false, contextUser)
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            this.Load(params, provider, forceRefresh, contextUser)
         ]);
-
-        return await this.Load(params, provider, forceRefresh, contextUser);
+        return loadResult;
     }
 
     /**
@@ -564,8 +631,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // Clear the configuration chain cache when data is reloaded
+        // Clear the configuration chain cache and user runnable agent directory cache when data is reloaded
         this._configurationChainCache.clear();
+        this._userRunnableAgentDirectoryCache.clear();
+        this._userRunnableAgentsRef = null;
+        this._userRunnableAgentsLen = -1;
+        this._userRunnablePermissionsRef = null;
+        this._userRunnablePermissionsLen = -1;
 
         // Invalidate memoized vendor-type IDs and lazily-built lookup indexes so they
         // rebuild against the freshly-loaded arrays. (See field declarations above.)
@@ -577,6 +649,34 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         this._configurationsByID = null;
         this._modelVendorsByModelID = null;
         this._promptModelsByPromptID = null;
+        this._agentsByID = null;
+        this._agentsByName = null;
+        this._childAgentsByParentID = null;
+        this._agentsIndexedRef = null;
+        this._agentsIndexedLen = -1;
+        this._agentRelationshipsByAgentID = null;
+        this._agentRelationshipsIndexedRef = null;
+        this._agentRelationshipsIndexedLen = -1;
+        this._modelPriceUnitTypesByID = null;
+        this._modelPriceUnitTypesIndexedRef = null;
+        this._modelPriceUnitTypesIndexedLen = -1;
+        this._agentConfigurationsByAgentID = null;
+        this._agentConfigurationsIndexedRef = null;
+        this._agentConfigurationsIndexedLen = -1;
+        this._configurationParamsByConfigID = null;
+        this._configurationParamsIndexedRef = null;
+        this._configurationParamsIndexedLen = -1;
+        this._modalitiesByID = null;
+        this._modalitiesByName = null;
+        this._modalitiesIndexedRef = null;
+        this._modalitiesIndexedLen = -1;
+        this._agentStepsByID = null;
+        this._agentStepsByAgentID = null;
+        this._agentStepsIndexedRef = null;
+        this._agentStepsIndexedLen = -1;
+        this._agentStepPathsByOriginStepID = null;
+        this._agentStepPathsIndexedRef = null;
+        this._agentStepPathsIndexedLen = -1;
 
         // Each grouping below buckets the children in one pass, then gives each parent a
         // finished array. Three properties follow from that shape:
@@ -890,7 +990,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * per-million-tokens rate.
      */
     public CostRowUsageKind(cost: MJAIModelCostEntity): string | null {
-        const priceUnitType = this.ModelPriceUnitTypes.find(put => UUIDsEqual(put.ID, cost.UnitTypeID));
+        this.ensureModelPriceUnitTypesIndex();
+        const priceUnitType = cost?.UnitTypeID ? this._modelPriceUnitTypesByID!.get(NormalizeUUID(cost.UnitTypeID)) : undefined;
         // `UsageType` is the denormalized name CodeGen adds to the view for the UsageTypeID foreign
         // key, so this needs no third lookup into the usage-type catalog.
         return priceUnitType?.UsageType ?? null;
@@ -901,7 +1002,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * the row points at a unit type this deployment has no calculator for.
      */
     public GetPriceCalculator(activeCost: MJAIModelCostEntity): BasePriceUnitType | null {
-        const priceUnitType = this.ModelPriceUnitTypes.find(put => UUIDsEqual(put.ID, activeCost.UnitTypeID));
+        this.ensureModelPriceUnitTypesIndex();
+        const priceUnitType = activeCost?.UnitTypeID ? this._modelPriceUnitTypesByID!.get(NormalizeUUID(activeCost.UnitTypeID)) : undefined;
         if (!priceUnitType) {
             LogError(`Price unit type not found: ${activeCost.UnitTypeID}`);
             return null;
@@ -938,6 +1040,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
     }
 
+    /**
+     * The agents this user may read, or none: `Agents` throws {@link PermissionConstrainedError} when the engine could not
+     * load them for the current user, which is right for code that needs them and wrong for a screen that must keep rendering
+     * (a conversation, a mention picker, a task's agent name) for a user who holds no read on MJ: AI Agents. Such code reads
+     * this instead and gets an empty list, the same way `IsPermissionConstrained` tells it to.
+     */
+    public get ReadableAgents(): MJAIAgentEntityExtended[] {
+        try {
+            return this.Agents;
+        } catch (error) {
+            if (error instanceof PermissionConstrainedError) return [];
+            throw error;
+        }
+    }
+
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
         return this.GetConfigData<MJAIAgentRelationshipEntity>('_agentRelationships');
     }
@@ -957,32 +1074,39 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         status?: MJAIAgentEntityExtended['Status'],
         relationshipStatus?: MJAIAgentRelationshipEntity['Status']
     ): MJAIAgentEntityExtended[] {
+        this.ensureAgentsIndex();
+        this.ensureAgentRelationshipsIndex();
+        const normAgentId = NormalizeUUID(agentID);
+
         // Get child agents (ParentID relationship)
-        const childAgents = this._agents.filter(a =>
-            UUIDsEqual(a.ParentID, agentID) &&
-            (!status || a.Status === status)
-        );
+        const rawChildAgents = this._childAgentsByParentID!.get(normAgentId) ?? [];
+        const childAgents = status ? rawChildAgents.filter(a => a.Status === status) : rawChildAgents;
 
         // Get related agents (AgentRelationships)
         const relStatus = relationshipStatus ?? 'Active'; // Default to Active for relationships
-        const activeRelationships = this._agentRelationships.filter(ar =>
-            UUIDsEqual(ar.AgentID, agentID) &&
-            ar.Status === relStatus
-        );
-
-        // Get the actual agent entities for related agents
-        const relatedAgents = activeRelationships
-            .map(ar => this._agents.find(a => UUIDsEqual(a.ID, ar.SubAgentID)))
-            .filter(a => a != null && (!status || a.Status === status));
+        const rawRelationships = this._agentRelationshipsByAgentID!.get(normAgentId) ?? [];
 
         // Combine and deduplicate by ID
         const uniqueAgentIDs = new Set<string>();
         const allSubAgents: MJAIAgentEntityExtended[] = [];
 
-        for (const agent of [...childAgents, ...relatedAgents]) {
-            if (!uniqueAgentIDs.has(NormalizeUUID(agent.ID))) {
-                uniqueAgentIDs.add(NormalizeUUID(agent.ID));
+        for (const agent of childAgents) {
+            const normId = NormalizeUUID(agent.ID);
+            if (!uniqueAgentIDs.has(normId)) {
+                uniqueAgentIDs.add(normId);
                 allSubAgents.push(agent);
+            }
+        }
+
+        for (const ar of rawRelationships) {
+            if (ar.Status !== relStatus || !ar.SubAgentID) continue;
+            const agent = this._agentsByID!.get(NormalizeUUID(ar.SubAgentID));
+            if (agent && (!status || agent.Status === status)) {
+                const normId = NormalizeUUID(agent.ID);
+                if (!uniqueAgentIDs.has(normId)) {
+                    uniqueAgentIDs.add(normId);
+                    allSubAgents.push(agent);
+                }
             }
         }
 
@@ -991,6 +1115,36 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
         return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
+    }
+
+    /**
+     * The `MJ: AI Agent Request Types` rows (Approval, Information, ...), cached during Config().
+     * Resolve a type with {@link GetAgentRequestTypeByName} instead of hardcoding its ID.
+     */
+    public get AgentRequestTypes(): MJAIAgentRequestTypeEntity[] {
+        return this.GetConfigData<MJAIAgentRequestTypeEntity>('_agentRequestTypes');
+    }
+
+    /**
+     * Finds an agent request type by name (trimmed, case-insensitive), or `undefined` when no
+     * row matches. The small seeded table is scanned directly; no index is kept.
+     */
+    public GetAgentRequestTypeByName(name: string): MJAIAgentRequestTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this.AgentRequestTypes.find(t => t.Name.trim().toLowerCase() === normalized);
+    }
+
+    /**
+     * Resolves the ID of an agent request type by name, loading the engine first if it has not
+     * been configured yet. Returns `null` when no row matches, so a caller can surface that as a
+     * result code instead of saving a request with an unknown type.
+     */
+    public async ResolveAgentRequestTypeID(typeName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        await this.EnsureLoaded(contextUser, provider);
+        return this.GetAgentRequestTypeByName(typeName)?.ID ?? null;
     }
 
     /** All agent categories, cached during Config(). Used for hierarchical resolution of
@@ -1043,11 +1197,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /** Walks up the category tree from `categoryId` and returns the first `DefaultStorageAccountID` found. */
     private resolveCategoryStorageAccountID(categoryId: string | null): string | null {
-        const visited = new Set<string>();
+        const categoriesById = IndexByUUID(this.AgentCategories);
+        const visited = new UUIDSet();
         let currentId = categoryId;
-        while (currentId && !visited.has(currentId)) {
-            visited.add(currentId);
-            const category = this.AgentCategories.find(c => UUIDsEqual(c.ID, currentId));
+        while (currentId && !visited.Has(currentId)) {
+            visited.Add(currentId);
+            const category = categoriesById.Get(currentId);
             if (!category) return null;
             if (category.DefaultStorageAccountID) return category.DefaultStorageAccountID;
             currentId = category.ParentID;
@@ -1079,11 +1234,124 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
-        return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
+        if (!agentName) return undefined!;
+        this.ensureAgentsIndex();
+        return this._agentsByName!.get(agentName.trim().toLowerCase())!;
     }
 
     public GetAgentByID(agentId: string): MJAIAgentEntityExtended {
-        return this._agents.find(a => a.ID.trim().toLowerCase() === agentId.trim().toLowerCase());
+        if (!agentId) return undefined!;
+        this.ensureAgentsIndex();
+        return this._agentsByID!.get(NormalizeUUID(agentId))!;
+    }
+
+    /**
+     * Returns the cached, permission-filtered list of directly discoverable, active agents
+     * that `user` is permitted to run, sorted alphabetically by name with compact 1-line descriptions.
+     *
+     * Computed once per user and cached in memory on `AIEngineBase` until agents or agent permissions change.
+     */
+    public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
+        if (!user) {
+            return [];
+        }
+
+        const agents = this._agents;
+        const permissions = this._agentPermissions;
+        if (
+            agents !== this._userRunnableAgentsRef ||
+            agents.length !== this._userRunnableAgentsLen ||
+            permissions !== this._userRunnablePermissionsRef ||
+            permissions.length !== this._userRunnablePermissionsLen
+        ) {
+            this._userRunnableAgentDirectoryCache.clear();
+            this._userRunnableAgentsRef = agents;
+            this._userRunnableAgentsLen = agents.length;
+            this._userRunnablePermissionsRef = permissions;
+            this._userRunnablePermissionsLen = permissions.length;
+        }
+
+        const cacheKey = user.ID ? NormalizeUUID(user.ID) : '__anonymous__';
+        const cached = this._userRunnableAgentDirectoryCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        // A set, built once: each agent's permission rows are checked against the user's roles.
+        const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+        const summaries: UserRunnableAgentSummary[] = [];
+
+        for (const agent of agents) {
+            if (agent.Status !== 'Active') {
+                continue;
+            }
+            if (!AIAgentPermissionHelper.IsDirectlyDiscoverable(agent)) {
+                continue;
+            }
+            if (!this.canUserRunAgentSync(agent, permissions, user, userRoleIds)) {
+                continue;
+            }
+            summaries.push({
+                ID: agent.ID,
+                Name: (agent.Name ?? '').trim(),
+                Description: this.summarizeAgentDescription(agent.Description),
+            });
+        }
+
+        summaries.sort((a, b) => a.Name.localeCompare(b.Name));
+        this._userRunnableAgentDirectoryCache.set(cacheKey, summaries);
+        return summaries;
+    }
+
+    /**
+     * Clears the cached per-user runnable agent directory (for a specific user ID or all users).
+     */
+    public ClearUserRunnableAgentDirectoryCache(userId?: string): void {
+        if (userId) {
+            this._userRunnableAgentDirectoryCache.delete(NormalizeUUID(userId));
+        } else {
+            this._userRunnableAgentDirectoryCache.clear();
+        }
+    }
+
+    /**
+     * Synchronous permission check using already-loaded `_agentPermissions` metadata.
+     * Mirrors `AIAgentPermissionHelper.GetEffectivePermissions` without async `Config()` overhead.
+     */
+    private canUserRunAgentSync(
+        agent: MJAIAgentEntityExtended,
+        allPermissions: MJAIAgentPermissionEntity[],
+        user: UserInfo,
+        userRoleIds: UUIDSet
+    ): boolean {
+        if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
+            return true;
+        }
+        const agentPerms = allPermissions.filter(p => UUIDsEqual(p.AgentID, agent.ID));
+        if (agentPerms.length === 0) {
+            // Open by default when no permission rows are configured on the agent
+            return true;
+        }
+        const matching = agentPerms.filter(
+            p => UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.Has(p.RoleID))
+        );
+        return matching.some(p => p.CanDelete === true || p.CanEdit === true || p.CanRun === true);
+    }
+
+    private summarizeAgentDescription(rawDescription: string | null | undefined): string {
+        if (!rawDescription) {
+            return 'No description available';
+        }
+        const firstLine = rawDescription.split(/\r?\n/).find(l => l.trim().length > 0) ?? '';
+        const singleLine = firstLine.replace(/\s+/g, ' ').trim();
+        if (!singleLine) {
+            return 'No description available';
+        }
+        const maxLen = 140;
+        if (singleLine.length <= maxLen) {
+            return singleLine;
+        }
+        return `${singleLine.slice(0, maxLen - 3).trimEnd()}...`;
     }
 
     public get AgentActions(): MJAIAgentActionEntity[] {
@@ -1257,12 +1525,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of configuration presets sorted by Priority
      */
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
-        let presets = this._agentConfigurations.filter(ac => UUIDsEqual(ac.AgentID, agentId));
-
-        if (activeOnly) {
-            presets = presets.filter(ac => ac.Status === 'Active');
-        }
-
+        this.ensureAgentConfigurationsIndex();
+        const raw = this._agentConfigurationsByAgentID!.get(NormalizeUUID(agentId)) ?? [];
+        const presets = activeOnly ? raw.filter(ac => ac.Status === 'Active') : raw.slice();
         return presets.sort((a, b) => a.Priority - b.Priority);
     }
 
@@ -1283,11 +1548,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The configuration preset, or undefined if not found
      */
     public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
-        return this._agentConfigurations.find(
-            ac => UUIDsEqual(ac.AgentID, agentId) &&
-                  ac.Name === presetName &&
-                  ac.Status === 'Active'
-        );
+        this.ensureAgentConfigurationsIndex();
+        const raw = this._agentConfigurationsByAgentID!.get(NormalizeUUID(agentId));
+        if (!raw) return undefined;
+        return raw.find(ac => ac.Name === presetName && ac.Status === 'Active');
     }
 
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
@@ -1481,6 +1745,177 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             this._promptModelsByPromptID = map;
         }
         return this._promptModelsByPromptID;
+    }
+
+    private ensureAgentsIndex(): void {
+        if (!this._agentsByID || this._agentsIndexedRef !== this._agents || this._agentsIndexedLen !== this._agents.length) {
+            const byId = new Map<string, MJAIAgentEntityExtended>();
+            const byName = new Map<string, MJAIAgentEntityExtended>();
+            const byParentId = new Map<string, MJAIAgentEntityExtended[]>();
+            for (const a of this._agents) {
+                if (a.ID) {
+                    byId.set(NormalizeUUID(a.ID), a);
+                }
+                if (a.Name) {
+                    const normName = a.Name.trim().toLowerCase();
+                    if (!byName.has(normName)) {
+                        byName.set(normName, a);
+                    }
+                }
+                if (a.ParentID) {
+                    const normParent = NormalizeUUID(a.ParentID);
+                    let list = byParentId.get(normParent);
+                    if (!list) {
+                        list = [];
+                        byParentId.set(normParent, list);
+                    }
+                    list.push(a);
+                }
+            }
+            this._agentsByID = byId;
+            this._agentsByName = byName;
+            this._childAgentsByParentID = byParentId;
+            this._agentsIndexedRef = this._agents;
+            this._agentsIndexedLen = this._agents.length;
+        }
+    }
+
+    private ensureAgentRelationshipsIndex(): void {
+        if (!this._agentRelationshipsByAgentID || this._agentRelationshipsIndexedRef !== this._agentRelationships || this._agentRelationshipsIndexedLen !== this._agentRelationships.length) {
+            const byAgentId = new Map<string, MJAIAgentRelationshipEntity[]>();
+            for (const ar of this._agentRelationships) {
+                if (!ar.AgentID) continue;
+                const key = NormalizeUUID(ar.AgentID);
+                let list = byAgentId.get(key);
+                if (!list) {
+                    list = [];
+                    byAgentId.set(key, list);
+                }
+                list.push(ar);
+            }
+            this._agentRelationshipsByAgentID = byAgentId;
+            this._agentRelationshipsIndexedRef = this._agentRelationships;
+            this._agentRelationshipsIndexedLen = this._agentRelationships.length;
+        }
+    }
+
+    private ensureModelPriceUnitTypesIndex(): void {
+        const arr = this.ModelPriceUnitTypes;
+        if (!this._modelPriceUnitTypesByID || this._modelPriceUnitTypesIndexedRef !== arr || this._modelPriceUnitTypesIndexedLen !== arr.length) {
+            const byId = new Map<string, MJAIModelPriceUnitTypeEntity>();
+            for (const put of arr) {
+                if (put.ID) {
+                    byId.set(NormalizeUUID(put.ID), put);
+                }
+            }
+            this._modelPriceUnitTypesByID = byId;
+            this._modelPriceUnitTypesIndexedRef = arr;
+            this._modelPriceUnitTypesIndexedLen = arr.length;
+        }
+    }
+
+    private ensureAgentConfigurationsIndex(): void {
+        if (!this._agentConfigurationsByAgentID || this._agentConfigurationsIndexedRef !== this._agentConfigurations || this._agentConfigurationsIndexedLen !== this._agentConfigurations.length) {
+            const byAgentId = new Map<string, MJAIAgentConfigurationEntity[]>();
+            for (const ac of this._agentConfigurations) {
+                if (!ac.AgentID) continue;
+                const key = NormalizeUUID(ac.AgentID);
+                let list = byAgentId.get(key);
+                if (!list) {
+                    list = [];
+                    byAgentId.set(key, list);
+                }
+                list.push(ac);
+            }
+            this._agentConfigurationsByAgentID = byAgentId;
+            this._agentConfigurationsIndexedRef = this._agentConfigurations;
+            this._agentConfigurationsIndexedLen = this._agentConfigurations.length;
+        }
+    }
+
+    private ensureConfigurationParamsIndex(): void {
+        if (!this._configurationParamsByConfigID || this._configurationParamsIndexedRef !== this._configurationParams || this._configurationParamsIndexedLen !== this._configurationParams.length) {
+            const byConfigId = new Map<string, MJAIConfigurationParamEntity[]>();
+            for (const p of this._configurationParams) {
+                if (!p.ConfigurationID) continue;
+                const key = NormalizeUUID(p.ConfigurationID);
+                let list = byConfigId.get(key);
+                if (!list) {
+                    list = [];
+                    byConfigId.set(key, list);
+                }
+                list.push(p);
+            }
+            this._configurationParamsByConfigID = byConfigId;
+            this._configurationParamsIndexedRef = this._configurationParams;
+            this._configurationParamsIndexedLen = this._configurationParams.length;
+        }
+    }
+
+    private ensureModalitiesIndex(): void {
+        if (!this._modalitiesByID || this._modalitiesIndexedRef !== this._modalities || this._modalitiesIndexedLen !== this._modalities.length) {
+            const byId = new Map<string, MJAIModalityEntity>();
+            const byName = new Map<string, MJAIModalityEntity>();
+            for (const m of this._modalities) {
+                if (m.ID) {
+                    byId.set(NormalizeUUID(m.ID), m);
+                }
+                if (m.Name) {
+                    const normName = m.Name.toLowerCase();
+                    if (!byName.has(normName)) {
+                        byName.set(normName, m);
+                    }
+                }
+            }
+            this._modalitiesByID = byId;
+            this._modalitiesByName = byName;
+            this._modalitiesIndexedRef = this._modalities;
+            this._modalitiesIndexedLen = this._modalities.length;
+        }
+    }
+
+    private ensureAgentStepsIndex(): void {
+        if (!this._agentStepsByID || this._agentStepsIndexedRef !== this._agentSteps || this._agentStepsIndexedLen !== this._agentSteps.length) {
+            const byId = new Map<string, MJAIAgentStepEntity>();
+            const byAgentId = new Map<string, MJAIAgentStepEntity[]>();
+            for (const step of this._agentSteps) {
+                if (step.ID) {
+                    byId.set(NormalizeUUID(step.ID), step);
+                }
+                if (step.AgentID) {
+                    const key = NormalizeUUID(step.AgentID);
+                    let list = byAgentId.get(key);
+                    if (!list) {
+                        list = [];
+                        byAgentId.set(key, list);
+                    }
+                    list.push(step);
+                }
+            }
+            this._agentStepsByID = byId;
+            this._agentStepsByAgentID = byAgentId;
+            this._agentStepsIndexedRef = this._agentSteps;
+            this._agentStepsIndexedLen = this._agentSteps.length;
+        }
+    }
+
+    private ensureAgentStepPathsIndex(): void {
+        if (!this._agentStepPathsByOriginStepID || this._agentStepPathsIndexedRef !== this._agentStepPaths || this._agentStepPathsIndexedLen !== this._agentStepPaths.length) {
+            const byOriginId = new Map<string, MJAIAgentStepPathEntity[]>();
+            for (const path of this._agentStepPaths) {
+                if (!path.OriginStepID) continue;
+                const key = NormalizeUUID(path.OriginStepID);
+                let list = byOriginId.get(key);
+                if (!list) {
+                    list = [];
+                    byOriginId.set(key, list);
+                }
+                list.push(path);
+            }
+            this._agentStepPathsByOriginStepID = byOriginId;
+            this._agentStepPathsIndexedRef = this._agentStepPaths;
+            this._agentStepPathsIndexedLen = this._agentStepPaths.length;
+        }
     }
 
     public get Vendors(): MJAIVendorEntity[] {
@@ -1700,7 +2135,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of configuration parameters for the specified configuration
      */
     public GetConfigurationParams(configurationId: string): MJAIConfigurationParamEntity[] {
-        return this._configurationParams.filter(p => UUIDsEqual(p.ConfigurationID, configurationId));
+        this.ensureConfigurationParamsIndex();
+        const raw = this._configurationParamsByConfigID!.get(NormalizeUUID(configurationId));
+        return raw ? raw.slice() : [];
     }
 
     /**
@@ -1710,10 +2147,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The parameter entity or null if not found
      */
     public GetConfigurationParam(configurationId: string, paramName: string): MJAIConfigurationParamEntity | null {
-        return this._configurationParams.find(p =>
-            UUIDsEqual(p.ConfigurationID, configurationId) &&
-            p.Name.toLowerCase() === paramName.toLowerCase()
-        ) || null;
+        this.ensureConfigurationParamsIndex();
+        const raw = this._configurationParamsByConfigID!.get(NormalizeUUID(configurationId));
+        if (!raw) return null;
+        const lowerName = paramName.toLowerCase();
+        return raw.find(p => p.Name.toLowerCase() === lowerName) || null;
     }
 
     /**
@@ -1810,14 +2248,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return [];
         }
 
+        this.ensureConfigurationParamsIndex();
+
         // Use a map to track params by name (lowercase for case-insensitive matching)
         // Walk chain in reverse (root first, child last) so child overwrites parent
         const paramMap = new Map<string, MJAIConfigurationParamEntity>();
 
         for (let i = chain.length - 1; i >= 0; i--) {
-            const configParams = this._configurationParams.filter(
-                p => UUIDsEqual(p.ConfigurationID, chain[i].ID)
-            );
+            const configParams = this._configurationParamsByConfigID!.get(NormalizeUUID(chain[i].ID));
+            if (!configParams) continue;
             for (const param of configParams) {
                 paramMap.set(param.Name.toLowerCase(), param);
             }
@@ -1930,7 +2369,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The modality entity or undefined if not found
      */
     public GetModalityByName(name: string): MJAIModalityEntity | undefined {
-        return this._modalities.find(m => m.Name.toLowerCase() === name.toLowerCase());
+        if (!name) return undefined;
+        this.ensureModalitiesIndex();
+        return this._modalitiesByName!.get(name.toLowerCase());
     }
 
     /**
@@ -1944,7 +2385,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         if (modelId) {
             return modelId;
         }
-        const agent = this._agents.find(a => UUIDsEqual(a.ID, agentId));
+        this.ensureAgentsIndex();
+        const agent = this._agentsByID!.get(NormalizeUUID(agentId));
         if (!agent) {
             return undefined;
         }
@@ -2000,6 +2442,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of modality entities the agent supports
      */
     public GetAgentModalities(agentId: string, direction: 'Input' | 'Output', modelId?: string): MJAIModalityEntity[] {
+        this.ensureModalitiesIndex();
         const resolvedModelId = this.resolveAgentModelId(agentId, modelId);
         const baseModalities = resolvedModelId
             ? this.GetModelModalities(resolvedModelId, direction)
@@ -2019,7 +2462,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             const normId = NormalizeUUID(am.ModalityID);
             const isAllowed = am.IsAllowed !== false;
             if (isAllowed) {
-                const modality = this._modalities.find(m => UUIDsEqual(m.ID, am.ModalityID));
+                const modality = this._modalitiesByID!.get(normId);
                 if (modality) {
                     resultMap.set(normId, modality);
                 }
@@ -2042,6 +2485,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of modality entities the model supports
      */
     public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
+        this.ensureModalitiesIndex();
         const model = this.ModelsByID.get(NormalizeUUID(modelId));
         const modelModalityRecords = this._modelModalities.filter(
             mm => UUIDsEqual(mm.ModelID, modelId) && mm.Direction === direction
@@ -2058,7 +2502,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     ? modelType.DefaultInputModalityID
                     : modelType.DefaultOutputModalityID;
                 if (defaultModalityId) {
-                    const defaultModality = this._modalities.find(m => UUIDsEqual(m.ID, defaultModalityId));
+                    const defaultModality = this._modalitiesByID!.get(NormalizeUUID(defaultModalityId));
                     if (defaultModality) {
                         resultMap.set(NormalizeUUID(defaultModality.ID), defaultModality);
                     }
@@ -2071,7 +2515,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             const normModalityId = NormalizeUUID(mm.ModalityID);
             const isExplicitlyDisabled = mm.IsSupported === false;
             if (!isExplicitlyDisabled) {
-                const modality = this._modalities.find(m => UUIDsEqual(m.ID, mm.ModalityID));
+                const modality = this._modalitiesByID!.get(normModalityId);
                 if (modality) {
                     resultMap.set(normModalityId, modality);
                 }
@@ -2097,7 +2541,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns True if the agent supports this modality
      */
     public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output', modelId?: string): boolean {
-        const targetModality = this._modalities.find(m => m.Name.toLowerCase() === modalityName.toLowerCase());
+        this.ensureModalitiesIndex();
+        const targetModality = this._modalitiesByName!.get(modalityName.toLowerCase());
 
         // Check if agent has an explicit record for this modality & direction
         if (targetModality) {
@@ -2622,10 +3067,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of agent steps
      */
     public GetAgentSteps(agentId: string, status?: string): MJAIAgentStepEntity[] {
-        return this._agentSteps.filter(step =>
-            UUIDsEqual(step.AgentID, agentId) &&
-            (!status || step.Status === status)
-        );
+        if (!agentId) return [];
+        this.ensureAgentStepsIndex();
+        const raw = this._agentStepsByAgentID!.get(NormalizeUUID(agentId));
+        if (!raw) return [];
+        return status ? raw.filter(step => step.Status === status) : raw.slice();
     }
 
     /**
@@ -2634,7 +3080,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns The step or null if not found
      */
     public GetAgentStepByID(stepId: string): MJAIAgentStepEntity | null {
-        return this._agentSteps.find(step => UUIDsEqual(step.ID, stepId)) || null;
+        if (!stepId) return null;
+        this.ensureAgentStepsIndex();
+        return this._agentStepsByID!.get(NormalizeUUID(stepId)) || null;
     }
 
     /**
@@ -2643,7 +3091,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns Array of paths from the step
      */
     public GetPathsFromStep(stepId: string): MJAIAgentStepPathEntity[] {
-        return this._agentStepPaths.filter(path => UUIDsEqual(path.OriginStepID, stepId));
+        if (!stepId) return [];
+        this.ensureAgentStepPathsIndex();
+        const raw = this._agentStepPathsByOriginStepID!.get(NormalizeUUID(stepId));
+        return raw ? raw.slice() : [];
     }
 
     /**

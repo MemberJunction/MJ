@@ -1,5 +1,187 @@
 # @memberjunction/ng-livekit-room
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 1aefcb4: `<mj-realtime-whiteboard-host>` gains a `ShowFocusToggle` input (default `true`). The header's Focus toggle ("Move to stage" / "Back to tab") only emits `FocusModeChange`; a host that composes the board into its own chrome has nothing to collapse, so the button was visible and did nothing, and could only be removed by `!important` CSS against an internal class name. Hosts without a stage now pass `[ShowFocusToggle]="false"`. `SetOnStage` and `FocusMode` keep working with the toggle hidden; the rest of the header is unchanged.
+
+  `<mj-livekit-whiteboard-surface>` passes it: the LiveKit room has no stage and never serviced `FocusModeChange`, so its board header no longer carries the inert button.
+
+- Updated dependencies [8b62f8c]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [1aefcb4]
+- Updated dependencies [2f9e209]
+- Updated dependencies [382de4d]
+- Updated dependencies [8576224]
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+  - @memberjunction/ng-whiteboard@6.2.0-edge.5
+  - @memberjunction/ng-realtime-media@6.2.0-edge.5
+  - @memberjunction/livekit-room-core@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 676f0dc: The words a call shows now match across the web and the phone. The phone's red call button is named "End call" for screen readers, as the web names it, and its hint says "Tap to end the call · swipe right for keyboard" (it said "Stop" and "Tap to stop"). The words for what agents see are plural only in a room with more than one agent: the participant tile's chip says "Agents can see", the self-view's badge "Agents can see this" and the control "Let agents see me" / "Hide from agents" (named "Let agents in this room see your camera and screen") there, and "Agent can see", "Agent can see this" and "Let the agent see me" / "Hide from the agent" (named "Let the agent see your camera and screen") in a call with one agent. `mj-media-tile`, `mj-self-view`, `mj-media-controls` and `mj-livekit-control-bar` take an `AgentCount` input (1 by default); `mj-livekit-room` passes its number of agents (`AgentCount`, participants whose role is `agent`), and the words are exported as `AgentVisionText(agentCount)`.
+- 703c44e: The meeting room lays out through the shared media stage (`LayoutMediaStage` and its selectors from `@memberjunction/ai-realtime-client/media`), as the realtime call does: the spotlight, the filmstrip beside it, the grid, and split view's sharer and speaker. The layouts show the same people as before, with one difference: split view shows a remote share once its screen track arrives, where it showed the sharer's tile without the screen for the moment between the share being announced and its track arriving. The room's own layout selectors (`SelectDisplayParticipants`, `SelectSpotlight`, `SelectFilmstrip`, `SelectScreenShare`, `SelectSplitSpeaker`) are deprecated in favor of the shared ones.
+- 435a69b: The meeting room shares a screen through `/media` display capture, so it can share one panel of the page as the call does. `LiveKitRoomController` asks the browser's picker through `RequestDisplayCapture` (a constructor option, `RequestScreenShare`, lets a test pass its own), caps the shared track at 1080p and 30 fps with `applyConstraints`, as LiveKit caps its own capture, and publishes it with `publishTrack(track, { source: ScreenShare })`; stopping unpublishes it and releases the capture, and leaving releases it too. A share stopped, or ended in the browser, while the picker was open or the track was publishing is withdrawn. A picker the user closes shares nothing and is no longer reported as an error; a share the browser refuses is a `device` error with the picker's reason. `ILiveKitRoomController.SetScreenShareEnabled` and `ChangeScreenShare` take a surface as before or the capture's options (`DisplayCaptureSurface | DisplayCaptureOptions`), so one panel can be shared with its name, and `LiveKitLocalMediaState.ScreenSharePanelLabel` carries the name while it is shared; the preview room takes the same request. `ToScreenShareCaptureOptions` is deprecated. In `ng-livekit-room`, the control bar's Share menu lists panels under "This panel" (`SharePanels`, `PanelShareRequested`); `mj-livekit-room` marks its whiteboard as a panel (`mjSharePanel="Whiteboard"`), lists the panels on screen that do not hold the room, shares the picked one, names it in the share preview ("Sharing a panel: Whiteboard"), and stops the share when the shared panel goes away. The room's whiteboard shows its board again: its surface set `display: block` on the board host, which overrode the host's flex column and left the board with no height.
+- b44a563: The meeting room's pin is a move of the participant's tile to the spotlight in the shared media stage: each participant's tile is a media-stage surface, and `MoveTile(identity, placement)` moves it to the spotlight (`stage`) or back among the others (`tab`). One participant holds the spotlight, so a new pin sends the last one back, and unpinning gives the spotlight back to the call. Pinning someone in Gallery switches the room to Active speaker with them in the spotlight, and emits `LayoutChange`. `PinnedIdentity` reads the participant moved to the spotlight while pinning is on and they are in the room; setting it moves their tile, and `null` sends it back.
+- 5b2c8a8: The meeting room's chat marks a message that fails to send "Not sent", with a Retry. Before, `<mj-livekit-room>` showed the user's message at once and kept showing it as sent when it never went out; the failure reached only `ErrorOccurred`, which nothing in the room showed. The message still shows at once. When it does not go out (the send failed, a `BeforeSendData` handler canceled it, or there is no room), a "Not sent" line with a Retry button appears under it; Retry removes it and sends the text again as a new message at the end of the chat, where the others will see it. If the chat panel was closed by then, the chat button's unread badge counts the failure. A message that goes out looks as before. `ChatMessage` now reports the user's own message once it has gone out, and not at all when it does not. `LiveKitChatMessage.NotSent` marks such a message, and the chat panel has a `Retry` output. In `livekit-room-core`, `ILiveKitRoomController.SendData` resolves `true` when the message went out and `false` when it did not; `LiveKitRoomController` still raises a failed publish as an `error` of kind `data`, and the preview room resolves `false` only for a canceled message or outside the room.
+- 318084b: The meeting room's self-view Hide is saved per user. In `<mj-livekit-agent-room>`, a user who hides their own tile finds it still hidden in their next meeting, on any device, until they click Show on the "Self-view hidden" chip or reset the layout. It is saved in `MJ: User Settings` under `mj.livekit.selfView.hidden.v1`, and the preview room keeps its own under `mj.livekit.preview.selfView.hidden.v1`. Only a saved `true` hides it. Nothing saved, `false`, or a malformed value shows it. When saving fails, the hide still holds for that session. Reset layout now also shows the self-view again and saves that, as the realtime call's Reset brings back a hidden camera box. `<mj-livekit-room>`'s `SelfViewHidden` is now an input, and the new `SelfViewHiddenChange` output fires when the user hides or shows the self-view or resets the layout, so any host can save it. Without a host that saves it, it lasts for the session as before. In `/media`, `MediaLayoutKeys` gains an optional `SelfViewHidden` key, `MediaLayoutPrefs` gains `LoadSelfViewHidden` and `SaveSelfViewHidden`, and `ParseSelfViewHidden` / `SerializeSelfViewHidden` are new. A host that names no key for the self-view, such as the realtime call, reads it as shown and saves nothing: the call's self-view hides by moving its box to Hide, a move it already saves.
+- efe4738: New package `@memberjunction/ng-realtime-media`: provider-neutral media UI that renders the `/media` models of `@memberjunction/ai-realtime-client`. It holds the participant tile (`mj-media-tile`), the audio meter (`mj-audio-meter`), the agent-state indicator (`mj-agent-state`), the connection overlay (`mj-connection-overlay`) and the device menu (`mj-media-device-menu`), moved out of `ng-livekit-room` so the realtime overlay and the meeting room share one implementation. A tile never plays audio, and text over video stays light in dark mode.
+
+  `ng-livekit-room` renders the new components. Each remote voice now plays from a hidden player outside the layouts (`mj-livekit-participant-audio`), so split view and the whiteboard no longer silence participants without a tile. The old `mj-livekit-participant-tile`, `-audio-meter`, `-agent-state`, `-connection-overlay` and `-device-menu` components stay as deprecated wrappers around the new ones, with the same inputs and outputs.
+
+  `livekit-room-core` adds `ToMediaParticipant`, `ToMediaDevice` and `ToLiveKitDeviceKind`, which map LiveKit views to the `/media` models (memoized, so a tile never reattaches its video), and exports the meter's `AUDIO_METER_ATTACK` and `AUDIO_METER_DECAY`. The `/media` model gains `MediaAgentState`, `MediaConnectionStatus`, `MediaDisconnectReason`, `MediaConnectionQuality`, `MediaDeviceSelection`, a `speaker` device kind, and the tile's optional participant fields (`PreferredVideo`, `IsMuted`, `ConnectionQuality`, `GetAudioLevel`).
+
+- 368ce6d: `mj-camera-check` (ng-realtime-media) is a look at the camera and a listen to the microphone before anything is shared: the camera mirrored, a level meter, the microphone and camera buttons of `mj-media-controls`, microphone and camera pickers, an optional name, and a confirm button that emits `Confirmed` with the choices (`MediaCameraCheckChoices`). It is presentational: the host runs the preview, passing the camera as `CameraSource` and the level as `MicrophoneLevel`, and starts, stops or switches devices on `MicrophoneToggled`, `CameraToggled` and `DeviceSelected`.
+
+  `mj-livekit-prejoin` is now a deprecated wrapper: it runs `LiveKitMediaPreview` and renders `mj-camera-check`, with the same inputs and `Join` output. Its text now follows the theme (it was white on the light page), its meter is the shared `mj-audio-meter`, and `MicLevelPct` reads the level on demand instead of being updated on every animation frame.
+
+- aee2d53: Full-duplex realtime models improvements, speech-tuned Meet room options, audio telemetry, and disconnect reason handling:
+  - **FullDuplex metadata**: Added `FullDuplex?: boolean` to Realtime section of `IAIModelConfiguration` with cascaded metadata resolution and helper `ResolveIsModelFullDuplex`. Seeded metadata for full-duplex models (Gemini 3.8 Live family, GPT-Live 1).
+  - **Coordinator turn-taking tools & ResolveHostTools seam**: Withhold turn-taking tools (`turnTakingTools = []`) when model is full-duplex. Added `ResolveHostTools` callback seam to `PrepareClientSessionInput` allowing dynamic resolution of host tools based on resolved model/vendor/driver before session startup.
+  - **Energy gate bypass**: Bypassed `FullDuplexTurnGate` and `HumanSpeechDetector` for full-duplex models by default unless `MJ_REALTIME_MODERATOR_MODE=on`.
+  - **Speech-tuned Meet RoomOptions**: Configured speech defaults (`dtx: false`, `red: true`, `audioPreset: AudioPresets.speech`, `audioCaptureDefaults`) overridable via `RoomOptions` input.
+  - **Audio telemetry**: Added inbound inter-frame gap histogram per participant, outbound `queuedDuration` and underrun tracking, event-loop delay p99 (`perf_hooks.monitorEventLoopDelay`) with 30s rolling window, and speech-to-audio latency logging.
+  - **LiveKit disconnect reason**: Mapped `null`/`undefined` disconnect reason from `livekit-client` to `'connection-lost'` rather than `'client-initiated'`.
+  - **Interaction lifecycle**: Added optional `Status` override on `CloseInteractionParams`.
+
+- 5e1e343: `mj-media-controls` (ng-realtime-media) is a call's microphone, camera and Share buttons, drawn as round `mjButton`s. Share is a split button: its main part asks the browser's picker with no preference, or stops sharing; its arrow opens a menu that asks for an entire screen, a window or a browser tab first and, when the host lists `SharePanels`, offers "This panel" with one of them. The arrow hides while the user shares. It emits `MicrophoneToggled`, `CameraToggled`, `ShareRequested` (`MediaShareRequest`) and `StopShareRequested`.
+
+  The LiveKit room's control bar renders it for its media buttons, and its other buttons become round `mjButton`s. The bar gains `EnableShareMenu` (off by default) and `ScreenShareRequested`; the room turns the menu on and starts the share with `LiveKitRoomController.SetScreenShareEnabled(true, surface)`, which now takes the kind of surface to offer first and passes it to LiveKit as `displaySurface` (`ToScreenShareCaptureOptions`). The chat and participants buttons are named with the counts their badges show.
+
+  `mj-menu-item` shows an arrow after its label when it opens a submenu.
+
+- b3db2aa: The realtime relay caps what it holds while the upstream opens at 8 MiB as well as 512 frames, and closes a tunnel whose upstream stops reading once 16 MiB is queued for it (1013 to the browser, 1001 upstream), as it already did for a browser that falls behind (#5499).
+
+  Withdrawing agent vision (`SetLiveKitAgentVision` with `Allow: false`) no longer goes through room authorization, so a cancelled meeting or a failed lookup cannot keep an agent watching (#5500).
+
+  The mint fallback for a server without the relay fields matches `field "RelayUrl"`, not any message that names RelayUrl.
+
+  The agent-vision button says what the consent covers: in a room with more than one agent, every agent in the room. Its label there reads "Let agents see me" / "Hide from agents" and its name "Let agents in this room see your camera and screen"; with one agent, "Let the agent see me" / "Hide from the agent" and "Let the agent see your camera and screen". A failure says "Couldn't change what the agent sees" with one agent and "Couldn't change what agents see" with several (#5502).
+
+- f1fb411: `mj-self-view` (ng-realtime-media) is the user's own tile, as `mj-media-tile` draws it with the camera mirrored, with an "Agent can see this" badge ("Agents can see this" with more than one agent) while the host says frames reach an agent, and a Hide button (`HideRequested`). `mj-share-preview` shows what the user shares, whole and not mirrored, labelled by the kind of surface ("Sharing a window"), with Stop sharing and Change (`StopRequested`, `ChangeRequested`). `mj-media-tile` gains `Mirror`, which mirrors the camera only.
+
+  The LiveKit room draws the user's own tile with them in every layout: their self-view, or their share preview while they share. Hide (in the grid and filmstrip) leaves a "Self-view hidden · Show" chip in the stage's top-left corner for the session; the camera stays on. Your own tile no longer has a pin button. `LiveKitRoomController.ChangeScreenShare(preferredSurface?)` stops a share and asks the browser's picker again, and `LiveKitLocalMediaState.ScreenShareSurface` says what is shared. `/media` exports `CapturedSurfaceOf(track)`, which reads the kind of surface from any captured display track.
+
+- dcc5a44: The meeting room lets each person choose whether an agent sees their camera and shared screen. Two LiveKit participant attributes carry it: `mj.agentCanSee` (the person allows it; the server sets it, since a participant's token can't change its own attributes) and `mj.agentWatches` (an agent's bot watches). `LiveKitRoomController` reads them into `LiveKitRoomState.AgentWatching`, `LiveKitLocalMediaState.AgentVisionOn` and each participant view's `AgentCanSee`, which the tiles show as "Agent can see" ("Agents can see" in a room with more than one agent). `mj-livekit-room` offers the "Let the agent see me" switch only while an agent watches (`EnableAgentVisionControl` turns it off) and reports the person's choice through `AgentVisionChange`; the room changes nothing itself. The preview room simulates it: its agent watches, Ada allows it, and `LiveKitPreviewRoomController.SetAgentVision` records your choice at once, which `mj-livekit-agent-room` does in preview mode.
+- 6eec932: The meeting room runs on any room controller. `ILiveKitRoomController` in `@memberjunction/livekit-room-core` is what `mj-livekit-room` drives: the connection, local media, the data channel, effects, devices, and the room's state and events. `LiveKitRoomController` implements it and stays the default. `LIVEKIT_ROOM_CONTROLLER_FACTORY` and the room's `Controller` are now typed to the interface, so a host can provide its own controller; code that assigns `Controller` to a variable typed `LiveKitRoomController` should type it `ILiveKitRoomController` instead.
+- 13ccb0c: The meeting room's header shows its title and participant count in the light theme. Both used the inverse text color, meant for colored backgrounds, on the header's surface, so they were white on white; they now use the primary and secondary text colors, which also reads better in the dark theme.
+- 3775aba: The meeting room's layout is saved per user, for every room. `mj-livekit-room` takes the user's moves and boxes as `TileMoves` and `PipRects` and reports them through `TileMovesChange` and `PipRectsChange` (two-way bindable) as the user moves a tile, moves or resizes a box, or resets the layout; Reset layout now also forgets the boxes' positions, as the realtime call's does. `mj-livekit-agent-room` loads and saves them with the shared `MediaLayoutPrefs`, under `mj.livekit.placement.v1` and `mj.livekit.pip.v1` (`LIVEKIT_PLACEMENT_PREF_KEY`, `LIVEKIT_PIP_PREF_KEY`), in its provider's `UserInfoEngine` once that has loaded and the global one otherwise. The binding gets its first DOM spec.
+- d09f068: The meeting room's lobby runs on the shared `MediaPreview` and renders `mj-camera-check` itself, instead of the deprecated `mj-livekit-prejoin` wrapper and its `LiveKitMediaPreview`. The lobby starts the microphone and camera as the room's `StartWithMicrophone` and `StartWithCamera` say (the wrapper always started the microphone), lets the user pick devices, frees them before the room connects with the name and devices chosen, and frees them if the room goes away first. `LOCAL_MEDIA_CONTROLLER_FACTORY` in `@memberjunction/ng-realtime-media` makes the camera-and-microphone controller a component runs on (the browser's `LocalMediaController` by default; a test provides a fake). `LiveKitMediaPreview` in `@memberjunction/livekit-room-core` is deprecated in favor of `MediaPreview`; `mj-livekit-prejoin` stays exported, deprecated.
+- 161b7bc: Every meeting tile has a "Move to…" menu, beside its pin. It offers the spotlight and the strip (named Filmstrip, or Gallery in Gallery), with the tile's place disabled, then Reset layout, which puts every tile back where the call places it. The participant the call put in the spotlight is offered the spotlight alone, which pins them there. Moving to the spotlight from Gallery switches to Active speaker, as the pin does. There is no menu while pinning is off, or on the shared screen in split view.
+
+  To make room for it, `mj-media-tile` takes content marked `mjMediaTileActions` in its top corner, before the pin, shown on hover or focus; `mj-self-view` passes it on and puts its Hide button in the same corner, after it; `mj-share-preview` takes it in its top corner. `mj-media-move-menu` gains `OverVideo`, which gives its button the dark round scrim of the tile's pin.
+
+- c9e1891: Meeting tiles can go into picture-in-picture boxes. Every tile's "Move to…" menu offers Picture-in-picture (the participant the call put in the spotlight is offered the spotlight and a box); a box floats over the stage, the whiteboard included, through `mj-media-stage`, and its bar carries the participant's menu. Someone in a box is not shown again: they leave the filmstrip and the grid, and are not the speaker pane in split view, though their shared screen still shows. Without pinning, the menus offer the strip and a box. A host turning the self-view off takes the user's box away until it is back on.
+
+  The shared media stage (`LayoutMediaStage`) no longer picks for the spotlight a participant already shown in a picture-in-picture box; the next in line takes it. `mj-media-tile`'s minimum height reads `--mj-media-tile-min-height` (120px by default), so a host can let a tile shrink into a small box.
+
+- 7a08dc1: The realtime call and the meeting room keep and save the user's layout through one shared set of helpers in `@memberjunction/ai-realtime-client/media`: `RecordPlacementMove` and `WithoutStageMoves` keep the moves, `ParsePlacementMoves` / `SerializePlacementMoves` and `ParsePipRects` / `SerializePipRects` give their saved form, and `MediaPipRect` is the saved picture-in-picture box. `ParticipantTileKey`, `ParticipantTileSurface` and `StageParticipantIdentity` let any host show participants as movable tiles, as the meeting room now does through them. Nothing changes on screen.
+
+  Removed, since no release shipped them: the call's own copies of these helpers (`ParseSurfacePlacementPref`, `SerializeSurfacePlacementPref`, `RecordSurfaceMove`, `ParseSurfacePipPref`, `SerializeSurfacePipPref`) and the deprecated `mj-realtime-surface-move-menu` / `RealtimeSurfaceMove` from `@memberjunction/ng-conversations`, and `MediaPipRect` from `@memberjunction/ng-realtime-media`. The call's setting keys (`SURFACE_PLACEMENT_PREF_KEY`, `SURFACE_PIP_PREF_KEY`) stay.
+
+- Updated dependencies [c8409ce]
+- Updated dependencies [7ada797]
+- Updated dependencies [155aa45]
+- Updated dependencies [e4c355e]
+- Updated dependencies [4412e85]
+- Updated dependencies [6dce70c]
+- Updated dependencies [8c157aa]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [676f0dc]
+- Updated dependencies [961d529]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [490cd8d]
+- Updated dependencies [b2441c3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [435a69b]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [5b2c8a8]
+- Updated dependencies [33d4f4f]
+- Updated dependencies [4ee3b59]
+- Updated dependencies [318084b]
+- Updated dependencies [69bf67c]
+- Updated dependencies [efe4738]
+- Updated dependencies [d9da1ad]
+- Updated dependencies [a16b39d]
+- Updated dependencies [c5472d2]
+- Updated dependencies [666d078]
+- Updated dependencies [ae78a45]
+- Updated dependencies [8704df6]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [4cff918]
+- Updated dependencies [d714f25]
+- Updated dependencies [989b3d0]
+- Updated dependencies [368ce6d]
+- Updated dependencies [ca2791b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [22c9074]
+- Updated dependencies [7f243eb]
+- Updated dependencies [a3fcce8]
+- Updated dependencies [a08ed58]
+- Updated dependencies [2bc4677]
+- Updated dependencies [42f8016]
+- Updated dependencies [6b587b3]
+- Updated dependencies [891dc77]
+- Updated dependencies [98dbb78]
+- Updated dependencies [0a952ee]
+- Updated dependencies [ee81865]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5e1e343]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [54cd610]
+- Updated dependencies [1bed7f7]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [f1fb411]
+- Updated dependencies [6a19f78]
+- Updated dependencies [e402de5]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [44428b5]
+- Updated dependencies [1b8791e]
+- Updated dependencies [eee025e]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [dcc5a44]
+- Updated dependencies [d3cfd90]
+- Updated dependencies [a96c392]
+- Updated dependencies [6eec932]
+- Updated dependencies [d09f068]
+- Updated dependencies [161b7bc]
+- Updated dependencies [c9e1891]
+- Updated dependencies [0a3a56a]
+- Updated dependencies [7a08dc1]
+- Updated dependencies [005612e]
+- Updated dependencies [cf50330]
+- Updated dependencies [cbddadb]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [f00d5fc]
+- Updated dependencies [7d4906b]
+  - @memberjunction/ai-realtime-client@6.2.0-edge.4
+  - @memberjunction/ng-realtime-media@6.2.0-edge.4
+  - @memberjunction/livekit-room-core@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-whiteboard@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes
