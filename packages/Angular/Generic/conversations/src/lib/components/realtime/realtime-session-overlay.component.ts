@@ -1543,9 +1543,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._ui.showSurfacePanel || this.IsReviewing;
   }
 
-  /** The Details (tabs) toggle is offered while live — it's the panel's one door. */
+  /**
+   * The Details (tabs) toggle is offered while live — it's the panel's one door — unless the host turned the surface
+   * panel off. Reads the host ceiling, not the resolved {@link Ui.showSurfacePanel}: that one also needs the panel to be
+   * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
+   */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing;
+    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
@@ -1932,6 +1936,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     this.ComposerOpen = open;
     if (open) {
+      // Opening the box asks for the conversation, like "Show the conversation": pin the thread, so the agent's video
+      // arriving later (which keeps the hero for captions alone) does not hide it under an open box.
+      this.conversationShown = true;
       this.Disclosure.Raise('engaged'); // emits Changed$ → recomputeUi()
       this.ControlInvoked.emit('type');
       setTimeout(() => this.composer?.FocusInput());

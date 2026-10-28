@@ -1451,6 +1451,19 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Avatar","Placement":"pip"}]');
     });
 
+    it('keeps the conversation and the typing box when the video arrives after the box was opened with captions on (#6120)', async () => {
+      const { f, sendVideo } = await renderWithAvatar('orb');
+      f.componentInstance.SetCaptions(true);
+      await settle();
+      expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+      f.componentInstance.OnComposerOpenChanged(true);
+      await settle();
+      await sendVideo();
+      expect(f.componentInstance.PresenterOnStage).toBe(true);
+      expect(f.componentInstance.ComposerOpen).toBe(true);
+      expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+    });
+
     describe('captions over the video', () => {
       const caption = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']) => query(f, '.hero__caption')?.textContent?.replace(/\s+/g, ' ').trim();
 
@@ -1825,6 +1838,18 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(queryAll(f, '[aria-label="Captions"]')).toHaveLength(0);
       keydown(f, 'h');
       expect(f.componentInstance.ComposerOpen).toBe(false);
+    });
+
+    it('ShowSurfacePanel=false removes the Details control from the call strip (#6120)', async () => {
+      const { f } = await renderCall('console', { ShowSurfacePanel: false });
+      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
+      expect(queryAll(f, '[title="Peek at the session panels"]')).toHaveLength(0);
+    });
+
+    it('the lean dock drops its "more" menu when typing, the surface panel, camera and share are all off (#6120)', async () => {
+      const { f } = await renderCall('orb', { AllowTyping: false, ShowSurfacePanel: false });
+      expect(query(f, 'mj-realtime-composer')).not.toBeNull();
+      expect(query(f, '.lean-more')).toBeNull();
     });
 
     it('an open dock closes when the host turns typing off, and the draft survives', async () => {
