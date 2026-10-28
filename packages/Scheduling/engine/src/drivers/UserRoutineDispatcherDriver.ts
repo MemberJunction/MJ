@@ -1023,7 +1023,12 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         run: MJUserRoutineRunEntity,
         contextUser: UserInfo
     ): Promise<boolean> {
-        const resourceConfiguration = { type: 'UserRoutine', routineId: routine.ID, runId: run.ID };
+        // The run's reply lives in the routine's own conversation, which the main chat list hides;
+        // the notification carries it so a click can open the reply rather than the routine row.
+        const resourceConfiguration: Record<string, string> = { type: 'UserRoutine', routineId: routine.ID, runId: run.ID };
+        if (routine.ConversationID) {
+            resourceConfiguration['conversationId'] = routine.ConversationID;
+        }
         try {
             await NotificationEngine.Instance.Config(false, contextUser);
             const result = await NotificationEngine.Instance.SendNotification({
