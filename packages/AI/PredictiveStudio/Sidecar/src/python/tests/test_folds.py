@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.typing as npt
+import pytest
 
 from app import folds as F
 
@@ -86,3 +87,72 @@ def test_blocked_time_gap_removes_training_periods_closer_than_the_gap() -> None
     # A gap of two periods drops the period one before validation and keeps the one exactly two before.
     assert train_periods(2) == set(range(7))
     assert train_periods(3) == set(range(6))
+
+
+def test_blocked_time_refuses_a_fold_with_no_validation_rows() -> None:
+    # 20 single-row periods, ungrouped: only the last 5 rows are at or after the trailing cutoff, so with 10 folds at
+    # least 5 folds draw no late row.
+    periods = np.arange(20).astype(np.int64)
+    with pytest.raises(ValueError, match=r"fold \d+ has no validation rows"):
+        F.blocked_time(periods, None, folds=10, gap_periods=0, seed=0)
+
+
+def test_blocked_time_refuses_a_fold_with_no_training_rows() -> None:
+    periods = np.repeat(np.arange(10), 20).astype(np.int64)
+    groups = [f"m{i % 20}" for i in range(len(periods))]
+    with pytest.raises(ValueError, match=r"fold \d+ has no training rows"):
+        F.blocked_time(periods, groups, folds=4, gap_periods=9, seed=0)
+
+
+def test_blocked_time_refuses_group_keys_of_a_different_length() -> None:
+    periods = np.repeat(np.arange(10), 20).astype(np.int64)
+    with pytest.raises(ValueError, match="group keys"):
+        F.blocked_time(periods, [f"m{i % 20}" for i in range(199)], folds=4, gap_periods=0, seed=0)
+
+
+def test_repeated_folds_refuse_fewer_rows_than_folds() -> None:
+    with pytest.raises(ValueError, match="at least 5 development rows"):
+        F.repeated_stratified(np.arange(4), 5, 1, 0, stratify=False)
+    with pytest.raises(ValueError, match="at least 5 development rows"):
+        F.repeated_stratified(np.arange(4), 5, 1, 0, stratify=True)
+
+
+def test_stratified_deal_continues_across_classes_so_folds_stay_balanced() -> None:
+    y = np.array([0] * 7 + [1] * 8 + [2] * 9)
+    for r in range(3):
+        fs = [f for f in F.repeated_stratified(y, 5, 3, 4, stratify=True) if f.repeat == r]
+        sizes = [len(f.valid) for f in fs]
+        assert max(sizes) - min(sizes) <= 1
+        for cls in (0, 1, 2):
+            per_fold = [int(np.sum(y[f.valid] == cls)) for f in fs]
+            assert max(per_fold) - min(per_fold) <= 1
+
+
+def _reference_blocked(periods: npt.NDArray[np.int64], keys: list[str], k: int, seed: int,
+                       gap: int) -> list[tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]]:
+    """The reference pipeline's grouped, time-blocked folds restated over integer periods: the grouped assignment, a
+    trailing cutoff (earliest period whose trailing block holds at most a quarter of the rows), validation = a fold's
+    keys at or after it, training = the other keys at periods <= earliest validation period - gap."""
+    f = _reference_assignment(len(periods), keys, k, seed)
+    uniq = sorted({int(p) for p in periods.tolist()})
+    cut = uniq[-1]
+    for u in reversed(uniq):
+        if float(np.sum(periods >= u)) / len(periods) <= 0.25:
+            cut = u
+        else:
+            break
+    late = periods >= cut
+    early_ok = periods <= int(periods[late].min()) - gap
+    return [(np.flatnonzero((f != i) & ~late & early_ok).astype(np.int64),
+             np.flatnonzero((f == i) & late).astype(np.int64)) for i in range(k)]
+
+
+def test_blocked_time_reproduces_the_reference_grouped_time_blocked_folds() -> None:
+    n = 311
+    periods = np.array([i % 12 for i in range(n)], dtype=np.int64)
+    keys = [f"E{(i * 13) % 57}" for i in range(n)]
+    for seed, gap in ((0, 0), (7, 1), (42, 3)):
+        mine = F.blocked_time(periods, keys, 5, gap, seed)
+        ref = _reference_blocked(periods, keys, 5, seed, gap)
+        assert all(np.array_equal(a, m.train) and np.array_equal(b, m.valid) for (a, b), m in zip(ref, mine))
+        assert all(m.repeat == 0 for m in mine)

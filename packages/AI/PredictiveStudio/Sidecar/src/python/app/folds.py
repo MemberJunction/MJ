@@ -51,7 +51,9 @@ def _folds_of(assign: IntArr, folds: int, repeat: int) -> list[Fold]:
 
 def _stratified_assignment(labels: list[str], folds: int, rng: np.random.Generator) -> IntArr:
     """Each class, in sorted label order, is shuffled and dealt round-robin over the folds, continuing the deal where
-    the previous class stopped, so every fold holds its share of every class."""
+    the previous class stopped, so validation fold sizes differ by at most 1 and each class's count per fold differs by
+    at most 1. A class with fewer members than `folds` is therefore spread over fewer validation folds than there are
+    (some folds hold none of it)."""
     tokens = np.asarray(labels, dtype=object)
     assign = np.empty(len(labels), dtype=np.int64)
     offset = 0
@@ -67,9 +69,12 @@ def repeated_stratified(y: npt.NDArray[np.generic], folds: int, repeats: int, se
                         stratify: bool) -> list[Fold]:
     """`repeats` independent k-fold partitions of the development rows `y`. With `stratify` (classification), each
     class is dealt round-robin over the folds after a seeded shuffle, so every fold keeps the class balance; without it
-    (regression), rows are dealt round-robin after a seeded permutation, the reference pipeline's random assignment."""
+    (regression), rows are dealt round-robin after a seeded permutation, the reference pipeline's random assignment.
+    Raises when there are fewer rows than folds (a fold would validate nothing)."""
     _require_partition(folds, repeats)
     n = len(y)
+    if n < folds:
+        raise ValueError(f"repeated inner validation needs at least {folds} development rows, got {n}")
     labels = [str(v) for v in np.asarray(y).tolist()] if stratify else []
     out: list[Fold] = []
     for r in range(repeats):
@@ -128,24 +133,39 @@ def blocked_time(period_ordinals: IntArr, groups: Sequence[str] | None, folds: i
     ordinals at or after the inner trailing cutoff; training is the other groups' rows with
     ordinal <= (earliest validation ordinal - gap_periods), so training and validation periods are at least
     `gap_periods` apart (a gap of 0 or 1 already holds once the trailing block is removed). With no group key every row
-    is its own group. One repeat: the time order fixes the blocks.
+    is its own group. One repeat: the time order fixes the blocks. Raises when a fold would have no validation rows
+    (none of its groups reaches the trailing block) or no training rows (the gap leaves no other group's row early
+    enough): a fold that scores nothing, or a model fitted on nothing, must not reach candidate selection.
 
     The reference pipeline blocks on dates with a gap in days; ordinals over the unit's period kind are the product's
     equivalent, with the gap counted in periods."""
     if gap_periods < 0:
         raise ValueError(f"blocked-time gap must be at least 0 periods, got {gap_periods}")
     n = len(period_ordinals)
+    if groups is not None and len(groups) != n:
+        raise ValueError(f"blocked-time inner validation got {len(groups)} group keys for {n} period ordinals")
     keys: Sequence[str] = groups if groups is not None else [str(i) for i in range(n)]
     late = period_ordinals >= trailing_cutoff_index(period_ordinals)
     early_ok = period_ordinals <= int(period_ordinals[late].min()) - gap_periods
     out: list[Fold] = []
-    for f in grouped(keys, folds, 1, seed):
+    for k, f in enumerate(grouped(keys, folds, 1, seed)):
         in_valid_fold = np.zeros(n, dtype=bool)
         in_valid_fold[f.valid] = True
         train = np.flatnonzero(~in_valid_fold & ~late & early_ok).astype(np.int64)
         valid = np.flatnonzero(in_valid_fold & late).astype(np.int64)
+        _require_nonempty(k, train, valid, gap_periods)
         out.append(Fold(0, train, valid))
     return out
+
+
+def _require_nonempty(k: int, train: IntArr, valid: IntArr, gap_periods: int) -> None:
+    if len(valid) == 0:
+        raise ValueError(f"blocked-time fold {k} has no validation rows: none of its groups has a row at or after the "
+                         "inner trailing cutoff (use fewer folds or more late development rows)")
+    if len(train) == 0:
+        raise ValueError(f"blocked-time fold {k} has no training rows: no other group has a row at least "
+                         f"{gap_periods} period(s) before the earliest validation period (use a smaller gap or more "
+                         "early development rows)")
 
 
 def shared_groups(fold: Fold, groups: Sequence[str]) -> int:
