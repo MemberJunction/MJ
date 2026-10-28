@@ -225,6 +225,25 @@ const results = await rv.RunView<TemplateContentEntity>({
 const entities = results.Results; // No casting needed!
 ```
 
+### Querying Governed Subsets — Alternate Base Views (`RunViewParams.AlternateBaseView`)
+
+When an entity defines **Alternate Base Views** (`MJ: Entity Alternate Base Views`), pass `AlternateBaseView` (by semantic `Name`, case-insensitive) in `RunViewParams` or `BaseEnginePropertyConfig` instead of repeating domain filter predicates in `ExtraFilter`:
+
+```typescript
+const rv = new RunView();
+const result = await rv.RunView<MJUserEntity>({
+    EntityName: 'MJ: Users',
+    AlternateBaseView: 'Active',   // queries vwUsersActive (100% column parity with vwUsers)
+    ExtraFilter: "Type = 'Owner'", // composes with the alternate base view
+    OrderBy: 'Name ASC',
+    ResultType: 'entity_object'
+}, contextUser);
+```
+
+- **100% column parity**: Every Alternate Base View exposes the exact same columns as the entity's canonical `BaseView`, so returned records hydrate the same `BaseEntity` subclass and enforce the same Entity Permissions, Row-Level Security (RLS), and Field-Level Security (FLS).
+- **Fail-closed**: Passing an unknown or `Disabled` `AlternateBaseView` name fails closed (never silently falls back to `BaseView`).
+- Full architecture, authoring rules (`metadata/entities/.alternate-base-views.json`), and out-of-the-box catalog: [`guides/ALTERNATE_BASE_VIEWS_GUIDE.md`](../../guides/ALTERNATE_BASE_VIEWS_GUIDE.md).
+
 ### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
 
 - **NEVER hand-roll `.replace(/'/g, "''")`** when interpolating a dynamic value into SQL text, `ExtraFilter`, or a query predicate. Import `EscapeSQLString` from `@memberjunction/global` instead.

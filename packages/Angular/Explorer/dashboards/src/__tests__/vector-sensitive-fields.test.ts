@@ -414,3 +414,17 @@ describe('the asymmetry argument has a limit, and the limit is also pinned', () 
         expect(IsSensitiveFieldName('EmbeddedRecordObject')).toBe(false);
     });
 });
+
+describe('PIN, one-time password, passcode and biometric columns', () => {
+    it('refuses them', () => {
+        for (const name of ['UserPin', 'PIN', 'OTPCode', 'Passcode', 'BiometricTemplate', 'BiometricEnabled']) {
+            expect(IsSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
+        }
+    });
+
+    it('does not refuse look-alikes that merely contain the letters', () => {
+        for (const name of ['Shipping', 'Pinned', 'PinnedAt', 'Option', 'Hotpot']) {
+            expect(IsSensitiveFieldName(name), `must accept ${name}`).toBe(false);
+        }
+    });
+});

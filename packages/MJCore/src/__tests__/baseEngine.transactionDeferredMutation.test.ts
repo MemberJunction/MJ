@@ -71,6 +71,8 @@ function createdItem(id: string, provider: DatabaseProviderBase): BaseEntityEven
             },
         },
         ID: id,
+        // A full-width row: the engine replaces rows in place only when the saved row is complete.
+        GetAll: () => ({ ID: id }),
         ProviderToUse: provider,
     } as unknown as BaseEntity;
     return { type: 'save', saveSubType: 'create', baseEntity: entity } as BaseEntityEvent;

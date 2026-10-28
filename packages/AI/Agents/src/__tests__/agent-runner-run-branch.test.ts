@@ -65,6 +65,7 @@ function makeDetail(id: string, branchId: string | null): FakeDetail {
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
         EnsureSaveComplete: vi.fn(async () => undefined),
+        MarkServerAuthoredReply: vi.fn(), // the runner marks the reply row it creates (A19)
     };
 }
 

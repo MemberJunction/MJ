@@ -647,9 +647,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
 
     /**
      * Gives a status-less session with ledger shards back a `Pending` status so it can be claimed (the
-     * claim only takes Pending/Partial/stale Assembling). The status is lost when a `BaseEntity.Save` of
-     * the session (e.g. its close) loaded the row before a shard or terminal proc wrote it and saved
-     * after: `spUpdate` rewrites every column, so it puts back the stale NULL status and counts.
+     * claim only takes Pending/Partial/stale Assembling). That is how statuses were lost before #6010
+     * made the ledger columns not updatable through an entity save (a stale `Save` of the session, e.g. its
+     * close, put back the NULL status and counts). The restore stays for rows hit before then.
      *
      * The terminal proc is the existing way to set a NULL status to `Pending`. It is stamped with the
      * counts the session still stores, or 0 for a NULL count (the proc accepts any count over NULL), and

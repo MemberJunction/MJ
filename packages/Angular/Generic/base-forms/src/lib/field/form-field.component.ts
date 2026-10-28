@@ -491,8 +491,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * `GetDeniedReadFields` walks every field on the entity and aggregates permissions across the
    * user's roles. `ngOnChanges` clears the memo when `Record` or `FieldName` changes.
    *
-   * Fails OPEN — on a missing entity, missing user, or an entity with field security switched
-   * off — matching `BaseEntity`'s own gate. A form that hid fields because no user had resolved
+   * Fails OPEN — on a missing entity, missing user, or an entity field security does not apply
+   * to (its own flag off and, for an IS-A child, every ancestor's flag off too) — matching
+   * `BaseEntity`'s own gate. A form that hid fields because no user had resolved
    * yet would be worse than one that shows them, since the server is the real boundary.
    */
   get IsFieldReadableByUser(): boolean {
@@ -504,7 +505,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldReadableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
@@ -668,7 +669,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldWritableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;

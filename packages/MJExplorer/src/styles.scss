@@ -19,6 +19,16 @@ my-app {
     overflow: hidden;
 }
 
+/* The page token on the document itself, so the frame BEFORE Angular boots paints the
+   theme's (and the org brand overlay's) page background instead of the browser default.
+   Token-driven: follows light/dark and data-theme-overlay with no further wiring. The shell and
+   its loading screen paint the same token, so an authenticated boot changes nothing; the sign-in
+   page paints its own banner over it. */
+html,
+body {
+    background: var(--mj-bg-page);
+}
+
 my-app {
     display: flex;
     flex-direction: column;
@@ -77,12 +87,14 @@ my-app {
         background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) !important;
     }
 
-    /* Syntax highlighting — brighter tones for dark backgrounds */
-    .cm-string   { color: #86efac !important; }  /* green-300: brighter green */
-    .cm-number   { color: #fde68a !important; }  /* amber-200: brighter yellow */
-    .cm-property { color: #93c5fd !important; }  /* blue-300: brighter blue */
-    .cm-keyword  { color: #fca5a5 !important; }  /* red-300: softer red */
-    .cm-atom     { color: #fde68a !important; }  /* amber-200 */
+    /* Syntax highlighting — brighter tones for dark backgrounds. Primitive ramp tokens on
+       purpose: there is no semantic token for code tokens, and these are the exact values the
+       hexes held (success-300, warning-200, info-300, error-300). */
+    .cm-string   { color: var(--mj-color-success-300) !important; }  /* brighter green */
+    .cm-number   { color: var(--mj-color-warning-200) !important; }  /* brighter yellow */
+    .cm-property { color: var(--mj-color-info-300) !important; }     /* brighter blue */
+    .cm-keyword  { color: var(--mj-color-error-300) !important; }    /* softer red */
+    .cm-atom     { color: var(--mj-color-warning-200) !important; }
     .cm-punctuation { color: var(--mj-text-secondary) !important; }
 }
 

@@ -29,7 +29,7 @@
  * headless in a single turn. CE2 (positive) + CE9 (negative) are the trustworthy live core.
  */
 import { RunView } from '@memberjunction/core';
-import { ConversationEngine, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -70,7 +70,8 @@ async function fabricateConversation(ctx: IntegrationCheckContext, rows: Array<{
   Assert(await conversation.Save(), `fixture conversation save: ${conversation.LatestResult?.CompleteMessage}`);
   const details: MJConversationDetailEntity[] = [];
   for (const row of rows) {
-    const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+    const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ctx.User);
+    detail.MarkServerAuthoredReply(); // an 'AI' row stands in for an agent reply, which only the server writes
     detail.ConversationID = conversation.ID;
     detail.Role = row.role;
     detail.Message = row.text;

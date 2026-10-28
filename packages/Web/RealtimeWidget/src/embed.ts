@@ -16,14 +16,15 @@
  */
 
 import { DefineSupportWidgetElement } from './ui/support-widget-element.js';
-import { BootstrapFromDocument } from './loader.js';
+import { StartEmbeddedWidget } from './loader.js';
 
 // When loaded in a browser, register the element and attempt auto-bootstrap from the host's
 // [data-widget-key] element. No-ops cleanly server-side or when nothing matches.
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     DefineSupportWidgetElement();
     const run = (): void => {
-        void BootstrapFromDocument();
+        // StartEmbeddedWidget never rejects: a failure (e.g. a plain-http page without Web Crypto) is logged.
+        void StartEmbeddedWidget();
     };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', run, { once: true });

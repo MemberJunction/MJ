@@ -26,10 +26,10 @@ export class RunViewMLModelLoader implements IMLModelLoader {
   /** @inheritdoc */
   public async loadModel(
     modelId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelEntity | null> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLModelEntity>(
       {
         EntityName: 'MJ: ML Models',
