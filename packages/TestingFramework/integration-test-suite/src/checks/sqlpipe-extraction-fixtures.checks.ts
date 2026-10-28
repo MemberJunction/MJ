@@ -78,7 +78,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
 
 function sqlFor(fixture: ExtractionFixture, s: FixtureState): string {
     const raw = typeof fixture.SQL === 'string' ? fixture.SQL : (s.Platform === 'postgresql' ? fixture.SQL.PostgreSQL : fixture.SQL.SqlServer);
-    const withPath = raw.replace(/\{PATH\}/g, s.CategoryPath).replace(/\{PREFIX\}/g, PREFIX);
+    const withPath = raw.replace(/\{PATH\}/g, () => s.CategoryPath).replace(/\{PREFIX\}/g, () => PREFIX);
     return s.Platform === 'postgresql' ? BracketsToDoubleQuotes(withPath) : withPath;
 }
 
@@ -127,7 +127,7 @@ function assertFields(ctx: IntegrationCheckContext, fixture: ExtractionFixture, 
 function assertParameters(fixture: ExtractionFixture, rows: StoredQueryRows): void {
     const line = (p: { Name: string; Type: string; IsRequired: boolean | null; DefaultValue: string | null; Description: string | null }) =>
         `${p.Name}:${p.Type}:${p.IsRequired}:${p.DefaultValue ?? ''}:${p.Description ?? ''}`;
-    const expected = fixture.Parameters.map(p => line({ ...p, DefaultValue: p.DefaultValue ?? null, Description: p.Description?.replace(/\{PREFIX\}/g, PREFIX) ?? null })).sort();
+    const expected = fixture.Parameters.map(p => line({ ...p, DefaultValue: p.DefaultValue ?? null, Description: p.Description?.replace(/\{PREFIX\}/g, () => PREFIX) ?? null })).sort();
     const actual = rows.Parameters.map(p => line({ Name: p.Name, Type: p.Type, IsRequired: p.IsRequired, DefaultValue: p.DefaultValue, Description: p.Description })).sort();
     AssertEqual(actual.join(' | '), expected.join(' | '), `${fixture.Id}: parameter rows (name:type:required:default:description)`);
 }

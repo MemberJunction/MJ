@@ -105,7 +105,7 @@ export class Sql {
 
     /** The source's base predicate, read through `alias`. */
     Base(alias: string): string {
-        return this.Source.BasePredicate.replace(/\{s\./g, `{${alias}.`);
+        return this.Source.BasePredicate.replace(/\{s\./g, () => `{${alias}.`);
     }
 
     /** The physical columns of the source, comma-separated, read through `alias`. */
