@@ -110,8 +110,8 @@ export class UnitFixtures {
 
   /** The C1 unit's feature steps: the reference's as-of features. */
   public static C1AssemblySteps(h: TruthHarness): FeatureStepGraph {
-    const child = (Id: string, FeatureName: string, baseTable: string, rest: Omit<Extract<FeatureStep, { Kind: 'windowed-aggregate' }>, 'Id' | 'Kind' | 'FeatureName' | 'ChildEntity' | 'ForeignKey' | 'OwnerKeyField'>): FeatureStep =>
-      ({ Id, Kind: 'windowed-aggregate', FeatureName, ChildEntity: UnitFixtures.TruthEntityName(h, baseTable), ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', ...rest });
+    const child = (id: string, featureName: string, baseTable: string, rest: Omit<Extract<FeatureStep, { Kind: 'windowed-aggregate' }>, 'Id' | 'Kind' | 'FeatureName' | 'ChildEntity' | 'ForeignKey' | 'OwnerKeyField'>): FeatureStep =>
+      ({ Id: id, Kind: 'windowed-aggregate', FeatureName: featureName, ChildEntity: UnitFixtures.TruthEntityName(h, baseTable), ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', ...rest });
     return { Steps: [
       { Id: 'tier', Kind: 'select', Columns: ['TierSKU'] },
       { Id: 'person', Kind: 'select', Entity: UnitFixtures.TruthEntityName(h, 'C1Person'), KeyField: 'PersonID', Columns: ['JoinDate', 'Segment', 'Region'] },

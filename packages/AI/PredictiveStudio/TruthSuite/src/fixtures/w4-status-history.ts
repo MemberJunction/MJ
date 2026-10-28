@@ -95,16 +95,31 @@ export class W4StatusHistory {
     }, h.User);
     if (!res.Success) throw new Error(`reading earlier W4 Record Changes failed: ${res.ErrorMessage}`);
     const keys = new Set<string>();
-    let foreign = 0;
+    const foreign: string[] = [];
     for (const r of res.Results) {
       const personId = r.RecordID.replace(/^ID\|/, '');
       const span = timeline.get(personId.toLowerCase());
       const at = span ? W4StatusHistory.rowInstant(span, r.Type) : null;
-      if ((r.Type !== 'Create' && r.Type !== 'Update') || at === null || at.getTime() !== new Date(r.ChangedAt).getTime()) { foreign++; continue; }
+      if ((r.Type !== 'Create' && r.Type !== 'Update') || at === null || at.getTime() !== new Date(r.ChangedAt).getTime()) {
+        foreign.push(`${r.RecordID} ${r.Type} ${new Date(r.ChangedAt).toISOString()}`);
+        continue;
+      }
       keys.add(W4StatusHistory.rowKey(personId, r.Type));
     }
-    if (foreign > 0) throw new Error(`pstruth.W4_Person has ${foreign} Record Change(s) this fixture does not write; Record Changes cannot be deleted, so the dated history cannot be rebuilt`);
+    if (foreign.length > 0) throw new Error(W4StatusHistory.foreignRowsMessage(entityID, foreign));
     return keys;
+  }
+
+  /**
+   * The refusal for Record Changes this fixture does not write: which rows (RecordID, Type, ChangedAt) and the recovery.
+   * No role holds delete permission on `MJ: Record Changes`, so an operator removes them from the database.
+   */
+  private static foreignRowsMessage(entityID: string, foreign: readonly string[]): string {
+    const shown = foreign.slice(0, 10).join('; ');
+    const more = foreign.length > 10 ? ` (and ${foreign.length - 10} more)` : '';
+    return `pstruth.W4_Person (EntityID ${entityID}) has ${foreign.length} Record Change(s) this fixture does not write, so the dated `
+      + `Person.Status history cannot be rebuilt: ${shown}${more}. MJ: Record Changes has no delete permission for any role, so an `
+      + `operator must remove these rows (__mj.RecordChange WHERE EntityID = '${entityID}') from the database before the gate runs again.`;
   }
 
   /**

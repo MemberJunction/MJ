@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W4 -> S2.1 #2",
-    "Description": "Gate G1.4 (phase 1, dataset W4, criterion S2.1 #2): PersonStatusNow on W4-pit s42 is excluded or flagged for 4 of 4 catalog algorithms, and every as-of assembled value equals the dated history's value at the row's decision date, 100% of rows (T4). It fails when the as-of assembler reads a record-changes column's current value instead of its history at the decision date, so as-of mismatches appear.",
+    "Description": "Gate G1.4 (phase 1, dataset W4, criterion S2.1 #2): PersonStatusNow on W4-pit s42 is excluded or flagged for 4 of 4 catalog algorithms, and every as-of assembled value equals the dated history's value at the row's decision date, 100% of rows (T4). W4's unit rows are decided before any lapse takes effect, so every row expects Active; the gate therefore also replays every lapser's Person.Status through the assembly's Record Changes reader: Lapsed the day after the lapse and Active the day before, for every lapser (3,288 of 3,288), and the Person.Status history's continuity check reports 0 mismatched records. It fails when the as-of assembler reads a record-changes column's current value instead of its history at the decision date (as-of mismatches appear), or when the history replay ignores Update rows (the lapse is never applied).",
     "Status": "Active",
     "Tags": "[\"gate\",\"G1.4\",\"owner:PR3\",\"phase:1\",\"dataset:W4\",\"criterion:S2.1 #2\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "PersonStatusNow refused (decision-date-before-change-history) for 4 of 4 catalog algorithms; Person.Status read as of each decision date equals the dated history on 100% of rows."
+      "summary": "PersonStatusNow refused (decision-date-before-change-history) for 4 of 4 catalog algorithms; Person.Status read as of each decision date equals the dated history on 100% of rows; every lapser replays as Lapsed the day after the lapse and Active the day before (3,288 of 3,288 each); Person.Status continuity: 0 records mismatched."
     },
     "Configuration": {
       "tier": "mutation",
