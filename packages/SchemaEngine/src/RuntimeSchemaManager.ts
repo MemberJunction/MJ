@@ -2248,9 +2248,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         fn();
       };
 
+      // The SIGKILL escalation, armed only when the timeout fires; cleared once the child has
+      // actually closed so it never fires at a process group that is already gone.
+      let hardKill: ReturnType<typeof setTimeout> | undefined;
       const timer = setTimeout(() => {
         killGroup('SIGTERM');
-        const hardKill = setTimeout(() => killGroup('SIGKILL'), rsuConfig.CommandKillGraceMs);
+        hardKill = setTimeout(() => killGroup('SIGKILL'), rsuConfig.CommandKillGraceMs);
         hardKill.unref?.();
         settle(() =>
           reject(
@@ -2266,6 +2269,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
       child.on('error', (err) => settle(() => reject(err)));
       child.on('close', (code, signal) => {
+        if (hardKill) clearTimeout(hardKill);
         if (code === 0) settle(() => resolve({ stdout, stderr }));
         else settle(() => reject(new RSUError('COMMAND_FAILED', `Command failed (exit ${code ?? signal}): ${command}\n${stderr.slice(-2000)}`)));
       });

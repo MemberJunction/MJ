@@ -25,6 +25,7 @@ import {
     IntegrationProgressEmitter,
     IntegrationProgressReader,
     IntegrationRunResumeError,
+    SweepInterruptedRuns,
 } from '@memberjunction/integration-progress-artifacts';
 import type { EmitterOptions, IntegrationProgressEvent, IntegrationRunSnapshot } from '@memberjunction/integration-progress-artifacts';
 import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
@@ -229,6 +230,16 @@ export class RSUPostRestartProgress {
 export class RSUPostRestartProgressSession {
     private readonly byRunID = new Map<string, RSUPostRestartProgress>();
     private readonly byCompanyIntegrationID = new Map<string, RSUPostRestartProgress | null>();
+    /**
+     * Every run any session in this process re-attached to. Process-wide on purpose: the startup
+     * sweep that left restart-killed runs in flight and the pass that resumes them live in
+     * different places, and the one question that joins them — "did anything pick this run up?" —
+     * must survive the resuming pass throwing halfway.
+     */
+    private static readonly attachedRunIDs = new Set<string>();
+    public static get AttachedRunIDs(): ReadonlySet<string> {
+        return RSUPostRestartProgressSession.attachedRunIDs;
+    }
 
     constructor(private readonly emitterOptions: EmitterOptions = {}) {}
 
@@ -277,12 +288,13 @@ export class RSUPostRestartProgressSession {
 
             const checkpoint = await reader.LatestCheckpoint(runID);
             const emitter = await IntegrationProgressEmitter.Resume(runID, this.emitterOptions);
-            emitter.runResumed(
+            emitter.RunResumed(
                 `Resumed after the RSU restart — continuing with ${RuntimeSchemaManager.EXPECTED_STEPS_POST_RESTART.join(' then ')}`,
                 { companyIntegrationID }
             );
             const progress = new RSUPostRestartProgress(emitter, RSUPostRestartProgressSession.PositionFrom(checkpoint));
             this.byRunID.set(runID, progress);
+            RSUPostRestartProgressSession.attachedRunIDs.add(runID);
             LogStatus(`[RSU] Re-attached to run ${runID} for connection ${companyIntegrationID}`);
             return progress;
         } catch (err: unknown) {
@@ -309,6 +321,28 @@ export class RSUPostRestartProgressSession {
      */
     public static WasKilledAtRestart(snapshot: IntegrationRunSnapshot): boolean {
         return snapshot.latestEvent?.stage === RESTART_STAGE;
+    }
+    /**
+     * Closes out the restart-killed runs the startup sweep left in flight that NO session then
+     * re-attached to — because there was no system user, or the pending work was stale and
+     * dropped, or it simply failed before reaching the run. Without this they would read as in
+     * flight forever, which is the state the sweep exists to end.
+     *
+     * Only the runs in `leftInFlight` (the sweep's `Skipped` list) are candidates: anything else
+     * in flight by now may be a run this process started, and is not ours to judge. A candidate
+     * a session attached to is live — its session terminates it — and is left alone.
+     */
+    public static async SweepUnattached(
+        leftInFlight: readonly string[],
+        rootDir?: string,
+        log: (message: string) => void = () => {},
+    ): Promise<{ Swept: string[]; Failed: string[]; Skipped: string[] }> {
+        if (leftInFlight.length === 0) return { Swept: [], Failed: [], Skipped: [] };
+        const candidates = new Set(leftInFlight);
+        return SweepInterruptedRuns(rootDir, log, snapshot => {
+            const runID = snapshot.manifest.runID;
+            return !candidates.has(runID) || RSUPostRestartProgressSession.attachedRunIDs.has(runID);
+        });
     }
 
     /** Reads the step position out of a restart checkpoint, tolerating a missing or partial one. */

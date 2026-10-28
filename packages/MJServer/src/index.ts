@@ -1594,7 +1594,17 @@ const setupComplete$ = new ReplaySubject(1);
   // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
   // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
   // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
-  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
+  //
+  // One exception: an RSU run killed inside its own RestartMJAPI step is not dead — THIS process is
+  // its continuation, and processRSUPendingWork below re-attaches to it. Those are left in flight
+  // (and named in `Skipped`); whichever of them nothing re-attaches to is closed out afterwards by
+  // RSUPostRestartProgressSession.SweepUnattached. On a replica that runs no background workers
+  // nothing would ever resume them, so there they are swept like any other.
+  const bootSweep = await SweepInterruptedRuns(
+    undefined,
+    msg => console.warn(msg),
+    runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
+  );
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -1654,7 +1664,12 @@ const setupComplete$ = new ReplaySubject(1);
 
   if (runBackgroundWorkers) {
     // Process pending RSU work from pre-restart (entity maps, field maps, sync)
-    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
+    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`))
+      .finally(() =>
+        RSUPostRestartProgressSession.SweepUnattached(bootSweep.Skipped, undefined, msg => console.warn(msg)).catch(err =>
+          console.warn(`RSU leftover run sweep failed: ${err}`)
+        )
+      );
 
     // Resume any integration syncs that were orphaned by the previous process restart
     if (resumeUser) {

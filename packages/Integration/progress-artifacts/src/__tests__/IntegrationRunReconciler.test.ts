@@ -82,6 +82,31 @@ describe('SweepInterruptedRuns', () => {
         expect(Failed).toEqual([]);
     });
 
+    it('leaves a run the caller marks as its own continuation in flight, and names it', async () => {
+        // An RSU run killed inside its own RestartMJAPI step is not dead: the process that is
+        // starting IS its continuation and will resume it. Everything else in flight is still dead.
+        await makeRun('rsu-restart', { stage: 'RestartMJAPI' });
+        await makeRun('rsu-dead');
+
+        const { Swept, Skipped } = await SweepInterruptedRuns(root, undefined, snap => snap.latestEvent?.stage === 'RestartMJAPI');
+
+        expect(Skipped).toEqual(['rsu-restart']);
+        expect(Swept).toEqual(['rsu-dead']);
+        expect((await new IntegrationProgressReader(root).GetRun('rsu-restart'))!.isInFlight).toBe(true);
+        expect((await readResult('rsu-dead')).exitReason).toBe('killed');
+    });
+
+    it('a run left in flight is closed by a later sweep that no longer exempts it', async () => {
+        await makeRun('rsu-restart', { stage: 'RestartMJAPI' });
+        await SweepInterruptedRuns(root, undefined, () => true);
+        expect((await new IntegrationProgressReader(root).GetRun('rsu-restart'))!.isInFlight).toBe(true);
+
+        const { Swept } = await SweepInterruptedRuns(root);
+
+        expect(Swept).toEqual(['rsu-restart']);
+        expect((await readResult('rsu-restart')).exitReason).toBe('killed');
+    });
+
     it('is idempotent — a second sweep changes nothing', async () => {
         await makeRun('rsu-killed');
         await SweepInterruptedRuns(root);
