@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W4 -> S2.1 #2",
+    "Description": "Gate G1.4 (phase 1, dataset W4, criterion S2.1 #2): PersonStatusNow on W4-pit s42 is excluded or flagged for 4 of 4 catalog algorithms, and every as-of assembled value equals the dated history's value at the row's decision date, 100% of rows (T4). It fails when the as-of assembler reads a record-changes column's current value instead of its history at the decision date, so as-of mismatches appear.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.4\",\"owner:PR3\",\"phase:1\",\"dataset:W4\",\"criterion:S2.1 #2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "PersonStatusNow refused (decision-date-before-change-history) for 4 of 4 catalog algorithms; Person.Status read as of each decision date equals the dated history on 100% of rows."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w4-s2-1-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "049E553D-1E6B-42EF-9B5B-65AB881616D0"
+  }
+}

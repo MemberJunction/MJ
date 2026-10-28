@@ -365,12 +365,15 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c1-s1-1': 1,
         'ps-gate-c1-s2-2': 1,
         'ps-gate-c1-s2-3': 1,
+        'ps-gate-c1-s3-1': 1,
         'ps-gate-r3-s1-4': 1,
+        'ps-gate-t3-s-t-1': 1,
         'ps-gate-t4-s6-5': 1,
         'ps-gate-w1-s1-4': 1,
         'ps-gate-w1-s5-4': 1,
         'ps-gate-w1-s7-3': 1,
         'ps-gate-w1-s7-5': 1,
+        'ps-gate-w1-s7-5-2': 1,
         'ps-gate-w1-s9-3': 1,
         'ps-gate-w1-s9-4': 1,
         'ps-gate-w1-s9-5': 1,
@@ -378,6 +381,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w2-s5-3': 1,
         'ps-gate-w3-c1-1': 1,
         'ps-gate-w4-s2-1': 1,
+        'ps-gate-w4-s2-1-2': 1,
         'ps-gate-w5-s2-2': 1,
         'ps-gate-w7-s4-2': 1,
         'ps-truth-datasets': 68,
@@ -456,7 +460,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(160);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(164);
     });
 });
 
@@ -686,11 +690,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c1-s1-1.G1.1',
         'ps-gate-c1-s2-2.G1.2',
         'ps-gate-c1-s2-3.G1.6',
+        'ps-gate-c1-s3-1.G1.12',
         'ps-gate-r3-s1-4.G1.8',
+        'ps-gate-t3-s-t-1.G1.5',
         'ps-gate-t4-s6-5.G0.11',
         'ps-gate-w1-s1-4.G1.7',
         'ps-gate-w1-s5-4.G0.10',
         'ps-gate-w1-s7-3.G0.7',
+        'ps-gate-w1-s7-5-2.G1.9',
         'ps-gate-w1-s7-5.G0.1',
         'ps-gate-w1-s9-3.G0.6',
         'ps-gate-w1-s9-4.G0.4',
@@ -698,6 +705,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-w2-c1-1.G0.2',
         'ps-gate-w2-s5-3.G0.9',
         'ps-gate-w3-c1-1.G0.3',
+        'ps-gate-w4-s2-1-2.G1.4',
         'ps-gate-w4-s2-1.G0.8',
         'ps-gate-w5-s2-2.G1.3',
         'ps-gate-w7-s4-2.G0.12',

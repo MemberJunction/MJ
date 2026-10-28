@@ -10,6 +10,7 @@ export * from './harness/agent-plan';
 export * from './harness/w-world';
 export * from './harness/world-truth';
 export * from './fixtures/unit-fixtures';
+export * from './fixtures/w4-status-history';
 export * from './fixtures/c1-corpus-loader';
 export * from './data/seeds';
 export * from './data/cache';

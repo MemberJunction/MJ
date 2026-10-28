@@ -7,10 +7,29 @@
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { PredictionUnit, type LeakageGuard, type PredictionUnitSpec, type TaskType } from '@memberjunction/predictive-studio-core';
+import { PredictionUnit, type ColumnEncodingKind, type FeatureStep, type FeatureStepGraph, type LeakageGuard, type PredictionUnitSpec, type TaskType } from '@memberjunction/predictive-studio-core';
 import { RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata, type IEntityFactory, type PredictionUnitDraft } from '@memberjunction/predictive-studio';
 import type { ScenarioID, TruthHarness } from '../harness/types';
 import { DatasetSeeds } from '../data/seeds';
+
+/** What a W-world renewal pipeline selects: its features, and the options that shape the unit and its steps. */
+export interface WorldRenewalPipelineOptions {
+  readonly Features: readonly string[];
+  readonly OneClassVariant?: boolean;
+  readonly Algorithm?: string;
+  /** Saved as the pipeline's whole LeakageGuard (deny list and dominance threshold). */
+  readonly LeakageGuard?: LeakageGuard;
+  /** Declared encodings of the selected columns, overriding the one chosen from the field type. */
+  readonly Encodings?: Record<string, ColumnEncodingKind>;
+  /** Also select the person's `Status`, read from the world's Person table through the year's PersonID. */
+  readonly PersonStatus?: boolean;
+}
+
+/** The columns a T3 pipeline selects from the series table, and how many periods back each one refers to. */
+export interface T3PipelineOptions {
+  readonly Columns: readonly string[];
+  readonly PeriodOffsets: Record<string, number>;
+}
 
 export interface ProvisionedUnitPipeline {
   readonly UnitRow: MJPredictionUnitEntity;
@@ -75,6 +94,46 @@ export class UnitFixtures {
     };
   }
 
+  /** T3: one row per month of the planted series, decided on its own month, forecasting `Target` one month ahead. */
+  public static T3UnitDraft(h: TruthHarness): PredictionUnitDraft {
+    return {
+      Name: 'T3 monthly forecast (series x month)', Description: null,
+      UnitRows: { kind: 'grain', grainEntity: UnitFixtures.TruthEntityName(h, 'Scn_T3'), decisionDate: { kind: 'column', column: 'T' }, filter: [] },
+      LabelRule: { kind: 'column', column: 'Target' }, LabelWindowDays: 28, LabelGapDays: 0,
+      TaskType: { kind: 'forecast', valueKind: 'continuous' },
+      Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2025-12-31' } },
+      ChangeHistoryPolicy: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, GroupKey: null,
+      TemporalSpec: { timeColumn: 'T', horizonPeriods: 1, lags: [1, 12], rollingWindows: [], period: 'month', seasonality: 12 },
+      DecisionSpec: { action: 'monthly forecast', actorRole: 'test', capacityPerPeriod: null, period: 'month' }, IncumbentHeuristic: { kind: 'none' },
+    };
+  }
+
+  /** The C1 unit's feature steps: the reference's as-of features. */
+  public static C1AssemblySteps(h: TruthHarness): FeatureStepGraph {
+    const child = (Id: string, FeatureName: string, baseTable: string, rest: Omit<Extract<FeatureStep, { Kind: 'windowed-aggregate' }>, 'Id' | 'Kind' | 'FeatureName' | 'ChildEntity' | 'ForeignKey' | 'OwnerKeyField'>): FeatureStep =>
+      ({ Id, Kind: 'windowed-aggregate', FeatureName, ChildEntity: UnitFixtures.TruthEntityName(h, baseTable), ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', ...rest });
+    return { Steps: [
+      { Id: 'tier', Kind: 'select', Columns: ['TierSKU'] },
+      { Id: 'person', Kind: 'select', Entity: UnitFixtures.TruthEntityName(h, 'C1Person'), KeyField: 'PersonID', Columns: ['JoinDate', 'Segment', 'Region'] },
+      child('events', 'events_attended_y', 'C1EventAttendance', { DateField: 'EventDate', Aggregate: 'count', WindowDays: 365 }),
+      child('courses', 'courses_completed_y', 'C1CourseCompletion', { DateField: 'CompletedOn', Aggregate: 'count', WindowDays: 365 }),
+      child('certs', 'certs_held_y', 'C1Certification', { DateField: 'AwardedOn', EndDateField: 'ExpiresOn', Aggregate: 'active-at' }),
+      child('committee', 'committee_active_y', 'C1CommitteeMembership', { DateField: 'StartDate', EndDateField: 'EndDate', Aggregate: 'active-at' }),
+      child('lines', 'nondues_lines_y', 'C1NonduesLine', { DateField: 'OrderDate', VoidedAtField: 'ReversedOn', Aggregate: 'count', WindowDays: 365 }),
+      child('spend', 'nondues_spend_y', 'C1NonduesLine', { DateField: 'OrderDate', VoidedAtField: 'ReversedOn', Aggregate: 'sum', ValueField: 'LineTotalNet', WindowDays: 365 }),
+      child('prior', 'prior_dues_periods_400d', 'C1DuesPeriod', { DateField: 'OrderDate', Aggregate: 'count', WindowDays: 400 }),
+    ] };
+  }
+
+  /** A W-world renewal pipeline's steps: the selected year columns (with any declared encodings), and the person's Status when asked. */
+  private static worldRenewalSteps(h: TruthHarness, world: string, o: WorldRenewalPipelineOptions): FeatureStepGraph {
+    const steps: FeatureStep[] = [{ Id: 'select', Kind: 'select', Columns: [...o.Features], ...(o.Encodings ? { Encodings: { ...o.Encodings } } : {}) }];
+    if (o.PersonStatus) {
+      steps.push({ Id: 'person', Kind: 'select', Entity: UnitFixtures.TruthEntityName(h, `${UnitFixtures.WorldTablePrefix(world)}_Person`), KeyField: 'PersonID', Columns: ['Status'] });
+    }
+    return { Steps: steps };
+  }
+
   /** A cross-sectional planted scenario (no dates): one decision moment for every row. */
   public static ScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType): PredictionUnitDraft {
     return {
@@ -93,7 +152,8 @@ export class UnitFixtures {
     return r.Results[0].ID;
   }
 
-  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, guard?: LeakageGuard): Promise<ProvisionedUnitPipeline> {
+  /** `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. */
+  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -102,7 +162,8 @@ export class UnitFixtures {
     const pipeline = await factory.getEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', h.User);
     pipeline.Name = `PSTruth: ${draft.Name} — ${algorithm} ${h.RunID}`;
     pipeline.AlgorithmID = await UnitFixtures.algorithmId(h, algorithm);
-    pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 'select', Kind: 'select', Columns: features }] });
+    const steps: FeatureStepGraph = featureSteps || { Steps: [{ Id: 'select', Kind: 'select', Columns: [...features] }] };
+    pipeline.FeatureSteps = JSON.stringify(steps);
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 });
     if (guard) pipeline.LeakageGuard = JSON.stringify(guard);
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, unitRow.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
@@ -115,9 +176,19 @@ export class UnitFixtures {
     return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), ['PeriodIndex'], 'Logistic Regression');
   }
 
-  /** `leakageGuard`, when given, is saved as the pipeline's whole LeakageGuard (deny list and dominance threshold). */
-  public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: { readonly features: readonly string[]; readonly oneClassVariant?: boolean; readonly algorithm?: string; readonly leakageGuard?: LeakageGuard }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.oneClassVariant === true), o.features, o.algorithm || 'Logistic Regression', o.leakageGuard);
+  /** The C1 renewal unit with the reference's as-of features (`C1AssemblySteps`). */
+  public static ProvisionC1AssemblyPipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), [], 'Logistic Regression', undefined, UnitFixtures.C1AssemblySteps(h));
+  }
+
+  public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: WorldRenewalPipelineOptions): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.LeakageGuard, UnitFixtures.worldRenewalSteps(h, world, o));
+  }
+
+  /** The T3 forecast unit with one select step over the given series columns and their period offsets. */
+  public static ProvisionT3Pipeline(h: TruthHarness, o: T3PipelineOptions): Promise<ProvisionedUnitPipeline> {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 'select', Kind: 'select', Columns: [...o.Columns], PeriodOffsets: { ...o.PeriodOffsets } }] };
+    return UnitFixtures.provision(h, UnitFixtures.T3UnitDraft(h), o.Columns, 'Ridge Regression', undefined, steps);
   }
 
   public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType): Promise<ProvisionedUnitPipeline> {

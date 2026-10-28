@@ -32,3 +32,12 @@ describe('ImmutableFieldDeclarations.AppliesTo', () => {
     expect(covering[0].Fields).not.toContain('PersonStatusNow');
   });
 });
+
+describe('TRUTH_IMMUTABLE_FIELDS scenario tables', () => {
+  it('declares every Scn_T3 and Scn_R3 column except the key', () => {
+    const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
+    expect(fieldsOf('Scn_T3')).toEqual(['EntityKey', 'T', 'LagTarget', 'SamePeriodTarget', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_R3')).toEqual(['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T3lag')).toEqual([]);
+  });
+});

@@ -68,7 +68,7 @@ export class PredictionUnitGates {
   public static async MeasureW5Censoring(h: TruthHarness): Promise<GateMeasurement> {
     const w5 = await h.EnsureLoaded({ Kind: 'world', ID: 'W5-censor', Seed: 42 });
     // AutoRenew is a planted true driver of the world generator (about 0.74 of importance here), not leakage: the dominance threshold is raised just above it.
-    const { Pipeline: pipeline } = await UnitFixtures.ProvisionWorldRenewalPipeline(h, 'W5-censor', { features: [...W_WORLD_FEATURES], leakageGuard: { DenyFields: [...W_WORLD_DENY_FIELDS], SingleFeatureDominanceThreshold: 0.75 } });
+    const { Pipeline: pipeline } = await UnitFixtures.ProvisionWorldRenewalPipeline(h, 'W5-censor', { Features: [...W_WORLD_FEATURES], LeakageGuard: { DenyFields: [...W_WORLD_DENY_FIELDS], SingleFeatureDominanceThreshold: 0.75 } });
     await h.Train(pipeline);
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);
     const results = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
@@ -120,7 +120,7 @@ export class PredictionUnitGates {
   /** G1.7 W1 → S1.4 */
   public static async MeasureW1OneClassRefused(h: TruthHarness): Promise<GateMeasurement> {
     await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
-    const { Pipeline: pipeline } = await UnitFixtures.ProvisionWorldRenewalPipeline(h, 'W1-signal', { features: ['EventsAttended'], oneClassVariant: true });
+    const { Pipeline: pipeline } = await UnitFixtures.ProvisionWorldRenewalPipeline(h, 'W1-signal', { Features: ['EventsAttended'], OneClassVariant: true });
     const attempt = await h.Train(pipeline);
     const error = attempt.Ok ? null : (attempt.ErrorMessage || 'refused without a message');
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);

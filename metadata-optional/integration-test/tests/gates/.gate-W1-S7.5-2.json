@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S7.5 #2",
+    "Description": "Gate G1.9 (phase 1, dataset W1, criterion S7.5 #2): a string column bound as plain numeric select on W1-signal s42 stops the run with an error naming the column, 1 of 1, and 0 values are coerced to 0.0 (T16(a)). It fails when the as-of assembler's numeric encoding coerces a string to Number(x) || 0, so values are coerced and no error is raised.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.9\",\"owner:PR3\",\"phase:1\",\"dataset:W1\",\"criterion:S7.5 #2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Region bound numeric stops the run with non-numeric-in-numeric-column naming Region, 1 of 1; no model is created, so 0 values are coerced."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s7-5-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "5F062CAD-A592-4B57-807D-814A1C9131CA"
+  }
+}

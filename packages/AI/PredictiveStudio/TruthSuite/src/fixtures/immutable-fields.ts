@@ -24,6 +24,9 @@ export const TRUTH_IMMUTABLE_FIELDS: readonly ImmutableFieldDeclaration[] = [
   { BaseTable: 'C1CommitteeMembership', Fields: ['PersonID', 'StartDate', 'EndDate'] },
   { BaseTable: 'MembershipYear', Fields: ['PersonID', 'Year', 'StartDate', 'Plan', 'EventsAttended', 'IncomeK', 'AutoRenew', 'Region', 'PostalCode', 'MemberNumber', 'Noise1', 'Noise2', 'Noise3', 'Noise4', 'Noise5', 'Renewed', 'Status', 'WorldID', 'Seed'] },
   { BaseTable: 'Person', Fields: ['MemberNumber', 'Region', 'PostalCode', 'IncomeK', 'AutoRenew', 'WorldID', 'Seed'] },
+  // The planted scenarios the unit gates train on are loaded once and never edited: every column except the key.
+  { BaseTable: 'Scn_T3', Fields: ['EntityKey', 'T', 'LagTarget', 'SamePeriodTarget', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_R3', Fields: ['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore'] },
 ];
 
 /** The dataset prefixes a test-schema table name can carry. */
