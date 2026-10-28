@@ -19,6 +19,7 @@ function createSummary(overrides: Partial<IntegrationSummary> = {}): Integration
     } as unknown as MJCompanyIntegrationEntity,
     SourceType: null,
     DataSourceDialect: null,
+    DataSourceStatus: null,
     LatestRun: null,
     RecentRuns: [],
     StatusColor: 'gray',

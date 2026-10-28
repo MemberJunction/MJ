@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, ElementRef, OnInit, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -13,7 +13,7 @@ import {
   IntegrationSummary,
   EntityMapRow
 } from '../../services/integration-data.service';
-import { BootstrapResultSummary } from '../../services/backup-source.helpers';
+import { BootstrapResultSummary, IsSeededAwaitingSource, ReadSeededJobID } from '../../services/backup-source.helpers';
 import {
   BuildConnectionsAgentContext,
   ResolveIntegrationSurface,
@@ -48,7 +48,17 @@ const BRAND_COLOR_MAP: Array<{ Pattern: RegExp; Color: string }> = [
   { Pattern: /ftp|sftp/i, Color: '#555' }
 ];
 
-type StatusBadgeType = 'Connected' | 'Error' | 'Inactive' | 'Syncing';
+type StatusBadgeType = 'Connected' | 'Error' | 'Inactive' | 'Syncing' | typeof SEEDED_BADGE;
+type ConnectModeType = 'credentials' | 'archive';
+
+/** Badge text for a connection seeded from a backup whose live source is not connected yet. */
+const SEEDED_BADGE = 'Seeded · source not connected';
+
+/** The class names the SQL Server connector registers under: the package name and the legacy class name. */
+const SQL_SERVER_CONNECTOR_CLASS_NAMES = ['@memberjunction/connector-sqlserver', 'sqlserverconnector'];
+
+/** Archive seed job states after which there is nothing left to resume. */
+const TERMINAL_SEED_STATES = ['Done', 'Failed'];
 type WizardStepType = 1 | 2 | 3;
 type CardMenuAction = 'edit' | 'disable' | 'delete';
 
@@ -96,6 +106,9 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Step 1
   SelectedIntegration: MJIntegrationEntity | null = null;
 
+  // Step 2 for a SQL Server connector: connect with credentials, or seed from a backup archive
+  ConnectMode: ConnectModeType | null = null;
+
   // Step 2
   ConnectionName = '';
   SelectedCompanyID: string | null = null;
@@ -142,6 +155,12 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Bootstrap Wizard state
   BootstrapWizardOpen = false;
   SelectedBootstrapIntegration: MJCompanyIntegrationEntity | null = null;
+
+  // Archive Seed Wizard state
+  ArchiveSeedWizardOpen = false;
+  ArchiveSeedResumeJobID: string | null = null;
+  /** Latest archive seed job state per seeded connection, keyed by company integration ID. */
+  SeedStates = new UUIDMap<string>();
 
   // Schedule state (for the selected integration)
   ScheduledJobID: string | null = null;
@@ -280,6 +299,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       ]);
       this.Connections = summaries;
       this.EntityMapCounts = this.countMapsByIntegration(entityMaps);
+      void this.LoadSeedStates();
     } catch (err) {
       console.error('[IntegrationConnections] Failed to load data:', err);
     } finally {
@@ -458,6 +478,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // ---------------------------------------------------------------------------
 
   GetStatusBadge(summary: IntegrationSummary): StatusBadgeType {
+    if (this.IsSeededAwaitingSource(summary)) return SEEDED_BADGE;
     if (summary.LatestRun?.Status === 'In Progress') return 'Syncing';
     if (summary.StatusColor === 'green') return 'Connected';
     if (summary.StatusColor === 'red') return 'Error';
@@ -466,7 +487,8 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   GetStatusBadgeClass(summary: IntegrationSummary): string {
     const badge = this.GetStatusBadge(summary);
-    return `status-badge status-badge-${badge.toLowerCase()}`;
+    const modifier = badge === SEEDED_BADGE ? 'seeded' : badge.toLowerCase();
+    return `status-badge status-badge-${modifier}`;
   }
 
   GetIntegrationIcon(name: string, icon?: string | null): string {
@@ -661,6 +683,87 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   async OnBootstrapCompleted(_result: BootstrapResultSummary): Promise<void> {
     await this.LoadData();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Archive seed: the "how to connect" choice and seeded connections
+  // ---------------------------------------------------------------------------
+
+  /** True for the SQL Server connector definition, matched on its class name (package or legacy name). */
+  IsSqlServerDefinition(def: MJIntegrationEntity | null | undefined): boolean {
+    const className = def?.ClassName?.trim().toLowerCase();
+    return !!className && SQL_SERVER_CONNECTOR_CLASS_NAMES.includes(className);
+  }
+
+  /** Step 2 asks how to connect a SQL Server definition before showing the credentials form. */
+  get ShowConnectModeChoice(): boolean {
+    return this.WizardStep === 2 && this.ConnectMode === null && this.IsSqlServerDefinition(this.SelectedIntegration);
+  }
+
+  /** Credentials continue in the inline wizard; an archive hands over to the archive seed wizard. */
+  ChooseConnectMode(mode: ConnectModeType): void {
+    this.ConnectMode = mode;
+    if (mode === 'archive') {
+      this.WizardOpen = false;
+      this.ArchiveSeedResumeJobID = null;
+      this.ArchiveSeedWizardOpen = true;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** True when the connection was seeded from a backup and its data source still awaits a live source. */
+  IsSeededAwaitingSource(summary: IntegrationSummary): boolean {
+    return IsSeededAwaitingSource(summary.Integration.Configuration, summary.DataSourceStatus);
+  }
+
+  /** True when the connection's archive seed job is known and has not reached a terminal state. */
+  CanResumeSeed(summary: IntegrationSummary): boolean {
+    if (!ReadSeededJobID(summary.Integration.Configuration)) return false;
+    const state = this.SeedStates.Get(summary.Integration.ID);
+    return !!state && !TERMINAL_SEED_STATES.includes(state);
+  }
+
+  ResumeSeed(summary: IntegrationSummary, event?: MouseEvent): void {
+    event?.stopPropagation();
+    const jobID = ReadSeededJobID(summary.Integration.Configuration);
+    if (!jobID) return;
+    this.ArchiveSeedResumeJobID = jobID;
+    this.ArchiveSeedWizardOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  CloseArchiveSeedWizard(): void {
+    this.ArchiveSeedWizardOpen = false;
+    this.ArchiveSeedResumeJobID = null;
+    this.cdr.detectChanges();
+  }
+
+  async OnArchiveSeedCompleted(_result?: BootstrapResultSummary): Promise<void> {
+    await this.LoadData();
+  }
+
+  /** Reads the latest job state once for each connection that records an archive seed job. */
+  async LoadSeedStates(): Promise<void> {
+    const states = new UUIDMap<string>();
+    const seeded = this.Connections
+      .map(summary => ({ ID: summary.Integration.ID, JobID: ReadSeededJobID(summary.Integration.Configuration) }))
+      .filter((row): row is { ID: string; JobID: string } => !!row.JobID);
+    await Promise.all(seeded.map(async row => {
+      const state = await this.readSeedState(row.JobID);
+      if (state) states.Set(row.ID, state);
+    }));
+    this.SeedStates = states;
+    this.cdr.detectChanges();
+  }
+
+  private async readSeedState(jobID: string): Promise<string | undefined> {
+    try {
+      const result = await this.dataService.GetArchiveSeedState(jobID);
+      return result.Success ? result.State?.State : undefined;
+    } catch (err) {
+      console.error('[IntegrationConnections] Failed to read archive seed state:', err);
+      return undefined;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1275,13 +1378,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   PreviousStep(): void {
     if (this.WizardStep > 1) {
       this.WizardStep = (this.WizardStep - 1) as WizardStepType;
+      if (this.WizardStep === 1) {
+        this.ConnectMode = null;
+      }
       this.cdr.detectChanges();
     }
   }
 
   get IsNextDisabled(): boolean {
     if (this.WizardStep === 1) return !this.SelectedIntegration;
-    if (this.WizardStep === 2) return !this.ConnectionName.trim() || !this.SelectedCompanyID;
+    if (this.WizardStep === 2) return this.ShowConnectModeChoice || !this.ConnectionName.trim() || !this.SelectedCompanyID;
     if (this.WizardStep === 3) return !this.TestResult?.Success;
     return false;
   }
@@ -1306,6 +1412,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   SelectIntegration(def: MJIntegrationEntity): void {
     this.SelectedIntegration = def;
     this.ConnectionName = def.Name;
+    this.ConnectMode = null;
   }
 
   IsSelectedIntegration(def: MJIntegrationEntity): boolean {
@@ -1836,6 +1943,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.AvailableIntegrations = [];
     this.SearchQuery = '';
     this.SelectedIntegration = null;
+    this.ConnectMode = null;
     this.ConnectionName = '';
     this.SelectedCompanyID = null;
     this.ConnectionDescription = '';

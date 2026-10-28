@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
-import type { MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
+import type { MJExternalDataSourceEntity, MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
 import { DateCellDayKey } from '../../shared/date-cell';
 import { FormatBytes, ReadExternalDataSourceID } from './backup-source.helpers';
 import {
@@ -150,6 +150,12 @@ export interface IntegrationDefinitionRow {
   SourceTypeID: string | null;
 }
 
+/** What a connection's summary reads from its external data source: the type's dialect and the source's status. */
+interface DataSourceLink {
+  Dialect: MJExternalDataSourceTypeEntity['FilterDialect'] | null;
+  Status: MJExternalDataSourceEntity['Status'] | null;
+}
+
 /** Aggregated summary for a single integration, used by the Control Tower UI */
 export interface IntegrationSummary {
   Integration: MJCompanyIntegrationEntity;
@@ -160,6 +166,12 @@ export interface IntegrationSummary {
    * that is not backed by an external data source. `tsql` identifies a SQL Server (or Fabric SQL) source.
    */
   DataSourceDialect: MJExternalDataSourceTypeEntity['FilterDialect'] | null;
+  /**
+   * The `Status` of the external data source this connection reads, resolved the same way as
+   * `DataSourceDialect`; null for a connection not backed by an external data source. A connection
+   * seeded from a backup keeps its data source `Disabled` until a live source is connected.
+   */
+  DataSourceStatus: MJExternalDataSourceEntity['Status'] | null;
   /** Icon from the Integration entity — FA class, URL, or base64 */
   Icon: string | null;
   LatestRun: IntegrationRunRow | null;
@@ -322,7 +334,7 @@ export class IntegrationDataService {
 
     // Engine provides cached metadata; runs are dynamic, and the external-data-source link (which
     // decides the source dialect) is not cached by the integration engine, so both are read here.
-    const [, runsResult, dialectByDataSourceID] = await Promise.all([
+    const [, runsResult, linkByDataSourceID] = await Promise.all([
       engine.Config(false),
       rv.RunView<IntegrationRunRow>({
         EntityName: 'MJ: Company Integration Runs',
@@ -332,7 +344,7 @@ export class IntegrationDataService {
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
       }),
-      this.loadDataSourceDialects(rv)
+      this.loadDataSourceLinks(rv)
     ]);
 
     const integrations = engine.CompanyIntegrations;
@@ -340,14 +352,14 @@ export class IntegrationDataService {
     const sourceTypes = engine.SourceTypes;
 
     const integrationDefs = engine.Integrations;
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs, dialectByDataSourceID));
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs, linkByDataSourceID));
   }
 
-  /** `MJ: External Data Sources` ID → its type's `FilterDialect`, read in one batched round trip. */
-  private async loadDataSourceDialects(rv: RunView): Promise<UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>> {
-    type DataSourceLinkRow = { ID: string; TypeID?: string | null; FilterDialect?: MJExternalDataSourceTypeEntity['FilterDialect'] | null };
-    const [sourcesResult, typesResult] = await rv.RunViews<DataSourceLinkRow>([
-      { EntityName: 'MJ: External Data Sources', Fields: ['ID', 'TypeID'], ResultType: 'simple' },
+  /** `MJ: External Data Sources` ID → its type's `FilterDialect` and its own `Status`, read in one batched round trip. */
+  private async loadDataSourceLinks(rv: RunView): Promise<UUIDMap<DataSourceLink>> {
+    type DataSourceRow = { ID: string; TypeID?: string | null; Status?: MJExternalDataSourceEntity['Status'] | null; FilterDialect?: MJExternalDataSourceTypeEntity['FilterDialect'] | null };
+    const [sourcesResult, typesResult] = await rv.RunViews<DataSourceRow>([
+      { EntityName: 'MJ: External Data Sources', Fields: ['ID', 'TypeID', 'Status'], ResultType: 'simple' },
       { EntityName: 'MJ: External Data Source Types', Fields: ['ID', 'FilterDialect'], ResultType: 'simple' },
     ]);
 
@@ -357,14 +369,12 @@ export class IntegrationDataService {
         dialectByTypeID.Set(type.ID, type.FilterDialect);
       }
     }
-    const dialectByDataSourceID = new UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>();
+    const linkByDataSourceID = new UUIDMap<DataSourceLink>();
     for (const source of sourcesResult?.Results ?? []) {
-      const dialect = source.TypeID ? dialectByTypeID.Get(source.TypeID) : undefined;
-      if (dialect) {
-        dialectByDataSourceID.Set(source.ID, dialect);
-      }
+      const dialect = source.TypeID ? dialectByTypeID.Get(source.TypeID) ?? null : null;
+      linkByDataSourceID.Set(source.ID, { Dialect: dialect, Status: source.Status ?? null });
     }
-    return dialectByDataSourceID;
+    return linkByDataSourceID;
   }
 
   async LoadEntityMaps(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntityMapEntity[]> {
@@ -1300,10 +1310,10 @@ export class IntegrationDataService {
     allRuns: IntegrationRunRow[],
     sourceTypes: MJIntegrationSourceTypeEntity[],
     integrationDefs: MJIntegrationEntity[],
-    dialectByDataSourceID: UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>
+    linkByDataSourceID: UUIDMap<DataSourceLink>
   ): IntegrationSummary {
     const dataSourceID = ReadExternalDataSourceID(integration.Configuration);
-    const dataSourceDialect = dataSourceID ? dialectByDataSourceID.Get(dataSourceID) ?? null : null;
+    const dataSourceLink = dataSourceID ? linkByDataSourceID.Get(dataSourceID) : undefined;
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
     const recentRuns = integrationRuns.slice(0, 5);
@@ -1320,7 +1330,8 @@ export class IntegrationDataService {
     return {
       Integration: integration,
       SourceType: sourceType,
-      DataSourceDialect: dataSourceDialect,
+      DataSourceDialect: dataSourceLink?.Dialect ?? null,
+      DataSourceStatus: dataSourceLink?.Status ?? null,
       Icon: icon,
       LatestRun: latestRun,
       RecentRuns: recentRuns,

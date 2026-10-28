@@ -37,6 +37,7 @@ describe('Bootstrap Wizard Review Fixes', () => {
           ? ({ ID: 'st-1', Name: opts.sourceTypeName } as unknown as MJIntegrationSourceTypeEntity)
           : null,
         DataSourceDialect: opts.dialect ?? null,
+        DataSourceStatus: null,
         LatestRun: null,
         RecentRuns: [],
         StatusColor: 'gray',

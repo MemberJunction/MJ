@@ -60,7 +60,8 @@
               <div class="card-body">
               <div class="card-name">{{ summary.Integration.Name }}</div>
               <div class="card-company">{{ summary.Integration.Company }}</div>
-              <div class="card-meta">
+              <div class="card-meta"
+                   [attr.title]="IsSeededAwaitingSource(summary) ? 'Seeded from a backup archive. Sync is unavailable until a live source is connected.' : null">
                 <span class="meta-label">{{ GetSourceTypeLabel(summary) }}</span>
                 <span class="meta-separator">&middot;</span>
                 <span class="meta-value">{{ GetCredentialHint(summary) }}</span>
@@ -135,7 +136,16 @@
                   Bootstrap
                 </button>
               }
-              @if (IsConnectionActive(summary)) {
+              @if (CanResumeSeed(summary)) {
+                <button mjButton
+                        variant="outline"
+                        (click)="ResumeSeed(summary, $event)"
+                        title="Resume the archive seed for this connection">
+                  <i class="fa-solid fa-play"></i>
+                  Resume seed
+                </button>
+              }
+              @if (IsConnectionActive(summary) && !IsSeededAwaitingSource(summary)) {
                 <div class="sync-menu-wrapper">
                   <button mjButton variant="primary"
                           [disabled]="!!SyncingIntegrationID"
@@ -771,8 +781,35 @@
           </div>
         }
 
+        <!-- Step 2 (SQL Server): how to connect -->
+        @if (ShowConnectModeChoice) {
+          <div class="step-content">
+            <h3 class="step-title">How do you want to connect?</h3>
+            <div class="connect-mode-selector">
+              <div class="connect-mode-card" (click)="ChooseConnectMode('credentials')">
+                <div class="connect-mode-icon">
+                  <i class="fa-solid fa-key"></i>
+                </div>
+                <div class="connect-mode-info">
+                  <span class="connect-mode-title">Specify credentials</span>
+                  <span class="connect-mode-desc">Connect to a live SQL Server with a connection credential</span>
+                </div>
+              </div>
+              <div class="connect-mode-card" (click)="ChooseConnectMode('archive')">
+                <div class="connect-mode-icon">
+                  <i class="fa-solid fa-box-archive"></i>
+                </div>
+                <div class="connect-mode-info">
+                  <span class="connect-mode-title">Choose an archive</span>
+                  <span class="connect-mode-desc">Seed the integration from a SQL Server backup archive</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+
         <!-- Step 2: Configure Connection -->
-        @if (WizardStep === 2) {
+        @if (WizardStep === 2 && !ShowConnectModeChoice) {
           <div class="step-content">
             <h3 class="step-title">Set up your connection</h3>
             <div class="form-group">
@@ -1167,5 +1204,15 @@
       (Closed)="CloseBootstrapWizard()"
       (Completed)="OnBootstrapCompleted($event)">
     </app-bootstrap-wizard>
+    <!-- Archive Seed Wizard Modal -->
+    <app-archive-seed-wizard
+      [ResumeJobID]="ArchiveSeedResumeJobID"
+      [Companies]="Companies"
+      [DefaultCompanyID]="SelectedCompanyID"
+      [IsOpen]="ArchiveSeedWizardOpen"
+      [Provider]="Provider"
+      (Closed)="CloseArchiveSeedWizard()"
+      (Completed)="OnArchiveSeedCompleted($event)">
+    </app-archive-seed-wizard>
   </mj-page-body>
 </mj-page-layout>
