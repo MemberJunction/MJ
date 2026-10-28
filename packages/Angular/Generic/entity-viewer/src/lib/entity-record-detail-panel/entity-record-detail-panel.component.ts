@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID } from '@memberjunction/global';
 import {
   BuildCompositeKey,
   BuildPkString,
@@ -294,12 +294,15 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       perTarget.set(id, (perTarget.get(id) ?? 0) + 1);
     }
 
+    // One index, built once per call: a per-relationship scan over every entity is the nested UUID
+    // comparison the compliance gate (MJGlobal UUIDCompliance) rejects, and it is quadratic for no reason.
+    const entitiesByID = IndexByUUID(this.metadata.Entities);
     return relationships.map(rel => {
       if (rel.DisplayName && rel.DisplayName.trim().length > 0) {
         return rel.DisplayName;
       }
 
-      const relatedEntity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, rel.RelatedEntityID));
+      const relatedEntity = entitiesByID.Get(rel.RelatedEntityID);
       let label = relatedEntity?.DisplayNameOrName ?? rel.RelatedEntity;
 
       if ((perTarget.get((rel.RelatedEntityID ?? '').toLowerCase()) ?? 0) > 1) {

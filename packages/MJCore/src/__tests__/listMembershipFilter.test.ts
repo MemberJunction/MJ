@@ -29,6 +29,12 @@ describe('ListMembershipFilter', () => {
         );
     });
 
+    it('escapes the list id, which is spliced into the SQL as a string literal', () => {
+        const filter = ListMembershipFilter({ Name: 'ID', Type: 'uuid' }, VIEW, "abc' OR 1=1--");
+        expect(filter).toContain("WHERE ListID='abc'' OR 1=1--')");
+        expect(filter).not.toContain("ListID='abc' OR");
+    });
+
     it('compares uncast when the key type is unknown', () => {
         expect(ListMembershipFilter({ Name: 'ID', Type: null }, VIEW, LIST)).toBe(
             "ID IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID='list-1')"

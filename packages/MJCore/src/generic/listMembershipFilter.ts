@@ -11,6 +11,8 @@
  * Callers on the client cannot ask which database is behind the API, which is why the cast is
  * driven by the key's type rather than by a platform switch.
  */
+import { EscapeSQLString } from '@memberjunction/global';
+
 export function ListMembershipFilter(
     pkField: { Name: string; Type: string | null },
     listDetailsView: string,
@@ -20,5 +22,6 @@ export function ListMembershipFilter(
     // Only a plain SQL type word is ever spliced into the SQL.
     const castable = /^[A-Za-z][A-Za-z ]*$/.test(type) && !/char|text/i.test(type);
     const recordId = castable ? `CAST(RecordID AS ${type})` : 'RecordID';
-    return `${pkField.Name} IN (SELECT ${recordId} FROM ${listDetailsView} WHERE ListID='${listId}')`;
+    // The list id is spliced into SQL as a string literal, so it is escaped like every other value.
+    return `${pkField.Name} IN (SELECT ${recordId} FROM ${listDetailsView} WHERE ListID='${EscapeSQLString(listId)}')`;
 }
