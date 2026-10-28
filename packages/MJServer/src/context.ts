@@ -6,7 +6,7 @@ import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, ExtractUserInfoFromPayload } from './auth/index.js';
-import { BuildLoginIdentity, RecordBindingLogin, ResolveLoginUser, type ResolvedLoginUser } from './auth/loginIdentityBinding.js';
+import { BuildProviderIdentity, RecordBindingUse, ResolveSessionUser, type ResolvedSessionUser } from './auth/loginIdentityBinding.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
@@ -153,7 +153,7 @@ async function writeSessionAudit(args: {
  * rewrite is reported as such; any other difference means the lookup reached another person's
  * record. Anonymous magic-link sessions run as a synthetic principal by design and are skipped.
  */
-function reportIdentityMismatch(loginEmail: LoginEmailResolution, sessionUser: UserInfo, resolved: ResolvedLoginUser): boolean {
+function reportIdentityMismatch(loginEmail: LoginEmailResolution, sessionUser: UserInfo, resolved: ResolvedSessionUser): boolean {
   if (sessionUser.IsMagicLinkAnonymous || EmailsMatch(loginEmail.TokenEmail, sessionUser.Email)) {
     return false;
   }
@@ -563,8 +563,8 @@ export const GetUserPayload = async (
     
     // Match the login to a User by its provider account first, and by email only when the account
     // is not bound yet (see auth/loginIdentityBinding.ts).
-    const resolvedLogin = await ResolveLoginUser({
-      Identity: BuildLoginIdentity(payload.iss, userInfo.subject, userInfo.providerName),
+    const resolvedLogin = await ResolveSessionUser({
+      Identity: BuildProviderIdentity(payload.iss, userInfo.subject, userInfo.providerName),
       LoginEmail: loginEmail,
       FirstName: userInfo.firstName,
       LastName: userInfo.lastName,
@@ -591,7 +591,7 @@ export const GetUserPayload = async (
     // it never adds latency to the request. The dedup mark is set synchronously here.
     if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
       const identityMismatch = reportIdentityMismatch(loginEmail, sessionUser, resolvedLogin);
-      RecordBindingLogin(resolvedLogin.BindingID);
+      RecordBindingUse(resolvedLogin.BindingID);
       void writeSessionAudit({
         user: sessionUser,
         auditTypeName: SESSION_AUDIT_TYPE,

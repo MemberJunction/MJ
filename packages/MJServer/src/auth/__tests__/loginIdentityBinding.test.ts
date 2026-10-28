@@ -20,7 +20,7 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: { Instance: { FindUser: mockFindUser, GetSystemUser: () => ({ ID: 'system' }) } },
 }));
 
-import { BuildLoginIdentity, DecideEmailMatchBinding, HasEmailDrift, ResolveLoginUser, type LoginBinding } from '../loginIdentityBinding.js';
+import { BuildProviderIdentity, DecideEmailMatchBinding, HasEmailDrift, ResolveSessionUser, type LoginBinding } from '../loginIdentityBinding.js';
 
 const ISSUER = 'https://login.example/';
 const identity = { Issuer: ISSUER, Subject: 'sub-b', ProviderName: 'test' };
@@ -29,11 +29,11 @@ const userB = { ID: 'user-b', Email: 'b@example.com', IsActive: true } as UserIn
 const binding = (id: string, userID: string, issuer: string, subject: string): LoginBinding => ({ ID: id, UserID: userID, Issuer: issuer, Subject: subject });
 const plainLogin = (email: string) => ({ TokenEmail: email, LookupEmail: email, Remapped: false });
 
-describe('BuildLoginIdentity', () => {
+describe('BuildProviderIdentity', () => {
   it('needs both an issuer and a subject', () => {
-    expect(BuildLoginIdentity(ISSUER, 'sub', 'p')).toEqual({ Issuer: ISSUER, Subject: 'sub', ProviderName: 'p' });
-    expect(BuildLoginIdentity(undefined, 'sub')).toBeUndefined();
-    expect(BuildLoginIdentity(ISSUER, undefined)).toBeUndefined();
+    expect(BuildProviderIdentity(ISSUER, 'sub', 'p')).toEqual({ Issuer: ISSUER, Subject: 'sub', ProviderName: 'p' });
+    expect(BuildProviderIdentity(undefined, 'sub')).toBeUndefined();
+    expect(BuildProviderIdentity(ISSUER, undefined)).toBeUndefined();
   });
 });
 
@@ -69,7 +69,7 @@ describe('HasEmailDrift', () => {
   });
 });
 
-describe('ResolveLoginUser', () => {
+describe('ResolveSessionUser', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     engine.Loaded = true;
@@ -82,7 +82,7 @@ describe('ResolveLoginUser', () => {
     engine.FindBinding.mockReturnValue(binding('bind-b', 'user-b', ISSUER, 'sub-b'));
     mockFindUser.mockResolvedValue(userB);
 
-    const result = await ResolveLoginUser({ Identity: identity, LoginEmail: plainLogin('a@example.com') });
+    const result = await ResolveSessionUser({ Identity: identity, LoginEmail: plainLogin('a@example.com') });
 
     expect(result).toEqual({ User: userB, Source: 'binding', BindingID: 'bind-b', EmailDrift: true });
     expect(mockVerifyUserRecord).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('ResolveLoginUser', () => {
     engine.FindBinding.mockReturnValue(binding('bind-b', 'user-b', ISSUER, 'sub-b'));
     mockFindUser.mockResolvedValue(undefined);
 
-    const result = await ResolveLoginUser({ Identity: identity, LoginEmail: plainLogin('b@example.com') });
+    const result = await ResolveSessionUser({ Identity: identity, LoginEmail: plainLogin('b@example.com') });
 
     expect(result.Source).toBe('refused');
     expect(result.User).toBeUndefined();
@@ -102,7 +102,7 @@ describe('ResolveLoginUser', () => {
   it('matches an unbound login by email once and binds it', async () => {
     mockVerifyUserRecord.mockResolvedValue(userB);
 
-    const result = await ResolveLoginUser({ Identity: identity, LoginEmail: plainLogin('b@example.com') });
+    const result = await ResolveSessionUser({ Identity: identity, LoginEmail: plainLogin('b@example.com') });
 
     expect(result).toEqual({ User: userB, Source: 'email', BindingID: 'new-binding', EmailDrift: false });
     expect(engine.CreateBinding).toHaveBeenCalledWith('user-b', identity, { ID: 'system' });
@@ -112,7 +112,7 @@ describe('ResolveLoginUser', () => {
     engine.FindBinding.mockReturnValue(binding('bind-b', 'user-b', ISSUER, 'sub-b'));
     mockVerifyUserRecord.mockResolvedValue(userA);
 
-    const result = await ResolveLoginUser({
+    const result = await ResolveSessionUser({
       Identity: identity,
       LoginEmail: { TokenEmail: 'b@example.com', LookupEmail: 'a@example.com', Remapped: true },
     });
@@ -126,7 +126,7 @@ describe('ResolveLoginUser', () => {
     mockVerifyUserRecord.mockResolvedValue(userA);
     engine.BindingsForUser.mockReturnValue([binding('bind-a', 'user-a', ISSUER, 'sub-a')]);
 
-    const result = await ResolveLoginUser({ Identity: identity, LoginEmail: plainLogin('a@example.com') });
+    const result = await ResolveSessionUser({ Identity: identity, LoginEmail: plainLogin('a@example.com') });
 
     expect(result).toEqual({ User: undefined, Source: 'refused', EmailDrift: false });
     expect(engine.CreateBinding).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('ResolveLoginUser', () => {
     engine.Config.mockRejectedValue(new Error('Invalid object name UserExternalIdentity'));
     mockVerifyUserRecord.mockResolvedValue(userB);
 
-    const result = await ResolveLoginUser({ Identity: identity, LoginEmail: plainLogin('b@example.com') });
+    const result = await ResolveSessionUser({ Identity: identity, LoginEmail: plainLogin('b@example.com') });
 
     expect(result).toEqual({ User: userB, Source: 'email', EmailDrift: false });
     expect(engine.FindBinding).not.toHaveBeenCalled();
@@ -146,7 +146,7 @@ describe('ResolveLoginUser', () => {
 
   it('reports not-found when no user matches', async () => {
     mockVerifyUserRecord.mockResolvedValue(undefined);
-    const result = await ResolveLoginUser({ Identity: identity, LoginEmail: plainLogin('nobody@example.com') });
+    const result = await ResolveSessionUser({ Identity: identity, LoginEmail: plainLogin('nobody@example.com') });
     expect(result).toEqual({ User: undefined, Source: 'not-found', EmailDrift: false });
   });
 });
