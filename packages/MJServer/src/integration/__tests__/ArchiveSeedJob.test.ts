@@ -136,9 +136,13 @@ class FakeStore implements ArchiveSeedStore {
   }
   public async Complete(jobID: string): Promise<void> {
     this.Completed.push(jobID);
+    const job = this.Jobs.get(jobID);
+    if (job) job.Status = 'Completed';
   }
   public async Fail(jobID: string, message: string): Promise<void> {
     this.Failed.push({ JobID: jobID, Message: message });
+    const job = this.Jobs.get(jobID);
+    if (job) job.Status = 'Failed';
   }
   public async ApplyWorkStatus(): Promise<ArchiveSeedApplyWorkStatus | undefined> {
     return this.ApplyStatus;
@@ -674,6 +678,20 @@ describe('ArchiveSeedJob', () => {
     await job.WaitForIdle();
     expect(store.Updates.length).toBe(done);
     expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('Done');
+  });
+
+  it('Resume closes a still-Pending row whose job is already Done or Failed', async () => {
+    const done = await ToCleanupDecision();
+    SetState(done.JobID, { State: 'Done' });
+    await job.Resume(done.JobID, USER, PROVIDER);
+    expect(store.Completed).toEqual([done.JobID]);
+    expect(store.Failed).toEqual([]);
+
+    const failed = await StartToSelection();
+    SetState(failed.JobID, { State: 'Failed', Error: 'boom' });
+    await job.Resume(failed.JobID, USER, PROVIDER);
+    expect(store.Failed).toEqual([{ JobID: failed.JobID, Message: 'boom' }]);
+    expect(store.Completed).toEqual([done.JobID]);
   });
 
   it('Finish with dropStaging drops staging, deletes the archive source, repoints the configuration, completes run B and the store', async () => {

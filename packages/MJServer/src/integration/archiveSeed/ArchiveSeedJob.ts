@@ -358,6 +358,12 @@ export class ArchiveSeedJob {
     }
     const ctx = this.contextOf(stored, user, provider);
     const state = ctx.Work.State;
+    if (state === 'Done' || state === 'Failed') {
+      // The job finished but its row is still Pending (a crash between the last state write and
+      // the store close): close it so boot does not re-dispatch it forever.
+      await this.closeTerminalRow(ctx, stored.Status);
+      return undefined;
+    }
     if (state === 'Building' || state === 'Mapping') {
       return { Phase: this.runDetached(ctx, () => this.runPhaseB(ctx)) };
     }
@@ -369,6 +375,17 @@ export class ArchiveSeedJob {
       await this.finishContext(ctx, false);
     }
     return undefined;
+  }
+
+  private async closeTerminalRow(ctx: ArchiveSeedContext, rowStatus: ArchiveSeedStoredJob['Status']): Promise<void> {
+    if (rowStatus !== 'Pending') {
+      return;
+    }
+    if (ctx.Work.State === 'Done') {
+      await this.deps.Store.Complete(ctx.JobID, ctx.User, ctx.Provider);
+    } else {
+      await this.deps.Store.Fail(ctx.JobID, ctx.Work.Error ?? 'archive seed failed', ctx.User, ctx.Provider);
+    }
   }
 
   private cleanupDecisionExpired(work: ArchiveSeedWork): boolean {

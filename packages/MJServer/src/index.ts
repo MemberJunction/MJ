@@ -80,6 +80,10 @@ import { RoomAuthorizationService, RoomHandoffEngine } from '@memberjunction/liv
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
+import { ArchiveSeedJob } from './integration/archiveSeed/ArchiveSeedJob.js';
+import { DefaultArchiveSeedDeps } from './integration/archiveSeed/ArchiveSeedDeps.js';
+import { DefaultArchiveSeedRecords } from './integration/archiveSeed/ArchiveSeedRecordsDefault.js';
+import { ResolveArchiveSeedResumeUser } from './integration/archiveSeed/ArchiveSeedDispatch.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
@@ -1889,6 +1893,10 @@ async function ProcessPromoteColumnsPendingWork(
   }
 }
 
+/** One job instance for the process, so its re-entry guard covers every boot dispatch. */
+const archiveSeedRecords = new DefaultArchiveSeedRecords();
+const archiveSeedJob = new ArchiveSeedJob({ ...DefaultArchiveSeedDeps(), Records: archiveSeedRecords });
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
@@ -1929,6 +1937,15 @@ async function processRSUPendingWork(): Promise<void> {
       //
       // Absent WorkType means apply-objects: every row written before that field existed is one,
       // and the branch below must keep treating it that way.
+      // An archive-seed row is the job's own state store: it stays Pending for the job's whole life
+      // and the job completes or fails it itself, so this branch never closes the row.
+      if (item.WorkType === 'archive-seed') {
+        const resumeUser = ResolveArchiveSeedResumeUser(item, systemUser, archiveSeedRecords);
+        void archiveSeedJob.Resume(pendingWorkID, resumeUser, Metadata.Provider) // global-provider-ok: server startup recovery — this process's one provider
+          .catch(err => console.error(`[RSU] archive-seed resume failed: ${err instanceof Error ? err.message : String(err)}`));
+        continue;
+      }
+
       if (item.WorkType === 'promote-columns') {
         await ProcessPromoteColumnsPendingWork(item, pendingWorkID, rsm, systemUser);
         continue;
