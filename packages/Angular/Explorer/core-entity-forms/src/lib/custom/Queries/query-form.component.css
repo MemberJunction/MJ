@@ -218,7 +218,7 @@
 
 ::ng-deep .query-content .mj-accordion-panel--expanded .mj-accordion-header {
     background: var(--mj-brand-primary) !important;
-    color: white !important;
+    color: var(--mj-brand-on-primary) !important;
     border-radius: var(--mj-radius-md) var(--mj-radius-md) 0 0 !important;
     outline-color: var(--mj-text-inverse);
 }
@@ -270,12 +270,12 @@
 
 .panel-badge.defined {
     background: var(--mj-status-success);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .panel-badge.count {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 ::ng-deep .mj-accordion-panel--expanded .panel-badge.count {
@@ -467,7 +467,7 @@
     border-radius: var(--mj-radius-lg);
     font-size: var(--mj-text-xs);
     font-weight: 600;
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .item-badge.required {
@@ -667,7 +667,7 @@
     align-items: center;
     gap: 4px;
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     padding: 4px 10px;
     border-radius: var(--mj-radius-md);
     font-size: var(--mj-text-xs);
@@ -684,7 +684,7 @@
 
 .add-item-btn {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border: none;
     padding: 8px 16px;
     border-radius: var(--mj-radius-md);
