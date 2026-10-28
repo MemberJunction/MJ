@@ -1916,6 +1916,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public RemoteBrowserUrlInput: string = '';
   public IsRemoteBrowserNavigating: boolean = false;
 
+  /** Whether this conversation's browser is running, shown or not (the header button stays lit while it is). */
+  public get IsRemoteBrowserLive(): boolean {
+    return this.remoteBrowser?.ConversationId != null;
+  }
+
   /** The conversation's browser, built on first open so a chat area that never opens one pays nothing. */
   private remoteBrowser: ConversationRemoteBrowserController | null = null;
 
@@ -1926,6 +1931,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // Fires on open, close and a real URL change, never per screencast frame.
         OnStateChange: () => {
           this.RemoteBrowserUrlInput = browser.CurrentUrl ?? '';
+          this.cdr.detectChanges();
+        },
+        OnSessionRefused: (message) => {
+          this.ShowRemoteBrowserPanel = false;
+          MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 6000);
           this.cdr.detectChanges();
         },
       });
@@ -7465,7 +7475,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.IsRemoteBrowserNavigating = true;
     this.cdr.detectChanges();
     try {
-      await this.remoteBrowser?.Navigate(rawUrl);
+      const result = await this.remoteBrowser?.Navigate(rawUrl);
+      // A refused session already said why (OnSessionRefused) and closed the browser.
+      if (result && !result.Success && this.IsRemoteBrowserLive) {
+        MJNotificationService.Instance.CreateSimpleNotification(result.ErrorMessage ?? 'The page could not be opened.', 'error', 5000);
+      }
     } finally {
       this.IsRemoteBrowserNavigating = false;
       this.cdr.detectChanges();

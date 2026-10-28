@@ -103,9 +103,9 @@
         @if (AllowRemoteBrowser && conversation) {
           <button mjButton variant="flat" size="sm"
             class="remote-browser-toggle-btn"
-            [class.active]="ShowRemoteBrowserPanel"
+            [class.active]="ShowRemoteBrowserPanel || IsRemoteBrowserLive"
             (click)="ToggleRemoteBrowserPanel()"
-            [title]="ShowRemoteBrowserPanel ? 'Hide Browser' : 'Open Browser'">
+            [title]="ShowRemoteBrowserPanel ? 'Hide Browser' : IsRemoteBrowserLive ? 'Show Browser (running)' : 'Open Browser'">
             <i class="fa-solid fa-globe"></i>
             <span class="btn-label">Browser</span>
           </button>

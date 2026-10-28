@@ -1470,4 +1470,74 @@ describe('ConversationRemoteBrowserController', () => {
     expect(c.CurrentUrl).toBe('https://right.example.com');
     expect(changes).toBe(1);
   });
+
+  it('returns a refused navigation to the caller, so the drawer can show it', async () => {
+    const c = new ConversationRemoteBrowserController({
+      ExecuteServerAction: async <T>(): Promise<T | null> =>
+        ({ ExecuteRemoteBrowserAction: { Success: false, Detail: 'Navigation to "http://10.0.0.5/" was blocked.' } }) as T,
+    });
+    c.Initialize(agentClient as unknown as AgentClientService, null);
+    c.Open('conv-1');
+
+    expect(await c.Navigate('http://10.0.0.5/')).toEqual({ Success: false, ErrorMessage: 'Navigation to "http://10.0.0.5/" was blocked.' });
+  });
+
+  describe('a session the server refuses', () => {
+    function refusing(error: string, refused: string[]): ConversationRemoteBrowserController {
+      const c = new ConversationRemoteBrowserController({
+        OnSessionRefused: (message) => refused.push(message),
+        ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+          calls.push({ Query: query, Variables: variables });
+          if (query.includes('EndRemoteBrowserSession')) {
+            return null;
+          }
+          throw new Error(`${error}: {"response":{"errors":[]}}`);
+        },
+      });
+      c.Initialize(agentClient as unknown as AgentClientService, null);
+      return c;
+    }
+
+    it('closes the browser and reports the reason once, however many calls it refused', async () => {
+      const refused: string[] = [];
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const c = refusing('You already have 2 conversation browser(s) open, the most this server allows. Close one first.', refused);
+      c.Open('conv-1');
+
+      await Promise.all([
+        c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {}),
+        c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.GetPageText, {}),
+      ]);
+      await Promise.resolve();
+
+      expect(c.ConversationId).toBeNull();
+      expect(agentClient.Tools.size).toBe(0);
+      expect(refused).toEqual(['You already have 2 conversation browser(s) open, the most this server allows. Close one first.']);
+      expect(ended()).toEqual(['conv-1']);
+    });
+
+    it.each([
+      'Remote-browser session conv-1 not found. Conversation browsers are not enabled on this server (realtime.conversationBrowser.enabled).',
+      'Remote-browser session conv-1 not found.',
+      'Not authorized: remote-browser session conv-1 is not owned by you.',
+      'Not authorized: anonymous users cannot open a conversation browser on this server.',
+    ])('treats "%s" as final', async (error) => {
+      const refused: string[] = [];
+      const c = refusing(error, refused);
+      c.Open('conv-1');
+      await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
+      expect(c.ConversationId).toBeNull();
+      expect(refused).toEqual([error]);
+    });
+
+    it('keeps the browser through an error that may pass', async () => {
+      const refused: string[] = [];
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const c = refusing('Network request failed', refused);
+      c.Open('conv-1');
+      await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
+      expect(c.ConversationId).toBe('conv-1');
+      expect(refused).toEqual([]);
+    });
+  });
 });

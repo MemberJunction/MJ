@@ -23,9 +23,17 @@ export interface ConversationRemoteBrowserControllerOptions {
   OnAutoOpenSurface?: () => void;
   /** Invoked when the browser opens or closes, or its URL changes. */
   OnStateChange?: () => void;
+  /**
+   * Invoked once when the server refuses this conversation a browser (not enabled, not the caller's, over
+   * the cap). The controller has already closed it, which stops the live view's polling.
+   */
+  OnSessionRefused?: (message: string) => void;
   /** Optional custom GraphQL executor (used by unit tests; defaults to the provider's `ExecuteGQL`). */
   ExecuteServerAction?: <T>(query: string, variables: Record<string, JSONValue>) => Promise<T | null>;
 }
+
+/** The server's answers that mean this conversation gets no browser, however often it asks. */
+const SESSION_REFUSED = /not enabled on this server|not authorized|session \S+ not found|the most this server allows|has no instances/i;
 
 const END_REMOTE_BROWSER_SESSION_MUTATION = `
   mutation EndRemoteBrowserSession($agentSessionID: String!) {
@@ -152,9 +160,10 @@ export class ConversationRemoteBrowserController {
     this.channel.UnbindSurface();
   }
 
-  /** Navigates the browser, e.g. from the drawer's URL bar. */
-  public async Navigate(url: string): Promise<void> {
-    await this.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.OpenUrl, { url });
+  /** Navigates the browser, e.g. from the drawer's URL bar; a refusal or failure comes back in `ErrorMessage`. */
+  public async Navigate(url: string): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    const result = await this.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.OpenUrl, { url });
+    return { Success: result.Success, ErrorMessage: result.ErrorMessage };
   }
 
   /** Runs one `browser_*` tool against this conversation's browser. */
@@ -300,16 +309,21 @@ export class ConversationRemoteBrowserController {
   }
 
   private async executeServerAction<T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> {
-    if (this.options.ExecuteServerAction) {
-      return this.options.ExecuteServerAction<T>(query, variables);
-    }
-    if (!this.provider) {
-      return null;
-    }
     try {
-      return ((await this.provider.ExecuteGQL(query, variables)) as T) ?? null;
+      if (this.options.ExecuteServerAction) {
+        return await this.options.ExecuteServerAction<T>(query, variables);
+      }
+      return this.provider ? (((await this.provider.ExecuteGQL(query, variables)) as T) ?? null) : null;
     } catch (err) {
-      console.warn('[ConversationRemoteBrowserController] GraphQL execution failed:', err);
+      // GraphQL client errors append the raw response after ": {"; the server's sentence comes first.
+      const message = (err instanceof Error ? err.message : String(err)).replace(/: \{[\s\S]*$/, '').slice(0, 300);
+      if (this.conversationId && SESSION_REFUSED.test(message)) {
+        // Asking again gets the same answer: close, so the live view stops polling, and say why once.
+        void this.Close();
+        this.options.OnSessionRefused?.(message);
+      } else {
+        console.warn('[ConversationRemoteBrowserController] GraphQL execution failed:', err);
+      }
       return null;
     }
   }
