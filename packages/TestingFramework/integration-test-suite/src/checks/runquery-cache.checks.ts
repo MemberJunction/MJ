@@ -205,12 +205,29 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
 
 /** Time for QueryEngine to apply a local save, which it does asynchronously. */
 const ENGINE_SETTLE_MS = 300;
+
 /**
- * Time for QueryEngine to delete an edited query's cached results: it waits 3s after the last
- * result-affecting save. Creating a query counts, so a check waits this long after creating its
- * fixtures before warming a slot, or that deletion could remove the warmed slot mid-check.
+ * The result-deletion settle window this bundle installs on QueryEngine for its own duration (see
+ * the lifecycle at the bottom of this file); the shipped default is 3s.
+ *
+ * Kept well above zero on purpose. The window is what makes an edit delete a query's slots ONCE
+ * rather than once per save in the burst, and collapsing it to near-nothing would change that
+ * behavior rather than just speed it up. 750ms still coalesces the saves a check issues
+ * back-to-back while costing a quarter of what the shipped default costs to wait out.
  */
-const DEFINITION_SETTLE_MS = 3500;
+const ENGINE_DELETION_SETTLE_MS = 750;
+
+/**
+ * How long a check waits for QueryEngine to have deleted an edited query's cached results: the
+ * engine waits {@link ENGINE_DELETION_SETTLE_MS} after the last result-affecting save. Creating a
+ * query counts, so a check waits this long after creating its fixtures before warming a slot, or
+ * that deletion could remove the warmed slot mid-check.
+ *
+ * Derived from the engine window rather than hardcoded: the two have to move together, and when
+ * this was a literal 3500 against a literal 3000 inside QueryEngine, nothing said so. The margin
+ * absorbs the save round-trip between the write landing and the timer arming.
+ */
+const DEFINITION_SETTLE_MS = ENGINE_DELETION_SETTLE_MS + 500;
 
 /**
  * A throwaway query in the fixture category whose SQL returns a `Marker` column, so a check can
@@ -855,9 +872,30 @@ for (const check of RunQueryCacheChecks) {
 
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and the dispatcher script create/tear them down identically (was a hardcoded driver special-case).
+//
+// The lifecycle also collapses QueryEngine's result-deletion settle window for the duration of this
+// bundle. That window is a real product behavior — it makes the deletion run once per edit instead
+// of once per save in the burst — but its DURATION is not what any check here asserts, and at the
+// 3s default every check that creates a fixture or edits a query has to sleep past it (8 sites at
+// DEFINITION_SETTLE_MS, ~28s a run). Collapsing it shortens the sleeps without changing what is
+// tested: the deletion still happens, still once, still after the burst settles.
+//
+// Restored in Teardown rather than left set, because the static is process-global and the bundles
+// that follow must see shipped behavior. Captured rather than assumed to be the default, so a
+// harness that already lowered it is not silently overwritten.
+let priorSettleMs: number | undefined;
+
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
-    Setup: async ctx => { ctx.Fixtures = await CreateRunQueryFixtures(ctx); },
+    Setup: async ctx => {
+        priorSettleMs = QueryEngine.DefaultDefinitionEditSettleMs;
+        QueryEngine.DefaultDefinitionEditSettleMs = ENGINE_DELETION_SETTLE_MS;
+        ctx.Fixtures = await CreateRunQueryFixtures(ctx);
+    },
     Teardown: async ctx => {
+        if (priorSettleMs !== undefined) {
+            QueryEngine.DefaultDefinitionEditSettleMs = priorSettleMs;
+            priorSettleMs = undefined;
+        }
         if (ctx.Fixtures) {
             await TeardownRunQueryFixtures(ctx, ctx.Fixtures);
             ctx.Fixtures = undefined;
