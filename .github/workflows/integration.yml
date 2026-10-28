@@ -311,22 +311,33 @@ jobs:
         run: |
           if [ ! -f /tmp/mjdb/test.bak ]; then
             echo 'No snapshot available — provisioning cold.'
+            echo 'DB provisioning: **cold** — no snapshot in the cache for this key' >> "$GITHUB_STEP_SUMMARY"
             echo 'warm=0' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           ls -lh /tmp/mjdb/test.bak
           # -b so sqlcmd exits non-zero on a SQL error; without it a failed RESTORE still
           # returns 0 and the fallback below would never fire.
+          #
+          # The chmod is load-bearing. `docker cp` does NOT preserve ownership: it writes the
+          # file into the container as the HOST uid with group root and mode 0640. SQL Server
+          # runs as uid 10001 (mssql), which is neither the owner nor able to read via group,
+          # so RESTORE fails with "Operating system error 5(Access is denied.)" — which is
+          # exactly what the first two runs of this cache did, silently falling back to cold
+          # provisioning. 0644 is enough; the file is a throwaway on an ephemeral runner.
           if docker cp /tmp/mjdb/test.bak sql:/var/opt/mssql/test.bak && \
+             docker exec -u 0 sql chmod 0644 /var/opt/mssql/test.bak && \
              docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
                /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
                -Q "RESTORE DATABASE [test] FROM DISK='/var/opt/mssql/test.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_log.ldf';"; then
             echo "warm=1" >> "$GITHUB_OUTPUT"
             echo "Snapshot restored from key: ${MATCHED}"
+            echo "DB provisioning: **warm** — restored from \`${MATCHED}\`" >> "$GITHUB_STEP_SUMMARY"
           else
             # A half-finished RESTORE leaves [test] in RESTORING and every later step would
             # fail against it, so drop and recreate before handing back to the cold path.
             echo "::warning::Snapshot restore failed — dropping the database and provisioning cold. This costs the usual ~6 minutes; it does not affect correctness."
+            echo "DB provisioning: **cold (restore FAILED)** — the snapshot cache is not working; see the \`Load the snapshot\` step" >> "$GITHUB_STEP_SUMMARY"
             docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
               /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' \
               -Q "IF DB_ID('test') IS NOT NULL BEGIN ALTER DATABASE [test] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [test]; END; CREATE DATABASE [test];"
