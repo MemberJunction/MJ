@@ -399,6 +399,7 @@ describe('GetTaskPriorityClass', () => {
 });
 
 describe('ResolvePersonTaskScope', () => {
+    const PEOPLE_ENTITY_ID = 'EEEEEEEE-0000-0000-0000-000000000001';
     function makeRunner(responses: Record<string, Array<Record<string, string>>>): TaskScopeQueryRunner & { Calls: string[] } {
         const calls: string[] = [];
         return {
@@ -415,7 +416,7 @@ describe('ResolvePersonTaskScope', () => {
             'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
             'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'TTTTTTTT-0000-0000-0000-000000000001' }],
         });
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001');
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
         expect(scope.HasLinkedPerson).toBe(true);
         if (scope.HasLinkedPerson) {
             expect(scope.PersonID).toBe('PPPPPPPP-0000-0000-0000-000000000001');
@@ -424,12 +425,15 @@ describe('ResolvePersonTaskScope', () => {
             );
         }
         expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
-        expect(runner.Calls[1]).toBe("MJ_BizApps_Tasks: Task Assignments :: PersonID = 'PPPPPPPP-0000-0000-0000-000000000001'");
+        // Task Assignments has no PersonID column: the assignee is the polymorphic (AssigneeEntityID, AssigneeRecordID) pair.
+        expect(runner.Calls[1]).toBe(
+            `MJ_BizApps_Tasks: Task Assignments :: AssigneeEntityID = '${PEOPLE_ENTITY_ID}' AND AssigneeRecordID = 'PPPPPPPP-0000-0000-0000-000000000001'`,
+        );
     });
 
     it('reports no linked person without querying assignments', async () => {
         const runner = makeRunner({});
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001');
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
         expect(scope.HasLinkedPerson).toBe(false);
         expect(runner.Calls.length).toBe(1);
     });
@@ -438,7 +442,14 @@ describe('ResolvePersonTaskScope', () => {
         const runner: TaskScopeQueryRunner = {
             RunView: async () => ({ Success: false, Results: [], ErrorMessage: 'boom' }),
         };
-        await expect(ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001')).rejects.toThrow('boom');
+        await expect(ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID)).rejects.toThrow('boom');
+    });
+    it('escapes the person id and the entity id in the assignment filter', async () => {
+        const runner = makeRunner({
+            'MJ_BizApps_Common: People': [{ ID: "P'1" }],
+        });
+        await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', "E'1");
+        expect(runner.Calls[1]).toBe("MJ_BizApps_Tasks: Task Assignments :: AssigneeEntityID = 'E''1' AND AssigneeRecordID = 'P''1'");
     });
 });
 

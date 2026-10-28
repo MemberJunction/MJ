@@ -306,10 +306,15 @@ export type PersonTaskScope =
 /**
  * Resolve the BizApps person linked to `currentUserId` and the filter that limits the Tasks query to work
  * that person created or is assigned to. Throws when either lookup fails so the caller can show the error.
+ *
+ * `peopleEntityId` is the `MJ: Entities` ID of {@link BIZAPPS_PEOPLE_ENTITY_NAME}: Task Assignments has no
+ * PersonID column, its assignee is the polymorphic (`AssigneeEntityID`, `AssigneeRecordID`) pair, so the
+ * person is matched on both.
  */
 export async function ResolvePersonTaskScope(
     runner: TaskScopeQueryRunner,
     currentUserId: string,
+    peopleEntityId: string,
 ): Promise<PersonTaskScope> {
     const people = await runner.RunView<{ ID: string }>({
         EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
@@ -327,7 +332,7 @@ export async function ResolvePersonTaskScope(
     }
     const assignments = await runner.RunView<{ TaskID: string }>({
         EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
-        ExtraFilter: `PersonID = '${EscapeSQLString(personID)}'`,
+        ExtraFilter: `AssigneeEntityID = '${EscapeSQLString(peopleEntityId)}' AND AssigneeRecordID = '${EscapeSQLString(personID)}'`,
         Fields: ['TaskID'],
         ResultType: 'simple',
     });

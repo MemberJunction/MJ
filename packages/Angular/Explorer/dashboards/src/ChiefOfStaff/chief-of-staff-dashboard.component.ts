@@ -43,6 +43,7 @@ import {
     PolicyMessagingChannelModeValue,
     PolicyPhoneChannelModeValue,
     ResolvePersonTaskScope,
+    BIZAPPS_PEOPLE_ENTITY_NAME,
     PolicyStatusValue,
     PriorityObjectiveCardViewModel,
     RequestSummaryItem,
@@ -1179,8 +1180,14 @@ export class ChiefOfStaffDashboardComponent
      * `HasLinkedPerson`) when no person is linked, or when the lookup fails after surfacing the error.
      */
     private async resolveTaskScopeFilter(rv: RunView, currentUserId: string): Promise<string | null> {
+        const peopleEntity = this.ProviderToUse.EntityByName(BIZAPPS_PEOPLE_ENTITY_NAME);
+        if (!peopleEntity) {
+            // The BizApps Common OpenApp is not installed, so no person can be linked.
+            this.HasLinkedPerson = false;
+            return null;
+        }
         try {
-            const scope = await ResolvePersonTaskScope(rv, currentUserId);
+            const scope = await ResolvePersonTaskScope(rv, currentUserId, peopleEntity.ID);
             this.HasLinkedPerson = scope.HasLinkedPerson;
             return scope.HasLinkedPerson ? scope.Filter : null;
         } catch (err) {
