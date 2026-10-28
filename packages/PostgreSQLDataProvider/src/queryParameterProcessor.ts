@@ -1,3 +1,5 @@
+import { TypedQueryParameter } from '@memberjunction/generic-database-provider';
+
 /**
  * PostgreSQL-specific query parameter processing.
  * Handles type conversion differences between SQL Server and PostgreSQL.
@@ -12,6 +14,8 @@ export class PGQueryParameterProcessor {
      */
     static ProcessParameterValue(value: unknown): unknown {
         if (value == null) return null;
+        // A typed parameter binds by position; its placeholder already casts it (`$1::varchar(50)`).
+        if (value instanceof TypedQueryParameter) return PGQueryParameterProcessor.ProcessParameterValue(value.Value);
         if (typeof value === 'boolean') return value; // PG natively supports boolean
         if (value instanceof Date) return value.toISOString();
         if (typeof value === 'number') return value;

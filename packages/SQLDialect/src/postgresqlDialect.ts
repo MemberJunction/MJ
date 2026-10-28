@@ -5,7 +5,7 @@ import type { DialectLexicalRules, ParameterPlaceholderForm } from './facets/dia
 import type { DialectGrammar, RowCapForm } from './facets/dialectGrammar.js';
 import type { DialectWriter, LimitClauseResult } from './facets/dialectWriter.js';
 import type { DialectTypes } from './facets/dialectTypes.js';
-import type { DialectBinding } from './facets/dialectBinding.js';
+import type { DialectBinding, TypedParameterReference } from './facets/dialectBinding.js';
 import type { DialectSchemaDDL } from './facets/dialectSchemaDDL.js';
 
 /**
@@ -185,6 +185,18 @@ export class PostgreSQLBinding implements DialectBinding {
 
     ParameterPlaceholder(index: number): string {
         return `$${index + 1}`; // PostgreSQL uses 1-based indexing
+    }
+
+    /**
+     * `$<n>::<type>`: the driver sends untyped text, so the cast gives the server the column's type.
+     * @throws Error when `sqlType` is not a plain type name (words with an optional `(n[, m])`, as `timestamp(3) with time zone`, and an optional `[]`).
+     */
+    TypedParameter(index: number, sqlType: string): TypedParameterReference {
+        if (sqlType.length > 128 || !/^[A-Za-z_][A-Za-z0-9_ ]*(\(\s*\d+\s*(,\s*\d+\s*)?\))?[A-Za-z0-9_ ]*(\[\])?$/.test(sqlType.trim())) {
+            throw new Error(`'${sqlType}' is not a type name a parameter can be cast to.`);
+        }
+        const placeholder = `$${index + 1}`;
+        return { Placeholder: `${placeholder}::${sqlType.trim()}`, Name: placeholder };
     }
 
     IsConnectionError(e: unknown): boolean {

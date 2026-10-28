@@ -362,14 +362,13 @@ describe('Query Entity Permission Validation', () => {
             });
 
             expect(() => provider.testValidateQueryForExecution(query, mockUser))
-                .toThrow(/does not have permission to run query/);
+                .toThrow(/does not exist or you do not have permission to run it/);
         });
 
-        // Pinned: the refusal no longer lists "Denied entities" (DISCUSSION §6, 2026-10-27; Topic 3e item 5). TEST-INVENTORY F2.
+        // The refusal does not list "Denied entities" (DISCUSSION §6, 2026-10-27; Topic 3e item 5). TEST-INVENTORY F2.
         // Inverted from 'should include denied entities in error message' (`toThrow(/Restricted/)`). That a refusal happens is
         // covered by 'should throw when user lacks entity read permission' above.
-        // Observed today: "User does not have permission to run query 'Test Query' (ID: q-1). Denied entities: Restricted."
-        it.fails('should not name the denied entities in the error message', () => {
+        it('should not name the denied entities in the error message', () => {
             const entity = makeEntityInfo('e-1', 'Restricted', false);
             provider.setMockEntities([entity]);
 
@@ -377,8 +376,9 @@ describe('Query Entity Permission Validation', () => {
                 QueryEntities: [makeQueryEntityRecord('e-1')],
             });
 
+            // Without the caller's identifier the refusal echoes the query's ID, never its name.
             expect(() => provider.testValidateQueryForExecution(query, mockUser))
-                .toThrow("Query 'Test Query' does not exist or you do not have permission to run it.");
+                .toThrow(`Query '${query.ID}' does not exist or you do not have permission to run it.`);
             expect(() => provider.testValidateQueryForExecution(query, mockUser))
                 .not.toThrow(/Denied entities|Restricted/);
         });
@@ -404,7 +404,7 @@ describe('Query Entity Permission Validation', () => {
             query.UserHasRunPermissions = vi.fn().mockReturnValue(false);
 
             expect(() => provider.testValidateQueryForExecution(query, mockUser))
-                .toThrow(/does not have permission to run query/);
+                .toThrow(/does not exist or you do not have permission to run it/);
         });
     });
 
@@ -427,13 +427,14 @@ describe('Query Entity Permission Validation', () => {
             const result = await provider.testInternalRunQuery({ QueryID: 'q-1' }, mockUser);
 
             expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toContain('Confidential');
+            // Asked for by ID, so the refusal echoes the ID and does not disclose the query's name.
+            expect(result.ErrorMessage).toBe("Query 'q-1' does not exist or you do not have permission to run it.");
+            expect(result.ErrorMessage).not.toContain('Confidential');
         });
 
-        // Pinned: the refusal no longer lists "Denied entities" (DISCUSSION §6, 2026-10-27; Topic 3e item 5). TEST-INVENTORY F2.
-        // Message-level counterpart of 'should list all denied entities' (which checks UserCanRun's return value and stays `it`).
-        // Observed today: "User does not have permission to run query 'Quarterly Report' (ID: q-1). Denied entities: Secret Plans, Classified Data."
-        it.fails('should list none of the denied entities in the run refusal', async () => {
+        // The refusal does not list "Denied entities" (DISCUSSION §6, 2026-10-27; Topic 3e item 5). TEST-INVENTORY F2.
+        // Message-level counterpart of 'should list all denied entities' (which checks UserCanRun's return value).
+        it('should list none of the denied entities in the run refusal', async () => {
             provider.setMockEntities([
                 makeEntityInfo('e-1', 'Secret Plans', false),
                 makeEntityInfo('e-2', 'Classified Data', false),

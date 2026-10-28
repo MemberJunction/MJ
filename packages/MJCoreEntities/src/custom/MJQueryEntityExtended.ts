@@ -12,6 +12,31 @@ import {
 import { QueryEngine } from "../engines/QueryEngine";
 import type { DatabasePlatform } from "@memberjunction/core";
 
+/** Options for {@link MJQueryEntityExtended.UserCanRunRenderedSQL}. */
+export interface RenderedSQLCheckOptions {
+    /**
+     * The character offsets of the `*` of each projection star in the rendered SQL: a plain `*` or
+     * `alias.*` select item whose columns reach the caller only as output columns. Such stars are
+     * allowed; the denied columns they bring are dropped from the result by the caller.
+     */
+    ProjectionStarOffsets?: ReadonlySet<number>;
+}
+
+/** The result of {@link MJQueryEntityExtended.UserCanRunRenderedSQL}. */
+export interface RenderedSQLCheckResult {
+    /** Whether the user may run this rendering of the query. */
+    canRun: boolean;
+    /** Entities the SQL reads that the user may not read. Never shown to the user. */
+    deniedEntities: string[];
+    /** The field-level security finding behind a refusal, for logging. */
+    fieldSecurityViolation?: FieldSecurityViolation;
+    /**
+     * True when the query may run but a projection star can bring a column the user is denied:
+     * the caller must drop the denied columns from the rows before returning them.
+     */
+    needsColumnFiltering?: boolean;
+}
+
 /**
  * Extended query entity with child-relationship getters and business logic.
  * All child data reads through `QueryEngine`'s event-driven cache — always
@@ -219,19 +244,24 @@ export class MJQueryEntityExtended extends MJQueryEntity {
      * to {@link UserCanRun}, never instead of it.
      *
      * 1. A query with `MJ: Query Permissions` rows is authorized by its role list alone: a user who
-     *    holds one of those roles may run it whatever it reads (stored-procedure semantics), and one
-     *    who holds none may not.
+     *    holds one of those roles may run it whatever it reads (definer's rights, like an EXECUTE
+     *    grant on a stored procedure), and one who holds none may not. Field-level security does
+     *    not apply to it.
      * 2. Otherwise every entity whose base view or base table the SQL reads as a relation must be
      *    readable by the user ({@link FieldSecuritySQLGate.RelationEntities}). These come from the
      *    SQL, so a query whose `QueryEntities` rows are missing or stale is still checked. SQL that
      *    cannot be read is refused for a user who cannot read every entity in the catalog.
-     * 3. The SQL must not reference a field the user is denied anywhere it could leak one: the
-     *    select list, WHERE, JOIN, GROUP BY, ORDER BY or HAVING, inside expressions and aggregates
-     *    included. A whole-row construct (`SELECT *`, `alias.*`) over an entity the user is denied a
-     *    field on, and SQL that cannot be read, are refused too ({@link FieldSecuritySQLGate.FindViolation}).
-     *    So is a relation that is not a CTE or a catalog entity's base view or base table (a custom
-     *    view, synonym, table-valued function, temp table or cross-database name), whose reads
-     *    cannot be checked. A user denied no field on any entity is not scanned.
+     * 3. The SQL must not name a field the user is denied anywhere: the select list, WHERE, JOIN,
+     *    GROUP BY, ORDER BY or HAVING, inside expressions and aggregates, through a CTE. A
+     *    whole-row construct (`DISTINCT *`, set operations, `FOR JSON`, `row_to_json`, `NATURAL
+     *    JOIN`, …) over an entity the user is denied a field on, and SQL that cannot be read, are
+     *    refused too ({@link FieldSecuritySQLGate.FindViolation}). So is a relation that is not a
+     *    CTE or a catalog entity's base view or base table, whose reads cannot be checked. A user
+     *    denied no field on any entity is not scanned.
+     * 4. A plain `*` or `alias.*` that a structural reading of the statement has shown reaches the
+     *    caller only as output columns (`options.ProjectionStarOffsets`) is not refused. The result
+     *    then reports `needsColumnFiltering` when the user is denied a field on an entity the SQL
+     *    reads: the caller must run the query and drop the denied columns from its rows.
      *
      * The result never names a denied field, so a refusal says only that the query cannot be run.
      * `QueryFields` metadata plays no part: it is documentation, not a security source.
@@ -240,13 +270,15 @@ export class MJQueryEntityExtended extends MJQueryEntity {
      * @param renderedSQL The SQL the run will execute
      * @param catalog Every entity the executing provider knows
      * @param dialect The database dialect the SQL runs under
+     * @param options The projection stars of `renderedSQL`, when the caller has read them
      */
     public UserCanRunRenderedSQL(
         user: UserInfo,
         renderedSQL: string,
         catalog: readonly EntityInfo[],
         dialect: SQLScreeningDialect,
-    ): { canRun: boolean; deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation } {
+        options?: RenderedSQLCheckOptions,
+    ): RenderedSQLCheckResult {
         const permissions = this.QueryPermissions;
         if (permissions && permissions.length > 0) {
             return { canRun: this.UserHasRunPermissions(user), deniedEntities: [] };
@@ -260,16 +292,21 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         if (deniedEntities.length > 0) {
             return { canRun: false, deniedEntities };
         }
+        const readEntities = [...this.declaredEntities(catalog), ...(read ?? [])];
+        const stars = options?.ProjectionStarOffsets;
         const violation = FieldSecuritySQLGate.FindViolation(renderedSQL, {
             User: user,
             Dialect: dialect,
             Catalog: catalog,
-            ReadEntities: [...this.declaredEntities(catalog), ...(read ?? [])],
+            ReadEntities: readEntities,
             RefuseUnknownRelations: true,
+            ProjectionStarOffsets: stars,
         });
-        return violation
-            ? { canRun: false, deniedEntities: [], fieldSecurityViolation: violation }
-            : { canRun: true, deniedEntities: [] };
+        if (violation) {
+            return { canRun: false, deniedEntities: [], fieldSecurityViolation: violation };
+        }
+        const needsColumnFiltering = !!stars && stars.size > 0 && FieldSecuritySQLGate.UserCarriesDenials(readEntities, user);
+        return { canRun: true, deniedEntities: [], needsColumnFiltering };
     }
 
     /** The catalog entities this query's `QueryEntities` rows name; stale rows are left out. */

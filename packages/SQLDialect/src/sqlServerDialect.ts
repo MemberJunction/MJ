@@ -5,7 +5,7 @@ import type { DialectLexicalRules, ParameterPlaceholderForm } from './facets/dia
 import type { ColumnAliasForm, DialectGrammar, RowCapForm } from './facets/dialectGrammar.js';
 import type { DialectWriter, LimitClauseResult } from './facets/dialectWriter.js';
 import type { DialectTypes } from './facets/dialectTypes.js';
-import type { DialectBinding } from './facets/dialectBinding.js';
+import type { DialectBinding, TypedParameterReference } from './facets/dialectBinding.js';
 import type { DialectSchemaDDL } from './facets/dialectSchemaDDL.js';
 
 /**
@@ -178,6 +178,11 @@ export class SQLServerBinding implements DialectBinding {
 
     ParameterPlaceholder(index: number): string {
         return `@p${index}`;
+    }
+
+    /** A named `@mj_p<n>` parameter; the driver declares its type, so no cast is written. */
+    TypedParameter(index: number, _sqlType: string): TypedParameterReference {
+        return { Placeholder: `@mj_p${index}`, Name: `mj_p${index}` };
     }
 
     IsConnectionError(e: unknown): boolean {

@@ -64,7 +64,10 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, IsTypedQueryParameterList, TypedQueryParameter, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
+import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import { BindTypedParameters } from './typedParameters';
+import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
@@ -151,6 +154,11 @@ function buildRequest(
     for (const p of parameters) {
       request.input(p.Name, p.Type, p.Value);
     }
+    return { request, processedQuery: query };
+  }
+  if (IsTypedQueryParameterList(parameters)) {
+    // Named inputs declared with the types of the columns they are compared with (typedParameters.ts).
+    BindTypedParameters(request, parameters);
     return { request, processedQuery: query };
   }
 
@@ -2590,6 +2598,26 @@ export class SQLServerDataProvider
     } catch (e) {
       // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Describes the first result set of `sqlText` with `sys.dm_exec_describe_first_result_set` (mode 2):
+   * names, order, exact types, nullability and the view or table column each pass-through column
+   * comes from. SQL Server compiles the statement without executing it. A statement the server
+   * cannot compile gives a failure carrying the server's message.
+   */
+  public override async DescribeStatement(sqlText: string, contextUser?: UserInfo): Promise<DescribeStatementResult> {
+    try {
+      const rows: SQLServerDescribeRow[] = await this.ExecuteSQL(
+        SQLSERVER_DESCRIBE_SQL,
+        [new TypedQueryParameter('tsql', 'nvarchar(max)', sqlText)],
+        { description: 'DescribeStatement', ignoreLogging: true },
+        contextUser,
+      );
+      return MapSQLServerDescribeRows(rows);
+    } catch (e) {
+      return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
     }
   }
 

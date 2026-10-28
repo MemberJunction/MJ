@@ -25,7 +25,7 @@ export type {
 } from './facets/dialectLexicalRules.js';
 export type { DialectGrammar, RowCapForm, CorrelatedJoinForm, ColumnAliasForm } from './facets/dialectGrammar.js';
 export type { DialectTypes } from './facets/dialectTypes.js';
-export type { DialectBinding } from './facets/dialectBinding.js';
+export type { DialectBinding, TypedParameterReference } from './facets/dialectBinding.js';
 export { QueryDialect } from './queryDialect.js';
 export type { ParserDialect } from './queryDialect.js';
 export { AnsiQueryDialect, AnsiWriter, ANSI_LEXICAL, ANSI_GRAMMAR, ANSI_WRITE_STATEMENT_KEYWORDS } from './dialects/ansi.js';

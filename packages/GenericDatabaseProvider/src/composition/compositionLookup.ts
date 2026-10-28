@@ -39,7 +39,8 @@ export class CompositionLookup {
 
     /**
      * Refuses a saved query that may not be composed: not Reusable, not Approved, or not runnable
-     * by `user`. Inline dependencies are not checked: the caller supplied them.
+     * by `user`. A query the user may not run is refused with the not-found message
+     * ({@link NotFoundMessage}). Inline dependencies are not checked: the caller supplied them.
      */
     static AssertComposable(resolved: ResolvedComposition, path: CompositionPath, user: UserInfo | undefined): void {
         if (resolved.IsInline) return;
@@ -53,11 +54,19 @@ export class CompositionLookup {
         if (!user) {
             throw new Error(`Query "${path.FullPath}" (${query.Name}) is composed, which requires a context user so permission to run it can be checked.`);
         }
-        const run = query.UserCanRun(user);
-        if (!run.canRun) {
-            const denied = run.deniedEntities.length > 0 ? ` Denied entities: ${run.deniedEntities.join(', ')}.` : '';
-            throw new Error(`User does not have permission to run referenced query "${path.FullPath}" (${query.Name}).${denied}`);
+        if (!query.UserCanRun(user).canRun) {
+            // Worded exactly as a reference that names no query, so a refusal does not confirm the query exists.
+            throw new Error(CompositionLookup.NotFoundMessage(path));
         }
+    }
+
+    /**
+     * The message for a composition reference that names no query, or a query the user may not run:
+     * the same text for both.
+     */
+    static NotFoundMessage(path: CompositionPath): string {
+        return `Referenced query not found: "${path.FullPath}". A composition names the query by its full category path and name ` +
+            `(for example "Sales/Reports/Top Customers"); ensure the query exists at exactly that path.`;
     }
 
     /** A category path in comparable form: segments trimmed, empty ones dropped, joined by `/`, lower case. */
@@ -76,10 +85,7 @@ export class CompositionLookup {
         const name = path.Name.toLowerCase();
         const matches = QueryEngine.Instance.Queries.filter(q => q.Name.toLowerCase() === name && CompositionLookup.NormalizeCategoryPath(q.CategoryPath) === category);
         if (matches.length === 0) {
-            throw new Error(
-                `Referenced query not found: "${path.FullPath}". A composition names the query by its full category path and name ` +
-                `(for example "Sales/Reports/Top Customers"); ensure the query exists at exactly that path.`,
-            );
+            throw new Error(CompositionLookup.NotFoundMessage(path));
         }
         if (matches.length > 1) {
             throw new Error(`Ambiguous query reference: "${path.FullPath}" matches ${matches.length} queries with the same category path and name.`);

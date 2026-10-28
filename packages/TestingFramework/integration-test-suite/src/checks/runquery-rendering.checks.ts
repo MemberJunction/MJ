@@ -1003,7 +1003,9 @@ async function expectDeniedDependencyFailure(fixtures: RenderFixtures, path: str
     Assert(await permission.Save(), `restricting the dependency failed: ${permission.LatestResult?.CompleteMessage}`);
     try {
         await RefreshRenderQueries(user);
-        await expectFailure(composed.ID, /does not have permission to run query 'RR Comp Restricted'/i, `dependency restricted to role '${role.Name}'`, user);
+        // Run by ID, so the refusal echoes the ID (never the query's name).
+        const unavailable = new RegExp(`^Query '${composed.ID}' does not exist or you do not have permission to run it\\.$`, 'i');
+        await expectFailure(composed.ID, unavailable, `dependency restricted to role '${role.Name}'`, user);
     } finally {
         if (!await permission.Delete()) console.error(`runquery-rendering: removing the dependency restriction failed: ${permission.LatestResult?.CompleteMessage}`);
         await RefreshRenderQueries(user);

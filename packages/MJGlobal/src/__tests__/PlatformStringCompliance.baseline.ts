@@ -5,10 +5,6 @@
  */
 export const PLATFORM_STRING_BASELINE: ReadonlyArray<{ File: string; Text: string }> = [
     {
-        File: 'GenericDatabaseProvider/src/GenericDatabaseProvider.ts',
-        Text: "isPostgres: this.PlatformKey === 'postgresql',",
-    },
-    {
         File: 'MJCoreEntitiesServer/src/custom/query-extraction/sync.ts',
         Text: "if (platform === 'postgresql') {",
     },

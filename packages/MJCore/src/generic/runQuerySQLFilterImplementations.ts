@@ -7,7 +7,7 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
-import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
+import { BaseSingleton } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
 import { GetDialect, GetQueryDialect } from '@memberjunction/sql-dialect';
@@ -281,16 +281,20 @@ function stripBoundaryWildcards(value: string, side: 'leading' | 'trailing' | 'b
 function likeLiteral(value: unknown, wildcardSide: 'leading' | 'trailing' | 'both', dialect: Pick<QueryDialect, 'Writer'>): string {
     if (value === null || value === undefined) return 'NULL';
     const stripped = stripBoundaryWildcards(String(value), wildcardSide);
-    const pattern = dialect.Writer.EscapeLikePattern(stripped.replace(/'/g, "''"));
+    const pattern = dialect.Writer.EscapeLikePattern(stripped);
     const before = wildcardSide === 'trailing' ? '' : '%';
     const after = wildcardSide === 'leading' ? '' : '%';
-    return `${dialect.Writer.StringLiteralPrefix(stripped)}'${before}${pattern}${after}'`;
+    return `${dialect.Writer.StringLiteralPrefix(stripped)}${dialect.Writer.QuoteStringLiteral(`${before}${pattern}${after}`)}`;
 }
 
-/** A string literal for `value` with the dialect's prefix, quotes escaped. */
+/**
+ * A string literal for `value` with the dialect's prefix, written by the dialect's writer, so a
+ * dialect in which a backslash escapes (MySQL, Snowflake, Databricks) gets its backslashes
+ * escaped too and the literal ends where the database reads it ending. NUL characters are dropped.
+ */
 function textLiteral(value: unknown, dialect: Pick<QueryDialect, 'Writer'>): string {
-    const text = String(value);
-    return `${dialect.Writer.StringLiteralPrefix(text)}'${EscapeSQLString(text)}'`;
+    const text = String(value).replace(/\0/g, '');
+    return `${dialect.Writer.StringLiteralPrefix(text)}${dialect.Writer.QuoteStringLiteral(text)}`;
 }
 
 /**

@@ -273,9 +273,29 @@ export class SelectParser {
         ctx.Pos += keywordLength;
         const conditionEnd = ctx.ExpressionEnd(ctx.Pos, end);
         if (conditionEnd === ctx.Pos) ctx.ReportEmpty(start, `This ${ctx.T.Upper(start)} has no condition.`);
+        this.reportListComma(ctx.Pos, conditionEnd, ctx.T.Upper(start));
         const condition = ctx.Expression(ctx.Pos, conditionEnd);
         ctx.Pos = conditionEnd;
         return Object.freeze({ Kind: kind, Span: ctx.Span(start, ctx.Pos), Condition: condition });
+    }
+
+    /**
+     * Reports a comma at the top level of a condition (`WHERE Status = 'a','b'`): a condition is
+     * one expression, so the comma means the text is not what it was meant to be.
+     */
+    private reportListComma(start: number, end: number, clause: string): void {
+        const ctx = this.ctx;
+        for (let k = start; k < end; k++) {
+            if (ctx.T.IsChar(k, '(')) {
+                const close = ctx.T.Match(k);
+                if (close < 0) return;
+                k = close;
+            } else if (ctx.T.IsChar(k, ',')) {
+                ctx.Report(SqlDocumentDiagnosticCodes.UnknownSyntax, 'Error', ctx.T.SpanOf(k, k),
+                    `A ${clause} condition is one expression; this comma is not part of it.`, 'Combine the conditions with AND or OR, or use IN (…) for a list of values.');
+                return;
+            }
+        }
     }
 
     private parseInto(end: number): IntoClause {

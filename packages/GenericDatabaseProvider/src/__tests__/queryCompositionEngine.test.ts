@@ -509,7 +509,9 @@ SELECT 1 AS Val`;
                 .toThrow(/not Approved/);
         });
 
-        it('should throw on permission denied for referenced query', () => {
+        // A reference to a query the user may not run reads exactly like one to a query that does not exist
+        // (DISCUSSION Topic 3e item 1).
+        it('should refuse a referenced query the user may not run with the not-found message', () => {
             const restricted = makeQueryInfo({
                 ID: 'base-1',
                 Name: 'Restricted Query',
@@ -522,7 +524,7 @@ SELECT 1 AS Val`;
 
             const sql = 'SELECT * FROM {{query:"Sales/Restricted Query"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
-                .toThrow(/does not have permission/);
+                .toThrow(/^Referenced query not found: "Sales\/Restricted Query"\./);
         });
 
         it('should detect circular dependencies', () => {

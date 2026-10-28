@@ -33,6 +33,11 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
     return 'ansi';
   }
 
+  /** The registered key of {@link SourceDialect} (`'ansi'` reads as the PostgreSQL dialect). */
+  public override get QueryDialectKey(): string | null {
+    return this.SourceDialect.Key;
+  }
+
   /** The {@link QueryDialect} for {@link sqlDialectKey}, resolved once. */
   protected get SourceDialect(): QueryDialect {
     if (!this.resolvedDialect) {

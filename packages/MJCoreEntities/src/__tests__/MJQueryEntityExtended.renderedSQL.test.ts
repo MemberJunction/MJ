@@ -147,4 +147,20 @@ describe('MJQueryEntityExtended.UserCanRunRenderedSQL', () => {
         expect(query('q-i').UserCanRunRenderedSQL(clerk, unreadable, catalog, 'sqlserver').canRun).toBe(false);
         expect(query('q-i').UserCanRunRenderedSQL(hr, unreadable, catalog, 'sqlserver').canRun).toBe(true);
     });
+
+    it('runs a projection star for a restricted user and says the denied columns must be dropped', () => {
+        const sql = 'SELECT * FROM __mj.vwPeople';
+        const stars = { ProjectionStarOffsets: new Set([sql.indexOf('*')]) };
+        expect(query('q-j').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver').canRun).toBe(false);
+        expect(query('q-j').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver', stars)).toEqual({ canRun: true, deniedEntities: [], needsColumnFiltering: true });
+        expect(query('q-j').UserCanRunRenderedSQL(hr, sql, catalog, 'sqlserver', stars)).toEqual({ canRun: true, deniedEntities: [], needsColumnFiltering: false });
+    });
+
+    it('skips field-level security for a role-listed query, projection stars or not (definer\'s rights)', () => {
+        engineState.permissions = [{ QueryID: 'q-k', Role: `Role-${STAFF}` }];
+        const sql = 'SELECT * FROM __mj.vwPeople';
+        const result = query('q-k').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver', { ProjectionStarOffsets: new Set([sql.indexOf('*')]) });
+        expect(result).toEqual({ canRun: true, deniedEntities: [] });
+        engineState.permissions = [];
+    });
 });
