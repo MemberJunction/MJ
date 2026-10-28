@@ -568,6 +568,7 @@ jobs:
       # shard: it is cheap against a warm build and a type error is a property of the code,
       # not of which shard happened to draw the package.
       - name: Build
+        id: build
         env:
           TURBO_FILTER: ${{ steps.scope.outputs.turbo_filter }}
         run: |
@@ -585,9 +586,23 @@ jobs:
       # `pnpm run build` has regenerated them, the leak is visible — but the freshness gate
       # exits 1 on ANY diff, so if it ran first the developer would see an opaque "manifest is
       # stale" message instead of "a server package leaked in".
+      #
+      # `!cancelled()` and the build-outcome check below apply to this gate and the freshness
+      # gate after it. With the default `success()`, a failed build SKIPPED both, and a skip
+      # reads the same as a pass: a merge that shipped a compile error and a stale manifest
+      # reported only the compile error, and the stale manifest rode `next` until someone else
+      # fixed the build. A failed build means the manifests were not regenerated, so there is
+      # nothing to compare; each gate now fails with "could not verify" instead of vanishing.
       - name: Browser manifest server-leakage gate (regenerated)
-        if: steps.scope.outputs.turbo_filter == ''
-        run: node .github/scripts/check-browser-manifest-leakage.mjs
+        if: ${{ !cancelled() && steps.scope.outputs.turbo_filter == '' }}
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          if [ "$BUILD_OUTCOME" != "success" ]; then
+            echo "::error::Browser manifest server-leakage gate could not verify manifests (build failed, so they were not regenerated). Fix the build; this gate then runs."
+            exit 1
+          fi
+          node .github/scripts/check-browser-manifest-leakage.mjs
 
       # Class-registration manifest freshness gate. The committed manifests (the anti-tree-
       # shaking import lists wiring 100+ packages of @RegisterClass classes) demonstrably go
@@ -596,10 +611,17 @@ jobs:
       # committed files means a package added/removed a registered class and the manifest
       # commit was forgotten. Fail loudly with the exact fix. (PR-filtered runs skip this:
       # `npx turbo run build` doesn't run the root postbuild, so there's nothing regenerated
-      # to compare — the merge backstop always catches it.)
+      # to compare — the merge backstop catches it, and a failed build on that backstop now
+      # fails this gate as "could not verify" rather than skipping it; see the leakage gate above.)
       - name: Class-registration manifest freshness gate
-        if: steps.scope.outputs.turbo_filter == ''
+        if: ${{ !cancelled() && steps.scope.outputs.turbo_filter == '' }}
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
         run: |
+          if [ "$BUILD_OUTCOME" != "success" ]; then
+            echo "::error::Class-registration manifest freshness gate could not verify manifests (build failed, so they were not regenerated). Fix the build; this gate then runs."
+            exit 1
+          fi
           MANIFESTS=$(git ls-files '*mj-class-registrations.ts' '*class-registrations-manifest.ts' '*lazy-feature-config.ts')
           if ! git diff --exit-code -- $MANIFESTS; then
             echo "::error::Committed class-registration manifests are STALE — a @RegisterClass class was added/removed without regenerating them. Fix: run 'pnpm run mj:manifest' locally and commit the result. A stale manifest lets tree-shaking silently drop the class in bundled apps."
