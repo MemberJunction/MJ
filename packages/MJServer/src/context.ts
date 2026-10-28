@@ -8,7 +8,7 @@ import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, ExtractUserInfoFromPayload } from './auth/index.js';
 import { BuildLoginIdentity, RecordBindingLogin, ResolveLoginUser, type ResolvedLoginUser } from './auth/loginIdentityBinding.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
-import { EmailsMatch, ResolveLoginEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
+import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache } from './cache.js';
@@ -153,7 +153,7 @@ async function writeSessionAudit(args: {
  * rewrite is reported as such; any other difference means the lookup reached another person's
  * record. Anonymous magic-link sessions run as a synthetic principal by design and are skipped.
  */
-function reportLoginIdentity(loginEmail: LoginEmailResolution, sessionUser: UserInfo, resolved: ResolvedLoginUser): boolean {
+function reportIdentityMismatch(loginEmail: LoginEmailResolution, sessionUser: UserInfo, resolved: ResolvedLoginUser): boolean {
   if (sessionUser.IsMagicLinkAnonymous || EmailsMatch(loginEmail.TokenEmail, sessionUser.Email)) {
     return false;
   }
@@ -558,7 +558,7 @@ export const GetUserPayload = async (
 
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);
-    const loginEmail = ResolveLoginEmail(userInfo, userEmailMap);
+    const loginEmail = ResolveUserLookupEmail(userInfo, userEmailMap);
     const email = loginEmail.LookupEmail;
     
     // Match the login to a User by its provider account first, and by email only when the account
@@ -590,7 +590,7 @@ export const GetUserPayload = async (
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
     if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
-      const identityMismatch = reportLoginIdentity(loginEmail, sessionUser, resolvedLogin);
+      const identityMismatch = reportIdentityMismatch(loginEmail, sessionUser, resolvedLogin);
       RecordBindingLogin(resolvedLogin.BindingID);
       void writeSessionAudit({
         user: sessionUser,
