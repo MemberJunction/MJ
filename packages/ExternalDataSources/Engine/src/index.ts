@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./temporal";
 export * from "./sqlReadOnlyScreen";
+export * from "./hostConnection";
 export * from "./BaseExternalDataSourceDriver";
 export * from "./BaseSqlExternalDataSourceDriver";
 export * from "./ExternalDataSourceRouter";

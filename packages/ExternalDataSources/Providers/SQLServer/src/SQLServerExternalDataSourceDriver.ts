@@ -17,6 +17,8 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  HostSqlConnectionInfo,
+  ResolveHostConnection,
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
@@ -49,8 +51,12 @@ export interface SQLServerConnectionConfig {
    * credential) — required for Microsoft Fabric SQL endpoints, which speak TDS but refuse SQL auth.
    * When unset, the driver infers `'entra-service-principal'` if the credential carries a clientId,
    * otherwise `'sql'` (so a correctly-shaped credential Just Works without setting this).
+   * `'host'` connects with the SQL Server login the host process (MJAPI) uses for its own database,
+   * resolved through `ResolveHostConnection()` — no credential record. It is honored only when this
+   * config names no `server`/`host` and the data source has no `CredentialID`; the target database
+   * comes from `DefaultDatabase` (or `database`).
    */
-  authMode?: 'sql' | 'entra-service-principal';
+  authMode?: 'sql' | 'entra-service-principal' | 'host';
 }
 
 /** Decrypted credential values from the Credential Engine — SQL auth or Entra service principal. */
@@ -111,10 +117,11 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   /** Build a fresh pool for the data source — invoked once per source by the race-safe cache. */
   private async createPool(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const config = this.parseConnectionConfig<SQLServerConnectionConfig>(dataSource);
-    const cred = await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
-    const poolConfig = this.buildPoolConfig(dataSource, config, cred);
+    const host = config.authMode === 'host' ? this.resolveHostConnectionInfo(dataSource, config) : undefined;
+    const cred = host ? null : await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
+    const poolConfig = this.buildPoolConfig(dataSource, config, cred, host);
     // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
-    this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!poolConfig.options?.encrypt, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+    this.assertSecureTransport({ host: host ? host.Server : (config.server ?? config.host), tlsEnabled: !!poolConfig.options?.encrypt, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
     const pool = new sql.ConnectionPool(poolConfig);
     try {
       await pool.connect();
@@ -128,18 +135,56 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   }
 
   /**
+   * Refuses `host` auth mode unless the data source is shaped for it: the config must not name a
+   * `server`/`host` (the target is always the host's own server) and the row must carry no
+   * `CredentialID` (host mode never mixes with a stored credential). Throws a configuration error.
+   */
+  protected assertHostModeAllowed(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): void {
+    if (config.server || config.host) {
+      throw new Error(
+        `host auth mode requires a ConnectionConfig without "server"/"host" (external data source '${dataSource.Name}'); the host's own server is used.`,
+      );
+    }
+    if (dataSource.CredentialID) {
+      throw new Error(`host auth mode requires an external data source with no CredentialID (external data source '${dataSource.Name}').`);
+    }
+  }
+
+  /**
+   * Validates a `host` auth-mode data source and resolves the host's SQL Server connection info.
+   * Throws when the data source is not shaped for host mode, when no host connection resolver is
+   * registered, or when the resolved info lacks a user or password.
+   */
+  protected resolveHostConnectionInfo(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): HostSqlConnectionInfo {
+    this.assertHostModeAllowed(dataSource, config);
+    const host = ResolveHostConnection();
+    if (!host) {
+      throw new Error(`host auth mode requires a registered host connection resolver (external data source '${dataSource.Name}').`);
+    }
+    if (!host.User || !host.Password) {
+      throw new Error(`host auth mode requires a host connection with a SQL login user and password (external data source '${dataSource.Name}').`);
+    }
+    return host;
+  }
+
+  /**
    * Builds the mssql pool config for either SQL auth or Microsoft Entra service-principal auth.
    * Pure (no I/O) so the auth-mode selection, forced encryption, and the Entra `authentication`
    * block are unit-testable without opening a connection. Entra mode is used when `authMode` says
    * so, or is inferred when the credential carries a `clientId` (so a correctly-shaped credential
    * works without extra config). Entra endpoints (Microsoft Fabric) are TLS-only, so encryption is
-   * forced on for them regardless of the `ssl` flag.
+   * forced on for them regardless of the `ssl` flag. In `host` auth mode the server, login and
+   * transport options come from `host` (the host's own connection) and `cred` is ignored.
    */
   protected buildPoolConfig(
     dataSource: MJExternalDataSourceEntity,
     config: SQLServerConnectionConfig,
     cred: { values: SQLServerCredentialValues } | null,
+    host?: HostSqlConnectionInfo,
   ): sql.config {
+    if (config.authMode === 'host') {
+      return this.buildHostPoolConfig(dataSource, config, host);
+    }
     const useEntra = (config.authMode ?? (cred?.values.clientId ? 'entra-service-principal' : 'sql')) === 'entra-service-principal';
     const encrypt = useEntra ? true : !!config.ssl;
     const options: NonNullable<sql.config['options']> = {
@@ -179,6 +224,30 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
       poolConfig.password = cred?.values.password;
     }
     return poolConfig;
+  }
+
+  /** SQL-auth pool config for `host` auth mode: the host's server, login and TLS options, the data source's database. */
+  private buildHostPoolConfig(
+    dataSource: MJExternalDataSourceEntity,
+    config: SQLServerConnectionConfig,
+    host: HostSqlConnectionInfo | undefined,
+  ): sql.config {
+    if (!host) {
+      throw new Error(`host auth mode requires resolved host connection info (external data source '${dataSource.Name}').`);
+    }
+    return {
+      server: host.Server,
+      port: host.Port,
+      database: dataSource.DefaultDatabase ?? config.database,
+      user: host.User,
+      password: host.Password,
+      options: {
+        encrypt: !!host.Encrypt,
+        trustServerCertificate: !!host.TrustServerCertificate,
+        ...(host.InstanceName ? { instanceName: host.InstanceName } : {}),
+      },
+      pool: { max: config.maxPoolSize ?? 5 },
+    };
   }
 
   /**

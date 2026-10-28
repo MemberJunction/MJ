@@ -82,6 +82,7 @@
     "@memberjunction/entity-communications-server": "6.2.0-edge.5",
     "@memberjunction/esignature": "6.2.0-edge.5",
     "@memberjunction/external-change-detection": "6.2.0-edge.5",
+    "@memberjunction/external-data-sources": "6.2.0-edge.5",
     "@memberjunction/generic-database-provider": "6.2.0-edge.5",
     "@memberjunction/global": "6.2.0-edge.5",
     "@memberjunction/graphql-dataprovider": "6.2.0-edge.5",
