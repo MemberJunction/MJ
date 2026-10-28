@@ -2,6 +2,10 @@
  * Declares which test-schema fields are immutable after creation (`MJ: Entity Fields.AllowUpdateAPI = false`), the
  * metadata the As-of Feature Assembly reads as "may be read directly". Fields not listed stay updatable, so the
  * assembly must replay them from Record Changes (PersonStatusNow on W4 is the planted example).
+ *
+ * A declaration whose table carries no dataset prefix (`MembershipYear`, `Person`) describes the synthetic worlds'
+ * tables: it applies to every `W<n>_<table>` table as well as to the bare name. A prefixed declaration (`C1…`,
+ * `Scn_…`, `W<n>_…`) applies to its own table only.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
@@ -22,8 +26,19 @@ export const TRUTH_IMMUTABLE_FIELDS: readonly ImmutableFieldDeclaration[] = [
   { BaseTable: 'Person', Fields: ['MemberNumber', 'Region', 'PostalCode', 'IncomeK', 'AutoRenew', 'WorldID', 'Seed'] },
 ];
 
+/** The dataset prefixes a test-schema table name can carry. */
+const DATASET_PREFIX = /^(W\d+_|C1|Scn_)/;
+
 /** Applies `TRUTH_IMMUTABLE_FIELDS` to the provisioned pstruth entities' field metadata. */
 export class ImmutableFieldDeclarations {
+  /** True when `decl` covers the table `baseTable`: the same name, or (for an unprefixed declaration) `W<n>_` + its name. */
+  public static AppliesTo(decl: ImmutableFieldDeclaration, baseTable: string): boolean {
+    if (baseTable === decl.BaseTable) return true;
+    if (DATASET_PREFIX.test(decl.BaseTable)) return false;
+    const world = /^W\d+_(.+)$/.exec(baseTable);
+    return world !== null && world[1] === decl.BaseTable;
+  }
+
   /**
    * Set AllowUpdateAPI = false on the declared pstruth fields; returns how many fields changed. MJAPI must restart after.
    * One RunView reads every declared field of every provisioned table (no read per table); the saves run in parallel
@@ -31,9 +46,10 @@ export class ImmutableFieldDeclarations {
    */
   public static async Apply(provider: IMetadataProvider, user: UserInfo, schema: string = 'pstruth'): Promise<number> {
     const declared = new Map<string, ReadonlySet<string>>();   // entity ID (lower-case) → declared field names
-    for (const decl of TRUTH_IMMUTABLE_FIELDS) {
-      const entity = provider.Entities.find((e) => e.SchemaName === schema && e.BaseTable === decl.BaseTable);
-      if (entity) declared.set(NormalizeUUID(entity.ID), new Set(decl.Fields)); // absent = that dataset is not provisioned here
+    // A table no declaration covers is not provisioned here, or keeps every field updatable.
+    for (const entity of provider.Entities.filter((e) => e.SchemaName === schema)) {
+      const fields = TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, entity.BaseTable)).flatMap((d) => d.Fields);
+      if (fields.length > 0) declared.set(NormalizeUUID(entity.ID), new Set(fields));
     }
     if (declared.size === 0) return 0;
     const ids = [...declared.keys()].map((id) => `'${EscapeSQLString(id)}'`).join(',');

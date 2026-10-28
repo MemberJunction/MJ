@@ -18,7 +18,7 @@ import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunctio
 import { type ModelingPlanSpec, TrustVerdicts, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
-import { TrainModelViaEngine, WasTrainingLeakageFlagged } from '../operations/delegation';
+import { TrainingDelegation, WasTrainingLeakageFlagged } from '../operations/delegation';
 import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
@@ -181,7 +181,7 @@ export class PredictiveStudioPipelineBuilder {
         const config = ModelingPlanToPipelineConfig(spec);
         recordWarnings(config.warnings);
         const pipeline = await this.createPipeline(config, provider, user);
-        const trainResult = await TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+        const trainResult = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
         const model = trainResult.model;
         const trust = TrustVerdicts.DeriveTrustVerdict(model);
         const leakageFlagged = WasTrainingLeakageFlagged(trainResult);
@@ -221,7 +221,7 @@ export class PredictiveStudioPipelineBuilder {
           const config = ModelingPlanToPipelineConfig(spec, i);
           recordWarnings(config.warnings);
           const pipeline = await this.createPipeline(config, provider, user);
-          const trainResult = await TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+          const trainResult = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
           const trust = TrustVerdicts.DeriveTrustVerdict(model);
           const leakageFlagged = WasTrainingLeakageFlagged(trainResult);

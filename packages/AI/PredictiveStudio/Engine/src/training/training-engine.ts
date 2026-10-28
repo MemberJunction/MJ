@@ -9,10 +9,12 @@
  *
  * ## Flow ({@link TrainingEngine.trainModel})
  * 1. Resolve the pipeline (parse its JSON columns via the core type contracts),
- *    then refuse — before any row is written — an as-of mode training would ignore
- *    ({@link AsOfSettingHasNoEffectError}) and an unknown `MajorityBaselineRule`
+ *    then refuse — before any row is written — an unknown `MajorityBaselineRule`
  *    (`InvalidMajorityBaselineRuleError`).
- * 2. Create the training-run row (`Status='Running'`, `StartedAt`).
+ * 2. Create the training-run row (`Status='Running'`, `StartedAt`). A pipeline
+ *    without a Prediction Unit whose AsOfStrategy asks for point-in-time assembly
+ *    is refused here (`unit-required`, recorded on the run): that assembly lives
+ *    in a Prediction Unit.
  * 3. Assemble the raw matrix + schema + preprocessing ops via FeatureAssembly
  *    (context `'train'`), carrying the label column. The target read is ordered by
  *    the entity's primary key, so the same data always arrives in the same order.
@@ -30,9 +32,12 @@
  *
  * A pipeline that points at a Prediction Unit takes the unit path instead: the unit
  * row reader reads every unit row (censored and label-known rows excluded and
- * counted), the target is validated, and a refusal is recorded on the run as a
- * `refused` envelope ({@link TrainingRefusedError}); a completed run stores the
- * unit resolution counts, and the model Lineage names the unit version.
+ * counted), the target is validated, and the matrix is assembled as of each row's
+ * decision date by {@link TrainingEngine.AssembleForTraining} — the same
+ * `AsOfFeatureAssembler` the scoring path calls. A refusal is recorded on the run
+ * as a `refused` envelope ({@link TrainingRefusedError}); a completed run stores
+ * the unit resolution counts, and the model Lineage names the unit version, the
+ * typed feature columns and the kept categorical levels scoring reuses.
  *
  * Every external dependency is injected (see {@link TrainingDeps}) so the engine
  * is unit-testable with no live database and no live sidecar.
@@ -65,35 +70,66 @@ import {
   type PredictionUnitSpec,
   type TrainingRunResults,
   type UnitResolutionCounts,
+  type UncoveredRowsCount,
+  type FeatureColumnSpec,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
-import { RunViewDataAccess, type SourceRow } from '../feature-assembly/data-access';
-import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
-import { PredictionUnitRowReader } from '../prediction-unit/unit-row-reader';
+import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
+import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import { AsOfFeatureAssembler, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
+import { FeatureResolver } from '../feature-assembly/as-of/feature-resolution';
+import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import { SeriesFeatures, type SeriesHistory, type SeriesPoint } from '../feature-assembly/as-of/series-features';
+import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '../prediction-unit/unit-row-reader';
 import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingRefusedError } from './training-refusal';
-import { AsOfSettingHasNoEffectError } from './as-of-refusal';
 import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
-import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage } from './types';
+import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, UnitModelLineage } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
-interface ResolvedPipeline {
-  pipeline: MJMLTrainingPipelineEntity;
-  targetEntityName: string;
-  targetVariable: string;
-  problemType: ProblemType;
-  algorithmDriverKey: string;
-  hyperparameters: Record<string, unknown>;
-  sourceBindings: SourceBinding[];
-  featureSteps: FeatureStepGraph;
-  asOf: AsOfStrategy;
-  leakageGuard: LeakageGuard;
-  validation: ValidationStrategy;
-  outcomeConfig: OutcomeConfig;
+export interface ResolvedPipeline {
+  pipeline: MJMLTrainingPipelineEntity;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  targetEntityName: string;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  targetVariable: string;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  problemType: ProblemType;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  algorithmDriverKey: string;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  hyperparameters: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  sourceBindings: SourceBinding[];  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  featureSteps: FeatureStepGraph;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  asOf: AsOfStrategy;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  leakageGuard: LeakageGuard;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  validation: ValidationStrategy;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
+  outcomeConfig: OutcomeConfig;  // case-violation-ok-legacy-back-compat: the engine's internal pipeline shape, exported only so AssembleForTraining's signature compiles under declaration emit
 }
+
+/** The unit rows a complete read returned. */
+export type UnitRowsRead = Extract<UnitRowReadResult, { Status: 'read' }>;
+
+/** What a unit training run already holds when it asks for the matrix, so the assembly does not read it twice. */
+export interface UnitAssemblyInputs {
+  readonly Resolved: ResolvedPipeline;
+  readonly Unit: PredictionUnitSpec;
+  readonly UnitRead: UnitRowsRead;
+  readonly DataAccess: ICountingDataAccess;
+  readonly Metadata: IAssemblyMetadata;
+}
+
+/**
+ * A unit pipeline's matrix as training assembles it: the unit, its rows, the typed feature columns (empty when feature
+ * resolution refused) and the assembled matrix or the first refusal.
+ */
+export interface UnitTrainingAssembly {
+  readonly Unit: PredictionUnitSpec;
+  readonly UnitRead: UnitRowsRead;
+  readonly Features: readonly FeatureColumnSpec[];
+  readonly Assembled: AsOfAssemblyResult;
+}
+
+/** The read seams of the unit path: the request's metadata and counting data access. */
+interface UnitSeams { readonly Metadata: IAssemblyMetadata; readonly DataAccess: ICountingDataAccess }
 
 /**
  * Training orchestrator. Stateless across calls; construct once and reuse. All
@@ -125,19 +161,20 @@ export class TrainingEngine {
   }
 
   /**
-   * Train a pipeline that does not point at a Prediction Unit: the as-of refusal and the `MajorityBaselineRule` parse
-   * run before the run row is written, then the target entity is assembled, the locked holdout carved and the sidecar
-   * trained.
+   * Train a pipeline that does not point at a Prediction Unit: the `MajorityBaselineRule` parse runs before the run row
+   * is written; a point-in-time AsOfStrategy is refused on the run (`unit-required`); then the target entity is
+   * assembled, the locked holdout carved and the sidecar trained.
    */
   private async trainLegacyPipeline(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
-    if (AsOfSettingHasNoEffectError.WouldBeIgnored(resolved.asOf)) {
-      throw new AsOfSettingHasNoEffectError('pipeline', resolved.asOf.Mode, resolved.pipeline.ID);
-    }
-    // Validates the evaluation settings (D2-C5d: an unknown MajorityBaselineRule is refused) before any row is written.
+    // Validates the evaluation settings (an unknown MajorityBaselineRule is refused) before any row is written.
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
+      if (resolved.asOf.Mode !== 'none') {
+        const why = "point-in-time assembly now lives in a Prediction Unit; this pipeline's AsOfStrategy has no effect without one";
+        throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why } });
+      }
       const assembly = await this.assemble(resolved, input, deps);
       const targetIdx = assembly.matrix.columns.indexOf(resolved.targetVariable);
       const cleanRows = targetIdx >= 0
@@ -160,8 +197,17 @@ export class TrainingEngine {
       await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps);
       return { model, run };
     } catch (err) {
-      await this.finalizeRunFailure(run, err, deps);
+      await this.recordRunError(run, err, deps);
       throw err;
+    }
+  }
+
+  /** Record a run that ended in an error: a refusal as the `refused` envelope, any other error as a failure. */
+  private async recordRunError(run: MJMLTrainingRunEntity, err: unknown, deps: TrainingDeps): Promise<void> {
+    if (err instanceof TrainingRefusedError) {
+      await this.finalizeRunRefused(run, err);
+    } else {
+      await this.finalizeRunFailure(run, err, deps);
     }
   }
 
@@ -169,55 +215,147 @@ export class TrainingEngine {
 
   /**
    * Train a pipeline that points at a Prediction Unit. The unit decides the rows, their decision dates and their
-   * labels: inputs that would override them (`maxRows`, `labelEventDates`) are refused, censored and label-known rows
-   * are excluded and counted, and a target that cannot train a model is refused before the sidecar is called. A
-   * refusal is recorded on the run row as a `refused` envelope; the counts and the unit's identity are stored on a
-   * completed run and its model.
+   * labels: inputs that would override them (`maxRows`, `labelEventDates`, a point-in-time AsOfStrategy) are refused,
+   * censored and label-known rows are excluded and counted, and a target that cannot train a model is refused before
+   * the sidecar is called. The matrix is assembled as of each decision date ({@link AssembleForTraining}). A refusal is
+   * recorded on the run row as a `refused` envelope; the counts and the unit's identity are stored on a completed run
+   * and its model.
    */
   private async trainUnitPipeline(resolved: ResolvedPipeline, unitId: string, input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
     const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
     try {
-      if (input.maxRows !== null && input.maxRows !== undefined) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows', why: 'a Prediction Unit pipeline reads every unit row; a capped read is not a complete read' } });
-      if (input.labelEventDates) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: 'decision dates come from the Prediction Unit' } });
-      if (resolved.asOf.Mode !== 'none') throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } });
+      TrainingEngine.refuseUnitOverrides(input, resolved);
       const unit = await this.loadUnitSpec(unitId, deps);
-      const metadata = deps.assemblyMetadata || new ProviderAssemblyMetadata(this.requireProvider(deps));
-      // requireProvider: the unit path reads through the request's provider, never a global RunView.
-      const dataAccess = deps.dataAccess || new RunViewDataAccess(deps.contextUser, this.requireProvider(deps));
-      const unitRead = await this.unitReader.Read(unit, { DataAccess: dataAccess, Metadata: metadata, Read: { mode: 'complete' }, Now: deps.now?.() || new Date() });
-      if (unitRead.Status === 'refused') throw new TrainingRefusedError(unitRead.Refusal);
+      const seams = this.unitSeams(deps);
+      const unitRead = await this.readUnitRows(unit, seams, deps);
       const validation = UnitTargetValidator.ValidateUnitTargets(unitRead.Rows, unit.label.outcome, unitRead.Counts);
       if (validation.status === 'refused') throw new TrainingRefusedError({ stage: 'unit', reason: validation.reason });
 
-      // The existing executor assembles the unit's rows until the as-of assembler replaces this call.
-      const records: SourceRow[] = unitRead.Rows.map((r) => ({ ...r.Source, [LABEL_COLUMN]: r.Label }));
-      const assembly = await this.assembler.assemble({
-        targetEntityName: unitRead.RowEntity.Name, records, sources: resolved.sourceBindings, steps: resolved.featureSteps,
-        asOf: { Mode: 'none' }, leakageGuard: resolved.leakageGuard, targetVariable: LABEL_COLUMN,
-        primaryKeyField: unitRead.RowEntity.PrimaryKey, context: 'train', contextUser: deps.contextUser, provider: deps.provider, dataAccess,
-      });
+      const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata });
+      if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
+      const labels = new Map(unitRead.Rows.map((r) => [r.RowId, r.Label]));
+      const legacyShaped = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembly.Assembled, labels, LABEL_COLUMN);
       const unitResolved: ResolvedPipeline = { ...resolved, targetEntityName: unitRead.RowEntity.Name, targetVariable: LABEL_COLUMN, problemType: TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome) };
-      const split = this.carveLockedHoldout(assembly.matrix, unitResolved, DEFAULT_SPLIT_SEED);
-      const trainRequest = this.buildTrainRequest(unitResolved, assembly, split.Training, this.buildValidationConfig(resolved.validation));
-      const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
-      const evaluation = EvaluationLineage.Build(resolved.validation, {
-        ValidationOutOfSample: response.validation_out_of_sample === true,
-        ImportanceKind: response.feature_importance_kind || null,
-        MajorityBaselineRule: majorityBaselineRule,
-      });
-      const dominance = this.checkLeakage(response, resolved.leakageGuard);
-      const model = await this.createModelRow(unitResolved, input, assembly, split, response, evaluation, deps, this.unitLineage(unit, resolved));
-      await this.finalizeUnitRunSuccess(run, model, assembly, unitResolved, response, dominance, evaluation, unitRead.Counts, split);
+      const lineage = this.unitLineage(unit, resolved, unitRead, assembly.Features, assembly.Assembled.CategoryLevels);
+      const model = await this.fitUnitModel(run, unitResolved, input, legacyShaped, deps, majorityBaselineRule, lineage, unitRead.Counts, assembly.Assembled.UncoveredRowsExcluded);
       return { model, run };
     } catch (err) {
-      if (err instanceof TrainingRefusedError) {
-        await this.finalizeRunRefused(run, err);
-      } else {
-        await this.finalizeRunFailure(run, err, deps);
-      }
+      await this.recordRunError(run, err, deps);
       throw err;
     }
+  }
+
+  /** The unit decides rows and decision dates, so a capped read, label-event dates and an as-of strategy are refused. */
+  private static refuseUnitOverrides(input: TrainModelInput, resolved: ResolvedPipeline): void {
+    if (input.maxRows !== null && input.maxRows !== undefined) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows', why: 'a Prediction Unit pipeline reads every unit row; a capped read is not a complete read' } });
+    if (input.labelEventDates) throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates', why: 'decision dates come from the Prediction Unit' } });
+    if (resolved.asOf.Mode !== 'none') throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } });
+  }
+
+  /** Carve the locked holdout, train through the sidecar, create the model row and complete the run. */
+  private async fitUnitModel(
+    run: MJMLTrainingRunEntity,
+    resolved: ResolvedPipeline,
+    input: TrainModelInput,
+    assembly: FeatureAssemblyResult,
+    deps: TrainingDeps,
+    majorityBaselineRule: ReturnType<typeof EvaluationLineage.ParseMajorityBaselineRule>,
+    lineage: UnitModelLineage,
+    counts: UnitResolutionCounts,
+    uncovered: readonly UncoveredRowsCount[],
+  ): Promise<MJMLModelEntity> {
+    const split = this.carveLockedHoldout(assembly.matrix, resolved, DEFAULT_SPLIT_SEED);
+    const trainRequest = this.buildTrainRequest(resolved, assembly, split.Training, this.buildValidationConfig(resolved.validation));
+    const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
+    const evaluation = EvaluationLineage.Build(resolved.validation, {
+      ValidationOutOfSample: response.validation_out_of_sample === true,
+      ImportanceKind: response.feature_importance_kind || null,
+      MajorityBaselineRule: majorityBaselineRule,
+    });
+    const dominance = this.checkLeakage(response, resolved.leakageGuard);
+    const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps, lineage);
+    await this.finalizeUnitRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, counts, split, uncovered);
+    return model;
+  }
+
+  /**
+   * Assemble a unit pipeline's training matrix as of each unit row's decision date: the pipeline's steps resolve into
+   * typed columns (the pipeline's LeakageGuard deny lists excluded) and the as-of assembler reads them. This is the one
+   * assembly function training uses; the scoring path calls the same assembler with the columns and levels training
+   * stored. With `prepared` (a training run) the pipeline, unit and rows already read are reused; without it (a check
+   * that only needs the matrix) the pipeline, unit and rows are read here, and a pipeline without a unit is refused
+   * (`unit-required`).
+   *
+   * @param pipelineId the `MJ: ML Training Pipelines` row
+   * @param deps the training deps (provider, user and the unit seams; `history` defaults to complete Record Changes reads)
+   * @param prepared what a training run has already read
+   */
+  public async AssembleForTraining(pipelineId: string, deps: TrainingDeps, prepared?: UnitAssemblyInputs): Promise<UnitTrainingAssembly> {
+    const inputs = prepared || (await this.prepareUnitAssembly(pipelineId, deps));
+    const { Resolved: resolved, Unit: unit, UnitRead: unitRead } = inputs;
+    const exclusions = { denyFields: resolved.leakageGuard.DenyFields || [], denySources: resolved.leakageGuard.DenySources || [] };
+    const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions);
+    if (resolution.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: resolution };
+    const assembled = await new AsOfFeatureAssembler().Assemble({
+      Context: 'train',
+      Unit: unit,
+      RowEntity: unitRead.RowEntity,
+      Rows: unitRead.Rows.map((r) => ({ RowId: r.RowId, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
+      Features: resolution.Columns,
+      SeriesHistory: TrainingEngine.SeriesHistoryFor(unit, unitRead.Rows),
+      Read: { mode: 'complete' },
+      DataAccess: inputs.DataAccess,
+      History: deps.history || new RunViewRecordHistoryReader(inputs.DataAccess, { mode: 'complete' }),
+      Metadata: inputs.Metadata,
+      AssembledAt: deps.now?.() || new Date(),
+      ExplicitOps: resolution.ExplicitOps,
+    });
+    return { Unit: unit, UnitRead: unitRead, Features: resolution.Columns, Assembled: assembled };
+  }
+
+  /**
+   * The series history a unit with a Temporal Spec reads its lags and rolling windows from: the unit rows' labels by
+   * entity and period. Null for a unit without one.
+   */
+  public static SeriesHistoryFor(unit: PredictionUnitSpec, rows: readonly UnitRow[]): SeriesHistory | null {
+    const temporal = unit.temporal;
+    return temporal ? SeriesFeatures.BuildSeriesHistory(rows.map((r) => TrainingEngine.toPoint(r)), temporal) : null;
+  }
+
+  /** A unit row as a series point; a forecast row always has a period and a numeric label once the target is validated. */
+  private static toPoint(r: UnitRow): SeriesPoint {
+    if (r.Period === null) throw new Error(`TrainingEngine: unit row ${r.RowId} has no period, so it cannot be a series point`);
+    if (typeof r.Label !== 'number') throw new Error(`TrainingEngine: unit row ${r.RowId} has the non-numeric label "${r.Label}", so it cannot be a series point`);
+    return { EntityKey: r.EntityKey, Period: r.Period, Value: r.Label, RowId: r.RowId };
+  }
+
+  /** Read the pipeline, its unit and the unit's rows, for an assembly that is not part of a training run. */
+  private async prepareUnitAssembly(pipelineId: string, deps: TrainingDeps): Promise<UnitAssemblyInputs> {
+    const resolved = await this.resolvePipeline(pipelineId, deps);
+    const unitId = resolved.pipeline.PredictionUnitID;
+    if (!unitId) {
+      throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: resolved.pipeline.ID, why: 'only a pipeline that points at a Prediction Unit is assembled as of decision dates' } });
+    }
+    const unit = await this.loadUnitSpec(unitId, deps);
+    const seams = this.unitSeams(deps);
+    const unitRead = await this.readUnitRows(unit, seams, deps);
+    return { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata };
+  }
+
+  /** The unit path reads through the request's provider (never a global RunView) unless the deps supply the seams. */
+  private unitSeams(deps: TrainingDeps): UnitSeams {
+    return {
+      Metadata: deps.assemblyMetadata || new ProviderAssemblyMetadata(this.requireProvider(deps)),
+      DataAccess: deps.dataAccess || new RunViewDataAccess(deps.contextUser, this.requireProvider(deps)),
+    };
+  }
+
+  /** Every unit row, read completely; a refused read is the run's refusal. */
+  private async readUnitRows(unit: PredictionUnitSpec, seams: UnitSeams, deps: TrainingDeps): Promise<UnitRowsRead> {
+    const unitRead = await this.unitReader.Read(unit, { DataAccess: seams.DataAccess, Metadata: seams.Metadata, Read: { mode: 'complete' }, Now: deps.now?.() || new Date() });
+    if (unitRead.Status === 'refused') throw new TrainingRefusedError(unitRead.Refusal);
+    return unitRead;
   }
 
   /** Load the pipeline's unit version and parse it; a missing or unparseable unit is the refusal `unit-invalid`. */
@@ -230,9 +368,19 @@ export class TrainingEngine {
     return parsed.Value;
   }
 
-  /** The unit's identity, stored in the model Lineage beside the pipeline provenance. */
-  private unitLineage(unit: PredictionUnitSpec, resolved: ResolvedPipeline): Record<string, string | number> {
-    return { predictionUnitId: unit.id, predictionUnitVersion: unit.version, labelVersion: unit.label.labelVersion, featureSpecVersion: resolved.pipeline.Version };
+  /** The unit's identity, the typed feature columns and the kept categorical levels, stored in the model Lineage. */
+  private unitLineage(
+    unit: PredictionUnitSpec, resolved: ResolvedPipeline, unitRead: UnitRowsRead, features: readonly FeatureColumnSpec[], levels: ReadonlyMap<string, readonly string[]>,
+  ): UnitModelLineage {
+    return {
+      predictionUnitId: unit.id,
+      predictionUnitVersion: unit.version,
+      labelVersion: unit.label.labelVersion,
+      featureSpecVersion: resolved.pipeline.Version,
+      unitRowEntity: unitRead.RowEntity.Name,
+      featureSpec: [...features],
+      categoryLevels: Object.fromEntries([...levels].map(([column, kept]) => [column, [...kept]])),
+    };
   }
 
   /** The provider the unit path's production seams read through; the unit path has no global fallback. */
@@ -271,6 +419,7 @@ export class TrainingEngine {
     evaluation: EvaluationRecord,
     counts: UnitResolutionCounts,
     split: LockedHoldoutSplit,
+    uncovered: readonly UncoveredRowsCount[],
   ): Promise<void> {
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts,
@@ -282,8 +431,14 @@ export class TrainingEngine {
     run.ValidationResults = JSON.stringify(results);
     run.Status = 'Completed';
     run.CompletedAt = new Date();
-    run.Notes = this.buildRunNotes(dominance, evaluation);
+    run.Notes = TrainingEngine.withUncoveredNote(this.buildRunNotes(dominance, evaluation), uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
+  }
+
+  /** Rows excluded because a read field's history did not cover their decision date, named per entity and field. */
+  private static withUncoveredNote(notes: string, uncovered: readonly UncoveredRowsCount[]): string {
+    if (uncovered.length === 0) return notes;
+    return `${notes} Excluded for uncovered history: ${uncovered.map((u) => `${u.entity}.${u.field} ${u.rows}`).join(', ')}.`;
   }
 
   // region: pipeline resolution -------------------------------------------------
@@ -497,7 +652,7 @@ export class TrainingEngine {
     response: TrainResponse,
     evaluation: EvaluationRecord,
     deps: TrainingDeps,
-    extraLineage: Record<string, string | number> = {},
+    unitLineage: UnitModelLineage | null = null,
   ): Promise<MJMLModelEntity> {
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
     const artifactName = `model-${resolved.pipeline.ID}-v${version}.bin`;
@@ -517,7 +672,7 @@ export class TrainingEngine {
       model.HoldoutMetrics = JSON.stringify(response.holdout_metrics);
     }
     model.FeatureImportance = JSON.stringify(response.feature_importance ?? {});
-    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation, extraLineage));
+    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation, unitLineage));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(response.duration_sec ?? 0);
     model.TrainingRowCount = response.training_row_count ?? split.TrainingRowCount;
@@ -535,17 +690,17 @@ export class TrainingEngine {
    * `asOfStrategy` when the pipeline row isn't separately loaded. Omitting
    * `targetEntityName` or `featureSteps` here would leave the model unable to
    * produce any feature columns at inference (train/serve break), so both are
-   * persisted alongside the other provenance fields.
+   * persisted alongside the other provenance fields. A unit model adds its {@link UnitModelLineage}.
    */
   private buildLineage(
     resolved: ResolvedPipeline,
     input: TrainModelInput,
     split: LockedHoldoutSplit,
     evaluation: EvaluationRecord,
-    extraLineage: Record<string, string | number> = {},
-  ): ModelTrainingLineage {
+    unitLineage: UnitModelLineage | null,
+  ): ModelTrainingLineage & Partial<UnitModelLineage> {
     return {
-      ...extraLineage,
+      ...(unitLineage || {}),
       pipelineId: resolved.pipeline.ID,
       pipelineVersion: resolved.pipeline.Version,
       targetEntityName: resolved.targetEntityName,

@@ -21,6 +21,10 @@
  * preprocessing travels with the model and is passed straight through to the
  * sidecar's `/predict`, which only *applies* it. This is what keeps train-time
  * and score-time features identical.
+ *
+ * A model trained on a Prediction Unit goes further: its Lineage stores the unit, the typed feature columns and the
+ * kept categorical levels, and scoring assembles the scoped rows as of their decision dates through the same
+ * `AsOfFeatureAssembler` training used ({@link LoadedModel.unit}).
  */
 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -36,7 +40,13 @@ import type {
   ProblemType,
   FeatureStepGraph,
   OutcomeConfig,
+  FeatureColumnSpec,
+  PredictionUnitSpec,
 } from '@memberjunction/predictive-studio-core';
+import type { ICountingDataAccess } from '../feature-assembly/data-access';
+import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
+import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-history';
+import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import type { DatedSourceSpec } from '../feature-assembly';
 
@@ -118,6 +128,21 @@ export interface LoadedModel {
   leakageGuard: LeakageGuard;
   /** Metadata-driven outcome and band configuration frozen on the model or resolved from defaults. */
   outcomeConfig: OutcomeConfig;
+  /**
+   * For a model trained on a Prediction Unit: the unit version, the typed feature columns and the kept categorical
+   * levels its Lineage stored, and the unit's row entity. Null for a model trained without a unit (the legacy path).
+   */
+  unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: LoadedModel's members are camelCase; one casing per interface
+}
+
+/** What scoring needs to assemble a unit model's features exactly as training did. */
+export interface LoadedUnitModel {
+  readonly Spec: PredictionUnitSpec;
+  readonly Features: readonly FeatureColumnSpec[];
+  /** The name of the entity whose records the unit rows are; a scoring scope must hold this entity's records. */
+  readonly RowEntity: string;
+  /** The kept levels of each categorical column, by column name, as training stored them. */
+  readonly CategoryLevels: ReadonlyMap<string, readonly string[]>;
 }
 
 /**
@@ -132,6 +157,14 @@ export interface MLInferenceDeps {
   artifactLoader: IArtifactLoader;
   /** Sidecar `/predict` seam. */
   sidecar: ISidecarPredictor;
+  /** Prediction Unit store a unit model's unit is loaded from; defaults to a `RunViewPredictionUnitStore` on the run's provider. */
+  predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  /** Entity metadata a unit model's assembly resolves against; defaults to a `ProviderAssemblyMetadata` on the run's provider. */
+  assemblyMetadata?: IAssemblyMetadata;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  /** The counting data access a unit model's rows are read through; defaults to a `RunViewDataAccess` on the run's provider. */
+  dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
+  /** The Record Changes history a unit model's assembly replays; defaults to a complete-read `RunViewRecordHistoryReader` over `dataAccess`. */
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: MLInferenceDeps's members are camelCase; one casing per interface
 }
 
 /**

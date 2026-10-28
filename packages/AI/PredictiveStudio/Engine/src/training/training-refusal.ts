@@ -28,8 +28,15 @@ export class TrainingRefusedError extends Error {
       case 'protocol-required': return `Refused (protocol-required): pipeline ${reason.pipelineId} has no Evaluation Protocol.`;
       case 'input-not-accepted': return `Refused (input-not-accepted): ${reason.input} — ${reason.why}`;
       case 'unit-invalid': return `Refused (unit-invalid): Prediction Unit ${reason.unitId}: ${reason.errors.join('; ')}`;
-      // The assembly refusal kinds: each gets its own sentence when a case names it; until then the kind and its fields.
-      default: return `Refused (${reason.kind}): ${JSON.stringify(reason)}`;
+      case 'select-changes-after-decision-date': return `Refused (select-changes-after-decision-date): ${reason.entity}.${reason.field} was updated ${reason.changesAfter} time(s) after a decision date, so its stored value is not the value on that date.`;
+      case 'decision-date-before-change-history': return `Refused (decision-date-before-change-history): ${reason.entity}.${reason.field} cannot be read as of ${reason.rowsAffected} row(s)' decision dates; ${reason.historyStart ? `its change history starts ${reason.historyStart}` : 'it has no change history'}.`;
+      case 'truncated-read': return `Refused (truncated-read): ${reason.entity} returned ${reason.rowsRead} of ${reason.rowsExpected} expected rows; a partial read is not a complete one.`;
+      case 'non-numeric-in-numeric-column': return `Refused (non-numeric-in-numeric-column): column ${reason.column} is declared numeric but holds "${reason.sampleValue}"; no value is coerced to 0.`;
+      case 'future-period-lag': return `Refused (future-period-lag): column ${reason.column} is read ${reason.lag} period(s) back, inside the ${reason.horizonPeriods}-period horizon.`;
+      case 'unpinned-feature-version': return `Refused (unpinned-feature-version): feature ${reason.featureName} has no pinned version, so its past values cannot be reproduced.`;
+      case 'scope-entity-mismatch': return `Refused (scope-entity-mismatch): the model scores ${reason.modelEntity} records but the scope holds ${reason.scopeEntity} records.`;
+      case 'unresolved-column': return `Refused (unresolved-column): ${reason.entity}.${reason.field} is not a field the pipeline can read.`;
+      case 'unsupported-step-kind': return `Refused (unsupported-step-kind): step ${reason.stepId} is a ${reason.stepKind} step, which has no as-of reading.`;
     }
   }
 }

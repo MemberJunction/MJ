@@ -211,6 +211,15 @@ export class PredictionUnitRowReader {
   }
 
   private decisionDate(unit: PredictionUnitSpec, row: SourceRow): Date | null {
+    return PredictionUnitRowReader.UnitDecisionDate(unit, row);
+  }
+
+  /**
+   * A row's decision day by the unit's rule: the period date of a grain × periods unit, else the decision-date column
+   * (offset when the rule says so) or the fixed date. Null when the row has no date there. Training and scoring both
+   * date their rows with it.
+   */
+  public static UnitDecisionDate(unit: PredictionUnitSpec, row: SourceRow): Date | null {
     if (unit.rows.kind === 'grain-x-periods') return UtcDay.ToUtcDay(row[unit.rows.periodDate]);
     const rule = unit.rows.decisionDate;
     switch (rule.kind) {

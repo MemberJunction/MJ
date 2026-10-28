@@ -57,54 +57,64 @@ import type {
 // ----- Training ---------------------------------------------------------------
 
 /**
- * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
- * `provider` + `user`. Resolves the active File Storage Provider once and chooses
- * the artifact-store family accordingly (MJ-Files when a provider is active, local
- * disk when none is — see {@link ResolveActiveFileStorageProviderId}). Async so the
- * provider lookup is part of the wiring; the scoring side keys off the SAME
- * decision (the composite loader routes by whether the artifact exists on local
- * disk) so a model never gets trained to one family and scored from another.
- *
- * @param provider the owning provider for data access / multi-provider correctness
- * @param user the acting user threaded through every entity op for isolation/audit
+ * The training delegation every in-process caller uses: one production deps builder and one train-by-pipeline entry
+ * point, so the Train operation, the Train action, auto-train, the pipeline builder and the rigs train the same way.
+ * Static members on one owner.
  */
-export async function BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
-  const entityFactory = new MetadataEntityFactory(provider);
-  const providerId = await ResolveActiveFileStorageProviderId(user, provider);
-  return {
-    entityFactory,
-    recordLoader: new RunViewRecordLoader(),
-    sidecar: new MJSidecarTrainer(),
-    artifactStore: BuildArtifactStore(providerId, entityFactory),
-    contextUser: user,
-    provider,
-    // The Prediction Unit seams read through the same provider and user as every other training read.
-    predictionUnits: new RunViewPredictionUnitStore(provider, user),
-    assemblyMetadata: new ProviderAssemblyMetadata(provider),
-    dataAccess: new RunViewDataAccess(user, provider),
-  };
-}
+export class TrainingDelegation {
+  /**
+   * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
+   * `provider` + `user`. Resolves the active File Storage Provider once and chooses
+   * the artifact-store family accordingly (MJ-Files when a provider is active, local
+   * disk when none is — see {@link ResolveActiveFileStorageProviderId}). Async so the
+   * provider lookup is part of the wiring; the scoring side keys off the SAME
+   * decision (the composite loader routes by whether the artifact exists on local
+   * disk) so a model never gets trained to one family and scored from another.
+   *
+   * The Record Changes history the as-of assembly replays is left to the engine's default: a complete-read
+   * `RunViewRecordHistoryReader` over the same `dataAccess`.
+   *
+   * @param provider the owning provider for data access / multi-provider correctness
+   * @param user the acting user threaded through every entity op for isolation/audit
+   */
+  public static async BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
+    const entityFactory = new MetadataEntityFactory(provider);
+    const providerId = await ResolveActiveFileStorageProviderId(user, provider);
+    return {
+      entityFactory,
+      recordLoader: new RunViewRecordLoader(),
+      sidecar: new MJSidecarTrainer(),
+      artifactStore: BuildArtifactStore(providerId, entityFactory),
+      contextUser: user,
+      provider,
+      // The Prediction Unit seams read through the same provider and user as every other training read.
+      predictionUnits: new RunViewPredictionUnitStore(provider, user),
+      assemblyMetadata: new ProviderAssemblyMetadata(provider),
+      dataAccess: new RunViewDataAccess(user, provider),
+    };
+  }
 
-/**
- * Train a model by pipeline id, delegating to {@link TrainingEngine.trainModel}
- * with production deps. The `engine` is injectable so unit tests substitute a mock
- * with no live DB / sidecar (mirroring the Action's `createEngine` seam).
- *
- * A refused run throws `TrainingRefusedError` unchanged: the run row already records the
- * refusal, and the operation surfaces its message as the operation's error.
- *
- * @param input the typed training input (pipeline id + optional overrides)
- * @param provider the owning provider
- * @param user the acting user
- * @param engine optional engine override (defaults to a fresh {@link TrainingEngine})
- */
-export async function TrainModelViaEngine(
-  input: TrainModelInput,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  engine: TrainingEngine = new TrainingEngine(),
-): Promise<TrainModelResult> {
-  return engine.trainModel(input, await BuildTrainingDeps(provider, user));
+  /**
+   * Train a model by pipeline id, delegating to {@link TrainingEngine.trainModel}
+   * with production deps. The `engine` is injectable so unit tests substitute a mock
+   * with no live DB / sidecar (mirroring the Action's `createEngine` seam).
+   *
+   * A refused run throws `TrainingRefusedError` unchanged: the run row already records the
+   * refusal, and the operation surfaces its message as the operation's error.
+   *
+   * @param input the typed training input (pipeline id + optional overrides)
+   * @param provider the owning provider
+   * @param user the acting user
+   * @param engine optional engine override (defaults to a fresh {@link TrainingEngine})
+   */
+  public static async TrainModelViaEngine(
+    input: TrainModelInput,
+    provider: IMetadataProvider,
+    user: UserInfo,
+    engine: TrainingEngine = new TrainingEngine(),
+  ): Promise<TrainModelResult> {
+    return engine.trainModel(input, await TrainingDelegation.BuildTrainingDeps(provider, user));
+  }
 }
 
 /**

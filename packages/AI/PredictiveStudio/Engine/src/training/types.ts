@@ -24,6 +24,7 @@ import type {
   AsOfStrategy,
   OutcomeConfig,
   EvaluationRecord,
+  FeatureColumnSpec,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -33,6 +34,7 @@ import type {
 import type { ICountingDataAccess } from '../feature-assembly/data-access';
 import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
+import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-history';
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -157,9 +159,9 @@ export interface TrainModelInput {
    */
   experimentSessionIterationId?: string;
   /**
-   * Optional per-record label-event dates (keyed by record primary key). Feature assembly's `offset` as-of mode
-   * reads them, but training refuses every as-of mode other than `none` before assembly
-   * (`AsOfSettingHasNoEffectError`), so training does not use them today.
+   * Optional per-record label-event dates (keyed by record primary key). Decision dates come from the pipeline's
+   * Prediction Unit, so a unit pipeline refuses them (`input-not-accepted`) and a pipeline without a unit, which
+   * refuses every point-in-time as-of mode (`unit-required`), never reads them.
    */
   labelEventDates?: Record<string, Date>;
   /** Optional primary-key field on the target entity (defaults to `ID`). */
@@ -197,6 +199,8 @@ export interface TrainingDeps {
   dataAccess?: ICountingDataAccess;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The clock for a unit whose censoring cutoff is `now`; defaults to the current time. */
   now?: () => Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The Record Changes history the as-of assembly replays; defaults to a `RunViewRecordHistoryReader` (complete reads) over `dataAccess`. */
+  history?: IRecordHistoryReader;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -237,6 +241,24 @@ export interface ModelTrainingLineage {
   assembledAt: string;
   /** How the stored metrics were measured (`EvaluationLineage.Key`). */
   evaluation: EvaluationRecord;
+}
+
+/**
+ * The part of `MJ: ML Models.Lineage` a model trained on a Prediction Unit adds: the unit version it was trained on,
+ * the typed feature columns its matrix was assembled from and the kept levels of each categorical column. Scoring
+ * reads these back to assemble the same columns, folded the same way.
+ */
+export interface UnitModelLineage {
+  predictionUnitId: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
+  predictionUnitVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
+  labelVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
+  featureSpecVersion: number;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
+  /** The entity whose records the unit rows are (the entity a scoring scope must hold). */
+  unitRowEntity: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
+  /** The typed columns the matrix was assembled from, in order. */
+  featureSpec: FeatureColumnSpec[];  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
+  /** The kept levels of each categorical column, by column name; scoring folds every other value into the fold level. */
+  categoryLevels: Record<string, string[]>;  // case-violation-ok-legacy-back-compat: stored Lineage JSON key read by scoring and the truth-suite judges
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

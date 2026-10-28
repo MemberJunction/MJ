@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
   PredictResponse,
@@ -23,6 +23,11 @@ import { ModelNotScorableError, ModelNeedsTrainingError } from '../model-readine
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
+import { TrainingEngine } from '../../training/training-engine';
+import { TrainingRefusedError } from '../../training/training-refusal';
+import type { TrainingDeps } from '../../training/types';
+import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
+import { FakePredictionUnitStore, UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import type {
   IFeatureDataAccess,
   FetchRowsParams,
@@ -230,7 +235,7 @@ describe('MLModelInferenceProcessor.ProcessBatch — warm artifact reuse', () =>
   });
 });
 
-describe('matrixToFeatureRows — frozen-schema mapping', () => {
+describe('MatrixToFeatureRows — frozen-schema mapping', () => {
   it('maps a row-major matrix to schema-ordered objects, dropping extras and null-filling missing', () => {
     const matrix = { columns: ['city', 'tenure', 'extra'], rows: [['NYC', 12, 'ignore-me']] };
     const schema: FeatureSchemaEntry[] = [
@@ -326,5 +331,100 @@ describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SC
     model.ArtifactFileID = null;
     const { deps } = buildDeps(model);
     await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Models trained on a Prediction Unit: assembled as of each row's decision date by the same assembler as training.
+// ---------------------------------------------------------------------------
+
+describe('MLModelInferenceProcessor — Prediction Unit models', () => {
+  const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
+  const entityIDs: Record<string, string> = { Years: UnitYearsWorld.YearsEntity.ID, People: UnitYearsWorld.PeopleEntity.ID };
+  /** The provider slice scoring reads: entity lookups by name and by ID (one deliberate test-double cast at the seam). */
+  const provider = {
+    EntityByName: (name: string) => (entityIDs[name] ? { ID: entityIDs[name], Name: name } : undefined),
+    EntityByID: (id: string) => {
+      const name = Object.keys(entityIDs).find((n) => entityIDs[n].toLowerCase() === id.toLowerCase());
+      return name ? { ID: entityIDs[name], Name: name } : undefined;
+    },
+  } as unknown as IMetadataProvider;
+  const user = { ID: 'user-1' } as UserInfo;
+  const ctx = (entityID?: string): RecordProcessorContext => ({ ContextUser: user, Provider: provider, ...(entityID ? { EntityID: entityID } : {}) });
+
+  /** The training-side deps over the unit world: the pipeline row, the unit store, the metadata and the tables. */
+  function trainingDeps(dataAccess: TableDataAccess): TrainingDeps {
+    const pipeline = {
+      ID: 'pipe-u', Version: 1, PredictionUnitID: UnitYearsWorld.UnitID, TargetEntity: 'Years', TargetVariable: '__ps_label', ProblemType: 'classification',
+      Algorithm: 'xgboost', AlgorithmID: 'algo', Hyperparameters: '{}', SourceBindings: '[]', FeatureSteps: JSON.stringify(steps), AsOfStrategy: null,
+      LeakageGuard: JSON.stringify({ DenyFields: [], SingleFeatureDominanceThreshold: 0.6 }), ValidationStrategy: null, EvaluationProtocolID: null,
+    } as unknown as MJMLTrainingPipelineEntity;
+    const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
+    return {
+      entityFactory: { getEntityObject: unused },
+      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1 },
+      sidecar: { train: unused },
+      artifactStore: { save: unused },
+      contextUser: user,
+      provider,
+      predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()),
+      assemblyMetadata: UnitYearsWorld.Metadata(),
+      dataAccess,
+    };
+  }
+
+  /** A Validated unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
+  async function unitModel(): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
+    const dataAccess = new TableDataAccess(UnitYearsWorld.Tables());
+    const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess));
+    if (training.Assembled.Status !== 'assembled') throw new Error('training assembly refused');
+    const model = new FakeMLModel();
+    model.Status = 'Validated';
+    model.FeatureSchema = JSON.stringify(training.Assembled.Columns.map((c) => ({ Name: c.Name, Kind: c.Encoding === 'categorical' ? 'categorical' : 'numeric' })));
+    model.Lineage = JSON.stringify({
+      predictionUnitId: UnitYearsWorld.UnitID, predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Years',
+      featureSpec: training.Features, categoryLevels: Object.fromEntries(training.Assembled.CategoryLevels),
+      targetEntityName: 'Years', sourceBindings: [], featureSteps: steps, asOfStrategy: { Mode: 'none' },
+    });
+    const { deps, sidecar } = buildDeps(model);
+    return { deps: { ...deps, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
+  }
+
+  it('refuses in Preflight a scope whose entity is not the unit row entity, as a typed refusal', async () => {
+    const { deps } = await unitModel();
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps });
+    await expect(processor.Preflight(ctx(UnitYearsWorld.PeopleEntity.ID))).rejects.toBeInstanceOf(TrainingRefusedError);
+    await expect(processor.Preflight(ctx(UnitYearsWorld.PeopleEntity.ID))).rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'scope-entity-mismatch', modelEntity: 'Years', scopeEntity: 'People' } } });
+  });
+
+  it('accepts a scope over the unit row entity (IDs compared case-insensitively)', async () => {
+    const { deps } = await unitModel();
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps }).Preflight(ctx(UnitYearsWorld.YearsEntity.ID.toLowerCase()))).resolves.toBeUndefined();
+  });
+
+  it('assembles the same row values as training for the same record and decision date', async () => {
+    const { deps, training } = await unitModel();
+    if (training.Assembled.Status !== 'assembled') return;
+    const scored = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'y2024-2' }, { ID: 'y2025-2' }, { ID: 'y2025-0' }], ctx(), 'unit-rule');
+    expect(scored.Status).toBe('assembled');
+    if (scored.Status !== 'assembled') return;
+    const trained = new Map(training.Assembled.Rows.map((r) => [r.RowId, r.Values]));
+    expect(scored.Rows.map((r) => r.RowId)).toEqual(['y2024-2', 'y2025-2', 'y2025-0']);
+    for (const r of scored.Rows) expect(r.Values).toEqual(trained.get(r.RowId));
+    expect(scored.Rows[0].Values[1]).toBe('Active');   // the stored value is Lapsed; on this decision date it was Active
+  });
+
+  it('assembles every row as of one given date when a date is passed instead of the unit rule', async () => {
+    const { deps } = await unitModel();
+    const scored = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'y2025-2' }], ctx(), new Date('2024-12-31T00:00:00Z'));
+    expect(scored.Status === 'assembled' && scored.Rows[0].Values[1]).toBe('Active');
+  });
+
+  it('scores a batch through the as-of assembly, sending the as-of values to the sidecar', async () => {
+    const { deps, sidecar } = await unitModel();
+    const records: RecordRef[] = [{ EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2024-2' }, { EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2025-2' }];
+    const results = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).ProcessBatch(records, ctx(UnitYearsWorld.YearsEntity.ID));
+    expect(results.map((r) => r.Status)).toEqual(['Succeeded', 'Succeeded']);
+    expect(sidecar.Requests[0].rows).toEqual([{ EventsAttended: 20, Status: 'Active' }, { EventsAttended: 21, Status: 'Lapsed' }]);
   });
 });

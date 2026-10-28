@@ -4,7 +4,6 @@ import type {
   MJMLTrainingPipelineEntity,
   MJMLModelEntity,
   MJMLTrainingRunEntity,
-  MJPredictionUnitEntity,
 } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
@@ -22,7 +21,6 @@ import {
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training-engine';
-import { AsOfSettingHasNoEffectError } from '../as-of-refusal';
 import { InMemoryArtifactStore } from '../artifact-store';
 import { DEFAULT_SPLIT_SEED } from '../locked-holdout';
 import type {
@@ -34,16 +32,12 @@ import type {
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type {
   IFeatureDataAccess,
-  ICountingDataAccess,
-  CountRowsResult,
   FetchRowsParams,
   FetchRowsResult,
   SourceRow,
-  IAssemblyMetadata,
-  AssemblyEntityInfo,
-  AssemblyFieldInfo,
 } from '../../feature-assembly';
-import type { IPredictionUnitStore } from '../../prediction-unit';
+import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
+import { FakePredictionUnitStore, UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 
 /**
  * Unit tests for the TrainingEngine. NO live DB, NO live sidecar — every seam is
@@ -451,27 +445,24 @@ describe('TrainingEngine.trainModel — experiment session iteration linkage (§
   });
 });
 
-describe('TrainingEngine.trainModel — as-of settings that change nothing are refused (W4 → S2.1, F-PIT-3)', () => {
-  const ignored: ReadonlyArray<AsOfStrategy> = [{ Mode: 'column', Column: 'StartDate' }, { Mode: 'offset', OffsetDays: 30 }];
-  for (const asOf of ignored) {
-    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' before any row is written`, async () => {
+describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time as-of strategy is refused', () => {
+  const pointInTime: ReadonlyArray<AsOfStrategy> = [{ Mode: 'column', Column: 'StartDate' }, { Mode: 'offset', OffsetDays: 30 }];
+  for (const asOf of pointInTime) {
+    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' with unit-required, records it on the run, and never calls the sidecar`, async () => {
       const pipeline = new FakeMLPipeline();
       pipeline.AsOfStrategy = JSON.stringify(asOf);
       const { deps, factory, sidecar } = buildDeps({ pipeline });
-      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(AsOfSettingHasNoEffectError);
-      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toMatchObject({ Source: 'pipeline', Mode: asOf.Mode });
-      expect(factory.Runs).toHaveLength(0);
+      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toMatchObject({
+        name: 'TrainingRefusedError',
+        Refusal: { stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1' } },
+      });
+      expect(factory.Runs).toHaveLength(1);
+      expect(factory.Runs[0].Status).toBe('Failed');
+      expect(JSON.parse(factory.Runs[0].ValidationResults!)).toMatchObject({ status: 'refused', refusal: { stage: 'pipeline', reason: { kind: 'unit-required' } } });
       expect(factory.Models).toHaveLength(0);
       expect(sidecar.LastRequest).toBeNull();
     });
   }
-
-  it('names the setting to change: the pipeline for a pipeline refusal, the Train input for a train-input refusal', () => {
-    expect(new AsOfSettingHasNoEffectError('pipeline', 'column', 'p1').message).toMatch(/Set the pipeline's AsOfStrategy to \{"Mode":"none"\} \(pipeline p1\)\.$/);
-    const trainInput = new AsOfSettingHasNoEffectError('train-input', 'column', 'p1').message;
-    expect(trainInput).toMatch(/Remove the asOf input from the Train request \(pipeline p1\)\.$/);
-    expect(trainInput).not.toContain("Set the pipeline's AsOfStrategy");
-  });
 
   it("still trains Mode='none'", async () => {
     const { deps } = buildDeps();
@@ -576,111 +567,43 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
 });
 
 // ---------------------------------------------------------------------------
-// Prediction Unit pipelines: the unit store, the assembly metadata and a counting data access over one entity.
+// Prediction Unit pipelines: the unit store, the assembly metadata and a counting data access over the unit world.
 // ---------------------------------------------------------------------------
 
-/** Unit-store fake: returns the configured unit row for its ID (one deliberate test-double cast at the seam). */
-class FakePredictionUnitStore implements IPredictionUnitStore {
-  constructor(private readonly unit: PredictionUnitColumns) {}
-  async Load(unitId: string): Promise<MJPredictionUnitEntity | null> {
-    return unitId === this.unit.ID ? (this.unit as unknown as MJPredictionUnitEntity) : null;
-  }
-  async LatestVersion(_lineageRootId: string): Promise<MJPredictionUnitEntity | null> {
-    return this.unit as unknown as MJPredictionUnitEntity;
-  }
-}
-
-/** Assembly metadata describing one entity. */
-class FakeAssemblyMetadata implements IAssemblyMetadata {
-  constructor(private readonly entity: AssemblyEntityInfo) {}
-  Entity(name: string): AssemblyEntityInfo | null {
-    return name === this.entity.Name ? this.entity : null;
-  }
-}
-
-/**
- * Counting data access over one entity's rows. The unit path reads `complete` (no key paging), so `ExtraFilter` is
- * not interpreted; `OrderBy '[Field] DESC'` and `MaxRows` are honoured for the corpus-end cutoff read.
- */
-class FakeCountingDataAccess implements ICountingDataAccess {
-  constructor(private readonly entityName: string, private readonly rows: SourceRow[]) {}
-  async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
-    if (params.EntityName !== this.entityName) {
-      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `no fixture ${params.EntityName}` };
-    }
-    let rows = [...this.rows];
-    const desc = /^\[(\w+)\] DESC$/.exec(params.OrderBy ?? '');
-    if (desc) {
-      const field = desc[1];
-      rows.sort((a, b) => String(b[field]).localeCompare(String(a[field])));
-    }
-    if (params.MaxRows !== undefined) {
-      rows = rows.slice(0, params.MaxRows);
-    }
-    return { Success: true, Rows: rows, TotalRowCount: this.rows.length };
-  }
-  async fetchEmbedding(): Promise<number[] | null> {
-    return null;
-  }
-  async CountRows(params: { readonly EntityName: string; readonly ExtraFilter?: string }): Promise<CountRowsResult> {
-    return params.EntityName === this.entityName ? { Success: true, Count: this.rows.length } : { Success: false, Count: 0, ErrorMessage: `no fixture ${params.EntityName}` };
-  }
-}
-
-function yearsField(Name: string, TSType: AssemblyFieldInfo['TSType'], SqlType: string): AssemblyFieldInfo {
-  return { Name, SqlType, TSType, AllowUpdateAPI: true, IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false };
-}
-
-const yearsEntity: AssemblyEntityInfo = {
-  ID: 'E-YEARS',
-  Name: 'Years',
-  PrimaryKey: 'ID',
-  TrackRecordChanges: false,
-  Fields: [
-    yearsField('ID', 'string', 'nvarchar'),
-    yearsField('PersonID', 'string', 'nvarchar'),
-    yearsField('StartDate', 'Date', 'date'),
-    yearsField('EventsAttended', 'number', 'int'),
-    yearsField('Renewed', 'boolean', 'bit'),
-  ],
-};
-
 /** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows. */
-function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns): {
+function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] }): {
   engine: TrainingEngine;
   deps: TrainingDeps;
   sidecar: FakeSidecar;
   pipeline: FakeMLPipeline;
   runs: FakeMLRun[];
+  models: FakeMLModel[];
 } {
   const pipeline = new FakeMLPipeline();
-  pipeline.PredictionUnitID = 'U-1';
+  pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
   pipeline.TargetEntity = 'Years';
   pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
-  pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] } satisfies FeatureStepGraph);
+  pipeline.FeatureSteps = JSON.stringify(featureSteps);
   const { deps, factory, sidecar } = buildDeps({ pipeline });
   deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
-  deps.assemblyMetadata = new FakeAssemblyMetadata(yearsEntity);
-  deps.dataAccess = new FakeCountingDataAccess('Years', rows);
-  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs };
+  deps.assemblyMetadata = UnitYearsWorld.Metadata();
+  deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
+  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models };
+}
+
+/** Every matrix row the sidecar saw (training data and the locked holdout), as column → value. */
+function sentRows(sidecar: FakeSidecar): Array<Record<string, string | number | boolean | null>> {
+  const out: Array<Record<string, string | number | boolean | null>> = [];
+  for (const m of [sidecar.LastRequest?.data, sidecar.LastHoldout]) {
+    if (!m) continue;
+    for (const r of m.rows) out.push(Object.fromEntries(m.columns.map((c, i) => [c, r[i] ?? null])));
+  }
+  return out;
 }
 
 describe('TrainingEngine — Prediction Unit pipelines', () => {
-  // 3 cycles × 4 people; the 2026 cycle's outcome window has not closed at the cutoff.
-  const years: SourceRow[] = [];
-  for (const [c, renewedPattern] of [[2024, [true, false, true, true]], [2025, [true, true, false, true]], [2026, [false, false, false, false]]] as const) {
-    renewedPattern.forEach((renewed, p) => years.push({ ID: `y${c}-${p}`, PersonID: `p${p}`, StartDate: `${c}-01-01`, EventsAttended: p + c - 2024, Renewed: renewed }));
-  }
-  const unitColumns: PredictionUnitColumns = {
-    ID: 'U-1', LineageRootID: 'U-1', Version: 1, Name: 'world renewal', LabelVersion: 1, LabelWindowDays: 31, LabelGapDays: 0, GroupKey: null, TemporalSpec: null,
-    UnitRows: JSON.stringify({ kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'column-offset', column: 'StartDate', offsetDays: 334 }, filter: [] }),
-    LabelRule: JSON.stringify({ kind: 'column', column: 'Renewed' }),
-    TaskType: JSON.stringify({ kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }),
-    Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'corpus-end', entity: 'Years', field: 'StartDate' } }),
-    ChangeHistoryPolicy: JSON.stringify({ onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }),
-    DecisionSpec: JSON.stringify({ action: 'a', actorRole: 'r', capacityPerPeriod: null, period: 'year' }),
-    IncumbentHeuristic: JSON.stringify({ kind: 'none' }), AuthoredBy: JSON.stringify({ kind: 'human', userId: 'U' }),
-  };
+  const years = UnitYearsWorld.Years();
+  const unitColumns = UnitYearsWorld.UnitColumns();
 
   it('excludes the unresolved 2026 cycle, stores the counts, and records the unit in the model lineage', async () => {
     const { engine, deps, sidecar, pipeline } = unitHarness(years, unitColumns);
@@ -692,7 +615,48 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const results = JSON.parse(run.ValidationResults!);
     expect(results.schema).toBe('ps-run-results/v2');
     expect(results.unitResolution).toMatchObject({ rowsRead: 12, censoredRowsExcluded: 4, resolvedRows: 8, dataCutoff: '2026-01-01' });
-    expect(JSON.parse(model.Lineage!)).toMatchObject({ predictionUnitId: 'U-1', predictionUnitVersion: 1, labelVersion: 1 });
+    expect(JSON.parse(model.Lineage!)).toMatchObject({ predictionUnitId: 'U-1', predictionUnitVersion: 1, labelVersion: 1, unitRowEntity: 'Years' });
+  });
+
+  it('reads an updatable field of another entity as of each decision date, and stores the feature spec and levels in the lineage', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
+    const { engine, deps, sidecar, pipeline, models } = unitHarness(years, unitColumns, steps);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const sent = sentRows(sidecar);
+    expect(sent).toHaveLength(8);
+    const statusOf = (person: number, cycle: number) => sent.find((r) => r.EventsAttended === UnitYearsWorld.EventsAttended(person, cycle))?.Status;
+    // The lapsed person's stored Status is Lapsed, but on the 2024 decision date it was still Active.
+    expect(statusOf(2, 2024)).toBe('Active');
+    expect(statusOf(2, 2025)).toBe('Lapsed');
+    for (const p of [0, 1, 3]) for (const c of [2024, 2025]) expect(statusOf(p, c)).toBe('Active');
+    const lineage = JSON.parse(models[0].Lineage!);
+    expect(lineage.featureSpec.map((f: { name: string }) => f.name)).toEqual(['EventsAttended', 'Status']);
+    expect(lineage.categoryLevels).toEqual({ Status: ['Active', 'Lapsed'] });
+  });
+
+  it('refuses a text column declared numeric at the assembly stage, naming the column, before calling the sidecar', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'Region'], Encodings: { Region: 'numeric' } }] };
+    const { engine, deps, sidecar, pipeline, runs, models } = unitHarness(years, unitColumns, steps);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'non-numeric-in-numeric-column', column: 'Region' } } });
+    expect(sidecar.CallCount).toBe(0);
+    expect(models).toHaveLength(0);
+    const results = JSON.parse(runs[0].ValidationResults!);
+    expect(results.refusal.stage).toBe('assembly');
+    expect(results.refusal.reason.kind).toBe('non-numeric-in-numeric-column');
+  });
+
+  it('assembles the same matrix on its own (pipeline ID and deps only) as the training run sends', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
+    const { engine, deps, pipeline } = unitHarness(years, unitColumns, steps);
+    const assembly = await engine.AssembleForTraining(pipeline.ID, deps);
+    expect(assembly.Assembled.Status).toBe('assembled');
+    if (assembly.Assembled.Status !== 'assembled') return;
+    expect(assembly.Unit.id).toBe('U-1');
+    expect(assembly.Features.map((f) => f.name)).toEqual(['EventsAttended', 'Status']);
+    expect(assembly.UnitRead.Rows).toHaveLength(8);
+    const byId = new Map(assembly.Assembled.Rows.map((r) => [r.RowId, r.Values]));
+    expect(byId.get('y2024-2')).toEqual([UnitYearsWorld.EventsAttended(2, 2024), 'Active']);
+    expect(byId.get('y2025-2')).toEqual([UnitYearsWorld.EventsAttended(2, 2025), 'Lapsed']);
   });
 
   it('refuses a one-class target before calling the sidecar and records the refusal on the run', async () => {

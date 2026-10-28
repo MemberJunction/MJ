@@ -4,7 +4,7 @@ import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/cor
 
 import { PredictiveStudioTrainModelAction } from '../train-model.action';
 import { TrainingEngine } from '../../training/training-engine';
-import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
+import { TrainingRefusedError } from '../../training/training-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
 
 /**
@@ -142,13 +142,13 @@ describe('PredictiveStudioTrainModelAction — engine error', () => {
   it('keeps a refusal\'s typed code instead of TRAINING_FAILED', async () => {
     class RefusingEngine extends TrainingEngine {
       public override async trainModel(): Promise<TrainModelResult> {
-        throw new AsOfSettingHasNoEffectError('pipeline', 'column', 'pipe-1');
+        throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1', why: 'no unit' } });
       }
     }
     const result = await new TestableTrainAction(new RefusingEngine()).run(
       params([{ Name: 'PipelineID', Type: 'Input', Value: 'pipe-1' }]),
     );
     expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('AS_OF_NO_EFFECT');
+    expect(result.ResultCode).toBe('UNIT_REQUIRED');
   });
 });
