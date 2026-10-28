@@ -26,8 +26,9 @@ folds the rest into one `__other` level (a global, label-free fold), so a produc
 folding again would merge `__other` with a level the assembler deliberately kept. Only when the declared non-missing
 levels exceed `cardinality_cap + 1`, which only frames that bypass the assembler (test fixtures) can produce, does the
 in-fold cap bind: the first `cardinality_cap - 1` non-missing levels in sorted order keep their own column and every
-other non-missing level shares one `<col>_other` column. The missing token never counts toward the cap and always keeps
-its own column.
+other non-missing level shares one `<col>_other` column. The missing token never counts toward the cap and, when declared
+(the column's levels include it because some value is missing), keeps its own column; when it is not declared, a missing
+value encodes as all zeros like any other undeclared value.
 
 `hashed` folds values into `cardinality_cap` stable buckets, and `target-in-fold` uses sklearn's cross-fitted
 TargetEncoder (its own inner 5-fold cross-fit on each fit's training rows). Only `onehot` is reachable from a product
@@ -80,6 +81,10 @@ class NumericEncoding:
 class CategoricalEncoding:
     cardinality_cap: int
     method: Literal["onehot", "hashed", "target-in-fold"]
+
+    def __post_init__(self) -> None:
+        if self.cardinality_cap < 1:
+            raise ValueError(f"a categorical cardinality cap must be at least 1, got {self.cardinality_cap}")
 
 
 @dataclass(frozen=True)
@@ -286,7 +291,7 @@ def build_preprocessor(columns: Sequence[ColumnSpec], target_type: TargetType, s
     A one-hot column encodes every declared level when its non-missing levels number at most `cardinality_cap + 1`
     (the assembler's kept levels plus its `__other` level are never folded again). Beyond that, which only fixture
     data reaches, the first `cardinality_cap - 1` sorted non-missing levels keep their columns and the rest share
-    `<col>_other`; the missing token always keeps its own column.
+    `<col>_other`; the missing token, when declared, keeps its own column.
 
     Raises:
         ValueError: When no column is left (every column is an excluded identifier), or a one-hot column declares no

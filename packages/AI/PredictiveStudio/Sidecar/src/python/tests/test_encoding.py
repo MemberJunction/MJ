@@ -66,6 +66,20 @@ def test_a_fold_whose_training_rows_are_all_missing_keeps_the_column_width() -> 
     assert list(pre.get_feature_names_out()) == ["x", "x__missing", "z", "z__missing"]
     assert out.shape == (2, 4)
     assert [row[1] for row in out] == [0.0, 1.0]
+    # No training value: the median fills 0 and the scaler (mean 0, degenerate std 1) leaves values as they are.
+    assert [row[0] for row in out] == [5.0, 0.0]
+
+
+def test_a_categorical_cardinality_cap_below_one_is_refused() -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        E.CategoricalEncoding(0, "onehot")
+
+
+def test_an_undeclared_missing_token_has_no_column_and_a_missing_value_encodes_as_zeros() -> None:
+    cols = [E.ColumnSpec("c", "c", E.CategoricalEncoding(10, "onehot"), levels=("a", "b"))]
+    pre = E.build_preprocessor(cols, "binary", 0).fit(pd.DataFrame({"c": ["a", "b"]}), np.array([0, 1]))
+    assert list(pre.get_feature_names_out()) == ["c_a", "c_b"]
+    assert pre.transform(pd.DataFrame({"c": [None]}))[0].sum() == 0.0
 
 
 def test_folds_with_disjoint_training_levels_produce_the_same_columns() -> None:
