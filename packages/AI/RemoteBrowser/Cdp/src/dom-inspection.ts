@@ -117,7 +117,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
   type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
   const REF_ATTR = 'data-mj-browser-ref';
   const PROTECTED =
-    /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|number\s*on\s*card|credit\s*card|debit\s*card|cc-(number|csc|exp)|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account/i;
+    /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|number\s*on\s*card|credit\s*card|debit\s*card|cc-(number|csc|exp)|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account|account\s*(number|no\b|#)|\biban\b|secret|token|api[-_\s]?key|passphrase/i;
   const DESTRUCTIVE =
     /\b(submit|purchase|buy\s+now|pay\b|place\s+(your\s+)?order|checkout|delete|remove|destroy|cancel\s+account|close\s+account|confirm\s+(order|payment|purchase)|authorize|transfer|sign\s+in|log\s+in)\b/i;
   const NON_FIELD_TYPES = ['hidden', 'submit', 'button', 'reset', 'image'];
@@ -198,12 +198,14 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     (el.tagName === 'INPUT' && typeOf(el) === 'submit') ||
     (el.tagName === 'BUTTON' && (el.getAttribute('type') || 'submit').toLowerCase() === 'submit' && Boolean(el.closest('form')));
 
-  // The label alone: "any submit button in a form" also refused Search and Add to cart.
-  const isDestructive = (el: HTMLElement): boolean => DESTRUCTIVE.test(actionLabel(el));
-
-  const visibleFields = (): Control[] =>
-    (Array.from(document.querySelectorAll('input, select, textarea')) as Control[]).filter(
-      (el) => !NON_FIELD_TYPES.includes(typeOf(el)) && isVisible(el),
+  // Every name the control carries, not just the one shown as its label: an aria-label "Continue" on a
+  // "Pay now" button must not hide it. The label alone decides (not "is a submit button"): that rule also
+  // refused Search and Add to cart.
+  const isDestructive = (el: HTMLElement): boolean =>
+    DESTRUCTIVE.test(
+      [el.getAttribute('aria-label'), labelledByText(el), el.tagName === 'INPUT' ? (el as HTMLInputElement).value : '', el.innerText || el.textContent, el.getAttribute('title'), el.getAttribute('name')]
+        .map((v) => clean(v))
+        .join(' | '),
     );
 
   // Focus, a hit test and a selector all stop at a shadow host; these follow open shadow roots down to
@@ -240,13 +242,18 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     return el;
   };
 
+  const visibleFields = (): Control[] =>
+    (deepQueryAll('input, select, textarea') as Control[]).filter(
+      (el) => !NON_FIELD_TYPES.includes(typeOf(el)) && isVisible(el),
+    );
+
   const byRef = (ref: string | undefined): HTMLElement | null =>
-    ref && /^[fa]\d+$/i.test(ref.trim()) ? document.querySelector<HTMLElement>(`[${REF_ATTR}="${ref.trim().toLowerCase()}"]`) : null;
+    ref && /^[fa]\d+$/i.test(ref.trim()) ? deepQueryAll(`[${REF_ATTR}="${ref.trim().toLowerCase()}"]`)[0] ?? null : null;
 
   if (req.Op === 'inspect') {
     // A ref names an element from THIS inspect only: an old ref left on a now-hidden wizard step
     // would otherwise be filled or clicked in place of the visible one.
-    document.querySelectorAll(`[${REF_ATTR}]`).forEach((el) => el.removeAttribute(REF_ATTR));
+    deepQueryAll(`[${REF_ATTR}]`).forEach((el) => el.removeAttribute(REF_ATTR));
 
     const fields: RemoteBrowserFieldObservation[] = visibleFields().map((control, i) => {
       const ref = `f${i + 1}`;
@@ -286,7 +293,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     });
 
     const actions: RemoteBrowserActionObservation[] = [];
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>(ACTION_SELECTOR))) {
+    for (const el of deepQueryAll(ACTION_SELECTOR)) {
       if (!isVisible(el) || (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') {
         continue;
       }
@@ -304,7 +311,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
 
     const links: RemoteBrowserLinkObservation[] = [];
     const seen = new Set<string>();
-    for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+    for (const a of deepQueryAll('a[href]') as HTMLAnchorElement[]) {
       const text = clean(a.innerText || a.textContent || a.getAttribute('aria-label'));
       if (!text || !/^https?:/i.test(a.href) || seen.has(a.href) || !isVisible(a)) {
         continue;
@@ -410,6 +417,9 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
       Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(text, String(item.Value));
       fire(text, 'input', 'change', 'blur');
       filled.push({ Ref: ref, Label: label, Value: text.value });
+      if (String(item.Value) !== '' && text.value === '') {
+        errors.push(`Field "${label}" (${ref}) reads back empty after "${String(item.Value)}"; it likely expects another format.`);
+      }
     }
     return { filled, errors };
   }
@@ -436,7 +446,8 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     // an open shadow root, which Playwright's CSS also reaches).
     let matches: HTMLElement[];
     try {
-      matches = deepQueryAll(q.Selector);
+      // A match inside a control (an icon, an SVG, a span) clicks that control, so judge the control.
+      matches = deepQueryAll(q.Selector).map((m) => m.closest<HTMLElement>(TEXT_CLICK_SELECTOR) ?? m);
     } catch {
       return { Found: false, Label: q.Selector, Destructive: false, InvalidSelector: true };
     }
@@ -448,7 +459,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     el = byRef(q.Ref);
   } else if (q.Text) {
     const needle = q.Text.trim().toLowerCase();
-    const candidates = Array.from(document.querySelectorAll<HTMLElement>(TEXT_CLICK_SELECTOR)).filter(isVisible);
+    const candidates = deepQueryAll(TEXT_CLICK_SELECTOR).filter(isVisible);
     el =
       candidates.find((c) => actionLabel(c).toLowerCase() === needle) ??
       candidates.find((c) => {
@@ -458,7 +469,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
       null;
     // Give a text match a ref so the click targets exactly this element.
     if (el && !el.getAttribute(REF_ATTR)) {
-      const used = Array.from(document.querySelectorAll(`[${REF_ATTR}^="a"]`)).map((n) => Number((n.getAttribute(REF_ATTR) ?? '').slice(1)) || 0);
+      const used = deepQueryAll(`[${REF_ATTR}^="a"]`).map((n) => Number((n.getAttribute(REF_ATTR) ?? '').slice(1)) || 0);
       el.setAttribute(REF_ATTR, `a${Math.max(0, ...used) + 1}`);
     }
   } else if (typeof q.X === 'number' && typeof q.Y === 'number') {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     IRemoteBrowserProviderFeatures,
     RemoteBrowserActionResult,
@@ -385,5 +385,24 @@ describe('CdpRemoteBrowserSession — navigation guard and page text', () => {
         const { session, adapter } = buildSession({});
         await expect(session.ExecuteAction({ Kind: 'click', X: 5, Y: 5 })).rejects.toThrow('did not respond');
         expect(adapter.ExecutedActions).toEqual([]);
+    });
+});
+
+describe('CdpRemoteBrowserSession — navigation restriction wiring', () => {
+    it('restricts its adapter to http(s) as soon as it is built', () => {
+        const restrict = vi.spyOn(FakePlaywrightBrowserAdapter.prototype, 'RestrictNavigation');
+        try {
+            buildSession({});
+            expect(restrict).toHaveBeenCalledWith(null);
+        } finally {
+            restrict.mockRestore();
+        }
+    });
+
+    it('hands a private-network allow-list to its adapter', async () => {
+        const { session, adapter } = buildSession({});
+        const restrict = vi.spyOn(adapter, 'RestrictNavigation').mockResolvedValue(undefined);
+        await session.RestrictPrivateNetwork(['localhost:4200']);
+        expect(restrict).toHaveBeenCalledWith(['localhost:4200']);
     });
 });

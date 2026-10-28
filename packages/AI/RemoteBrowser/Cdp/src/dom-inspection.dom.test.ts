@@ -294,6 +294,72 @@ describe('guards reach into open shadow roots', () => {
     });
 });
 
+describe('round-5 review: labels, ancestors, shadow inspect, credentials, fill read-back, links', () => {
+    let session: CdpRemoteBrowserSession;
+    let adapter: FakePlaywrightBrowserAdapter;
+    beforeEach(() => ({ session, adapter } = buildSession()));
+
+    it('a selector aimed at an icon, an SVG or any child of a "Pay now" button is judged by the button', async () => {
+        render(`<button type="button" data-visible>Pay now <i class="ico"></i><svg class="s"></svg><span class="x"></span></button>`);
+        for (const selector of ['i.ico', 'svg.s', 'button > *']) {
+            const result = await session.ExecuteAction({ Kind: 'click', Selector: selector });
+            expect([selector, result.Detail]).toEqual([selector, expect.stringContaining('Refusing to activate "Pay now"')]);
+        }
+        expect(adapter.ExecutedActions).toEqual([]);
+    });
+
+    it('a harmless aria-label cannot hide a destructive name, in inspect and in a click', async () => {
+        render(`<span id="lbl">Delete account</span><button type="button" aria-label="Continue" data-visible>Pay now</button><button type="button" aria-labelledby="lbl" data-visible>Go</button>`);
+        const { Observation } = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(Observation?.Actions.map((a) => [a.Label, a.Destructive])).toEqual([
+            ['Continue', true],
+            ['Go', true],
+        ]);
+        expect((await session.ExecuteAction({ Kind: 'click', Ref: 'a1' })).Success).toBe(false);
+        expect((await session.ExecuteAction({ Kind: 'click', Text: 'Continue' })).Success).toBe(false);
+    });
+
+    it('inspect, fill and click by ref or text see an open shadow root', async () => {
+        render(`<div id="host" data-visible></div>`);
+        const root = document.getElementById('host')!.attachShadow({ mode: 'open' });
+        root.innerHTML = '<input id="q" aria-label="Quantity"><button type="button" id="more">More</button>';
+        root.querySelectorAll('*').forEach((el) => {
+            (el as HTMLElement).getBoundingClientRect = () => ({ x: 1, y: 1, width: 50, height: 20, top: 1, left: 1, right: 51, bottom: 21, toJSON: () => ({}) }) as DOMRect;
+        });
+        const { Observation } = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(Observation?.Fields.map((f) => f.Label)).toEqual(['Quantity']);
+        expect(Observation?.Actions.map((a) => a.Label)).toEqual(['More']);
+        expect((await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'f1', Value: '3' }] })).Success).toBe(true);
+        expect((root.getElementById('q') as HTMLInputElement).value).toBe('3');
+        expect((await session.ExecuteAction({ Kind: 'click', Ref: 'a1' })).Success).toBe(true);
+        expect((await session.ExecuteAction({ Kind: 'click', Text: 'More' })).Success).toBe(true);
+    });
+
+    it('protects account numbers, IBANs, secrets, tokens, API keys and passphrases, by name or by label', async () => {
+        render(
+            '<input name="iban" data-visible><input aria-label="Account number" data-visible><input name="client_secret" data-visible>' +
+                '<input placeholder="Access token" data-visible><input aria-label="API key" data-visible><input aria-label="Passphrase" data-visible>',
+        );
+        const { Observation } = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(Observation?.Fields.map((f) => f.Writable)).toEqual([false, false, false, false, false, false]);
+    });
+
+    it('a fill that reads back empty after a non-empty request fails, and names the field', async () => {
+        render(`<input id="age" type="number" aria-label="Age" data-visible>`);
+        await session.ExecuteAction({ Kind: 'inspect' });
+        const result = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'f1', Value: 'forty' }] });
+        expect(result.Success).toBe(false);
+        expect(result.Detail).toContain('reads back empty');
+        expect((await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'f1', Value: '' }] })).Success).toBe(true);
+    });
+
+    it('lists only http(s) links (the CodeQL fix)', async () => {
+        render(`<a href="https://example.com/a" data-visible>Real</a><a href="javascript:alert(1)" data-visible>Script</a><a href="data:text/html,x" data-visible>Data</a>`);
+        const { Observation } = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(Observation?.Links.map((l) => l.Text)).toEqual(['Real']);
+    });
+});
+
 describe('NormalizeNavigableUrl', () => {
     it('opens http(s), bare domains, local hosts and about:blank', () => {
         expect(NormalizeNavigableUrl('example.com/x')).toBe('https://example.com/x');
