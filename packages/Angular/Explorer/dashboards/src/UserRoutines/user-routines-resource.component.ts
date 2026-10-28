@@ -130,7 +130,14 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
             MJNotificationService.Instance.CreateSimpleNotification('The Chat app is not installed, so this conversation cannot be opened here', 'error', 4000);
             return;
         }
-        void this.navigationService.OpenNavItemByName('Conversations', { conversationId: args.ConversationID }, chatApp.ID);
+        // Query params as well as configuration: an already-open Chat tab is reused and reacts only
+        // to a query-param change (its configuration is read once, at init).
+        void this.navigationService.OpenNavItemByName(
+            'Conversations',
+            { conversationId: args.ConversationID },
+            chatApp.ID,
+            { queryParams: { conversationId: args.ConversationID } },
+        );
     }
 
     /** Opens the linked execution record (Agent Run / Prompt Run / Action Log) in a tab. */

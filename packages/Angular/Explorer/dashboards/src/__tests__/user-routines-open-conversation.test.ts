@@ -39,7 +39,7 @@ describe('UserRoutinesResourceComponent — opening a routine conversation', () 
 
     component.OnConversationOpened(new ConversationOpenedEventArgs('C1', routine));
 
-    expect(openNavItemByName).toHaveBeenCalledWith('Conversations', { conversationId: 'C1' }, 'chat-app');
+    expect(openNavItemByName).toHaveBeenCalledWith('Conversations', { conversationId: 'C1' }, 'chat-app', { queryParams: { conversationId: 'C1' } });
   });
 
   it('tells the user when the Chat app is not installed', () => {

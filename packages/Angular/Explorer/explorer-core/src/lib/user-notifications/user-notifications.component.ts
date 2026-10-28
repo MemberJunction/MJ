@@ -877,10 +877,13 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
     if (config.taskId) navConfig['taskId'] = config.taskId;
 
+    // The Chat tab is usually already open and gets reused; a reused tab reads its configuration
+    // only at init, so the same values go in the query params, which it does react to.
     this.navigationService.OpenNavItemByName(
       'Conversations',
       navConfig,
-      chatApp.ID
+      chatApp.ID,
+      { queryParams: { ...navConfig } }
     );
     return true;
   }
@@ -918,7 +921,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const conversationId = config.conversationId ?? await this.loadRoutineConversationId(config.routineId);
     const chatApp = conversationId ? this.appManager.GetAppByName('Chat') : null;
     if (conversationId && chatApp) {
-      await this.navigationService.OpenNavItemByName('Conversations', { conversationId }, chatApp.ID);
+      // Query params as well as configuration: an already-open Chat tab is reused and reacts
+      // only to a query-param change (its configuration is read once, at init).
+      await this.navigationService.OpenNavItemByName('Conversations', { conversationId }, chatApp.ID, { queryParams: { conversationId } });
       return;
     }
     const routinesApp = this.appManager.GetAppByName('Routines');

@@ -9,7 +9,9 @@ import type { MJUserNotificationEntity } from '@memberjunction/core-entities';
  * A routine-run notification (`{ type: 'UserRoutine', routineId, runId, conversationId? }`) must
  * open what the run produced. The reply lives in the routine's own conversation, which the main
  * chat list hides, so the click goes to the Chat app's Conversations item with that conversation;
- * a routine with no conversation opens its page in the Routines app instead.
+ * a routine with no conversation opens its page in the Routines app instead. The conversation goes
+ * in the tab's query params as well as its configuration: a Chat tab that is already open is reused,
+ * and only a query-param change reaches the resource (configuration is read once, at init).
  */
 
 type Open = Record<string, unknown>;
@@ -61,7 +63,7 @@ describe('UserNotificationsComponent — a routine-run notification opens the ru
 
     component.NotificationClicked(notification({ type: 'UserRoutine', routineId: 'R1', runId: 'RUN1', conversationId: 'C1' }));
 
-    await vi.waitFor(() => expect(openNavItemByName).toHaveBeenCalledWith('Conversations', { conversationId: 'C1' }, 'chat-app'));
+    await vi.waitFor(() => expect(openNavItemByName).toHaveBeenCalledWith('Conversations', { conversationId: 'C1' }, 'chat-app', { queryParams: { conversationId: 'C1' } }));
   });
 
   it('reads the conversation off the routine for a notification written before it carried one', async () => {
@@ -69,7 +71,16 @@ describe('UserNotificationsComponent — a routine-run notification opens the ru
 
     component.NotificationClicked(notification({ type: 'UserRoutine', routineId: 'R1', runId: 'RUN1' }));
 
-    await vi.waitFor(() => expect(openNavItemByName).toHaveBeenCalledWith('Conversations', { conversationId: 'C-from-routine' }, 'chat-app'));
+    await vi.waitFor(() => expect(openNavItemByName).toHaveBeenCalledWith('Conversations', { conversationId: 'C-from-routine' }, 'chat-app', { queryParams: { conversationId: 'C-from-routine' } }));
+  });
+
+  it('a conversation notification also carries the conversation in the query params, so a reused Chat tab switches to it', async () => {
+    const { component, openNavItemByName } = createComponent();
+
+    component.NotificationClicked(notification({ type: 'conversation', conversationId: 'C9', messageId: 'M1' }));
+
+    await vi.waitFor(() => expect(openNavItemByName).toHaveBeenCalledWith(
+      'Conversations', { conversationId: 'C9', messageId: 'M1' }, 'chat-app', { queryParams: { conversationId: 'C9', messageId: 'M1' } }));
   });
 
   it('opens the routine in the Routines app when it has no conversation', async () => {
