@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockFileSystem, createMockGitHubProvider } from './mocks/adapters.js';
+import { createMockFileSystem, createMockGitHubProvider, createMockProcessRunner } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleVersionInfo } from './mocks/fixtures.js';
 import type { ScaffoldContext } from '../phases/ScaffoldPhase.js';
 import { InstallerError } from '../errors/InstallerError.js';
-import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
 import type { SparseFetchResult } from '../adapters/RepoFetcher.js';
 import type { WriteOp } from '../distribution/DistributionAssembler.js';
@@ -24,6 +23,13 @@ const mockGitHub = createMockGitHubProvider();
 vi.mock('../adapters/GitHubReleaseProvider.js', () => {
   return {
     GitHubReleaseProvider: function GitHubReleaseProvider() { return mockGitHub; },
+  };
+});
+
+const mockProcessRunner = createMockProcessRunner();
+vi.mock('../adapters/ProcessRunner.js', () => {
+  return {
+    ProcessRunner: function ProcessRunner() { return mockProcessRunner; },
   };
 });
 
@@ -94,6 +100,12 @@ describe('ScaffoldPhase', () => {
     mockFs.CreateTempDir.mockResolvedValue('/tmp/mj-install-test');
     mockFs.ExtractZip.mockResolvedValue([]);
     mockFs.RemoveFile.mockResolvedValue(undefined);
+    mockFs.RemoveDir.mockReset().mockResolvedValue(undefined);
+    mockFs.CopyDirectory.mockReset().mockResolvedValue(undefined);
+    mockFs.WriteText.mockClear();
+    mockFs.FileExists.mockReset().mockResolvedValue(false);
+    mockProcessRunner.Run.mockReset();
+    mockProcessRunner.Run.mockResolvedValue({ ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false });
 
     // Distribution-mode sparse fetch + assemble defaults (happy path)
     mockRepoFetcher.FetchPaths.mockReset();
@@ -341,64 +353,70 @@ describe('ScaffoldPhase', () => {
     });
   });
 
-  // ─── Monorepo mode (download + extract zip) ────────────────────────
+  // ─── Monorepo mode (shallow git clone of the tag) ──────────────────
 
-  describe('monorepo download and extract', () => {
+  describe('monorepo git clone', () => {
     const monorepoCtx = () => makeContext({ Tag: 'v5.2.0', InstallMode: 'monorepo' });
 
-    it('should throw DOWNLOAD_FAILED when download fails', async () => {
-      mockGitHub.DownloadRelease.mockRejectedValue(new Error('Network timeout'));
-      try {
-        await phase.Run(monorepoCtx());
-        throw new Error('expected Run to throw');
-      } catch (err) {
-        expect((err as InstallerError).Code).toBe('DOWNLOAD_FAILED');
-        expect((err as InstallerError).message).toContain('Network timeout');
-      }
-    });
-
-    it('should throw EXTRACT_FAILED when extraction fails', async () => {
-      mockFs.ExtractZip.mockRejectedValue(new Error('Corrupt ZIP'));
-      try {
-        await phase.Run(monorepoCtx());
-        throw new Error('expected Run to throw');
-      } catch (err) {
-        expect((err as InstallerError).Code).toBe('EXTRACT_FAILED');
-        expect((err as InstallerError).message).toContain('Corrupt ZIP');
-      }
-    });
-
-    it('should throw ARCHIVE_REFUSED, not EXTRACT_FAILED, when the archive contains an escaping entry', async () => {
-      mockFs.ExtractZip.mockRejectedValue(new ArchiveEntryRefusedError('MJ-abc/../../.bashrc'));
-      try {
-        await phase.Run(monorepoCtx());
-        throw new Error('expected Run to throw');
-      } catch (err) {
-        const error = err as InstallerError;
-        expect(error.Code).toBe('ARCHIVE_REFUSED');
-        expect(error.message).toContain('MJ-abc/../../.bashrc');
-        // The remediation must not tell the user to extract by hand the archive that was just refused.
-        expect(error.SuggestedFix).not.toMatch(/extract it into the target directory/);
-        expect(error.SuggestedFix).toMatch(/Do not extract this archive by hand/);
-      }
-      // The hostile download must not be left behind in the temp dir.
-      expect(mockFs.RemoveFile).toHaveBeenCalledWith(expect.stringContaining('v5.2.0.zip'));
-    });
-
-    it('should call RemoveFile for the temp zip after successful extraction', async () => {
+    it('shallow-clones the tag into a temp dir with a relative destination', async () => {
       await phase.Run(monorepoCtx());
-      expect(mockFs.RemoveFile).toHaveBeenCalledWith(expect.stringContaining('v5.2.0.zip'));
+      expect(mockProcessRunner.Run).toHaveBeenCalledWith(
+        'git',
+        ['clone', '--depth', '1', '--branch', 'v5.2.0', 'https://github.com/MemberJunction/MJ.git', 'MJ'],
+        expect.objectContaining({ Cwd: '/tmp/mj-install-test' })
+      );
     });
 
-    it('should not throw if RemoveFile fails (non-critical cleanup)', async () => {
-      mockFs.RemoveFile.mockRejectedValue(new Error('Permission denied'));
-      await expect(phase.Run(monorepoCtx())).resolves.toBeDefined();
-    });
-
-    it('does not sparse-fetch in monorepo mode', async () => {
+    it('copies the clone into the target dir and removes the temp dir', async () => {
       await phase.Run(monorepoCtx());
+      expect(mockFs.CopyDirectory).toHaveBeenCalledWith('/tmp/mj-install-test/MJ', '/test/install');
+      expect(mockFs.RemoveDir).toHaveBeenCalledWith('/tmp/mj-install-test');
+    });
+
+    it('does not download or extract a zip, or sparse-fetch', async () => {
+      await phase.Run(monorepoCtx());
+      expect(mockGitHub.DownloadRelease).not.toHaveBeenCalled();
+      expect(mockFs.ExtractZip).not.toHaveBeenCalled();
       expect(mockRepoFetcher.FetchPaths).not.toHaveBeenCalled();
-      expect(mockGitHub.DownloadRelease).toHaveBeenCalled();
+    });
+
+    it('throws CLONE_FAILED with git output when the clone fails, and still removes the temp dir', async () => {
+      mockProcessRunner.Run.mockResolvedValue({
+        ExitCode: 128, Stdout: '', Stderr: "fatal: Remote branch v5.2.0 not found in upstream origin", TimedOut: false,
+      });
+      try {
+        await phase.Run(monorepoCtx());
+        throw new Error('expected Run to throw');
+      } catch (err) {
+        const ie = err as InstallerError;
+        expect(ie.Code).toBe('CLONE_FAILED');
+        expect(ie.message).toContain('Remote branch v5.2.0 not found');
+      }
+      expect(mockFs.CopyDirectory).not.toHaveBeenCalled();
+      expect(mockFs.RemoveDir).toHaveBeenCalledWith('/tmp/mj-install-test');
+    });
+
+    it('throws CLONE_FAILED when the copy into the target fails', async () => {
+      mockFs.CopyDirectory.mockRejectedValue(new Error('EACCES'));
+      try {
+        await phase.Run(monorepoCtx());
+        throw new Error('expected Run to throw');
+      } catch (err) {
+        expect((err as InstallerError).Code).toBe('CLONE_FAILED');
+        expect((err as InstallerError).message).toContain('EACCES');
+      }
+    });
+
+    it('restores a user-populated install.config.json after the copy', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => p === '/test/install/install.config.json');
+      mockFs.ReadText.mockResolvedValue('{"DatabaseHost":"db"}');
+      await phase.Run(monorepoCtx());
+      expect(mockFs.WriteText).toHaveBeenCalledWith('/test/install/install.config.json', '{"DatabaseHost":"db"}');
+    });
+
+    it('does not throw if removing the temp dir fails (non-critical cleanup)', async () => {
+      mockFs.RemoveDir.mockRejectedValue(new Error('Permission denied'));
+      await expect(phase.Run(monorepoCtx())).resolves.toBeDefined();
     });
   });
 });

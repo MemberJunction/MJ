@@ -9,12 +9,13 @@ import { VerifyDatabaseConnection } from '../../lib/db-preflight';
 import { ReadCurrentDbVersion } from '../../lib/db-version';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
 import { ClearSharedCacheAfterWrite, MigrationChangedDatabase, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache';
+import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS, MigrationTimeoutHint } from '../../lib/migration-timeout';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
 
 export default class Migrate extends Command {
-  static description = 'Migrate MemberJunction database to latest version. Open App migrates also run the core metadata-heal procs (same work as R__RefreshMetadata) scoped to the app schema, on SQL Server and PostgreSQL.';
+  static description = 'Migrate MemberJunction database to latest version. Open App migrates also run the core metadata-heal procs (same work as R__RefreshMetadata) scoped to the app schema, on SQL Server and PostgreSQL. Each database request may run for up to 30 minutes by default; set MJ_MIGRATION_REQUEST_TIMEOUT (milliseconds) or dbRequestTimeout in mj.config.cjs to change it.';
 
   static examples = [
     `<%= config.bin %> <%= command.id %>
@@ -188,6 +189,7 @@ export default class Migrate extends Command {
       const message = err instanceof Error ? err.message : String(err);
       this.logToStderr(`\nMigration error: ${message}\n`);
       this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
+      this.printTimeoutHint(skywayConfig, [message, ...errorLog]);
       // A throw used to end the run with the fleet still holding pre-migration rows. Whatever had
       // already been applied was committed, so the cache is stale whether or not the run finished.
       await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
@@ -254,6 +256,12 @@ export default class Migrate extends Command {
         // Fall back to errors captured by OnProgress callbacks.
         this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
       }
+      this.printTimeoutHint(skywayConfig, [
+        result.ErrorMessage,
+        ...result.Details.map((d) => d.Error?.message),
+        ...failedMigrations.map((r) => r.Error?.message),
+        ...errorLog,
+      ]);
 
       this.error('Migrations failed');
     }
@@ -372,6 +380,12 @@ export default class Migrate extends Command {
         this.logToStderr('      ...');
       }
     }
+  }
+
+  /** Prints a hint naming MJ_MIGRATION_REQUEST_TIMEOUT when the failure was a request timeout. */
+  private printTimeoutHint(skywayConfig: SkywayConfig, texts: ReadonlyArray<string | undefined>): void {
+    const hint = MigrationTimeoutHint(texts, skywayConfig.Database.Options?.RequestTimeout ?? DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS);
+    if (hint) this.logToStderr(`\n  Hint: ${hint}\n`);
   }
 
   /**

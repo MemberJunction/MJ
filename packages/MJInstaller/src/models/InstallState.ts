@@ -66,6 +66,12 @@ export interface PhaseState {
 export interface InstallStateData {
   /** Git tag of the version being installed (e.g., `"v5.1.0"`). */
   Tag: string;
+  /**
+   * Concrete release tag the scaffold phase resolved `Tag` to (e.g. `"v6.1.2"`
+   * when `Tag` is `"latest"`). Absent until scaffold completes. Persisted so a
+   * resumed install pins the same version as the scaffolded code.
+   */
+  ResolvedTag?: string;
   /** ISO 8601 timestamp when the install was started. */
   StartedAt: string;
   /** Per-phase status map. Phases not yet reached are absent (treated as `'pending'`). */
@@ -121,6 +127,20 @@ export class InstallState {
   /** Git tag of the version being installed. */
   get Tag(): string {
     return this.data.Tag;
+  }
+
+  /** Concrete release tag resolved by the scaffold phase, if it has run. */
+  get ResolvedTag(): string | undefined {
+    return this.data.ResolvedTag;
+  }
+
+  /**
+   * Record the concrete release tag the scaffold phase resolved.
+   *
+   * @param tag - Concrete tag (e.g., `"v6.1.2"`).
+   */
+  SetResolvedTag(tag: string): void {
+    this.data.ResolvedTag = tag;
   }
 
   /** ISO 8601 timestamp when the install was started. */

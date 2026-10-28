@@ -32,7 +32,7 @@
     "@memberjunction/network-utils": "6.2.0-edge.6",
     "exceljs": "^4.4.0",
     "mammoth": "^1.11.0",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.4"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

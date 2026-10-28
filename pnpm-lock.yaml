@@ -3768,7 +3768,7 @@ importers:
         specifier: ^1.11.0
         version: 1.11.0
       pdf-parse:
-        specifier: ^1.1.1
+        specifier: ^1.1.4
         version: 1.1.4
     devDependencies:
       '@types/node':
@@ -10947,7 +10947,7 @@ importers:
         specifier: ^6.18.0
         version: 6.18.0(ws@8.19.0)(zod@4.3.6)
       pdf-parse:
-        specifier: ^1.1.1
+        specifier: ^1.1.4
         version: 1.1.4
       rss-parser:
         specifier: ^3.13.0
@@ -11326,7 +11326,7 @@ importers:
         specifier: ^1.11.0
         version: 1.11.0
       pdf-parse:
-        specifier: ^1.1.1
+        specifier: ^1.1.4
         version: 1.1.4
     devDependencies:
       '@types/node':

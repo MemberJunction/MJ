@@ -91,6 +91,16 @@ describe('getSkywayConfig', () => {
     expect(skyway.Database.Options?.TrustServerCertificate).toBe(true);
   });
 
+  it('should default RequestTimeout to 30 minutes when dbRequestTimeout is unset (#3168)', async () => {
+    const skyway = await GetSkywayConfig(baseConfig);
+    expect(skyway.Database.Options?.RequestTimeout).toBe(1_800_000);
+  });
+
+  it('should use dbRequestTimeout when set', async () => {
+    const skyway = await GetSkywayConfig({ ...baseConfig, dbRequestTimeout: 600_000 });
+    expect(skyway.Database.Options?.RequestTimeout).toBe(600_000);
+  });
+
   it('should strip filesystem: prefix from migration locations', async () => {
     const skyway = await GetSkywayConfig(baseConfig);
     expect(skyway.Migrations.Locations).toEqual(['./migrations']);

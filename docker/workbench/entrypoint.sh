@@ -28,10 +28,18 @@ echo ""
 FRESH_CLONE=false
 if [ ! -d "$MJ_DIR/.git" ]; then
     echo "Cloning MemberJunction repo (next branch)..."
+    CLONE_STATUS=0
     if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
-        gh repo clone MemberJunction/MJ "$MJ_DIR" -- --branch next
+        gh repo clone MemberJunction/MJ "$MJ_DIR" -- --branch next || CLONE_STATUS=$?
     else
-        git clone --branch next "$MJ_REPO" "$MJ_DIR"
+        git clone --branch next "$MJ_REPO" "$MJ_DIR" || CLONE_STATUS=$?
+    fi
+    # Fail loudly: falling through to the keep-alive below leaves a container with no repo
+    # and nothing in `docker logs`.
+    if [ "$CLONE_STATUS" -ne 0 ] || [ ! -d "$MJ_DIR/.git" ]; then
+        echo "ERROR: cloning MemberJunction into $MJ_DIR failed (exit $CLONE_STATUS); no $MJ_DIR/.git." >&2
+        echo "       See the git output above. Fix network/auth access to GitHub, then restart the container." >&2
+        exit 1
     fi
     echo "  MJ repo cloned to $MJ_DIR"
     FRESH_CLONE=true

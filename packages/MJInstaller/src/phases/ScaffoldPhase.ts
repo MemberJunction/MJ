@@ -2,8 +2,9 @@
  * Phase B — Version Selection + Scaffold
  *
  * Lists available MemberJunction releases from GitHub, lets the user pick
- * one interactively (or resolves a specific tag via `-t`), downloads the
- * release ZIP archive, and extracts it into the target directory.
+ * one interactively (or resolves a specific tag via `-t`), then materializes
+ * that release in the target directory: a sparse fetch + distribution assembly
+ * (default), or a shallow `git clone` of the tag (monorepo mode).
  *
  * Key behaviors:
  * - **Interactive mode**: Emits a `prompt` event with up to 20 versions for
@@ -13,27 +14,30 @@
  *   to tag lookup if no formal GitHub Release exists.
  * - **Directory safety**: Warns if the target directory is non-empty (ignoring
  *   installer-owned files like `.mj-install-state.json`).
- * - **Temp file cleanup**: Downloads to a temp directory, then cleans up the
- *   ZIP after extraction.
+ * - **Temp file cleanup**: Fetches and clones go to a temp directory that is
+ *   removed afterwards.
  *
  * @module phases/ScaffoldPhase
- * @see GitHubReleaseProvider — fetches releases and downloads ZIP archives.
- * @see FileSystemAdapter — handles ZIP extraction and temp directory management.
+ * @see GitHubReleaseProvider — lists and resolves releases.
+ * @see FileSystemAdapter — handles copying and temp directory management.
  */
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import { InstallerError } from '../errors/InstallerError.js';
-import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js';
 import { GitHubReleaseProvider } from '../adapters/GitHubReleaseProvider.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
+import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { RepoFetcher, type SparseFetchResult } from '../adapters/RepoFetcher.js';
 import { DistributionAssembler, DistributionSourcePaths } from '../distribution/DistributionAssembler.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
 
-/** Default canonical MemberJunction clone URL used for the distribution sparse fetch. */
+/** Default canonical MemberJunction clone URL used for the sparse fetch and the monorepo clone. */
 const DEFAULT_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
+
+/** Folder name the monorepo clone is created under inside its temp directory. */
+const MONOREPO_CLONE_DIR = 'MJ';
 
 /**
  * Input context for the scaffold phase.
@@ -54,11 +58,11 @@ export interface ScaffoldContext {
   Emitter: InstallerEventEmitter;
   /**
    * Installation mode. `distribution` (default) sparse-checks-out the source at the
-   * resolved tag and assembles the distribution layout; `monorepo` downloads and
-   * extracts the full repository zip.
+   * resolved tag and assembles the distribution layout; `monorepo` shallow-clones
+   * the full repository at the tag.
    */
   InstallMode?: 'distribution' | 'monorepo';
-  /** Canonical repo clone URL for the distribution sparse fetch (defaults to the MJ repo). */
+  /** Canonical repo clone URL for the sparse fetch and the monorepo clone (defaults to the MJ repo). */
   RepoUrl?: string;
   /**
    * Whether to include the Claude Code pack in the scaffold output. Defaults to
@@ -83,7 +87,7 @@ export interface ScaffoldResult {
 }
 
 /**
- * Phase B — Downloads and extracts a MemberJunction release.
+ * Phase B — Fetches a MemberJunction release into the target directory.
  *
  * @example
  * ```typescript
@@ -101,19 +105,18 @@ export class ScaffoldPhase {
   private github!: GitHubReleaseProvider;
   private fileSystem = new FileSystemAdapter();
   private repoFetcher = new RepoFetcher();
+  private processRunner = new ProcessRunner();
   private assembler = new DistributionAssembler();
 
   /**
-   * Execute the scaffold phase: resolve version, download ZIP, and extract.
+   * Execute the scaffold phase: resolve version, then fetch it into the target directory.
    *
    * @param context - Scaffold input with tag, directory, mode, and emitter.
    * @returns The selected version and extraction path.
    * @throws {InstallerError} With code `TAG_NOT_FOUND` if the specified tag doesn't exist.
    * @throws {InstallerError} With code `NO_RELEASES` if no releases are found on GitHub.
-   * @throws {InstallerError} With code `DOWNLOAD_FAILED` if the ZIP download fails.
-   * @throws {InstallerError} With code `EXTRACT_FAILED` if ZIP extraction fails.
-   * @throws {InstallerError} With code `ARCHIVE_REFUSED` if the archive contains an entry that would
-   *   be written outside the target directory; nothing is extracted in that case.
+   * @throws {InstallerError} With code `FETCH_FAILED` / `ASSEMBLE_FAILED` if the distribution fetch or assembly fails.
+   * @throws {InstallerError} With code `CLONE_FAILED` if the monorepo `git clone` or copy fails.
    * @throws {InstallerError} With code `USER_CANCELLED` if the user declines the non-empty directory prompt.
    */
   async Run(context: ScaffoldContext): Promise<ScaffoldResult> {
@@ -131,9 +134,9 @@ export class ScaffoldPhase {
 
     // Step 3: Materialize the code into the target directory. Distribution mode
     // sparse-checks-out the source and assembles the distribution layout; monorepo
-    // mode downloads and extracts the full repository zip.
+    // mode shallow-clones the full repository at the tag.
     if (mode === 'monorepo') {
-      await this.downloadAndExtract(version, context);
+      await this.cloneRelease(version, context);
     } else {
       await this.fetchAndAssemble(version, context);
     }
@@ -228,67 +231,81 @@ export class ScaffoldPhase {
   }
 
   /**
-   * Monorepo path: download the full repository zip for the resolved tag and
-   * extract it into the target directory. Used by `mj install --monorepo`.
+   * Monorepo path: `git clone --depth 1 --branch <tag>` the full repository into a
+   * temp directory, then copy it (including `.git`) into the target directory.
+   * Used by `mj install --monorepo`.
    *
-   * Also preserves the user's `install.config.json` across `ExtractZip`: the
-   * monorepo zip ships a stub `install.config.json` template that would
-   * otherwise overwrite a user-populated config sitting in the target dir.
+   * git replaces the GitHub zipball, whose extraction lost tagged files (#4562).
+   * The clone goes to a temp directory because the target is usually not empty
+   * (it holds `.mj-install-state.json`), and `git clone` refuses a non-empty
+   * destination. git runs with the temp directory as its working directory and a
+   * relative destination, so no path with spaces reaches the command line.
+   *
+   * Also preserves the user's `install.config.json` across the copy: the repo
+   * ships a stub `install.config.json` template that would otherwise overwrite a
+   * user-populated config sitting in the target dir.
    */
-  private async downloadAndExtract(version: VersionInfo, context: ScaffoldContext): Promise<void> {
+  private async cloneRelease(version: VersionInfo, context: ScaffoldContext): Promise<void> {
     const { Emitter: emitter } = context;
-    const zipPath = await this.downloadRelease(version, emitter);
+    const repoUrl = context.RepoUrl ?? DEFAULT_REPO_URL;
 
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'scaffold',
-      Message: 'Extracting release...',
+      Message: `Cloning ${version.Tag} from ${repoUrl}...`,
     });
 
-    // Snapshot a user-populated install.config.json before extraction overwrites it.
-    const userConfigPath = path.join(context.Dir, 'install.config.json');
-    const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
-      ? await this.fileSystem.ReadText(userConfigPath)
-      : null;
-
+    const tempDir = await this.fileSystem.CreateTempDir('mj-clone-');
     try {
-      await this.fileSystem.ExtractZip(zipPath, context.Dir);
-    } catch (err) {
-      await this.removeTempZip(zipPath);
-      if (err instanceof ArchiveEntryRefusedError) {
-        // Nothing was written: ExtractZip validates every entry before the first write.
+      const result = await this.processRunner.Run(
+        'git',
+        ['clone', '--depth', '1', '--branch', version.Tag, repoUrl, MONOREPO_CLONE_DIR],
+        { Cwd: tempDir, TimeoutMs: 1_800_000 }
+      );
+      if (result.ExitCode !== 0) {
+        const detail = result.TimedOut ? 'timed out after 30 minutes' : (result.Stderr || result.Stdout).trim();
         throw new InstallerError(
           'scaffold',
-          'ARCHIVE_REFUSED',
-          `The release archive was refused: ${err.message}`,
-          'Do not extract this archive by hand. Delete the download, fetch the release again from ' +
-            'GitHub, and report it to the MemberJunction team if the same archive is refused twice.'
+          'CLONE_FAILED',
+          `git clone of ${version.Tag} from ${repoUrl} failed: ${detail}`,
+          'Check network access to GitHub and that git is on PATH, then re-run "mj install".'
         );
       }
-      throw new InstallerError(
-        'scaffold',
-        'EXTRACT_FAILED',
-        `Failed to extract ZIP: ${err instanceof Error ? err.message : String(err)}`,
-        'Download the release ZIP manually and extract it into the target directory.'
-      );
-    }
 
-    if (savedUserConfig !== null) {
-      await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
-      emitter.Emit('step:progress', {
-        Type: 'step:progress',
-        Phase: 'scaffold',
-        Message: 'Preserved existing install.config.json across release extraction.',
-      });
-    }
+      // Snapshot a user-populated install.config.json before the copy overwrites it.
+      const userConfigPath = path.join(context.Dir, 'install.config.json');
+      const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
+        ? await this.fileSystem.ReadText(userConfigPath)
+        : null;
 
-    await this.removeTempZip(zipPath);
+      try {
+        await this.fileSystem.CopyDirectory(path.join(tempDir, MONOREPO_CLONE_DIR), context.Dir);
+      } catch (err) {
+        throw new InstallerError(
+          'scaffold',
+          'CLONE_FAILED',
+          `Failed to copy the ${version.Tag} clone into ${context.Dir}: ${err instanceof Error ? err.message : String(err)}`,
+          'Check that the target directory is writable, then re-run "mj install".'
+        );
+      }
+
+      if (savedUserConfig !== null) {
+        await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'scaffold',
+          Message: 'Preserved existing install.config.json across the repository clone.',
+        });
+      }
+    } finally {
+      await this.removeTempDir(tempDir);
+    }
   }
 
-  /** Removes the downloaded release ZIP. Non-critical: the temp dir is reclaimed by the OS. */
-  private async removeTempZip(zipPath: string): Promise<void> {
+  /** Removes a temp directory. Non-critical: the temp dir is reclaimed by the OS. */
+  private async removeTempDir(dir: string): Promise<void> {
     try {
-      await this.fileSystem.RemoveFile(zipPath);
+      await this.fileSystem.RemoveDir(dir);
     } catch {
       // ignore
     }
@@ -469,50 +486,5 @@ export class ScaffoldPhase {
   private async isEffectivelyEmpty(dir: string): Promise<boolean> {
     const entries = await this.fileSystem.ListDirectoryEntries(dir);
     return entries.every((name) => ScaffoldPhase.INSTALLER_OWNED_FILES.has(name));
-  }
-
-  private async downloadRelease(version: VersionInfo, emitter: InstallerEventEmitter): Promise<string> {
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'scaffold',
-      Message: `Downloading ${version.Tag}...`,
-      Percent: 0,
-    });
-
-    const tempDir = await this.fileSystem.CreateTempDir();
-    const zipPath = path.join(tempDir, `${version.Tag}.zip`);
-
-    let downloadedMB = 0;
-    try {
-      await this.github.DownloadRelease(version.DownloadUrl, zipPath, (percent) => {
-        if (percent >= 0) {
-          // Determinate progress — server provided Content-Length
-          emitter.Emit('step:progress', {
-            Type: 'step:progress',
-            Phase: 'scaffold',
-            Message: `Downloading ${version.Tag}... ${percent}%`,
-            Percent: percent,
-          });
-        } else {
-          // Indeterminate progress — no Content-Length (API zipball fallback)
-          downloadedMB++;
-          emitter.Emit('step:progress', {
-            Type: 'step:progress',
-            Phase: 'scaffold',
-            Message: `Downloading ${version.Tag}... (data received)`,
-            Percent: -1,
-          });
-        }
-      });
-    } catch (err) {
-      throw new InstallerError(
-        'scaffold',
-        'DOWNLOAD_FAILED',
-        `Download failed: ${err instanceof Error ? err.message : String(err)}`,
-        `Download manually from: ${version.DownloadUrl}`
-      );
-    }
-
-    return zipPath;
   }
 }
