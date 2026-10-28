@@ -111,16 +111,16 @@ export function FindOutOfScopeISAChildDrift(
     excludeSchemas: string[],
     liveColumns: Map<string, Set<string>>,
 ): OutOfScopeISAChildDrift[] {
-    const excluded = new Set(excludeSchemas.map(s => s.toLowerCase()));
+    const excluded = new Set(excludeSchemas.map(s => s.trim().toLowerCase()));
     const drift: OutOfScopeISAChildDrift[] = [];
     for (const child of OutOfScopeISAChildrenWithInScopeParent(entities, excludeSchemas)) {
         const viewName = child.GeneratedViewName;
-        const live = liveColumns.get(`${child.SchemaName}.${viewName}`.toLowerCase());
+        const live = liveColumns.get(`${child.SchemaName.trim()}.${viewName.trim()}`.toLowerCase());
         if (!live) continue;
         const missing = InheritedParentColumns(child)
-            .filter(c => !excluded.has(c.Parent.SchemaName.toLowerCase()))
+            .filter(c => !excluded.has(c.Parent.SchemaName.trim().toLowerCase()))
             .map(c => c.Field.Name)
-            .filter(name => !live.has(name.toLowerCase()));
+            .filter(name => !live.has(name.trim().toLowerCase()));
         if (missing.length > 0) {
             drift.push({ ChildName: child.Name, ChildSchema: child.SchemaName, ViewName: viewName, MissingColumns: missing });
         }
@@ -130,13 +130,13 @@ export function FindOutOfScopeISAChildDrift(
 
 /** IS-A children in an excluded schema with at least one parent in this run's scope. */
 export function OutOfScopeISAChildrenWithInScopeParent(entities: EntityInfo[], excludeSchemas: string[]): EntityInfo[] {
-    const excluded = new Set(excludeSchemas.map(s => s.toLowerCase()));
+    const excluded = new Set(excludeSchemas.map(s => s.trim().toLowerCase()));
     return entities.filter(e =>
         e.IsChildType &&
         !e.VirtualEntity &&
         !e.ExternalDataSourceID &&
-        excluded.has(e.SchemaName.toLowerCase()) &&
-        e.ParentChain.some(p => !excluded.has(p.SchemaName.toLowerCase()))
+        excluded.has(e.SchemaName.trim().toLowerCase()) &&
+        e.ParentChain.some(p => !excluded.has(p.SchemaName.trim().toLowerCase()))
     );
 }
 

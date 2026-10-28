@@ -68,6 +68,14 @@ export function CountDistinctValidators(validators: ReadonlyArray<{ entityName: 
 
 export class RunCodeGenBase {
   /**
+   * The entities the post-run CRUD validator expects routines for: IncludeInAPI and in scope. An
+   * out-of-scope schema's routines belong to another run (#3384).
+   */
+  public static CRUDValidationBaseline<T extends { IncludeInAPI: boolean; SchemaName: string }>(entities: T[], excludeSchemas: string[] | undefined): T[] {
+    return EntitiesNotInExcludedSchemas(entities.filter(e => e.IncludeInAPI), excludeSchemas ?? []);
+  }
+
+  /**
    * Every step failure captured during a pipeline run: BEFORE/AFTER commands, SQL scripts,
    * metadata management, the SQL pass, validators, file generation and integrity checks.
    * The pipeline runs every step to the end, then fails (success=false, non-zero exit) with
@@ -412,7 +420,7 @@ export class RunCodeGenBase {
             // Use the same baseline filter as manageSQLScriptsAndExecution: only
             // entities flagged IncludeInAPI=true and in scope (not in an excluded schema) are
             // expected to have routines. An out-of-scope schema's routines are another run's (#3384).
-            const baseline = EntitiesNotInExcludedSchemas(md.Entities.filter(e => e.IncludeInAPI), configInfo.excludeSchemas);
+            const baseline = RunCodeGenBase.CRUDValidationBaseline(md.Entities, configInfo.excludeSchemas);
             let missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
 
             // Self-heal pass: when the validator finds missing routines, the

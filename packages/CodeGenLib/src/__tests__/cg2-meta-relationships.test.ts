@@ -148,6 +148,17 @@ describe('FindStaleOneToManyRelationships (#2071)', () => {
       expect(find([r], [fld('customerid', PARENT_ID.toUpperCase(), CHILD_ID.toUpperCase())])).toEqual([]);
    });
 
+   it('keeps a relationship that joins on a non-PK parent column (EntityKeyField set)', () => {
+      // The child's AccountID points at a third entity; with the join on Parent.AccountNumber that is normal.
+      const r = rel({ RelatedEntityJoinField: 'AccountID', EntityKeyField: 'AccountNumber' });
+      expect(find([r], [fld('AccountID', OTHER_ID)])).toEqual([]);
+      expect(find([rel({ ID: 'rel-2', RelatedEntityJoinField: 'AccountID', EntityKeyField: '  ' })], [fld('AccountID', OTHER_ID)])).toEqual(['rel-2']);
+   });
+
+   it('keeps a relationship whose join field is empty', () => {
+      expect(find([rel({ RelatedEntityJoinField: '' }), rel({ ID: 'rel-2', RelatedEntityJoinField: '   ' })], [fld('ID', null)])).toEqual([]);
+   });
+
    it('never touches operator-owned rows or other relationship types', () => {
       expect(find([rel({ AutoUpdateFromSchema: false }), rel({ ID: 'rel-2', AutoUpdateFromSchema: 0 }), rel({ ID: 'rel-3', Type: 'Many To Many' })], [fld('ID', null)])).toEqual([]);
    });

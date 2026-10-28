@@ -127,6 +127,14 @@ describe('Angular orphan cleanup keeps out-of-scope entity directories (#3384 it
         expect(fs.readdirSync(root).sort()).toEqual(['CoreUsers', 'Orders']);
     });
 
+    it('removes nothing when schemas are excluded and the loaded metadata has no entities yet', () => {
+        state.config.excludeSchemas = ['__mj'];
+        state.metadataEntities = [];
+        const root = seedDirs('Orders', 'CoreUsers');
+        new TestableAngular().Cleanup(root, [entity('Orders', 'app')]);
+        expect(fs.readdirSync(root).sort()).toEqual(['CoreUsers', 'Orders']);
+    });
+
     it('with nothing excluded, behaves as before: only this pass entities survive', () => {
         state.metadataEntities = [entity('CoreUsers', '__mj')];
         const root = seedDirs('Orders', 'CoreUsers');

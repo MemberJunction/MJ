@@ -210,7 +210,8 @@ export class AngularClientGeneratorBase {
 
     /**
      * Loaded entities whose schema is in `configInfo.excludeSchemas` (case-insensitive), or null when
-     * the metadata cannot be read (no provider loaded).
+     * the metadata cannot be read: no provider loaded, or a provider with no entities yet. An empty
+     * list would read as "nothing is out of scope" and let the caller delete their directories.
      */
     protected outOfScopeEntities(): EntityInfo[] | null {
         const excluded = new Set((configInfo.excludeSchemas ?? []).map(s => s.trim().toLowerCase()));
@@ -219,7 +220,11 @@ export class AngularClientGeneratorBase {
         }
         try {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-            return (md.Entities ?? []).filter(e => excluded.has((e.SchemaName ?? '').trim().toLowerCase()));
+            const entities = md.Entities ?? [];
+            if (entities.length === 0) {
+                return null;
+            }
+            return entities.filter(e => excluded.has((e.SchemaName ?? '').trim().toLowerCase()));
         }
         catch {
             return null;

@@ -33,7 +33,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, EscapeSQLString, generatePluralName, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDMap, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -128,6 +128,7 @@ export type StaleRelationshipCandidate = {
    EntityID: string;
    RelatedEntityID: string;
    RelatedEntityJoinField: string | null;
+   EntityKeyField?: string | null;
    Type: string | null;
    AutoUpdateFromSchema: boolean | number | string | null;
    Entity?: string | null;
@@ -2691,44 +2692,17 @@ export class ManageMetadataBase {
       // @IncludedSchemaNames — never the sibling snapshot of this machine's database.
       SnapshotAuthoredExcludeSchemas(configInfo.excludeSchemas);
 
-      // Resolve the opt-in `includeSchemas` positive scope into excludeSchemas, BEFORE the exclude
-      // snapshot below and before createNewEntities() runs. The universe is queried from the DATABASE
-      // rather than taken from loaded metadata on purpose: createNewEntities() discovers tables with no
-      // EntityID straight from the database, so a schema MJ has never seen — the exact case an include
-      // list exists to protect against, e.g. a client's own schemas in a deployed instance — is absent
-      // from Metadata.Entities and would otherwise be adopted on the first run (and then excluded on
-      // every run after, orphaning its entity records). No-op when includeSchemas is unset.
-      // An entry that matches no schema in the database fails the step (#3384), after the scope is
-      // applied, so the rest of the run still uses the entries that do match.
-      let includeSchemasAllMatched = true;
-      if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
-         try {
-            const schemaSQL = `SELECT DISTINCT ${this.qi('SchemaName')} FROM ${this.qs(MjCoreSchema(), 'vwSQLTablesAndEntities')}`;
-            const schemaResult = await this.runQuery(pool, schemaSQL);
-            const allSchemas: string[] = (schemaResult.recordset ?? [])
-               .map((r: { SchemaName?: string }) => r.SchemaName)
-               .filter((s: string | undefined): s is string => !!s);
-            const unmatched = FindUnmatchedIncludeSchemas(allSchemas, configInfo.includeSchemas);
-            if (unmatched.length > 0) {
-               includeSchemasAllMatched = false;
-               logError(`   includeSchemas entr${unmatched.length === 1 ? 'y' : 'ies'} [${unmatched.join(', ')}] match no schema in the database; check for a typo or a dropped schema`);
-            }
-            const newlyExcluded = ApplyIncludeSchemaScope(allSchemas, configInfo);
-            logStatus(
-               `   Applied includeSchemas scope [${configInfo.includeSchemas.join(', ')}] — excluded ${newlyExcluded.length} other schema(s) present in the database`
-            );
-         }
-         catch (e) {
-            // Proceeding would let CodeGen traverse schemas the include list was meant to keep it off,
-            // which can create entity metadata for another app's (or a client's) tables. Fail instead.
-            logError(`   Error resolving includeSchemas scope: ${e instanceof Error ? e.message : e}`);
-            return false;
-         }
+      // Resolve the opt-in `includeSchemas` scope BEFORE the exclude snapshot below and before
+      // createNewEntities() runs. An entry that matches no schema fails the step (#3384), after the
+      // scope is applied, so the rest of the run still uses the entries that do match.
+      const includeScope = await this.ResolveIncludeSchemaScope(pool);
+      if (includeScope === null) {
+         return false;
       }
 
       const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
 
-      let bSuccess = includeSchemasAllMatched;
+      let bSuccess = includeScope;
       let start = new Date();
       
       // Very early FK check - before any operations
@@ -2931,6 +2905,48 @@ export class ManageMetadataBase {
       await this.checkEntityFieldSequenceIntegrity(pool, excludeSchemas);
 
       return bSuccess;
+   }
+
+   /**
+    * Resolves the opt-in `includeSchemas` scope into `configInfo.excludeSchemas` (#3384).
+    * @returns true when every entry matched a database schema (or none are set), false when an entry
+    *          matched none (the scope is still applied), null when the scope could not be resolved.
+    */
+   public async ResolveIncludeSchemaScope(pool: CodeGenConnection): Promise<boolean | null> {
+      // ManageMetadata calls this before its exclude snapshot and before createNewEntities() runs.
+      // The universe is queried from the DATABASE
+      // rather than taken from loaded metadata on purpose: createNewEntities() discovers tables with no
+      // EntityID straight from the database, so a schema MJ has never seen — the exact case an include
+      // list exists to protect against, e.g. a client's own schemas in a deployed instance — is absent
+      // from Metadata.Entities and would otherwise be adopted on the first run (and then excluded on
+      // every run after, orphaning its entity records). No-op when includeSchemas is unset.
+      if (!configInfo.includeSchemas || configInfo.includeSchemas.length === 0) {
+         return true;
+      }
+      let allMatched = true;
+      try {
+         const schemaSQL = `SELECT DISTINCT ${this.qi('SchemaName')} FROM ${this.qs(MjCoreSchema(), 'vwSQLTablesAndEntities')}`;
+         const schemaResult = await this.runQuery(pool, schemaSQL);
+         const allSchemas: string[] = (schemaResult.recordset ?? [])
+            .map((r: { SchemaName?: string }) => r.SchemaName)
+            .filter((s: string | undefined): s is string => !!s);
+         const unmatched = FindUnmatchedIncludeSchemas(allSchemas, configInfo.includeSchemas);
+         if (unmatched.length > 0) {
+            allMatched = false;
+            logError(`   includeSchemas entr${unmatched.length === 1 ? 'y' : 'ies'} [${unmatched.join(', ')}] match no schema in the database; check for a typo or a dropped schema`);
+         }
+         const newlyExcluded = ApplyIncludeSchemaScope(allSchemas, configInfo);
+         logStatus(
+            `   Applied includeSchemas scope [${configInfo.includeSchemas.join(', ')}] — excluded ${newlyExcluded.length} other schema(s) present in the database`
+         );
+      }
+      catch (e) {
+         // Proceeding would let CodeGen traverse schemas the include list was meant to keep it off,
+         // which can create entity metadata for another app's (or a client's) tables. Fail instead.
+         logError(`   Error resolving includeSchemas scope: ${e instanceof Error ? e.message : e}`);
+         return null;
+      }
+      return allMatched;
    }
 
    /**
@@ -4793,7 +4809,11 @@ export class ManageMetadataBase {
     * `cleanupStaleRelationships` config option is set.
     *
     * A row is stale only when every one of these holds:
-    *  - `Type` is One To Many and `AutoUpdateFromSchema` is set (operator-owned rows are never touched);
+    *  - `Type` is One To Many and `AutoUpdateFromSchema` is set. Rows pinned with `AutoUpdateFromSchema = 0`
+    *    are never touched; a row made in Explorer defaults to 1, so it is a candidate unless unticked;
+    *  - `EntityKeyField` is empty. A row joining on a non-PK parent column can carry a child join field
+    *    whose FK points at a third entity, so the FK target says nothing about whether it is stale;
+    *  - `RelatedEntityJoinField` is not empty. An empty one names no column, so nothing can be checked;
     *  - BOTH its parent and child entities are in scope. Out of scope means untouched, not deleted
     *    (#3384): an app run must not delete relationships of core or sibling-app entities;
     *  - the child's join field is gone (dropped or renamed column), or it now points at a different
@@ -4886,7 +4906,13 @@ export class ManageMetadataBase {
             // No field rows for the child at all: the field list is not trustworthy for it, so keep.
             return false;
          }
+         if (String(r.EntityKeyField ?? '').trim() !== '') {
+            return false; // joins on a non-PK parent column: the FK target cannot judge it
+         }
          const joinField = String(r.RelatedEntityJoinField ?? '').trim().toLowerCase();
+         if (joinField === '') {
+            return false; // names no column, so there is nothing to check
+         }
          if (!childFields.has(joinField)) {
             return true; // join column dropped or renamed
          }
@@ -9593,25 +9619,38 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
    /**
     * Lower-cased names of the computed columns (`IsVirtual = 1 AND IsComputed = 1`, not a PK, not
     * an `__mj_` column) on every entity in the IS-A parent chain of `entityID`. Empty for an entity
-    * with no parent, or when metadata is unavailable.
+    * with no parent, or when metadata is unavailable. Memoized per entity: the smart-field pass asks
+    * once per field. The memo resets when the loaded entity list changes (a metadata refresh).
     */
    protected inheritedComputedFieldNames(entityID: string): Set<string> {
-      const names = new Set<string>();
+      let entities: EntityInfo[];
       try {
-         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-         const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
-         for (const parent of entity?.ParentChain ?? []) {
-            for (const f of parent.Fields) {
-               if (f.IsVirtual && f.IsComputed && !f.IsPrimaryKey && !f.Name.startsWith('__mj_')) {
-                  names.add(f.Name.trim().toLowerCase());
-               }
+         entities = new Metadata().Entities; // global-provider-ok: codegen runs offline against a single provider
+      } catch {
+         return new Set<string>(); // No metadata provider: nothing is known to be inherited.
+      }
+      if (this._inheritedComputedSource !== entities) {
+         this._inheritedComputedSource = entities;
+         this._inheritedComputedNames.Clear();
+      }
+      const cached = this._inheritedComputedNames.Get(entityID);
+      if (cached) {
+         return cached;
+      }
+      const names = new Set<string>();
+      const entity = (entities ?? []).find(e => UUIDsEqual(e.ID, entityID));
+      for (const parent of entity?.ParentChain ?? []) {
+         for (const f of parent.Fields) {
+            if (f.IsVirtual && f.IsComputed && !f.IsPrimaryKey && !f.Name.startsWith('__mj_')) {
+               names.add(f.Name.trim().toLowerCase());
             }
          }
-      } catch {
-         // No metadata provider: nothing is known to be inherited.
       }
+      this._inheritedComputedNames.Set(entityID, names);
       return names;
    }
+   private _inheritedComputedSource: EntityInfo[] | undefined;
+   private readonly _inheritedComputedNames = new UUIDMap<Set<string>>();
 
    /**
     * Generate SQL UPDATEs for DefaultInView on the identified default view fields
