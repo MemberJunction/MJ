@@ -2,7 +2,7 @@ import { Subscription } from 'rxjs';
 import { JSONObject, JSONValue } from '@memberjunction/ai';
 import { ClientToolMetadata } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, SafeGraphQLError } from '@memberjunction/graphql-dataprovider';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import { RemoteBrowserChannel } from '../realtime/remote-browser/remote-browser-channel';
@@ -32,8 +32,11 @@ export interface ConversationRemoteBrowserControllerOptions {
   ExecuteServerAction?: <T>(query: string, variables: Record<string, JSONValue>) => Promise<T | null>;
 }
 
-/** The server's answers that mean this conversation gets no browser, however often it asks. */
-const SESSION_REFUSED = /not enabled on this server|not authorized|session \S+ not found|the most this server allows|has no instances/i;
+/**
+ * The `extensions.code` the server sets on a refusal that asking again cannot change (browsers not enabled,
+ * not the caller's, over a cap): MJServer's `RemoteBrowserRefusedError`.
+ */
+const REMOTE_BROWSER_REFUSED = 'REMOTE_BROWSER_REFUSED';
 
 const END_REMOTE_BROWSER_SESSION_MUTATION = `
   mutation EndRemoteBrowserSession($agentSessionID: String!) {
@@ -315,12 +318,10 @@ export class ConversationRemoteBrowserController {
       }
       return this.provider ? (((await this.provider.ExecuteGQL(query, variables)) as T) ?? null) : null;
     } catch (err) {
-      // GraphQL client errors append the raw response after ": {"; the server's sentence comes first.
-      const message = (err instanceof Error ? err.message : String(err)).replace(/: \{[\s\S]*$/, '').slice(0, 300);
-      if (this.conversationId && SESSION_REFUSED.test(message)) {
+      if (this.conversationId && err instanceof SafeGraphQLError && err.Code === REMOTE_BROWSER_REFUSED) {
         // Asking again gets the same answer: close, so the live view stops polling, and say why once.
         void this.Close();
-        this.options.OnSessionRefused?.(message);
+        this.options.OnSessionRefused?.(err.message);
       } else {
         console.warn('[ConversationRemoteBrowserController] GraphQL execution failed:', err);
       }

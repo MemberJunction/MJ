@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { JSONValue, RealtimeTrack } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+import { ToSafeGraphQLError } from '@memberjunction/graphql-dataprovider';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import {
   LoadRealtimeRemoteBrowserChannel, RemoteBrowserChannel
@@ -1483,7 +1484,12 @@ describe('ConversationRemoteBrowserController', () => {
   });
 
   describe('a session the server refuses', () => {
-    function refusing(error: string, refused: string[]): ConversationRemoteBrowserController {
+    const REASON = 'You already have 2 conversation browser(s) open, the most this server allows. Close one first.';
+    // What ExecuteGQL throws for a GraphQL error: the server's first error, with its code.
+    const graphQLError = (code: string) =>
+      ToSafeGraphQLError({ name: 'ClientError', response: { status: 200, errors: [{ message: REASON, extensions: { code } }] }, request: { query: 'mutation X' } });
+
+    function refusing(code: string, refused: string[]): ConversationRemoteBrowserController {
       const c = new ConversationRemoteBrowserController({
         OnSessionRefused: (message) => refused.push(message),
         ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
@@ -1491,7 +1497,7 @@ describe('ConversationRemoteBrowserController', () => {
           if (query.includes('EndRemoteBrowserSession')) {
             return null;
           }
-          throw new Error(`${error}: {"response":{"errors":[]}}`);
+          throw graphQLError(code);
         },
       });
       c.Initialize(agentClient as unknown as AgentClientService, null);
@@ -1501,7 +1507,7 @@ describe('ConversationRemoteBrowserController', () => {
     it('closes the browser and reports the reason once, however many calls it refused', async () => {
       const refused: string[] = [];
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const c = refusing('You already have 2 conversation browser(s) open, the most this server allows. Close one first.', refused);
+      const c = refusing('REMOTE_BROWSER_REFUSED', refused);
       c.Open('conv-1');
 
       await Promise.all([
@@ -1512,28 +1518,14 @@ describe('ConversationRemoteBrowserController', () => {
 
       expect(c.ConversationId).toBeNull();
       expect(agentClient.Tools.size).toBe(0);
-      expect(refused).toEqual(['You already have 2 conversation browser(s) open, the most this server allows. Close one first.']);
+      expect(refused).toEqual([REASON]);
       expect(ended()).toEqual(['conv-1']);
     });
 
-    it.each([
-      'Remote-browser session conv-1 not found. Conversation browsers are not enabled on this server (realtime.conversationBrowser.enabled).',
-      'Remote-browser session conv-1 not found.',
-      'Not authorized: remote-browser session conv-1 is not owned by you.',
-      'Not authorized: anonymous users cannot open a conversation browser on this server.',
-    ])('treats "%s" as final', async (error) => {
-      const refused: string[] = [];
-      const c = refusing(error, refused);
-      c.Open('conv-1');
-      await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
-      expect(c.ConversationId).toBeNull();
-      expect(refused).toEqual([error]);
-    });
-
-    it('keeps the browser through an error that may pass', async () => {
+    it('keeps the browser through any other error, whatever its message says', async () => {
       const refused: string[] = [];
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const c = refusing('Network request failed', refused);
+      const c = refusing('INTERNAL_SERVER_ERROR', refused);
       c.Open('conv-1');
       await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
       expect(c.ConversationId).toBe('conv-1');
