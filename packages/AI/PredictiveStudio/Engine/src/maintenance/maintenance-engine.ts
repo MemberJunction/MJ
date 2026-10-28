@@ -6,21 +6,21 @@
  * scoring inference path via an injected re-score runner, the
  * `MJ: ML Model Scoring Bindings` lineage) into one auditable maintenance flow:
  *
- * 1. **Staleness detection** ({@link MaintenanceEngine.detectStaleness}) — given a
+ * 1. **Staleness detection** ({@link MaintenanceEngine.DetectStaleness}) — given a
  *    binding + its model, decide stale-or-fresh by a configurable
  *    {@link RetrainingPolicy}: **cadence** (last-scored / last-trained older than N
  *    days), **data-volume** (target row count grew > X% since training), and a
  *    **drift** seam ({@link IDriftDetector}).
- * 2. **Scheduled re-scoring** ({@link MaintenanceEngine.rescoreScheduledBinding}) —
+ * 2. **Scheduled re-scoring** ({@link MaintenanceEngine.RescoreScheduledBinding}) —
  *    for a `Mode='Scheduled'` binding, re-run scoring via the injected runner and
  *    stamp `LastScoredAt` / `LastRowCount` on the binding.
- * 3. **Retraining trigger** ({@link MaintenanceEngine.triggerRetrainIfStale}) — when
+ * 3. **Retraining trigger** ({@link MaintenanceEngine.TriggerRetrainIfStale}) — when
  *    a model is stale, retrain via `TrainingEngine.trainModel` against the same
  *    pipeline → a NEW immutable version; compare the challenger's `HoldoutMetrics`
  *    vs the incumbent's; return a **promotion recommendation** (`promote` when the
  *    challenger wins by the configured margin, else `hold`). It NEVER auto-promotes
  *    — promotion is a separate signed-off Action (§6.4 / PS-AGENT-7).
- * 4. A **single pass** ({@link MaintenanceEngine.runMaintenancePass}) the scheduler
+ * 4. A **single pass** ({@link MaintenanceEngine.RunMaintenancePass}) the scheduler
  *    / an Action calls to do all of the above over a set of bindings, isolated
  *    per-binding so one failure never aborts the batch.
  *
@@ -29,7 +29,7 @@
  */
 
 import { LogError, type UserInfo } from '@memberjunction/core';
-import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLModelEntity,
   MJMLModelScoringBindingEntity,
@@ -98,16 +98,6 @@ export class MaintenanceEngine {
       currentRowCount,
       trainedRowCount,
     };
-  }
-
-  /** @deprecated Use {@link DetectStaleness}. */
-  public async detectStaleness(
-    binding: MJMLModelScoringBindingEntity,
-    model: MJMLModelEntity,
-    policy: Partial<RetrainingPolicy>,
-    deps: MaintenanceDeps,
-  ): Promise<StalenessResult> {
-    return this.DetectStaleness(binding, model, policy, deps);
   }
 
   /** Append a cadence reason when the anchor timestamp is older than `cadenceDays`. */
@@ -242,15 +232,6 @@ export class MaintenanceEngine {
     return result;
   }
 
-  /** @deprecated Use {@link RescoreScheduledBinding}. */
-  public async rescoreScheduledBinding(
-    binding: MJMLModelScoringBindingEntity,
-    model: MJMLModelEntity,
-    deps: MaintenanceDeps,
-  ): Promise<RescoreResult | null> {
-    return this.RescoreScheduledBinding(binding, model, deps);
-  }
-
   /** Stamp `LastScoredAt` / `LastRowCount` on a binding after a re-score (clock-driven). */
   private async stampScoringRun(
     binding: MJMLModelScoringBindingEntity,
@@ -309,18 +290,6 @@ export class MaintenanceEngine {
     };
   }
 
-  /** @deprecated Use {@link TriggerRetrainIfStale}. */
-  public async triggerRetrainIfStale(
-    binding: MJMLModelScoringBindingEntity,
-    incumbent: MJMLModelEntity,
-    staleness: StalenessResult,
-    policy: Partial<RetrainingPolicy>,
-    deps: MaintenanceDeps,
-    trainInputOverrides?: Partial<Omit<TrainModelInput, 'pipelineId'>>,
-  ): Promise<RetrainOutcome> {
-    return this.TriggerRetrainIfStale(binding, incumbent, staleness, policy, deps, trainInputOverrides);
-  }
-
   /** Retrain the incumbent's pipeline into a new immutable version via the training engine. */
   private async retrainSamePipeline(
     incumbent: MJMLModelEntity,
@@ -371,15 +340,6 @@ export class MaintenanceEngine {
     };
   }
 
-  /** @deprecated Use {@link CompareChallenger}. */
-  public compareChallenger(
-    incumbent: MJMLModelEntity,
-    challenger: MJMLModelEntity,
-    policy: RetrainingPolicy,
-  ): ChallengerComparison {
-    return this.CompareChallenger(incumbent, challenger, policy);
-  }
-
   /**
    * How much the challenger improves over the incumbent, in the metric's natural
    * direction (positive = better). Returns `null` when either value is absent.
@@ -390,7 +350,7 @@ export class MaintenanceEngine {
     if (incumbentValue == null || challengerValue == null) {
       return null;
     }
-    return isErrorMetric(metric) ? incumbentValue - challengerValue : challengerValue - incumbentValue;
+    return MetricDirections.IsErrorMetric(metric) ? incumbentValue - challengerValue : challengerValue - incumbentValue;
   }
 
   /** Decide promote-vs-hold from the directional improvement + margin (hold when unknown). */
@@ -453,16 +413,6 @@ export class MaintenanceEngine {
       entries.push(await this.maintainOne(binding, policy, deps, { rescoreScheduled, retrainStale, trainModelInput: options.trainModelInput }));
     }
     return this.summarizePass(entries);
-  }
-
-  /** @deprecated Use {@link RunMaintenancePass}. */
-  public async runMaintenancePass(
-    bindings: MJMLModelScoringBindingEntity[],
-    policy: Partial<RetrainingPolicy>,
-    deps: MaintenanceDeps,
-    options: MaintenancePassOptions = {},
-  ): Promise<MaintenancePassResult> {
-    return this.RunMaintenancePass(bindings, policy, deps, options);
   }
 
   /** Maintain a single binding end-to-end, capturing any error on the entry. */
@@ -578,17 +528,7 @@ export function RunMaintenancePass(
   deps: MaintenanceDeps,
   options?: MaintenancePassOptions,
 ): Promise<MaintenancePassResult> {
-  return new MaintenanceEngine().runMaintenancePass(bindings, policy, deps, options);
-}
-
-/** @deprecated Use {@link RunMaintenancePass}. */
-export function runMaintenancePass(
-  bindings: MJMLModelScoringBindingEntity[],
-  policy: Partial<RetrainingPolicy>,
-  deps: MaintenanceDeps,
-  options?: MaintenancePassOptions,
-): Promise<MaintenancePassResult> {
-  return RunMaintenancePass(bindings, policy, deps, options);
+  return new MaintenanceEngine().RunMaintenancePass(bindings, policy, deps, options);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */

@@ -15,7 +15,7 @@
  */
 
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import { isErrorMetric } from '@memberjunction/predictive-studio-core';
+import { MetricDirections } from '@memberjunction/predictive-studio-core';
 
 /** Default higher-is-better metric per problem type, in priority order. */
 const DEFAULT_METRICS_BY_PROBLEM: Record<'classification' | 'regression', string[]> = {
@@ -56,7 +56,7 @@ export function ResolveComparisonMetric(
   // metric name still wins above, where the comparison handles direction).
   const sharedNumeric = Object.keys(incumbentMetrics).find(
     (k) =>
-      !isErrorMetric(k) &&
+      !MetricDirections.IsErrorMetric(k) &&
       isFiniteNumber(incumbentMetrics[k]) &&
       isFiniteNumber(challengerMetrics[k]),
   );
@@ -64,15 +64,6 @@ export function ResolveComparisonMetric(
     return sharedNumeric;
   }
   return (DEFAULT_METRICS_BY_PROBLEM[problem] ?? ['roc_auc'])[0];
-}
-
-/** @deprecated Use {@link ResolveComparisonMetric}. */
-export function resolveComparisonMetric(
-  configured: string,
-  incumbent: MJMLModelEntity,
-  challenger: MJMLModelEntity,
-): string {
-  return ResolveComparisonMetric(configured, incumbent, challenger);
 }
 
 /**
@@ -86,11 +77,6 @@ export function ReadMetric(holdoutMetricsJson: string | null | undefined, metric
   const metrics = parseMetrics(holdoutMetricsJson);
   const value = metrics[metric];
   return isFiniteNumber(value) ? value : null;
-}
-
-/** @deprecated Use {@link ReadMetric}. */
-export function readMetric(holdoutMetricsJson: string | null | undefined, metric: string): number | null {
-  return ReadMetric(holdoutMetricsJson, metric);
 }
 
 /** Parse a `HoldoutMetrics` JSON blob into a name → value map (empty on null/parse error). */

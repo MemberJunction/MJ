@@ -886,17 +886,17 @@ The Remote Op surfaces these as clean `EXECUTION_ERROR`s with the same plain-lan
 
 > **Built, not wired.** Nothing runs the maintenance pass: no Action exists for it and its scheduled job ("Predictive Studio Maintenance") is Disabled. The design below is what the engine code implements.
 
-`MaintenanceEngine` (`Engine/src/maintenance/maintenance-engine.ts`, entry `runMaintenancePass(...)`) drives staleness detection, scheduled re-scoring, and retraining-with-comparison off the `MJ: ML Model Scoring Bindings`.
+`MaintenanceEngine` (`Engine/src/maintenance/maintenance-engine.ts`, entry `RunMaintenancePass(...)`) drives staleness detection, scheduled re-scoring, and retraining-with-comparison off the `MJ: ML Model Scoring Bindings`.
 
 ```mermaid
 flowchart TB
-    BIND["MJ: ML Model Scoring Bindings"] --> DET["detectStaleness"]
+    BIND["MJ: ML Model Scoring Bindings"] --> DET["DetectStaleness"]
     DET --> CAD{"cadence?<br/>(anchor: lastScored or TrainedAt<br/>older than cadenceDays)"}
     DET --> VOL{"data-volume?<br/>(growth > threshold)"}
     DET --> DRIFT{"drift?<br/>(IDriftDetector seam)"}
-    CAD & VOL & DRIFT -->|any fires| STALE["stale → triggerRetrainIfStale"]
+    CAD & VOL & DRIFT -->|any fires| STALE["stale → TriggerRetrainIfStale"]
     STALE --> CHAL["train challenger (TrainingEngine)"]
-    CHAL --> CMP["compareChallenger<br/>(metric-direction aware)"]
+    CHAL --> CMP["CompareChallenger<br/>(metric-direction aware)"]
     CMP --> REC{"improvement ≥ margin?"}
     REC -->|yes| PROP["recommendation = 'promote'<br/>(PROPOSE only)"]
     REC -->|no / unknown| HOLD["recommendation = 'hold'"]
@@ -904,12 +904,12 @@ flowchart TB
     style HUMAN fill:#fee2e2,stroke:#dc2626
 ```
 
-**Staleness — three triggers.** `detectStaleness` accumulates `StalenessReason[]`; the binding is stale if any fires:
+**Staleness — three triggers.** `DetectStaleness` accumulates `StalenessReason[]`; the binding is stale if any fires:
 - **Cadence** — anchor is `binding.LastScoredAt` (when `cadenceAnchor='lastScored'`) or `model.TrainedAt`; stale if older than `cadenceDays`. A never-scored/never-trained binding is treated as stale so it's picked up on the first pass.
 - **Data-volume** — `growth = (currentRowCount − model.TrainingRowCount) / model.TrainingRowCount`; stale if `growth > dataVolumeGrowthThreshold` (current count via an injected `rowCounter`).
 - **Drift** — gated by `policy.driftEnabled`, delegated to an injected `IDriftDetector` seam.
 
-Scheduled re-scoring (`rescoreScheduledBinding`, for `Mode='Scheduled'` bindings) stamps `LastScoredAt = now` and `LastRowCount = scoredCount` after each pass.
+Scheduled re-scoring (`RescoreScheduledBinding`, for `Mode='Scheduled'` bindings) stamps `LastScoredAt = now` and `LastRowCount = scoredCount` after each pass.
 
 **Challenger-vs-incumbent — respects metric direction, never auto-promotes.** When a binding is stale, a challenger is trained and compared. Direction is handled via Core's shared `isErrorMetric`:
 
@@ -925,9 +925,9 @@ private recommendPromotion(improvement, margin): PromotionRecommendation {
 }
 ```
 
-Positive `improvement` always means "better," whichever direction the metric runs. `compareChallenger` returns only a `recommendation` (`'promote' | 'hold'`) — it performs **no promotion**. The class doc is explicit: *"It NEVER auto-promotes — promotion is a separate signed-off Action,"* and the comparison detail always appends *"Promotion still requires explicit human sign-off — nothing has been promoted automatically."* Promotion only ever happens through the §13 gate with its sign-off.
+Positive `improvement` always means "better," whichever direction the metric runs. `CompareChallenger` returns only a `recommendation` (`'promote' | 'hold'`) — it performs **no promotion**. The class doc is explicit: *"It NEVER auto-promotes — promotion is a separate signed-off Action,"* and the comparison detail always appends *"Promotion still requires explicit human sign-off — nothing has been promoted automatically."* Promotion only ever happens through the §13 gate with its sign-off.
 
-> One nuance: the `'auto'` comparison-metric *selection* (`metrics.ts → resolveComparisonMetric`) only auto-picks higher-is-better keys; a **pinned** error metric is still compared direction-correctly via `metricImprovement`, but `'auto'` won't land on an error metric by itself.
+> One nuance: the `'auto'` comparison-metric *selection* (`metrics.ts → ResolveComparisonMetric`) only auto-picks higher-is-better keys; a **pinned** error metric is still compared direction-correctly via `metricImprovement`, but `'auto'` won't land on an error metric by itself.
 
 ---
 
