@@ -54,7 +54,8 @@ export interface SQLServerConnectionConfig {
    * `'host'` connects with the SQL Server login the host process (MJAPI) uses for its own database,
    * resolved through `ResolveHostConnection()` — no credential record. It is honored only when this
    * config names no `server`/`host` and the data source has no `CredentialID`; the target database
-   * comes from `DefaultDatabase` (or `database`).
+   * comes from `DefaultDatabase` only (required — `database` is ignored, so a misconfigured row can
+   * never fall through to the host login's default database).
    */
   authMode?: 'sql' | 'entra-service-principal' | 'host';
 }
@@ -137,7 +138,9 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   /**
    * Refuses `host` auth mode unless the data source is shaped for it: the config must not name a
    * `server`/`host` (the target is always the host's own server) and the row must carry no
-   * `CredentialID` (host mode never mixes with a stored credential). Throws a configuration error.
+   * `CredentialID` (host mode never mixes with a stored credential), and the row must name its
+   * target in `DefaultDatabase` (otherwise the host login would land in its own default database —
+   * the MJ database). Throws a configuration error.
    */
   protected assertHostModeAllowed(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): void {
     if (config.server || config.host) {
@@ -148,6 +151,16 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     if (dataSource.CredentialID) {
       throw new Error(`host auth mode requires an external data source with no CredentialID (external data source '${dataSource.Name}').`);
     }
+    this.requireHostDatabase(dataSource);
+  }
+
+  /** The `DefaultDatabase` a `host` auth-mode data source targets; throws when it is missing or blank. */
+  private requireHostDatabase(dataSource: MJExternalDataSourceEntity): string {
+    const database = dataSource.DefaultDatabase?.trim();
+    if (!database) {
+      throw new Error(`host auth mode requires a DefaultDatabase on the external data source '${dataSource.Name}'.`);
+    }
+    return database;
   }
 
   /**
@@ -226,7 +239,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     return poolConfig;
   }
 
-  /** SQL-auth pool config for `host` auth mode: the host's server, login and TLS options, the data source's database. */
+  /** SQL-auth pool config for `host` auth mode: the host's server, login and TLS options, the data source's DefaultDatabase. */
   private buildHostPoolConfig(
     dataSource: MJExternalDataSourceEntity,
     config: SQLServerConnectionConfig,
@@ -238,7 +251,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     return {
       server: host.Server,
       port: host.Port,
-      database: dataSource.DefaultDatabase ?? config.database,
+      database: this.requireHostDatabase(dataSource),
       user: host.User,
       password: host.Password,
       options: {

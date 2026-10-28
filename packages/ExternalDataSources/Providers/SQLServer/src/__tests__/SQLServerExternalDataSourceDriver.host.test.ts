@@ -48,6 +48,17 @@ describe('SQLServerExternalDataSourceDriver — host auth mode', () => {
       expect(cfg.options?.trustServerCertificate).toBe(true);
     });
 
+    it('ignores config.database in host mode', () => {
+      const cfg = d.cfg(ds({ DefaultDatabase: 'MJ_Staging_X' }), { authMode: 'host', database: 'OtherDb' }, null, hostInfo);
+      expect(cfg.database).toBe('MJ_Staging_X');
+    });
+
+    it('refuses to build a host pool config without a DefaultDatabase', () => {
+      expect(() => d.cfg(ds({ DefaultDatabase: null }), { authMode: 'host', database: 'OtherDb' }, null, hostInfo)).toThrow(
+        /host auth mode requires a DefaultDatabase/,
+      );
+    });
+
     it('carries the host instance name', () => {
       const cfg = d.cfg(ds(), { authMode: 'host' }, null, { ...hostInfo, InstanceName: 'SQLEXPRESS' });
       expect(cfg.options?.instanceName).toBe('SQLEXPRESS');
@@ -74,6 +85,14 @@ describe('SQLServerExternalDataSourceDriver — host auth mode', () => {
       expect(() => d.assertAllowed(ds({ CredentialID: 'CRED-1' }), { authMode: 'host' })).toThrow(/host auth mode/);
       SetHostConnectionResolver(() => hostInfo);
       expect(() => d.hostGuard(ds({ CredentialID: 'CRED-1' }), { authMode: 'host' })).toThrow(/host auth mode/);
+    });
+
+    it('refuses host mode when the data source has no DefaultDatabase', () => {
+      SetHostConnectionResolver(() => hostInfo);
+      expect(() => d.hostGuard(ds({ DefaultDatabase: null }), { authMode: 'host', database: 'OtherDb' })).toThrow(
+        /host auth mode requires a DefaultDatabase/,
+      );
+      expect(() => d.assertAllowed(ds({ DefaultDatabase: '   ' }), { authMode: 'host' })).toThrow(/host auth mode requires a DefaultDatabase/);
     });
 
     it('refuses host mode when no resolver is registered', () => {
