@@ -99,7 +99,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest, AddExcludeSchema } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -525,7 +525,7 @@ function manifestJSONNoSchema(name: string): string {
     });
 }
 
-describe('InstallApp — post-install summary (B16: schema-only shell needs CodeGen)', () => {
+describe('InstallApp — post-install summary (#4238: no CodeGen step for a schema app)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         installSequence.length = 0;
@@ -549,13 +549,16 @@ describe('InstallApp — post-install summary (B16: schema-only shell needs Code
         });
     });
 
-    it('a schema-bearing app is told to run CodeGen (entities materialize out-of-band)', async () => {
+    it('a schema-bearing app is told its metadata ships in its migrations, not to run CodeGen', async () => {
         serveManifests({ 'https://github.com/test/schema-app': manifestJSON('schema-app', {}) });
         const result = await InstallApp({ Source: 'https://github.com/test/schema-app' }, context);
         expect(result.Success).toBe(true);
-        // Pre-fix: a generic "restart + rebuild" summary omitted the one step (CodeGen) that
-        // materializes the app's entity metadata, so 'Active' overstated readiness.
-        expect(result.Summary?.toLowerCase()).toContain('codegen');
+        // The install excluded the schema from the host's CodeGen, so advice to run it could not
+        // help and, for an app that ships CodeGen output in its migrations, double-registers entities.
+        expect(result.Summary).not.toContain("run 'mj codegen'");
+        expect(result.Summary).toContain('entity metadata ship in its migrations');
+        expect(result.Summary).toContain('Restart MJAPI and rebuild MJExplorer');
+        expect(vi.mocked(AddExcludeSchema)).toHaveBeenCalledWith(expect.anything(), 'test_schema_app', undefined);
     });
 
     it('a connector-profile (no-schema) app is NOT told to run CodeGen', async () => {
@@ -917,6 +920,33 @@ describe('UpgradeApp — config prune ordering', () => {
         expect(result.Success).toBe(false);
         expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+
+    // #5859: re-adding the exclusion on every upgrade undid an operator's deliberate removal.
+    function mockInstalledWithSchema(schemaName: string | undefined): void {
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+            ManifestJSON: JSON.stringify(schemaName ? { name: 'app-x', schema: { name: schemaName } } : { name: 'app-x' }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+    }
+
+    it('does not re-add the schema to excludeSchemas when the schema is unchanged', async () => {
+        mockInstalledWithSchema('test_app_x');
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+        expect(vi.mocked(AddServerDynamicPackages)).toHaveBeenCalled();
+        expect(vi.mocked(AddExcludeSchema)).not.toHaveBeenCalled();
+    });
+
+    it('does not add the exclusion when the previous manifest cannot be read', async () => {
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+        expect(vi.mocked(AddExcludeSchema)).not.toHaveBeenCalled();
+    });
+
+    it('adds the new schema to excludeSchemas when the schema was renamed', async () => {
+        mockInstalledWithSchema('old_app_x');
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+        expect(vi.mocked(AddExcludeSchema)).toHaveBeenCalledWith(expect.anything(), 'test_app_x', undefined);
     });
 });
 
