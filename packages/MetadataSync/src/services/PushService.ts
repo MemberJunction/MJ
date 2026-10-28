@@ -3549,7 +3549,10 @@ export class PushService {
             // constraint. Matching on the declared fields adopts that row instead.
             //
             // Declared values are resolved first, so a key written as a reference
-            // (`@lookup:`, `@parent:`, `@owner:` …) compares as the value it stands for.
+            // (`@lookup:`, `@parent:`, `@owner:` …) compares as the value it stands for. The
+            // resolved values are reused when the fields are applied below, so each reference
+            // is resolved once.
+            const resolvedFieldValues = new Map<string, unknown>();
             if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
               const fields = itemData.fields;
               const missing = matchOn.filter((f) => !(f in fields));
@@ -3562,7 +3565,6 @@ export class PushService {
                   callbacks
                 );
               } else {
-                const resolvedFieldValues = new Map<string, unknown>();
                 for (const f of matchOn) {
                   resolvedFieldValues.set(
                     f,
@@ -3617,6 +3619,10 @@ export class PushService {
             // Apply fields with ownerRecord = entity for @owner:Field resolution
             if (itemData.fields && typeof itemData.fields === 'object') {
               for (const [fName, fVal] of Object.entries(itemData.fields)) {
+                if (resolvedFieldValues.has(fName)) {
+                  targetChild.Set(fName, resolvedFieldValues.get(fName));
+                  continue;
+                }
                 await this.setCompositionField(targetChild, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks);
               }
             }
