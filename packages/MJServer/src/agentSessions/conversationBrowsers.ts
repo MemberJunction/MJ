@@ -8,19 +8,27 @@
  * @module @memberjunction/server/agentSessions
  */
 import { LogError, LogStatus } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton } from '@memberjunction/global';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 
 /** How often idle conversation browsers are looked for. */
 const REAP_INTERVAL_MS = 60_000;
 
+/** A user (or, for an anonymous guest, a scope) already holds the most conversation browsers allowed. */
+export class ConversationBrowserLimitError extends Error {
+  constructor(count: number) {
+    super(`You already have ${count} conversation browser(s) open, the most this server allows. Close one first.`);
+    this.name = 'ConversationBrowserLimitError';
+  }
+}
+
 interface HeldBrowser {
-  UserID: string;
+  OwnerKey: string;
   LastUsedAt: number;
   IdleMs: number;
 }
 
-export class ConversationBrowserLedger {
+export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowserLedger> {
   private readonly held = new Map<string, HeldBrowser>();
   private reapTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -31,23 +39,33 @@ export class ConversationBrowserLedger {
   public EndBrowser: (conversationID: string) => Promise<unknown> = (conversationID) =>
     RemoteBrowserEngine.Instance.EndSessionForAgentSession(conversationID);
 
-  constructor(private readonly now: () => number = () => Date.now()) {}
+  /** The clock (a seam for tests). */
+  public Now: () => number = () => Date.now();
+
+  protected constructor() {
+    super();
+  }
+
+  public static get Instance(): ConversationBrowserLedger {
+    return super.getInstance<ConversationBrowserLedger>();
+  }
 
   /**
    * Records that a conversation's browser is about to be used. A conversation the ledger does not hold
-   * yet counts against its owner's cap.
+   * yet counts against its owner's cap. `ownerKey` is who the cap counts: a user, or for an anonymous
+   * guest (who all share one Anonymous user) the guest's own scope.
    *
-   * @throws when the owner already holds `maxPerUser` conversation browsers.
+   * @throws ConversationBrowserLimitError when the owner already holds `maxPerUser` conversation browsers.
    */
-  public Claim(conversationID: string, userID: string, maxPerUser: number, idleMinutes: number): void {
+  public Claim(conversationID: string, ownerKey: string, maxPerUser: number, idleMinutes: number): void {
     const key = conversationID.toLowerCase();
     if (!this.held.has(key)) {
-      const count = Array.from(this.held.values()).filter((b) => UUIDsEqual(b.UserID, userID)).length;
+      const count = Array.from(this.held.values()).filter((b) => b.OwnerKey === ownerKey).length;
       if (count >= maxPerUser) {
-        throw new Error(`You already have ${count} conversation browser(s) open, the most this server allows. Close one first.`);
+        throw new ConversationBrowserLimitError(count);
       }
     }
-    this.held.set(key, { UserID: userID, LastUsedAt: this.now(), IdleMs: idleMinutes * 60_000 });
+    this.held.set(key, { OwnerKey: ownerKey, LastUsedAt: this.Now(), IdleMs: idleMinutes * 60_000 });
     this.startReaper();
   }
 
@@ -55,7 +73,7 @@ export class ConversationBrowserLedger {
   public Touch(conversationID: string): void {
     const browser = this.held.get(conversationID.toLowerCase());
     if (browser) {
-      browser.LastUsedAt = this.now();
+      browser.LastUsedAt = this.Now();
     }
   }
 
@@ -66,7 +84,7 @@ export class ConversationBrowserLedger {
 
   /** Ends every held browser unused for longer than its idle limit. Returns how many were ended. */
   public async ReapIdle(): Promise<number> {
-    const now = this.now();
+    const now = this.Now();
     const idle = Array.from(this.held).filter(([, b]) => now - b.LastUsedAt > b.IdleMs).map(([id]) => id);
     for (const conversationID of idle) {
       this.held.delete(conversationID);
@@ -91,6 +109,3 @@ export class ConversationBrowserLedger {
     this.reapTimer.unref?.();
   }
 }
-
-/** The process's ledger. */
-export const ConversationBrowsers = new ConversationBrowserLedger();

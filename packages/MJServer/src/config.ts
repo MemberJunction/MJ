@@ -883,14 +883,20 @@ const conversationBrowserSchema = z.object({
   enabled: zodBooleanWithTransforms().default(false),
   /** Also let anonymous principals (public widget guests, anonymous magic links) open one. */
   allowAnonymous: zodBooleanWithTransforms().default(false),
-  /** Most conversation browsers one user may hold at once. Default 2. */
+  /** Most conversation browsers one user (or one anonymous guest) may hold at once. Default 2. */
   maxPerUser: z.coerce.number().int().positive().optional().default(2),
-  /** Minutes unused after which a conversation browser is ended (a reloaded or closed tab never ends its own). Default 15. */
+  /**
+   * Minutes unused after which a conversation browser is ended (a reloaded or closed tab never ends its own).
+   * Used means an agent or the user acts on it, or its open drawer polls for a snapshot; a drawer showing a
+   * pushed screencast with nothing else happening counts as unused. Default 15.
+   */
   idleMinutes: z.coerce.number().positive().optional().default(15),
   /**
    * Private hosts a conversation browser may still reach, as `host` or `host:port` (e.g. `localhost:4200`).
-   * Every other loopback, link-local or private-network HOSTNAME is refused, including where a main-frame
-   * redirect lands. This is a best-effort hostname check. Gets through: a public name that resolves to a
+   * Every other loopback, link-local or private-network HOSTNAME is refused (private IPv4 and IPv6 ranges,
+   * `localhost`, names under `.local`, `.internal`, `.lan`, `.corp`, `.home.arpa` and `.svc`, and the Docker,
+   * Kubernetes and cloud-metadata names), including where a main-frame redirect lands, and in popups the page
+   * opens. This is a best-effort hostname check. Gets through: a public name that resolves to a
    * private address, WebSockets, service-worker fetches, an iframe whose source redirects to a private
    * host, redirects of the page's own requests, and the redirect request itself (only where it lands is
    * refused). For real isolation, run the browsers under network egress rules. Default none.

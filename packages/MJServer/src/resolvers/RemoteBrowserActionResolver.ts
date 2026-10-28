@@ -19,6 +19,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 import { MJAIAgentEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
@@ -41,8 +42,8 @@ import {
   RealtimeSessionNotFoundError,
   RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
-import { AuthorizeSessionAccess } from '../realtimeSessions/sessionAccess.js';
-import { ConversationBrowsers } from '../agentSessions/conversationBrowsers.js';
+import { AuthorizeSessionAccess, ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
+import { ConversationBrowserLedger, ConversationBrowserLimitError } from '../agentSessions/conversationBrowsers.js';
 import { configInfo, type ConversationBrowserConfig } from '../config.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -278,7 +279,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   constructor() {
     super();
     // The idle reaper ends a conversation browser the way EndRemoteBrowserSession does.
-    ConversationBrowsers.EndBrowser = (conversationID) => this.endBrowser(conversationID);
+    ConversationBrowserLedger.Instance.EndBrowser = (conversationID) => this.endBrowser(conversationID);
   }
 
   /**
@@ -306,6 +307,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * {@link RemoteBrowserActionResolver.startedScreencasts} for why the value is a timestamp.
    */
   private startedAudioStreams = new Map<string, number>();
+
+  /**
+   * The push session each surface's frames and audio go to, by stream key. A reloaded tab starts again
+   * from a new push session while the browser keeps streaming; it takes the frames over here instead of
+   * being told "already streaming" while they still go to the old session.
+   */
+  private streamTargets = new Map<string, UserPayload>();
 
   /**
    * Drops any {@link startedScreencasts} / {@link startedAudioStreams} entry older than
@@ -666,6 +674,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // but a SECOND surface binding for the first time is not a re-bind (#3531).
     this.sweepStreamEntries();
     const streamKey = this.streamKey(agentSessionID, instanceKey);
+    this.streamTargets.set(streamKey, userPayload);
     if (this.startedScreencasts.has(streamKey)) {
       return { Streaming: true };
     }
@@ -674,7 +683,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     try {
       const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
       await liveSession.StartScreencast((frame) =>
-        this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
+        this.publishFrame(pubSub, this.streamTargets.get(streamKey) ?? userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
       );
       this.startedScreencasts.set(streamKey, Date.now());
       return { Streaming: true };
@@ -682,6 +691,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
         // Backend can't stream — the client keeps polling. Not an error condition.
         return { Streaming: false };
+      }
+      if (err instanceof ConversationBrowserLimitError) {
+        throw err; // the client must stop and say so, not poll for a browser that will never start
       }
       const message = err instanceof Error ? err.message : String(err);
       LogError(`StartRemoteBrowserScreencast failed (provider='${providerName}'): ${message}`);
@@ -746,10 +758,11 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * browser) and the browser itself. The idle reaper ends conversation browsers through here too.
    */
   private async endBrowser(agentSessionID: string, instanceKey?: string): Promise<boolean> {
-    ConversationBrowsers.Release(agentSessionID);
+    ConversationBrowserLedger.Instance.Release(agentSessionID);
     const streamKey = this.streamKey(agentSessionID, instanceKey);
     this.startedScreencasts.delete(streamKey);
     this.startedAudioStreams.delete(streamKey);
+    this.streamTargets.delete(streamKey);
     return RemoteBrowserEngine.Instance.EndSessionForAgentSession(agentSessionID, instanceKey);
   }
 
@@ -779,6 +792,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // Idempotent PER SURFACE — same reasoning as the screencast map (#3531).
     this.sweepStreamEntries();
     const streamKey = this.streamKey(agentSessionID, instanceKey);
+    this.streamTargets.set(streamKey, userPayload);
     if (this.startedAudioStreams.has(streamKey)) {
       return { Streaming: true };
     }
@@ -786,13 +800,16 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
       const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
-      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, instanceKey, chunk));
+      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, this.streamTargets.get(streamKey) ?? userPayload, agentSessionID, instanceKey, chunk));
       this.startedAudioStreams.set(streamKey, Date.now());
       return { Streaming: true };
     } catch (err) {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
         // Backend can't capture audio — the client plays no audio. Not an error condition.
         return { Streaming: false };
+      }
+      if (err instanceof ConversationBrowserLimitError) {
+        throw err;
       }
       const message = err instanceof Error ? err.message : String(err);
       LogError(`StartRemoteBrowserAudioStream failed (provider='${providerName}'): ${message}`);
@@ -1203,7 +1220,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
     }
     // Each use puts off the browser's idle end.
-    ConversationBrowsers.Touch(agentSessionID);
+    ConversationBrowserLedger.Instance.Touch(agentSessionID);
     return { ID: conversation.ID, AgentID: null, Config_: null, IsConversation: true };
   }
 
@@ -1227,7 +1244,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       const settings = this.ConversationBrowserSettings();
       // ponytail: an action that joins a launch a concurrent End then tears down keeps this slot until the
       // reaper frees it (idleMinutes); release it on that teardown if users hit maxPerUser this way.
-      ConversationBrowsers.Claim(agentSessionID, contextUser.ID, settings.maxPerUser, settings.idleMinutes);
+      // An anonymous guest's cap is its own: every guest is the one shared Anonymous user.
+      const scope = contextUser.IsMagicLinkAnonymous ? ResolveSessionScopeIdentity(contextUser) : undefined;
+      ConversationBrowserLedger.Instance.Claim(agentSessionID, scope ? `scope:${scope}` : `user:${NormalizeUUID(contextUser.ID)}`, settings.maxPerUser, settings.idleMinutes);
       // Set once, before the browser launches; the engine re-applies it to any replacement.
       if (!RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
         await RemoteBrowserEngine.Instance.RestrictPrivateNetworkForAgentSession(agentSessionID, settings.allowedPrivateHosts);
@@ -1237,7 +1256,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       return await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
     } catch (err) {
       if (scope.IsConversation && !RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
-        ConversationBrowsers.Release(agentSessionID);
+        ConversationBrowserLedger.Instance.Release(agentSessionID);
       }
       throw err;
     }
