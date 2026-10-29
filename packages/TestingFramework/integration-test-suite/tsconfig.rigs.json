@@ -4,6 +4,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["rigs/feature-pipelines/**/*.ts"],
+  "include": ["rigs/feature-pipelines/**/*.ts", "rigs/schema-mutating/**/*.ts"],
   "exclude": ["node_modules"]
 }
