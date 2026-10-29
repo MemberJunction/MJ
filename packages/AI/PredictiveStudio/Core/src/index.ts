@@ -21,6 +21,7 @@ export * from './modeling-plan-schema';
 export * from './metrics-util';
 export * from './gate';
 export * from './trainer-contract';
+export * from './trainer-result-schemas';
 export * from './trust';
 export * from './outcome-config';
 export * from './json-value';

@@ -3,13 +3,15 @@ import { existsSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type {
-  TrainRequest,
-  TrainResponse,
-  PredictRequest,
-  PredictResponse,
-  TrainerRequest,
-  TrainerResult,
+import {
+  TrainerContract,
+  type JsonValue,
+  type TrainRequest,
+  type TrainResponse,
+  type PredictRequest,
+  type PredictResponse,
+  type TrainerRequest,
+  type TrainerResult,
 } from '@memberjunction/predictive-studio-core';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,6 +67,22 @@ export class SidecarError extends Error {
     this.name = 'SidecarError';
     this.Status = status;
     this.Body = body;
+  }
+}
+
+/**
+ * Error thrown when the sidecar answers `POST /trainer` with 2xx but the body is not a {@link TrainerResult} (a
+ * sidecar of another version, or a wrong host behind the configured URL). Sending the same request again gets the
+ * same answer, so it is not a transport failure and callers do not retry it.
+ */
+export class TrainerResultMalformedError extends Error {
+  /** One problem per mismatch with the contract (`<path>: <message>`). */
+  public readonly Problems: readonly string[];
+
+  constructor(problems: readonly string[]) {
+    super(`The sidecar's /trainer answer is not a TrainerResult: ${problems.join('; ')}`);
+    this.name = 'TrainerResultMalformedError';
+    this.Problems = problems;
   }
 }
 
@@ -343,13 +361,18 @@ export class MLSidecar {
   /**
    * Run one protocol-driven training by POSTing a {@link TrainerRequest} to `/trainer`. The transport timeout is the
    * request's own `timeoutSeconds` plus a 60 s margin: the sidecar stops itself at `timeoutSeconds` and answers
-   * `failed` at stage `timeout`, so the client only times out when the sidecar process is gone or wedged.
+   * `failed` at stage `timeout`, so the client only times out when the sidecar process is gone or wedged. The answer
+   * is checked against the contract before it is returned, never cast.
    * @throws {SidecarError} when the sidecar refuses the request (4xx) or fails (5xx)
+   * @throws {TrainerResultMalformedError} when a 2xx answer is not a {@link TrainerResult}
    */
   async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
     this.assertRunning();
     const timeoutMs = (req.timeoutSeconds + MLSidecar.TrainerTimeoutMarginSeconds) * 1000;
-    return this.httpPost<TrainerRequest, TrainerResult>('/trainer', req, timeoutMs);
+    const answer = await this.httpPost<TrainerRequest, JsonValue>('/trainer', req, timeoutMs);
+    const parsed = TrainerContract.ParseTrainerResult(answer);
+    if (parsed.Ok === false) throw new TrainerResultMalformedError(parsed.Errors);
+    return parsed.Value;
   }
 
   /**

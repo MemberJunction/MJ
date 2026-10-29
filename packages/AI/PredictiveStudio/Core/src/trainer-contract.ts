@@ -22,7 +22,10 @@ import type {
   MetricWithInterval,
 } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
+import type { JsonValue, ParseResult } from './json-value';
+import { StoreSchemas } from './store-schemas';
 import type { TaskType } from './task-type';
+import { TrainerResultSchemas } from './trainer-result-schemas';
 
 /** One hyperparameter value of a candidate. */
 export type HyperparameterValue = number | string | boolean | null;
@@ -316,6 +319,14 @@ export class TrainerContract {
     }).map((lib) => `libraryVersions.${lib}`);
     if (!Number.isInteger(cv.threads) || cv.threads < 1) gaps.push('threads');
     return gaps;
+  }
+
+  /**
+   * Check a sidecar's `POST /trainer` answer against the contract: the typed result, or one problem per mismatch
+   * (`<path>: <message>`). Unknown keys are refused, as the sidecar's own models refuse them.
+   */
+  public static ParseTrainerResult(value: JsonValue): ParseResult<TrainerResult> {
+    return StoreSchemas.Validate(TrainerResultSchemas.TrainerResult, value);
   }
 
   /**

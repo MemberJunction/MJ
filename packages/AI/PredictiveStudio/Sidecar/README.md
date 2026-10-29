@@ -13,7 +13,7 @@ For the full architecture, read the
 
 ## Two topologies
 
-| Mode | When | What `start()` does |
+| Mode | When | What `Start()` does |
 |------|------|---------------------|
 | **Managed** (default) | nothing configured | Spawns the bundled FastAPI service on `127.0.0.1` with an **ephemeral port**, reads `PREDICTIVE_STUDIO_SIDECAR_PORT=<n>` from its stdout, polls `/health` until ready, registers SIGINT/SIGTERM/exit cleanup. |
 | **Remote** | `url` option **or** `PREDICTIVE_STUDIO_SIDECAR_URL` env set | Connects only — no child process — and just verifies `/health`. Use for a containerized/scaled sidecar. |
@@ -53,7 +53,7 @@ await s.Stop();                     // shut the child down
 const s = new MLSidecar({ url: 'http://predictive-studio-sidecar:8000' });
 await s.Start();                    // just verifies /health — no spawn
 // ... train / predict / health ...
-// stop() is a no-op (this client never owned the process)
+// Stop() is a no-op (this client never owned the process)
 ```
 
 ## `MLSidecar` API

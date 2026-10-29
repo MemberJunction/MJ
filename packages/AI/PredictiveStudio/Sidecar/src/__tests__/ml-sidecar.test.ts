@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import {
-  EvaluationProtocol,
   type TrainRequest,
   type TrainResponse,
   type PredictRequest,
   type PredictResponse,
   type TrainerFailed,
-  type TrainerRequest,
 } from '@memberjunction/predictive-studio-core';
+import { TrainerRequestFixture } from './fixtures/trainer-request.fixture';
 
 /**
  * Unit tests for {@link MLSidecar}. `node:http` is mocked so no live sidecar (and
@@ -67,7 +66,7 @@ vi.mock('node:http', () => ({
 }));
 
 // Import AFTER the mock is registered.
-const { MLSidecar, SidecarError } = await import('../ml-sidecar.js');
+const { MLSidecar, SidecarError, TrainerResultMalformedError } = await import('../ml-sidecar.js');
 
 const URL_BASE = 'http://localhost:8000';
 
@@ -200,51 +199,6 @@ describe('MLSidecar (remote mode)', () => {
   });
 });
 
-const RUN_ID = '00000000-0000-0000-0000-000000000004';
-
-function buildTrainerRequest(timeoutSeconds: number): TrainerRequest {
-  const download = {
-    fileId: '00000000-0000-0000-0000-000000000006', url: 'file:///tmp/matrix.jsonl', issuedAt: '2026-10-28T00:00:00.000Z',
-    driverLifetimeSeconds: null, expiresAt: null, sha256: 'ab',
-  };
-  return {
-    trainingRunId: RUN_ID,
-    snapshot: { id: '00000000-0000-0000-0000-000000000005', contentHash: 'h', featureSchemaHash: 'f', matrix: download, rowManifest: download },
-    incumbent: null,
-    protocol: {
-      id: 'P1', lineageRootId: 'P1', version: 1, name: 'Renewal grading',
-      holdout: { kind: 'date-carved', dateColumn: 'OrderDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null },
-      innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 },
-      seed: 0, holdoutAccessBudget: 1,
-      primaryScore: { family: 'binary', metric: 'log-loss' },
-      secondaryMetrics: ['auc'],
-      baselines: [{ kind: 'dummy', name: 'base-rate' }],
-      calibration: { kind: 'platt', fitOn: 'disjoint-calibration-fold' },
-      resampling: { kind: 'none' },
-      intervals: { level: 0.95, method: 'bootstrap', resamples: 1000, pairedTest: 'paired-bootstrap' },
-      promotion: {
-        comparators: [], incumbent: 'none', margin: EvaluationProtocol.ToNonNegative(0), lowerBoundLevel: 0.95,
-        pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15',
-      },
-      allowedOutcomes: ['model', 'keep-simple-baseline', 'no-signal'],
-      leakageAudit: { singleFeatureHeldOutAucMax: 0.9, timeShiftedLabelTest: true, dropColumnTest: true, importanceAggregation: 'per-source-column', highCardinalityIdCheck: true },
-      exclusions: { denyFields: [], denySources: [] },
-      slices: { outOfTime: false, subgroups: [] },
-      predictionIntervals: null, residualDiagnostics: null, retrainTriggers: [],
-      search: { kind: 'random', candidates: 1 },
-      budgets: { maxComputeSeconds: 60, maxTokens: 0, maxCandidates: 1, hardStop: true },
-      minMinorityClassRows: 20, guardFieldsEditableBy: 'non-agent',
-      authoredBy: { kind: 'human', userId: 'U1' },
-    },
-    task: { kind: 'binary', classOrder: ['false', 'true'], adverseIndex: 1 },
-    candidates: [{ name: 'glm_candidate', algorithmId: 'A1', driverKey: 'logistic_regression', hyperparameters: {} }],
-    seed: 0,
-    threads: 1,
-    timeoutSeconds,
-    maxRetries: 0,
-  };
-}
-
 describe('MLSidecar.RunTrainer', () => {
   beforeEach(() => {
     responseQueue.length = 0;
@@ -253,12 +207,12 @@ describe('MLSidecar.RunTrainer', () => {
 
   it('POSTs the TrainerRequest to /trainer and returns the parsed TrainerResult', async () => {
     const failed: TrainerFailed = {
-      status: 'failed', trainingRunId: RUN_ID, stage: 'load-snapshot',
+      status: 'failed', trainingRunId: TrainerRequestFixture.RunID, stage: 'load-snapshot',
       message: 'pre-authorised URL for file 00000000-0000-0000-0000-000000000006 expired', computeSeconds: 0.01,
     };
     queue(200, failed);
     const s = new MLSidecar({ url: URL_BASE });
-    const req = buildTrainerRequest(60);
+    const req = TrainerRequestFixture.Build(60, 0);
     const out = await s.RunTrainer(req);
     expect(requestLog[0].method).toBe('POST');
     expect(requestLog[0].path).toBe('/trainer');
@@ -267,15 +221,32 @@ describe('MLSidecar.RunTrainer', () => {
   });
 
   it("times the transport out 60 s after the run's own timeout, not at the client default", async () => {
-    queue(200, { status: 'failed', trainingRunId: RUN_ID, stage: 'timeout', message: 'x', computeSeconds: 60 });
+    queue(200, { status: 'failed', trainingRunId: TrainerRequestFixture.RunID, stage: 'timeout', message: 'x', computeSeconds: 60 });
     const s = new MLSidecar({ url: URL_BASE, requestTimeoutMs: 1000 });
-    await s.RunTrainer(buildTrainerRequest(600));
+    await s.RunTrainer(TrainerRequestFixture.Build(600, 0));
     expect(requestLog[0].timeout).toBe(660_000);
+  });
+
+  it('refuses a 200 answer that is not a TrainerResult with TrainerResultMalformedError naming the problem', async () => {
+    queue(200, { status: 'completed', trainingRunId: TrainerRequestFixture.RunID, computeSeconds: 1 });
+    const s = new MLSidecar({ url: URL_BASE });
+    const err = await s.RunTrainer(TrainerRequestFixture.Build(60, 0)).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(TrainerResultMalformedError);
+    if (err instanceof TrainerResultMalformedError) {
+      expect(err.Problems.join('\n')).toContain('codeVersion');
+      expect(err.message).toContain('codeVersion');
+    }
+  });
+
+  it('refuses an answer carrying a key the contract does not have', async () => {
+    queue(200, { status: 'failed', trainingRunId: TrainerRequestFixture.RunID, stage: 'timeout', message: 'x', computeSeconds: 60, retryable: true });
+    const s = new MLSidecar({ url: URL_BASE });
+    await expect(s.RunTrainer(TrainerRequestFixture.Build(60, 0))).rejects.toBeInstanceOf(TrainerResultMalformedError);
   });
 
   it('surfaces a 400 refusal as SidecarError', async () => {
     queue(400, { detail: 'ranking across families (e.g. Tweedie vs squared-error by RMSE) is refused' });
     const s = new MLSidecar({ url: URL_BASE });
-    await expect(s.RunTrainer(buildTrainerRequest(60))).rejects.toMatchObject({ name: 'SidecarError', Status: 400 });
+    await expect(s.RunTrainer(TrainerRequestFixture.Build(60, 0))).rejects.toMatchObject({ name: 'SidecarError', Status: 400 });
   });
 });

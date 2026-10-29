@@ -23,7 +23,7 @@ import type {
   TrainerRequest,
   TrainerResult,
 } from '@memberjunction/predictive-studio-core';
-import { MLSidecar, SidecarError } from '@memberjunction/predictive-studio-sidecar';
+import { MLSidecar, SidecarError, TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
 import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator } from './types';
 
@@ -156,17 +156,25 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
 
   /**
    * Run one protocol-driven training with bounded retries: a transport failure or a 5xx answer is retried up to
-   * `req.maxRetries` times; a 4xx refusal is not retried (the request itself is wrong) and is rethrown. When every
-   * attempt fails the result is `failed` at stage `timeout` naming the last error, never partial metrics.
+   * `req.maxRetries` times. Each attempt first calls `Start()`, which does nothing while the sidecar runs and respawns
+   * a managed child that died, so a crash mid-training is recovered by the next attempt (a failed respawn counts as
+   * that attempt failing). A 4xx refusal and a malformed answer are not retried (the same request gets the same
+   * answer) and are rethrown. When every attempt fails the result is `failed` at stage `timeout` naming the last
+   * error, never partial metrics.
+   *
+   * A retried transport failure can repeat a training that is still running: a socket reset on a remote sidecar
+   * that kept computing makes attempt 2 train and score the holdout again, concurrently. The sidecar is stateless
+   * and the run is seeded, so the repeat produces the same result; only compute repeats, up to
+   * `(maxRetries + 1) × (timeoutSeconds + 60)` seconds of wall time.
    */
   public async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
-    await this.ensureStarted();
     let lastError = '';
     for (let attempt = 0; attempt <= req.maxRetries; attempt++) {
       try {
+        await this.sidecar.Start();
         return await this.sidecar.RunTrainer(req);
       } catch (err) {
-        if (err instanceof SidecarError && err.Status >= 400 && err.Status < 500) throw err;
+        if (MJSidecarTrainer.isNotRetryable(err)) throw err;
         lastError = err instanceof Error ? err.message : String(err);
       }
     }
@@ -179,7 +187,12 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
     };
   }
 
-  /** Start the sidecar once per trainer; later calls reuse the connection. */
+  /** A refusal (4xx) or a malformed answer: sending the same request again gets the same answer. */
+  private static isNotRetryable(err: Error | object | string | number | boolean | null | undefined): boolean {
+    return err instanceof TrainerResultMalformedError || (err instanceof SidecarError && err.Status >= 400 && err.Status < 500);
+  }
+
+  /** Start the sidecar once per trainer for the legacy `train` path; later calls reuse the connection. */
   private async ensureStarted(): Promise<void> {
     if (!this.started) {
       await this.sidecar.Start();

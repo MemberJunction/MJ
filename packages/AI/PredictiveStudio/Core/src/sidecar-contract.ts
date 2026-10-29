@@ -247,10 +247,12 @@ export interface Prediction {
    */
   contributions?: PredictionContribution[];
   /**
-   * The full class-probability vector, aligned with {@link PredictResponse.classOrder}. Present for classification;
-   * `score` keeps its meaning (P(class 1) for binary, P(predicted class) for multiclass).
+   * The full class-probability vector, aligned with {@link PredictResponse.classOrder}. Present for classification and
+   * null otherwise (the sidecar sends null rather than leaving the key out); `score` keeps its meaning (P(class 1) for
+   * binary, P(predicted class) for multiclass). The sidecar always sends the key; it stays optional so the test
+   * doubles of the predictor seam, which build responses by hand, need not state it.
    */
-  probabilities?: number[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  probabilities?: number[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** One signed per-record feature contribution: `value > 0` pushes the score up, `< 0` down. */
@@ -268,8 +270,11 @@ export interface PredictionContribution {
 export interface PredictResponse {
   /** One prediction per input row, in request order. */
   predictions: Prediction[];
-  /** The class order every `probabilities` vector follows (the artifact's declared order for v2 predictors). */
-  classOrder?: string[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * The class order every `probabilities` vector follows (the artifact's declared order for v2 predictors); null for
+   * regression, as the sidecar sends it. Optional for the same reason as {@link Prediction.probabilities}.
+   */
+  classOrder?: string[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**

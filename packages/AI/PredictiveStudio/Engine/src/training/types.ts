@@ -105,12 +105,6 @@ export interface IRecordLoader {
 }
 
 /**
- * Sidecar seam — the `/train` call. Wraps {@link MLSidecar} from
- * `@memberjunction/predictive-studio-sidecar` in production; tests inject a fake
- * that returns a canned {@link TrainResponse} and captures the request so the
- * test can assert the matrix/preprocessing/holdout shape sent to the sidecar.
- */
-/**
  * The protocol-driven training seam: one Training Run over one immutable Training Snapshot per call, answered with a
  * {@link TrainerResult}. Kept apart from {@link ISidecarTrainer} so the legacy `train` seam and its test doubles stay
  * untouched while the legacy path exists.
@@ -118,11 +112,17 @@ export interface IRecordLoader {
 export interface ITrainerEvaluator {
   /**
    * Run one training. Transport failures and sidecar faults are retried up to `req.maxRetries` times; a refused request
-   * throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
+   * or a malformed answer throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
    */
   RunTrainer(req: TrainerRequest): Promise<TrainerResult>;
 }
 
+/**
+ * Sidecar seam — the `/train` call. Wraps {@link MLSidecar} from
+ * `@memberjunction/predictive-studio-sidecar` in production; tests inject a fake
+ * that returns a canned {@link TrainResponse} and captures the request so the
+ * test can assert the matrix/preprocessing/holdout shape sent to the sidecar.
+ */
 export interface ISidecarTrainer {
   /**
    * Train a model from an assembled feature matrix. The implementation is
