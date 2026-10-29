@@ -40,11 +40,14 @@ export interface CreateSessionInput {
 /**
  * Why a session was closed — persisted to `AIAgentSession.CloseReason` alongside the
  * `Status = 'Closed'` transition so the admin dashboards can distinguish a user hanging up
- * (`Explicit`) from janitor reconciliation (`Janitor`), a graceful host drain (`Shutdown`),
- * or a failure-path teardown (`Error`). `NULL` in the column means "legacy/unknown" — rows
- * closed before this column existed.
+ * (`Explicit`) from janitor reconciliation (`Janitor`, an orphan from an earlier boot), a graceful
+ * host drain (`Shutdown`), a failure-path teardown (`Error`), an expired authored deadline
+ * (`TimeLimit`) or a session left quiet past the idle threshold (`Idle`). `NULL` in the column means
+ * "legacy/unknown" — rows closed before this column existed.
+ *
+ * Derived from the generated entity so the column's CHECK constraint stays the single source of truth.
  */
-export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+export type SessionCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 /**
  * The {@link SessionCloseReason} for a session whose bridged agent has left (see

@@ -1,5 +1,7 @@
-/** Local until SessionCloseReason gains these values (they need the CloseReason CHECK migration). */
-export type ExpiryReason = 'Idle' | 'TimeLimit';
+import type { SessionCloseReason } from './SessionManager.js';
+
+/** The close reasons an expiry check can yield: the two ways a live session runs out of time. */
+export type ExpiryReason = Extract<SessionCloseReason, 'Idle' | 'TimeLimit'>;
 
 /**
  * Parses the absolute deadline (ms) from a session's `Config_` JSON, or null when absent/malformed.
