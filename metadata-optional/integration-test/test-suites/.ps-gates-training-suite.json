@@ -182,6 +182,39 @@
           "primaryKey": {
             "ID": "C3DF6A32-EEF0-4666-859E-87B7267D43F5"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C4 -> S2.4",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "50156CEE-29D6-4F94-B1BA-814426F1ACAE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W3 -> S2.4",
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D6B9EC21-75F4-483D-A67B-CC551D7AB721"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W8 -> S9.4",
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B09F255A-3D03-4DAE-B417-98C12CA9C28A"
+          }
         }
       ]
     },

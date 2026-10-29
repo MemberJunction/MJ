@@ -372,6 +372,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c2-s6-2': 1,
         'ps-gate-c2-s6-2-2': 1,
         'ps-gate-c3-s4-1': 1,
+        'ps-gate-c4-s2-4': 1,
         'ps-gate-d1c-s6-4': 1,
         'ps-gate-r1-s6-6': 1,
         'ps-gate-r2-real-s4-4': 1,
@@ -396,12 +397,14 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w2-c1-1': 1,
         'ps-gate-w2-s5-3': 1,
         'ps-gate-w3-c1-1': 1,
+        'ps-gate-w3-s2-4': 1,
         'ps-gate-w4-s2-1': 1,
         'ps-gate-w4-s2-1-2': 1,
         'ps-gate-w5-s2-2': 1,
         'ps-gate-w7-s4-2': 1,
         'ps-gate-w7-s6-2': 1,
         'ps-gate-w8-s3-4': 1,
+        'ps-gate-w8-s9-4': 1,
         'ps-gate-w9-s6-3': 1,
         'ps-truth-datasets': 68,
         'query-approvals': 5,
@@ -479,7 +482,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(183);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(186);
     });
 });
 
@@ -716,6 +719,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c2-s6-2-2.G2.35',
         'ps-gate-c2-s6-2.G2.34',
         'ps-gate-c3-s4-1.G2.18',
+        'ps-gate-c4-s2-4.G2.9',
         'ps-gate-d1c-s6-4.G2.37',
         'ps-gate-r1-s6-6.G2.17',
         'ps-gate-r2-real-s4-4.G2.28',
@@ -740,12 +744,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-w2-c1-1.G0.2',
         'ps-gate-w2-s5-3.G0.9',
         'ps-gate-w3-c1-1.G0.3',
+        'ps-gate-w3-s2-4.G2.10',
         'ps-gate-w4-s2-1-2.G1.4',
         'ps-gate-w4-s2-1.G0.8',
         'ps-gate-w5-s2-2.G1.3',
         'ps-gate-w7-s4-2.G0.12',
         'ps-gate-w7-s6-2.G2.33',
         'ps-gate-w8-s3-4.G2.27',
+        'ps-gate-w8-s9-4.G2.40',
         'ps-gate-w9-s6-3.G2.38',
         'ps-truth-datasets.C2-s2201',
         'ps-truth-datasets.C4-s2202',
