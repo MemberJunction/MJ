@@ -3,8 +3,10 @@ spec seed, then spec*1000+1 ... +399) and W2-noise s100-s499 (`n400`) / s100-s15
 through truthsuite.paths (tests/tools/trainer_fixture.py). Generate a set into the cache before the gate runs with
 `pnpm run truth:data -- --set <set> --only <id>` in TruthSuite. Rules: a noise world publishes a model on at most 28 of
 400 seeds; a 95% interval covers its planted value on 372-388 of 400 seeds. Selected with PS_SEEDS400=1 or by naming
-the node (the conftest deselects them otherwise). PS_SEED_LIMIT=<k> runs the first k seeds with the thresholds scaled
-to k (a statistical gate's mutation check). The stored gate outcome is the engine's decision over these intervals plus
+the node (the conftest deselects them otherwise). PS_SEED_LIMIT=<k> runs a noise-publish or optimism gate on its first
+k seeds with the cap scaled to k (a mutation check). A coverage gate refuses it: a 372-388 band scaled to a few dozen
+seeds fails honest intervals about a third of the time, so coverage is measured on all 400 seeds or not at all. The
+stored gate outcome is the engine's decision over these intervals plus
 guards that only demote `model`, so a sidecar `model` count within the cap bounds the stored count."""
 
 from __future__ import annotations
@@ -20,15 +22,14 @@ import pytest
 
 from app import artifacts, scores
 from tests.gates.conftest import W_BINARY_FEATURES, completed, last_cycle_ids, world, world_frame
-from tests.tools.trainer_fixture import (NUMERIC, FileServer, JsonObject, candidates, protocol, refpipe_carve, request,
-                                         scenario, scenario_dir, scenario_seeds400, snapshot_files)
+from tests.tools.trainer_fixture import (BINARY_LABELS as LM, BINARY_TASK as BIN, NUMERIC, FileServer, JsonObject,
+                                         candidates, protocol, refpipe_carve, request, scenario, scenario_dir,
+                                         scenario_seeds400, snapshot_files)
 
 FArr = npt.NDArray[np.float64]
 
 WORKERS = int(os.environ.get("PS_GATE_WORKERS", "8"))
 SEED_LIMIT = int(os.environ.get("PS_SEED_LIMIT", "0"))   # > 0 only for a statistical gate's mutation check
-BIN: JsonObject = {"kind": "binary", "classOrder": ["0", "1"], "adverseIndex": 1}
-LM = {0: "0", 1: "1"}
 _KEYS = ("ID", "EntityKey", "T", "Target")
 
 
@@ -42,9 +43,7 @@ def publish_cap(n: int) -> int:
     return 28 * n // 400
 
 
-def coverage_band(n: int) -> tuple[int, int]:
-    """372-388 covered of 400, scaled to n seeds (floor, ceiling)."""
-    return 372 * n // 400, -(-388 * n // 400)
+COVERAGE_BAND = (372, 388)   # covered seeds of 400
 
 
 def seeds400(sid: str) -> list[int]:
@@ -109,8 +108,7 @@ def w2_run(seed: int) -> tuple[str, float, float]:
     return r.gate.outcome, reported.value, fresh_auc
 
 
-def _scenario_outcomes(sid: str, family: str) -> list[tuple[str, float, float, float | None]]:
-    seeds = limited(seeds400(sid))
+def _scenario_outcomes(sid: str, family: str, seeds: list[int]) -> list[tuple[str, float, float, float | None]]:
     with ProcessPoolExecutor(WORKERS) as ex:
         return list(ex.map(scenario_gate, [sid] * len(seeds), seeds, [family] * len(seeds)))
 
@@ -118,7 +116,7 @@ def _scenario_outcomes(sid: str, family: str) -> list[tuple[str, float, float, f
 @pytest.mark.seeds400
 @pytest.mark.gate("N1c -> S6.5")
 def test_N1c_S6_5_noise_publish() -> None:
-    out = _scenario_outcomes("N1c", "binary")
+    out = _scenario_outcomes("N1c", "binary", limited(seeds400("N1c")))
     published = sum(o[0] == "model" for o in out)
     assert published <= publish_cap(len(out)), f"{published} of {len(out)} noise seeds published a model"
 
@@ -126,7 +124,7 @@ def test_N1c_S6_5_noise_publish() -> None:
 @pytest.mark.seeds400
 @pytest.mark.gate("N1r -> S6.5")
 def test_N1r_S6_5_noise_publish() -> None:
-    out = _scenario_outcomes("N1r", "continuous")
+    out = _scenario_outcomes("N1r", "continuous", limited(seeds400("N1r")))
     published = sum(o[0] == "model" for o in out)
     assert published <= publish_cap(len(out)), f"{published} of {len(out)} noise seeds published a model"
 
@@ -153,8 +151,10 @@ def test_W2_S5_2_winner_optimism() -> None:
 @pytest.mark.seeds400
 @pytest.mark.gate("C2 -> S6.2 #2")
 def test_C2_S6_2_2_difference_interval_coverage() -> None:
-    out = _scenario_outcomes("C2", "binary")
+    assert SEED_LIMIT == 0, f"PS_SEED_LIMIT={SEED_LIMIT} is set: the coverage gate runs on all 400 seeds only; unset it"
+    out = _scenario_outcomes("C2", "binary", seeds400("C2"))
+    assert len(out) == 400, f"the coverage gate ran {len(out)} seeds, not 400"
     covered = sum(1 for _, lo, hi, planted in out if planted is not None and lo <= planted <= hi)
-    low, high = coverage_band(len(out))
+    low, high = COVERAGE_BAND
     assert low <= covered <= high, f"the model-minus-dummy interval covers the planted difference on {covered} of " \
-                                   f"{len(out)} seeds (band {low}-{high})"
+                                   f"400 seeds (band {low}-{high})"

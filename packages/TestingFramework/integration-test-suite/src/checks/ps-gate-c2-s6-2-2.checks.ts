@@ -1,7 +1,6 @@
 /**
  * Gate G2.35 "C2 → S6.2 #2": the model-minus-dummy log-loss interval covers the planted difference in 372–388 of
- * 400 seeds. A statistical gate: the node trains one model per seed of C2's n400 set; PS_SEED_LIMIT=<k> (passed
- * through to pytest) runs the first k seeds with the band scaled to k.
+ * 400 seeds. A statistical gate: the node trains one model per seed of C2's n400 set, and runs on all 400 only.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { PsGate } from './ps-gates/ps-gate-fixture';

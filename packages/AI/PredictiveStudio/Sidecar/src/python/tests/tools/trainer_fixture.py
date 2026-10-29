@@ -45,6 +45,10 @@ JsonObject = dict[str, JsonValue]
 
 NIL = "00000000-0000-0000-0000-0000000000"
 NUMERIC: JsonObject = {"kind": "numeric", "nonNumericValue": "fail"}
+# The binary task of the planted 0/1 scenarios and worlds (class "1" adverse) and the label map that writes their 0/1
+# targets as those class names.
+BINARY_TASK: JsonObject = {"kind": "binary", "classOrder": ["0", "1"], "adverseIndex": 1}
+BINARY_LABELS: dict[int, str] = {0: "0", 1: "1"}
 # Integers beyond this are not exactly representable as a JavaScript number, so they are never folded from a float.
 _JS_SAFE_INTEGER = 2**53
 
@@ -55,31 +59,32 @@ def uid(n: int) -> str:
 
 # ------------------------------------------------------------------------------------------------ JSON reading ------
 
-def _as_object(v: JsonValue, where: str) -> JsonObject:
+def as_object(v: JsonValue, where: str) -> JsonObject:
+    """`v` as a JSON object; ValueError naming `where` otherwise (the as_* readers narrow parsed JSON without casts)."""
     if not isinstance(v, dict):
         raise ValueError(f"{where} is not a JSON object")
     return v
 
 
-def _as_list(v: JsonValue, where: str) -> list[JsonValue]:
+def as_list(v: JsonValue, where: str) -> list[JsonValue]:
     if not isinstance(v, list):
         raise ValueError(f"{where} is not a JSON array")
     return v
 
 
-def _as_str(v: JsonValue, where: str) -> str:
+def as_str(v: JsonValue, where: str) -> str:
     if not isinstance(v, str):
         raise ValueError(f"{where} is not a JSON string")
     return v
 
 
-def _as_number(v: JsonValue, where: str) -> float:
+def as_number(v: JsonValue, where: str) -> float:
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         raise ValueError(f"{where} is not a JSON number")
     return float(v)
 
 
-def _as_int(v: JsonValue, where: str) -> int:
+def as_int(v: JsonValue, where: str) -> int:
     if isinstance(v, bool) or not isinstance(v, int):
         raise ValueError(f"{where} is not a JSON integer")
     return v
@@ -223,7 +228,7 @@ def feature_schema_hash(matrix: bytes) -> str:
     columns = header.get("featureColumns", []) if isinstance(header, dict) else []
     entries: list[JsonObject] = []
     for i, c in enumerate(columns if isinstance(columns, list) else []):
-        col = _as_object(c, f"featureColumns[{i}]")
+        col = as_object(c, f"featureColumns[{i}]")
         entries.append({"name": col.get("name"), "encoding": col.get("encoding"), "sourceColumn": col.get("sourceColumn")})
     return hashlib.sha256(_canonical_line(entries).rstrip("\n").encode("utf-8")).hexdigest()
 
@@ -320,7 +325,7 @@ def request(server: FileServer, matrix: bytes, manifest: bytes, task: JsonObject
                      "matrix": server.publish(f"{tag}-matrix.jsonl", matrix, uid(6), expires),
                      "rowManifest": server.publish(f"{tag}-manifest.jsonl", manifest, uid(7), expires)},
         "incumbent": incumbent, "protocol": proto, "task": task, "candidates": cands,
-        "seed": _as_int(proto["seed"], "protocol.seed"), "threads": threads, "timeoutSeconds": timeout, "maxRetries": 0,
+        "seed": as_int(proto["seed"], "protocol.seed"), "threads": threads, "timeoutSeconds": timeout, "maxRetries": 0,
     }
 
 
@@ -410,7 +415,7 @@ def scenario_manifest(sid: str, seed: int | None = None) -> JsonObject:
         path = paths.real_fixture(f"{sid}.manifest.json")
     else:
         path = scenario_dir(sid, seed) / "manifest.json"
-    return _as_object(_read_json(path), str(path))
+    return as_object(_read_json(path), str(path))
 
 
 def person_years() -> pd.DataFrame:
@@ -424,11 +429,11 @@ def person_years() -> pd.DataFrame:
 def _golden_mismatches(got: JsonObject, want: JsonObject) -> list[str]:
     """The keys of the committed summary entry `want` that the full result `got` does not reproduce."""
     def close(a: JsonValue, b: JsonValue) -> bool:
-        return abs(round(_as_number(a, "result value"), 10) - _as_number(b, "summary value")) <= 1e-9
+        return abs(round(as_number(a, "result value"), 10) - as_number(b, "summary value")) <= 1e-9
 
     try:
-        ps = _as_object(got["primaryScore"], "primaryScore")
-        ci, want_ci = _as_list(ps["ci"], "primaryScore.ci"), _as_list(want["ci"], "ci")
+        ps = as_object(got["primaryScore"], "primaryScore")
+        ci, want_ci = as_list(ps["ci"], "primaryScore.ci"), as_list(want["ci"], "ci")
         checks = {
             "selected": got.get("selected") == want.get("selected"),
             "score": ps.get("name") == want.get("score"),
@@ -436,8 +441,8 @@ def _golden_mismatches(got: JsonObject, want: JsonObject) -> list[str]:
             "ci": len(ci) == len(want_ci) == 2 and all(close(a, b) for a, b in zip(ci, want_ci)),
             "nTest": ps.get("nTest") == want.get("nTest"),
             "outcome": got.get("gateOutcome") == want.get("outcome"),
-            "branch": _as_object(got["gate"], "gate").get("branch") == want.get("branch"),
-            "sha256": _as_object(got["source"], "source").get("sha256") == want.get("sha256"),
+            "branch": as_object(got["gate"], "gate").get("branch") == want.get("branch"),
+            "sha256": as_object(got["source"], "source").get("sha256") == want.get("sha256"),
         }
     except (KeyError, ValueError) as e:
         return [f"shape ({e})"]
@@ -459,10 +464,10 @@ def refpipe(ref_id: str) -> JsonObject:
     _require_truthsuite()
     from truthsuite import paths
 
-    golden = _as_object(_read_json(paths.FIXTURES / "reference" / "p5-golden.json"), "p5-golden.json")
+    golden = as_object(_read_json(paths.FIXTURES / "reference" / "p5-golden.json"), "p5-golden.json")
     if ref_id not in golden:
         raise KeyError(f"{ref_id} is not a reference id of fixtures/reference/p5-golden.json")
-    want = _as_object(golden[ref_id], f"p5-golden.json {ref_id}")
+    want = as_object(golden[ref_id], f"p5-golden.json {ref_id}")
     out = paths.data_root() / "refpipe" / f"{ref_id}.json"
     if not out.is_file():
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -471,7 +476,7 @@ def refpipe(ref_id: str) -> JsonObject:
         subprocess.run([sys.executable, "-m", "truthsuite.refpipe.run", sid, "--out", str(tmp)] + (["--shuffle-labels"] if shuffled else []),
                        check=True, cwd=paths.PACKAGE_ROOT / "python", env={**os.environ, "PYTHONHASHSEED": "0"})
         tmp.replace(out)
-    got = _as_object(_read_json(out), str(out))
+    got = as_object(_read_json(out), str(out))
     bad = _golden_mismatches(got, want)
     if bad:
         out.unlink()
@@ -499,8 +504,8 @@ def refpipe_carve(df: pd.DataFrame, seed: int = 0) -> list[str]:
 # --------------------------------------------------------------------------------------------- runtime check -------
 
 def _summary(ref: JsonObject, result: TrainerCompleted | None, status: str, compute_seconds: float) -> JsonObject:
-    rp = _as_object(ref["primaryScore"], "primaryScore")
-    gate = _as_object(ref["gate"], "gate")
+    rp = as_object(ref["primaryScore"], "primaryScore")
+    gate = as_object(ref["gate"], "gate")
     return {"status": status,
             "finalist": result.finalist if result is not None else None,
             "gate": result.gate.model_dump(mode="json") if result is not None else None,
@@ -523,12 +528,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     ref = refpipe(a.scenario)
     df = scenario(a.scenario)
-    task = _as_object(json.loads(a.task), "--task")
-    family = _as_str(task["kind"], "--task kind")
-    label_map = ({int(k): _as_str(v, f"--label-map {k}") for k, v in _as_object(json.loads(a.label_map), "--label-map").items()}
+    task = as_object(json.loads(a.task), "--task")
+    family = as_str(task["kind"], "--task kind")
+    label_map = ({int(k): as_str(v, f"--label-map {k}") for k, v in as_object(json.loads(a.label_map), "--label-map").items()}
                  if a.label_map else None)
-    feats = {_as_str(c, "features[]"): NUMERIC for c in _as_list(ref["features"], "features")}
-    test_ids = [_as_str(i, "split.testIds[]") for i in _as_list(_as_object(ref["split"], "split")["testIds"], "split.testIds")]
+    feats = {as_str(c, "features[]"): NUMERIC for c in as_list(ref["features"], "features")}
+    test_ids = [as_str(i, "split.testIds[]") for i in as_list(as_object(ref["split"], "split")["testIds"], "split.testIds")]
     srv = FileServer()
     try:
         m, n = snapshot_files(df, feats, test_ids, label_map=label_map)

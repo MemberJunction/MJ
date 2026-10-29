@@ -17,10 +17,10 @@ from app import code_version, snapshot as SN, trainer as TR
 from app.failures import RunClock
 from app.trainer_schemas import TrainerRequest
 from tests.gates.conftest import W_BINARY_FEATURES, last_cycle_ids, world, world_frame
-from tests.tools.trainer_fixture import FileServer, JsonObject, candidates, protocol, request, snapshot_files
+from tests.tools.trainer_fixture import (BINARY_LABELS as LM, FileServer, JsonObject, candidates, protocol, request,
+                                         snapshot_files)
 
 TASK: JsonObject = {"kind": "binary", "classOrder": ["0", "1"], "adverseIndex": 0}
-LM = {0: "0", 1: "1"}
 NOW = dt.datetime(2026, 10, 12, tzinfo=dt.timezone.utc)
 
 IntArr = npt.NDArray[np.int64]

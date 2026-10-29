@@ -13,15 +13,14 @@ import pandas as pd
 import pytest
 
 from app import artifacts, calibration as CAL, intervals as IV, scores
-from app.trainer_schemas import MetricWithInterval, TrainerCompleted
+from app.trainer_schemas import MetricWithInterval, OutOfTimeSlice, TrainerCompleted
 from tests.gates.conftest import W_BINARY_FEATURES, completed, last_cycle_ids, post, world, world_frame, world_truth
-from tests.tools.trainer_fixture import (NUMERIC, FileServer, JsonObject, JsonValue, candidates, person_years, protocol,
-                                         refpipe, request, scenario, snapshot_files)
+from tests.tools.trainer_fixture import (BINARY_LABELS as LM, BINARY_TASK as BIN, NUMERIC, FileServer, JsonObject,
+                                         JsonValue, as_list, as_number, as_object, as_str, candidates, person_years,
+                                         protocol, refpipe, request, scenario, snapshot_files)
 
 FArr = npt.NDArray[np.float64]
 
-BIN: JsonObject = {"kind": "binary", "classOrder": ["0", "1"], "adverseIndex": 1}
-LM = {0: "0", 1: "1"}
 ONEHOT: JsonObject = {"kind": "categorical", "cardinalityCap": 20, "method": "onehot"}
 # Gate member name -> the baseline kind it reports under.
 _MEMBER_KIND = {"glm": "glm", "oneFeature": "one-feature", "dummy": "dummy"}
@@ -29,24 +28,13 @@ _MEMBER_KIND = {"glm": "glm", "oneFeature": "one-feature", "dummy": "dummy"}
 
 # ------------------------------------------------------------------------------------------ reference results -----
 
-def _obj(v: JsonValue, where: str) -> JsonObject:
-    assert isinstance(v, dict), f"{where} is not a JSON object"
-    return v
-
-
 def _strs(v: JsonValue, where: str) -> list[str]:
-    assert isinstance(v, list) and all(isinstance(x, str) for x in v), f"{where} is not a list of strings"
-    return [str(x) for x in v]
-
-
-def _num(v: JsonValue, where: str) -> float:
-    assert isinstance(v, (int, float)) and not isinstance(v, bool), f"{where} is not a number"
-    return float(v)
+    return [as_str(x, f"{where}[]") for x in as_list(v, where)]
 
 
 def ref_test_ids(ref_id: str) -> list[str]:
     """The reference pipeline's locked-holdout row IDs for a reference id."""
-    return _strs(_obj(refpipe(ref_id)["split"], "split")["testIds"], f"{ref_id} split.testIds")
+    return _strs(as_object(refpipe(ref_id)["split"], "split")["testIds"], f"{ref_id} split.testIds")
 
 
 def ref_features(ref_id: str) -> list[str]:
@@ -56,10 +44,19 @@ def ref_features(ref_id: str) -> list[str]:
 
 def ref_primary(ref_id: str) -> tuple[float, float, float]:
     """(value, lower, upper) of the reference pipeline's holdout primary score."""
-    p = _obj(refpipe(ref_id)["primaryScore"], f"{ref_id} primaryScore")
-    ci = p["ci"]
-    assert isinstance(ci, list) and len(ci) == 2
-    return _num(p["value"], "value"), _num(ci[0], "ci[0]"), _num(ci[1], "ci[1]")
+    p = as_object(refpipe(ref_id)["primaryScore"], f"{ref_id} primaryScore")
+    ci = as_list(p["ci"], "ci")
+    assert len(ci) == 2
+    return as_number(p["value"], "value"), as_number(ci[0], "ci[0]"), as_number(ci[1], "ci[1]")
+
+
+def ref_inner_score(ref_id: str, candidate: str) -> float:
+    """The reference pipeline's inner-CV primary score of one of its candidates (glm, lgbm, xgb)."""
+    for c in as_list(refpipe(ref_id)["candidates"], f"{ref_id} candidates"):
+        entry = as_object(c, "candidate")
+        if entry.get("name") == candidate:
+            return as_number(entry["innerCvScore"], f"{candidate} innerCvScore")
+    raise KeyError(f"{ref_id} has no reference candidate {candidate}")
 
 
 # ------------------------------------------------------------------------------------------------- helpers --------
@@ -100,14 +97,14 @@ def predict_class_vectors(r: TrainerCompleted, rows: list[JsonObject]) -> tuple[
     status, body = post("/predict", {"artifact_b64": art.bytesBase64, "fitted_preprocessing": {}, "feature_schema": [],
                                      "rows": list(rows)})
     assert status == 200, f"/predict answered {status}: {body}"
-    resp = _obj(body, "/predict response")
+    resp = as_object(body, "/predict response")
     order = _strs(resp["classOrder"], "classOrder")
     preds = resp["predictions"]
     assert isinstance(preds, list)
     vectors: list[list[float]] = []
     for i, p in enumerate(preds):
-        probs = _obj(p, f"predictions[{i}]").get("probabilities")
-        vectors.append([_num(x, "probability") for x in probs] if isinstance(probs, list) else [])
+        probs = as_object(p, f"predictions[{i}]").get("probabilities")
+        vectors.append([as_number(x, "probability") for x in probs] if isinstance(probs, list) else [])
     return order, vectors
 
 
@@ -207,20 +204,26 @@ def _assert_no_negative_predictions(r: TrainerCompleted, sid: str) -> None:
     assert int(np.sum(p < 0)) == 0, f"{int(np.sum(p < 0))} negative predictions"
 
 
-def _assert_glm_is_reference(r: TrainerCompleted, sid: str) -> None:
-    """The GLM baseline fits the family's own likelihood: its holdout score equals the reference pipeline's GLM."""
+def _assert_family_objectives(r: TrainerCompleted, sid: str) -> None:
+    """The GLM baseline and the boosted candidates fit the family's own likelihood: the GLM baseline's holdout score
+    and the XGBoost candidate's inner-CV score equal the reference pipeline's (same model, objective, seed and folds).
+    LightGBM is not pinned: the trainer centres numeric columns before every driver and LightGBM's histogram bins
+    always split at zero, so its fits differ from the reference pipeline's uncentred ones by design."""
     value, _lo, _hi = ref_primary(sid)
     glm = next(b.holdout for b in r.baselines if b.baseline.kind == "glm")
     assert glm.value == pytest.approx(value, abs=1e-6), f"GLM baseline {glm.value} vs the reference pipeline's {value}"
+    xgb = next(s.inner for s in r.innerScores if s.candidate == "xgb")
+    want = ref_inner_score(sid, "xgb")
+    assert xgb.value == pytest.approx(want, abs=1e-6), f"xgb inner score {xgb.value} vs the reference pipeline's {want}"
 
 
 @pytest.mark.gate("R3 -> S4.3")
 def test_R3_S4_3_poisson_deviance(server: FileServer) -> None:
-    """A count target ranks and gates on Poisson deviance; its GLM baseline is the reference pipeline's Poisson GLM
-    (same holdout deviance within 1e-6); what ships scores at most 1.1713 and predicts no negatives."""
+    """A count target ranks and gates on Poisson deviance; its GLM baseline and XGBoost candidate are the reference
+    pipeline's Poisson fits (scores within 1e-6); what ships scores at most 1.1713 and predicts no negatives."""
     r = scenario_run(server, "R3", {"kind": "count"}, "count")
     assert r.holdout.primary.metric == "poisson-deviance" and r.gate.shipped is not None
-    _assert_glm_is_reference(r, "R3")
+    _assert_family_objectives(r, "R3")
     shipped = shipped_holdout(r)
     assert shipped.value <= 1.1713, f"shipped {r.gate.shipped} Poisson deviance {shipped.value}"
     _assert_no_negative_predictions(r, "R3")
@@ -228,12 +231,12 @@ def test_R3_S4_3_poisson_deviance(server: FileServer) -> None:
 
 @pytest.mark.gate("R2p -> S4.3")
 def test_R2p_S4_3_tweedie_deviance(server: FileServer) -> None:
-    """A non-negative target ranks and gates on Tweedie deviance at its declared power 1.5; its GLM baseline is the
-    reference pipeline's Tweedie GLM (same holdout deviance within 1e-6); what ships scores at most 22.7529 and predicts
-    no negatives."""
+    """A non-negative target ranks and gates on Tweedie deviance at its declared power 1.5; its GLM baseline and XGBoost
+    candidate are the reference pipeline's Tweedie fits (scores within 1e-6); what ships scores at most 22.7529 and
+    predicts no negatives."""
     r = scenario_run(server, "R2p", {"kind": "non-negative", "tweediePower": 1.5}, "non-negative")
     assert r.holdout.primary.metric == "tweedie-deviance" and r.gate.shipped is not None
-    _assert_glm_is_reference(r, "R2p")
+    _assert_family_objectives(r, "R2p")
     shipped = shipped_holdout(r)
     assert shipped.value <= 22.7529, f"shipped {r.gate.shipped} Tweedie deviance {shipped.value}"
     _assert_no_negative_predictions(r, "R2p")
@@ -241,16 +244,16 @@ def test_R2p_S4_3_tweedie_deviance(server: FileServer) -> None:
 
 @pytest.mark.gate("R2-real -> S4.4")
 def test_R2_real_S4_4_rmse_across_families_is_refused(server: FileServer) -> None:
-    """Ranking Tweedie and squared-error candidates of a non-negative target by RMSE is refused before anything fits."""
+    """A non-negative target's candidates ranked by RMSE is refused before anything fits."""
     df = scenario("R2-real")
     feats: dict[str, JsonObject] = {c: (NUMERIC if pd.api.types.is_numeric_dtype(df[c]) else ONEHOT)
                                     for c in ref_features("R2-real")}
     m, n = snapshot_files(df, feats, ref_test_ids("R2-real"))
     req = request(server, m, n, {"kind": "non-negative", "tweediePower": 1.5},
                   protocol("non-negative", primaryScore={"family": "continuous", "metric": "rmse"}),
-                  candidates("non-negative", [("tweedie", "lightgbm", {}), ("sq", "lightgbm", {"objective": "regression"})]))
+                  candidates("non-negative", [("tweedie", "lightgbm", {}), ("xgb", "xgboost", {})]))
     status, body = post("/trainer", req)
-    detail = _obj(body, "response").get("detail")
+    detail = as_object(body, "response").get("detail")
     assert status == 400 and isinstance(detail, str) and "ranking across families" in detail, f"{status}: {body}"
 
 
@@ -370,7 +373,9 @@ def test_W1_S6_3_every_family_calibrated_or_hidden(server: FileServer, seed: int
     expected_hidden = (driver, seed) in W1_HIDDEN
     assert CAL.slope_hides_family(slope) is expected_hidden, \
         f"{driver} s{seed}: slope {slope:.4f}, declared {'hidden' if expected_hidden else 'offered'}"
-    if not expected_hidden:
+    if expected_hidden:
+        assert not 0.8 <= slope <= 1.2, f"declared-hidden family {driver} s{seed} measures slope {slope:.4f}, inside"
+    else:
         assert 0.8 <= slope <= 1.2, f"offered family {driver} s{seed} is miscalibrated: slope {slope:.4f}"
 
 
@@ -422,7 +427,7 @@ def test_D1c_S6_4_one_slice_per_post_cutoff_period(server: FileServer) -> None:
     r = completed(request(server, m, n, BIN, protocol("binary", slices={"outOfTime": True, "subgroups": []}),
                           candidates("binary"), tag="d1c"))
     periods = sorted({str(t)[:4] + "-01-01" for t in df.loc[df["ID"].isin(hold), "T"]})
-    got = [s for s in r.slices if s.slice.kind == "out-of-time"]
+    got = [(s.slice.period, s.primary) for s in r.slices if isinstance(s.slice, OutOfTimeSlice)]
     assert len(periods) > 1
-    assert sorted(s.slice.period for s in got if s.slice.kind == "out-of-time") == periods
-    assert all(strictly_inside(s.primary) and s.primary.interval.level == 0.95 for s in got)
+    assert sorted(period for period, _ in got) == periods
+    assert all(strictly_inside(primary) and primary.interval.level == 0.95 for _, primary in got)
