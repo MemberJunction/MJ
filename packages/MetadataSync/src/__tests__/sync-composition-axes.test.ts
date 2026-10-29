@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, UserInfo } from '@memberjunction/core';
-import type { RecordData, BatchContext } from '../lib/sync-engine';
+import type { RecordData, BatchContext, SyncResolutionCollector } from '../lib/sync-engine';
+import { OptionalEnvMissingError } from '../lib/env-reference';
 import type { FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { PushOptions } from '../services/PushService';
 import type { EntityConfig, EntityConfig as EntitySyncConfig } from '../config';
@@ -10,6 +11,8 @@ import { ValidationService } from '../services/ValidationService';
 import { PushService } from '../services/PushService';
 import { SyncEngine } from '../lib/sync-engine';
 import { RecordProcessor } from '../lib/RecordProcessor';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import type { RelatedRecordCollection } from '@memberjunction/core';
 
 // Mock minimal BaseEntity supporting composition axes
 class MockEntity {
@@ -143,6 +146,57 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
 
       const errors = getErrors();
       expect(errors.some((e) => e.message.includes('Did you mean "collections"?'))).toBe(true);
+    });
+
+    describe('collection declared by the entity class', () => {
+      // No RelatedRecordCollection row yet: CodeGen's relationship carries no collection name, as on a fresh database
+      const queryEntity = {
+        ID: 'query-entity',
+        Name: 'MJ: Queries',
+        Fields: [{ Name: 'ID', AllowsNull: false, DefaultValue: null, AutoIncrement: false, ReadOnly: false }],
+        PrimaryKeys: [{ Name: 'ID' }],
+        RelatedEntities: [
+          { RelatedEntity: 'MJ: Query Parameters', RelatedEntityJoinField: 'QueryID', RelatedRecordCollection: null, DisplayName: 'MJ: Query Parameters' },
+        ],
+      } as unknown as EntityInfo;
+      const parameterEntity = {
+        ID: 'param-entity',
+        Name: 'MJ: Query Parameters',
+        Fields: [{ Name: 'Name', AllowsNull: false, DefaultValue: null, AutoIncrement: false, ReadOnly: false }],
+        PrimaryKeys: [{ Name: 'ID' }],
+      } as unknown as EntityInfo;
+      const declaredParameters = () =>
+        ({ Name: 'Parameters', RelatedEntityName: 'MJ: Query Parameters' }) as Partial<RelatedRecordCollection>;
+      const validateParameters = async () =>
+        (service as unknown as {
+          validateCollections: (d: unknown, info: EntityInfo, file: string, cfg: EntitySyncConfig, depth: number) => Promise<void>;
+        }).validateCollections({ Parameters: [{ fields: { Name: 'maxDepth' } }] }, queryEntity, '/q.json', { entity: 'MJ: Queries', filePattern: '*.json' }, 0);
+
+      beforeEach(() => {
+        mockMetadata.EntityByName = vi.fn().mockImplementation((name: string) =>
+          name === 'MJ: Queries' ? queryEntity : name === 'MJ: Query Parameters' ? parameterEntity : null
+        );
+        // GetEntityObject runs as the System user, which needs the Developer role
+        vi.spyOn(UserCache.Instance, 'UserByName').mockReturnValue({ UserRoles: [{ Role: 'Developer' }] } as unknown as UserInfo);
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('accepts a collection the class declares before its RelatedRecordCollection row exists, as push does', async () => {
+        mockMetadata.GetEntityObject = vi.fn().mockResolvedValue({ Companions: [declaredParameters()] });
+        await validateParameters();
+        expect(getErrors()).toEqual([]);
+      });
+
+      it('rejects a collection neither the class nor the relationship metadata declares', async () => {
+        mockMetadata.GetEntityObject = vi.fn().mockResolvedValue({ Companions: [] });
+        await validateParameters();
+        expect(getErrors().map((e) => e.message)).toEqual([
+          'Collection "Parameters" is not declared on entity "MJ: Queries" or has no valid relationship join field',
+        ]);
+      });
     });
 
     it('accepts one primary key in two files and rejects a field set to two values (§6)', async () => {
@@ -892,6 +946,80 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         expect(lookupCalls).toHaveLength(1);
       });
 
+      describe('an @env: matchOn key', () => {
+        const envRef = '@env:PROBE_SECRET_NAME';
+        const applyWithOwnerCollector = async (ownerCollector: SyncResolutionCollector) =>
+          (pushService as unknown as {
+            applyCompositionAxes: (
+              entity: MockEntity,
+              record: RecordData,
+              entityName: string,
+              entityDir: string,
+              batchContext: BatchContext,
+              resolutionCollector: SyncResolutionCollector,
+              options: PushOptions,
+              callbacks?: unknown,
+              entityConfig?: EntityConfig
+            ) => Promise<void>;
+          }).applyCompositionAxes(
+            mockOwnerEntity,
+            {
+              primaryKey: { ID: 'ord-1' },
+              fields: { ID: 'ord-1' },
+              collections: { Parameters: [{ fields: { Name: envRef, DetectionMethod: 'Manual' } }] },
+            },
+            mockOwnerEntity.EntityInfo.Name,
+            '/dummy/dir',
+            new Map(),
+            ownerCollector,
+            {},
+            undefined,
+            configWithMatchOn(['Name'])
+          );
+
+        it("records the variable in the child's map and queues it for the SQL log, not in the owner's map", async () => {
+          const processFieldValue = mockSyncEngine.processFieldValue as unknown as ReturnType<typeof vi.fn>;
+          processFieldValue.mockImplementation((val: unknown, ...rest: unknown[]) => {
+            if (val !== envRef) return val;
+            const [, , , , , collector, fieldName] = rest as [unknown, unknown, unknown, unknown, unknown, SyncResolutionCollector, string];
+            collector.EnvFields?.set(fieldName, new Set(['PROBE_SECRET_NAME']));
+            return 'agentRunID';
+          });
+          const existing = new MockEntity('QueryParameters', { ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI' });
+          mockOwnerEntity.collections['Parameters'] = buildCollection([existing]);
+          const queue = vi.spyOn(pushService as unknown as { queueEnvSqlChildField: (...args: unknown[]) => void }, 'queueEnvSqlChildField');
+          const ownerCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'fields', EnvFields: new Map() };
+
+          await applyWithOwnerCollector(ownerCollector);
+
+          expect(existing.Get('DetectionMethod')).toBe('Manual');
+          expect(ownerCollector.EnvFields?.has('Name')).toBe(false);
+          expect(queue).toHaveBeenCalledWith(ownerCollector, {
+            Target: existing,
+            FieldName: 'Name',
+            Variables: new Set(['PROBE_SECRET_NAME']),
+          });
+        });
+
+        it('matches nothing when the key is an unset optional variable, and leaves the field out', async () => {
+          const processFieldValue = mockSyncEngine.processFieldValue as unknown as ReturnType<typeof vi.fn>;
+          processFieldValue.mockImplementation((val: unknown) => {
+            if (val === envRef) throw new OptionalEnvMissingError('PROBE_SECRET_NAME');
+            return val;
+          });
+          const existing = new MockEntity('QueryParameters', { ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI' });
+          const items = [existing];
+          mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+          await applyWithOwnerCollector({ notes: [], fieldPrefix: 'fields', EnvFields: new Map() });
+
+          expect(items).toHaveLength(2);
+          expect(existing.Get('DetectionMethod')).toBe('AI');
+          expect(items[1].Get('Name')).toBeUndefined();
+          expect(items[1].Get('DetectionMethod')).toBe('Manual');
+        });
+      });
+
       it('warns, naming the fields, when an item lacks a matchOn field', async () => {
         const existing = new MockEntity('QueryParameters', {
           ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI',
@@ -1307,7 +1435,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
           calculateChecksum: vi.fn().mockReturnValue('cs-1'),
           calculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
         } as unknown as SyncEngine;
-        const processor = new RecordProcessor(mockSync);
+        const processor = new RecordProcessor(mockSync, {} as UserInfo);
         const owner = new MockEntity('MJ: Queries', { ID: 'query-1' }, ['ID'], ['ID']);
         const childFields = ['ID', 'QueryID', 'Name', 'DetectionMethod', 'Description'];
         const param = (id: string, name: string, detection: string) =>
@@ -1320,7 +1448,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
           Items: [param('a', 'zeta', 'Manual'), param('b', 'maxDepth', 'AI'), param('c', 'alpha', 'Manual'), param('d', 'agentRunID', 'AI')],
           Load: vi.fn().mockResolvedValue(undefined),
         } as unknown as (typeof owner.collections)[string];
-        owner.EntityInfo.RelatedEntities = [
+        (owner.EntityInfo as { RelatedEntities: EntityRelationshipInfo[] }).RelatedEntities = [
           {
             RelatedEntity: 'MJ: Query Parameters',
             RelatedEntityJoinField: 'QueryID',

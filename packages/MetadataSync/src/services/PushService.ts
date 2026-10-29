@@ -3551,8 +3551,10 @@ export class PushService {
             // Declared values are resolved first, so a key written as a reference
             // (`@lookup:`, `@parent:`, `@owner:` …) compares as the value it stands for. The
             // resolved values are reused when the fields are applied below, so each reference
-            // is resolved once.
+            // is resolved once. They resolve into the child's own EnvFields map, as
+            // setCompositionField does, so a child key never masks an owner field of the same name.
             const resolvedFieldValues = new Map<string, unknown>();
+            const matchCollector: SyncResolutionCollector = { notes: resolutionCollector.notes, fieldPrefix: resolutionCollector.fieldPrefix, EnvFields: new Map() };
             if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
               const fields = itemData.fields;
               const missing = matchOn.filter((f) => !(f in fields));
@@ -3566,23 +3568,36 @@ export class PushService {
                 );
               } else {
                 for (const f of matchOn) {
-                  resolvedFieldValues.set(
-                    f,
-                    await this.syncEngine.processFieldValue(
-                      fields[f],
-                      entityDir,
-                      null,
-                      null,
-                      0,
-                      batchContext,
-                      resolutionCollector,
+                  try {
+                    resolvedFieldValues.set(
                       f,
-                      recordProvider,
-                      entity // ownerRecord
-                    )
-                  );
+                      await this.syncEngine.processFieldValue(
+                        fields[f],
+                        entityDir,
+                        null,
+                        null,
+                        0,
+                        batchContext,
+                        matchCollector,
+                        f,
+                        recordProvider,
+                        entity // ownerRecord
+                      )
+                    );
+                  } catch (error) {
+                    if (error instanceof EnvVariableNotSetError) {
+                      throw error.ForField(`fields.${f}`, col.RelatedEntityName);
+                    }
+                    if (!(error instanceof OptionalEnvMissingError)) {
+                      throw error;
+                    }
+                    // An unset optional key leaves the field out of the save, so it cannot identify a row:
+                    // match on nothing, and let the fields below skip it with setCompositionField's warning
+                    resolvedFieldValues.clear();
+                    break;
+                  }
                 }
-                targetChild = loadedItems.find((child) =>
+                targetChild = resolvedFieldValues.size === 0 ? null : loadedItems.find((child) =>
                   matchOn.every((f) => {
                     const childValue = child.Get(f);
                     const declaredValue = resolvedFieldValues.get(f);
@@ -3621,6 +3636,10 @@ export class PushService {
               for (const [fName, fVal] of Object.entries(itemData.fields)) {
                 if (resolvedFieldValues.has(fName)) {
                   targetChild.Set(fName, resolvedFieldValues.get(fName));
+                  const variables = matchCollector.EnvFields?.get(fName);
+                  if (variables) {
+                    this.queueEnvSqlChildField(resolutionCollector, { Target: targetChild, FieldName: fName, Variables: variables });
+                  }
                   continue;
                 }
                 await this.setCompositionField(targetChild, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks);

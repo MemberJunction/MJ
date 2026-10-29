@@ -31,6 +31,7 @@ import {
 } from '../constants/metadata-keywords';
 import { EntityConfig, SyncConfig } from '../config';
 import { ResolveCollectionRelationship } from '@memberjunction/record-graph';
+import type { RelatedRecordCollection } from '@memberjunction/core';
 
 // Type aliases for clarity
 type EntityData = RecordData;
@@ -2167,8 +2168,11 @@ export class ValidationService {
         continue;
       }
 
-      const resolved = ResolveCollectionRelationship(entityInfo, colName);
-      if (!resolved) {
+      // Push looks for the collection on the entity class before the relationship metadata, so validation does too:
+      // a collection the generated class declares is pushable before its RelatedRecordCollection row reaches the database
+      const relatedEntity =
+        (await this.codeDeclaredCollectionEntity(entityInfo, colName)) ?? ResolveCollectionRelationship(entityInfo, colName)?.relatedEntity;
+      if (!relatedEntity) {
         this.addError({
           type: 'entity',
           severity: 'error',
@@ -2179,14 +2183,14 @@ export class ValidationService {
         continue;
       }
 
-      const childEntityInfo = this.metadata.EntityByName(resolved.relatedEntity);
+      const childEntityInfo = this.metadata.EntityByName(relatedEntity);
       if (!childEntityInfo) {
         this.addError({
           type: 'entity',
           severity: 'error',
           entity: entityInfo.Name,
           file: filePath,
-          message: `Collection "${colName}" refers to related entity "${resolved.relatedEntity}" which is not found in metadata`,
+          message: `Collection "${colName}" refers to related entity "${relatedEntity}" which is not found in metadata`,
         });
         continue;
       }
@@ -2213,6 +2217,22 @@ export class ValidationService {
           { entity: entityInfo.Name }
         );
       }
+    }
+  }
+
+  /**
+   * The related entity of a collection the entity's class declares in code (its companion of that name,
+   * matched without regard to case as push matches it), or undefined when the class declares none.
+   */
+  private async codeDeclaredCollectionEntity(entityInfo: EntityInfo, colName: string): Promise<string | undefined> {
+    try {
+      const entity = await this.metadata.GetEntityObject(entityInfo.Name, GetSystemUser());
+      const companion = entity.Companions.find((c) => c.Name.toLowerCase() === colName.toLowerCase());
+      // Matched by shape, as push reads the companion
+      const relatedEntity = (companion as Partial<RelatedRecordCollection> | undefined)?.RelatedEntityName;
+      return typeof relatedEntity === 'string' ? relatedEntity : undefined;
+    } catch {
+      return undefined;
     }
   }
 
