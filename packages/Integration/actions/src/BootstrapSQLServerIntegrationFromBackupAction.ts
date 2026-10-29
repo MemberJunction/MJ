@@ -21,6 +21,7 @@ import {
     type StagingDropFacts,
     type StagingDropOptions
 } from './StagingDropGuard.js';
+import { StagingNotAccessibleError, StagingNotAccessibleMessage } from './StagingAccessGuard.js';
 
 /**
  * Reports the bootstrap's stages onto an integration run's progress artifact stream when the caller
@@ -350,7 +351,28 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
         ctx.StagingDbCreated = true;
         await this.executeDatabaseRestore(runner, stagingDbName, backupUrls, moveClauses);
+        await this.assertStagingAccessible(sqlExecutor, stagingDbName, params.ContextUser);
         progress.StageComplete('Restore');
+    }
+
+    /**
+     * Throws {@link StagingNotAccessibleError} when the login this server runs with cannot read the
+     * restored database (see that class for why a successful restore can leave it unreadable). Checked
+     * right after the restore so the failure names the remedy, instead of the discover phase failing
+     * with a bare "Login failed".
+     */
+    protected async assertStagingAccessible(executor: DatabaseProviderBase, stagingDbName: string, contextUser?: UserInfo): Promise<void> {
+        ValidateIdentifier(stagingDbName, 'database');
+        try {
+            await executor.ExecuteSQL<{ TableCount: number }>(
+                `SELECT COUNT(*) AS TableCount FROM [${stagingDbName}].sys.tables`,
+                undefined,
+                { description: `Check access to [${stagingDbName}]` },
+                contextUser
+            );
+        } catch (err) {
+            throw new StagingNotAccessibleError(StagingNotAccessibleMessage(stagingDbName, err instanceof Error ? err.message : String(err)));
+        }
     }
 
     /**

@@ -130,6 +130,8 @@ function outputs(result: ActionResultSimple): Record<string, unknown> {
 interface MockSqlOptions {
     stagingDbExists?: boolean;
     failOnRestore?: boolean;
+    /** The post-restore access check (`[staging].sys.tables`) fails as the login cannot open the database. */
+    failOnStagingAccess?: boolean;
     /** `DB_NAME()` the drop guard sees (default 'MJ_Main'). */
     currentDatabase?: string;
     /** The target's `create_date` in UTC the drop guard sees (default 2026-10-28T12:00Z); null means absent. */
@@ -146,6 +148,11 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): DatabaseProviderBa
 
         if (text.startsWith('RESTORE DATABASE') && options.failOnRestore) {
             return Promise.reject(new Error('RESTORE DATABASE is terminating abnormally'));
+        }
+        if (sql.includes('].sys.tables')) {
+            return options.failOnStagingAccess
+                ? Promise.reject(new Error("The server principal \"MJ_Connect\" is not able to access the database \"MJ_Staging_X\" under the current security context."))
+                : Promise.resolve([{ TableCount: 12 }]);
         }
         if (sql.includes('SELECT TOP 1 1 AS HasRows')) {
             return Promise.resolve([]);
@@ -273,6 +280,31 @@ describe('RestoreSQLServerBackupToStagingAction', () => {
         expect(r.Success).toBe(false);
         expect(r.ResultCode).toBe('RESTORE_FAILED');
         expect(sqlCalls.some(s => s.includes('DROP DATABASE [MJ_Staging_X]'))).toBe(true);
+    });
+
+    it('Restore action checks the restored database can be opened before reporting the restore complete', async () => {
+        const r = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', StagingDatabaseName: 'MJ_Staging_X' }));
+
+        expect(r.Success).toBe(true);
+        const restoreAt = sqlCalls.findIndex(s => s.startsWith('RESTORE DATABASE [MJ_Staging_X]'));
+        const checkAt = sqlCalls.findIndex(s => s.includes('[MJ_Staging_X].sys.tables'));
+        expect(checkAt).toBeGreaterThan(restoreAt);
+    });
+
+    it('Restore action fails with STAGING_NOT_ACCESSIBLE, naming the remedy, and drops the staging database when the login cannot open it', async () => {
+        restore.CustomDatabaseProvider = createMockSqlExecutor({ failOnStagingAccess: true });
+        const r = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', StagingDatabaseName: 'MJ_Staging_X', ProgressRunID: 'run-A' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('STAGING_NOT_ACCESSIBLE');
+        expect(r.Message).toContain('Restored [MJ_Staging_X], but the SQL login MJAPI runs with cannot open it');
+        expect(r.Message).toContain('not able to access the database');
+        expect(r.Message).toContain('CONNECT ANY DATABASE and SELECT ALL USER SECURABLES');
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE [MJ_Staging_X]'))).toBe(true);
+        const stageError = progressCalls.find(c => c.Method === 'StageError');
+        expect(stageError?.Args[0]).toBe('Restore');
+        expect(stageError?.Args[2]).toEqual({ code: 'STAGING_NOT_ACCESSIBLE' });
+        expect(progressMethods()).not.toContain('Fail');
     });
 
     it('Restore action reports the restore stage, never completes the run, and flushes the stream', async () => {

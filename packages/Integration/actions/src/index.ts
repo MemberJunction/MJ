@@ -7,3 +7,4 @@ export * from './RestoreSQLServerBackupToStagingAction.js';
 export * from './LoadSQLServerIntegrationFromStagingAction.js';
 export * from './DropSQLServerStagingDatabaseAction.js';
 export * from './StagingDropGuard.js';
+export * from './StagingAccessGuard.js';

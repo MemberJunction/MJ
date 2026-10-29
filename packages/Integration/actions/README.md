@@ -147,7 +147,7 @@ Restores the backup into a named staging database and stops. The staging databas
 | `BackupDatabaseName` | Output | string | — | Source database recorded in the backup header |
 | `ContainerUrl` | Output | string | — | Storage container whose SQL Server credential was registered (empty for local paths) |
 
-**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupUrls holds no valid URL or path), `RESTORE_FAILED`
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupUrls holds no valid URL or path), `STAGING_NOT_ACCESSIBLE` (the restore succeeded but MJAPI's SQL login cannot open the staging database; the staging database is dropped and the message names the remedy), `RESTORE_FAILED`
 
 ### 6. Load SQL Server Integration From Staging
 
@@ -219,6 +219,7 @@ An `archive-seed` pending-work job in MJAPI drives the three actions; Explorer's
 - **The build step restarts MJAPI.** Set `RSU_RESTART_COMMAND` to a command that restarts the API process, or run the API under PM2 (process name `mjapi`, or set `RSU_PM2_PROCESS_NAME`). Without either, the restart falls back to `pm2 start ecosystem.config.cjs`, the running API is not restarted, and the new entities never reach it. The job then fails at once with "The API did not restart after creating tables; configure RSU_RESTART_COMMAND or run MJAPI under PM2" rather than waiting in the build step.
 - **Archive seeding needs a node that runs background workers.** On an `MJ_SERVER_ROLE=api` node the start is refused; the job's phases run in, and resume on, the node that started it.
 - **MJAPI's SQL login must be allowed to restore.** `RESTORE DATABASE` into a new database needs `CREATE ANY DATABASE` (for example the `dbcreator` server role). A least-privilege login such as `MJ_Connect` fails the restore.
+- **…and to open what it restored.** A backup taken from another server carries that server's database users. When one has the same name as MJAPI's login but another SID (a backup of another MemberJunction database always has `MJ_Connect` and `MJ_CodeGen`), SQL Server refuses the login even though it owns the restored database (error 18456 state 38), and nothing a `dbcreator`-only login can do from outside the database repairs it. The restore phase detects this and fails with `STAGING_NOT_ACCESSIBLE`. Remedy, once per server: `GRANT CONNECT ANY DATABASE TO [MJ_Connect]; GRANT SELECT ALL USER SECURABLES TO [MJ_Connect];` (or restore with a sysadmin login).
 - `authMode: "host"` needs MJAPI to connect with a SQL login (user and password); with any other authentication host mode is unavailable and the data source is refused.
 
 ### Test coverage

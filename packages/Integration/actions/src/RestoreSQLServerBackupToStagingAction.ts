@@ -8,6 +8,7 @@ import {
     BootstrapSQLServerIntegrationFromBackupAction,
     type BootstrapRunContext
 } from './BootstrapSQLServerIntegrationFromBackupAction.js';
+import { StagingNotAccessibleError } from './StagingAccessGuard.js';
 
 /** The validated inputs of a restore, or the reason the action cannot run. */
 type RestoreInput =
@@ -109,11 +110,12 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
         error: unknown
     ): Promise<ActionResultSimple> {
         const message = error instanceof Error ? error.message : String(error);
+        const resultCode = error instanceof StagingNotAccessibleError ? error.ResultCode : 'RESTORE_FAILED';
         LogError(`[RestoreSQLServerBackupToStagingAction] Failure: ${message}`);
-        await this.ReportFailure(progress, message, 'RESTORE_FAILED');
+        await this.ReportFailure(progress, message, resultCode);
         if (ctx) {
             await this.cleanUpAfterFailure(ctx.Executor, ctx.StagingDbCreated ? ctx.StagingDatabaseName : '', ctx.ContainerUrl, params.ContextUser);
         }
-        return { Success: false, ResultCode: 'RESTORE_FAILED', Message: message, Params: params.Params };
+        return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
     }
 }
