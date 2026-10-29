@@ -17,6 +17,7 @@ import type { AutoTrainRequest, IMLModelLoader, IModelAutoTrainer, ISidecarPredi
 import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
@@ -246,6 +247,7 @@ const OLD = 'E93F0238-6902-4521-87D9-FE9A1201B001';
 
 describe('PipelineAutoTrainer', () => {
   it('trains, publishes (Validated → Published), repoints, and archives the superseded model', async () => {
+    const status = ConsoleCapture.Status();
     const gate = new RecordingGate();
     const trainer = new TestableAutoTrainer(gate, null);
     const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER);
@@ -257,15 +259,18 @@ describe('PipelineAutoTrainer', () => {
       { modelId: OLD, targetStatus: 'Archived' },
     ]);
     expect(trainer.Repointed).toEqual(['new-model']);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 trained + published model 'new-model'.")]);
   });
 
   it('reuses an already-published, loadable model instead of retraining', async () => {
+    const status = ConsoleCapture.Status();
     const gate = new RecordingGate();
     const trainer = new TestableAutoTrainer(gate, 'existing-model');
     const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: null, recordProcessId: null }, USER, PROVIDER);
     expect(id).toBe('existing-model');
     expect(trainer.TrainCount).toBe(0);
     expect(trainer.Repointed).toEqual(['existing-model']);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 reused model 'existing-model'.")]);
   });
 
   it('refuses to publish a leakage-flagged model and says it needs human sign-off', async () => {

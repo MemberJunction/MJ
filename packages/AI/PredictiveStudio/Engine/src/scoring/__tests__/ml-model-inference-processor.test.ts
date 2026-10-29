@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider, BaseEntity, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
@@ -34,6 +34,7 @@ import type {
   FetchRowsParams,
   FetchRowsResult,
 } from '../../feature-assembly';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the MLModelInferenceProcessor (scoring). NO live DB, NO live
@@ -196,11 +197,13 @@ describe('MLModelInferenceProcessor.ProcessRecord — per-record scoring', () =>
   });
 
   it('fails the record (not throws) when the model is not found', async () => {
+    const errors = ConsoleCapture.Errors();
     const { deps } = buildDeps(null);
     const proc = buildProcessor(deps);
     const result = await proc.ProcessRecord(memberRecord('m1', 1, 1, 'NYC'), CTX);
     expect(result.Status).toBe('Failed');
     expect(result.ErrorMessage).toMatch(/not found/);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MLModelInferenceProcessor: scoring failed for record 'm1': MLModelInferenceProcessor: ML Model 'model-1' not found")]);
   });
 });
 
@@ -271,10 +274,23 @@ describe('MLModelInferenceProcessor — empty feature assembly guardrail', () =>
 
     const { deps } = buildDeps(emptyLineageModel);
     const proc = buildProcessor(deps);
+    // The empty lineage sends the processor to the pipeline row for its steps; that row has none to offer either.
+    const pipelineQueries: string[] = [];
+    const provider = {
+      RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, string>>> => {
+        pipelineQueries.push(`${params.EntityName}|${params.ExtraFilter}`);
+        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
+      },
+    } as unknown as IMetadataProvider;
+    const errors = ConsoleCapture.Errors();
 
-    const result = await proc.ProcessRecord(memberRecord('m1', 1, 1, 'NYC'), CTX);
+    const result = await proc.ProcessRecord(memberRecord('m1', 1, 1, 'NYC'), { ...CTX, Provider: provider });
     expect(result.Status).toBe('Failed');
     expect(result.ErrorMessage).toMatch(/feature assembly produced 0 columns/);
+    expect(pipelineQueries).toEqual(["MJ: ML Training Pipelines|ID='pipe-members'"]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([
+      expect.stringContaining("MLModelInferenceProcessor: scoring failed for record 'm1': MLModelInferenceProcessor: feature assembly produced 0 columns for model 'model-1'"),
+    ]);
   });
 });
 
@@ -302,10 +318,14 @@ describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SC
       const model = new FakeMLModel();
       model.Status = status;
       const { deps, sidecar } = buildDeps(model);
+      const errors = ConsoleCapture.Errors();
       const results = await buildProcessor(deps).ProcessBatch([memberRecord('a', 3, 1, 'NYC'), memberRecord('b', 5, 2, 'LA')], CTX);
       expect(results.map((r) => r.Status)).toEqual(['Failed', 'Failed']);
       expect(results[0].ErrorMessage).toContain('cannot score records');
       expect(sidecar.Requests).toHaveLength(0);
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        expect.stringContaining(`MLModelInferenceProcessor: batch scoring failed: MLModelInferenceProcessor: ML Model 'model-1' is ${status} and cannot score records`),
+      ]);
     });
   }
 

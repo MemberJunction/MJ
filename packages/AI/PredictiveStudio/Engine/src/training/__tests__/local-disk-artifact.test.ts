@@ -14,6 +14,7 @@ import {
 } from '../artifact-store';
 import { LocalArtifactLoader } from '../../scoring/artifact-loader';
 import type { IEntityFactory } from '../types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Round-trip tests for the single coherent artifact store + loader (dev / on-prem
@@ -141,6 +142,7 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
   });
 
   it('throws when the File row fails to save (no bytes written)', async () => {
+    const errors = ConsoleCapture.Errors();
     const baseDir = await makeScratchDir();
     const fileId = randomUUID();
     const store = new MJFilesArtifactStore(new FakeFileFactory(() => new FakeFile(fileId, false)), {
@@ -151,9 +153,11 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
     await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact file/i);
     const files = await readdir(baseDir).catch(() => [] as string[]);
     expect(files).toEqual([]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MJFilesArtifactStore: failed to persist artifact file row 'm.bin': forced save failure")]);
   });
 
   it('deletes its own File row when the bytes cannot be written, then throws', async () => {
+    const errors = ConsoleCapture.Errors();
     const parent = await makeScratchDir();
     const blocker = join(parent, 'not-a-directory');
     await writeFile(blocker, 'x');   // the base directory's parent is a file, so the bytes cannot be written
@@ -163,6 +167,7 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
     await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact bytes/i);
     expect(factory.Created).toHaveLength(1);
     expect(factory.Created[0].Deleted).toBe(true);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("but failed to write bytes under")]);
   });
 
   it('keeps the fake-file cast honest (the stand-in satisfies the store contract)', () => {

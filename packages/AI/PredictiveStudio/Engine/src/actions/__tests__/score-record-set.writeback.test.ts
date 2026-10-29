@@ -5,6 +5,7 @@ import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjun
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import type { ScoreRecordSetRequest, ScoreRecordSetResult } from '../score-record-set.action';
 import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Score Record Set runner's WRITE-BACK pass. NO live DB / sidecar.
@@ -148,6 +149,7 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
   });
 
   it('reclassifies a record scored→failed when its Save fails', async () => {
+    const errors = ConsoleCapture.Errors();
     const runner = new TestableWriteBackRunner();
     runner.Entities.set('ok', new FakeEntity(['ID', 'RenewalScore', 'RenewalClass'], true));
     runner.Entities.set('bad', new FakeEntity(['ID', 'RenewalScore', 'RenewalClass'], false, 'FK violation'));
@@ -165,6 +167,7 @@ describe('ProductionScoreRecordSetRunner write-back — Saves mapped fields', ()
     expect(summary.scoredCount).toBe(1); // 'ok'
     expect(summary.failedCount).toBe(1); // 'bad' moved out of scored
     expect(summary.wroteBack).toBe(true);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("Score Record Set: write-back Save failed for record 'bad': FK violation")]);
   });
 });
 
@@ -191,6 +194,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
   });
 
   it('rejects an unknown target field name (no Save)', async () => {
+    const errors = ConsoleCapture.Errors();
     const runner = new TestableWriteBackRunner();
     const entity = new FakeEntity(['ID', 'RenewalScore'], true); // RenewalClass missing
     runner.Entities.set('m1', entity);
@@ -206,6 +210,7 @@ describe('ProductionScoreRecordSetRunner write-back — dryRun & validation', ()
     expect(wb.wroteBack).toBe(false);
     expect(wb.failedIndexes.has(0)).toBe(true);
     expect(entity.SaveCalled).toBe(0);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("Score Record Set: write-back failed for record 'm1': 'RenewalClass' is not a field on entity 'Members'")]);
   });
 
   it('treats the boolean write-back form as "no mapping to apply here" (no write)', async () => {

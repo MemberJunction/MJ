@@ -6,6 +6,7 @@ import { PredictiveStudioTrainModelAction } from '../train-model.action';
 import { TrainingEngine } from '../../training/training-engine';
 import { TrainingRefusedError } from '../../training/training-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Train ML Model action. NO live DB, NO live sidecar — the
@@ -126,6 +127,7 @@ describe('PredictiveStudioTrainModelAction — leakage flag', () => {
 
 describe('PredictiveStudioTrainModelAction — engine error', () => {
   it('maps a thrown engine error to a TRAINING_FAILED result', async () => {
+    const errors = ConsoleCapture.Errors();
     class ThrowingEngine extends TrainingEngine {
       public override async trainModel(): Promise<TrainModelResult> {
         throw new Error('sidecar unreachable');
@@ -137,9 +139,11 @@ describe('PredictiveStudioTrainModelAction — engine error', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('TRAINING_FAILED');
     expect(result.Message).toContain('sidecar unreachable');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("sidecar unreachable")]);
   });
 
   it('keeps a refusal\'s typed code instead of TRAINING_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
     class RefusingEngine extends TrainingEngine {
       public override async trainModel(): Promise<TrainModelResult> {
         throw new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1', why: 'no unit' } });
@@ -150,5 +154,6 @@ describe('PredictiveStudioTrainModelAction — engine error', () => {
     );
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('UNIT_REQUIRED');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("Refused (unit-required): pipeline pipe-1 \u2014 no unit")]);
   });
 });
