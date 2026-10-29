@@ -207,25 +207,35 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
 const ENGINE_SETTLE_MS = 300;
 
 /**
- * The result-deletion settle window this bundle installs on QueryEngine for its own duration (see
- * the lifecycle at the bottom of this file); the shipped default is 3s.
+ * QueryEngine's result-deletion settle window, as shipped. Read from the engine rather than
+ * duplicated, so the two cannot drift — when this was a literal 3500 against a literal 3000
+ * inside QueryEngine, nothing said they had to move together.
  *
- * Kept well above zero on purpose. The window is what makes an edit delete a query's slots ONCE
- * rather than once per save in the burst, and collapsing it to near-nothing would change that
- * behavior rather than just speed it up. 750ms still coalesces the saves a check issues
- * back-to-back while costing a quarter of what the shipped default costs to wait out.
+ * DO NOT LOWER IT FOR THIS BUNDLE. That was tried and reverted; the reasoning is worth keeping
+ * because the idea is an attractive one.
+ *
+ * The window is a deletion DELAY, and the checks here want opposite things from it:
+ *
+ *   * Q1-Q12 create or edit a query and then exercise its cache slots. They need the deletion
+ *     NOT to fire while they run. At the shipped 3s it lands after they finish, which is the
+ *     only reason they pass.
+ *   * Q13+ assert the deletion HAPPENED, so they wait it out. They want it short.
+ *
+ * One global window cannot satisfy both, and 3s is the value that happens to. Lowering it to
+ * 750ms moved the deletion INTO the first group: it broke Q2 (caught pre-merge) and then Q11
+ * ("repeat category-A request must hit its own slot — expected true, got false", run
+ * 40786888827) once Q2 was patched — Q11 creates two queries mid-check and warms slots inside
+ * the shortened window. Patching each victim is whack-a-mole; the premise was wrong.
+ *
+ * Making Q1-Q12 not depend on the timing at all is the real fix, and it is a redesign.
  */
-const ENGINE_DELETION_SETTLE_MS = 750;
+const ENGINE_DELETION_SETTLE_MS = QueryEngine.DefaultDefinitionEditSettleMs;
 
 /**
- * How long a check waits for QueryEngine to have deleted an edited query's cached results: the
- * engine waits {@link ENGINE_DELETION_SETTLE_MS} after the last result-affecting save. Creating a
- * query counts, so a check waits this long after creating its fixtures before warming a slot, or
- * that deletion could remove the warmed slot mid-check.
- *
- * Derived from the engine window rather than hardcoded: the two have to move together, and when
- * this was a literal 3500 against a literal 3000 inside QueryEngine, nothing said so. The margin
- * absorbs the save round-trip between the write landing and the timer arming.
+ * How long a check waits for QueryEngine to have deleted an edited query's cached results.
+ * Creating a query counts as a result-affecting save, so a check waits this long after creating
+ * its fixtures before warming a slot, or that deletion could remove the warmed slot mid-check.
+ * The margin absorbs the save round-trip between the write landing and the timer arming.
  */
 const DEFINITION_SETTLE_MS = ENGINE_DELETION_SETTLE_MS + 500;
 
@@ -873,44 +883,25 @@ for (const check of RunQueryCacheChecks) {
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and the dispatcher script create/tear them down identically (was a hardcoded driver special-case).
 //
-// The lifecycle also collapses QueryEngine's result-deletion settle window for the duration of this
-// bundle. That window is a real product behavior — it makes the deletion run once per edit instead
-// of once per save in the burst — but its DURATION is not what any check here asserts, and at the
-// 3s default every check that creates a fixture or edits a query has to sleep past it (8 sites at
-// DEFINITION_SETTLE_MS, ~28s a run). Collapsing it shortens the sleeps without changing what is
-// tested: the deletion still happens, still once, still after the burst settles.
-//
-// Restored in Teardown rather than left set, because the static is process-global and the bundles
-// that follow must see shipped behavior. Captured rather than assumed to be the default, so a
-// harness that already lowered it is not silently overwritten.
-let priorSettleMs: number | undefined;
-
+// The lifecycle no longer touches QueryEngine's settle window — see ENGINE_DELETION_SETTLE_MS
+// above for why lowering it for this bundle does not work.
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
     Setup: async ctx => {
-        priorSettleMs = QueryEngine.DefaultDefinitionEditSettleMs;
-        QueryEngine.DefaultDefinitionEditSettleMs = ENGINE_DELETION_SETTLE_MS;
         ctx.Fixtures = await CreateRunQueryFixtures(ctx);
         // Creating the fixtures is itself a result-affecting save, so it arms the slot-deletion
         // timer. Wait it out HERE, once, so the deletion has already happened before the first
         // check warms a slot.
         //
-        // This is the actual fix for a race that predates the settable window. At the shipped
-        // 3000ms the deletion landed 2.2-3.2s into the run — right on top of Q5, which is the
-        // measured cause of that bundle's ~0.7% flake (6 failures in ~840 runs). Only Q13+ waited
-        // the window out; Q1-Q12 just hoped to miss it. Shortening the window WITHOUT this wait
-        // does not fix that, it only moves the collision earlier: at 750ms it lands on Q1/Q2
-        // instead, which is exactly what CI caught on the first run of this branch
-        // (`Q2: TTL-served results report ExecutionTime 0 — expected 0, got 4`).
+        // This is the one piece worth keeping from the settle-window experiment, and it fixes a
+        // race that predates it: the deletion lands 2.2-3.2s into the run — right on top of Q5,
+        // the measured cause of this bundle's ~0.7% flake (6 failures in ~840 runs). Q13+ wait
+        // the window out explicitly; Q1-Q12 only ever hoped to miss it.
         //
-        // Paid once per bundle, and only affordable because the window is now short: at the
-        // shipped 3000ms this same wait would cost 3.5s.
+        // Costs 3.5s once per bundle, against ~28s of per-check waiting it does not remove.
+        // Worth it to stop a recurring flake, not a performance change.
         await Sleep(DEFINITION_SETTLE_MS);
     },
     Teardown: async ctx => {
-        if (priorSettleMs !== undefined) {
-            QueryEngine.DefaultDefinitionEditSettleMs = priorSettleMs;
-            priorSettleMs = undefined;
-        }
         if (ctx.Fixtures) {
             await TeardownRunQueryFixtures(ctx, ctx.Fixtures);
             ctx.Fixtures = undefined;
