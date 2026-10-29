@@ -7,18 +7,84 @@ also carry `seeds400`; they belong to the statistical suite."""
 
 from __future__ import annotations
 
+import json
+import os
+import urllib.error
+import urllib.request
 from collections.abc import Iterator
 
 import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
 
-from tests.tools.trainer_fixture import NUMERIC, FileServer, JsonObject, world_dir
+from app.main import app
+from app.run import run_trainer
+from app.trainer_schemas import TrainerCompleted, TrainerRequest, TrainerResult
+from tests.tools.trainer_fixture import NUMERIC, FileServer, JsonObject, JsonValue, world_dir
+
+_CLIENT = TestClient(app)
+_RESULT = TypeAdapter(TrainerResult)
 
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "gate(name): planted-truth gate, named as its MJ: Tests row Name")
     config.addinivalue_line("markers", "seeds400: 400-seed statistical gate (suite Training (statistical))")
     config.addinivalue_line("markers", "covers(name): additional coverage for a gate registered with another test")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """400-seed tests run with PS_SEEDS400=1 or when their node id is named on the command line (PsGatePytest.Run
+    names each gate's nodes); a plain `pytest tests/gates` run deselects them."""
+    if os.environ.get("PS_SEEDS400") == "1":
+        return
+    named = [str(a) for a in config.args if "::" in str(a)]
+
+    def is_named(item: pytest.Item) -> bool:
+        return any(item.nodeid == a or item.nodeid.startswith(f"{a}[") for a in named)
+
+    dropped = [i for i in items if i.get_closest_marker("seeds400") is not None and not is_named(i)]
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+        items[:] = [i for i in items if i not in dropped]
+
+
+def sidecar_url() -> str | None:
+    """A running sidecar's base URL (PS_SIDECAR_URL, runtime verification), or None to run in-process."""
+    url = os.environ.get("PS_SIDECAR_URL", "").strip()
+    return url.rstrip("/") if url else None
+
+
+def post(path: str, body: JsonObject) -> tuple[int, JsonValue]:
+    """POST a JSON body to a sidecar route: (HTTP status, parsed JSON body). Through the running sidecar when
+    PS_SIDECAR_URL is set, else the in-process app."""
+    url = sidecar_url()
+    if url is None:
+        resp = _CLIENT.post(path, json=body)
+        parsed: JsonValue = resp.json()
+        return resp.status_code, parsed
+    req = urllib.request.Request(f"{url}{path}", data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=3600) as r:  # noqa: S310 - a local sidecar
+            ok: JsonValue = json.loads(r.read())
+            return int(r.status), ok
+    except urllib.error.HTTPError as e:
+        err: JsonValue = json.loads(e.read())
+        return int(e.code), err
+
+
+def completed(payload: JsonObject) -> TrainerCompleted:
+    """Run one trainer request and require a completed result: in-process, or through a running sidecar's
+    POST /trainer when PS_SIDECAR_URL is set, so the same gate tests exercise the real server process."""
+    if sidecar_url() is None:
+        res = run_trainer(TrainerRequest.model_validate(payload))
+    else:
+        status, body = post("/trainer", payload)
+        assert status == 200, f"/trainer answered {status}: {body}"
+        res = _RESULT.validate_python(body)
+    assert isinstance(res, TrainerCompleted), f"the trainer did not complete: {res}"
+    return res
 
 
 @pytest.fixture(scope="module")

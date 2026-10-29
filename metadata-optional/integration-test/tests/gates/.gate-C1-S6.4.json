@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S6.4",
+    "Description": "Gate G2.36 (phase 2, dataset C1, criterion S6.4): on C1 (the MoreCheese person-years) every region and tenure-band value of the holdout is its own slice, and every slice reports the primary score with a 95% interval on either side of it, 100% of slices. It fails when slice results drop their interval (fewer than 100% of slices).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.36\",\"owner:PR3\",\"phase:2\",\"dataset:C1\",\"criterion:S6.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every C1 region and tenure-band slice reports log loss with a 95% interval (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s6-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "4448DF6A-1ACA-497D-AD7B-93F7217F289A"
+  }
+}

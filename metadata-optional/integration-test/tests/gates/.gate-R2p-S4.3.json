@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R2p -> S4.3",
+    "Description": "Gate G2.16 (phase 2, dataset R2p, criterion S4.3): on R2p a non-negative target ranks and gates on Tweedie deviance at its declared power 1.5; its GLM baseline is the reference pipeline's Tweedie GLM (holdout deviance within 1e-6 of it), and what the gate ships scores at most 22.7529 on the 6,250 held-out rows, with 0 negative predictions, 1 of 1. It fails when the Tweedie objective falls back to squared error, for the Tweedie GLM baseline and the boosted candidates alike (the GLM baseline's Tweedie deviance departs from the reference pipeline's 21.7364).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.16\",\"owner:PR3\",\"phase:2\",\"dataset:R2p\",\"criterion:S4.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Tweedie deviance (power 1.5) is the primary score on R2p; the GLM baseline matches the reference pipeline's and the shipped model scores at most 22.7529 with no negative values (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r2p-s4-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "4DCAC48C-634A-4CC0-B36E-B120117A3082"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W9 -> S6.3",
+    "Description": "Gate G2.38 (phase 2, dataset W9, criterion S6.3): on W9-multiclass s42 with its classes declared out of alphabetical order, each class's AUC from /predict's class vector lies within 0.03 of the planted oracle's for 3 of 3 classes, and the top-label calibration slope lies in 0.8-1.2. It fails when /predict returns the class vector in sorted, not declared, order (per-class AUC off by more than 0.03).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.38\",\"owner:PR3\",\"phase:2\",\"dataset:W9\",\"criterion:S6.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Per-class AUC from /predict lies within 0.03 of the oracle for 3 of 3 W9 classes; the top-label slope lies in 0.8-1.2 (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w9-s6-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "240BCE33-A81E-4A09-874B-3C2273D84DA4"
+  }
+}

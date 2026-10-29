@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Training",
-      "Description": "The three deterministic Phase-2 training gates (G2.27, G2.31, G2.32; G2.x outside the statistical suite). Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training\"",
+      "Description": "The sixteen deterministic Phase-2 training gates (G2.15–G2.19, G2.21, G2.27, G2.28, G2.31–G2.34, G2.36–G2.39; G2.x outside the statistical suite). Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training\"",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -38,6 +38,149 @@
           },
           "primaryKey": {
             "ID": "2B75DF19-F693-4BAA-964E-9C9CA0B124CD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R3 -> S4.3",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B8FC218F-CA8A-4A74-849F-87F13A41617E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R2p -> S4.3",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ACA0C776-47BB-4D98-A744-9C9380E1B177"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R1 -> S6.6",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A73FE16F-F386-4AEC-9978-C1A79D718904"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C3 -> S4.1",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "00A127A9-FBA0-4715-B9A9-4F7DEAA55294"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C2 -> S4.1",
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "481EDD2D-B5BA-4CB4-AB25-00EF0F63F9BD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C2 -> S1.2",
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B437B7A-DC5A-4C75-B9F8-BB5E35CCCCFC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R2-real -> S4.4",
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1FC6888C-E064-4E52-996D-79505BF439B1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W7 -> S6.2",
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "12A286BA-CE1E-4D3F-AB40-E5347D4230DD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C2 -> S6.2",
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "08B9F21A-16C9-4133-95A9-175DF4EE100A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> S6.4",
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBFC2B33-C634-41C5-A913-E697678A128B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=D1c -> S6.4",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A5091F8A-D4A6-463C-B623-6ABA445FC811"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W9 -> S6.3",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7542EAA5-3B66-49CB-9B22-6C3263D13649"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S6.3",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C3DF6A32-EEF0-4666-859E-87B7267D43F5"
           }
         }
       ]
