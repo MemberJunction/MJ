@@ -320,4 +320,19 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         // Either the per-check budget failed it or it never started; it can never be absent or passed.
         expect(notRun?.passed).toBe(false);
     });
+
+    it('a requiresEnv-parked Test is allowed when every selected bundle has a bundle-level entry', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitparked.A', Name: 'parkedA', Fn: async () => { /* pass */ } });
+        reg.AllowSkip({ CheckId: 'unitparked', Gate: 'pending-ruling', Reason: 'parked until a provider is provisioned' });
+        delete process.env.UNIT_PARK_GATE;
+        const driver = new IntegrationTestDriver();
+        const parked = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }], requiresEnv: 'UNIT_PARK_GATE' }));
+        const details = parked.oracleResults[0].details as Record<string, unknown>;
+        expect(details.SkipAllowed).toBe(true);
+        expect(details.SkipGate).toBe('pending-ruling');
+
+        const mixed = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }, { type: 'unitpass' }], requiresEnv: 'UNIT_PARK_GATE' }));
+        expect((mixed.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
 });

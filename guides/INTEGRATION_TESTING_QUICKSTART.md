@@ -228,8 +228,10 @@ allowance, or a registered check of a selected bundle that produced no result. A
   tier gates — the driver allows these without a list entry;
 - checks on the allowlist in
   [`integration-test-suite/src/skip-allowlist.ts`](../packages/TestingFramework/integration-test-suite/src/skip-allowlist.ts),
-  each with a gate (`mutation`, `credentials`, or `fixture` for data CI deliberately does not seed)
-  and a reason.
+  each with a gate and a one-line reason: `mutation`, `credentials`, `fixture` (data CI deliberately
+  does not seed), `not-applicable` (nothing on the stock schema or catalog to examine, or a leg for
+  another database platform) or `pending-ruling` (waiting on someone else's decision). A bare
+  bundle name allows a Test parked by `requiresEnv` when every bundle it selects is listed.
 
 A check that cannot run ends with `SkipCheck('<what is missing>')` from
 `@memberjunction/testing-integration`, never with a log line and `return` — a return scores as a
@@ -748,8 +750,8 @@ TypeScript:
   row parks a test without deleting it.
 
 - **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then reports `Skipped` unless
-  `MY_FLAG=1`, overriding the tier-derived gate. That skip is not allowed, so a suite run that
-  includes the test fails while the flag is unset; park a test with a `Skip` membership instead.
+  `MY_FLAG=1`, overriding the tier-derived gate. That skip fails a suite run that includes the
+  test unless every bundle it selects has a bundle-level allowlist entry saying why it is parked.
 
 Push with `pnpm mj sync push --dir=metadata-optional/integration-test` and run via `mj test`.
 

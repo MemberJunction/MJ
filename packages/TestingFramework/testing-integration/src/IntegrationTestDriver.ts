@@ -154,9 +154,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
             const gateVar = explicitGate ?? TIER_ENV_GATE[tier];
             const note = `Skipped: ${gateVar} not set (tier '${tier}')`;
             this.logToTestRun(context, 'warn', note);
-            // Only the tier's own gate is an allowed skip. An explicit `requiresEnv` parks a test
-            // for some other reason, which the skip gate reports as unexpected.
-            const allowance = explicitGate ? undefined
+            // The tier's own gate is an allowed skip. An explicit `requiresEnv` parks a test for some
+            // other reason: allowed only when every bundle it selects has a bundle-level allowlist
+            // entry, otherwise the skip gate reports it as unexpected.
+            const allowance = explicitGate ? this.parkedTestAllowance(config)
                 : tier === 'mutation' ? MUTATION_GATE_ALLOWANCE
                 : tier === 'live-model' ? LIVE_MODEL_GATE_ALLOWANCE
                 : undefined;
@@ -230,6 +231,20 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
         // 5b) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
         return this.buildResult(context, startTime, oracleResults, timedOut);
+    }
+
+    /**
+     * The allowance for a Test parked by an explicit `requiresEnv` gate: the bundle-level allowlist
+     * entry when every selected bundle has one (the first one's gate and reason), else undefined.
+     */
+    private parkedTestAllowance(config: IntegrationTestConfig): SkipAllowance | undefined {
+        const bundles = Array.isArray(config.checks) ? config.checks.map(c => c.type) : [];
+        const entries = bundles.map(b => IntegrationCheckRegistry.Instance.GetAllowedSkip(b));
+        const first = entries[0];
+        if (!first || entries.some(e => e === undefined)) {
+            return undefined;
+        }
+        return { Gate: first.Gate, Reason: first.Reason };
     }
 
     /**

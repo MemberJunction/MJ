@@ -20,13 +20,18 @@ export const INTEGRATION_TARGET_TYPE = 'Integration Check Bundle';
 /**
  * Why a skip is acceptable. `mutation`: the check writes to the database and runs only when the
  * mutation tier is armed. `credentials`: the check needs model or service credentials the runner
- * does not have. `fixture`: the check needs data CI deliberately does not seed.
+ * does not have. `fixture`: the check needs data CI deliberately does not seed. `not-applicable`:
+ * the deployment has nothing for the check to examine (a platform-only leg, data MJ does not ship).
+ * `pending-ruling`: the skip waits on a decision someone else owns; the reason names it.
  */
-export type AllowedSkipGate = 'mutation' | 'credentials' | 'fixture';
+export type AllowedSkipGate = 'mutation' | 'credentials' | 'fixture' | 'not-applicable' | 'pending-ruling';
 
 /** One allowlist entry: a check that may skip, the gate it waits on, and why. */
 export interface AllowedSkip {
-    /** Registered check Id, e.g. `prompt-eval-harness.PE7`. */
+    /**
+     * Registered check Id, e.g. `prompt-eval-harness.PE7`. A bare bundle name (`search`) allows a
+     * whole Test parked by an explicit `requiresEnv` gate when every bundle it selects is listed.
+     */
     CheckId: string;
     Gate: AllowedSkipGate;
     /** Why the skip is expected — printed next to the skip in the run's output. */

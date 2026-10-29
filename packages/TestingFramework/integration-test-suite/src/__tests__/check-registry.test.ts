@@ -935,7 +935,8 @@ describe('skip allowlist', () => {
         const reg = IntegrationCheckRegistry.Instance;
         const entries = reg.GetAllowedSkips();
         expect(entries.length).toBe(SKIP_ALLOWLIST.length);
-        const stale = entries.filter(e => !reg.Get(e.CheckId)).map(e => e.CheckId);
+        const bundles = new Set(reg.GetBundleNames());
+        const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
         expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
         expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
     });
