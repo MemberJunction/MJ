@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { SourceFieldInfo, SourceObjectInfo, SourceSchemaInfo } from '@memberjunction/integration-engine';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { ConnectorFactory, IntegrationSchemaSync, type SourceFieldInfo, type SourceObjectInfo, type SourceSchemaInfo } from '@memberjunction/integration-engine';
 import type { ArchiveSeedWork, RSUPendingWork } from '@memberjunction/schema-engine';
 
 interface StoredRow {
@@ -196,5 +196,129 @@ describe('DefaultArchiveSeedDeps().Records.CreateCompanyIntegration', () => {
     expect(id).toBe('ci-new');
     expect(getEntityObject).toHaveBeenCalledWith('MJ: Company Integrations', expect.anything());
     expect(entity.SavedIsActive).toBe(false);
+  });
+});
+
+describe('DefaultArchiveSeedDeps().Discovery.IntrospectArchive', () => {
+  const SCHEMA: SourceSchemaInfo = { Objects: [SourceObject({ ExternalName: 'dbo.Orders', PrimaryKeyFields: ['ID'], Fields: FieldsNamed('ID') })] };
+
+  function Provider(): IMetadataProvider {
+    const record = { IntegrationID: 'int-1', async Load() { return true; } };
+    const partial: Partial<IMetadataProvider> = {
+      GetEntityObject: vi.fn(async () => record) as Partial<IMetadataProvider>['GetEntityObject'],
+    };
+    return partial as IMetadataProvider;
+  }
+
+  function Connector(schemas: string[] | undefined): { IntrospectSchema: ReturnType<typeof vi.fn>; ListSchemas?: () => Promise<string[]> } {
+    const connector: { IntrospectSchema: ReturnType<typeof vi.fn>; ListSchemas?: () => Promise<string[]> } = {
+      IntrospectSchema: vi.fn(async () => SCHEMA),
+    };
+    if (schemas) {
+      connector.ListSchemas = async () => schemas;
+    }
+    return connector;
+  }
+
+  beforeEach(() => {
+    vi.spyOn(IntegrationSchemaSync, 'PersistDiscoveredSchema').mockResolvedValue(
+      { ObjectsCreated: 1, ObjectsUpdated: 0, FieldsCreated: 1, FieldsUpdated: 0 } as Awaited<ReturnType<typeof IntegrationSchemaSync.PersistDiscoveredSchema>>,
+    );
+  });
+
+  it.each([
+    ['the archive schemas when the connector lists them', ['dbo', 'sales'], { Schemas: ['dbo', 'sales'], BaseTablesOnly: true }],
+    ['only the base-table filter when it cannot', undefined, { BaseTablesOnly: true }],
+  ])('introspects base tables only, passing %s', async (_label, schemas, expected) => {
+    const connector = Connector(schemas);
+    vi.spyOn(ConnectorFactory, 'Resolve').mockReturnValue(connector as unknown as ReturnType<typeof ConnectorFactory.Resolve>);
+
+    const tables = await DefaultArchiveSeedDeps().Discovery.IntrospectArchive('ci-1', { ID: 'u-1' } as UserInfo, Provider());
+
+    expect(connector.IntrospectSchema).toHaveBeenCalledWith(expect.anything(), expect.anything(), expected);
+    expect(tables.map(t => t.Name)).toEqual(['dbo.Orders']);
+  });
+});
+
+describe('DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable', () => {
+  interface FakeEntityRow {
+    ID: string;
+    Name: string;
+    SchemaName: string;
+    TrackRecordChanges: boolean;
+    TrustServerCacheCompletely: boolean;
+    AllowDirectSQLInsert: boolean;
+    Saved?: boolean;
+    Load(id: string): Promise<boolean>;
+    Save(): Promise<boolean>;
+  }
+
+  const ENTITIES: Record<string, { Name: string; SchemaName: string }> = {
+    'ent-orders': { Name: 'Orders', SchemaName: 'sql_server' },
+    'ent-customers': { Name: 'Customers', SchemaName: 'SQL_Server' },
+    'ent-users': { Name: 'MJ: Users', SchemaName: '__mj' },
+    'ent-hubspot': { Name: 'Contacts', SchemaName: 'hubspot' },
+  };
+
+  let loaded: FakeEntityRow[];
+  let refresh: ReturnType<typeof vi.fn>;
+
+  function NewEntity(): FakeEntityRow {
+    const row: FakeEntityRow = {
+      ID: '',
+      Name: '',
+      SchemaName: '',
+      TrackRecordChanges: true,
+      TrustServerCacheCompletely: true,
+      AllowDirectSQLInsert: false,
+      async Load(id: string) {
+        const found = ENTITIES[id];
+        if (!found) return false;
+        Object.assign(this, { ID: id, ...found });
+        return true;
+      },
+      async Save() {
+        this.Saved = true;
+        return true;
+      },
+    };
+    loaded.push(row);
+    return row;
+  }
+
+  function Provider(): IMetadataProvider {
+    refresh = vi.fn(async () => true);
+    const partial: Partial<IMetadataProvider> = {
+      GetEntityObject: vi.fn(async () => NewEntity()) as Partial<IMetadataProvider>['GetEntityObject'],
+      Refresh: refresh as Partial<IMetadataProvider>['Refresh'],
+    };
+    return partial as IMetadataProvider;
+  }
+
+  beforeEach(() => {
+    loaded = [];
+    const runView: Partial<RunView> = {
+      RunView: vi.fn(async () => ({ Success: true, Results: [{ Integration: 'SQL Server' }] })) as Partial<RunView>['RunView'],
+    };
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(runView as RunView);
+  });
+
+  it('marks the entities in the schema the apply created for the connection', async () => {
+    await DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable('ci-1', ['ent-orders', 'ent-customers'], { ID: 'u-1' } as UserInfo, Provider());
+
+    expect(loaded.filter(e => e.Saved).map(e => e.ID)).toEqual(['ent-orders', 'ent-customers']);
+    expect(loaded.every(e => e.AllowDirectSQLInsert && !e.TrackRecordChanges && !e.TrustServerCacheCompletely)).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['a core (__mj) entity', 'ent-users'],
+    ["another integration's entity", 'ent-hubspot'],
+  ])('refuses %s and changes nothing', async (_label, foreign) => {
+    await expect(
+      DefaultArchiveSeedDeps().Records.MarkEntitiesBulkLoadable('ci-1', ['ent-orders', foreign], { ID: 'u-1' } as UserInfo, Provider()),
+    ).rejects.toThrow(/outside the connection's schema 'sql_server'/);
+    expect(loaded.some(e => e.Saved)).toBe(false);
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

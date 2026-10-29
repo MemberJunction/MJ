@@ -112,12 +112,6 @@ export class IntegrationProgressEmitter {
         return this.isResumed;
     }
 
-    /** Whether a run with this ID has already been opened under the root (its manifest.json exists). */
-    public static RunExists(runID: string, rootDir?: string): boolean {
-        const root = rootDir ?? join(process.cwd(), 'logs', 'integration-runs');
-        return existsSync(join(root, runID, 'manifest.json'));
-    }
-
     /** Emit a generic event. */
     public Emit(
         eventType: IntegrationProgressEventType,

@@ -62,12 +62,33 @@ describe('IntegrationArchiveSeedResolver', () => {
     });
 
     it.each(OPERATIONS.slice(1))('%s requires the job company integration to be readable', name => {
-        expect(memberBody(`async ${name}(`)).toContain('this.loadReadableJob(');
+        expect(memberBody(`async ${name}(`)).toMatch(/this\.load(Readable|Manageable)Job\(/);
+    });
+
+    it.each(['IntegrationArchiveSeedSelectTables', 'IntegrationArchiveSeedFinish', 'IntegrationArchiveSeedCancel'])(
+        '%s requires the job owner or update access to its company integration before changing the job',
+        name => {
+            const body = memberBody(`async ${name}(`);
+            const check = body.indexOf('this.loadManageableJob(');
+            expect(check).toBeGreaterThan(-1);
+            expect(check).toBeLessThan(body.indexOf('ArchiveSeedJobInstance.'));
+        },
+    );
+
+    it('IntegrationArchiveSeedState needs only read access', () => {
+        expect(memberBody('async IntegrationArchiveSeedState(')).not.toContain('this.loadManageableJob(');
+    });
+
+    it('the manage check reads the job as readable first, then applies CanManageArchiveSeedJob to its owner', () => {
+        const check = memberBody('private async loadManageableJob(');
+        expect(check.indexOf('this.loadReadableJob(')).toBeGreaterThan(-1);
+        expect(check).toContain("CanManageArchiveSeedJob(job.UserID, caller.User, caller.Provider.EntityByName('MJ: Company Integrations'))");
     });
 
     it('IntegrationArchiveSeedSelectTables answers without reading the job back (the apply restarts the API)', () => {
         const body = memberBody('async IntegrationArchiveSeedSelectTables(');
-        expect(body.split('this.loadReadableJob(').length - 1).toBe(1);
+        expect(body.split('this.loadManageableJob(').length - 1).toBe(1);
+        expect(body).not.toContain('this.loadReadableJob(');
         expect(body).not.toContain('this.stateOutput(');
     });
 
@@ -97,7 +118,7 @@ describe('IntegrationArchiveSeedResolver', () => {
     });
 
     it('index.ts dispatches resumes on the shared instance', () => {
-        expect(indexSource).toContain('ArchiveSeedJobInstance.Resume(');
+        expect(indexSource).toMatch(/DispatchArchiveSeedWork\([^)]*ArchiveSeedJobInstance, ArchiveSeedRecordsInstance\)/);
         expect(indexSource).not.toContain('new ArchiveSeedJob(');
     });
 });

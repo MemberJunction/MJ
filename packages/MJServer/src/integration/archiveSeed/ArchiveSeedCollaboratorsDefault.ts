@@ -6,7 +6,7 @@ import { LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunctio
 import { ActionEngineServer } from '@memberjunction/actions';
 import type { ActionParam, ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
-import { ConnectorFactory, IntegrationSchemaSync, type BaseIntegrationConnector, type PersistSchemaResult, type SourceSchemaInfo } from '@memberjunction/integration-engine';
+import { ConnectorFactory, IntegrationSchemaSync, type BaseIntegrationConnector, type IntrospectSchemaOptions, type PersistSchemaResult, type SourceSchemaInfo } from '@memberjunction/integration-engine';
 import { RuntimeSchemaManager, type ArchiveSeedDiscoveredTable, type ArchiveSeedWork, type RSUPendingWork } from '@memberjunction/schema-engine';
 import { SelectArchiveSchemas } from './ArchiveSeedState.js';
 import { IntegrationDiscoveryResolver, type ApplyAllBatchInput } from '../../resolvers/IntegrationDiscoveryResolver.js';
@@ -30,7 +30,7 @@ const APPLY_SKIP_GIT_COMMIT = false;
 
 /**
  * Maps an introspected schema to the discovered-table summary the job stores. `SourceObjectInfo`
- * carries no table/view marker, so every object is kept.
+ * carries no table/view marker; discovery asks the connector for base tables only (`BaseTablesOnly`).
  */
 export function MapSourceSchemaToTables(schema: SourceSchemaInfo): ArchiveSeedDiscoveredTable[] {
   return schema.Objects.map(o => {
@@ -56,7 +56,9 @@ export class DefaultArchiveSeedDiscovery implements ArchiveSeedDiscovery {
     }
     const connector = ConnectorFactory.Resolve(integration);
     const schemas = await this.archiveSchemas(connector, companyIntegration, user);
-    const schema = await connector.IntrospectSchema(companyIntegration, user, schemas.length > 0 ? { Schemas: schemas } : undefined);
+    // Views are never offered: the load copies rows into tables the apply creates from base tables.
+    const options: IntrospectSchemaOptions = schemas.length > 0 ? { Schemas: schemas, BaseTablesOnly: true } : { BaseTablesOnly: true };
+    const schema = await connector.IntrospectSchema(companyIntegration, user, options);
     const persisted = await IntegrationSchemaSync.PersistDiscoveredSchema({
       IntegrationID: companyIntegration.IntegrationID,
       CatalogSource: 'Shared',
@@ -70,12 +72,9 @@ export class DefaultArchiveSeedDiscovery implements ArchiveSeedDiscovery {
 
   /** One line of what discovery found and persisted; the keyed count is what the apply will accept. */
   private describeDiscovery(schemas: string[], schema: SourceSchemaInfo, persisted: PersistSchemaResult): string {
-    const keyed = schema.Objects.filter(o => o.PrimaryKeyFields.length > 0);
-    const keyedFlags = schema.Objects.reduce((n, o) => n + o.Fields.filter(f => f.IsPrimaryKey === true).length, 0);
-    const sample = keyed.slice(0, 3).map(o => `${o.ExternalName}[${o.PrimaryKeyFields.join(',')}]`).join(' ');
-    return `Archive seed discovery: schemas [${schemas.join(', ')}], ${schema.Objects.length} object(s), ${keyed.length} with a primary key `
-      + `(${keyedFlags} key column flag(s)) e.g. ${sample || 'none'}; persisted ${persisted.ObjectsCreated}+${persisted.ObjectsUpdated} objects, `
-      + `${persisted.FieldsCreated}+${persisted.FieldsUpdated} fields`;
+    const keyed = schema.Objects.filter(o => o.PrimaryKeyFields.length > 0).length;
+    return `Archive seed discovery: schemas [${schemas.join(', ')}], ${schema.Objects.length} table(s), ${keyed} keyed; `
+      + `persisted ${persisted.ObjectsCreated + persisted.ObjectsUpdated} object(s), ${persisted.FieldsCreated + persisted.FieldsUpdated} field(s)`;
   }
 
   /**

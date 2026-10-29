@@ -80,8 +80,13 @@ export interface ArchiveSeedRecords {
   CreateCompanyIntegration(values: ArchiveSeedCompanyIntegrationValues, user: UserInfo, provider: IMetadataProvider): Promise<string>;
   SetCompanyIntegrationConfiguration(id: string, configuration: string, user: UserInfo, provider: IMetadataProvider): Promise<void>;
   EntityMapsFor(companyIntegrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<ArchiveSeedEntityMap[]>;
-  /** Turns off record-change tracking and server cache trust, turns on direct SQL insert, then refreshes metadata. */
-  MarkEntitiesBulkLoadable(entityIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<void>;
+  /**
+   * Turns off record-change tracking and server cache trust, turns on direct SQL insert, then
+   * refreshes metadata. Only entities in the schema the apply created for this company integration
+   * qualify: throws, before changing anything, when any entity is outside it or is a core (`__mj`)
+   * entity, so an entity map pointed at another entity can never open it to a bulk load.
+   */
+  MarkEntitiesBulkLoadable(companyIntegrationID: string, entityIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<void>;
   /** The cached user with this ID, or undefined. */
   ResolveUser(userID: string): UserInfo | undefined;
 }

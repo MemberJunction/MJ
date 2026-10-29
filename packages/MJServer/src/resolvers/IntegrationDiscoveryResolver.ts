@@ -51,6 +51,7 @@ import {
     ExistingTableInfo,
     SchemaEvolution
 } from "@memberjunction/integration-schema-builder";
+import { DeriveIntegrationSchemaName } from '../integration/IntegrationSchemaName.js';
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput, type RSUPendingWork } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
 import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
@@ -3814,7 +3815,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     /** Derives a SQL-safe schema name from the integration name (e.g., "HubSpot" → "hubspot"). */
     private deriveSchemaName(integrationName: string): string {
-        return (integrationName || 'integration').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        return DeriveIntegrationSchemaName(integrationName);
     }
 
     /** Builds SchemaPreviewObjectInput[] from source object name strings, using auto-derived schema/table names. */

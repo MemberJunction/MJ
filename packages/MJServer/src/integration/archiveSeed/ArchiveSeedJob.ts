@@ -9,8 +9,8 @@
  * Progress: run A is opened here; the restore/drop actions write to the same run, so after every
  * action call the emitter is re-created (it resumes from the run's file) before emitting again.
  */
-import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { UUIDMap } from '@memberjunction/global';
+import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UUIDMap, UUIDSet } from '@memberjunction/global';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { ArchiveSeedState, ArchiveSeedSummary, ArchiveSeedWork } from '@memberjunction/schema-engine';
@@ -131,7 +131,7 @@ const STAGE_FOR_STATE: Partial<Record<ArchiveSeedState, string>> = {
 export class ArchiveSeedJob {
   private pending: Promise<void> = Promise.resolve();
   /** Jobs this instance is resuming or running phase B for, so a repeated Resume is a no-op. */
-  private readonly active = new Set<string>();
+  private readonly active = new UUIDSet();
   /** In-process cleanup-decision timers of parked jobs, so a decision that never comes still ends the job. */
   private readonly cleanupTimers = new UUIDMap<ReturnType<typeof setTimeout>>();
   private readonly pollIntervalMs: number;
@@ -214,10 +214,10 @@ export class ArchiveSeedJob {
    * call while this instance is already working on the job is a no-op.
    */
   public async Resume(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
-    if (this.active.has(jobID)) {
+    if (this.active.Has(jobID)) {
       return;
     }
-    this.active.add(jobID);
+    this.active.Add(jobID);
     let detached: { Phase: Promise<void> } | undefined;
     try {
       detached = await this.resumeJob(jobID, user, provider);
@@ -225,9 +225,9 @@ export class ArchiveSeedJob {
       LogError(`Archive seed job ${jobID}: resume failed: ${this.messageOf(err)}`);
     } finally {
       if (detached) {
-        this.track(detached.Phase.finally(() => this.active.delete(jobID)));
+        this.track(detached.Phase.finally(() => this.active.Delete(jobID)));
       } else {
-        this.active.delete(jobID);
+        this.active.Delete(jobID);
       }
     }
   }
@@ -247,10 +247,11 @@ export class ArchiveSeedJob {
   }
 
   /**
-   * Abandons a job that is waiting for the caller (`AwaitingSelection` or `AwaitingCleanupDecision`):
+   * Abandons a job that is waiting (`AwaitingSelection`, `Mapping` or `AwaitingCleanupDecision`):
    * the job fails with a cancellation message, which drops the staging database and removes the
    * archive data source like any other failure, so the connection can then be deleted or replaced.
    * Throws when the job is missing or in any other state, since a running phase cannot be interrupted.
+   * A phase B still polling in `Mapping` sees the stored `Failed` on its next poll and stops.
    */
   public async Cancel(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
     const ctx = await this.loadContext(jobID, user, provider);
@@ -267,10 +268,10 @@ export class ArchiveSeedJob {
    * boot dispatcher calls this as the system user. Never throws; a no-op while the job is active.
    */
   public async FailUnresolvableOwner(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
-    if (this.active.has(jobID)) {
+    if (this.active.Has(jobID)) {
       return;
     }
-    this.active.add(jobID);
+    this.active.Add(jobID);
     try {
       const stored = await this.deps.Store.Read(jobID, user, provider);
       if (!stored || stored.Work.State === 'Done' || stored.Work.State === 'Failed') {
@@ -282,7 +283,7 @@ export class ArchiveSeedJob {
     } catch (err) {
       LogError(`Archive seed job ${jobID}: failing for an unresolvable owner failed: ${this.messageOf(err)}`);
     } finally {
-      this.active.delete(jobID);
+      this.active.Delete(jobID);
     }
   }
 
@@ -541,7 +542,7 @@ export class ArchiveSeedJob {
     const emitter = this.emitterFor(ctx);
     emitter.StageComplete('Mapping', { processed: maps.length });
     await emitter.Flush();
-    await this.deps.Records.MarkEntitiesBulkLoadable(maps.map(m => m.EntityID), ctx.User, ctx.Provider);
+    await this.deps.Records.MarkEntitiesBulkLoadable(ctx.CompanyIntegrationID, maps.map(m => m.EntityID), ctx.User, ctx.Provider);
     await this.load(ctx);
   }
 
@@ -567,12 +568,16 @@ export class ArchiveSeedJob {
   /**
    * Polls until every selected table has an entity map (returns those maps), the schema-apply work
    * failed, or the apply timeout (measured from entering `Mapping`) elapsed — the latter two fail
-   * the job and return undefined.
+   * the job and return undefined. `Mapping` is cancellable, so every poll re-reads the stored job:
+   * once it is no longer `Mapping` (a Cancel failed it) the wait stops without writing anything.
    */
   private async awaitEntityMaps(ctx: ArchiveSeedContext): Promise<ArchiveSeedEntityMap[] | undefined> {
     const since = Date.parse(ctx.Work.StateChangedAt);
     for (;;) {
       const maps = this.mapsForSelection(ctx.Work, await this.deps.Records.EntityMapsFor(ctx.CompanyIntegrationID, ctx.User, ctx.Provider));
+      if (!(await this.stillMapping(ctx))) {
+        return undefined;
+      }
       if (maps) {
         return maps;
       }
@@ -587,6 +592,16 @@ export class ArchiveSeedJob {
       }
       await this.delay(this.pollIntervalMs);
     }
+  }
+
+  /** Whether the stored job is still `Mapping`; logs and returns false once something else (a Cancel) moved it on. */
+  private async stillMapping(ctx: ArchiveSeedContext): Promise<boolean> {
+    const state = (await this.deps.Store.Read(ctx.JobID, ctx.User, ctx.Provider))?.Work.State;
+    if (state === 'Mapping') {
+      return true;
+    }
+    LogStatus(`Archive seed job ${ctx.JobID}: stopped waiting for entity maps; the job is now ${state ?? 'gone'}`);
+    return false;
   }
 
   /** The map of each selected table (matched case-insensitively), or undefined while any is missing. */

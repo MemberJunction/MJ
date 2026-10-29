@@ -367,13 +367,11 @@ describe('IntegrationProgressEmitter', () => {
             expect(entries.sort()).toEqual(['target', 'x', 'y']);
         });
 
-        it('a fresh run is not resumed and RunExists reflects the directory', async () => {
-            expect(IntegrationProgressEmitter.RunExists('run-fresh', rootDir)).toBe(false);
+        it('a fresh run is not resumed', async () => {
             const emitter = new IntegrationProgressEmitter(makeManifest('run-fresh'), { rootDir });
             expect(emitter.IsResumed).toBe(false);
             emitter.RunStart();
             await emitter.Flush();
-            expect(IntegrationProgressEmitter.RunExists('run-fresh', rootDir)).toBe(true);
             expect((await readEvents('run-fresh')).map(e => e.seq)).toEqual([1]);
         });
     });

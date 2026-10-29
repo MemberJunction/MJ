@@ -15,6 +15,7 @@ import { BOOTSTRAP_ACTION_NAME } from '../integration/BootstrapLaunch.js';
 import type { ArchiveSeedStartInput } from '../integration/archiveSeed/ArchiveSeedState.js';
 import type { ArchiveSeedJobState } from '../integration/archiveSeed/ArchiveSeedJob.js';
 import { ArchiveSeedJobInstance } from '../integration/archiveSeed/ArchiveSeedJobInstance.js';
+import { CanManageArchiveSeedJob } from '../integration/archiveSeed/ArchiveSeedAccess.js';
 
 @InputType()
 export class IntegrationArchiveSeedStartInput implements ArchiveSeedStartInput {
@@ -82,7 +83,8 @@ interface ArchiveSeedCaller {
  * applies the caller's choice (which restarts the API; the job resumes on boot), `Finish` applies
  * the cleanup decision, and `State` reports where the job is. Every operation is gated exactly as
  * launching the bootstrap action is; the job-scoped ones also require that the caller can read the
- * job's company integration. Job refusals come back as `Success: false`, never as GraphQL errors.
+ * job's company integration, and the ones that change a job (`SelectTables`, `Finish`, `Cancel`)
+ * that the caller started it or can update company integrations. Job refusals come back as `Success: false`, never as GraphQL errors.
  */
 @Resolver()
 export class IntegrationArchiveSeedResolver extends ResolverBase {
@@ -114,7 +116,7 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
   ): Promise<IntegrationArchiveSeedStateOutput> {
     try {
       const caller = await this.authorize(ctx, 'IntegrationArchiveSeedSelectTables');
-      await this.loadReadableJob(jobID, caller);
+      await this.loadManageableJob(jobID, caller);
       await ArchiveSeedJobInstance.SelectTables(jobID, tableNames, caller.User, caller.Provider);
       // The apply now runs in the background and ends in an API restart, so nothing is read back
       // here: the caller follows the job with IntegrationArchiveSeedState once the server is back.
@@ -132,7 +134,7 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
   ): Promise<IntegrationArchiveSeedStateOutput> {
     try {
       const caller = await this.authorize(ctx, 'IntegrationArchiveSeedFinish');
-      await this.loadReadableJob(jobID, caller);
+      await this.loadManageableJob(jobID, caller);
       await ArchiveSeedJobInstance.Finish(jobID, dropStaging, caller.User, caller.Provider);
       return this.stateOutput(await this.loadReadableJob(jobID, caller), 'Cleanup decision applied.');
     } catch (e) {
@@ -147,7 +149,7 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
   ): Promise<IntegrationArchiveSeedStateOutput> {
     try {
       const caller = await this.authorize(ctx, 'IntegrationArchiveSeedCancel');
-      await this.loadReadableJob(jobID, caller);
+      await this.loadManageableJob(jobID, caller);
       await ArchiveSeedJobInstance.Cancel(jobID, caller.User, caller.Provider);
       return this.stateOutput(await this.loadReadableJob(jobID, caller), 'Archive seed cancelled.');
     } catch (e) {
@@ -236,6 +238,18 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
       ResultType: 'simple',
     }, caller.User);
     return result.Success && result.Results.length > 0;
+  }
+
+  /**
+   * The job, when the caller can read it (see {@link loadReadableJob}) and may change it: the job's
+   * owner, or a user who can update company integrations. Throws the refusal otherwise.
+   */
+  private async loadManageableJob(jobID: string, caller: ArchiveSeedCaller): Promise<ArchiveSeedJobState> {
+    const job = await this.loadReadableJob(jobID, caller);
+    if (!CanManageArchiveSeedJob(job.UserID, caller.User, caller.Provider.EntityByName('MJ: Company Integrations'))) {
+      throw new Error(`Only the user who started archive seed job "${jobID}", or a user who can update its connection, can change it`);
+    }
+    return job;
   }
 
   private stateOutput(job: ArchiveSeedJobState, message: string): IntegrationArchiveSeedStateOutput {

@@ -108,7 +108,7 @@ class FakeRecords implements ArchiveSeedRecords {
     this.EntityMapsCalls++;
     return maps;
   }
-  public async MarkEntitiesBulkLoadable(entityIDs: string[]): Promise<void> {
+  public async MarkEntitiesBulkLoadable(_companyIntegrationID: string, entityIDs: string[]): Promise<void> {
     this.BulkLoadable.push(entityIDs);
     this.Log?.push('MarkEntitiesBulkLoadable');
   }
@@ -691,6 +691,29 @@ describe('ArchiveSeedJob', () => {
 
     expect(actions.Names().filter(n => n === LOAD)).toHaveLength(1);
     expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('AwaitingCleanupDecision');
+  });
+
+  it('a Cancel while phase B waits in Mapping stops the wait: the job stays Failed and nothing is loaded', async () => {
+    const { JobID } = await ToBuilding();
+    records.MapsSequence = [[], MAPS];
+    let cancelled: Promise<void> | undefined;
+    records.OnEntityMapsFor = () => {
+      if (!cancelled && store.Jobs.get(JobID)?.Work.State === 'Mapping') {
+        cancelled = job.Cancel(JobID, { ...USER, Email: 'paul@example.com' } as UserInfo, PROVIDER);
+      }
+    };
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+    await cancelled;
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('Cancelled by paul@example.com');
+    expect(actions.Names()).not.toContain(LOAD);
+    expect(records.BulkLoadable).toEqual([]);
+    expect(store.Updates.at(-1)?.State).toBe('Failed');
+    expect(store.Failed.map(f => f.JobID)).toEqual([JobID]);
   });
 
   it('Resume in Building fails when the apply work row is Failed', async () => {

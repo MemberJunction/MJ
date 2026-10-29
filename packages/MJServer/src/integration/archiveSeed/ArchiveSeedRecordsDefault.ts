@@ -9,6 +9,8 @@ import type {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { ReadArchiveSeedConfiguration } from '@memberjunction/core-entities-server';
+import { DeriveIntegrationSchemaName } from '../IntegrationSchemaName.js';
 import { IntegrationDiscoveryResolver } from '../../resolvers/IntegrationDiscoveryResolver.js';
 import type {
   ArchiveSeedCompanyIntegrationRef,
@@ -20,24 +22,8 @@ import type {
 
 /** The SQL Server connector's ClassName, then the legacy one. */
 const SQLSERVER_CLASS_NAMES = ['@memberjunction/connector-sqlserver', 'SQLServerConnector'];
-
-/** The `seededFromBackup.jobID` of a company integration's configuration, or undefined. */
-function SeededJobIDOf(configuration: string | null): string | undefined {
-  if (!configuration) {
-    return undefined;
-  }
-  try {
-    const parsed: unknown = JSON.parse(configuration);
-    if (typeof parsed !== 'object' || parsed === null) {
-      return undefined;
-    }
-    const seeded = (parsed as Record<string, unknown>)['seededFromBackup'];
-    const jobID = typeof seeded === 'object' && seeded !== null ? (seeded as Record<string, unknown>)['jobID'] : undefined;
-    return typeof jobID === 'string' && jobID !== '' ? jobID : undefined;
-  } catch {
-    return undefined;
-  }
-}
+/** MemberJunction's core schema; its entities are never bulk-loaded by an archive seed. */
+const CORE_SCHEMA = '__mj';
 
 /** Saves the record, throwing the provider's complete message on failure. */
 async function SaveOrThrow(entity: BaseEntity, what: string): Promise<void> {
@@ -67,7 +53,7 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     );
     return rows.map(r => {
       const ref: ArchiveSeedCompanyIntegrationRef = { ID: r.ID, Name: r.Name };
-      const jobID = SeededJobIDOf(r.Configuration);
+      const jobID = ReadArchiveSeedConfiguration(r.Configuration)?.JobID;
       if (jobID) {
         ref.SeededJobID = jobID;
       }
@@ -161,9 +147,15 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     );
   }
 
-  public async MarkEntitiesBulkLoadable(entityIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<void> {
+  public async MarkEntitiesBulkLoadable(companyIntegrationID: string, entityIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    const schema = await this.connectionSchema(companyIntegrationID, user, provider);
+    const entities: MJEntityEntity[] = [];
     for (const entityID of entityIDs) {
-      await this.markBulkLoadable(entityID, user, provider);
+      entities.push(await this.loadEntity(entityID, user, provider));
+    }
+    this.assertInConnectionSchema(entities, schema, provider);
+    for (const entity of entities) {
+      await this.markBulkLoadable(entity);
     }
     await provider.Refresh();
   }
@@ -172,12 +164,40 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     return UserCache.Instance.Users.find(u => UUIDsEqual(u.ID, userID));
   }
 
-  /** One save: a DB CHECK requires tracking and cache trust off whenever direct insert is on. */
-  private async markBulkLoadable(entityID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+  /** The schema the apply created the connection's tables in (derived from its integration's name, as the apply derives it). */
+  private async connectionSchema(companyIntegrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<string> {
+    const rows = await this.simpleRows<{ Integration: string }>(
+      'MJ: Company Integrations', `ID='${EscapeSQLString(companyIntegrationID)}'`, ['Integration'], user, provider,
+    );
+    if (rows.length === 0) {
+      throw new Error(`CompanyIntegration "${companyIntegrationID}" not found`);
+    }
+    return DeriveIntegrationSchemaName(rows[0].Integration);
+  }
+
+  private async loadEntity(entityID: string, user: UserInfo, provider: IMetadataProvider): Promise<MJEntityEntity> {
     const entity = await provider.GetEntityObject<MJEntityEntity>('MJ: Entities', user);
     if (!(await entity.Load(entityID))) {
       throw new Error(`Entity "${entityID}" not found`);
     }
+    return entity;
+  }
+
+  /**
+   * Throws naming every entity that is outside the connection's schema, or that is a core entity
+   * (the connection's schema itself is refused when it is the core schema).
+   */
+  private assertInConnectionSchema(entities: MJEntityEntity[], schema: string, provider: IMetadataProvider): void {
+    const coreSchemas = [CORE_SCHEMA, provider.ConfigData?.MJCoreSchemaName ?? CORE_SCHEMA].map(n => n.toLowerCase());
+    const refused = entities.filter(e => e.SchemaName.toLowerCase() !== schema.toLowerCase() || coreSchemas.includes(e.SchemaName.toLowerCase()));
+    if (refused.length > 0) {
+      const names = refused.map(e => `'${e.Name}' (${e.SchemaName})`).join(', ');
+      throw new Error(`Refusing to bulk-load ${names}: outside the connection's schema '${schema}'`);
+    }
+  }
+
+  /** One save: a DB CHECK requires tracking and cache trust off whenever direct insert is on. */
+  private async markBulkLoadable(entity: MJEntityEntity): Promise<void> {
     if (!entity.TrackRecordChanges && !entity.TrustServerCacheCompletely && entity.AllowDirectSQLInsert) {
       return;
     }

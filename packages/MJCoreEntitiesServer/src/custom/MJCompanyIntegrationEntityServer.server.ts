@@ -6,6 +6,7 @@ import {
     LogError,
     LogStatus,
     Metadata,
+    RunInEntityTransaction,
     RunView,
     type UserInfo,
     type IMetadataProvider,
@@ -22,7 +23,14 @@ import {
     ConnectorFactory,
 } from '@memberjunction/integration-engine';
 import { BuildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
-import { ArchiveSeedConfiguration, IsArchiveSeedInProgress, ReadArchiveSeedConfiguration } from './CompanyIntegrationArchiveSeed';
+import { ArchiveSeedConfiguration, PlanArchiveSeedRowCleanup, ReadArchiveSeedConfiguration } from './CompanyIntegrationArchiveSeed';
+
+/** Aborts the connection-delete transaction; `Reason` is the refusal, or undefined when the connection's own delete failed. */
+class ConnectionDeleteAborted extends Error {
+    constructor(public readonly Reason: string | undefined) {
+        super(Reason ?? 'The connection could not be deleted');
+    }
+}
 
 /**
  * Server-side extension of MJCompanyIntegrationEntity that exposes
@@ -124,10 +132,15 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
     /**
      * Deletes the connection. A connection seeded from a backup archive (`seededFromBackup.jobID` in
      * its `Configuration`) owns an archive-seed job row in `MJ: RSU Pending Works`, whose foreign key
-     * would otherwise block the delete, and the deferred External Data Source the seed created. The
-     * job rows are deleted first, the connection next, and the data source last; a seed that is still
-     * running refuses the delete, as does a job row that cannot be deleted. On refusal the result is
-     * recorded (`LatestResult.CompleteMessage`) and `false` returned, per the Save/Delete contract.
+     * would otherwise block the delete, and the deferred External Data Source the seed created.
+     *
+     * The pending-work rows are planned by {@link PlanArchiveSeedRowCleanup}: a seed that is still
+     * running, or other work of the connection that is still Pending, refuses the delete. Otherwise
+     * the rows and the connection are deleted in one transaction on this record's provider, so a
+     * connection delete that fails puts the rows back. The data source goes last, after the commit
+     * (it is referenced only from the configuration JSON); a failure there is logged. On refusal
+     * the result is recorded (`LatestResult.CompleteMessage`) and `false` returned, per the
+     * Save/Delete contract.
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const seed = ReadArchiveSeedConfiguration(this.Configuration);
@@ -138,49 +151,77 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
         if (!user) {
             return this.refuseDelete('No user set - the context user for the entity object must be set');
         }
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
-        const refusal = await this.deleteArchiveSeedJobRows(user, provider);
-        if (refusal) {
-            return this.refuseDelete(refusal);
+        const rows = await this.loadPendingWorkRows(user);
+        if (typeof rows === 'string') {
+            return this.refuseDelete(rows);
         }
-        if (!(await super.Delete(options))) {
-            return false;
+        const plan = PlanArchiveSeedRowCleanup(rows);
+        if (plan.Refusal) {
+            return this.refuseDelete(plan.Refusal);
         }
-        await this.deleteArchiveSeedDataSource(seed, user, provider);
+        const outcome = await this.deleteWithPendingWorkRows(plan.Delete, options);
+        if (outcome !== true) {
+            return outcome === false ? false : this.refuseDelete(outcome);
+        }
+        await this.deleteArchiveSeedDataSource(seed, user);
         return true;
     }
 
-    /** Deletes this connection's archive-seed job rows; the refusal reason when one is running or cannot be deleted. */
-    private async deleteArchiveSeedJobRows(user: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
-        const rows = await RunView.FromMetadataProvider(provider).RunView<MJRSUPendingWorkEntity>({
+    /** This connection's pending-work rows, or the reason they could not be read. */
+    private async loadPendingWorkRows(user: UserInfo): Promise<MJRSUPendingWorkEntity[] | string> {
+        const rows = await new RunView(this.RunViewProviderToUse).RunView<MJRSUPendingWorkEntity>({
             EntityName: 'MJ: RSU Pending Works',
             ExtraFilter: `CompanyIntegrationID='${EscapeSQLString(this.ID)}'`,
             ResultType: 'entity_object',
         }, user);
         if (!rows.Success) {
-            return `Could not read the archive seed job of this connection: ${rows.ErrorMessage}`;
+            return `Could not read the pending work of this connection: ${rows.ErrorMessage}`;
         }
-        if (rows.Results.some(row => IsArchiveSeedInProgress(row))) {
-            return 'An archive seed is still running for this connection; wait for it to finish or fail before deleting it.';
-        }
-        for (const row of rows.Results) {
-            if (!(await row.Delete())) {
-                return `Could not delete the archive seed job of this connection: ${row.LatestResult?.CompleteMessage ?? 'delete failed'}`;
+        return rows.Results;
+    }
+
+    /**
+     * Deletes the rows, then the connection, in one transaction. `true` once committed; `false` when
+     * the connection's own delete failed (its result is already recorded); otherwise the reason a
+     * row could not be deleted. Either failure rolls the whole unit back.
+     */
+    private async deleteWithPendingWorkRows(rows: MJRSUPendingWorkEntity[], options?: EntityDeleteOptions): Promise<boolean | string> {
+        try {
+            await RunInEntityTransaction(this.ProviderToUse, async () => {
+                for (const row of rows) {
+                    if (!(await row.Delete())) {
+                        throw new ConnectionDeleteAborted(`Could not delete the pending work of this connection: ${row.LatestResult?.CompleteMessage ?? 'delete failed'}`);
+                    }
+                }
+                if (!(await super.Delete(options))) {
+                    throw new ConnectionDeleteAborted(undefined);
+                }
+            });
+            return true;
+        } catch (err) {
+            if (err instanceof ConnectionDeleteAborted) {
+                return err.Reason ?? false;
             }
+            throw err;
         }
-        return undefined;
     }
 
     /** Deletes the data source the seed created, when it still exists. A failure is logged; the connection is already gone. */
-    private async deleteArchiveSeedDataSource(seed: ArchiveSeedConfiguration, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    private async deleteArchiveSeedDataSource(seed: ArchiveSeedConfiguration, user: UserInfo): Promise<void> {
         if (!seed.ExternalDataSourceID) {
             return;
         }
-        const ds = await provider.GetEntityObject<MJExternalDataSourceEntity>('MJ: External Data Sources', user);
-        if (!(await ds.Load(seed.ExternalDataSourceID))) {
+        const result = await new RunView(this.RunViewProviderToUse).RunView<MJExternalDataSourceEntity>({
+            EntityName: 'MJ: External Data Sources',
+            ExtraFilter: `ID='${EscapeSQLString(seed.ExternalDataSourceID)}'`,
+            ResultType: 'entity_object',
+        }, user);
+        if (!result.Success) {
+            LogError(`[MJCompanyIntegrationEntityServer] Connection ${this.ID} deleted, but its archive seed data source ${seed.ExternalDataSourceID} could not be read: ${result.ErrorMessage}`);
             return;
         }
-        if (!(await ds.Delete())) {
+        const ds = result.Results[0];
+        if (ds && !(await ds.Delete())) {
             LogError(`[MJCompanyIntegrationEntityServer] Connection ${this.ID} deleted, but its archive seed data source ${seed.ExternalDataSourceID} was not: ${ds.LatestResult?.CompleteMessage ?? 'delete failed'}`);
         }
     }

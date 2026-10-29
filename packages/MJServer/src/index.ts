@@ -81,7 +81,7 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ArchiveSeedJobInstance, ArchiveSeedRecordsInstance } from './integration/archiveSeed/ArchiveSeedJobInstance.js';
-import { PlanArchiveSeedResume } from './integration/archiveSeed/ArchiveSeedDispatch.js';
+import { DispatchArchiveSeedWork } from './integration/archiveSeed/ArchiveSeedDispatch.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
@@ -1935,12 +1935,8 @@ async function processRSUPendingWork(): Promise<void> {
       // and the job completes or fails it itself, so this branch never closes the row.
       if (item.WorkType === 'archive-seed') {
         // Resumes as the job's own owner; an owner who no longer exists fails the job (as the system
-        // user) instead of handing the job to anyone else.
-        const plan = PlanArchiveSeedResume(item, ArchiveSeedRecordsInstance);
-        const settled = plan.Kind === 'Resume'
-          ? ArchiveSeedJobInstance.Resume(pendingWorkID, plan.User, Metadata.Provider) // global-provider-ok: server startup recovery — this process's one provider
-          : ArchiveSeedJobInstance.FailUnresolvableOwner(pendingWorkID, systemUser, Metadata.Provider); // global-provider-ok: server startup recovery — this process's one provider
-        void settled.catch(err => console.error(`[RSU] archive-seed resume failed: ${err instanceof Error ? err.message : String(err)}`));
+        // user) instead of handing the job to anyone else. Never throws and never waits.
+        DispatchArchiveSeedWork(item, pendingWorkID, systemUser, Metadata.Provider, ArchiveSeedJobInstance, ArchiveSeedRecordsInstance); // global-provider-ok: server startup recovery — this process's one provider
         continue;
       }
 
