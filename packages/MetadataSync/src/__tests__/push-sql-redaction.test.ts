@@ -40,6 +40,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 import { PushService } from '../services/PushService';
 import { SyncEngine } from '../lib/sync-engine';
 import { SQLLogger } from '../lib/sql-logger';
+import { DEFAULT_TRANSACTIONAL_EXCLUDE_PATTERNS } from '../lib/sql-log-filters';
 
 const SECRET = 'super-secret-123';
 const ID_VALUE = 'B0000000-0000-4000-8000-000000000001';
@@ -144,6 +145,15 @@ describe('push SQL log redaction', () => {
       await openWith(50);
       expect(capturedOptions?.variableBatchThreshold).toBe(50);
     });
+  });
+
+  it('passes the built-in run and log exclusions after the project patterns', async () => {
+    const config = { version: '1.0', sqlLogging: { enabled: true, outputDirectory: './sql', filterPatterns: ['*EntityFieldValue*'] } } as SyncConfig;
+    service['syncConfig'] = config;
+    await service['startSqlLogging'](new SQLLogger(config), {}, dir, {});
+
+    expect(capturedOptions?.filterType).toBe('exclude');
+    expect(capturedOptions?.filterPatterns).toEqual(['*EntityFieldValue*', ...DEFAULT_TRANSACTIONAL_EXCLUDE_PATTERNS]);
   });
 
   it('opens the SQL log with the redactor transform', () => {
