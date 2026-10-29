@@ -25,7 +25,7 @@
 import {
     BaseSingleton,
     SafeJSONParse,
-    UUIDsEqual,
+    UUIDSet,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
@@ -767,15 +767,19 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         if (!user || !user.UserRoles || user.UserRoles.length === 0) {
             return false;
         }
+        const roleIdSet = new UUIDSet();
+        const roleNameSet = new Set<string>();
+        for (const ur of user.UserRoles) {
+            if (typeof ur.Role === 'string') {
+                roleNameSet.add(ur.Role.trim().toLowerCase());
+            }
+            if (typeof ur.RoleID === 'string' && ur.RoleID.trim().length > 0) {
+                roleIdSet.Add(ur.RoleID);
+            }
+        }
         for (const allowed of allowedRoles) {
             const wanted = allowed.trim();
-            const wantedLower = wanted.toLowerCase();
-            const matched = user.UserRoles.some(
-                (ur) =>
-                    (typeof ur.Role === 'string' && ur.Role.trim().toLowerCase() === wantedLower) ||
-                    (typeof ur.RoleID === 'string' && UUIDsEqual(ur.RoleID, wanted)),
-            );
-            if (matched) {
+            if (roleNameSet.has(wanted.toLowerCase()) || roleIdSet.Has(wanted)) {
                 return true;
             }
         }
