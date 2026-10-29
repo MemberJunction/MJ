@@ -5,7 +5,7 @@ import { BaseLintRule } from '../lint-rule';
 import { Violation, FieldAccessViolationDetails } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { LinterOptions } from '../linter-options';
-import { TypeContext, FieldTypeInfo } from '../type-context';
+import { TypeContext, FieldTypeInfo, FunctionScopeName } from '../type-context';
 
 /**
  * Rule: entity-field-access-validation
@@ -28,40 +28,30 @@ import { TypeContext, FieldTypeInfo } from '../type-context';
 
 
 /**
- * Looks up a variable's TypeInfo from the TypeContext, including scoped lookups.
+ * The scope names enclosing `path`, outermost function first, named the way type inference
+ * named them while recording variable types.
+ */
+function enclosingScopePath(path: NodePath): string[] {
+  const names: string[] = [];
+  for (let current: NodePath | null = path.parentPath; current; current = current.parentPath) {
+    if (current.isFunctionDeclaration() || current.isFunctionExpression() || current.isArrowFunctionExpression()) {
+      names.unshift(FunctionScopeName(current.node, current.parent));
+    }
+  }
+  return names;
+}
+
+/**
+ * Looks up a variable's TypeInfo in the scope where `path` reads it, resolving the name as
+ * JavaScript does (innermost enclosing function first). Two callbacks that each name their
+ * parameter `row` therefore get their own types, never each other's.
  */
 function lookupVariableTypeInfo(
   varName: string,
   typeContext: TypeContext,
   path: NodePath
 ): { type: string; entityName?: string; queryName?: string; fields?: Map<string, FieldTypeInfo>; arrayElementType?: { type: string; entityName?: string; queryName?: string; fields?: Map<string, FieldTypeInfo> } } | null {
-  let varType = typeContext.getVariableType(varName);
-
-  if (!varType || varType.type === 'unknown') {
-    // Try with scope prefix from the path
-    let current: NodePath | null = path;
-    while (current) {
-      if (current.isFunction()) {
-        let fnName: string | undefined;
-        const node = current.node;
-        if (t.isFunctionDeclaration(node) && node.id) {
-          fnName = node.id.name;
-        } else if (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) {
-          const parent = current.parent;
-          if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
-            fnName = parent.id.name;
-          }
-        }
-        if (fnName) {
-          varType = typeContext.getVariableType(`${fnName}:${varName}`);
-          if (varType && varType.type !== 'unknown') break;
-        }
-      }
-      current = current.parentPath;
-    }
-  }
-
-  return varType ?? null;
+  return typeContext.GetVariableTypeInScope(varName, enclosingScopePath(path)) ?? null;
 }
 
 /**
