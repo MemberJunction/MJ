@@ -426,7 +426,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
      */
     private buildCloudItems(items: MJTaggedItemEntity[]): WordCloudItem[] {
         return items.map(item => ({
-            Text: item.Tag,
+            Text: item.Tag ?? '',
             Weight: item.Weight,
             Metadata: { TaggedItemID: item.ID, TagID: item.TagID }
         }));

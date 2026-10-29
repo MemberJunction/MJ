@@ -3022,7 +3022,9 @@ export class SQLCodeGenBase {
                 // sidesteps the self-reference problem when the FK is a self-FK.
                 const useView = ef._RelatedEntityNameFieldIsVirtual && !ef._RelatedEntityNameFieldIsComputed;
                 const relatedTable = useView ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable;
-                sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${qs(ef.RelatedEntitySchemaName, relatedTable)} AS ${ef._RelatedEntityTableAlias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(ef.Name)} = ${ef._RelatedEntityTableAlias}.${qi(ef.RelatedEntityFieldName)}`;
+                // Always LEFT OUTER (#4533): this join only fetches a display label, so a
+                // missing or unmatched related row must yield a NULL label, never drop the row.
+                sOutput += `LEFT OUTER JOIN\n    ${qs(ef.RelatedEntitySchemaName, relatedTable)} AS ${ef._RelatedEntityTableAlias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(ef.Name)} = ${ef._RelatedEntityTableAlias}.${qi(ef.RelatedEntityFieldName)}`;
             }
         }
 
@@ -3114,8 +3116,8 @@ export class SQLCodeGenBase {
             const alias = `__mj_emb_${spec.foreignKeyField}`;
             const schema = spec.relatedSchemaName || related.SchemaName;
             const table = spec.relatedBaseTable || related.BaseTable;
-            const joinKind = spec.allowsNull ? 'LEFT OUTER' : 'INNER';
-            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`); // first-pk-ok: FK target — a single FK column joins to the related entity's single key
+            // Display-only join: LEFT OUTER so an unmatched related row never drops the parent row (#4533).
+            joins.push(`LEFT OUTER JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`); // first-pk-ok: FK target — a single FK column joins to the related entity's single key
             selects.push(`    ${alias}.${qi(latF.Name)} AS ${qi(spec.lat)},\n    ${alias}.${qi(lngF.Name)} AS ${qi(spec.lng)}`);
         }
         return { select: selects.join(',\n'), joins: joins.join('\n') };

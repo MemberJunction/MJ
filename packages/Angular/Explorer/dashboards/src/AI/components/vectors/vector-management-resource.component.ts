@@ -848,7 +848,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             // Step 2: Subscribe to progress updates and also set a safety timeout
             // in case the subscription misses events (race condition, network issue, etc.)
-            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity);
+            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity ?? doc.Name);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error(`[VectorManagement] Error starting sync for ${entityDocumentId}:`, msg);

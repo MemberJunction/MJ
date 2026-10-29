@@ -435,7 +435,7 @@ export class SearchService {
             artifact,
             query,
             collArtifact.CollectionID,
-            collArtifact.Collection
+            collArtifact.Collection ?? undefined
           )
         );
       } else {

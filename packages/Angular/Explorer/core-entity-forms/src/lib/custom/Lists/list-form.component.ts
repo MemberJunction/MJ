@@ -1150,7 +1150,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result: RunViewResult = await rv.RunView({
-            EntityName: this.record.Entity,
+            EntityName: sourceEntityInfo.Name,
             ExtraFilter: filter,
             MaxRows: 100,
             ResultType: 'simple'
