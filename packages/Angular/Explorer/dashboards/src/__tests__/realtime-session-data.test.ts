@@ -94,7 +94,7 @@ describe('LoadRealtimeSessionsDataset — query shape', () => {
 // ── Rollup mapping ──
 
 describe('LoadRealtimeSessionsDataset — CloseReason rollup mapping', () => {
-    it.each(['Explicit', 'Janitor', 'Shutdown', 'Error'] as const)(
+    it.each(['Explicit', 'Janitor', 'Shutdown', 'Error', 'TimeLimit', 'Idle'] as const)(
         'carries CloseReason %s through to the rollup',
         async (reason) => {
             queueDataset([makeSessionRecord({ ID: `s-${reason}`, CloseReason: reason })]);
@@ -103,7 +103,7 @@ describe('LoadRealtimeSessionsDataset — CloseReason rollup mapping', () => {
 
             expect(ds.AllSessions).toHaveLength(1);
             expect(ds.AllSessions[0].CloseReason).toBe(reason);
-            expect(ds.AllSessions[0].IsJanitorClosed).toBe(reason === 'Janitor');
+            expect(ds.AllSessions[0].IsJanitorClosed).toBe(reason === 'Janitor' || reason === 'TimeLimit' || reason === 'Idle');
         },
     );
 
@@ -152,6 +152,8 @@ describe('BuildSessionStatusDisplay', () => {
         ['Janitor', 'Closed · janitor', 'fa-broom'],
         ['Shutdown', 'Closed · shutdown', 'fa-power-off'],
         ['Error', 'Closed · error', 'fa-triangle-exclamation'],
+        ['TimeLimit', 'Closed · time limit', 'fa-hourglass-end'],
+        ['Idle', 'Closed · idle — no activity', 'fa-moon'],
         [null, 'Closed · unknown', 'fa-circle-question'],
     ];
 

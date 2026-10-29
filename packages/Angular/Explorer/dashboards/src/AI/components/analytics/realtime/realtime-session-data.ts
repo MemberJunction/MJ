@@ -13,6 +13,7 @@
  */
 
 import { IMetadataProvider, RunView } from '@memberjunction/core';
+import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -23,7 +24,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
  * (mirrors `AIAgentSessionEntity.CloseReason`). `null` means a legacy row closed
  * before the column existed — rendered as "unknown".
  */
-export type RealtimeSessionCloseReason = 'Error' | 'Explicit' | 'Janitor' | 'Shutdown';
+export type RealtimeSessionCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 export interface RealtimeSessionRecord {
     ID: string;
@@ -97,9 +98,10 @@ export interface RealtimeSessionRollup {
      */
     CloseReason: RealtimeSessionCloseReason | null;
     /**
-     * `CloseReason === 'Janitor'` — the session was force-closed by the
-     * lifecycle janitor (startup orphan recovery or staleness sweep) rather
-     * than ended explicitly. Derived from the real column; the old
+     * The session was closed by the server's lifecycle janitor rather than
+     * ended by a person: `Idle` (staleness sweep), `TimeLimit` (deadline
+     * sweep) or `Janitor` (crash orphan reconciled at startup). All three
+     * count, so the "Janitor closes" KPI keeps counting every system close. Derived from the real column; the old
      * ClosedAt−LastActiveAt timing heuristic has been retired, so legacy
      * NULL-reason rows report `false` here and "unknown" in the UI.
      */
@@ -273,7 +275,7 @@ function buildRollup(
         DurationMs: durationMs,
         IsResumed: session.LastSessionID != null,
         CloseReason: closeReason,
-        IsJanitorClosed: closeReason === 'Janitor'
+        IsJanitorClosed: closeReason === 'Janitor' || closeReason === 'Idle' || closeReason === 'TimeLimit'
     };
 }
 
@@ -316,7 +318,11 @@ export function BuildSessionStatusDisplay(
         case 'Explicit':
             return { Label: 'Closed', Title: 'Closed explicitly (user hang-up / close mutation)', Icon: 'fa-solid fa-circle-stop' };
         case 'Janitor':
-            return { Label: 'Closed · janitor', Title: 'Force-closed by the lifecycle janitor (staleness sweep / orphan reconciliation)', Icon: 'fa-solid fa-broom' };
+            return { Label: 'Closed · janitor', Title: 'Crash orphan reconciled by the lifecycle janitor at startup', Icon: 'fa-solid fa-broom' };
+        case 'TimeLimit':
+            return { Label: 'Closed · time limit', Title: 'Closed by the janitor because the session passed its time limit', Icon: 'fa-solid fa-hourglass-end' };
+        case 'Idle':
+            return { Label: 'Closed · idle — no activity', Title: 'Closed by the janitor staleness sweep after no activity', Icon: 'fa-solid fa-moon' };
         case 'Shutdown':
             return { Label: 'Closed · shutdown', Title: 'Closed by the host’s graceful shutdown drain', Icon: 'fa-solid fa-power-off' };
         case 'Error':
