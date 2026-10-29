@@ -31,7 +31,8 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
                 Type: 'dataset',
                 DatasetName: 'ResourceTypes',
                 PropertyName: "_resourceTypes",
-                DatasetResultHandling: "single_property"
+                DatasetResultHandling: "single_property",
+                Entities: ['MJ: Resource Types']
             }
         ]
         await super.Load(c, provider, forceRefresh, contextUser);
