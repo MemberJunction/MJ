@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
@@ -106,6 +106,15 @@ export type ConversationContextMetadata = {
     agentName?: string | null;
     /** Parent `ConversationDetail.ID` when this message replies to an earlier row */
     parentId?: string | null;
+    /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
+    rawContent?: string;
+};
+
+type SpeakerAttributionState = {
+    attributeUsers: boolean;
+    attributeAgents: boolean;
+    labelsById: UUIDMap<string>;
+    rowsById: UUIDMap<ConversationWindowSourceRow>;
 };
 
 /**
@@ -3420,18 +3429,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /** Converts a raw ConversationDetail row into a context message with sequence and speaker metadata. */
     private static detailToContextMessage(
         detail: ConversationWindowSourceRow,
-        attribution?: {
-            attributeUsers: boolean;
-            attributeAgents: boolean;
-            labelsByNormalizedId: ReadonlyMap<string, string>;
-            rowsByNormalizedId: ReadonlyMap<string, ConversationWindowSourceRow>;
-        }
+        attribution?: SpeakerAttributionState
     ): ConversationContextMessage {
         const role = ConversationEngine.mapDetailRoleToChatRole(detail.Role);
+        const raw = detail.Message || '';
         const content = ConversationEngine.formatAttributedMessageContent(detail, role, attribution);
         const metadata: ConversationContextMetadata = {
             sequence: detail.Sequence,
             conversationDetailId: detail.ID,
+            ...(content !== raw ? { rawContent: raw } : {}),
             ...(detail.UserID !== undefined ? { userId: detail.UserID } : {}),
             ...(detail.User !== undefined ? { userName: detail.User } : {}),
             ...(detail.AgentID !== undefined ? { agentId: detail.AgentID } : {}),
@@ -3448,27 +3454,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             speakerAttribution?: 'off' | 'auto' | 'always';
             speakerLabels?: ReadonlyMap<string, string>;
         }
-    ): {
-        attributeUsers: boolean;
-        attributeAgents: boolean;
-        labelsByNormalizedId: ReadonlyMap<string, string>;
-        rowsByNormalizedId: ReadonlyMap<string, ConversationWindowSourceRow>;
-    } {
+    ): SpeakerAttributionState {
         const mode = options?.speakerAttribution ?? 'auto';
-        const labelsByNormalizedId = new Map<string, string>();
+        const labelsById = new UUIDMap<string>();
         for (const [key, value] of options?.speakerLabels ?? []) {
             if (key && value?.trim()) {
-                labelsByNormalizedId.set(NormalizeUUID(key), value.trim());
+                labelsById.Set(key, value.trim());
             }
         }
-        const distinctUsers = new Set(ordered.map(d => d.UserID?.trim()).filter((id): id is string => !!id).map(id => NormalizeUUID(id)));
-        const distinctAgents = new Set(ordered.map(d => d.AgentID?.trim()).filter((id): id is string => !!id).map(id => NormalizeUUID(id)));
-        const rowsByNormalizedId = new Map(ordered.map(d => [NormalizeUUID(d.ID), d]));
+        const distinctUsers = new UUIDSet();
+        const distinctAgents = new UUIDSet();
+        for (const d of ordered) {
+            const role = ConversationEngine.mapDetailRoleToChatRole(d.Role);
+            if (role === 'user' && d.UserID) {
+                distinctUsers.Add(d.UserID);
+            } else if (role === 'assistant' && d.AgentID) {
+                distinctAgents.Add(d.AgentID);
+            }
+        }
+        const rowsById = IndexByUUID(ordered);
+        const hasMultipleHumans = distinctUsers.Size > 1 || labelsById.Size > 0;
         return {
-            attributeUsers: mode === 'always' || (mode === 'auto' && (distinctUsers.size > 1 || labelsByNormalizedId.size > 0)),
-            attributeAgents: mode === 'always' || (mode === 'auto' && distinctAgents.size > 1),
-            labelsByNormalizedId,
-            rowsByNormalizedId,
+            attributeUsers: mode === 'always' || (mode === 'auto' && hasMultipleHumans),
+            attributeAgents: mode === 'always' || (mode === 'auto' && hasMultipleHumans && distinctAgents.Size > 1),
+            labelsById,
+            rowsById,
         };
     }
 
@@ -3476,27 +3486,22 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     private static formatAttributedMessageContent(
         detail: ConversationWindowSourceRow,
         role: 'user' | 'assistant' | 'system',
-        attribution?: {
-            attributeUsers: boolean;
-            attributeAgents: boolean;
-            labelsByNormalizedId: ReadonlyMap<string, string>;
-            rowsByNormalizedId: ReadonlyMap<string, ConversationWindowSourceRow>;
-        }
+        attribution?: SpeakerAttributionState
     ): string {
         const raw = detail.Message || '';
         if (!attribution) {
             return raw;
         }
         const speaker = role === 'user' && attribution.attributeUsers
-            ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsByNormalizedId)
+            ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsById)
             : role === 'assistant' && attribution.attributeAgents
-                ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsByNormalizedId)
+                ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsById)
                 : null;
         if (!speaker) {
             return raw;
         }
-        const parentRow = detail.ParentID ? attribution.rowsByNormalizedId.get(NormalizeUUID(detail.ParentID)) : undefined;
-        const parentSpeaker = parentRow ? ConversationEngine.speakerLabelForRow(parentRow, attribution.labelsByNormalizedId) : null;
+        const parentRow = detail.ParentID ? attribution.rowsById.Get(detail.ParentID) : undefined;
+        const parentSpeaker = parentRow ? ConversationEngine.speakerLabelForRow(parentRow, attribution.labelsById) : null;
         const header = parentSpeaker ? `[${speaker} -> replying to ${parentSpeaker}]` : `[${speaker}]`;
         return `${header}: ${raw}`;
     }
@@ -3504,15 +3509,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /** Resolves a display name for a row's author (human or agent). */
     private static speakerLabelForRow(
         row: ConversationWindowSourceRow,
-        labelsByNormalizedId: ReadonlyMap<string, string>
+        labelsById: UUIDMap<string>
     ): string | null {
         const role = ConversationEngine.mapDetailRoleToChatRole(row.Role);
         if (role === 'assistant') {
-            const custom = row.AgentID ? labelsByNormalizedId.get(NormalizeUUID(row.AgentID)) : undefined;
+            const custom = row.AgentID ? labelsById.Get(row.AgentID) : undefined;
             return custom || row.Agent?.trim() || null;
         }
         if (role === 'user') {
-            const custom = row.UserID ? labelsByNormalizedId.get(NormalizeUUID(row.UserID)) : undefined;
+            const custom = row.UserID ? labelsById.Get(row.UserID) : undefined;
             return custom || row.User?.trim() || null;
         }
         return null;

@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+    IsAddressedToHuman,
     ResolveAgentTurn,
     FindDisallowedTaskGraphAgents,
     type AgentTurnCandidates,
@@ -192,7 +193,7 @@ describe('ResolveAgentTurn — multi-party signals (human mentions, thread repli
         expect(ResolveAgentTurn(both, rules('MentionOnly'), isKnown)).toEqual({ AgentId: TAGGED, Route: 'Mention' });
     });
 
-    it('routes a thread reply to an AI message directly to that agent under both Always and MentionOnly', () => {
+    it('routes a thread reply to an AI message directly to that agent under both Always and MentionOnly when runnable', () => {
         const replyToAi = candidates({
             ReplyParentAgentId: OTHER,
             ContinuityAgentId: LAST,
@@ -200,6 +201,15 @@ describe('ResolveAgentTurn — multi-party signals (human mentions, thread repli
         expect(ResolveAgentTurn(replyToAi, rules('Always'), isKnown)).toEqual({ AgentId: OTHER, Route: 'ThreadReply' });
         expect(ResolveAgentTurn(replyToAi, rules('MentionOnly'), isKnown)).toEqual({ AgentId: OTHER, Route: 'ThreadReply' });
         expect(ResolveAgentTurn(replyToAi, rules('MentionOnly', [TAGGED]), isKnown)).toBeNull();
+        // When the parent agent is readable (isKnown) but not runnable by this user, ThreadReply does not fire
+        expect(ResolveAgentTurn(replyToAi, rules('MentionOnly'), isKnown, id => id !== OTHER)).toBeNull();
+    });
+
+    it('identifies intentional human-addressed candidates via IsAddressedToHuman', () => {
+        expect(IsAddressedToHuman(candidates())).toBe(false);
+        expect(IsAddressedToHuman(candidates({ MentionedUserIds: ['user-2'] }))).toBe(true);
+        expect(IsAddressedToHuman(candidates({ ReplyParentIsHuman: true }))).toBe(true);
+        expect(IsAddressedToHuman(candidates({ DecisionAddressedToHuman: true }))).toBe(true);
     });
 
     it('starts no turn for a thread reply to a human message unless an agent is explicitly @-mentioned', () => {

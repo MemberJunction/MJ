@@ -120,7 +120,9 @@ export const DECISION_ROUTING_MIN_CONFIDENCE = 0.7;
  *   belongs in `AIPromptRunner`: build `modelInfo` from the candidate that answered.
  *
  * Refit, and add the new pair, whenever a model, its version, the question or the state layout
- * changes.
+ * changes. Note: the multi-person path (`AllowNoAgentOption`) adds the `no_agent` option and
+ * speaker-attributed turns; it currently shares the single-user Platt fits below until a
+ * multi-person eval corpus is fitted.
  */
 export const ROUTING_CONTINUES_CALIBRATION: readonly DecisionModelCalibration<PlattCalibration>[] = Object.freeze([
     Object.freeze({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: Object.freeze({ A: 1.7757, B: -3.3506 }) }),
@@ -480,6 +482,9 @@ export function CanAskRoutingDecision(input: RoutingDecisionInput): boolean {
  * artifact version the message modifies.
  */
 export function BuildRoutingQuestions(input: RoutingDecisionInput): Record<string, DecisionQuestion> {
+    const someoneElseInstruction = hasManagerOption(input)
+        ? ' Choose someone else when the message moves to a subject none of these agents is handling.'
+        : '';
     const noAgentInstruction = input.AllowNoAgentOption
         ? ' Choose no agent when the message is addressed to another person in the conversation.'
         : '';
@@ -487,8 +492,7 @@ export function BuildRoutingQuestions(input: RoutingDecisionInput): Record<strin
         [ROUTE_QUESTION]: {
             Kind: 'Choice',
             Instructions: 'Which agent should answer the user\'s new message? Choose the agent whose work in '
-                + 'this conversation the message is about. Choose someone else when the message moves to a '
-                + `subject none of these agents is handling.${noAgentInstruction}`,
+                + `this conversation the message is about.${someoneElseInstruction}${noAgentInstruction}`,
             Options: buildRouteOptions(input)
         },
         [CONTINUES_QUESTION]: {
@@ -607,12 +611,17 @@ export function NoAgentOutcome(reason: string): RoutingDecisionOutcome {
     return noAgent(reason);
 }
 
+/** True when the conversation manager is offered as the "someone else" option. */
+function hasManagerOption(input: RoutingDecisionInput): boolean {
+    const manager = input.ConversationManager;
+    return Boolean(manager && IsAgentAllowed(manager.ID, input.AllowedAgentIDs));
+}
+
 /** The agent Choice's options: each participant, the conversation manager as someone else, and (when enabled) no agent. */
 function buildRouteOptions(input: RoutingDecisionInput): ChoiceOption[] {
     const options = input.Participants.map(p => ({ Value: p.Agent.ID, Description: describeParticipant(p) }));
-    const manager = input.ConversationManager;
-    if (manager && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
-        options.push({ Value: manager.ID, Description: describeSomeoneElse(manager) });
+    if (hasManagerOption(input) && input.ConversationManager) {
+        options.push({ Value: input.ConversationManager.ID, Description: describeSomeoneElse(input.ConversationManager) });
     }
     if (input.AllowNoAgentOption) {
         options.push({ Value: NO_AGENT, Description: describeNoAgent() });
@@ -812,36 +821,27 @@ function readMultiPartyRouteVerdict(
         if (!(continuing > 1 - DECISION_ROUTING_MIN_CONFIDENCE)) {
             return noAgent(`the thread likelihood does not confirm continuing (calibrated probability ${continuing.toFixed(3)})`);
         }
-        return verdictForMultiPartyChoice(input, route.Value);
+        return verdictForChoice(input, route.Value, noAgent);
     }
     if (!(continuing <= 1 - DECISION_ROUTING_MIN_CONFIDENCE)) {
         return noAgent(`the thread may still continue (calibrated probability ${continuing.toFixed(3)})`);
     }
-    return verdictForMultiPartyChoice(input, route.Value);
+    return verdictForChoice(input, route.Value, noAgent);
 }
 
-/** The verdict for an agent Choice that confidently left the thread. */
-function verdictForChoice(input: RoutingDecisionInput, value: string): RouteVerdict {
+/** The verdict for an agent Choice, falling back to `fallback` when the chosen agent is not routable. */
+function verdictForChoice(
+    input: RoutingDecisionInput,
+    value: string,
+    fallback: (reason: string) => RouteVerdict = keptContinuity
+): RouteVerdict {
     const manager = input.ConversationManager;
     if (manager && UUIDsEqual(value, manager.ID) && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
         return { Verdict: 'SomeoneElse', RoutedAgentId: null, Reason: 'the message moves to someone else' };
     }
     const participant = input.Participants.find(p => UUIDsEqual(p.Agent.ID, value));
     if (!participant || !IsAgentAllowed(participant.Agent.ID, input.AllowedAgentIDs)) {
-        return keptContinuity('the chosen agent is not one this chat can route to');
-    }
-    return { Verdict: 'Routed', RoutedAgentId: participant.Agent.ID, Reason: `routed to ${nameOf(participant.Agent)}` };
-}
-
-/** The verdict for an agent Choice in a multi-person chat (`AllowNoAgentOption`). */
-function verdictForMultiPartyChoice(input: RoutingDecisionInput, value: string): RouteVerdict {
-    const manager = input.ConversationManager;
-    if (manager && UUIDsEqual(value, manager.ID) && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
-        return { Verdict: 'SomeoneElse', RoutedAgentId: null, Reason: 'the message moves to someone else' };
-    }
-    const participant = input.Participants.find(p => UUIDsEqual(p.Agent.ID, value));
-    if (!participant || !IsAgentAllowed(participant.Agent.ID, input.AllowedAgentIDs)) {
-        return noAgent('the chosen agent is not one this chat can route to');
+        return fallback('the chosen agent is not one this chat can route to');
     }
     return { Verdict: 'Routed', RoutedAgentId: participant.Agent.ID, Reason: `routed to ${nameOf(participant.Agent)}` };
 }

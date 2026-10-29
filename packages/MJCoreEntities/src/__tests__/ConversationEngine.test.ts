@@ -1919,12 +1919,13 @@ describe('ConversationEngine', () => {
             const RESEARCH_ID = 'CCCCCCCC-0000-0000-0000-000000000001';
             const WRITER_ID = 'DDDDDDDD-0000-0000-0000-000000000002';
 
-            it('single-user, single-agent rows stay unprefixed by default (auto)', () => {
+            it('single-user rows stay unprefixed by default (auto), even when multiple agents reply', () => {
                 const window = ConversationEngine.AssembleContextWindow([
                     { ...row(1, 'User', 'Hello'), UserID: ALICE_ID, User: 'Alice Chen' },
                     { ...row(2, 'AI', 'Hi there'), AgentID: RESEARCH_ID, Agent: 'Research', ParentID: 'detail-1' },
+                    { ...row(3, 'AI', 'Draft ready'), AgentID: WRITER_ID, Agent: 'Writer', ParentID: 'detail-1' },
                 ]);
-                expect(window.map(m => m.content)).toEqual(['Hello', 'Hi there']);
+                expect(window.map(m => m.content)).toEqual(['Hello', 'Hi there', 'Draft ready']);
                 expect(window[0].metadata).toEqual({
                     sequence: 1,
                     conversationDetailId: 'detail-1',
@@ -1940,7 +1941,7 @@ describe('ConversationEngine', () => {
                 });
             });
 
-            it('prefixes speakers and reply targets when multiple users or agents participate (auto)', () => {
+            it('prefixes speakers, reply targets, and preserves metadata.rawContent when multiple users participate (auto)', () => {
                 const window = ConversationEngine.AssembleContextWindow([
                     { ...row(1, 'User', 'Can someone check Q3?'), UserID: ALICE_ID, User: 'Alice Chen' },
                     { ...row(2, 'User', 'I have the spreadsheet'), UserID: BOB_ID, User: 'Bob Rivera', ParentID: 'detail-1' },
@@ -1952,6 +1953,12 @@ describe('ConversationEngine', () => {
                     '[Bob Rivera -> replying to Alice Chen]: I have the spreadsheet',
                     '[Research -> replying to Alice Chen]: Found 3 variances',
                     '[Writer -> replying to Research]: Drafted executive summary',
+                ]);
+                expect(window.map(m => m.metadata?.rawContent)).toEqual([
+                    'Can someone check Q3?',
+                    'I have the spreadsheet',
+                    'Found 3 variances',
+                    'Drafted executive summary',
                 ]);
             });
 

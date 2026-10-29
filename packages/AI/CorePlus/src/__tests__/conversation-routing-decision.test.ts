@@ -402,9 +402,10 @@ describe('conversation routing decision', () => {
             expect(BuildRoutingQuestions(input())['continues']).toEqual(expected);
         });
 
-        it('leave the manager out when the chat does not allow it', () => {
+        it('leave the manager out when the chat does not allow it, and omit the "someone else" sentence', () => {
             const question = routeQuestion({ State: '', Questions: BuildRoutingQuestions(input({ AllowedAgentIDs: [RESEARCH.ID, WRITER.ID] })) });
             expect(question.Options.map(o => o.Value)).toEqual([RESEARCH.ID, WRITER.ID]);
+            expect(question.Instructions).not.toContain('Choose someone else');
         });
 
         it('ask nothing about artifacts when the participants have none', () => {

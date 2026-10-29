@@ -14,15 +14,18 @@ import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 /**
  * When a message starts an agent turn.
  *
- * - `Always` (the default): every message does, as it always has.
- * - `MentionOnly`: only a message that tags an agent does. Any other message is posted with no
- *   turn at all: no reply row, no placeholder and no turn events.
+ * - `Always` (the default): every message starts a turn unless it is addressed to another person
+ *   (`@Person`, a `ParentID` reply to another person's message, or a `NoAgent` routing decision).
+ * - `MentionOnly`: a message starts a turn only when it tags an agent (`Mention`), replies
+ *   (`ParentID`) directly to an agent's message (`ThreadReply`), or is sent to an active agent by a
+ *   confident routing decision (`DecisionRouted`, when `EnableDecisionRouting` is on). Any other
+ *   message is posted with no turn at all: no reply row, no placeholder and no turn events.
  */
 export type AgentReplyMode = 'Always' | 'MentionOnly';
 
 /**
  * How the turn's agent was chosen. MJ tries the routes in this order and takes the first that
- * applies; under `MentionOnly`, only `Mention` applies.
+ * applies; under `MentionOnly`, only `Mention`, `ThreadReply`, and `DecisionRouted` apply.
  *
  * - `Mention`: the message tags the agent.
  * - `ThreadReply`: the message replies (`ParentID`) directly to an earlier message from the agent.

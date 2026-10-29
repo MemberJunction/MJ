@@ -2319,6 +2319,8 @@ export type AgentChatMessageMetadata = {
     agentName?: string | null;
     /** Parent `ConversationDetail.ID` when this message replies to an earlier row */
     parentId?: string | null;
+    /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
+    rawContent?: string;
     /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the

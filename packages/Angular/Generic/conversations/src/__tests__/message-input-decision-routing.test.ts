@@ -515,15 +515,33 @@ describe('MessageInputComponent — decision routing', () => {
                 expect(h.before).toHaveLength(0);
             });
 
-            it('asks Jev with a no_agent option under MentionOnly once an agent has answered, and stays silent on no_agent', async () => {
+            it('asks Jev with a no_agent option under MentionOnly once an agent has answered, skips artifact queries, and stays silent on no_agent', async () => {
                 h.set({ AgentReplyMode: 'MentionOnly' });
                 h.runDecision.mockResolvedValue(answered({ route: choice(ROUTING_NO_AGENT, 0.92), continues: likelihood(0.1) }));
 
                 await h.route(userMessage('Hey Marcus, can you check slide 4?'));
 
                 expect(h.runDecision).toHaveBeenCalledOnce();
+                expect(h.findArtifacts).not.toHaveBeenCalled();
                 expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([WRITER.ID, RESEARCH.ID, ROUTING_NO_AGENT]);
                 expect(h.before).toHaveLength(0);
+            });
+
+            it('counts Sage as the continuity participant under MentionOnly when people @Sage', async () => {
+                h.set({
+                    AgentReplyMode: 'MentionOnly',
+                    ConversationHistory: [
+                        detail('u1', 'User', '@Sage summarize our Q3 plan'),
+                        reply(MANAGER, 'a1', 'Here is the Q3 summary.'),
+                    ],
+                });
+                h.runDecision.mockResolvedValue(answered({ route: choice(MANAGER.ID, 0.92), continues: likelihood(0.95) }));
+
+                await h.route(userMessage('Can you make bullet 2 more specific?'));
+
+                expect(h.runDecision).toHaveBeenCalledOnce();
+                expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([MANAGER.ID, ROUTING_NO_AGENT]);
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['DecisionRouted', MANAGER.ID]]);
             });
 
             it('continues with the active agent under MentionOnly when Jev confidently selects it', async () => {
@@ -555,12 +573,17 @@ describe('MessageInputComponent — decision routing', () => {
                 expect(h.before).toHaveLength(0);
             });
 
-            it('offers a restricted agent when the host explicitly allows it in AllowedAgentIDs', async () => {
+            it('offers a restricted agent when the host explicitly allows it in AllowedAgentIDs and it is active and top-level', async () => {
+                const subAgentRestricted = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000006', Name: 'Worker', Description: 'Sub-agent.', Status: 'Active', IsRestricted: true });
+                subAgentRestricted.InvocationMode = 'Sub-Agent';
+                vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue([...AGENTS, subAgentRestricted]);
+
                 h.set({
                     AgentReplyMode: 'MentionOnly',
-                    AllowedAgentIDs: [INTERNAL.ID],
+                    AllowedAgentIDs: [INTERNAL.ID, subAgentRestricted.ID],
                     ConversationHistory: [
                         detail('u1', 'User', '@Scheduler check status'),
+                        reply(subAgentRestricted, 'a0', 'Sub-step done.'),
                         reply(INTERNAL, 'a1', 'All jobs green.'),
                     ],
                 });
@@ -589,7 +612,7 @@ describe('MessageInputComponent — decision routing', () => {
                 expect(h.before).toHaveLength(0);
             });
 
-            it('makes no call and routes directly to the parent agent when replying to an AI message thread', async () => {
+            it('makes no call and routes directly to the parent agent when replying to a runnable AI message thread', async () => {
                 h.set({ AgentReplyMode: 'MentionOnly' });
                 const msg = userMessage('Can you expand on source #2?');
                 msg.ParentID = 'a1'; // 'a1' is RESEARCH's reply in TWO_AGENTS()
@@ -600,15 +623,62 @@ describe('MessageInputComponent — decision routing', () => {
                 expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['ThreadReply', RESEARCH.ID]]);
             });
 
-            it('makes no call and starts no turn when replying to a human message thread without an @Agent', async () => {
-                h.set({ AgentReplyMode: 'MentionOnly' });
-                const msg = userMessage('Good catch!');
-                msg.ParentID = 'u1'; // 'u1' is a User row in TWO_AGENTS()
+            it('does not route a thread reply to an AI message whose agent is disabled or not runnable by the user', async () => {
+                h.set({
+                    AgentReplyMode: 'MentionOnly',
+                    ConversationHistory: [reply(RETIRED, 'r1', 'Old archived reply.'), ...TWO_AGENTS()],
+                });
+                const msg = userMessage('Can you reopen that archive?');
+                msg.ParentID = 'r1';
 
                 await h.route(msg);
 
                 expect(h.runDecision).not.toHaveBeenCalled();
                 expect(h.before).toHaveLength(0);
+            });
+
+            it('makes no call and starts no turn when replying to another person\'s message thread without an @Agent, while allowing self-replies to route', async () => {
+                const teammateRow = detail('u-teammate', 'User', 'Check slide 4');
+                teammateRow.UserID = 'user-2';
+                const ownRow = detail('u-self', 'User', 'My earlier question');
+                ownRow.UserID = 'user-1';
+                h.set({
+                    AgentReplyMode: 'Always',
+                    ConversationHistory: [teammateRow, ownRow, ...TWO_AGENTS()],
+                });
+
+                const replyToTeammate = userMessage('Good catch!');
+                replyToTeammate.UserID = 'user-1';
+                replyToTeammate.ParentID = 'u-teammate';
+                await h.route(replyToTeammate);
+
+                expect(h.runDecision).not.toHaveBeenCalled();
+                expect(h.before).toHaveLength(0);
+
+                const replyToSelf = userMessage('Adding one more detail to my question');
+                replyToSelf.UserID = 'user-1';
+                replyToSelf.ParentID = 'u-self';
+                h.runDecision.mockResolvedValue(answered({ route: choice(WRITER.ID, 0.92), continues: likelihood(0.95) }));
+                await h.route(replyToSelf);
+
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+            });
+
+            it('uses messageDetail.ParentID rather than composer ParentMessageId so rerunning a top-level message does not inherit an open thread', async () => {
+                const teammateRow = detail('u-teammate', 'User', 'Check slide 4');
+                teammateRow.UserID = 'user-2';
+                h.set({
+                    AgentReplyMode: 'Always',
+                    ParentMessageId: 'u-teammate',
+                    ConversationHistory: [teammateRow, ...TWO_AGENTS()],
+                });
+                const topLevelRerun = userMessage('Summarize the sources');
+                topLevelRerun.ParentID = null;
+                h.runDecision.mockResolvedValue(answered({ route: choice(WRITER.ID, 0.92), continues: likelihood(0.95) }));
+
+                await h.route(topLevelRerun);
+
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
             });
         });
 

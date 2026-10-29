@@ -46,25 +46,40 @@ export interface AgentTurnRules {
 }
 
 /**
+ * True when a message with no allowed `@Agent` mention is intentionally addressed to a person
+ * rather than an agent: it tags a person (`@Person`), replies (`ParentID`) to another person's
+ * message, or was judged human-addressed by the routing decision.
+ */
+export function IsAddressedToHuman(candidates: AgentTurnCandidates): boolean {
+    return (candidates.MentionedUserIds?.length ?? 0) > 0
+        || Boolean(candidates.ReplyParentIsHuman)
+        || Boolean(candidates.DecisionAddressedToHuman);
+}
+
+/**
  * Picks the agent and route for one message, or null when no turn starts.
  *
- * The order is MJ's: the first tagged agent the host allows, then (under `Always` only) the last
- * agent that answered, the conversation's pinned agent, the host's default agent, and the
- * conversation manager. A candidate the host doesn't allow is skipped. A continuity candidate that
- * a routing decision chose (`ContinuityDecisionRouted`) takes the `DecisionRouted` label.
+ * The order is MJ's: the first tagged agent the host allows, a direct thread reply (`ParentID`) to
+ * a runnable agent, a continuity candidate that a routing decision chose (`DecisionRouted`), and
+ * then (under `Always` only) the last agent that answered, the conversation's pinned agent, the
+ * host's default agent, and the conversation manager. A message that tags a person, replies to
+ * another person's message, or receives a `NoAgent` routing decision with no allowed `@Agent` tag
+ * starts no turn. A candidate the host doesn't allow is skipped.
  *
  * A continuity or default candidate that `isKnownAgent` doesn't recognise falls back to the
  * conversation manager, as MJ always has, rather than to the next route. A tagged agent is taken
- * as tagged.
+ * as tagged; a `ThreadReply` target must pass `isRunnableAgent`.
  *
  * @param candidates The agent each route would use.
  * @param rules The host's reply mode and allowed list.
  * @param isKnownAgent True when the agent exists in the client's agent catalog.
+ * @param isRunnableAgent True when the current user can run the agent directly (defaults to `isKnownAgent`).
  */
 export function ResolveAgentTurn(
     candidates: AgentTurnCandidates,
     rules: AgentTurnRules,
-    isKnownAgent: (agentId: string) => boolean
+    isKnownAgent: (agentId: string) => boolean,
+    isRunnableAgent: (agentId: string) => boolean = isKnownAgent
 ): AgentTurnTarget | null {
     const mentioned = candidates.MentionedAgentIds.find(id => IsAgentAllowed(id, rules.AllowedAgentIDs));
     if (mentioned) {
@@ -74,7 +89,7 @@ export function ResolveAgentTurn(
         return null;
     }
     const replyAgent = candidates.ReplyParentAgentId;
-    if (replyAgent && IsAgentAllowed(replyAgent, rules.AllowedAgentIDs) && isKnownAgent(replyAgent)) {
+    if (replyAgent && IsAgentAllowed(replyAgent, rules.AllowedAgentIDs) && isRunnableAgent(replyAgent)) {
         return { AgentId: replyAgent, Route: 'ThreadReply' };
     }
     if (candidates.DecisionAddressedToHuman) {

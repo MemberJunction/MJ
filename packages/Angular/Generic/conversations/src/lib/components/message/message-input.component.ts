@@ -9,7 +9,7 @@ import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService, type SubAgentThreading } from '../../services/conversation-agent.service';
 import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import type { AgentReplyMode, AgentTurnHandler, AgentTurnRequest, AgentTurnResult, AgentTurnTarget } from '../../models/agent-turn.model';
-import { ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import { IsAddressedToHuman, ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
 import {
   ApplyRoutingDecision,
   ArtifactVersionForTurn,
@@ -56,7 +56,7 @@ import {
   PairingsAllowTarget
 } from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
-import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
+import { IndexByUUID, UUIDSet, UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 import { InjectFrameZone } from '../../util/frame-zone';
 
 /** Streamed-delta render cadence where no animation frame will come (hidden tab, no rAF). */
@@ -2286,12 +2286,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const candidates = this.agentTurnCandidates(
       this.agentMentionIds(mentionResult),
       this.userMentionIds(mentionResult),
-      messageDetail.ParentID ?? this.ParentMessageId ?? null
+      messageDetail.ParentID ?? null,
+      messageDetail.UserID ?? this.CurrentUser?.ID ?? null
     );
     const routing = await this.decideAgentRouting(messageDetail, candidates, branchId);
-    const target = this.resolveAgentTurnTarget(candidates, routing);
+    const appliedCandidates = ApplyRoutingDecision(candidates, routing);
+    const target = this.resolveAgentTurnTarget(appliedCandidates);
     if (!target) {
-      await this.finishWithoutAgentTurn(messageDetail, 'NoAgent');
+      const reason = IsAddressedToHuman(appliedCandidates) ? 'AddressedToHuman' : 'NoAgent';
+      await this.finishWithoutAgentTurn(messageDetail, reason);
       return;
     }
     const turn = this.announceAgentTurn(messageDetail, target);
@@ -2335,7 +2338,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       if (!CanAskRoutingDecision(input)) {
         return null;
       }
-      input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, branchId, input.Participants);
+      input.ArtifactVersions = this.AgentReplyMode === 'Always'
+        ? await this.loadRoutingArtifactVersions(message.ConversationID, branchId, input.Participants)
+        : [];
       const outcome = await RunRoutingDecision(input, params => this.agentService.RunDecision(params));
       LogStatusEx({
         message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason} (prompt run ${outcome.PromptRunID ?? 'none'})`,
@@ -2360,18 +2365,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
-    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
-    const runnable = this.mentionAutocomplete.GetAvailableAgents();
+    const findAgent = (agentId: string): MJAIAgentEntityExtended | undefined => AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
+    const runnable = (this.mentionAutocomplete ?? MentionAutocompleteService.Instance).GetAvailableAgents();
     const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => this.findRoutingRunnableAgent(agentId, runnable, findAgent);
-    const allowNoAgentOption = this.AgentReplyMode === 'MentionOnly' || (this.MentionPeople?.length ?? 0) > 0;
-    const findPersonName = allowNoAgentOption
-      ? (userId: string): string | undefined => this.MentionPeople?.find(p => UUIDsEqual(p.ID, userId))?.Name
+    const allowNoAgentOption = this.AgentReplyMode === 'MentionOnly';
+    const peopleById = this.MentionPeople?.length ? IndexByUUID(this.MentionPeople) : null;
+    const findPersonName = peopleById
+      ? (userId: string): string | undefined => peopleById.Get(userId)?.Name
       : undefined;
     const manager = this.ConverationManagerAgent;
+    const managerIdToExclude = this.AgentReplyMode === 'Always' ? (manager?.ID ?? null) : null;
     return {
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId,
-      Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findRunnable),
+      Participants: CollectRoutingParticipants(history, managerIdToExclude, this.AllowedAgentIDs, findRunnable),
       ConversationManager: this.AgentReplyMode === 'Always' && manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
       RecentTurns: BuildRecentTurns(history, findAgent, findPersonName),
       ArtifactVersions: [],
@@ -2383,7 +2390,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private findRoutingRunnableAgent(
     agentId: string,
     runnable: readonly MJAIAgentEntityExtended[],
-    findAgent: (id: string) => RoutingCatalogAgent | undefined
+    findAgent: (id: string) => MJAIAgentEntityExtended | undefined
   ): RoutingCatalogAgent | undefined {
     const fromAutocomplete = runnable.find(a => UUIDsEqual(a.ID, agentId));
     if (fromAutocomplete) {
@@ -2391,11 +2398,47 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
     if (this.AllowedAgentIDs != null && IsAgentAllowed(agentId, this.AllowedAgentIDs)) {
       const candidate = findAgent(agentId);
-      if (candidate?.IsRestricted) {
+      if (candidate && this.isRunnableRestrictedAgent(candidate)) {
         return candidate;
       }
     }
     return undefined;
+  }
+
+  /**
+   * True when a restricted agent (`IsRestricted`) passes the same runnability checks the '@' list
+   * (`MentionAutocomplete._initializeInternal`) applies to unrestricted agents: active, top-level,
+   * not a sub-agent, and runnable by the current user.
+   */
+  private isRunnableRestrictedAgent(candidate: MJAIAgentEntityExtended): boolean {
+    if (!candidate.IsRestricted || candidate.ParentID || candidate.Status !== 'Active' || candidate.InvocationMode === 'Sub-Agent') {
+      return false;
+    }
+    return this.canCurrentUserRunAgent(candidate);
+  }
+
+  private canCurrentUserRunAgent(agent: MJAIAgentEntityExtended): boolean {
+    const user = this.CurrentUser;
+    if (!user) {
+      return false;
+    }
+    if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
+      return true;
+    }
+    try {
+      const agentPermissions = AIEngineBase.Instance.AgentPermissions.filter(p => UUIDsEqual(p.AgentID, agent.ID));
+      if (agentPermissions.length === 0) {
+        return true;
+      }
+      const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
+      return agentPermissions.some(
+        p =>
+          (UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.Has(p.RoleID))) &&
+          (p.CanDelete === true || p.CanEdit === true || p.CanRun === true)
+      );
+    } catch {
+      return false;
+    }
   }
 
   /** Every participant's artifact versions on the path of `branchId` in this conversation, for the artifact question. */
@@ -2420,7 +2463,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private agentTurnCandidates(
     mentionedAgentIds: string[],
     mentionedUserIds: string[] = [],
-    parentId: string | null = null
+    parentId: string | null = null,
+    senderUserId: string | null = this.CurrentUser?.ID ?? null
   ): AgentTurnCandidates {
     const parentRow = parentId
       ? this.ConversationHistory.find(row => this.isWithinHistoryFloor(row) && UUIDsEqual(row.ID, parentId))
@@ -2429,8 +2473,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       MentionedAgentIds: mentionedAgentIds,
       MentionedUserIds: mentionedUserIds,
       ReplyParentAgentId: parentRow?.Role === 'AI' ? (parentRow.AgentID ?? null) : null,
-      ReplyParentIsHuman: parentRow?.Role === 'User',
-      ContinuityAgentId: this.findLastNonSageAgentId(),
+      ReplyParentIsHuman:
+        parentRow?.Role === 'User' &&
+        !!parentRow.UserID &&
+        (!senderUserId || !UUIDsEqual(parentRow.UserID, senderUserId)),
+      ContinuityAgentId: this.AgentReplyMode === 'MentionOnly' ? this.findLastReplyAgentId() : this.findLastNonSageAgentId(),
       ConversationDefaultAgentId: this.ConversationDefaultAgentId,
       HostDefaultAgentId: this.DefaultAgentId,
       ConversationManagerAgentId: this.ConverationManagerAgent?.ID ?? null
@@ -2439,16 +2486,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Picks the agent that answers this message and the route that chose it, or null for no turn.
-   * A routing decision, when there was one, is applied to the candidates first.
    */
-  private resolveAgentTurnTarget(
-    candidates: AgentTurnCandidates,
-    routing: RoutingDecisionOutcome | null
-  ): AgentTurnTarget | null {
+  private resolveAgentTurnTarget(candidates: AgentTurnCandidates): AgentTurnTarget | null {
     return ResolveAgentTurn(
-      ApplyRoutingDecision(candidates, routing),
+      candidates,
       this.agentTurnRules,
-      agentId => this.isKnownAgent(agentId)
+      agentId => this.isKnownAgent(agentId),
+      agentId => this.isRunnableAgent(agentId)
     );
   }
 
@@ -2492,11 +2536,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Settles a message that starts no agent turn — `MentionOnly` with no tagged agent, no allowed
-   * agent left, or a turn declined in {@link BeforeAgentTurn}. Nothing new is written; the
-   * person's own row is only confirmed Complete.
+   * Settles a message that starts no agent turn — `MentionOnly` with no tagged agent, a message
+   * addressed to a person, no allowed agent left, or a turn declined in {@link BeforeAgentTurn}.
+   * Nothing new is written; the person's own row is only confirmed Complete.
    */
-  private async finishWithoutAgentTurn(userMessage: MJConversationDetailEntity, reason: 'NoAgent' | 'Declined'): Promise<void> {
+  private async finishWithoutAgentTurn(
+    userMessage: MJConversationDetailEntity,
+    reason: 'NoAgent' | 'Declined' | 'AddressedToHuman'
+  ): Promise<void> {
     // Under the default rules a turn always has somewhere to go, so reaching here with no agent
     // means MJ's conversation manager failed to load. Say so rather than sit silent.
     if (reason === 'NoAgent' && this.AgentReplyMode === 'Always' && this.AllowedAgentIDs == null) {
@@ -2652,6 +2699,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this.findLastNonSageReply()?.AgentID || null;
   }
 
+  /**
+   * The newest reply from any agent (including Sage) within {@link AgentHistoryFrom} — used under
+   * `MentionOnly`, where the conversation manager is not an implicit fallback and is only present
+   * when explicitly tagged.
+   */
+  private findLastReplyAgentId(): string | null {
+    return this.ConversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && !!msg.AgentID && this.isWithinHistoryFloor(msg))?.AgentID || null;
+  }
+
   /** True when a row was written at or after {@link AgentHistoryFrom}; always true without one. */
   private isWithinHistoryFloor(detail: MJConversationDetailEntity): boolean {
     const floor = this.AgentHistoryFrom;
@@ -2665,6 +2724,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** True when the agent is in the client's agent catalog. */
   private isKnownAgent(agentId: string): boolean {
     return AIEngineBase.Instance.ReadableAgents.some(a => UUIDsEqual(a.ID, agentId));
+  }
+
+  /**
+   * True when the current user can run the agent directly in this chat: it is in the '@' list
+   * (`GetAvailableAgents`) or is an allowed restricted agent that passes the same active,
+   * top-level, non-sub-agent, and run-permission checks.
+   */
+  private isRunnableAgent(agentId: string): boolean {
+    const runnable = (this.mentionAutocomplete ?? MentionAutocompleteService.Instance).GetAvailableAgents();
+    const findAgent = (id: string): MJAIAgentEntityExtended | undefined =>
+      AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, id));
+    return this.findRoutingRunnableAgent(agentId, runnable, findAgent) != null;
   }
 
   /** The agent's name, when the client's agent catalog has it. */
