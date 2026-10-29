@@ -552,6 +552,90 @@ function BuildAudioBlock(
     };
 }
 
+/** True for a non-null, non-array object — the only shape the audio merge recurses into. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Recursively merges `override` onto `base` without mutating either. Two plain objects merge key
+ * by key; a `null` override leaf deletes the key; any other override value replaces the base value.
+ */
+function mergeDeep(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(override)) {
+        const current = merged[key];
+        if (value === null) {
+            delete merged[key];
+        }
+        else if (isPlainObject(value) && isPlainObject(current)) {
+            merged[key] = mergeDeep(current, value);
+        }
+        else if (isPlainObject(value)) {
+            merged[key] = mergeDeep({}, value);
+        }
+        else {
+            merged[key] = value;
+        }
+    }
+    return merged;
+}
+
+/** Reads `audio.input.turn_detection` from an untyped audio-shaped object, or `undefined`. */
+function readTurnDetection(audio: Record<string, unknown>): Record<string, unknown> | undefined {
+    const input = audio.input;
+    if (!isPlainObject(input)) {
+        return undefined;
+    }
+    return isPlainObject(input.turn_detection) ? input.turn_detection : undefined;
+}
+
+/**
+ * Merges a raw `audio` override from the Config bag into the audio block the driver built, so a
+ * bag that tunes one leaf (say `turn_detection.idle_timeout_ms`) no longer discards the built
+ * transcription model, voice, and VAD settings.
+ *
+ * Rules:
+ * - Plain objects merge key by key; the bag's leaves win over the built values.
+ * - A `null` leaf in the bag deletes that key from the result.
+ * - A non-object override (string, null, array, ...) is ignored; `built` is returned unchanged.
+ * - A `turn_detection.type` that differs from the built one replaces the whole `turn_detection`
+ *   object, because fields of one detector kind (e.g. `silence_duration_ms`) are invalid on another.
+ * - After the merge, in meeting mode the floor `turn_detection.create_response: false` is
+ *   re-applied, so the bag cannot make the model answer unprompted in a meeting.
+ *
+ * Neither argument is mutated.
+ *
+ * @param built The audio block from {@link BuildAudioBlock}, or `undefined` when nothing was built.
+ * @param override The raw `audio` value from the open JSON Config bag; untrusted shape.
+ * @param meetingMode Whether the session is a meeting (the model must not auto-respond).
+ * @returns The merged audio block, or `undefined` when there is neither a built block nor an override.
+ */
+export function MergeAudioOverride(
+    built: RealtimeSessionCreateRequest['audio'] | undefined,
+    override: unknown,
+    meetingMode: boolean,
+): RealtimeSessionCreateRequest['audio'] | undefined {
+    if (!isPlainObject(override)) {
+        return built;
+    }
+    const base: Record<string, unknown> = built ? { ...built } : {};
+    const merged = mergeDeep(base, override);
+
+    const builtType = readTurnDetection(base)?.type;
+    const overrideDetection = readTurnDetection(override);
+    if (overrideDetection && typeof overrideDetection.type === 'string' && overrideDetection.type !== builtType
+        && isPlainObject(merged.input)) {
+        merged.input = { ...merged.input, turn_detection: mergeDeep({}, overrideDetection) };
+    }
+
+    const detection = readTurnDetection(merged);
+    if (meetingMode && detection && isPlainObject(merged.input)) {
+        merged.input = { ...merged.input, turn_detection: { ...detection, create_response: false } };
+    }
+    return merged as RealtimeSessionCreateRequest['audio'];
+}
+
 /**
  * Maps Core {@link RealtimeToolDefinition}s up to OpenAI's native function-tool schema.
  *
