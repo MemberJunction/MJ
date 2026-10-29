@@ -41,7 +41,7 @@ function raise(entityName: string): void {
   MJGlobal.Instance.RaiseEvent({
     event: MJEventType.ComponentEvent,
     eventCode: BaseEntity.BaseEventCode,
-    component: null,
+    component: {}, // the sender; the cockpit keys on the event code and args, not on this
     args: { type: 'remote-invalidate', entityName, baseEntity: null, payload: { action: 'save' } },
   });
 }
