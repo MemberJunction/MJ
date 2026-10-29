@@ -5,7 +5,7 @@
  * by the trust verdict. Pure; no dependencies beyond the pipeline spec types.
  */
 import type { MajorityBaselineRule, ValidationStrategy } from './pipeline-spec';
-import type { ImportanceKind } from './sidecar-contract';
+import { IMPORTANCE_KINDS, type ImportanceKind } from './sidecar-contract';
 
 /** How a model's stored numbers were measured; training writes it into `MLModel.Lineage` under `evaluation`. */
 export interface EvaluationRecord {
@@ -42,8 +42,6 @@ export class EvaluationLineage {
   public static readonly DefaultMajorityBaselineRule: MajorityBaselineRule = 'enforce';
   /** Every value `MajorityBaselineRule` accepts. */
   public static readonly MajorityBaselineRules: ReadonlyArray<MajorityBaselineRule> = ['enforce', 'warn'];
-  /** Every value `ImportanceKind` takes; a stored kind outside it reads as null. */
-  public static readonly ImportanceKinds: ReadonlyArray<ImportanceKind> = ['coefficient', 'split_or_impurity', 'held_out_permutation', 'none'];
 
   /** The rule a pipeline asks for: absent or empty → the default; an unknown value is refused, never ignored. */
   public static ParseMajorityBaselineRule(value: string | null | undefined): MajorityBaselineRule {
@@ -97,7 +95,8 @@ export class EvaluationLineage {
   }
 
   private static isImportanceKind(value: unknown): value is ImportanceKind {
-    return typeof value === 'string' && (EvaluationLineage.ImportanceKinds as ReadonlyArray<string>).includes(value);
+    // A stored kind outside IMPORTANCE_KINDS reads as null.
+    return typeof value === 'string' && (IMPORTANCE_KINDS as ReadonlyArray<string>).includes(value);
   }
 
   private static isMajorityBaselineRule(value: string): value is MajorityBaselineRule {

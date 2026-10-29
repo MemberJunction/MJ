@@ -124,10 +124,15 @@ export type ModelMetrics = Record<string, number>;
 export type FeatureImportance = Record<string, number>;
 
 /**
- * Which kind of number a `FeatureImportance` map holds: |coefficient|, tree split/impurity counts, the held-out
- * permutation share per source column (the increase of the held-out loss when the column is permuted), or none.
+ * Every kind of number a `FeatureImportance` map can hold: |coefficient|, tree split/impurity counts, the held-out
+ * permutation share per source column (the increase of the held-out loss when the column is permuted), or none. The
+ * one TS list of the kinds: `ImportanceKind` is derived from it, and a Core test holds it to the sidecar's
+ * `ImportanceKind` literal in `schemas.py`.
  */
-export type ImportanceKind = 'coefficient' | 'split_or_impurity' | 'held_out_permutation' | 'none';
+export const IMPORTANCE_KINDS = ['coefficient', 'split_or_impurity', 'held_out_permutation', 'none'] as const;
+
+/** Which kind of number a `FeatureImportance` map holds; one of {@link IMPORTANCE_KINDS}. */
+export type ImportanceKind = (typeof IMPORTANCE_KINDS)[number];
 
 /**
  * Inline data payload — the assembled feature matrix in columnar header +

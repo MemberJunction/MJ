@@ -14,7 +14,7 @@ export class ImportanceDisplay {
   /** Plain note shown where a hidden global list used to be. */
   public static readonly HiddenNote =
     "This model's feature weights are the algorithm's own split or impurity counts, which favour noisy and many-valued " +
-    'columns, so they are hidden. Retraining the model measures held-out importance, which is shown.';
+    'columns, so they are hidden. A retrained model reports held-out importance when it has held-out rows to measure it on.';
 
   /** Whether a model's global importance list may be shown, from its stored Lineage. Unknown kinds are hidden (fail closed). */
   public static GlobalDriversShowable(lineageJSON: string | null | undefined): boolean {
