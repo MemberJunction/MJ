@@ -1,5 +1,33 @@
 # @memberjunction/unit-testing
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes

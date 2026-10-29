@@ -31,7 +31,8 @@ import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
-import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
+import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
 import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
@@ -46,7 +47,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
-import { AuthorizeAnonymousRoomSessions, LoadSessionConversationScope } from './realtimeSessions/sessionAccess.js';
+import { AuthorizeAnonymousRoomSessions, AuthorizeLoadedSession } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
@@ -161,6 +162,7 @@ export * from './directives/index.js';
 export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
+export * from './requestOrigin.js';
 export {
     getSystemUser,
     getSigningKeys,
@@ -1274,6 +1276,7 @@ const setupComplete$ = new ReplaySubject(1);
       },
       // context() now just reads the already-validated payload — no I/O, no logging
       context: async (ctx) => {
+        // No RequestOrigin here: the upgrade request's Origin is not carried onto subscription contexts.
         return { userPayload: ctx.extra.userPayload as UserPayload };
       },
       onClose: (ctx) => {
@@ -1461,6 +1464,11 @@ const setupComplete$ = new ReplaySubject(1);
   MountAuthCatalogRoute(app, startupLog);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
+  // Always shown, whatever the log level: a configured map makes logins run as other people's records
+  const userEmailMapWarning = DescribeUserEmailMap(userEmailMap);
+  if (userEmailMapWarning) {
+    console.warn(userEmailMapWarning);
+  }
   app.use(CreateUnifiedAuthMiddleware(dataSources));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
@@ -2303,7 +2311,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
-    LoadConversationScope: LoadSessionConversationScope,
+    AuthorizeSession: AuthorizeLoadedSession,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,

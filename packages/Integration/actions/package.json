@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-actions",
   "type": "module",
-  "version": "6.2.0-edge.5",
+  "version": "6.2.0-edge.6",
   "description": "MemberJunction Integration Engine Actions - MJ Actions for triggering and managing integration syncs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,24 +14,24 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.2.0-edge.5",
-    "@memberjunction/actions-base": "6.2.0-edge.5",
-    "@memberjunction/core": "6.2.0-edge.5",
-    "@memberjunction/core-entities": "6.2.0-edge.5",
-    "@memberjunction/credentials": "6.2.0-edge.5",
-    "@memberjunction/global": "6.2.0-edge.5",
-    "@memberjunction/integration-engine": "6.2.0-edge.5",
-    "@memberjunction/integration-engine-base": "6.2.0-edge.5",
-    "@memberjunction/integration-progress-artifacts": "6.2.0-edge.5",
-    "@memberjunction/schema-engine": "6.2.0-edge.5",
-    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.5",
+    "@memberjunction/actions": "6.2.0-edge.6",
+    "@memberjunction/actions-base": "6.2.0-edge.6",
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
+    "@memberjunction/integration-engine": "6.2.0-edge.6",
+    "@memberjunction/credentials": "6.2.0-edge.6",
+    "@memberjunction/integration-engine-base": "6.2.0-edge.6",
+    "@memberjunction/integration-progress-artifacts": "6.2.0-edge.6",
+    "@memberjunction/schema-engine": "6.2.0-edge.6",
+    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.6",
     "mssql": "^12.2.0"
   },
   "devDependencies": {
-    "@types/mssql": "^9.1.9",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@types/mssql": "^9.1.9"
   },
   "repository": {
     "type": "git",

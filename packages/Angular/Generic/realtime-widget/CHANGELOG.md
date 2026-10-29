@@ -1,5 +1,71 @@
 # @memberjunction/ng-realtime-widget
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- 709de1a: Anonymous realtime sessions are now isolated per visitor (#4931). Before, every anonymous visitor (a web-widget guest or an anonymous magic-link invitee) authenticated as the one shared Anonymous user, and the realtime session write gates compared only that user id, so a visitor who learned another visitor's session id could relay into it, close it, heartbeat it, drive its remote browser, or restore its state into a new session.
+  - `UserInfo.AnonymousVisitorID` (`@memberjunction/core`) carries the token's `mj_sid`. An anonymous token without `mj_sid` is refused at sign-in.
+  - One scope identity per session (`ResolveSessionScopeIdentity`, `@memberjunction/server`): the token's resource scope (`MagicLinkScope.ResourceID`) when it carries one, else the anonymous visitor's `mj_sid`. `SessionManager` stamps it as the session conversation's `ExternalID`, and `AuthorizeSessionAccess` compares it. A widget guest's resource scope is its `mj_sid`; redemptions of one resource-scoped anonymous invite share that scope by design and keep matching the `{{ScopeResourceID}}` row filters; redemptions of an unscoped multi-use invite are told apart by `mj_sid`.
+  - All five write gates (`LoadOwnedRealtimeSession`, `AgentSessionResolver`, `RemoteBrowserActionResolver`, and the `lastSessionId` restore paths in `RealtimeClientSessionResolver`) go through `AuthorizeSessionAccess`.
+  - `MJ: Conversations` and `MJ: AI Agent Sessions` (`@memberjunction/core-entities-server`) refuse an anonymous visitor changing `ExternalID` / `ConversationID` on an existing row, so the ownership key cannot be rewritten through generic CRUD under a role whose row filter is by user id. That includes a transaction group's `'Use'` variable on the key or on `ID`, which sets its field after validation; the protected-`Config` check on `MJ: AI Agent Sessions` also refuses a `'Use'` variable on `Config` or `ID`.
+  - A named user with a resource-scoped link may also use its own session on a conversation that carries no scope stamp (one started from the Conversations app) when it can read that conversation; a conversation stamped with another scope, or one it cannot read, is still refused. `LoadSessionConversationScope` reports whether the read succeeded.
+  - `SessionManager.CreateSession` refuses an anonymous caller that supplies a conversation it cannot read or whose `ExternalID` is not its own scope identity.
+  - `POST /widget/session/refresh` now requires the current guest token as `Authorization: Bearer <token>` (accepted up to 300 s after it expires) plus a `DPoP` proof signed by the key the widget registered at mint (`proofKey` in the mint body; its RFC 7638 thumbprint is the token's `cnf.jkt`). It keeps the token's `mj_sid`, so a refreshed guest keeps its session, its row filters and its session-events subscription. A guest session ends 12 h after its first mint (`mj_sid_iat`, `MAX_GUEST_SESSION_SECONDS`); no token outlives that, and refresh is refused once less than 120 s remain (`MIN_REFRESHED_TOKEN_SECONDS`), so the widget's last refresh restarts the session instead of looping into the rate limiter. The proof protocol (`CreateProofOfPossessionKey`, `CreateProofOfPossessionJwt`, `VerifyProofOfPossessionJwt`, `ComputeJwkThumbprint`) is in `@memberjunction/global`. `WidgetKeyClient` (`@memberjunction/ng-realtime-widget`) and `WidgetSessionClient` (`@memberjunction/realtime-widget`) register the key and sign each refresh. When the server refuses a refresh (401/403), the web widget mints a new session and tells the visitor; `WidgetSessionError` carries the status. Both clients sign the refresh proof on the server's clock, learned from each issued token's `iat` (the HTTP `Date` header is not readable cross-origin), and the web widget times its refresh on it too, so a visitor whose device clock is minutes off keeps one session instead of restarting it at each refresh. The key needs Web Crypto, which browsers expose only in a secure context, so both widgets now need a host page served over HTTPS (or `localhost`); on a plain `http://` page the web widget shows nothing and logs `[mj-widget] The support widget needs a secure context …` to the console (`StartEmbeddedWidget`, which the embed bundle runs, never rejects).
+  - A web-widget guest's text chat shows the agent's reply again. The agent runs as the system user, but since MJ#4791 only a conversation's owner (or a grantee) may write its messages, so every reply save was refused and the widget waited forever. `AgentRunner.RunAgentInConversation` takes a `ConversationWriter` (`@memberjunction/ai-agents`); `ElevateUserPayload` records the guest as `UserPayload.ElevatedFrom`, and `RunAIAgentResolver` passes it, so the reply is written as the guest and the run's own records as the system user. The run's status events (progress, streaming, completion, the liveness pulse) are stamped with the same guest (`StatusUpdateOwnerID`), so the guest's socket receives them; before, they carried the system user's id and the `statusUpdates` filter dropped every one. For an anonymous visitor the owner key is its user id plus its scope identity (`StatusUpdateOwnerKey`), and the filter rebuilds the same key from the connection, so a visitor who sends another visitor's (client-chosen) `x-session-id` does not receive that visitor's events.
+  - `@memberjunction/realtime-widget`'s `build` now also runs `bundle`, so `dist/embed/mj-widget.js` is rebuilt with the package instead of only when someone remembers the separate step.
+  - When the agent's reply cannot be saved, `RunAgentInConversation` now throws with the reason instead of only logging it. It still runs the artifact and media steps first, so the run's artifacts and `AIAgentRunMedia` are kept; for a caller-supplied `conversationDetailId` (which can never take the reply) it links nothing to that row and keeps only the `AIAgentRunMedia` rows. `RunAIAgentResolver` publishes a failed completion with the reason whenever a run throws, so a fire-and-forget client (the web widget, Explorer) learns of the failure at once instead of waiting out its idle timeout and then reconciling the run as a success.
+
+  **Deploy together:** a widget bundle older than this release cannot refresh and gets 403 at its first refresh; a self-hosted copy of `mj-widget.js` must be replaced with the one this release builds. Guest tokens issued before the deploy carry no `cnf`, so they cannot be refreshed; the updated web widget then starts a new session. An anonymous magic-link session without a resource scope that was started before the deploy is refused after it; the visitor starts a new session.
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [b5955fb]
+- Updated dependencies [d538c14]
+- Updated dependencies [0581392]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [09c7d57]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [a610c6e]
+- Updated dependencies [cb1e602]
+- Updated dependencies [c4645bc]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [c159f99]
+- Updated dependencies [0a348e2]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [291485d]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-shared-generic@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ng-conversations@6.2.0-edge.6
+  - @memberjunction/realtime-runtime@6.2.0-edge.6
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes
