@@ -16,6 +16,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
+/** Stands in for the shared delete rule; each test sets what it answers. */
+const deleteDecision = vi.hoisted(() => vi.fn());
+
 vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJConversationEntity. */
     class StubConversationEntity {
@@ -28,9 +31,21 @@ vi.mock('@memberjunction/core-entities', () => {
         public GetFieldByName(name: string): unknown {
             return this.Fields.get(name) ?? null;
         }
+        public ID = 'conv-1';
+        public UserID: string | null = 'owner';
+        public ProviderToUse = { ProviderType: 'Database' };
+        public Results: Array<{ Success: boolean; Message: string; Type: string }> = [];
+        public SuperDelete = vi.fn().mockResolvedValue(true);
+        public async Delete(): Promise<boolean> {
+            return this.SuperDelete();
+        }
+        public RegisterResultHistoryEntry(result: { Success: boolean; Message: string; Type: string }): void {
+            this.Results.push(result);
+        }
     }
-    return { MJConversationEntity: StubConversationEntity };
+    return { MJConversationEntity: StubConversationEntity, UserMayDeleteConversation: deleteDecision };
 });
+
 
 import { MJConversationEntityServer } from '../custom/MJConversationEntityServer.server';
 
@@ -86,5 +101,58 @@ describe('MJConversationEntityServer — a transaction variable cannot set Exter
     it("allows a 'Define' variable on this row, and a 'Use' variable on another row", () => {
         expect(inGroup((self) => [{ EntityObject: self, Type: 'Define', FieldName: 'ExternalID' }]).Validate().Success).toBe(true);
         expect(inGroup(() => [{ EntityObject: {}, Type: 'Use', FieldName: 'ExternalID' }]).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJConversationEntityServer — Delete needs ownership, an Owner grant, or a privileged role', () => {
+    type DeleteStub = { SuperDelete: ReturnType<typeof vi.fn>; Results: Array<{ Success: boolean; Message: string; Type: string }> };
+
+    function deletable(): MJConversationEntityServer {
+        const entity = new MJConversationEntityServer();
+        (entity as unknown as Stub).ContextCurrentUser = { ID: 'grantee' };
+        return entity;
+    }
+
+    it('refuses a caller the rule refuses (a View or Edit grantee), records the reason, and does not delete', async () => {
+        deleteDecision.mockResolvedValueOnce({ Allowed: false, Reason: 'Only the owner, or someone with Owner access, can delete a conversation.' });
+        const entity = deletable();
+
+        expect(await entity.Delete()).toBe(false);
+
+        const stub = entity as unknown as DeleteStub;
+        expect(stub.SuperDelete).not.toHaveBeenCalled();
+        expect(stub.Results).toHaveLength(1);
+        expect(stub.Results[0]).toMatchObject({ Success: false, Type: 'delete' });
+        expect(stub.Results[0].Message).toContain('Owner access');
+    });
+
+    it('asks the rule about this conversation and this caller', async () => {
+        deleteDecision.mockResolvedValueOnce({ Allowed: true, Reason: null });
+        const entity = deletable();
+
+        await entity.Delete();
+
+        expect(deleteDecision).toHaveBeenLastCalledWith(
+            { ProviderType: 'Database' },
+            { ID: 'grantee' },
+            { ID: 'conv-1', UserID: 'owner' }
+        );
+    });
+
+    it('deletes when the rule allows (owner, Owner grantee, Developer)', async () => {
+        deleteDecision.mockResolvedValueOnce({ Allowed: true, Reason: null });
+        const entity = deletable();
+
+        expect(await entity.Delete()).toBe(true);
+        expect((entity as unknown as DeleteStub).SuperDelete).toHaveBeenCalledOnce();
+    });
+
+    it('refuses when the permission check itself fails', async () => {
+        deleteDecision.mockRejectedValueOnce(new Error('lookup failed'));
+        const entity = deletable();
+
+        expect(await entity.Delete()).toBe(false);
+        expect((entity as unknown as DeleteStub).SuperDelete).not.toHaveBeenCalled();
+        expect((entity as unknown as DeleteStub).Results[0].Message).toMatch(/Unable to verify/);
     });
 });

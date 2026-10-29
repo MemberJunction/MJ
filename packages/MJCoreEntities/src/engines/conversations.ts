@@ -19,6 +19,7 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import { CONVERSATION_DELETE_REFUSED_REASON, ConversationDeleteAllowed } from "../custom/ConversationWriteAccess";
 
 /**
  * `MJ: Resource Types.ID` for Conversations. Conversations that the current
@@ -919,6 +920,16 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when the user may delete the conversation for everyone: they own it, hold an
+     * Owner-level grant on it, or are in the Developer or Integration role. An Edit grant
+     * is not enough. Mirrors the server's delete gate in `MJConversationEntityServer`, so
+     * the UI never offers a delete the server would refuse.
+     */
+    public CanDeleteConversation(conversation: MJConversationEntity, user: UserInfo): boolean {
+        return ConversationDeleteAllowed(conversation.UserID, user, this.GetSharedByInfo(conversation.ID)?.Level ?? null);
+    }
+
+    /**
      * True when the user may change the conversation's folder and pin: they own
      * it, or hold an Edit or Owner grant on it. A View grant is read-only.
      */
@@ -1601,7 +1612,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param id - The conversation ID to delete
      * @param contextUser - The current user context
      * @returns true if successful
-     * @throws Error if conversation not found or delete fails
+     * @throws Error if conversation not found, the user may not delete it ({@link CanDeleteConversation}), or delete fails
      */
     public async DeleteConversation(id: string, contextUser: UserInfo): Promise<boolean> {
         // Try to use the cached entity object first to avoid a DB round-trip
@@ -1614,6 +1625,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (!loaded) {
                 throw new Error('Conversation not found');
             }
+        }
+
+        // Refuse before the optimistic removal below, so a refused conversation never leaves the list.
+        if (!this.CanDeleteConversation(conversation, contextUser)) {
+            throw new Error(CONVERSATION_DELETE_REFUSED_REASON);
         }
 
         // Remove from the list and cache BEFORE calling Delete(), because
@@ -1750,6 +1766,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /**
      * Deletes multiple conversations in a batch operation with per-item error tracking.
+     * Conversations the user may not delete ({@link CanDeleteConversation}) are reported
+     * as failed, by name, without a delete.
      *
      * @param ids - Array of conversation IDs to delete
      * @param contextUser - The current user context
@@ -1802,6 +1820,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             for (const entity of entitiesToDelete) {
                 const name = entity.Name || 'Unknown';
+                if (!this.CanDeleteConversation(entity, contextUser)) {
+                    failed.push({ ID: entity.ID, Name: name, Error: CONVERSATION_DELETE_REFUSED_REASON });
+                    continue;
+                }
                 try {
                     // Use DeleteConversation which handles Load + Delete properly
                     // and removes from list/cache on success

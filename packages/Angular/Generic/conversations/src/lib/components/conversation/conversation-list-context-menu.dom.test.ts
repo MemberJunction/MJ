@@ -66,6 +66,7 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   GetSharedByInfo: (_id: string): SharedByInfo | null => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanDeleteConversation: ConversationEngine.prototype.CanDeleteConversation,
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -559,6 +560,46 @@ describe('ConversationListComponent (DOM) — who can move and pin', () => {
     expect(findItem(f, 'Pin').disabled).toBe(false);
     expect(findItem(f, 'Unpin').disabled).toBe(false);
     expect(findItem(f, 'Move to folder').disabled).toBe(false);
+  });
+
+  for (const level of ['View', 'Edit'] as const) {
+    it(`disables Delete, and says why, for a conversation shared with you at ${level} level`, () => {
+      const { f } = renderWithGrant(level);
+      rightClickOn(f, rowFor(f, 'Loose Two'));
+      const remove = findItem(f, 'Delete');
+      expect(remove.disabled).toBe(true);
+      expect(remove.getAttribute('title')).toBe(f.componentInstance.DeleteRefusedReason);
+    });
+  }
+
+  it('offers Delete for a conversation shared with you at Owner level, and for your own', () => {
+    const { f } = renderWithGrant('Owner');
+    rightClickOn(f, rowFor(f, 'Loose Two'));
+    expect(findItem(f, 'Delete').disabled).toBe(false);
+    expect(findItem(f, 'Delete').getAttribute('title')).toBeNull();
+    f.componentInstance.CloseContextMenu();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    expect(findItem(f, 'Delete').disabled).toBe(false);
+  });
+
+  it('offers Delete for a selection when any row in it can be deleted', () => {
+    const { f } = renderWithGrant('View', (c) => selectRows(c, ['U1', 'U2']));
+    rightClickOn(f, rowFor(f, 'Loose Two'));
+    expect(findItem(f, 'Delete 2').disabled).toBe(false);
+  });
+
+  it('says why, instead of asking to confirm, when asked to delete what it cannot', async () => {
+    const { f, engine } = renderWithGrant('View');
+    rightClickOn(f, rowFor(f, 'Loose Two'));
+    // The button was drawn enabled, then access changed before the click landed.
+    const remove = findItem(f, 'Delete');
+    remove.disabled = false;
+    remove.click();
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    const dialog = f.debugElement.injector.get(DialogService);
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(String((dialog.alert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1])).toContain('Owner access');
+    expect(engine['DeleteMultipleConversations']).not.toHaveBeenCalled();
   });
 
   it('does not let you drag a conversation you hold only View access to', () => {

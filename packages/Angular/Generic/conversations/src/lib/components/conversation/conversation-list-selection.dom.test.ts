@@ -73,6 +73,7 @@ const stubEngine = (
   GetSharedByInfo: () => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanDeleteConversation: ConversationEngine.prototype.CanDeleteConversation,
   GetConversation: (id: string) => conversations.find(c => c.ID === id),
   ...overrides
 });

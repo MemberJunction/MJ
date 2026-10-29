@@ -710,6 +710,7 @@ describe('ConversationEngine', () => {
         });
 
         it('should throw when delete fails', async () => {
+            mockConversationEntity.UserID = 'user-1';
             mockConversationEntity.Load.mockResolvedValue(true);
             mockConversationEntity.Delete.mockResolvedValue(false);
             mockConversationEntity.LatestResult = { Message: 'Delete failed' };
@@ -984,6 +985,70 @@ describe('ConversationEngine', () => {
             expect(result.Successful).toEqual(['c-mine']);
             expect(result.Failed.map(f => f.ID)).toEqual(['c-view']);
             expect(saveSpy('c-view')).not.toHaveBeenCalled();
+        });
+    });
+
+    // ========================================================================
+    // DELETE needs ownership, an Owner grant, or the Developer/Integration role
+    // ========================================================================
+    const deleteSpy = (id: string) =>
+        (engine.GetConversation(id) as unknown as { Delete: ReturnType<typeof vi.fn> }).Delete;
+    const developer = () => ({ ID: 'user-1', UserRoles: [{ Role: 'Developer' }] }) as unknown as UserInfo;
+
+    describe('CanDeleteConversation', () => {
+        it('lets the owner and a person with an Owner-level grant delete', async () => {
+            await loadWithGrants();
+            expect(engine.CanDeleteConversation(conversation('c-mine'), contextUser)).toBe(true);
+            expect(engine.CanDeleteConversation(conversation('c-owner'), contextUser)).toBe(true);
+        });
+
+        it('refuses a person with an Edit or View grant', async () => {
+            await loadWithGrants();
+            expect(engine.CanDeleteConversation(conversation('c-edit'), contextUser)).toBe(false);
+            expect(engine.CanDeleteConversation(conversation('c-view'), contextUser)).toBe(false);
+        });
+
+        it('lets a Developer delete any conversation', async () => {
+            await loadWithGrants();
+            expect(engine.CanDeleteConversation(conversation('c-view'), developer())).toBe(true);
+        });
+    });
+
+    describe('Delete refuses Edit and View grantees', () => {
+        it('DeleteConversation throws for a View grantee and keeps the conversation in the list', async () => {
+            await loadWithGrants();
+
+            await expect(engine.DeleteConversation('c-view', contextUser)).rejects.toThrow(/Owner access/);
+
+            expect(deleteSpy('c-view')).not.toHaveBeenCalled();
+            expect(engine.GetConversation('c-view')).toBeDefined();
+        });
+
+        it('DeleteMultipleConversations reports refused conversations by name and deletes the rest', async () => {
+            await loadWithGrants();
+            const viewDelete = deleteSpy('c-view');
+            const editDelete = deleteSpy('c-edit');
+
+            const result = await engine.DeleteMultipleConversations(['c-view', 'c-edit', 'c-mine', 'c-owner'], contextUser);
+
+            expect(result.Successful).toEqual(['c-mine', 'c-owner']);
+            expect(result.Failed.map(f => f.ID)).toEqual(['c-view', 'c-edit']);
+            expect(result.Failed[0].Name).toBe('Test Conversation');
+            expect(result.Failed[0].Error).toContain('Owner access');
+            expect(viewDelete).not.toHaveBeenCalled();
+            expect(editDelete).not.toHaveBeenCalled();
+            expect(engine.GetConversation('c-view')).toBeDefined();
+            expect(engine.GetConversation('c-edit')).toBeDefined();
+            expect(engine.GetConversation('c-mine')).toBeUndefined();
+        });
+
+        it('lets a Developer delete a conversation shared at View level', async () => {
+            await loadWithGrants();
+
+            const result = await engine.DeleteMultipleConversations(['c-view'], developer());
+
+            expect(result.Successful).toEqual(['c-view']);
+            expect(result.Failed).toEqual([]);
         });
     });
 

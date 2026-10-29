@@ -55,6 +55,7 @@ export * from './checks/fls-closeout-client.checks';
 export * from './checks/self-avatar-client.checks';
 export * from './checks/view-properties-client.checks';
 export * from './checks/conversation-authorship-client.checks';
+export * from './checks/conversation-delete-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/rolerowfilter.checks'; // RF1–RF3: registers into the 'rls-isolation' bundle AFTER KF1–KF6
 export * from './checks/runquery-cache.checks';
