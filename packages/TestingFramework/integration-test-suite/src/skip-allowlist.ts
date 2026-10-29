@@ -152,6 +152,11 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'Sweeps the shipped query catalog, and MJ ships no templated zero-parameter query.'
     },
     {
+        CheckId: 'scoped-anon-elevation.SA7',
+        Gate: 'not-applicable',
+        Reason: 'Skips only on PostgreSQL: spConsumeMagicLinkInvite exists only on SQL Server, and the PostgreSQL consume statement lives in MJServer, which this suite does not import.'
+    },
+    {
         CheckId: 'runquery-rendering-client.RRC4',
         Gate: 'not-applicable',
         Reason: 'PostgreSQL-only leg; SQL Server applies the timeout in the driver, so there is nothing to read.'
