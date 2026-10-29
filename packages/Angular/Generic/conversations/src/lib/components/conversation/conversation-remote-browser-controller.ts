@@ -318,10 +318,13 @@ export class ConversationRemoteBrowserController {
       }
       return this.provider ? (((await this.provider.ExecuteGQL(query, variables)) as T) ?? null) : null;
     } catch (err) {
-      if (this.conversationId && err instanceof SafeGraphQLError && err.Code === REMOTE_BROWSER_REFUSED) {
-        // Asking again gets the same answer: close, so the live view stops polling, and say why once.
-        void this.Close();
-        this.options.OnSessionRefused?.(err.message);
+      if (err instanceof SafeGraphQLError && err.Code === REMOTE_BROWSER_REFUSED) {
+        // Asking again gets the same answer: close, so the live view stops polling, and say why once. Only
+        // for the browser still open: a refusal for one already left (its End, after a switch) changes nothing.
+        if (UUIDsEqual(variables['agentSessionID'] as string | null, this.conversationId)) {
+          void this.Close();
+          this.options.OnSessionRefused?.(err.message);
+        }
       } else {
         console.warn('[ConversationRemoteBrowserController] GraphQL execution failed:', err);
       }

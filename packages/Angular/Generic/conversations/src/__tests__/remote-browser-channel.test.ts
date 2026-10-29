@@ -1522,6 +1522,28 @@ describe('ConversationRemoteBrowserController', () => {
       expect(ended()).toEqual(['conv-1']);
     });
 
+    it('ignores a refused End of a conversation it has left, and keeps the new one open', async () => {
+      const refused: string[] = [];
+      const c = new ConversationRemoteBrowserController({
+        OnSessionRefused: (message) => refused.push(message),
+        // conv-A's browser was already reaped, so ending it is refused as not found.
+        ExecuteServerAction: async <T>(query: string): Promise<T | null> => {
+          if (query.includes('EndRemoteBrowserSession')) {
+            throw graphQLError('REMOTE_BROWSER_REFUSED');
+          }
+          return null;
+        },
+      });
+      c.Initialize(agentClient as unknown as AgentClientService, null);
+      c.Open('conv-A');
+      c.Open('conv-B');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(c.ConversationId).toBe('conv-B');
+      expect(c.OwnsTools).toBe(true);
+      expect(refused).toEqual([]);
+    });
+
     it('keeps the browser through any other error, whatever its message says', async () => {
       const refused: string[] = [];
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
