@@ -5,6 +5,9 @@ import {
     ALARM_LABEL,
     ALARM_TITLE,
     MAX_ISSUES_PER_RUN,
+    DEFAULT_ALARM,
+    alarmFor,
+    parseArgs,
     buildOpenBody,
     buildStillRedComment,
     buildResolvedComment,
@@ -260,5 +263,94 @@ describe('handleGreen — the reset that did not exist', () => {
             MAX_ISSUES_PER_RUN + 2,
             MAX_ISSUES_PER_RUN + 3,
         ]);
+    });
+});
+
+describe('parseArgs', () => {
+    it('reads the mode alone, as the unit-test backstop calls it', () => {
+        expect(parseArgs(['red'])).toEqual({ mode: 'red', workflow: undefined });
+    });
+
+    it('reads --workflow in both spellings', () => {
+        expect(parseArgs(['green', '--workflow', 'Integration Tier'])).toEqual({
+            mode: 'green',
+            workflow: 'Integration Tier',
+        });
+        expect(parseArgs(['red', '--workflow=Test migrations'])).toEqual({ mode: 'red', workflow: 'Test migrations' });
+    });
+
+    it('rejects a bad mode, a dangling flag and stray arguments', () => {
+        expect(() => parseArgs([])).toThrow(/red or green/);
+        expect(() => parseArgs(['amber'])).toThrow(/red or green/);
+        expect(() => parseArgs(['red', '--workflow'])).toThrow(/unexpected argument/);
+        expect(() => parseArgs(['red', 'extra'])).toThrow(/unexpected argument/);
+    });
+});
+
+describe('alarmFor — one alarm per workflow', () => {
+    it('keeps the original label and title when no workflow is named', () => {
+        expect(alarmFor(undefined)).toBe(DEFAULT_ALARM);
+        expect(DEFAULT_ALARM.label).toBe(ALARM_LABEL);
+        expect(DEFAULT_ALARM.title).toBe(ALARM_TITLE);
+    });
+
+    it('derives a distinct label and a titled issue from the workflow name', () => {
+        const alarm = alarmFor('Integration Tier');
+        expect(alarm.label).toBe('backstop-alarm-integration-tier');
+        expect(alarm.title).toBe('🔴 Integration Tier backstop is red on `next`');
+        expect(alarm.label).not.toBe(ALARM_LABEL);
+    });
+
+    it('gives different workflows different labels', () => {
+        const labels = ['Build all packages for testing', 'Integration Tier', 'Test migrations', 'PostgreSQL migration validation']
+            .map((w) => alarmFor(w).label);
+        expect(new Set(labels).size).toBe(labels.length);
+        expect(labels).not.toContain(ALARM_LABEL);
+    });
+
+    it('keeps labels and label descriptions inside GitHub limits', () => {
+        const alarm = alarmFor('A very long workflow name that goes on and on well past any label limit at all');
+        expect(alarm.label.length).toBeLessThanOrEqual(50);
+        expect(alarm.label).not.toMatch(/-$/);
+        expect(alarm.labelDescription.length).toBeLessThanOrEqual(100);
+    });
+
+    it('rejects a name with nothing to build a label from', () => {
+        expect(() => alarmFor('  ')).toThrow(/workflow/);
+        expect(() => alarmFor('🔥')).toThrow(/workflow/);
+    });
+
+    it('names the workflow in the opening body', () => {
+        expect(buildOpenBody(CTX, alarmFor('Test migrations'))).toContain('**Test migrations** backstop');
+    });
+});
+
+describe('a named workflow alarm is isolated from the others', () => {
+    const alarm = alarmFor('Integration Tier');
+
+    it('creates, filters by and files under its own label and title', async () => {
+        const { request, calls } = fakeApi([
+            [{ method: 'POST', test: /^\/labels$/ }, { status: 201, body: {} }],
+            [{ method: 'GET', test: /^\/issues\?/ }, { status: 200, body: [] }],
+            [{ method: 'POST', test: /^\/issues$/ }, { status: 201, body: { number: 9 } }],
+        ]);
+        expect(await handleRed(request, CTX, alarm)).toEqual({ action: 'opened', issue: 9 });
+
+        expect(calls[0].body.name).toBe(alarm.label);
+        expect(calls[1].path).toContain(`labels=${alarm.label}&`);
+        const created = calls.find((c) => c.method === 'POST' && c.path === '/issues');
+        expect(created.body.title).toBe(alarm.title);
+        expect(created.body.labels).toEqual([alarm.label]);
+    });
+
+    it('closes only issues found under its own label', async () => {
+        const { request, calls } = fakeApi([
+            [{ method: 'GET', test: /^\/issues\?/ }, { status: 200, body: [issue(3)] }],
+            [{ method: 'POST', test: /^\/issues\/\d+\/comments$/ }, { status: 201, body: {} }],
+            [{ method: 'PATCH', test: /^\/issues\/\d+$/ }, { status: 200, body: {} }],
+        ]);
+        expect(await handleGreen(request, CTX, alarm)).toEqual({ closed: [3], failed: [] });
+        expect(calls[0].path).toContain(`labels=${alarm.label}&`);
+        expect(calls[0].path).not.toContain(`labels=${ALARM_LABEL}&`);
     });
 });

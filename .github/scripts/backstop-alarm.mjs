@@ -31,7 +31,13 @@
  *   - `green` logs `::error::` and exits 0. Failing here would turn a green backstop red,
  *     which would then file an alarm about the alarm. The error is surfaced, never swallowed.
  *
- * Usage:  node .github/scripts/backstop-alarm.mjs red|green
+ * ONE ALARM PER WORKFLOW: every workflow that runs on a push to `next` can call this with
+ * `--workflow "<name>"`. Each name gets its own label (the dedupe key) and title, so a red
+ * build and a red integration tier are two incidents, and one going green never closes the
+ * other's issue. Without `--workflow` the alarm is the unit-test backstop's original one
+ * (label `backstop-alarm`), unchanged so an alarm already open keeps deduping and closing.
+ *
+ * Usage:  node .github/scripts/backstop-alarm.mjs red|green [--workflow "<workflow name>"]
  * Env:    GITHUB_TOKEN (or GH_TOKEN), GITHUB_REPOSITORY, GITHUB_SHA, GITHUB_RUN_ID,
  *         GITHUB_SERVER_URL, GITHUB_EVENT_NAME
  * Exit:   0 = handled, 1 = API failure on the red path, 2 = usage/env error
@@ -45,17 +51,79 @@ export const ALARM_LABEL = 'backstop-alarm';
 /** Fixed title, so the rolling issue reads the same whichever run opened it. */
 export const ALARM_TITLE = '🔴 Unit-test backstop is red on `next`';
 
+/** GitHub caps label names at 50 characters and label descriptions at 100. */
+const MAX_LABEL_LENGTH = 50;
+const MAX_LABEL_DESCRIPTION_LENGTH = 100;
+
+/**
+ * The unit-test backstop's alarm — what every call without `--workflow` uses.
+ * @typedef {{label: string, title: string, source: string, labelDescription: string}} Alarm
+ * @type {Alarm}
+ */
+export const DEFAULT_ALARM = {
+    label: ALARM_LABEL,
+    title: ALARM_TITLE,
+    source: 'The full-suite **backstop**',
+    labelDescription: 'Auto-filed by the unit-test backstop; closes itself when the backstop goes green',
+};
+
+/**
+ * The alarm for one workflow: its own label and title, so workflows never dedupe into or
+ * close each other's issue. The label is derived from the name, so renaming a workflow's
+ * `--workflow` argument starts a new alarm; keep the argument stable.
+ * @param {string} [workflow]
+ * @returns {Alarm}
+ */
+export function alarmFor(workflow) {
+    if (workflow === undefined) return DEFAULT_ALARM;
+    const name = workflow.trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!slug) throw new Error(`--workflow needs a name with at least one letter or digit, got "${workflow}"`);
+    const label = `${ALARM_LABEL}-${slug}`.slice(0, MAX_LABEL_LENGTH).replace(/-+$/, '');
+    return {
+        label,
+        title: `🔴 ${name} backstop is red on \`next\``,
+        source: `The **${name}** backstop`,
+        labelDescription: `Auto-filed by the ${name} backstop; closes itself when it goes green`.slice(
+            0,
+            MAX_LABEL_DESCRIPTION_LENGTH,
+        ),
+    };
+}
+
+/**
+ * Parse `red|green [--workflow <name>]`.
+ * @param {string[]} argv  process.argv without the node binary and script path
+ * @returns {{mode: 'red'|'green', workflow: string|undefined}}
+ */
+export function parseArgs(argv) {
+    const [mode, ...rest] = argv;
+    if (mode !== 'red' && mode !== 'green') throw new Error('first argument must be red or green');
+    let workflow;
+    for (let i = 0; i < rest.length; i++) {
+        if (rest[i] === '--workflow' && i + 1 < rest.length) {
+            workflow = rest[++i];
+        } else if (rest[i].startsWith('--workflow=')) {
+            workflow = rest[i].slice('--workflow='.length);
+        } else {
+            throw new Error(`unexpected argument "${rest[i]}"`);
+        }
+    }
+    return { mode, workflow };
+}
+
 /** Never touch more than this many issues in one run — a runaway-loop backstop, not a real limit. */
 export const MAX_ISSUES_PER_RUN = 50;
 
 /**
  * Body for a newly opened alarm.
  * @param {{event: string, sha: string, runUrl: string}} ctx
+ * @param {Alarm} [alarm]
  */
-export function buildOpenBody(ctx) {
+export function buildOpenBody(ctx, alarm = DEFAULT_ALARM) {
     return [
-        `The full-suite **backstop** (\`${ctx.event}\`) failed on \`next\`, so a break slipped past PR`,
-        'affected-filtering and `next` is red.',
+        `${alarm.source} (\`${ctx.event}\`) failed on \`next\`, so a break slipped past PR`,
+        'checks and `next` is red.',
         '',
         `- First red run: ${ctx.runUrl}`,
         `- Commit: \`${ctx.sha.slice(0, 7)}\``,
@@ -135,14 +203,14 @@ export function createApi(ctx) {
  * is the success case on every run after the first.
  * @param {(m: string, p: string, b?: object) => Promise<{status: number, body: any}>} request
  */
-export async function ensureLabel(request) {
+export async function ensureLabel(request, alarm = DEFAULT_ALARM) {
     const res = await request('POST', '/labels', {
-        name: ALARM_LABEL,
+        name: alarm.label,
         color: 'b60205',
-        description: 'Auto-filed by the unit-test backstop; closes itself when the backstop goes green',
+        description: alarm.labelDescription,
     });
     if (res.status === 201 || res.status === 422) return;
-    throw new Error(`could not ensure the ${ALARM_LABEL} label (HTTP ${res.status})`);
+    throw new Error(`could not ensure the ${alarm.label} label (HTTP ${res.status})`);
 }
 
 /**
@@ -150,9 +218,9 @@ export async function ensureLabel(request) {
  * result is strongly consistent (see the header note on search lag).
  * @param {(m: string, p: string, b?: object) => Promise<{status: number, body: any}>} request
  */
-export async function findOpenAlarms(request) {
-    const res = await request('GET', `/issues?state=open&labels=${ALARM_LABEL}&per_page=100`);
-    if (res.status !== 200) throw new Error(`could not list ${ALARM_LABEL} issues (HTTP ${res.status})`);
+export async function findOpenAlarms(request, alarm = DEFAULT_ALARM) {
+    const res = await request('GET', `/issues?state=open&labels=${encodeURIComponent(alarm.label)}&per_page=100`);
+    if (res.status !== 200) throw new Error(`could not list ${alarm.label} issues (HTTP ${res.status})`);
     // The issues endpoint returns PRs too; a PR carries a `pull_request` key. Ours never are,
     // but filtering keeps a mislabeled PR from being commented on or closed.
     return (res.body || []).filter((i) => !i.pull_request);
@@ -162,12 +230,12 @@ export async function findOpenAlarms(request) {
  * Red path: comment on the open alarm, or open one if there is none.
  * @returns {Promise<{action: 'commented'|'opened', issue: number}>}
  */
-export async function handleRed(request, ctx) {
+export async function handleRed(request, ctx, alarm = DEFAULT_ALARM) {
     // Ensure the label FIRST, before it is used as a filter. On the very first run after this
     // ships the label does not exist yet, and "list issues with a label that does not exist" is
     // not a contract worth betting the dedupe on — create it, then query. Idempotent and cheap.
-    await ensureLabel(request);
-    const open = await findOpenAlarms(request);
+    await ensureLabel(request, alarm);
+    const open = await findOpenAlarms(request, alarm);
 
     if (open.length > 0) {
         const target = open[0];
@@ -179,9 +247,9 @@ export async function handleRed(request, ctx) {
     }
 
     const res = await request('POST', '/issues', {
-        title: ALARM_TITLE,
-        body: buildOpenBody(ctx),
-        labels: [ALARM_LABEL],
+        title: alarm.title,
+        body: buildOpenBody(ctx, alarm),
+        labels: [alarm.label],
     });
     if (res.status !== 201) throw new Error(`could not open the alarm issue (HTTP ${res.status})`);
     return { action: 'opened', issue: res.body.number };
@@ -191,8 +259,8 @@ export async function handleRed(request, ctx) {
  * Green path: close every open alarm, citing the run that proved it green.
  * @returns {Promise<{closed: number[], failed: number[]}>}
  */
-export async function handleGreen(request, ctx) {
-    const open = await findOpenAlarms(request);
+export async function handleGreen(request, ctx, alarm = DEFAULT_ALARM) {
+    const open = await findOpenAlarms(request, alarm);
     const closed = [];
     const failed = [];
 
@@ -215,9 +283,15 @@ export async function handleGreen(request, ctx) {
 }
 
 async function main() {
-    const mode = process.argv[2];
-    if (mode !== 'red' && mode !== 'green') {
-        console.error('usage: node .github/scripts/backstop-alarm.mjs red|green');
+    let mode;
+    let alarm;
+    try {
+        const args = parseArgs(process.argv.slice(2));
+        mode = args.mode;
+        alarm = alarmFor(args.workflow);
+    } catch (err) {
+        console.error(`::error::backstop-alarm: ${err.message}`);
+        console.error('usage: node .github/scripts/backstop-alarm.mjs red|green [--workflow "<workflow name>"]');
         process.exit(2);
     }
 
@@ -234,7 +308,7 @@ async function main() {
     if (mode === 'red') {
         // Loud on failure: the job is already red, so an unreported alarm is the only real loss.
         try {
-            const result = await handleRed(request, ctx);
+            const result = await handleRed(request, ctx, alarm);
             console.log(`backstop-alarm: ${result.action} #${result.issue}`);
         } catch (err) {
             console.error(`::error::Backstop failed AND the alarm could not be filed (${err.message}) — see ${ctx.runUrl}`);
@@ -246,7 +320,7 @@ async function main() {
     // Quiet-but-visible on failure: turning a green backstop red here would file an alarm
     // about the alarm. Surface it and move on.
     try {
-        const { closed, failed } = await handleGreen(request, ctx);
+        const { closed, failed } = await handleGreen(request, ctx, alarm);
         if (closed.length) console.log(`backstop-alarm: closed ${closed.map((n) => `#${n}`).join(', ')}`);
         if (failed.length) console.error(`::error::backstop-alarm: could not close ${failed.map((n) => `#${n}`).join(', ')}`);
     } catch (err) {
