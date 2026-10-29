@@ -28,6 +28,12 @@ const EXPECTED: ReadonlyArray<readonly [DriverWithFacts, number | undefined]> = 
     [InworldRealtime, undefined],
 ];
 
+/*
+ * Scope: this table and the registration check below cover the provider packages this Bundle
+ * imports. HuggingFaceRealtime is not a Bundle dependency, so its own package test checks it.
+ * That each driver's per-session Capabilities equal its static DriverFacts is asserted in each
+ * provider package's own tests, not here.
+ */
 describe('realtime driver facts table', () => {
     it.each(EXPECTED.map(([cls, expected]) => [cls.name, cls, expected] as const))(
         '%s declares its own ProviderMaxSessionSeconds',

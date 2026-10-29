@@ -453,8 +453,10 @@ export interface ClientRealtimeSessionConfig {
     AvatarStatus?: RealtimeAvatarStatus;
 
     /**
-     * The effective, clamped session cap in seconds for this minted session. Read-only
-     * information: changing it in the browser changes nothing on the wire. `undefined` when unknown.
+     * The effective session cap in seconds for this minted session: `min(provider ceiling, host cap)`.
+     * With no host cap it reports the provider ceiling; `undefined` when the driver knows neither.
+     * Server-side information carried on the prep result — the GraphQL resolver does not forward it
+     * to the browser today — and never an input: the cap on the wire is the driver's own decision.
      */
     MaxSessionSeconds?: number;
 }

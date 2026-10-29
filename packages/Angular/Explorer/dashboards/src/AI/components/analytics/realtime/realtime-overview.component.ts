@@ -677,7 +677,7 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
             {
                 title: 'Janitor closes',
                 value: janitorCloses,
-                subtitle: `orphans reconciled (${this.TimeRange})`,
+                subtitle: `orphan, idle & time-limit closes (${this.TimeRange})`,
                 icon: 'fa-broom',
                 color: 'warning'
             },
