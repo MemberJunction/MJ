@@ -1,5 +1,5 @@
 /**
- * scoped-anon-elevation.checks.ts — the 'scoped-anon-elevation' bundle (SA1–SA6).
+ * scoped-anon-elevation.checks.ts — the 'scoped-anon-elevation' bundle (SA1–SA7).
  *
  * MJ issue #3371: the realtime relayed-tool path ran delegated work as the anonymous magic-link
  * visitor, whose role deliberately holds no grants on the AI run entities — so a scoped anonymous
@@ -36,23 +36,33 @@
  * evaluation at import time, for coverage the unit tier already owns. The JWT→principal build is
  * likewise covered by MJServer's `magicLink.test.ts` — SA checks synthesize its exact output.
  *
+ *  - SA7 (RequiresMutation): the magic-link single-use gate, `spConsumeMagicLinkInvite`, executed
+ *    against the real table. An active one-use invite is consumed once (1 row) and only once (0
+ *    rows, Status 'Consumed', UseCount 1, ConsumedAt set); an expired and a revoked invite return 0
+ *    rows and are left untouched. MJServer's consume unit test mocks `ExecuteSQL`, so this is the
+ *    only test that runs the procedure body. SQL Server only: PostgreSQL has no procedure (MJServer
+ *    builds a guarded UPDATE there).
+ *
  * Every fixture row is created and deleted (best-effort) inside the same check's finally block, so
  * the bundle is self-cleaning and needs no shared lifecycle. SA1–SA5 clean up as the system user;
  * SA6 cleans up as the visitor principal that owns its conversation, because the owner gate
  * refuses the system user's Delete exactly as it refuses its Save.
  */
-import { Metadata, RoleInfo, RunView, UserInfo } from '@memberjunction/core';
+import { randomBytes } from 'node:crypto';
+import { DatabaseProviderBase, Metadata, RoleInfo, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRunEntity,
     MJAIPromptRunEntity,
     MJConversationDetailEntity,
     MJConversationDetailEntityExtended,
     MJConversationEntity,
+    MJMagicLinkInviteEntity,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, SkipCheck } from '@memberjunction/testing-integration';
+import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /** The reason `MJConversationDetailEntityExtended`'s owner gate records for a non-owner without a grant. */
 const CONVERSATION_ACCESS_DENIED = 'You do not have access to this conversation.';
@@ -190,6 +200,151 @@ async function attemptDeniedSave(entity: MJAIAgentRunEntity | MJAIPromptRunEntit
         return { saved, message: saved ? '' : entity.LatestResult?.CompleteMessage ?? '(no failure message)' };
     } catch (error) {
         return { saved: false, message: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/** The invite entity and the SQL Server single-use procedure MJServer's MagicLinkService.consumeInvite calls. */
+const INVITE_ENTITY = 'MJ: Magic Link Invites';
+const CONSUME_INVITE_PROC = 'spConsumeMagicLinkInvite';
+/** Margin on either side of now for the fixture expiry times, wide enough for any host/DB clock skew. */
+const EXPIRY_MARGIN_MS = 24 * 3600 * 1000;
+
+/** The invite columns the consume procedure writes. */
+interface InviteState {
+    ID: string;
+    Status: string;
+    UseCount: number;
+    ConsumedAt: Date | null;
+    __mj_UpdatedAt: Date;
+}
+
+/** Saves a one-use invite in the given state and returns its ID. */
+async function createInviteFixture(
+    provider: DatabaseProviderBase, user: UserInfo, applicationID: string, roleID: string,
+    status: MJMagicLinkInviteEntity['Status'], expiresAt: Date,
+): Promise<string> {
+    const invite = await provider.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, user);
+    invite.NewRecord();
+    invite.TokenHash = randomBytes(32).toString('hex');
+    invite.Email = `sa7-${status.toLowerCase()}@integration.test`;
+    invite.ApplicationID = applicationID;
+    invite.RoleID = roleID;
+    invite.ExpiresAt = expiresAt;
+    invite.MaxUses = 1;
+    invite.UseCount = 0;
+    invite.CreatedByUserID = user.ID;
+    invite.Status = status;
+    if (!(await invite.Save())) {
+        throw new Error(`could not create the ${status} invite fixture: ${invite.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+    return invite.ID;
+}
+
+/** Runs the consume procedure for one invite, the way MagicLinkService does, and returns the rows it reported. */
+async function consumeInvite(provider: DatabaseProviderBase, inviteID: string, user: UserInfo): Promise<{ ID: string }[]> {
+    const sql = provider.Dialect.ProcedureCallSyntax(provider.MJCoreSchemaName, CONSUME_INVITE_PROC, [`@ID=${provider.BuildParameterPlaceholder(0)}`]);
+    const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [inviteID], { isMutation: true, description: `SA7 ${CONSUME_INVITE_PROC}` }, user);
+    Assert(Array.isArray(rows), `${CONSUME_INVITE_PROC} returned no result set for invite ${inviteID}`);
+    return rows;
+}
+
+/** Reads the consume-relevant columns of the given invites, bypassing every cache. */
+async function readInviteStates(provider: DatabaseProviderBase, ids: string[], user: UserInfo): Promise<Map<string, InviteState>> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<InviteState>({
+        EntityName: INVITE_ENTITY,
+        Fields: ['ID', 'Status', 'UseCount', 'ConsumedAt', '__mj_UpdatedAt'],
+        ExtraFilter: `ID IN (${ids.map(id => `'${id}'`).join(', ')})`,
+        ResultType: 'simple',
+        BypassCache: true,
+    }, user);
+    Assert(result.Success, `could not read the invite fixtures: ${result.ErrorMessage}`);
+    return new Map(result.Results.map(r => [r.ID.toLowerCase(), r]));
+}
+
+/** The state of one invite, or a failed assertion when it is missing. */
+function stateOf(states: Map<string, InviteState>, id: string, label: string): InviteState {
+    const state = states.get(id.toLowerCase());
+    Assert(state != null, `the ${label} invite ${id} is missing`);
+    return state!;
+}
+
+/** Epoch milliseconds of a date column, whether the provider returned a Date or a string. */
+function timeOf(value: Date | string | null): number | null {
+    return value == null ? null : new Date(value).getTime();
+}
+
+/** Best-effort delete of the invite fixtures — logged, never thrown. */
+async function deleteInviteFixtures(provider: DatabaseProviderBase, ids: string[], user: UserInfo): Promise<void> {
+    for (const id of ids) {
+        try {
+            const invite = await provider.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, user);
+            if (await invite.Load(id) && !(await invite.Delete())) {
+                console.warn(`  ⚠ scoped-anon-elevation: invite fixture Delete failed for ${id}: `
+                    + `${invite.LatestResult?.CompleteMessage ?? '(Delete returned false with no LatestResult)'}`);
+            }
+        } catch (error) {
+            console.warn(`  ⚠ scoped-anon-elevation: could not clean up invite fixture ${id}: `
+                + `${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+}
+
+/**
+ * SA7 — the magic-link single-use gate holds on the real procedure body.
+ *
+ * Creates three one-use invites (active, expired, revoked), runs `spConsumeMagicLinkInvite` twice on
+ * the active one and once on each of the others, and checks the procedure's row results and the
+ * stored rows. Deletes the invites afterwards.
+ */
+export async function CheckSa7ConsumeInviteSingleUse(ctx: IntegrationCheckContext): Promise<void> {
+    const provider = ctx.Provider;
+    if (!(provider instanceof DatabaseProviderBase)) {
+        throw new Error('SA7 needs a database provider (server transport) to execute the consume procedure');
+    }
+    if (provider.PlatformKey === 'postgresql') {
+        SkipCheck(`${CONSUME_INVITE_PROC} exists only on SQL Server; on PostgreSQL MJServer issues a guarded UPDATE that this suite cannot import.`);
+    }
+    const application = provider.Applications[0];
+    Assert(application != null, 'SA7 needs at least one application for the invite fixtures');
+    const role = provider.Roles.find(r => r.Name.trim().toLowerCase() === 'ui') ?? provider.Roles[0];
+    Assert(role != null, 'SA7 needs at least one role for the invite fixtures');
+
+    const created: string[] = [];
+    try {
+        const now = Date.now();
+        const activeID = await createInviteFixture(provider, ctx.User, application.ID, role.ID, 'Active', new Date(now + EXPIRY_MARGIN_MS));
+        created.push(activeID);
+        const expiredID = await createInviteFixture(provider, ctx.User, application.ID, role.ID, 'Active', new Date(now - EXPIRY_MARGIN_MS));
+        created.push(expiredID);
+        const revokedID = await createInviteFixture(provider, ctx.User, application.ID, role.ID, 'Revoked', new Date(now + EXPIRY_MARGIN_MS));
+        created.push(revokedID);
+        const before = await readInviteStates(provider, created, ctx.User);
+
+        const first = await consumeInvite(provider, activeID, ctx.User);
+        AssertEqual(first.length, 1, 'the first consume of an active one-use invite must win (one row)');
+        Assert(UUIDsEqual(first[0].ID, activeID), `the first consume returned ${first[0].ID}, not the invite ${activeID}`);
+        const second = await consumeInvite(provider, activeID, ctx.User);
+        AssertEqual(second.length, 0, 'a second consume of a one-use invite must lose (zero rows): the link was replayable');
+
+        AssertEqual((await consumeInvite(provider, expiredID, ctx.User)).length, 0, 'an expired invite must not be consumable');
+        AssertEqual((await consumeInvite(provider, revokedID, ctx.User)).length, 0, 'a revoked invite must not be consumable');
+
+        const after = await readInviteStates(provider, created, ctx.User);
+        const active = stateOf(after, activeID, 'active');
+        AssertEqual(active.Status, 'Consumed', 'the consumed one-use invite must be marked Consumed');
+        AssertEqual(active.UseCount, 1, 'the consumed one-use invite must record exactly one use');
+        Assert(active.ConsumedAt != null, 'the consumed invite must record ConsumedAt');
+
+        for (const [id, label] of [[expiredID, 'expired'], [revokedID, 'revoked']] as const) {
+            const was = stateOf(before, id, label);
+            const is = stateOf(after, id, label);
+            AssertEqual(is.Status, was.Status, `the ${label} invite's Status changed`);
+            AssertEqual(is.UseCount, was.UseCount, `the ${label} invite's UseCount changed`);
+            AssertEqual(timeOf(is.ConsumedAt), timeOf(was.ConsumedAt), `the ${label} invite's ConsumedAt changed`);
+            AssertEqual(timeOf(is.__mj_UpdatedAt), timeOf(was.__mj_UpdatedAt), `the ${label} invite was updated`);
+        }
+    } finally {
+        await deleteInviteFixtures(provider, created, ctx.User);
     }
 }
 
@@ -449,6 +604,12 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
                 }
             }
         },
+    },
+    {
+        Id: 'scoped-anon-elevation.SA7',
+        Name: 'SA7: spConsumeMagicLinkInvite consumes an active one-use invite once (1 row, then 0) and leaves expired and revoked invites untouched',
+        Fn: CheckSa7ConsumeInviteSingleUse,
+        RequiresMutation: true,
     },
 ];
 

@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test: RLS Mixed Filtered",
+      "Description": "Integration-test-only role for the rls-isolation mixed-role checks (RLS12/RLS13). Grants READ on 'MJ: User Roles' bound to the 'Integration Test: Own Rows by UserID' Row-Level-Security filter, and nothing else. Paired with 'Integration Test: RLS Mixed Unfiltered' on the seeded it-rls-mixed user. Safe to delete; assign only to that test account."
+    },
+    "primaryKey": {
+      "ID": "B22F2D82-4D45-41B8-881C-288B9AAC5829"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test: RLS Mixed Unfiltered",
+      "Description": "Integration-test-only role for the rls-isolation mixed-role checks (RLS12/RLS13). On 'MJ: User Roles' it holds an UNFILTERED Allow row that grants Create but not Read, and a Deny row on Create that cancels it. The Allow row must not lift the read filter of 'Integration Test: RLS Mixed Filtered' (it grants no read), and the Deny row must win the permission gate, so the it-rls-mixed user ends with a filtered read and no create. Safe to delete; assign only to that test account."
+    },
+    "primaryKey": {
+      "ID": "8D9F40EF-84CE-438E-BAC7-AB63EAC568A2"
+    }
+  }
+]
