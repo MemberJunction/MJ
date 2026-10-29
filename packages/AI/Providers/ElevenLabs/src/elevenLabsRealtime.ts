@@ -540,6 +540,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
                 overrides: ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
                 config: params.Config ?? {},
             },
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

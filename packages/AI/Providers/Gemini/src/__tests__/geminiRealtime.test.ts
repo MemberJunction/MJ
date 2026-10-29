@@ -117,6 +117,13 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(expires).toBeLessThanOrEqual(after + 30 * 60 * 1000);
     });
 
+    it('carries the effective session cap: 1800 by default, the smaller host cap otherwise', async () => {
+        const driver = new ClientDirectTestable('k');
+        expect((await driver.CreateClientSession(makeParams())).MaxSessionSeconds).toBe(1800);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 5000 }))).MaxSessionSeconds).toBe(1800);
+    });
+
     it('locks the server-built connect config into the token via liveConnectConstraints', async () => {
         const driver = new ClientDirectTestable('k');
         await driver.CreateClientSession(makeParams({

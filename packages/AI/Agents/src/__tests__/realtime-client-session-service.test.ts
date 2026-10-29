@@ -70,6 +70,9 @@ class MockRealtimeSession implements IRealtimeSession {
 class MockRealtimeModel extends BaseRealtimeModel {
     public LastParams: RealtimeSessionParams | null = null;
     public ClientCalled = false;
+    constructor() { super('mock-api-key'); }    public ClientCalled = false;
+    /** What the mock driver mints as the effective session cap; unset by default (the key is omitted). */
+    public MintedMaxSessionSeconds: number | undefined = undefined;
     constructor() { super('mock-api-key'); }
     public override get SupportsClientDirect(): boolean { return true; }
     async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
@@ -85,6 +88,8 @@ class MockRealtimeModel extends BaseRealtimeModel {
             EphemeralToken: 'ephemeral-123',
             ExpiresAt: '2099-01-01T00:00:00.000Z',
             SessionConfig: { instructions: params.SystemPrompt }
+        };            SessionConfig: { instructions: params.SystemPrompt },
+            ...(this.MintedMaxSessionSeconds === undefined ? {} : { MaxSessionSeconds: this.MintedMaxSessionSeconds }),
         };
     }
 }
@@ -218,6 +223,18 @@ function makePrepInput(overrides: Partial<PrepareClientSessionInput> = {}): Prep
 // ════════════════════════════════════════════════════════════════════
 
 describe('RealtimeClientSessionService.PrepareClientSession', () => {
+describe('RealtimeClientSessionService.PrepareClientSession', () => {
+    it('passes the driver MaxSessionSeconds through unchanged, and undefined stays undefined', async () => {
+        const withCap = new TestableService();
+        withCap.Model.MintedMaxSessionSeconds = 1800;
+        const capped = await withCap.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(capped.ClientConfig!.MaxSessionSeconds).toBe(1800);
+
+        const noCap = await new TestableService().PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(noCap.ClientConfig!.MaxSessionSeconds).toBeUndefined();
+        expect('MaxSessionSeconds' in noCap.ClientConfig!).toBe(false);
+    });
+
     it('returns Success + ClientConfig with the stable invoke-target tool and a non-empty system prompt', async () => {
         const svc = new TestableService();
         const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);

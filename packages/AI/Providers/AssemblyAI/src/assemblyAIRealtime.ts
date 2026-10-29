@@ -17,6 +17,7 @@ import {
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
     type RealtimeDriverFacts,
+    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -237,6 +238,7 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
                 session: AssemblyAIRealtime.BuildSessionObject(params),
                 config: params.Config ?? {},
             },
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

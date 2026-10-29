@@ -350,6 +350,22 @@ describe('ElevenRealtime', () => {
                 expect('max_duration_seconds' in (await minted(bagOnly))).toBe(false);
             });
 
+            it('ClientConfig MaxSessionSeconds equals the wire max_duration_seconds, bag clamp included', async () => {
+                const cases: Array<[Partial<RealtimeSessionParams>, number | undefined]> = [
+                    [{ MaxSessionSeconds: 900 }, 900],
+                    [{ MaxSessionSeconds: 900, Config: { max_duration_seconds: 600 } }, 600],
+                    [{ MaxSessionSeconds: 900, Config: { max_duration_seconds: 1200 } }, 900],
+                    [{ Config: { max_duration_seconds: 600 } }, 600],
+                    [{}, undefined],
+                ];
+                for (const [params, expected] of cases) {
+                    const driver = new TestableElevenRealtime('xi-key');
+                    const cfg = await driver.CreateClientSession(makeParams(params));
+                    expect(cfg.MaxSessionSeconds).toBe(expected);
+                    expect((driver.MintBodies[0].session as Record<string, unknown>)['max_duration_seconds']).toBe(expected);
+                }
+            });
+
             it('no MaxSessionSeconds and no bag -> field absent', async () => {
                 expect('max_duration_seconds' in (await sentOnBridge({}))).toBe(false);
                 expect('max_duration_seconds' in (await minted({}))).toBe(false);

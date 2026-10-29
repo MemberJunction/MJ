@@ -781,6 +781,18 @@ describe('GeminiEnterpriseRealtime', () => {
             }
         });
 
+        it('ClientConfig MaxSessionSeconds is min(1800, host cap) and equals the relay ticket lifetime', async () => {
+            // The ticket's expiry is the relay's enforced lifetime (the minted ExpiresAt mirrors it).
+            const lifetimeSeconds = (minted: ClientRealtimeSessionConfig): number =>
+                Math.round((new Date(minted.ExpiresAt).getTime() - Date.now()) / 1000);
+            const cases: Array<[number | undefined, number]> = [[900, 900], [undefined, 1800], [5000, 1800]];
+            for (const [host, expected] of cases) {
+                const { Minted } = await mint(serviceAccountKey(), makeParams({ MaxSessionSeconds: host }));
+                expect(Minted.MaxSessionSeconds).toBe(expected);
+                expect(lifetimeSeconds(Minted)).toBe(Minted.MaxSessionSeconds);
+            }
+        });
+
         it('moves the relay for a subclass that overrides it: the upstream opens there, with the same token request, setup and browser view', async () => {
             const driver = new MovedEnterprise(serviceAccountKey({ location: 'us' }), MOCK_LIVE_URL);
             const minted = await driver.CreateClientSession(makeParams());

@@ -212,6 +212,14 @@ describe('HuggingFaceRealtime', () => {
             expect(pact['sampleRate']).toBe(HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE);
         });
 
+        it('carries the host cap as MaxSessionSeconds, and leaves it unset when the host sets none (no provider cap is known)', async () => {
+            const driver = new TestHuggingFaceRealtime('secret-key');
+            process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+            expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+            const unset = await driver.CreateClientSession(makeParams());
+            expect(unset.MaxSessionSeconds).toBeUndefined();
+        });
+
         it('takes the proxy origin from Config.proxyBaseUrl before MJAPI_PUBLIC_URL', async () => {
             const driver = new TestHuggingFaceRealtime('secret-key');
             process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';

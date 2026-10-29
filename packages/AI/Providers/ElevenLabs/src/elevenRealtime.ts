@@ -215,9 +215,15 @@ export class ElevenRealtime extends OpenAIRealtime {
         return session;
     }
 
-    /** Client-direct mint: the shared OpenAI flow, with `max_duration_seconds` clamped first (see {@link withClampedMaxDuration}). */
+    /**
+     * Client-direct mint: the shared OpenAI flow, with `max_duration_seconds` clamped first (see {@link withClampedMaxDuration}).
+     * The clamp is computed once: when it yields a wire value, that same value becomes `MaxSessionSeconds` for the
+     * shared flow, so the ClientConfig reports exactly what went on the wire (bag clamp included).
+     */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
-        return super.CreateClientSession(this.withClampedMaxDuration(params));
+        const clamped = this.withClampedMaxDuration(params);
+        const wireValue = (clamped.Config as JSONObject | undefined)?.['max_duration_seconds'];
+        return super.CreateClientSession(typeof wireValue === 'number' ? { ...clamped, MaxSessionSeconds: wireValue } : clamped);
     }
 
     /**

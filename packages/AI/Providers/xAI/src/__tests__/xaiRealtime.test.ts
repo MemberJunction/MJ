@@ -26,6 +26,15 @@ vi.mock('@memberjunction/ai', async () => {
         public get SupportsClientDirect(): boolean {
             return false;
         }
+        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
+        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+            let smallest: number | undefined;
+            for (const c of candidates) {
+                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+                if (smallest === undefined || c < smallest) smallest = c;
+            }
+            return smallest;
+        }
         public async CreateClientSession(): Promise<never> {
             throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
         }
@@ -233,6 +242,13 @@ describe('xAIRealtime construction', () => {
     it('CreateClientSession omits tools when none are provided', async () => {
         const cfg = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi' });
         expect((cfg.SessionConfig as Record<string, unknown>).tools).toBeUndefined();
+    });
+
+    it('CreateClientSession carries the 7200s xAI cap as MaxSessionSeconds (not the OpenAI 3600)', async () => {
+        const cfg = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi' });
+        expect(cfg.MaxSessionSeconds).toBe(7200);
+        const host = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi', MaxSessionSeconds: 900 });
+        expect(host.MaxSessionSeconds).toBe(900);
     });
 });
 

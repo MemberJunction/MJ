@@ -604,6 +604,12 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(7200);
     });
 
+    it('ClientConfig carries the effective cap: the clamped host cap, or the 7200s provider cap when the host sets none', async () => {
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 9000 }))).MaxSessionSeconds).toBe(7200);
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }))).MaxSessionSeconds).toBe(7200);
+    });
+
     it('absent MaxSessionSeconds leaves conversation unset', async () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
         expect(driver.CreateBodies[0].conversationConfig?.conversation).toBeUndefined();

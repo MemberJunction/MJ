@@ -216,6 +216,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
                 session: HuggingFaceRealtime.BuildSessionObject(params),
                 sampleRate: HuggingFaceRealtime.ResolveSampleRate(params),
             },
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

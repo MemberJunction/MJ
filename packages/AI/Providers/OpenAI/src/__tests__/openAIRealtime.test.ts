@@ -14,7 +14,17 @@ vi.mock('@memberjunction/ai', async () => {
             this._apiKey = apiKey;
         }
     }
-    class BaseRealtimeModel extends BaseModel {}
+    class BaseRealtimeModel extends BaseModel {
+        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
+        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+            let smallest: number | undefined;
+            for (const c of candidates) {
+                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+                if (smallest === undefined || c < smallest) smallest = c;
+            }
+            return smallest;
+        }
+    }
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
     // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
@@ -199,6 +209,17 @@ describe('OpenAIRealtime client-direct (CreateClientSession)', () => {
     it('omits tools when none are provided', async () => {
         const cfg = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi' });
         expect((cfg.SessionConfig as Record<string, unknown>).tools).toBeUndefined();
+    });
+});
+
+describe('OpenAIRealtime', () => {
+    it('carries the 3600s provider cap as MaxSessionSeconds when the host sets nothing, and the smaller host cap otherwise', async () => {
+        const unset = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi' });
+        expect(unset.MaxSessionSeconds).toBe(3600);
+        const host = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi', MaxSessionSeconds: 900 });
+        expect(host.MaxSessionSeconds).toBe(900);
+        const over = await new ClientDirectTestable('k').CreateClientSession({ Model: 'gpt-realtime-2', SystemPrompt: 'hi', MaxSessionSeconds: 9000 });
+        expect(over.MaxSessionSeconds).toBe(3600);
     });
 });
 

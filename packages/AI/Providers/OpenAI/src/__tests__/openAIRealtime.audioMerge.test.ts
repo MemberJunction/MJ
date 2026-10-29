@@ -11,7 +11,17 @@ vi.mock('@memberjunction/ai', async () => {
       this._apiKey = apiKey;
     }
   }
-  class BaseRealtimeModel extends BaseModel {}
+  class BaseRealtimeModel extends BaseModel {
+    // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
+    protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+        let smallest: number | undefined;
+        for (const c of candidates) {
+            if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+            if (smallest === undefined || c < smallest) smallest = c;
+        }
+        return smallest;
+    }
+  }
   const RealtimeDiagLog = () => { /* no-op in tests */ };
   const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
   const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');

@@ -136,6 +136,21 @@ export function RealtimeDriverFactsOf(driver: BaseRealtimeModel): Readonly<Realt
     return (driver.constructor as typeof BaseRealtimeModel).DriverFacts;
 }
 
+/**
+ * The ONE implementation of the session-cap rule, shared by the drivers ({@link BaseRealtimeModel.ClampSessionSeconds})
+ * and the MJAPI relay: returns the smallest candidate that is a positive integer; ignores `undefined`,
+ * `0`, negatives, fractions (rejected, never floored: no guessing), `NaN`, `Infinity` and non-numbers.
+ * `undefined` when none qualifies.
+ */
+export function ClampSessionSecondsValue(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+    let smallest: number | undefined;
+    for (const c of candidates) {
+        if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+        if (smallest === undefined || c < smallest) smallest = c;
+    }
+    return smallest;
+}
+
 export abstract class BaseRealtimeModel extends BaseModel {
     /**
      * Static facts about this driver, readable before a session instance exists.
@@ -146,18 +161,12 @@ export abstract class BaseRealtimeModel extends BaseModel {
     public static readonly DriverFacts: Readonly<RealtimeDriverFacts> = Object.freeze({});
 
     /**
-     * Returns the smallest candidate that is a positive integer; ignores `undefined`,
-     * `0`, negatives, fractions (rejected, never floored: no guessing), `NaN`, `Infinity` and non-numbers. `undefined` when none qualifies.
-     * The rule "the caller's bag wins only if smaller" is written once, here: pass the provider
+     * Returns the smallest candidate that is a positive integer; see {@link ClampSessionSecondsValue}.
+     * The rule "the caller's bag wins only if smaller" lives there, once: pass the provider
      * cap and the bag cap together.
      */
     protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
-        let smallest: number | undefined;
-        for (const c of candidates) {
-            if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
-            if (smallest === undefined || c < smallest) smallest = c;
-        }
-        return smallest;
+        return ClampSessionSecondsValue(...candidates);
     }
 
     /**

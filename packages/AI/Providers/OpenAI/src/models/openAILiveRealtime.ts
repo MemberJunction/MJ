@@ -1219,6 +1219,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             EphemeralToken: brokerUrl,
             ExpiresAt: ticket.ExpiresAt,
             SessionConfig: sessionPayload as JSONObject,
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

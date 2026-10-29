@@ -23,6 +23,7 @@ import {
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeDriverFacts,
+    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import {
     BuildGeminiLiveModelPath,
@@ -217,12 +218,14 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             Setup: BuildGeminiLiveSetup(GeminiEnterpriseRealtime.setupTarget(credentials, params.Model, location), config),
             UpstreamHeaders: () => this.upstreamHeaders(upstreamUrl),
         });
+        // Computed once: the ClientConfig reports the same cap the relay enforces on the ticket.
+        const maxSessionSeconds = this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
         const ticket = RealtimeProxyRegistry.Instance.IssueRelaySession({
             UpstreamUrl: upstreamUrl,
             Policy: policy,
             UserID: params.UserID,
             DriverClass: DRIVER_CLASS,
-            MaxSessionSeconds: params.MaxSessionSeconds,
+            MaxSessionSeconds: maxSessionSeconds,
         });
         const avatarStatus = this.AvatarStatusFor(params, config);
         return {
@@ -235,6 +238,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             RelayUrl: BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID),
             SessionConfig: this.SessionPactFor(params.Model, config, GeminiEnterpriseRealtime.browserConnectConfig(config)),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
+            MaxSessionSeconds: maxSessionSeconds,
         };
     }
 

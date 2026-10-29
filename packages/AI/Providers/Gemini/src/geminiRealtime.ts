@@ -392,6 +392,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // values authoritative even if a client tampers.
             SessionConfig: this.SessionPactFor(params.Model, config),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

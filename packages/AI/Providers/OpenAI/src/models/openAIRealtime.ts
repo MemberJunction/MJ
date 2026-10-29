@@ -964,6 +964,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             ExpiresAt: new Date(response.expires_at * 1000).toISOString(),
             // The provider-native session config the browser applies verbatim (plain JSON).
             SessionConfig: JSON.parse(JSON.stringify(session)) as JSONObject,
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 }
