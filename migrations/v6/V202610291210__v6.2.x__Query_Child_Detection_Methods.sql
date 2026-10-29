@@ -3,7 +3,7 @@
 --
 -- Query extraction writes parameter rows and entity links from MJ's analysis of the query
 -- template and its structure. It records that with DetectionMethod = 'Parser', next to the
--- existing 'AI' and 'Manual', as Query Fields already do (V202610280900).
+-- existing 'AI' and 'Manual', as Query Fields already do (V202610291200).
 --
 -- 1. QueryParameter.DetectionMethod: adds 'Parser'.
 -- 2. QueryEntity.DetectionMethod: adds 'Parser'.
