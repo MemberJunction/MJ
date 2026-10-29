@@ -810,11 +810,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
         const invocationType = isNewRecord ? 'AfterCreate' : 'AfterUpdate';
         const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
-        return activeActions.some(
-            (a) =>
-                a.RunMode === 'Durable' &&
-                !options.OriginatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID)),
-        );
+        const originatingSet =
+            options.OriginatingEntityActionIDs && options.OriginatingEntityActionIDs.length > 0
+                ? new UUIDSet(options.OriginatingEntityActionIDs)
+                : null;
+        return activeActions.some((a) => a.RunMode === 'Durable' && !originatingSet?.Has(a.ID));
     }
 
     protected override async OnDurableAfterSaveExecute(
