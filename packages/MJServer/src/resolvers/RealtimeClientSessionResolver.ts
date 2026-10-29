@@ -106,6 +106,14 @@ const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'sub
  */
 const MAX_USAGE_DETAILS_JSON_LENGTH = 4096;
 
+/**
+ * Sessions already logged as having no co-agent prompt run. Usage, transcript and tool-turn relays all read
+ * the id, many times per call, so the gap is logged once per session instead of once per relay. Bounded:
+ * past {@link MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS} entries the oldest is dropped (a Set keeps insertion order).
+ */
+const sessionsLoggedWithoutPromptRun = new Set<string>();
+const MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS = 5000;
+
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
@@ -1330,10 +1338,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return null;
         }
         if (!config.promptRunID) {
-            LogStatus(
-                `RelayRealtimeUsage: session ${session.ID} has no co-agent promptRunID (observability run ` +
-                    'creation was skipped or failed) — usage delta dropped.',
-            );
+            this.logMissingPromptRunOnce(session.ID);
             return null;
         }
         const verified = await this.runIDVerifier.Verify(
@@ -1347,6 +1352,29 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return null;
         }
         return verified.PromptRunID;
+    }
+
+    /**
+     * Logs, once per session, that the session has no co-agent prompt run, so its usage, cost, transcript and
+     * tool turns are not recorded on one. The reason (no active co-agent prompt, or a failed run save) was
+     * logged when the session was prepared.
+     */
+    private logMissingPromptRunOnce(sessionID: string): void {
+        if (sessionsLoggedWithoutPromptRun.has(sessionID)) {
+            return;
+        }
+        sessionsLoggedWithoutPromptRun.add(sessionID);
+        if (sessionsLoggedWithoutPromptRun.size > MAX_LOGGED_MISSING_PROMPT_RUN_SESSIONS) {
+            const oldest = sessionsLoggedWithoutPromptRun.values().next().value;
+            if (oldest !== undefined) {
+                sessionsLoggedWithoutPromptRun.delete(oldest);
+            }
+        }
+        LogError(
+            `RealtimeClientSessionResolver: session ${sessionID} has no co-agent promptRunID, so its usage, cost, ` +
+                'transcript and tool turns are not recorded on a prompt run (the reason was logged when the session ' +
+                'was prepared). Logged once per session.',
+        );
     }
 
     /**
