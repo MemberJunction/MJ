@@ -26,7 +26,7 @@ GO
 
 EXEC sp_updateextendedproperty
     @name = N'MS_Description',
-    @value = N'Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session''s authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while the session is Active/Idle.',
+    @value = N'Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session''s authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIAgentSession',
     @level2type = N'COLUMN', @level2name = N'CloseReason';

@@ -19,7 +19,7 @@ import {
 } from '@memberjunction/ai-agents';
 import { GetCurrentHostInstance, GetHostInstanceID, HostInstanceIdentity } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
-import { ExpiryCloseReason } from './sessionDeadline.js';
+import { ExpiryCloseReason, ExpiryReason } from './sessionDeadline.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -197,6 +197,24 @@ interface RecoveryVisit {
 }
 
 /**
+ * The close reason for a row the staleness sweep's SQL already judged stale (`LastActiveAt < cutoff`).
+ * {@link ExpiryCloseReason} returns null for such a row only when `LastActiveAt` will not parse (or the
+ * threshold is non-finite); skipping it would leave it `Active` forever, so it closes as `'Idle'` and the
+ * fallback is logged with the session ID.
+ */
+function staleRowCloseReason(session: MJAIAgentSessionEntity, nowMs: number, thresholdMs: number): ExpiryReason {
+    const reason = ExpiryCloseReason(session, nowMs, thresholdMs);
+    if (reason !== null) {
+        return reason;
+    }
+    LogError(
+        `[SessionJanitor] Staleness sweep: session ${session.ID} has LastActiveAt ${String(session.LastActiveAt)}; ` +
+            'LastActiveAt unparseable; closing as Idle',
+    );
+    return 'Idle';
+}
+
+/**
  * `BaseSingleton` background reconciler that keeps the durable `AIAgentSession` state from drifting
  * away from volatile process reality. A crash/redeploy vaporizes a host's in-memory sockets but
  * leaves its session rows reading `Active`/`Idle` forever; the janitor force-closes those orphans.
@@ -213,7 +231,9 @@ interface RecoveryVisit {
  *    `closeThresholdMinutes`, regardless of host. Catches sessions whose owner died without a clean
  *    reboot (OOM, scaled-down pod).
  * 3. **Max-duration sweep ({@link RunMaxDurationSweep})** — run on every periodic tick after the
- *    staleness sweep. Closes any session past its stored hard deadline (the public voice cost cap).
+ *    staleness sweep. Closes any session past its stored hard deadline (the public voice cost cap), and
+ *    any deadline-carrying session whose idle moment has passed; it stamps that row `'Idle'` when the idle
+ *    moment came before the deadline.
  *
  * Startup recovery stamps `CloseReason = 'Janitor'`; the staleness and max-duration sweeps stamp `'Idle'` or
  * `'TimeLimit'`, whichever expiry moment passed first ({@link ExpiryCloseReason}). A shutdown-time path — {@link RunShutdownDrain},
@@ -406,8 +426,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     /**
      * Force-close any `Active`/`Idle` session whose `LastActiveAt` is older than the configured
      * close threshold, regardless of host. Stamped `'Idle'`, or `'TimeLimit'` when the row's authored deadline
-     * passed before its idle moment ({@link ExpiryCloseReason}). Idempotent and concurrency-safe. Returns the
-     * count closed.
+     * passed before its idle moment ({@link ExpiryCloseReason}). A row the SQL judged stale is never skipped:
+     * when its `LastActiveAt` will not parse it closes as `'Idle'` with a `LogError` ({@link staleRowCloseReason}).
+     * Idempotent and concurrency-safe. Returns the count closed.
      */
     public async RunStalenessSweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
         // One clock read feeds both the SQL cutoff and the per-row decision, so they cannot disagree.
@@ -415,7 +436,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         const thresholdMs = this._config.closeThresholdMinutes * 60_000;
         const cutoffIso = new Date(nowMs - thresholdMs).toISOString();
         const filter = `Status IN ('Active','Idle') AND LastActiveAt < '${cutoffIso}'`;
-        const closed = await this.sweepAndClose(filter, provider, systemUser, s => ExpiryCloseReason(s, nowMs, thresholdMs));
+        const closed = await this.sweepAndClose(filter, provider, systemUser, s => staleRowCloseReason(s, nowMs, thresholdMs));
         if (closed > 0) {
             LogStatus(`[SessionJanitor] Staleness sweep closed ${closed} stale session(s) (>${this._config.closeThresholdMinutes}m idle)`);
         }

@@ -347,6 +347,25 @@ describe('SessionJanitor close reasons (#6182): sweeps stamp TimeLimit / Idle vi
         expect(r.reason).toBe('Idle');
     });
 
+    /*
+     * The SQL already judged this row stale (LastActiveAt < cutoff), so an unparseable LastActiveAt
+     * must not make it immortal: it closes as Idle, and the fallback is logged with the session ID.
+     */
+    it('the staleness sweep closes a stale row with an unparseable LastActiveAt as Idle and LogErrors the fallback', async () => {
+        logErrorMock.mockClear();
+        const r = await runSweep('RunStalenessSweep', { ID: 'garbled1', Status: 'Active', LastActiveAt: 'not-a-date', Config_: null });
+        expect(r.closed).toBe(true);
+        expect(r.reason).toBe('Idle');
+        const messages = logErrorMock.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('garbled1') && m.includes('LastActiveAt unparseable; closing as Idle'))).toBe(true);
+    });
+
+    it('the staleness sweep does not LogError for a row ExpiryCloseReason decides', async () => {
+        logErrorMock.mockClear();
+        await runSweep('RunStalenessSweep', { ID: 'q2', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: null });
+        expect(logErrorMock).not.toHaveBeenCalled();
+    });
+
     it('skips rows the callback returns null for, without loading their channels', async () => {
         const row = { ID: 'future1', Status: 'Active', LastActiveAt: minutesAgo(1), Config_: deadlineConfig(30) };
         sessionPages = [{ Success: true, Results: [row] }];

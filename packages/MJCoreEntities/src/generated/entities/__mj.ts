@@ -3509,7 +3509,7 @@ export const MJAIAgentSessionSchema = z.object({
     *   * Janitor
     *   * Shutdown
     *   * TimeLimit
-        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while the session is Active/Idle.`),
+        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -49881,7 +49881,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     *   * Janitor
     *   * Shutdown
     *   * TimeLimit
-    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while the session is Active/Idle.
+    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.
     */
     get CloseReason(): 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null {
         return this.Get('CloseReason');
