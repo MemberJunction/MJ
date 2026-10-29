@@ -102,7 +102,7 @@ The **Chief of Staff** works on a plain MJ installation with no Open App. Everyt
 ```mermaid
 flowchart TD
     MJ["MJ Core Chief of Staff<br/>• Users (Security Principal)<br/>• AIAgentUserPolicy (Governance, Priorities in InstructionsOverride)<br/>• UserRoutines + 3-Tier WakeGateEvaluator (Briefings, Reminders)<br/>• AIAgentRequests (Approvals Queue)<br/>• CommunicationProvider + AIBridgeAgentIdentity<br/>• Executive Cockpit (Overview, Approvals & Wakes, Governance)"]
-    Ext["Extension Open App (for example BizApps priorities and tasks)<br/>• MJ: AI Skills row granted to the Chief of Staff<br/>• Cockpit panels registered as BaseChiefOfStaffPanel"]
+    Ext["Extending Open App (for example BizApps Tasks: priorities, objectives and to-dos)<br/>• MJ: AI Skills row granted to the Chief of Staff<br/>• Cockpit panels registered as BaseChiefOfStaffPanel"]
     Ext --> MJ
 ```
 
@@ -144,5 +144,5 @@ An Open App extends the core agent in two places, without core knowing about it:
 1. **The agent, through a skill.** The app ships an `MJ: AI Skills` row whose `Instructions` explain its entities (for example People, objectives, assignments and to-dos), plus any actions it needs, and grants it to the Chief of Staff through `MJ: AI Agent Skills`. The Chief of Staff has `AcceptsSkills = 'All'` and `SkillActivationMode = 'Auto'`, so it activates a skill whose `ActivationMode = 'Auto'` when a request needs it. The core prompt tells the agent to use an active skill for business data and to say plainly when none is installed.
 2. **The cockpit, through registered panels.** The app's client bootstrap package registers Angular components that extend `BaseChiefOfStaffPanel` (exported from `@memberjunction/ng-dashboards`) with `RegisterClassEx` metadata: `placement` (`'tab'` for a cockpit tab, `'overview'` for the Overview's extension column), `panelKey`, `label`, optional `icon`, `sortKey` and `liveEntities`. The cockpit mounts every registered panel, passes it a context whose `RefreshToken` changes on every reload, merges what each panel reports into the agent context, and reloads when one of the panel's `liveEntities` changes.
 
-The BizApps priorities-and-tasks extension (People link, objectives and milestones, owner and holder rules, to-dos) is planned as its own Open App in [#6193](https://github.com/MemberJunction/MJ/issues/6193).
+The BizApps priorities-and-tasks extension (People link, objectives and milestones, owner and holder rules, to-dos) is planned for the BizApps Tasks app (`bizapps-tasks`), which already depends on BizApps Common for People, in [#6193](https://github.com/MemberJunction/MJ/issues/6193).
 
