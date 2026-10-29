@@ -3097,10 +3097,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 Results: null
             };
@@ -3245,10 +3245,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetStatusByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetStatusByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 EntityUpdateDates: null
             };

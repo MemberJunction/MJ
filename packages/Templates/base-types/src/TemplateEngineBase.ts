@@ -35,6 +35,12 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         Templates: MJTemplateEntityExtended[],
         TemplateContents: MJTemplateContentEntity[],
         TemplateParams: MJTemplateParamEntity[]
+    } = {
+        TemplateContentTypes: [],
+        TemplateCategories: [],
+        Templates: [],
+        TemplateContents: [],
+        TemplateParams: []
     };
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
@@ -44,7 +50,14 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
                 DatasetName: 'Template_Metadata',
                 DatasetResultHandling: "single_property",
                 PropertyName: "_metadata",
-                AutoRefresh: true
+                AutoRefresh: true,
+                Entities: [
+                    'MJ: Template Content Types',
+                    'MJ: Template Categories',
+                    'MJ: Templates',
+                    'MJ: Template Contents',
+                    'MJ: Template Params'
+                ]
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -82,6 +95,11 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
      * crashing: they are the same shape over the same object, so any of them is reachable
      * on the same unwarmed engine.
      */
+    // The getters below return an empty array by design for a restricted role: `_metadata` is one
+    // `single_property` dataset, so `GetConfigData` has no per-array slot to consult, and
+    // `AdditionalLoading` reads these getters during `BaseEngine.Load`, where a throw would stop
+    // boot. Callers that must distinguish "no templates" from "not readable" check
+    // `IsPermissionConstrained` first. Same shape as `ResourcePermissionEngine.ResourceTypes`.
     public get Templates(): MJTemplateEntityExtended[] {
         return this._metadata?.Templates ?? [];
     }
