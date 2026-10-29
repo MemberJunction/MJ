@@ -715,6 +715,22 @@ An entity folder's `.mj-sync.json` can gate the whole folder on an environment v
 - `mj sync push` does not validate a folder it will skip. `mj sync validate` validates every folder, and warns about a `pushWhen` in a nested folder.
 - `mj sync watch` reads `pushWhen` too. See [Watch](#watch-mj-sync-watch).
 
+### A later folder that changes the same records (`overrides`)
+Some records need two passes. A score model can only be Active once its factors exist, so one folder saves it as Draft and a later folder sets it to Active. Validation reports two entries that set a field of one record to different values, so the later folder lists the fields it changes on purpose:
+
+```json
+{
+  "entity": "MJ_BizApps_Sonar: Score Models",
+  "overrides": [{ "folder": "sonar-score-models", "fields": ["Status"] }]
+}
+```
+
+- `folder` is the earlier folder, by its name under the metadata root, as in `directoryOrder`. Push must run it before the folder that lists it.
+- `fields` are fields of the folder's entity. Names match without regard to case.
+- Only the listed fields, and only against the named folder, are exempt. Two entries in the later folder that disagree, or a third folder that sets the field again without its own `overrides`, are still errors.
+- Push needs no setting for this: it runs the folders in `directoryOrder`, so the later folder's value is the one saved.
+- Validation reports an entry that is not `{ "folder", "fields" }`, a field the entity does not have, a folder that is not an entity folder under the root, the folder itself, and a folder that push runs later. When `--dir` names one entity folder, the folder checks are skipped.
+
 ### First-Class Composition Axes (`collections`, `embeds`, `extension`)
 MetadataSync natively supports three composition axes directly within `RecordData`, persisted in a single `Save()` call on the root entity graph:
 - **`collections`**: Declared `RelatedRecordCollection` sets (e.g. `Lines`, `AgendaItems`). Supports `upsert` mode (default: match by PK, leaves unmentioned items intact) and `authoritative` mode (configured in `.mj-sync.json`: computes deletion set, enforced with a 20% max implied delete safety rail unless `--allow-bulk-delete` is passed).
@@ -1761,6 +1777,7 @@ mj sync pull --entity="AI Prompts" --no-validate
 **Record Conflicts:**
 - Several entries (in one file or in several files) can describe the same record: the same entity and `primaryKey`. This is allowed when they do not disagree.
 - Two such entries that set the same field to different raw values are an error. The message names the entity, the `primaryKey` and the field, and gives the full path and start line (`path:line`) of each entry.
+- A later folder can change listed fields of records an earlier folder sets. See [`overrides`](#a-later-folder-that-changes-the-same-records-overrides).
 - Entries whose `primaryKey` holds an `@parent:`, `@owner:` or `@root:` reference (also inside a `@lookup:`), or an object value, are not compared, because the same text can name different records.
 
 **Reference Validation:**
@@ -1833,7 +1850,7 @@ Errors
 | `Lookup not found` | No matching record | Verify lookup value or use ?create |
 | `Circular dependency` | A -> B -> A references | Restructure to avoid cycles |
 | `Required field missing` | Missing required field | Add field with appropriate value |
-| `Conflicting values for <entity> record …` | Two entries for one record set a field to different values | Set the same value in both entries, or set the field in one entry only |
+| `Conflicting values for <entity> record …` | Two entries for one record set a field to different values | Set the same value in both entries, or set the field in one entry only. If a later folder changes the field on purpose, list it in that folder's [`overrides`](#a-later-folder-that-changes-the-same-records-overrides) |
 | `@template: is not supported by mj sync push` | A field value starts with `@template:` | Use `@file:` instead |
 
 ## Programmatic Usage

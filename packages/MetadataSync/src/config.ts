@@ -237,8 +237,20 @@ export interface RelatedEntityConfig {
 }
 
 /**
+ * One entry of an entity folder's `overrides`: the fields this folder sets again, to a different
+ * value, on records that an earlier folder also sets. For example, a folder that saves models as
+ * Draft and a later folder that sets them to Active once their children exist.
+ */
+export interface FolderOverride {
+  /** The earlier folder, by its name under the metadata root, as in `directoryOrder` */
+  folder: string; // case-violation-ok-legacy-back-compat: mirrors the .mj-sync.json key
+  /** The entity fields this folder may set to a different value than that folder */
+  fields: string[]; // case-violation-ok-legacy-back-compat: mirrors the .mj-sync.json key
+}
+
+/**
  * Entity-specific configuration
- * 
+ *
  * Defines settings for a specific entity type within a directory. Stored in
  * .mj-sync.json files that contain an "entity" field. Supports defaults,
  * file patterns, and related entity configuration.
@@ -262,6 +274,12 @@ export interface EntityConfig {
    * for example "@env:DEMO_AGENTS_ENABLED". Otherwise push skips the folder and logs it.
    */
   pushWhen?: string; // case-violation-ok-legacy-back-compat: mirrors the .mj-sync.json key
+  /**
+   * Fields this folder sets on purpose to a different value than an earlier folder sets for the
+   * same record. Validation does not report those fields as conflicting. Each `folder` is a sibling
+   * folder under the same metadata root that push runs earlier.
+   */
+  overrides?: FolderOverride[]; // case-violation-ok-legacy-back-compat: mirrors the .mj-sync.json key
   /**
    * Declarative collection configuration for composition axes.
    * Key is collection property name (e.g. "Lines", "Payments").
