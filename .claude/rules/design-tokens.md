@@ -151,7 +151,7 @@ Don't override `.mj-btn` in component CSS — see [`packages/Angular/CLAUDE.md`]
 These rules are enforced by CI on PRs targeting `next`. Run them locally before pushing (requires your changes to be committed — the check diffs against `origin/next`):
 
 - `npm run check:ui` — both gates against changed CSS/SCSS vs `origin/next` (matches PR behavior)
-- `npm run check:ui-tokens` — hardcoded-color gate only (hex, rgb/rgba, hsl/hsla — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`)
+- `npm run check:ui-tokens` — hardcoded-color gate only (hex, rgb/rgba, hsl/hsla, and named colours like `white` on colour properties — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`, `black`/`white` inside `color-mix()`, `transparent` and `currentColor`); a single declaration with no token yet can carry `// color-exception: <reason>` on the line above
 - `npm run check:ui-buttons` — `.mj-btn` override gate only
 - `npm run check:ui:all` — audit the whole `packages/Angular/` tree (cleanup work; reports pre-existing violations CI doesn't gate on)
 - `npm run check:ui:adoption` — re-run the measurement script (writes to `plans/adoption-metrics.md`)
