@@ -24,6 +24,8 @@ import type {
   AsOfStrategy,
   OutcomeConfig,
   EvaluationRecord,
+  TrainerRequest,
+  TrainerResult,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -108,6 +110,19 @@ export interface IRecordLoader {
  * that returns a canned {@link TrainResponse} and captures the request so the
  * test can assert the matrix/preprocessing/holdout shape sent to the sidecar.
  */
+/**
+ * The protocol-driven training seam: one Training Run over one immutable Training Snapshot per call, answered with a
+ * {@link TrainerResult}. Kept apart from {@link ISidecarTrainer} so the legacy `train` seam and its test doubles stay
+ * untouched while the legacy path exists.
+ */
+export interface ITrainerEvaluator {
+  /**
+   * Run one training. Transport failures and sidecar faults are retried up to `req.maxRetries` times; a refused request
+   * throws. Every other outcome, including exhausted retries, is a {@link TrainerResult}.
+   */
+  RunTrainer(req: TrainerRequest): Promise<TrainerResult>;
+}
+
 export interface ISidecarTrainer {
   /**
    * Train a model from an assembled feature matrix. The implementation is

@@ -1,11 +1,16 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
+  CALIBRATION_SLOPE_RANGE,
   EvaluationProtocol,
   TrainerContract,
   REQUIRED_LIBRARIES,
   TRAINER_COMPLETED_KEYS,
   TRAINER_FAILED_KEYS,
   TRAINER_REQUEST_KEYS,
+  type CalibrationReport,
   type CodeVersion,
   type EvaluationProtocolSpec,
   type MetricWithInterval,
@@ -135,5 +140,32 @@ describe('trainer contract member lists', () => {
   it('lists the 10 members of the request', () => {
     expect(TRAINER_REQUEST_KEYS).toHaveLength(10);
     expect(sortedKeys(request)).toEqual([...TRAINER_REQUEST_KEYS].sort());
+  });
+});
+
+describe('TrainerContract.CalibrationHidesFamily (a family is offered only with a calibration slope inside 0.8–1.2)', () => {
+  const report = (slope: number): CalibrationReport => ({ method: 'platt', intercept: 0, slope, reliability: [] });
+  it('offers a family with slope inside 0.8–1.2 and hides one outside or undefined', () => {
+    expect(TrainerContract.CalibrationHidesFamily(report(0.95))).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(0.7998))).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(report(1.25))).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(report(Number.NaN))).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(null)).toBe(false);
+  });
+
+  it('keeps both range ends offered', () => {
+    expect(TrainerContract.CalibrationHidesFamily(report(0.8))).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(1.2))).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(Number.POSITIVE_INFINITY))).toBe(true);
+  });
+
+  it("declares the same slope range as the sidecar's calibration module", () => {
+    const calibrationPy = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../Sidecar/src/python/app/calibration.py',
+    );
+    const match = /^SLOPE_RANGE = \(([0-9.]+), ([0-9.]+)\)$/m.exec(readFileSync(calibrationPy, 'utf8'));
+    expect(match).not.toBeNull();
+    expect([Number(match?.[1]), Number(match?.[2])]).toEqual([...CALIBRATION_SLOPE_RANGE]);
   });
 });

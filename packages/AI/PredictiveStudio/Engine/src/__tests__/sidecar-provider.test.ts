@@ -5,8 +5,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // `MJSidecarTrainer`/`MJSidecarPredictor` used to default to `new MLSidecar()`,
 // and every production call site (`train-model.action.ts`, `run-experiment.deps.ts`,
 // `score-record-set.runner.ts`, `operations/delegation.ts`) constructed a fresh
-// trainer/predictor per run with no injected sidecar. `MLSidecar.start()` spawns a
-// Python child process in managed mode, but nothing ever called `.stop()` on it —
+// trainer/predictor per run with no injected sidecar. `MLSidecar.Start()` spawns a
+// Python child process in managed mode, but nothing ever called `Stop()` on it —
 // every "Train Model" / "Score Record Set" run leaked a live Python subprocess for
 // the life of the host process. `MLSidecarProvider` fixes this by holding one
 // process-lifetime `MLSidecar` shared across calls (mirrors
@@ -25,10 +25,10 @@ const { constructedCount, stopMock, MLSidecarStub } = vi.hoisted(() => {
             this.instanceId = state.constructedCount;
             this.options = options;
         }
-        async start() {
+        async Start() {
             /* no-op */
         }
-        async stop() {
+        async Stop() {
             return stopMock();
         }
     }
@@ -96,7 +96,7 @@ describe('MLSidecarProvider', () => {
         expect(constructedCount.constructedCount - before).toBeLessThanOrEqual(1);
     });
 
-    it('Shutdown() calls the underlying sidecar.stop() and releases the reference', async () => {
+    it('Shutdown() calls the underlying sidecar.Stop() and releases the reference', async () => {
         const provider = MLSidecarProvider.Instance;
         const sidecar = provider.GetSidecar(); // ensure a sidecar exists
         void sidecar;
@@ -112,7 +112,7 @@ describe('MLSidecarProvider', () => {
         expect(freshSidecar).not.toBe(sidecar);
     });
 
-    it('Shutdown() is idempotent — a second call does not re-invoke the underlying stop()', async () => {
+    it('Shutdown() is idempotent — a second call does not re-invoke the underlying Stop()', async () => {
         const provider = MLSidecarProvider.Instance;
         provider.GetSidecar();
 

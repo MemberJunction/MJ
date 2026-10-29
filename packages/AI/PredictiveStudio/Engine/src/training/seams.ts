@@ -16,10 +16,16 @@ import {
   type IMetadataProvider,
 } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type { TrainRequest, TrainResponse, MatrixData } from '@memberjunction/predictive-studio-core';
-import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
+import type {
+  TrainRequest,
+  TrainResponse,
+  MatrixData,
+  TrainerRequest,
+  TrainerResult,
+} from '@memberjunction/predictive-studio-core';
+import { MLSidecar, SidecarError } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
-import type { IEntityFactory, IRecordLoader, ISidecarTrainer } from './types';
+import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator } from './types';
 
 /**
  * Provider-bound {@link IEntityFactory}: every entity is created through the
@@ -115,7 +121,7 @@ export class RunViewRecordLoader implements IRecordLoader {
 }
 
 /**
- * {@link ISidecarTrainer} backed by the self-managing {@link MLSidecar} client.
+ * {@link ISidecarTrainer} and {@link ITrainerEvaluator} backed by the self-managing {@link MLSidecar} client.
  * Lazily starts the sidecar on first use (managed or remote mode is decided by
  * `MLSidecar` from options/env). Defaults to the process-shared
  * {@link MLSidecarProvider} instance rather than constructing a private `MLSidecar`
@@ -123,7 +129,7 @@ export class RunViewRecordLoader implements IRecordLoader {
  * child process per action run. Tests (and callers that genuinely need an isolated
  * sidecar) can still inject their own via the constructor parameter.
  */
-export class MJSidecarTrainer implements ISidecarTrainer {
+export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
   private started = false;
 
   /**
@@ -134,10 +140,7 @@ export class MJSidecarTrainer implements ISidecarTrainer {
 
   /** @inheritdoc */
   public async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
-    if (!this.started) {
-      await this.sidecar.start();
-      this.started = true;
-    }
+    await this.ensureStarted();
     // Forward the orchestrator-carved **locked holdout** (plan §8.2) on the shared
     // `TrainRequest.holdout` channel. The sidecar fits preprocessing on the
     // training `data` only, then APPLIES that frozen fitted transform to these
@@ -148,6 +151,39 @@ export class MJSidecarTrainer implements ISidecarTrainer {
     // simply omit it and the sidecar returns no `holdout_metrics`.
     const withHoldout: TrainRequest =
       lockedHoldout && lockedHoldout.rows.length > 0 ? { ...req, holdout: lockedHoldout } : req;
-    return this.sidecar.train(withHoldout);
+    return this.sidecar.Train(withHoldout);
+  }
+
+  /**
+   * Run one protocol-driven training with bounded retries: a transport failure or a 5xx answer is retried up to
+   * `req.maxRetries` times; a 4xx refusal is not retried (the request itself is wrong) and is rethrown. When every
+   * attempt fails the result is `failed` at stage `timeout` naming the last error, never partial metrics.
+   */
+  public async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
+    await this.ensureStarted();
+    let lastError = '';
+    for (let attempt = 0; attempt <= req.maxRetries; attempt++) {
+      try {
+        return await this.sidecar.RunTrainer(req);
+      } catch (err) {
+        if (err instanceof SidecarError && err.Status >= 400 && err.Status < 500) throw err;
+        lastError = err instanceof Error ? err.message : String(err);
+      }
+    }
+    return {
+      status: 'failed',
+      trainingRunId: req.trainingRunId,
+      stage: 'timeout',
+      message: `sidecar gave no result after ${req.maxRetries + 1} attempt(s): ${lastError}`,
+      computeSeconds: 0,
+    };
+  }
+
+  /** Start the sidecar once per trainer; later calls reuse the connection. */
+  private async ensureStarted(): Promise<void> {
+    if (!this.started) {
+      await this.sidecar.Start();
+      this.started = true;
+    }
   }
 }

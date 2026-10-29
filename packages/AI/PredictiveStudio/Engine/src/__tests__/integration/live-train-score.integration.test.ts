@@ -409,7 +409,7 @@ function buildPipeline(opts: {
  * production — the test no longer needs a bespoke trainer that reaches around the
  * contract via `validation.holdout_size`.
  *
- * `MJSidecarTrainer.train` calls `sidecar.start()` lazily, which is a no-op when
+ * `MJSidecarTrainer.train` calls `sidecar.Start()` lazily, which is a no-op when
  * the suite has already started the sidecar (lifecycle stays owned by the test).
  */
 function makeProductionTrainer(sidecar: MLSidecar): MJSidecarTrainer {
@@ -421,7 +421,7 @@ class LiveSidecarPredictor implements ISidecarPredictor {
   constructor(private readonly sidecar: MLSidecar) {}
 
   public async predict(req: PredictRequest): Promise<PredictResponse> {
-    return this.sidecar.predict(req);
+    return this.sidecar.Predict(req);
   }
 }
 
@@ -484,15 +484,15 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
 
   beforeAll(async () => {
     sidecar = new MLSidecar({ pythonPath: VENV_PYTHON ?? undefined });
-    await sidecar.start();
-    const health = await sidecar.health();
+    await sidecar.Start();
+    const health = await sidecar.Health();
     // eslint-disable-next-line no-console
     console.info(`[PS integration] sidecar up on port ${sidecar.Port}; algorithms: ${health.algorithms?.join(', ')}`);
   }, 60_000);
 
   afterAll(async () => {
     if (sidecar) {
-      await sidecar.stop();
+      await sidecar.Stop();
     }
   });
 

@@ -12,11 +12,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runDir = path.join(root, '.run');
 mkdirSync(runDir, { recursive: true });
 const sidecar = new MLSidecar();             // interpreter: PREDICTIVE_STUDIO_PYTHON, else the Sidecar venv
-await sidecar.start();
+await sidecar.Start();
 const url = `http://127.0.0.1:${sidecar.Port}`;
 writeFileSync(path.join(runDir, 'sidecar.url'), url);
 console.log(`truth sidecar up at ${url} (single-threaded)`);
-const stop = async (): Promise<void> => { await sidecar.stop(); process.exit(0); };
+const stop = async (): Promise<void> => { await sidecar.Stop(); process.exit(0); };
 process.on('SIGTERM', () => void stop());
 process.on('SIGINT', () => void stop());
 setInterval(() => undefined, 60_000);       // keep the event loop alive

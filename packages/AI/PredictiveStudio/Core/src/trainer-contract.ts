@@ -300,6 +300,12 @@ void trainerRequestKeysExact;
 /** Libraries every run's CodeVersion must name: a lineage without them cannot be reproduced and is refused. */
 export const REQUIRED_LIBRARIES = ['python', 'numpy', 'scikit-learn', 'xgboost', 'lightgbm'] as const;
 
+/**
+ * The holdout calibration-slope range a family must fall in to be offered. The sidecar's `SLOPE_RANGE` in
+ * `app/calibration.py` declares the same range; a Core test compares the two.
+ */
+export const CALIBRATION_SLOPE_RANGE = [0.8, 1.2] as const;
+
 /** Rules over the trainer contract. */
 export class TrainerContract {
   /** What a CodeVersion lacks for lineage: missing library versions and a thread count below 1. Empty = complete. */
@@ -310,5 +316,18 @@ export class TrainerContract {
     }).map((lib) => `libraryVersions.${lib}`);
     if (!Number.isInteger(cv.threads) || cv.threads < 1) gaps.push('threads');
     return gaps;
+  }
+
+  /**
+   * Whether a family is hidden for its holdout calibration: a slope outside 0.8–1.2, or one that is not a finite
+   * number, hides it, so it is never offered. A null report (regression families have none) hides nothing.
+   */
+  public static CalibrationHidesFamily(report: CalibrationReport | null): boolean {
+    if (report === null) return false;
+    return (
+      !Number.isFinite(report.slope) ||
+      report.slope < CALIBRATION_SLOPE_RANGE[0] ||
+      report.slope > CALIBRATION_SLOPE_RANGE[1]
+    );
   }
 }

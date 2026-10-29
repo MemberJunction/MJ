@@ -160,12 +160,12 @@ The public surface (`Sidecar/src/index.ts`): `MLSidecar`, `SidecarError`, plus t
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 
 const s = new MLSidecar();   // managed mode by default
-await s.start();             // spawns the bundled Python service
+await s.Start();             // spawns the bundled Python service
 
-const trained = await s.train({ /* TrainRequest */ });
-const { predictions } = await s.predict({ /* PredictRequest */ });
+const trained = await s.Train({ /* TrainRequest */ });
+const { predictions } = await s.Predict({ /* PredictRequest */ });
 
-await s.stop();              // SIGTERM the child (no-op in remote mode)
+await s.Stop();              // SIGTERM the child (no-op in remote mode)
 ```
 
 `MLSidecar` exposes `IsRemote`, `IsRunning` (remote always `true`; managed needs a live child), and `Port` (ephemeral in managed, `null` in remote). On macOS it automatically appends `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` to the spawn environment so XGBoost/LightGBM find the OpenMP runtime.

@@ -87,10 +87,10 @@ export class MJSidecarPredictor implements ISidecarPredictor {
   /** @inheritdoc */
   public async predict(req: PredictRequest): Promise<PredictResponse> {
     if (!this.started) {
-      await this.sidecar.start();
+      await this.sidecar.Start();
       this.started = true;
     }
-    return this.sidecar.predict(req);
+    return this.sidecar.Predict(req);
   }
 }
 

@@ -8,6 +8,8 @@ import type {
   TrainResponse,
   PredictRequest,
   PredictResponse,
+  TrainerRequest,
+  TrainerResult,
 } from '@memberjunction/predictive-studio-core';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -109,14 +111,14 @@ const DEFAULT_SERVER_PATH = resolveServerPath();
  *
  * Two topologies, chosen automatically:
  *
- * - **Managed mode (default):** {@link start} spawns the bundled FastAPI service
+ * - **Managed mode (default):** {@link Start} spawns the bundled FastAPI service
  *   (`src/python/server.py`) on 127.0.0.1 with an ephemeral port, reads
  *   `PREDICTIVE_STUDIO_SIDECAR_PORT=<n>` from its stdout, polls `/health` until
  *   ready, and registers SIGINT/SIGTERM/exit cleanup. On macOS it injects
  *   `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` so xgboost/lightgbm load.
  * - **Remote mode:** when a `url` option is given OR
  *   `PREDICTIVE_STUDIO_SIDECAR_URL` is set, it connects only — no child process
- *   is spawned — and {@link start} just verifies `/health`.
+ *   is spawned — and {@link Start} just verifies `/health`.
  *
  * The request/response contract is owned by
  * `@memberjunction/predictive-studio-core`; this client adds no business logic.
@@ -124,10 +126,10 @@ const DEFAULT_SERVER_PATH = resolveServerPath();
  * @example
  * ```ts
  * const s = new MLSidecar();
- * await s.start();
- * const trained = await s.train(trainRequest);
- * const predictions = await s.predict(predictRequest);
- * await s.stop();
+ * await s.Start();
+ * const trained = await s.Train(trainRequest);
+ * const predictions = await s.Predict(predictRequest);
+ * await s.Stop();
  * ```
  */
 export class MLSidecar {
@@ -135,6 +137,8 @@ export class MLSidecar {
   public static readonly DefaultRequestTimeoutMs = 300_000;
   /** Default startup timeout (ms) for the managed Python process. */
   public static readonly DefaultStartupTimeoutMs = 30_000;
+  /** Seconds the trainer transport waits beyond a run's own `timeoutSeconds` before giving up on the sidecar. */
+  public static readonly TrainerTimeoutMarginSeconds = 60;
   /** Env var naming an explicit interpreter for the managed sidecar (and its test runners). */
   public static readonly PythonEnvVar = 'PREDICTIVE_STUDIO_PYTHON';
 
@@ -157,10 +161,10 @@ export class MLSidecar {
   private stopping = false;
   private cleanupRegistered = false;
   /**
-   * In-flight `spawnManaged()` promise, so concurrent `start()` callers await the
+   * In-flight `spawnManaged()` promise, so concurrent `Start()` callers await the
    * SAME spawn instead of each racing `IsRunning` (false until the port is
    * announced) and forking a second Python process. Cleared once the spawn
-   * settles (success or failure) so a subsequent `start()` after a failed/stopped
+   * settles (success or failure) so a subsequent `Start()` after a failed/stopped
    * sidecar spawns fresh rather than replaying a rejected promise.
    */
   private startPromise: Promise<void> | null = null;
@@ -216,11 +220,6 @@ export class MLSidecar {
       this.startPromise = null;
     });
     return this.startPromise;
-  }
-
-  /** @deprecated Use {@link Start}. */
-  async start(): Promise<void> {
-    return this.Start();
   }
 
   private async spawnManaged(): Promise<void> {
@@ -332,11 +331,6 @@ export class MLSidecar {
     });
   }
 
-  /** @deprecated Use {@link Stop}. */
-  async stop(): Promise<void> {
-    return this.Stop();
-  }
-
   /**
    * Train a model by POSTing the assembled feature matrix to `/train`.
    * @throws {SidecarError} when the sidecar responds with a non-2xx status
@@ -346,9 +340,16 @@ export class MLSidecar {
     return this.httpPost<TrainRequest, TrainResponse>('/train', req);
   }
 
-  /** @deprecated Use {@link Train}. */
-  async train(req: TrainRequest): Promise<TrainResponse> {
-    return this.Train(req);
+  /**
+   * Run one protocol-driven training by POSTing a {@link TrainerRequest} to `/trainer`. The transport timeout is the
+   * request's own `timeoutSeconds` plus a 60 s margin: the sidecar stops itself at `timeoutSeconds` and answers
+   * `failed` at stage `timeout`, so the client only times out when the sidecar process is gone or wedged.
+   * @throws {SidecarError} when the sidecar refuses the request (4xx) or fails (5xx)
+   */
+  async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
+    this.assertRunning();
+    const timeoutMs = (req.timeoutSeconds + MLSidecar.TrainerTimeoutMarginSeconds) * 1000;
+    return this.httpPost<TrainerRequest, TrainerResult>('/trainer', req, timeoutMs);
   }
 
   /**
@@ -360,11 +361,6 @@ export class MLSidecar {
     return this.httpPost<PredictRequest, PredictResponse>('/predict', req);
   }
 
-  /** @deprecated Use {@link Predict}. */
-  async predict(req: PredictRequest): Promise<PredictResponse> {
-    return this.Predict(req);
-  }
-
   /**
    * Check sidecar liveness via `GET /health`.
    * @throws {SidecarError} when the sidecar responds with a non-2xx status
@@ -374,14 +370,9 @@ export class MLSidecar {
     return this.httpGet<SidecarHealthResponse>('/health');
   }
 
-  /** @deprecated Use {@link Health}. */
-  async health(): Promise<SidecarHealthResponse> {
-    return this.Health();
-  }
-
   private assertRunning(): void {
     if (!this.IsRunning) {
-      throw new Error('MLSidecar is not running. Call start() first.');
+      throw new Error('MLSidecar is not running. Call Start() first.');
     }
   }
 
@@ -441,7 +432,7 @@ export class MLSidecar {
     return { protocol: 'http:', hostname: this.host, port: this.port! };
   }
 
-  private httpPost<TBody, TResult>(reqPath: string, body: TBody): Promise<TResult> {
+  private httpPost<TBody, TResult>(reqPath: string, body: TBody, timeoutMs: number = this.requestTimeoutMs): Promise<TResult> {
     const data = JSON.stringify(body);
     const target = this.requestTarget();
     return new Promise<TResult>((resolve, reject) => {
@@ -456,11 +447,11 @@ export class MLSidecar {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(data),
           },
-          timeout: this.requestTimeoutMs,
+          timeout: timeoutMs,
         },
         (res) => this.collectResponse<TResult>(res, reqPath, resolve, reject)
       );
-      this.attachRequestHandlers(req, reqPath, reject);
+      this.attachRequestHandlers(req, reqPath, reject, timeoutMs);
       req.write(data);
       req.end();
     });
@@ -514,13 +505,14 @@ export class MLSidecar {
     req: http.ClientRequest,
     reqPath: string,
     reject: (reason: Error) => void,
+    timeoutMs: number = this.requestTimeoutMs,
   ): void {
     req.on('error', (err) => {
       reject(new Error(`HTTP request to predictive-studio-sidecar failed: ${err.message}`));
     });
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`Request to ${reqPath} timed out after ${this.requestTimeoutMs}ms`));
+      reject(new Error(`Request to ${reqPath} timed out after ${timeoutMs}ms`));
     });
   }
 }

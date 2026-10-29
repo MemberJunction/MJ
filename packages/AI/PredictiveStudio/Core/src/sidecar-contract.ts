@@ -246,6 +246,11 @@ export interface Prediction {
    * `Col=Value`), so a UI should collapse/humanize them for display.
    */
   contributions?: PredictionContribution[];
+  /**
+   * The full class-probability vector, aligned with {@link PredictResponse.classOrder}. Present for classification;
+   * `score` keeps its meaning (P(class 1) for binary, P(predicted class) for multiclass).
+   */
+  probabilities?: number[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /** One signed per-record feature contribution: `value > 0` pushes the score up, `< 0` down. */
@@ -263,6 +268,8 @@ export interface PredictionContribution {
 export interface PredictResponse {
   /** One prediction per input row, in request order. */
   predictions: Prediction[];
+  /** The class order every `probabilities` vector follows (the artifact's declared order for v2 predictors). */
+  classOrder?: string[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**
