@@ -175,3 +175,31 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
     expect(out).not.toContain('SKIPPED');
   });
 });
+
+/**
+ * mj sync push logs a lookup-keyed ID as a subquery on the natural key (#6069). The SET value is
+ * converted inside the `DO $mj$` block, where the PostProcessor's bracket pass never reaches, so
+ * the rule converts its identifiers itself (#6074).
+ */
+describe('ExecBlockRule — SET value holding a subquery (#6074)', () => {
+  const SUBQUERY_BLOCK = [
+    'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+    '  @Name_ab12 NVARCHAR(MAX)',
+    'SET',
+    "  @ID_ab12 = (SELECT [ID] FROM [__mj].[Widget] WHERE LOWER([Name]) = LOWER(N'Widgets') AND [EntityID] = (SELECT [ID] FROM [${mjSchema}].[Entity] WHERE LOWER([Name]) = LOWER(N'MJ: Widgets')))",
+    'SET',
+    "  @Name_ab12 = N'see [__mj].[Widget]' EXEC [__mj].spUpdateWidget @ID = @ID_ab12,",
+    '  @Name = @Name_ab12',
+  ].join('\n');
+
+  it('converts the bracket identifiers of the subquery', () => {
+    const out = convert(SUBQUERY_BLOCK);
+    expect(out).toContain(
+      `p_ID_ab12 := (SELECT "ID" FROM __mj."Widget" WHERE LOWER("Name") = LOWER('Widgets') AND "EntityID" = (SELECT "ID" FROM \${mjSchema}."Entity" WHERE LOWER("Name") = LOWER('MJ: Widgets')));`
+    );
+  });
+
+  it('leaves brackets inside a string literal alone', () => {
+    expect(convert(SUBQUERY_BLOCK)).toContain("p_Name_ab12 := 'see [__mj].[Widget]';");
+  });
+});

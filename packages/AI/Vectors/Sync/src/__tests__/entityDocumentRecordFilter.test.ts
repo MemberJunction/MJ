@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
+import type { PageRecordsParams } from '@memberjunction/ai-vectors';
+
+/** Every page request the syncer sent to VectorBase.PageRecordsByEntityID, in order. */
+const pageRequests = vi.hoisted((): PageRecordsParams[] => []);
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks — same shape as entityVectorSyncRecordID.test.ts    */
@@ -54,7 +58,17 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
   VectorDBBase: class { constructor(_k: string) {} },
 }));
 vi.mock('@memberjunction/ai-vectors', () => ({
-  VectorBase: class { CurrentUser: unknown; },
+  VectorBase: class {
+    CurrentUser: unknown;
+    protected CanUseKeysetPagination(): boolean {
+      return false;
+    }
+    /** Records the request and answers with an empty page, which ends the run. */
+    protected async PageRecordsByEntityID<T>(params: PageRecordsParams): Promise<T[]> {
+      pageRequests.push(params);
+      return [];
+    }
+  },
 }));
 vi.mock('@memberjunction/aiengine', () => ({
   AIEngine: { Instance: { Config: vi.fn() } },
@@ -67,6 +81,9 @@ vi.mock('@memberjunction/templates-base-types', () => ({}));
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import { EntityVectorSyncer } from '../models/entityVectorSync';
+import { PagedRecords } from '../models/PagedRecords';
+import type { MJTemplateEntityExtended, MJVectorIndexEntity } from '@memberjunction/core-entities';
+import type { TemplateParamData } from '../generic/vectorSync.types';
 import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
 import type { VectorizeEntityParams } from '../generic/vectorSync.types';
 
@@ -85,7 +102,37 @@ function doc(configuration: string | null): MJEntityDocumentEntity {
   return { Name: 'Individuals Duplicate', Configuration: configuration } as unknown as MJEntityDocumentEntity;
 }
 
+/** The private paging loop's signature, reached structurally so the test drives the real loop. */
+interface DataPagingSeam {
+  startDataPaging(
+    dataStream: PagedRecords,
+    params: VectorizeEntityParams,
+    md: IMetadataProvider,
+    entity: EntityInfo,
+    template: MJTemplateEntityExtended,
+    vectorIndexEntity: MJVectorIndexEntity,
+    entityDocument: MJEntityDocumentEntity,
+    pageSize: number
+  ): void;
+}
+
 class TestableSyncer extends EntityVectorSyncer {
+  /** Runs the paging loop until it ends the stream; resolves with the page requests it sent. */
+  public async pageRequestsFor(params: Partial<VectorizeEntityParams>, entityDocument: MJEntityDocumentEntity): Promise<PageRecordsParams[]> {
+    pageRequests.length = 0;
+    const stream = new PagedRecords();
+    const ended = new Promise<void>((resolve) => stream.on('end', () => resolve()));
+    stream.resume();
+    (this as unknown as DataPagingSeam).startDataPaging(
+      stream, { entityID: 'individuals-id', ...params } as VectorizeEntityParams, MD, INDIVIDUALS,
+      {} as MJTemplateEntityExtended, {} as MJVectorIndexEntity, entityDocument, 50
+    );
+    await ended;
+    return [...pageRequests];
+  }
+  protected override async GetRelatedTemplateDataForBatch(): Promise<TemplateParamData[]> {
+    return [];
+  }
   public pageFilter(params: Partial<VectorizeEntityParams>, entityDocument: MJEntityDocumentEntity): string | undefined {
     return this.BuildRecordPageFilter(INDIVIDUALS, params as VectorizeEntityParams, entityDocument, MD);
   }
@@ -146,6 +193,30 @@ describe('Entity document record filter', () => {
     it('is unchanged without a record filter: the list filter alone, or nothing', () => {
       expect(syncer.pageFilter({ listID: 'list-1' }, doc(null))).toBe('<members of list-1>');
       expect(syncer.pageFilter({}, doc(null))).toBeUndefined();
+    });
+  });
+
+  describe('the page requests a sync run sends', () => {
+    const syncer = new TestableSyncer();
+    const filtered = doc(JSON.stringify({ recordFilter: { extraFilter: NOT_DELETED } }));
+
+    it('carry the record filter on a whole-entity run', async () => {
+      const requests = await syncer.pageRequestsFor({}, filtered);
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({ EntityID: 'individuals-id', Filter: NOT_DELETED });
+    });
+
+    it('carry the list filter ANDed with the record filter on a list run', async () => {
+      const requests = await syncer.pageRequestsFor({ listID: 'list-1' }, filtered);
+
+      expect(requests[0].Filter).toBe(`(<members of list-1>) AND (${NOT_DELETED})`);
+    });
+
+    it('carry no filter when neither applies', async () => {
+      const requests = await syncer.pageRequestsFor({}, doc(null));
+
+      expect(requests[0].Filter).toBeUndefined();
     });
   });
 });
