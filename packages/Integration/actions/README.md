@@ -173,7 +173,7 @@ Loads every active entity map's table from the staging database into the target 
 | `DurationSeconds` | Output | number | — | Execution time of the phase |
 | `StagingDatabaseDropped` | Output | boolean | — | Whether the staging database was dropped |
 
-**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate is not a valid date), `STAGING_NOT_FOUND`, `DROP_REFUSED` (the requested drop-on-complete is not allowed), `LOAD_FAILED`
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate is not a valid date), `STAGING_NOT_FOUND`, `STAGING_NOT_ALLOWED` (the source is a system database or the server's own database, or lacks the `MJ_Staging_` prefix without `AllowAnyName` and a `CreatedAfter` its creation date satisfies), `DROP_REFUSED` (the requested drop-on-complete is not allowed), `LOAD_FAILED`
 
 ### 7. Drop SQL Server Staging Database
 

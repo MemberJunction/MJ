@@ -36,6 +36,11 @@ export interface StagingDropFacts {
 }
 
 /** Throws when `name` is a system database (compared case-insensitively). */
+/** True when `name` is a system database (compared case-insensitively). */
+export function IsSystemDatabase(name: string): boolean {
+    return SYSTEM_DATABASES.has(name.trim().toLowerCase());
+}
+
 export function AssertNotSystemDatabase(name: string): void {
     if (SYSTEM_DATABASES.has(name.trim().toLowerCase())) {
         throw new StagingDropRefusedError(`Refusing to drop [${name}]: it is a system database.`);

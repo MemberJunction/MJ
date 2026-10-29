@@ -9,7 +9,7 @@ import {
     type BootstrapLoadOptions,
     type BootstrapRunContext
 } from './BootstrapSQLServerIntegrationFromBackupAction.js';
-import { AssertStagingDatabaseName, StagingDropRefusedError } from './StagingDropGuard.js';
+import { AssertStagingDatabaseName, IsSystemDatabase, STAGING_DATABASE_PREFIX, StagingDropRefusedError } from './StagingDropGuard.js';
 import { StorageContainerUrlProblem } from './BackupSourceGuard.js';
 
 /** The validated inputs of a load. */
@@ -71,6 +71,10 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
             if (!(await this.stagingDatabaseExists(executor, input.StagingDatabaseName, params.ContextUser))) {
                 return await this.RejectInput(params, progress, 'STAGING_NOT_FOUND', `Staging database [${input.StagingDatabaseName}] does not exist on this instance.`);
             }
+            const sourceRefusal = await this.sourceRefusal(executor, input, params);
+            if (sourceRefusal) {
+                return await this.RejectInput(params, progress, 'STAGING_NOT_ALLOWED', sourceRefusal);
+            }
             ctx = this.buildLoadContext(params, progress, executor, input);
             const outputs = await this.RunLoadPhase(ctx, this.readLoadOptions(params, input.BackupStartDate));
             return this.loadSucceeded(params, outputs);
@@ -120,6 +124,32 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
             return { ResultCode: 'INVALID_PARAMETER', Message: `Parameter 'CreatedAfter' is not a valid date: '${createdAfterRaw}'.` };
         }
         return { BackupStartDate: backupStartDate, CreatedAfter: createdAfter };
+    }
+
+    /**
+     * Why the named database may not be read as a staging source, or undefined. The load reads it with
+     * MJAPI's own login, so a direct caller could otherwise copy any database on the server (the MJ
+     * database included) into entities it can read. A staging-prefixed name is accepted unless it is the
+     * server's own database; any other name needs `AllowAnyName` with `CreatedAfter`, and the database
+     * must have been created at or after that instant — the same rule the drop applies.
+     */
+    private async sourceRefusal(executor: DatabaseProviderBase, input: ValidLoadInput, params: RunActionParams): Promise<string | undefined> {
+        const name = input.StagingDatabaseName;
+        if (IsSystemDatabase(name)) {
+            return `Refusing to load from [${name}]: it is a system database.`;
+        }
+        const prefixed = name.toLowerCase().startsWith(STAGING_DATABASE_PREFIX.toLowerCase());
+        if (!prefixed && !(this.GetBoolParam(params, 'AllowAnyName', false) && input.CreatedAfter)) {
+            return `Refusing to load from [${name}]: a staging database name starts with '${STAGING_DATABASE_PREFIX}'. Pass AllowAnyName='true' with CreatedAfter to load from another database created after that instant.`;
+        }
+        const facts = await this.QueryStagingDropFacts(executor, name, params.ContextUser);
+        if (facts.CurrentDatabase.trim().toLowerCase() === name.trim().toLowerCase()) {
+            return `Refusing to load from [${name}]: it is the database this server runs on.`;
+        }
+        if (!prefixed && input.CreatedAfter && facts.CreatedAtUtc && facts.CreatedAtUtc.getTime() < input.CreatedAfter.getTime()) {
+            return `Refusing to load from [${name}]: it was created at ${facts.CreatedAtUtc.toISOString()}, before CreatedAfter (${input.CreatedAfter.toISOString()}).`;
+        }
+        return undefined;
     }
 
     /** The refusal of an invalid container URL or a disallowed drop-on-complete, or undefined. */

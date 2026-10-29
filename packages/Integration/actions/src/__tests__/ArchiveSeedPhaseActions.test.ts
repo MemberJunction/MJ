@@ -369,6 +369,33 @@ describe('LoadSQLServerIntegrationFromStagingAction', () => {
         expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
     });
 
+    it('Load action refuses to read the database the server runs on, before loading anything', async () => {
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Main', BackupStartDate: '2026-10-01T00:00:00.000Z', AllowAnyName: true, CreatedAfter: '2000-01-01T00:00:00.000Z' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('STAGING_NOT_ALLOWED');
+        expect(r.Message).toContain('it is the database this server runs on');
+        expect(sqlCalls.some(s => s.includes('MERGE INTO'))).toBe(false);
+    });
+
+    it('Load action refuses an unprefixed database without AllowAnyName and CreatedAfter', async () => {
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('STAGING_NOT_ALLOWED');
+        expect(sqlCalls.some(s => s.includes('MERGE INTO'))).toBe(false);
+    });
+
+    it('Load action refuses an unprefixed database created before CreatedAfter', async () => {
+        load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true, createdAtUtc: new Date('2020-01-01T00:00:00.000Z') });
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z', AllowAnyName: true, CreatedAfter: '2026-10-28T11:00:00.000Z' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('STAGING_NOT_ALLOWED');
+        expect(r.Message).toContain('before CreatedAfter');
+        expect(sqlCalls.some(s => s.includes('MERGE INTO'))).toBe(false);
+    });
+
     it('Load action fails with STAGING_NOT_FOUND when DB_ID returns null', async () => {
         load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: false });
         const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z' }));
@@ -409,12 +436,13 @@ describe('LoadSQLServerIntegrationFromStagingAction', () => {
         expect(sqlCalls).toHaveLength(0);
     });
 
-    it('Load action reports DROP_REFUSED when the drop-on-complete targets the server database', async () => {
+    it('Load action refuses, before reading or dropping, when the source is the server database', async () => {
         load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true, currentDatabase: 'Payroll' });
         const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true, AllowAnyName: true, CreatedAfter: '2026-10-28T11:00:00.000Z' }));
 
-        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.ResultCode).toBe('STAGING_NOT_ALLOWED');
         expect(r.Message).toContain('database this server runs on');
+        expect(sqlCalls.some(s => s.includes('MERGE INTO'))).toBe(false);
         expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
     });
 
