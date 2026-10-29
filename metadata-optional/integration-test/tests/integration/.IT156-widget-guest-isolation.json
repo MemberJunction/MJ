@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT156 - Widget Guest Row Isolation",
+    "Description": "Two widget guest principals (the shared Anonymous user with the Widget Guest role and different session scopes), each with its own Conversation and one row per entity. Guest B reads none of guest A's MJ: AI Agent Requests, MJ: Conversation Skills, MJ: Conversation Detail Artifacts or MJ: AI Agent Runs rows (WG1); each guest reads its own (WG2); a guest with no scope reads none (WG3); guest B's update of A's Agent Request, Conversation Skill and Agent Run is refused and leaves the row unchanged (WG4); guest A updates its own (WG5); the system user reads both guests' rows (WG6). Server transport; fixtures removed in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Widget guests read and update only the rows of their own session; a guest with no scope reads nothing."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "widget-guest-isolation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "BF11AC5B-431B-46A5-954B-026DFAD960C4"
+  }
+}
