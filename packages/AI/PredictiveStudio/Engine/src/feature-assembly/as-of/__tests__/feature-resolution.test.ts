@@ -72,7 +72,7 @@ describe('ResolveFeatureColumns', () => {
     const refusal = { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'TenureDays' } };
     expect(refusedFor({ Id: 'z', Kind: 'standardize', Columns: ['EventsAttended', 'TenureDays'] })).toEqual(refusal);
     expect(refusedFor({ Id: 'o', Kind: 'onehot', Column: 'TenureDays' })).toEqual(refusal);
-    expect(refusedFor({ Id: 'b', Kind: 'bin', Column: 'TenureDays', Bins: [0, 10] })).toEqual(refusal);
+    expect(refusedFor({ Id: 'b', Kind: 'bin', Column: 'TenureDays', Bins: 10 })).toEqual(refusal);
   });
   it('refuses llm-derived features without a version pin and steps with no as-of semantics', () => {
     expect(FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'llm-derived', FeaturePipelineRef: 'fp', Columns: ['Sentiment'] }] }, unitSpec, years, metadata, { denyFields: [], denySources: [] }))

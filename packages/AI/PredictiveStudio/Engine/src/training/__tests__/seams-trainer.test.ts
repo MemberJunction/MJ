@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { TrainerFailed, TrainerRequest, TrainerResult } from '@memberjunction/predictive-studio-core';
 import { MLSidecar, SidecarError, TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
-import { TrainerRequestFixture } from '../../../../Sidecar/src/__tests__/fixtures/trainer-request.fixture';
+import { TrainerRequestFixture } from './fixtures/trainer-request.fixture';
 import { MJSidecarTrainer } from '../seams';
 
 /** The managed child dying mid-request: the attempt fails and the sidecar is no longer running. */

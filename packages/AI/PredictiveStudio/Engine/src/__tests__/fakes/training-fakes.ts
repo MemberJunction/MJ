@@ -98,6 +98,7 @@ export class FakeMLRun extends FakeEntity {
   public Status: 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running' = 'Pending';
   public StartedAt: Date | null = null;
   public CompletedAt: Date | null = null;
+  public ComputeSeconds: number | null = null;
   public ComputeCost: number | null = null;
   public EvaluationProtocolID: string | null = null;
   public TrainingSnapshotID: string | null = null;
