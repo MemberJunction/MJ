@@ -320,7 +320,39 @@
                                                         (click)="OpenRequestDetail(req); $event.stopPropagation()">
                                                     Inspect
                                                 </button>
+                                                @let draft = EmailDraftFor(req);
+                                                @if (draft) {
+                                                    <button mjButton variant="outline" size="sm"
+                                                            [title]="IsDraftExpanded(req) ? 'Hide the email draft' : 'Show the email the agent wants to send'"
+                                                            (click)="ToggleEmailDraft(req, $event)">
+                                                        <i class="fa-solid" [class.fa-envelope-open]="IsDraftExpanded(req)" [class.fa-envelope]="!IsDraftExpanded(req)"></i>
+                                                        {{ IsDraftExpanded(req) ? 'Hide draft' : 'View draft' }}
+                                                    </button>
+                                                }
                                             </div>
+                                            @let openDraft = EmailDraftFor(req);
+                                            @if (openDraft && IsDraftExpanded(req)) {
+                                                <div class="cos-email-draft" (click)="$event.stopPropagation()">
+                                                    <div class="cos-email-draft__header">
+                                                        <div class="cos-email-draft__meta">
+                                                            <div><strong>To:</strong> {{ openDraft.To }}</div>
+                                                            @if (openDraft.CC.length > 0) {
+                                                                <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
+                                                            }
+                                                            @if (openDraft.From) {
+                                                                <div><strong>From:</strong> {{ openDraft.From }}</div>
+                                                            }
+                                                            <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
+                                                        </div>
+                                                        <button mjButton variant="outline" size="sm"
+                                                                title="Copy To, Subject and body as plain text for your mail client"
+                                                                (click)="CopyEmailDraft(req, $event)">
+                                                            <i class="fa-regular fa-copy"></i> Copy
+                                                        </button>
+                                                    </div>
+                                                    <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                </div>
+                                            }
                                         </div>
                                     }
                                 </div>
@@ -661,7 +693,39 @@
                                                     (click)="OpenRequestDetail(req); $event.stopPropagation()">
                                                 <i class="fa-solid fa-expand"></i> Full Details / Comment
                                             </button>
+                                            @let draft = EmailDraftFor(req);
+                                            @if (draft) {
+                                                <button mjButton variant="outline" size="sm"
+                                                        [title]="IsDraftExpanded(req) ? 'Hide the email draft' : 'Show the email the agent wants to send'"
+                                                        (click)="ToggleEmailDraft(req, $event)">
+                                                    <i class="fa-solid" [class.fa-envelope-open]="IsDraftExpanded(req)" [class.fa-envelope]="!IsDraftExpanded(req)"></i>
+                                                    {{ IsDraftExpanded(req) ? 'Hide draft' : 'View draft' }}
+                                                </button>
+                                            }
                                         </div>
+                                        @let openDraft = EmailDraftFor(req);
+                                        @if (openDraft && IsDraftExpanded(req)) {
+                                            <div class="cos-email-draft" (click)="$event.stopPropagation()">
+                                                <div class="cos-email-draft__header">
+                                                    <div class="cos-email-draft__meta">
+                                                        <div><strong>To:</strong> {{ openDraft.To }}</div>
+                                                        @if (openDraft.CC.length > 0) {
+                                                            <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
+                                                        }
+                                                        @if (openDraft.From) {
+                                                            <div><strong>From:</strong> {{ openDraft.From }}</div>
+                                                        }
+                                                        <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
+                                                    </div>
+                                                    <button mjButton variant="outline" size="sm"
+                                                            title="Copy To, Subject and body as plain text for your mail client"
+                                                            (click)="CopyEmailDraft(req, $event)">
+                                                        <i class="fa-regular fa-copy"></i> Copy
+                                                    </button>
+                                                </div>
+                                                <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>

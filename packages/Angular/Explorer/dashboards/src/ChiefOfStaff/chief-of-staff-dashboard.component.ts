@@ -55,6 +55,9 @@ import {
     ResolvePriorityObjectiveByIDOrName,
     RoutineSummaryItem,
     IsSpentOneShotRoutine,
+    ParseEmailApprovalPayload,
+    FormatEmailDraftForClipboard,
+    type EmailApprovalDraft,
     RoutineDisplayStatus,
     SortRoutinesForDisplay,
     type RoutineDisplayStatusValue,
@@ -532,6 +535,7 @@ export class ChiefOfStaffDashboardComponent
                 ? (routineRes.Results as MJUserRoutineEntity[])
                 : [];
 
+            this.emailDraftsByRequest.Clear();
             this.Requests = requestRes?.Success
                 ? (requestRes.Results as MJAIAgentRequestEntity[])
                 : [];
@@ -1131,6 +1135,48 @@ export class ChiefOfStaffDashboardComponent
         this.SelectedRequest = request;
         this.ShowRequestDialog = true;
         this.cdr.markForCheck();
+    }
+
+    /** The request whose email draft is opened inline on its card, if any. */
+    public ExpandedDraftRequestID: string | null = null;
+    private readonly emailDraftsByRequest = new UUIDMap<EmailApprovalDraft | null>();
+
+    /** The outbound email an approval request carries, or null when the request is not an email. */
+    public EmailDraftFor(request: MJAIAgentRequestEntity): EmailApprovalDraft | null {
+        const cached = this.emailDraftsByRequest.Get(request.ID);
+        if (cached !== undefined) {
+            return cached;
+        }
+        const draft = ParseEmailApprovalPayload(request.Comments);
+        this.emailDraftsByRequest.Set(request.ID, draft);
+        return draft;
+    }
+
+    public IsDraftExpanded(request: MJAIAgentRequestEntity): boolean {
+        return this.ExpandedDraftRequestID != null && UUIDsEqual(this.ExpandedDraftRequestID, request.ID);
+    }
+
+    public ToggleEmailDraft(request: MJAIAgentRequestEntity, event?: Event): void {
+        event?.stopPropagation();
+        this.ExpandedDraftRequestID = this.IsDraftExpanded(request) ? null : request.ID;
+        this.cdr.markForCheck();
+    }
+
+    /** Copies the draft as plain text (headers, blank line, body) for pasting into a mail client. */
+    public async CopyEmailDraft(request: MJAIAgentRequestEntity, event?: Event): Promise<void> {
+        event?.stopPropagation();
+        const draft = this.EmailDraftFor(request);
+        if (!draft) {
+            return;
+        }
+        const text = FormatEmailDraftForClipboard(draft);
+        try {
+            await navigator.clipboard.writeText(text);
+            this.showBanner('success', `Copied the email to ${draft.To} to the clipboard.`);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.showBanner('error', `Could not copy to the clipboard: ${msg}`);
+        }
     }
 
     public OnRequestDialogClose(result: AgentRequestPanelResult): void {

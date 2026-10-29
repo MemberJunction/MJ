@@ -212,6 +212,68 @@ export function SortRoutinesForDisplay<T extends Pick<RoutineSummaryItem, 'Sched
     });
 }
 
+/**
+ * An outbound email waiting for approval, as the email action records it in the request's
+ * `Comments` (JSON with Operation / From / To / CCRecipients / Subject / Body).
+ */
+export interface EmailApprovalDraft {
+    Operation: 'Send' | 'Reply' | 'Forward';
+    From: string | null;
+    To: string;
+    CC: string[];
+    Subject: string;
+    Body: string;
+}
+
+/**
+ * Reads the email draft out of an approval request's Comments. Returns null when the comments are
+ * empty, not JSON, or not an email (a call brief, say), so callers can show the draft only when
+ * there is one. An older payload without `Operation` counts as a `Send` when To and Subject exist.
+ */
+export function ParseEmailApprovalPayload(comments: string | null | undefined): EmailApprovalDraft | null {
+    const text = comments?.trim();
+    if (!text || !text.startsWith('{')) {
+        return null;
+    }
+    let raw: unknown;
+    try {
+        raw = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+    const record = raw as Record<string, unknown>;
+    const to = stringField(record, 'To');
+    const subject = stringField(record, 'Subject');
+    const body = stringField(record, 'Body');
+    if (to == null || subject == null || body == null) {
+        return null;
+    }
+    const operation = stringField(record, 'Operation');
+    const op: EmailApprovalDraft['Operation'] = operation === 'Reply' || operation === 'Forward' ? operation : 'Send';
+    const cc = Array.isArray(record['CCRecipients'])
+        ? (record['CCRecipients'] as unknown[]).filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+        : [];
+    return { Operation: op, From: stringField(record, 'From'), To: to, CC: cc, Subject: subject, Body: body };
+}
+
+/** The draft as plain text for a mail client: headers, a blank line, then the body. */
+export function FormatEmailDraftForClipboard(draft: EmailApprovalDraft): string {
+    const lines = [`To: ${draft.To}`];
+    if (draft.CC.length > 0) {
+        lines.push(`CC: ${draft.CC.join(', ')}`);
+    }
+    lines.push(`Subject: ${draft.Subject}`, '', draft.Body);
+    return lines.join('\n');
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+    const value = record[key];
+    return typeof value === 'string' ? value : null;
+}
+
 export interface RequestSummaryItem {
     ID: string;
     Request: string;

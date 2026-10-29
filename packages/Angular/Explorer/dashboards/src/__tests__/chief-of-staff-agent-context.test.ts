@@ -24,6 +24,8 @@ import {
     IsSpentOneShotRoutine,
     RoutineDisplayStatus,
     SortRoutinesForDisplay,
+    ParseEmailApprovalPayload,
+    FormatEmailDraftForClipboard,
 } from '../ChiefOfStaff/chief-of-staff-agent-context';
 import { AGENT_CONTEXT_NAME_LIST_CAP } from '../shared/agent-tool-validation';
 import { BuildScopeRootTasksFilter, BuildTodoItems, IsTodoTask, LoadTaskAssignees, type TaskAssignee } from '../ChiefOfStaff/chief-of-staff-agent-context';
@@ -886,6 +888,48 @@ describe('Spent one-shot routines read as fired, and sort below the live schedul
             routine({ ID: 'soon', NextRunAt: '2026-10-30T15:00:00Z' }),
         ]);
         expect(sorted.map((r) => r.ID)).toEqual(['soon', 'later', 'paused', 'spent-new', 'spent-old']);
+    });
+});
+
+describe('Email approval payload: the draft travels in the request Comments as JSON', () => {
+    const comments = JSON.stringify({
+        Operation: 'Send', From: 'paul.christmann@rasa.io', To: 'amith@bluecypress.io', CCRecipients: ['jimmy@rasa.io'],
+        Subject: 'Q4 OKR status', Body: 'Hi Amith,\n\nOn track.\n\nPaul', MessageID: null,
+    }, null, 2);
+
+    it('parses an outbound email approval into its parts', () => {
+        const draft = ParseEmailApprovalPayload(comments);
+        expect(draft).toEqual({
+            Operation: 'Send', From: 'paul.christmann@rasa.io', To: 'amith@bluecypress.io', CC: ['jimmy@rasa.io'],
+            Subject: 'Q4 OKR status', Body: 'Hi Amith,\n\nOn track.\n\nPaul',
+        });
+    });
+
+    it('returns null for empty, non-JSON, or non-email comments', () => {
+        expect(ParseEmailApprovalPayload(null)).toBeNull();
+        expect(ParseEmailApprovalPayload('')).toBeNull();
+        expect(ParseEmailApprovalPayload('Please call Jane about the budget')).toBeNull();
+        expect(ParseEmailApprovalPayload(JSON.stringify({ Recipient: 'Jane', Objective: 'budget' }))).toBeNull();
+    });
+
+    it('tolerates a missing CC list and an older payload without Operation when To and Subject are present', () => {
+        const draft = ParseEmailApprovalPayload(JSON.stringify({ To: 'a@b.io', Subject: 'Hi', Body: 'x' }));
+        expect(draft?.CC).toEqual([]);
+        expect(draft?.Operation).toBe('Send');
+        expect(draft?.From).toBeNull();
+    });
+
+    it('formats the draft for the clipboard as headers, a blank line, then the body', () => {
+        const draft = ParseEmailApprovalPayload(comments);
+        expect(draft).not.toBeNull();
+        expect(FormatEmailDraftForClipboard(draft!)).toBe(
+            'To: amith@bluecypress.io\nCC: jimmy@rasa.io\nSubject: Q4 OKR status\n\nHi Amith,\n\nOn track.\n\nPaul'
+        );
+    });
+
+    it('omits the CC header when there is nobody on copy', () => {
+        const draft = ParseEmailApprovalPayload(JSON.stringify({ To: 'a@b.io', Subject: 'Hi', Body: 'x' }));
+        expect(FormatEmailDraftForClipboard(draft!)).toBe('To: a@b.io\nSubject: Hi\n\nx');
     });
 });
 

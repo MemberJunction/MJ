@@ -621,6 +621,43 @@
     line-height: 1.45;
 }
 
+/* An outbound email waiting for approval, opened inline on its card */
+.cos-email-draft {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-subtle);
+    cursor: default;
+}
+
+.cos-email-draft__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cos-email-draft__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.9em;
+    color: var(--mj-text-secondary);
+    word-break: break-word;
+}
+
+.cos-email-draft__body {
+    margin: 10px 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--mj-text-primary);
+}
+
 .cos-request-card__actions {
     display: flex;
     flex-wrap: wrap;
