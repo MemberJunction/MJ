@@ -168,7 +168,11 @@ class GeminiEnterpriseAuthCache extends BaseSingleton<GeminiEnterpriseAuthCache>
 @RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')
 export class GeminiEnterpriseRealtime extends GeminiRealtime {
     /** Declared on its own so inheritance never hides a missing override; same 30-minute Gemini Live ceiling, applied through the MJ relay. */
-    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 1800 };
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 1800,
+        // Inherits GeminiRealtime's turn mapping, so it declares the same set (in its own static).
+        SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
+    };
 
     private readonly credentials: VertexAICredentials | null;
     private readonly credentialsProblem: string | null;

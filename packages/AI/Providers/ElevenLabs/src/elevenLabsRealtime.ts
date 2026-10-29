@@ -19,6 +19,7 @@ import {
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
     type RealtimeDriverFacts,
+    type SupportedTurnSettingsMap,
     RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import { BaseSingleton, RegisterClass } from '@memberjunction/global';
@@ -102,6 +103,13 @@ function resolveTrimmedConfigString(config: JSONObject | undefined, key: string)
 }
 
 /**
+ * The one declaration of what this driver honours; feeds both {@link ELEVENLABS_SUPPORTED_TURN_SETTINGS}
+ * and the driver's static facts. A const here (not read off the class) because the class is defined later
+ * in the module.
+ */
+const ELEVENLABS_TURN_SETTING_FIDELITY: SupportedTurnSettingsMap = { Eagerness: 'exact' };
+
+/**
  * The turn-detection settings this driver can actually deliver to ElevenLabs (#3534).
  *
  * MJ's {@link RealtimeTurnDetectionSettings} carries four — `Mode`, `Eagerness`, `Threshold`,
@@ -115,7 +123,8 @@ function resolveTrimmedConfigString(config: JSONObject | undefined, key: string)
  * one — is exactly the transmitted-then-discarded defect #3374 and #3859 exist to end. A caller
  * that needs to know what will survive can ask.
  */
-export const ELEVENLABS_SUPPORTED_TURN_SETTINGS: ReadonlyArray<keyof RealtimeTurnDetectionSettings> = ['Eagerness'];
+export const ELEVENLABS_SUPPORTED_TURN_SETTINGS: ReadonlyArray<keyof RealtimeTurnDetectionSettings> =
+    Object.keys(ELEVENLABS_TURN_SETTING_FIDELITY) as Array<keyof RealtimeTurnDetectionSettings>;
 
 /**
  * Maps MJ's normalized `Eagerness` onto ElevenLabs' `turnEagerness`.
@@ -447,7 +456,10 @@ export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManaged
 @RegisterClass(BaseRealtimeModel, 'ElevenLabsRealtime')
 export class ElevenLabsRealtime extends BaseRealtimeModel {
     /** ElevenLabs conversational-agent session ceiling (2 hours): the provider ceiling MJ uses for ElevenLabs Agents (#6182 design). */
-    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 7200 };
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 7200,
+        SupportedTurnSettings: ELEVENLABS_TURN_SETTING_FIDELITY,
+    };
 
     private elevenClient: ElevenLabsClient | null = null;
 

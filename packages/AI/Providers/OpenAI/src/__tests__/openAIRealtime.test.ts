@@ -1296,7 +1296,7 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
             expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(OpenAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
@@ -1314,7 +1314,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);

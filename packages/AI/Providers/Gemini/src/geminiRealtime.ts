@@ -224,7 +224,10 @@ interface GeminiOpenedConnection {
 @RegisterClass(BaseRealtimeModel, 'GeminiRealtime')
 export class GeminiRealtime extends BaseRealtimeModel {
     /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS); session resumption continues a conversation past a single connection, but the token bounds the session. */
-    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 1800 };
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 1800,
+        SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
+    };
 
     private geminiClient: GoogleGenAI | null = null;
     private geminiTokenClient: GoogleGenAI | null = null;

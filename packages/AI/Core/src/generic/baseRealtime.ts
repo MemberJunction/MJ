@@ -1,5 +1,5 @@
 import { BaseModel } from "./baseModel";
-import type { RealtimeReasoningPlane } from "./modelConfiguration";
+import type { RealtimeReasoningPlane, RealtimeTurnDetectionSettings } from "./modelConfiguration";
 import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
 import type { RealtimeVideoFrame } from "./realtimeVideoOutput";
 
@@ -116,8 +116,22 @@ export function RealtimeDiagLog(message: string): void {
 }
 
 /**
+ * How faithfully a driver honours one normalized turn-detection field.
+ * - `'exact'` — the value reaches the provider as the author wrote it (modulo spelling).
+ * - `'approximate'` — the driver translates it onto a coarser or different provider quantity (a ladder,
+ *   a bucket), so the provider behaves like the request but not to the same precision.
+ */
+export type TurnSettingFidelity = 'exact' | 'approximate';
+
+/**
+ * The normalized turn settings a driver honours, keyed by field, with fidelity. A field absent from
+ * the map is ignored by the driver; an absent map means the driver maps none.
+ */
+export type SupportedTurnSettingsMap = Readonly<Partial<Record<keyof RealtimeTurnDetectionSettings, TurnSettingFidelity>>>;
+
+/**
  * Static, instance-free facts about a realtime driver, read before any session exists.
- * Open on purpose: later facts (e.g. supported turn settings) are added here.
+ * Open on purpose: later facts are added here.
  */
 export interface RealtimeDriverFacts {
     /**
@@ -126,6 +140,12 @@ export interface RealtimeDriverFacts {
      * Positive integers only.
      */
     ProviderMaxSessionSeconds?: number;
+
+    /**
+     * The normalized {@link RealtimeTurnDetectionSettings} fields this driver maps to its provider, with
+     * fidelity. Declare only what the driver's mapping actually sends; leave the key off when it maps none.
+     */
+    SupportedTurnSettings?: SupportedTurnSettingsMap;
 }
 
 /**
@@ -469,6 +489,9 @@ export interface ClientRealtimeSessionConfig {
 export interface RealtimeSessionCapabilities {
     /** Mirrors {@link RealtimeDriverFacts.ProviderMaxSessionSeconds} for this session's driver; `undefined` = unknown. */
     ProviderMaxSessionSeconds?: number;
+
+    /** Mirrors {@link RealtimeDriverFacts.SupportedTurnSettings} for this session's driver; `undefined` = none declared. */
+    SupportedTurnSettings?: SupportedTurnSettingsMap;
 
     /**
      * Whether the session can change its turn-taking / auto-response mode on a **live** socket (no

@@ -145,7 +145,11 @@ export interface IxAIRealtimeConnection {
 @RegisterClass(BaseRealtimeModel, 'GrokRealtime')
 export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
     /** xAI's Grok Voice sessions run up to 120 minutes. */
-    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 7200 };
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 7200,
+        // Eagerness is approximate: xAI has no eagerness knob, so it is derived onto a silence ladder.
+        SupportedTurnSettings: { Mode: 'exact', Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' },
+    };
 
     public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
 

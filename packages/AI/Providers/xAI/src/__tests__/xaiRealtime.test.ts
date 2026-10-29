@@ -944,7 +944,7 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
     it('inherits live Reconfigure with the Grok transcription model', async () => {
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
         // The session carries xAI's own ceiling, not the OpenAI parent's.
-        expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 7200, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 7200, SupportedTurnSettings: { Mode: 'exact', Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' }, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
         expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(xAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
         expect(xAIRealtime.SupportsDynamicToolSet).toBe(true);
         const before = driver.Fake.Sent.length;

@@ -642,4 +642,8 @@ describe('HuggingFaceRealtime DriverFacts', () => {
         expect(Object.prototype.hasOwnProperty.call(HuggingFaceRealtime, 'DriverFacts')).toBe(true);
         expect(HuggingFaceRealtime.DriverFacts.ProviderMaxSessionSeconds).toBeUndefined();
     });
+
+    it('declares no SupportedTurnSettings: its profile maps no normalized turn field', () => {
+        expect(HuggingFaceRealtime.DriverFacts.SupportedTurnSettings).toBeUndefined();
+    });
 });

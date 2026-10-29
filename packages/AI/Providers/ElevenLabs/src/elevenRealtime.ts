@@ -171,7 +171,11 @@ export const ELEVEN_REALTIME_PROFILE: OpenAIRealtimeProfile = {
 @RegisterClass(BaseRealtimeModel, 'ElevenRealtime')
 export class ElevenRealtime extends OpenAIRealtime {
     /** The provider's session ceiling is not documented in-repo (`max_duration_seconds` is a per-session setting, not a ceiling), so it stays unknown. */
-    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        // What BuildElevenRealtimeTurnDetection maps: serverVad/semanticVad modes, eagerness (auto becomes
+        // medium, the documented equivalent), and the server-VAD threshold and silence duration.
+        SupportedTurnSettings: { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' },
+    };
 
     public static override readonly SupportsDynamicToolSet = ELEVEN_REALTIME_PROFILE.supportsDynamicToolSet;
 

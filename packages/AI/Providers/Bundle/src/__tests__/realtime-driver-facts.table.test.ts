@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BaseRealtimeModel, type RealtimeDriverFacts } from '@memberjunction/ai';
+import { BaseRealtimeModel, type RealtimeDriverFacts, type TurnSettingFidelity, type RealtimeTurnDetectionSettings } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import { OpenAIRealtime, OpenAILiveRealtime } from '@memberjunction/ai-openai';
 import { xAIRealtime } from '@memberjunction/ai-xai';
@@ -28,6 +28,26 @@ const EXPECTED: ReadonlyArray<readonly [DriverWithFacts, number | undefined]> = 
     [InworldRealtime, undefined],
 ];
 
+type Supported = Readonly<Partial<Record<keyof RealtimeTurnDetectionSettings, TurnSettingFidelity>>>;
+
+const OPENAI_FAMILY_SETTINGS: Supported = { Mode: 'exact', Eagerness: 'exact', SilenceDurationMs: 'exact', Threshold: 'exact' };
+const GEMINI_SETTINGS: Supported = { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' };
+
+// Second column: which normalized turn settings each driver honours, and how faithfully. `undefined` =
+// the driver maps none (declares no key at all).
+const EXPECTED_TURN_SETTINGS: ReadonlyArray<readonly [DriverWithFacts, Supported | undefined]> = [
+    [OpenAIRealtime, OPENAI_FAMILY_SETTINGS],
+    [OpenAILiveRealtime, undefined],
+    [xAIRealtime, { Mode: 'exact', Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' }],
+    [GeminiRealtime, GEMINI_SETTINGS],
+    [GeminiEnterpriseRealtime, GEMINI_SETTINGS],
+    [ElevenLabsRealtime, { Eagerness: 'exact' }],
+    // BuildElevenRealtimeTurnDetection: serverVad/semanticVad modes, eagerness (auto -> medium), threshold, silence.
+    [ElevenRealtime, OPENAI_FAMILY_SETTINGS],
+    [AssemblyAIRealtime, undefined],
+    [InworldRealtime, undefined],
+];
+
 /*
  * Scope: this table and the registration check below cover the provider packages this Bundle
  * imports. HuggingFaceRealtime is not a Bundle dependency, so its own package test checks it.
@@ -41,6 +61,13 @@ describe('realtime driver facts table', () => {
             expect(cls.DriverFacts.ProviderMaxSessionSeconds).toBe(expected);
             // An inherited static would hide a driver that forgot to declare its own.
             expect(Object.prototype.hasOwnProperty.call(cls, 'DriverFacts')).toBe(true);
+        },
+    );
+
+    it.each(EXPECTED_TURN_SETTINGS.map(([cls, expected]) => [cls.name, cls, expected] as const))(
+        '%s declares its SupportedTurnSettings',
+        (_name, cls, expected) => {
+            expect(cls.DriverFacts.SupportedTurnSettings).toEqual(expected);
         },
     );
 
