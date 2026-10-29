@@ -170,9 +170,9 @@ def fit_predictor(spec: CandidateSpec, columns: Sequence[encoding.ColumnSpec], X
     return TrainedPredictor(pipe, enc.family, n_classes, columns, threads)
 
 
-def _unit_groups(snap: Snapshot, dev: IntArr) -> list[str]:
-    """Each development row's grouping unit: the manifest's group key, else its entity key."""
-    return [str(snap.group_keys[int(i)] or snap.entity_keys[int(i)]) for i in dev]
+def unit_groups(snap: Snapshot, rows: IntArr) -> list[str]:
+    """Each row's grouping unit: the manifest's group key, else its entity key."""
+    return [str(snap.group_keys[int(i)] or snap.entity_keys[int(i)]) for i in rows]
 
 
 def build_folds(protocol: EvaluationProtocol, snap: Snapshot, dev: IntArr, enc: EncodedLabel,
@@ -190,7 +190,7 @@ def build_folds(protocol: EvaluationProtocol, snap: Snapshot, dev: IntArr, enc: 
     if isinstance(iv, RepeatedStratifiedKFold):
         return F.repeated_stratified(np.asarray(enc.y)[dev], iv.folds, iv.repeats, protocol.seed,
                                      stratify=enc.family in ("binary", "multiclass"))
-    groups = _unit_groups(snap, dev)
+    groups = unit_groups(snap, dev)
     if isinstance(iv, GroupedKFold):
         return F.grouped(groups, iv.folds, iv.repeats, protocol.seed)
     blocked: BlockedTime = iv

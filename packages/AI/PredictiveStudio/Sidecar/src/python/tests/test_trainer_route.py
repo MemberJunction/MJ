@@ -4,18 +4,32 @@ calibration, artifacts, the incumbent diff, failures and refusals; and POST /pre
 from __future__ import annotations
 
 import base64
+import datetime as dt
 import hashlib
 import json
+import math
+import warnings
 from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 import numpy as np
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
 
-from app import artifacts
-from app.main import app
-from app.trainer_schemas import TrainerCompleted, TrainerFailed
+from app import artifacts, artifacts_v2, calibration as CAL, evaluation as EV, snapshot as SN, trainer as TR
+from app.baselines import NIL_UUID
+from app.encoding import ColumnSpec, NumericEncoding
+from app.failures import RunClock, TrainerFailure
+from app.trainer_schemas import CandidateSpec, EvaluationProtocol, TrainerCompleted, TrainerFailed, TrainerRequest
+
+# Starlette's TestClient and form parser warn at import about their own dependencies (python-multipart's module name,
+# anyio's BlockingPortal alias); the pinned versions pair that way and nothing here exercises either.
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", "Please use `import python_multipart` instead", PendingDeprecationWarning)
+    warnings.filterwarnings("ignore", "The anyio.abc.BlockingPortal alias is deprecated", DeprecationWarning)
+    from fastapi.testclient import TestClient
+
+    from app.main import app
 from tests.tools.trainer_fixture import (
     NUMERIC,
     DriverSpec,
@@ -37,6 +51,12 @@ client = TestClient(app)
 LABELS = {0: "no", 1: "yes"}
 DECISION: JsonObject = {"action": "call", "actorRole": "rep", "capacityPerPeriod": 50, "period": "year"}
 LOGISTIC_ONLY: list[DriverSpec] = [("glm_candidate", "logistic_regression", {})]
+# A deep, fast-learning booster: overconfident out of fold, so its calibration map lowers the log loss and is applied.
+OVERCONFIDENT: list[DriverSpec] = [("xgb_deep", "xgboost", {"n_estimators": 300, "max_depth": 6, "learning_rate": 0.3})]
+MULTICLASS_TASK: JsonObject = {"kind": "multiclass", "classOrder": ["a", "b", "c"], "adverseIndices": [2]}
+MULTICLASS_LABELS = {0: "a", 1: "b", 2: "c"}
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def _obj(value: JsonValue) -> JsonObject:
@@ -54,11 +74,24 @@ def _holdout_2024(df: pd.DataFrame) -> list[str]:
 
 
 def _request(server: FileServer, df: pd.DataFrame, feats: dict[str, JsonObject] = FEATS, tag: str = "snap",
-             drivers: list[DriverSpec] | None = None) -> JsonObject:
+             drivers: list[DriverSpec] | None = None, task: JsonObject = TASK,
+             **proto_over: JsonValue) -> JsonObject:
     m, n = snapshot_files(df, feats, _holdout_2024(df), label_map=LABELS, slice_cols={"City": "city"},
                           decision=DECISION)
-    proto = protocol("binary", slices={"outOfTime": True, "subgroups": ["City"]})
-    return request(server, m, n, TASK, proto, candidates("binary", drivers), tag=tag)
+    proto = protocol("binary", slices={"outOfTime": True, "subgroups": ["City"]}, **proto_over)
+    return request(server, m, n, task, proto, candidates("binary", drivers), tag=tag)
+
+
+def _multiclass_request(server: FileServer, df: pd.DataFrame, tag: str) -> JsonObject:
+    m, n = snapshot_files(df, FEATS, _holdout_2024(df), label_map=MULTICLASS_LABELS)
+    return request(server, m, n, MULTICLASS_TASK, protocol("multiclass"), candidates("multiclass", LOGISTIC_ONLY),
+                   tag=tag)
+
+
+def _three_classes(df: pd.DataFrame) -> pd.DataFrame:
+    """`df` with a three-class label driven by x2."""
+    noisy = df["x2"].to_numpy() + np.random.default_rng(17).normal(scale=0.5, size=len(df))
+    return df.assign(Target=np.digitize(noisy, [-0.5, 0.5]))
 
 
 def _completed(req: JsonObject) -> TrainerCompleted:
@@ -260,3 +293,148 @@ def test_an_incumbent_needing_columns_the_snapshot_lacks_fails_the_holdout_stage
     req["incumbent"] = _incumbent(server, art.bytesBase64)
     r = _failed(req)
     assert r.stage == "holdout" and "x3" in r.message
+
+
+# ---------------------------------------------------------------- numbers undefined on the holdout rows never 500 ---
+
+def test_an_undefined_secondary_metric_is_left_out_and_the_run_completes(server: FileServer) -> None:
+    """On noise nothing scores >= 0.5, so precision is undefined: it is omitted and the gate still reports no-signal."""
+    r = _completed(_request(server, binary_frame(noise=True), secondaryMetrics=["precision"]))
+    assert r.gate.outcome == "no-signal"
+    assert "precision" not in {m.metric for m in r.holdout.secondary}
+
+
+def test_a_binary_holdout_without_a_declared_class_fails_the_holdout_stage(server: FileServer) -> None:
+    df = binary_frame()
+    df.loc[df["T"].str.startswith("2024"), "Target"] = 0
+    r = _failed(_request(server, df))
+    assert r.stage == "holdout" and "'yes'" in r.message
+
+
+def test_a_multiclass_holdout_without_a_declared_class_fails_the_holdout_stage(server: FileServer) -> None:
+    df = _three_classes(binary_frame())
+    hold = df["T"].str.startswith("2024")
+    df.loc[hold, "Target"] = np.minimum(df.loc[hold, "Target"], 1)
+    r = _failed(_multiclass_request(server, df, "mc-hold"))
+    assert r.stage == "holdout" and "'c'" in r.message
+
+
+def test_an_undefined_calibration_fit_reports_no_calibration(server: FileServer) -> None:
+    """Constant holdout predictions leave the calibration slope undefined: no calibration report, never NaN."""
+    df = binary_frame()
+    hold = df["T"].str.startswith("2024")
+    df.loc[hold, ["x1", "x2"]] = 0.0
+    df.loc[hold, "city"] = "LA"
+    r = _completed(_request(server, df, drivers=LOGISTIC_ONLY))
+    assert r.calibration is None
+
+
+def test_any_other_non_finite_number_fails_the_holdout_stage_naming_its_field(server: FileServer) -> None:
+    r = _completed(_request(server, binary_frame(), drivers=LOGISTIC_ONLY))
+    assert EV.refuse_non_finite(r) is r
+    holdout = r.holdout.model_copy(update={"primary": r.holdout.primary.model_copy(update={"value": math.nan})})
+    with pytest.raises(TrainerFailure) as e:
+        EV.refuse_non_finite(r.model_copy(update={"holdout": holdout}))
+    assert e.value.stage == "holdout" and "result.holdout.primary.value" in e.value.message
+
+
+def test_a_calibration_map_that_cannot_be_fitted_fails_the_holdout_stage(server: FileServer) -> None:
+    """A multiclass task whose rows never hold one declared class: the per-class map has nothing to fit."""
+    df = binary_frame().assign(Target=lambda d: (d["x2"] > 0).astype(int))
+    r = _failed(_multiclass_request(server, df, "mc-two"))
+    assert r.stage == "holdout" and "calibration map" in r.message
+
+
+# ------------------------------------------------------------------------------------------------ the incumbent ---
+
+def test_an_incumbent_of_another_class_order_fails_the_holdout_stage(server: FileServer) -> None:
+    """The same model under a flipped class order would be scored against the other class: refused, not diffed."""
+    df = binary_frame()
+    first = _completed(_request(server, df))
+    art = next(a for a in first.artifacts if a.candidate == first.gate.shipped)
+    req = _request(server, df, task={"kind": "binary", "classOrder": ["yes", "no"], "adverseIndex": 1})
+    req["incumbent"] = _incumbent(server, art.bytesBase64)
+    r = _failed(req)
+    assert r.stage == "holdout" and "class order" in r.message
+
+
+def test_an_incumbent_that_does_not_verify_fails_before_any_fit(server: FileServer) -> None:
+    req = _request(server, binary_frame(300))
+    inc = _incumbent(server, base64.b64encode(b"{}").decode("ascii"))
+    _obj(inc["artifact"])["sha256"] = "2" * 64
+    req["incumbent"] = inc
+    r = _failed(req)
+    assert r.stage == "load-snapshot" and "SHA-256" in r.message
+
+
+# ------------------------------------------------------------------------------------------ the run clock ---------
+
+def _then(fn: Callable[P, R], after: Callable[[], None]) -> Callable[P, R]:
+    """`fn`, then `after`."""
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        out = fn(*args, **kwargs)
+        after()
+        return out
+    return wrapped
+
+
+def test_a_budget_crossed_during_the_holdout_statistics_fails_the_run(server: FileServer,
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    """The clock is checked after the last holdout statistic, so time spent there is enforced and counted."""
+    late = {"now": False}
+    elapsed = RunClock.compute_seconds
+
+    def clock(self: RunClock) -> float:
+        return 1e9 if late["now"] else elapsed(self)
+
+    monkeypatch.setattr(RunClock, "compute_seconds", clock)
+    monkeypatch.setattr(EV, "slice_results", _then(EV.slice_results, lambda: late.update(now=True)))
+    r = _failed(_request(server, binary_frame(400), drivers=LOGISTIC_ONLY))
+    assert r.stage == "timeout" and "holdout statistics" in r.message
+
+
+# ------------------------------------------------------------------------------------- the applied calibration ---
+
+def test_an_applied_calibration_map_is_fitted_on_the_finalists_out_of_fold_rows(server: FileServer) -> None:
+    """The shipped finalist's map equals one fitted here on its out-of-fold development predictions, never on the
+    holdout."""
+    raw = _request(server, binary_frame(), drivers=OVERCONFIDENT)
+    r = _completed(raw)
+    assert r.calibration is not None and r.calibration.method == "platt"
+    art = next(a for a in r.artifacts if a.candidate == r.finalist)
+    shipped, _env = artifacts.load_v2_envelope(base64.b64decode(art.bytesBase64))
+    assert shipped.calibrator is not None
+
+    req = TrainerRequest.model_validate(raw)
+    snap = SN.load(req, dt.datetime.now(dt.timezone.utc), RunClock(600, 600))
+    enc = TR.encode_label(req.task, snap.label)
+    dev = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
+    out = TR.select_finalist(req.protocol, snap, snap.columns, enc, dev, req.candidates, 1, RunClock(600, 600),
+                             SN.period_ordinals(snap))
+    y_val = np.asarray(enc.y, dtype=np.float64)[dev][out.validated]
+    expected = CAL.Calibrator("platt").fit(y_val, out.cv[r.finalist].oof)
+    grid = np.linspace(0.01, 0.99, 50)
+    assert np.allclose(shipped.calibrator.apply(grid), expected.apply(grid), rtol=0, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------------------- /predict, multiclass ----
+
+def test_predict_returns_every_class_of_a_multiclass_v2_artifact() -> None:
+    df = _three_classes(binary_frame())
+    cols = [ColumnSpec("x2", "x2", NumericEncoding("numeric"))]
+    enc = TR.EncodedLabel(df["Target"].to_numpy(dtype=np.int64), "multiclass", ["a", "b", "c"], None)
+    proto = EvaluationProtocol.model_validate(protocol("multiclass"))
+    spec = CandidateSpec(name="m", algorithmId=NIL_UUID, driverKey="logistic_regression", hyperparameters={})
+    predictor = TR.fit_predictor(spec, cols, df[["x2"]], enc, np.arange(len(df), dtype=np.int64), proto, 1)
+    built = artifacts_v2.build("m", predictor, cols, "multiclass", ["a", "b", "c"], "0" * 64, None, None)
+    resp = client.post("/predict", json={"artifact_b64": built.bytes_base64,
+                                         "rows": [{"x2": -3.0}, {"x2": 0.0}, {"x2": 3.0}]})
+    assert resp.status_code == 200, resp.text
+    body = _obj(resp.json())
+    assert body["classOrder"] == ["a", "b", "c"]
+    preds = [_obj(p) for p in _list(body["predictions"])]
+    for p in preds:
+        probs = [float(v) for v in _list(p["probabilities"]) if isinstance(v, (int, float))]
+        assert len(probs) == 3 and sum(probs) == pytest.approx(1.0)
+        assert p["score"] == pytest.approx(max(probs)) and p["class"] == "abc"[int(np.argmax(probs))]
+    assert [p["class"] for p in preds] == ["a", "b", "c"]

@@ -3,7 +3,14 @@ gate, calibration, slices, the operating point, prediction-interval coverage, th
 
 Order matters and is fixed: (1) the calibration decision uses only out-of-fold development predictions; (2) the
 finalist (calibrated or not) and every baseline are fitted on development rows; (3) the holdout is read ONCE, here,
-and `holdoutAccess` is stamped at that moment; (4) everything after uses only those predictions.
+through a reader that counts the access, and `holdoutAccess` is stamped at that moment; (4) everything after uses only
+those predictions. Every holdout statistic is computed before the run clock's last check and before `computeSeconds`
+is stamped, so the reported cost is the whole run's.
+
+A number that is undefined on these rows never reaches the wire as NaN (JSON cannot carry it): a holdout without
+every declared class fails the stage, an undefined secondary metric is left out (the contract lists the secondary
+metrics computed, not every declared one), an undefined calibration fit reports no calibration, and any other
+non-finite number fails the stage naming its field.
 """
 
 from __future__ import annotations
@@ -18,48 +25,46 @@ import numpy.typing as npt
 import pandas as pd
 
 from . import artifacts, artifacts_v2, baselines as BL, calibration as CAL, encoding, intervals as IV, scores
-from . import snapshot as SN
+from . import snapshot as SN, trainer as TR
 from .array_types import FArr, IntArr
-from .failures import RunClock, SnapshotLoadFailure, TrainerFailure
+from .failures import RunClock, TrainerFailure
 from .folds import Fold, grouped, repeated_stratified
 from .gate import NO_SIMPLE_SIGNAL_NOTE, GateRecord, GateRun, run_gate
-from .snapshot import Snapshot, fetch_verified
+from .snapshot import Snapshot
 from .snapshot_format import INCUMBENT_SCORE_COLUMN
 from .trainer import CandidateCV, EncodedLabel, SelectionOutcome, TrainedPredictor
 from .trainer_schemas import (
     AutoCalibration, BaselineResult, CalibrationReport, CandidateInnerScore, CandidateSpec, CodeVersion, GateKeepSimple,
-    GateModel, GateNoSignal, HoldoutAccess, HoldoutScores, IncumbentDiff, Interval, IsotonicCalibration, LeakageFlag,
-    MetricKey, MetricWithInterval, NoCalibration, OperatingPoint, OutOfTimeSlice, PairedComparison, PlattCalibration,
-    PredictionIntervalCoverage, ReliabilityRow, ReturnedArtifact, RunCost, SliceResult, SubgroupSlice,
-    TrainerCompleted, TrainerRequest,
+    GateModel, GateNoSignal, HoldoutAccess, HoldoutScores, IncumbentDiff, IncumbentRef, Interval, IsotonicCalibration,
+    LeakageFlag, MetricKey, MetricWithInterval, NoCalibration, OperatingPoint, OutOfTimeSlice, PairedComparison,
+    PlattCalibration, PredictionIntervalCoverage, ReliabilityRow, ReturnedArtifact, RunCost, SliceResult,
+    SubgroupSlice, TrainerCompleted, TrainerRequest,
 )
 
-# The interval level the contract fixes for every holdout interval.
-LEVEL = 0.95
 ReportedCalibration = Literal["platt", "isotonic", "auto", "not-applicable"]
 
 
 def _groups(req: TrainerRequest, snap: Snapshot, rows: IntArr, ordinals: IntArr) -> Optional[List[str]]:
-    """Resampling units for intervals: entity keys for a cluster bootstrap, decision periods for a block bootstrap."""
+    """Resampling units for intervals: grouping units for a cluster bootstrap, decision periods for a block bootstrap."""
     method = req.protocol.intervals.method
     if method == "cluster-bootstrap":
-        return [snap.group_keys[int(i)] or snap.entity_keys[int(i)] for i in rows]
+        return TR.unit_groups(snap, rows)
     if method == "block-bootstrap":
         return [str(int(ordinals[int(i)])) for i in rows]
     return None
 
 
-def _mwi(metric: MetricKey, value: float, ci: IV.BootstrapInterval, n: int) -> MetricWithInterval:
+def _mwi(metric: MetricKey, value: float, ci: IV.BootstrapInterval, n: int, level: float) -> MetricWithInterval:
     return MetricWithInterval(metric=metric, value=float(value),
-                              interval=Interval(level=LEVEL, lower=float(ci.lower), upper=float(ci.upper)), n=n)
+                              interval=Interval(level=level, lower=float(ci.lower), upper=float(ci.upper)), n=n)
 
 
 def inner_scores(cv: Dict[str, CandidateCV], metric: MetricKey) -> List[CandidateInnerScore]:
     """Every candidate's inner-CV score with its corrected interval; optimistic by construction (it chose the finalist)."""
     return [CandidateInnerScore(candidate=c.name, folds=c.inner.folds, optimistic=True,
                                 inner=MetricWithInterval(metric=metric, value=c.inner.mean, n=c.inner.n_rows,
-                                                         interval=Interval(level=LEVEL, lower=c.inner.lower,
-                                                                           upper=c.inner.upper)))
+                                                         interval=Interval(level=TR.INNER_INTERVAL_LEVEL,
+                                                                           lower=c.inner.lower, upper=c.inner.upper)))
             for c in cv.values()]
 
 
@@ -96,11 +101,27 @@ def _halves(y: FArr, groups: Sequence[str], seed: int) -> List[Fold]:
         raise TrainerFailure("holdout", f"the calibration cross-fit cannot split the out-of-fold rows: {exc}") from exc
 
 
+def _fit_map(method: CAL.CalMethod, y: FArr, p: FArr, rows: str) -> CAL.Calibrator:
+    """One calibration map fitted on `rows`.
+
+    Raises:
+        TrainerFailure: Stage `holdout`, when the map cannot be fitted (e.g. the rows lack a class).
+    """
+    try:
+        return CAL.Calibrator(method).fit(y, p)
+    except ValueError as exc:
+        raise TrainerFailure("holdout", f"the calibration map cannot be fitted on {rows}: {exc}") from exc
+
+
 def decide_calibration(req: TrainerRequest, enc: EncodedLabel, oof: FArr, y_val: FArr,
                        val_groups: Sequence[str]) -> Tuple[Optional[CAL.Calibrator], Optional[CalibrationDecision]]:
     """Fit the map on the finalist's out-of-fold predictions (rows its fold models never trained on); apply it to the
     full refit only when a 2-fold cross-fit of the map lowers the primary score on those rows, or repairs a slope
-    outside 0.8-1.2. Each map's method follows the rows it is fitted on (`auto`: Platt below the threshold)."""
+    outside 0.8-1.2. Each map's method follows the rows it is fitted on (`auto`: Platt below the threshold).
+
+    Raises:
+        TrainerFailure: Stage `holdout`, when the rows cannot be split or a map cannot be fitted.
+    """
     c = req.protocol.calibration
     if isinstance(c, NoCalibration) or enc.family not in ("binary", "multiclass"):
         return None, None
@@ -109,13 +130,14 @@ def decide_calibration(req: TrainerRequest, enc: EncodedLabel, oof: FArr, y_val:
     primary = scores.primary_score(req.protocol.primaryScore.metric, None)
     crossed = np.empty_like(oof)
     for f in _halves(y_val, val_groups, req.protocol.seed):
-        method = CAL.choose_method(kind, len(f.train), threshold)
-        crossed[f.valid] = CAL.Calibrator(method).fit(y_val[f.train], oof[f.train]).apply(oof[f.valid])
+        half = _fit_map(CAL.choose_method(kind, len(f.train), threshold), y_val[f.train], oof[f.train],
+                        "one half of the out-of-fold rows")
+        crossed[f.valid] = half.apply(oof[f.valid])
     raw = primary.aggregate(y_val, oof)
     cal = primary.aggregate(y_val, crossed)
     apply = cal < raw or _slope_repaired(enc, y_val, oof, crossed)
     method = CAL.choose_method(kind, len(y_val), threshold)
-    calibrator = CAL.Calibrator(method).fit(y_val, oof)
+    calibrator = _fit_map(method, y_val, oof, "the out-of-fold rows")
     return (calibrator if apply else None), CalibrationDecision(apply, method, raw, cal)
 
 
@@ -139,11 +161,14 @@ def _slope_repaired(enc: EncodedLabel, y: FArr, raw: FArr, crossed: FArr) -> boo
 def _calibration_report(req: TrainerRequest, enc: EncodedLabel, y: FArr, p: FArr,
                         decision: Optional[CalibrationDecision]) -> Optional[CalibrationReport]:
     """Holdout calibration of the delivered finalist (top-label for multiclass); the method is the fitted one when the
-    map was applied, else the declared one."""
+    map was applied, else the declared one. None when no calibration applies to the task, or when the calibration
+    fit is undefined on these rows (constant predictions, separated classes, no convergence)."""
     if decision is None:
         return None
     yk, top = _top_label(enc, y, p)
     fit = CAL.calibration_fit(yk, top)
+    if not (math.isfinite(fit.slope) and math.isfinite(fit.intercept)):
+        return None
     rel = [ReliabilityRow(binLower=b.bin_lower, binUpper=b.bin_upper, meanPredicted=b.mean_predicted,
                           observedRate=b.observed_rate, n=b.n) for b in CAL.reliability(yk, top)]
     method: ReportedCalibration = decision.method if decision.applied else _declared_kind(req)
@@ -169,38 +194,25 @@ def operating_point(req: TrainerRequest, snap: Snapshot, hold: IntArr, ordinals:
         top = np.argsort(-np.asarray(ss, dtype=np.float64), kind="mergesort")[:kk]
         return float(np.mean(np.asarray(yy, dtype=np.float64)[top]))
 
-    ci = IV.bootstrap_ci(ya, s, prec_at_k, req.protocol.intervals.resamples, req.protocol.seed, groups, LEVEL)
-    return OperatingPoint(capacityPerPeriod=float(cap), precisionAtCapacity=_mwi("precision", prec_at_k(ya, s), ci, k),
-                          baseRate=float(np.mean(ya)))
+    iv = req.protocol.intervals
+    ci = IV.bootstrap_ci(ya, s, prec_at_k, iv.resamples, req.protocol.seed, groups, iv.level)
+    return OperatingPoint(capacityPerPeriod=float(cap), baseRate=float(np.mean(ya)),
+                          precisionAtCapacity=_mwi("precision", prec_at_k(ya, s), ci, k, iv.level))
 
 
-def _period_start(snap: Snapshot, i: int) -> str:
-    """The first day (yyyy-mm-dd) of row i's decision period: the manifest's period when set, else its decision date,
-    bucketed at the unit's decision period."""
-    text = snap.periods[i] or snap.decision_dates[i]
-    day = dt.date.fromisoformat(text[:10])
-    period = snap.decision.period
-    if period == "year":
-        day = day.replace(month=1, day=1)
-    elif period == "quarter":
-        day = day.replace(month=(day.month - 1) // 3 * 3 + 1, day=1)
-    elif period == "month":
-        day = day.replace(day=1)
-    elif period == "week":
-        day = dt.date.fromordinal(day.toordinal() // 7 * 7)
-    return day.isoformat()
-
-
-def slice_results(req: TrainerRequest, snap: Snapshot, hold: IntArr, y: FArr, pred: FArr,
+def slice_results(req: TrainerRequest, snap: Snapshot, hold: IntArr, ordinals: IntArr, y: FArr, pred: FArr,
                   primary: scores.PrimaryScore, g: Optional[List[str]]) -> List[SliceResult]:
-    """Declared subgroup slices and, when `outOfTime`, one slice per holdout decision period, each with an interval."""
+    """Declared subgroup slices and, when `outOfTime`, one slice per holdout decision period (named by its first day),
+    each with an interval."""
     p = req.protocol
     out: List[SliceResult] = []
 
     def one(mask: npt.NDArray[np.bool_]) -> MetricWithInterval:
         sub_g = None if g is None else [g[int(i)] for i in np.flatnonzero(mask)]
-        ci = IV.bootstrap_ci(y[mask], pred[mask], primary.aggregate, p.intervals.resamples, p.seed, sub_g, LEVEL)
-        return _mwi(p.primaryScore.metric, primary.aggregate(y[mask], pred[mask]), ci, int(mask.sum()))
+        ci = IV.bootstrap_ci(y[mask], pred[mask], primary.aggregate, p.intervals.resamples, p.seed, sub_g,
+                             p.intervals.level)
+        return _mwi(p.primaryScore.metric, primary.aggregate(y[mask], pred[mask]), ci, int(mask.sum()),
+                    p.intervals.level)
 
     for field in p.slices.subgroups:
         values = snap.slice_values.get(field)
@@ -210,7 +222,8 @@ def slice_results(req: TrainerRequest, snap: Snapshot, hold: IntArr, y: FArr, pr
         for v in sorted({str(x) for x in hv.tolist()}):
             out.append(SliceResult(slice=SubgroupSlice(kind="subgroup", field=field, value=v), primary=one(hv == v)))
     if p.slices.outOfTime:
-        per = np.asarray([_period_start(snap, int(i)) for i in hold], dtype=object)
+        per = np.asarray([SN.period_start(int(ordinals[int(i)]), snap.decision.period).isoformat() for i in hold],
+                         dtype=object)
         for v in sorted({str(x) for x in per.tolist()}):
             out.append(SliceResult(slice=OutOfTimeSlice(kind="out-of-time", period=v), primary=one(per == v)))
     return out
@@ -239,24 +252,24 @@ def interval_coverage(req: TrainerRequest, enc: EncodedLabel, r_oof: FArr, y: FA
     return out
 
 
-def _incumbent_predictions(req: TrainerRequest, X_hold: pd.DataFrame, n_rows: int, clock: RunClock) -> FArr:
-    """The incumbent's predictions on the holdout rows: its artifact downloaded through its pre-authorised URL,
-    hash-verified, loaded by the restricted unpickler and scored with its OWN in-fold encoding.
+def _incumbent_predictions(req: TrainerRequest, inc: IncumbentRef, raw: bytes, enc: EncodedLabel,
+                           X_hold: pd.DataFrame, n_rows: int) -> FArr:
+    """The incumbent's predictions on the holdout rows: its verified artifact bytes loaded by the restricted unpickler
+    and scored with its OWN in-fold encoding, after checking it predicts the same task, classes and columns.
 
     Raises:
-        TrainerFailure: Stage `holdout`, when the artifact cannot be fetched or loaded, needs a column the snapshot
-            lacks, cannot score these rows, or returns a prediction count other than the holdout's.
+        TrainerFailure: Stage `holdout`, when the artifact cannot be loaded, predicts another task kind or class order,
+            needs a column the snapshot lacks, cannot score these rows, or returns a prediction count other than the
+            holdout's.
     """
-    inc = req.incumbent
-    assert inc is not None
-    try:
-        raw = fetch_verified(inc.artifact, dt.datetime.now(dt.timezone.utc), clock)
-    except SnapshotLoadFailure as exc:
-        raise TrainerFailure("holdout", f"incumbent {inc.modelId} artifact: {exc.message}") from exc
     try:
         predictor, env = artifacts.load_v2_envelope(raw)
     except artifacts.ArtifactRefusedError as exc:
         raise TrainerFailure("holdout", f"incumbent {inc.modelId} is not a loadable v2 predictor: {exc}") from exc
+    if env.taskKind != req.task.kind or env.classOrder != enc.class_order:
+        raise TrainerFailure("holdout", f"incumbent {inc.modelId} predicts a '{env.taskKind}' task with class order "
+                                        f"{env.classOrder}; this run is a '{req.task.kind}' task with class order "
+                                        f"{enc.class_order}")
     needed = [c.name for c in env.featureColumns if c.encoding.kind != "identifier"]
     missing = sorted(set(needed) - set(X_hold.columns))
     if missing:
@@ -271,16 +284,20 @@ def _incumbent_predictions(req: TrainerRequest, X_hold: pd.DataFrame, n_rows: in
     return out
 
 
-def incumbent_diff(req: TrainerRequest, X_hold: pd.DataFrame, y_hold: FArr, shipped_pred: Optional[FArr],
-                   primary: scores.PrimaryScore, g: Optional[List[str]], clock: RunClock) -> Optional[IncumbentDiff]:
+def incumbent_diff(req: TrainerRequest, incumbent_artifact: Optional[bytes], enc: EncodedLabel, X_hold: pd.DataFrame,
+                   y_hold: FArr, shipped_pred: Optional[FArr], primary: scores.PrimaryScore,
+                   g: Optional[List[str]]) -> Optional[IncumbentDiff]:
     """Paired (incumbent loss - shipped loss) on the same holdout rows, for comparing with the published model. Null
-    with no incumbent or a no-signal gate."""
-    if req.incumbent is None or shipped_pred is None:
+    with no incumbent or a no-signal gate. `incumbent_artifact` is the incumbent's artifact, downloaded and verified
+    when the snapshot was loaded."""
+    inc = req.incumbent
+    if inc is None or incumbent_artifact is None or shipped_pred is None:
         return None
-    inc = _incumbent_predictions(req, X_hold, len(y_hold), clock)
-    r = IV.paired_bootstrap(y_hold, inc, shipped_pred, primary.aggregate, req.protocol.intervals.resamples,
-                            req.protocol.seed, g, LEVEL)
-    return IncumbentDiff(incumbentModelId=req.incumbent.modelId, value=r.value, lower=r.lower, upper=r.upper)
+    inc_pred = _incumbent_predictions(req, inc, incumbent_artifact, enc, X_hold, len(y_hold))
+    iv = req.protocol.intervals
+    r = IV.paired_bootstrap(y_hold, inc_pred, shipped_pred, primary.aggregate, iv.resamples, req.protocol.seed, g,
+                            iv.level)
+    return IncumbentDiff(incumbentModelId=inc.modelId, value=r.value, lower=r.lower, upper=r.upper)
 
 
 def _with_incumbent(X: pd.DataFrame, snap: Snapshot, rows: IntArr) -> pd.DataFrame:
@@ -313,6 +330,10 @@ def _secondary_applies(metric: str, family: str) -> bool:
     return True
 
 
+def _is_defined(m: MetricWithInterval) -> bool:
+    return math.isfinite(m.value) and math.isfinite(m.interval.lower) and math.isfinite(m.interval.upper)
+
+
 # The family's other proper score, reported beside the primary one (it never ranks).
 _COMPANION_SCORE: Dict[str, scores.PrimaryMetric] = {"log-loss": "brier", "brier": "log-loss",
                                                        "multiclass-log-loss": "brier"}
@@ -320,44 +341,49 @@ _COMPANION_SCORE: Dict[str, scores.PrimaryMetric] = {"log-loss": "brier", "brier
 
 def _secondary_metrics(req: TrainerRequest, enc: EncodedLabel, y_hold: FArr, pred: FArr,
                        g: Optional[List[str]]) -> List[MetricWithInterval]:
-    """Declared secondary metrics plus the family's companion proper score."""
+    """Declared secondary metrics plus the family's companion proper score. A metric undefined on these rows (e.g.
+    precision when nothing is predicted positive) is left out rather than reported as NaN."""
     p = req.protocol
-    R, seed, n = p.intervals.resamples, p.seed, len(y_hold)
+    R, seed, n, level = p.intervals.resamples, p.seed, len(y_hold), p.intervals.level
     out: List[MetricWithInterval] = []
     for m in p.secondaryMetrics:
         if _secondary_applies(m, enc.family):
             fn = scores.secondary_fn(m)
-            out.append(_mwi(m, fn(y_hold, pred), IV.bootstrap_ci(y_hold, pred, fn, R, seed, g, LEVEL), n))
+            out.append(_mwi(m, fn(y_hold, pred), IV.bootstrap_ci(y_hold, pred, fn, R, seed, g, level), n, level))
     other = _COMPANION_SCORE.get(p.primaryScore.metric)
     if other is not None:
         alt = scores.primary_score(other, None)
-        out.append(_mwi(other, alt.aggregate(y_hold, pred), IV.bootstrap_ci(y_hold, pred, alt.aggregate, R, seed, g, LEVEL), n))
-    return out
+        out.append(_mwi(other, alt.aggregate(y_hold, pred),
+                        IV.bootstrap_ci(y_hold, pred, alt.aggregate, R, seed, g, level), n, level))
+    return [m for m in out if _is_defined(m)]
 
 
 def _baseline_results(req: TrainerRequest, fitted: Sequence[BL.FittedBaseline], primary: scores.PrimaryScore,
                       y_hold: FArr, bpred: Dict[str, FArr], g: Optional[List[str]]) -> List[BaselineResult]:
     """Each baseline's holdout primary score with its interval."""
     p = req.protocol
-    R, seed, n = p.intervals.resamples, p.seed, len(y_hold)
+    R, seed, n, level = p.intervals.resamples, p.seed, len(y_hold), p.intervals.level
     return [BaselineResult(baseline=p.baselines[b.spec_index], role=b.role,
                            holdout=_mwi(p.primaryScore.metric, primary.aggregate(y_hold, bpred[b.name]),
-                                        IV.bootstrap_ci(y_hold, bpred[b.name], primary.aggregate, R, seed, g, LEVEL), n))
+                                        IV.bootstrap_ci(y_hold, bpred[b.name], primary.aggregate, R, seed, g, level),
+                                        n, level))
             for b in fitted]
 
 
 def _run_gate(req: TrainerRequest, enc: EncodedLabel, fitted: Sequence[BL.FittedBaseline], finalist_spec: CandidateSpec,
               calibrator: Optional[CAL.Calibrator], primary: scores.PrimaryScore, y_hold: FArr, pred: FArr,
               bpred: Dict[str, FArr], g: Optional[List[str]]) -> GateRun:
-    """The publishing gate on holdout predictions only. An uncalibrated, untuned finalist on the GLM baseline's own
-    driver IS the GLM baseline, so it is named as the delivered simple member and not compared with itself."""
+    """The publishing gate on holdout predictions only, at the protocol's margin and lower-bound level. An
+    uncalibrated, untuned finalist on the GLM baseline's own driver IS the GLM baseline, so it is named as the
+    delivered simple member and not compared with itself."""
     p = req.protocol
     dummy = next(b for b in fitted if b.role == "dummy")
     simple = [(b.name, bpred[b.name]) for b in fitted if b.role == "simple"]
     is_glm = (calibrator is None and finalist_spec.driverKey == BL.GLM_DRIVER[enc.family]
               and not finalist_spec.hyperparameters and any(nm == "glm" for nm, _ in simple))
     return run_gate(y_hold, primary.aggregate, finalist_spec.name, pred, bpred[dummy.name], simple,
-                    "glm" if is_glm else None, p.promotion.margin, p.intervals.resamples, p.seed, g, LEVEL)
+                    "glm" if is_glm else None, p.promotion.margin, p.intervals.resamples, p.seed, g,
+                    p.promotion.lowerBoundLevel)
 
 
 def gate_model(d: GateRecord) -> GateModel | GateKeepSimple | GateNoSignal:
@@ -397,6 +423,24 @@ def _artifacts(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, finalist_
     return out
 
 
+class _HoldoutReader:
+    """The only way to the locked holdout's rows: `read` counts every access and refuses one past the protocol's
+    holdout access budget, so the reported access count is the real one."""
+
+    def __init__(self, snap: Snapshot, hold: IntArr, budget: int) -> None:
+        self._snap = snap
+        self._hold = hold
+        self._budget = budget
+        self.accesses = 0
+
+    def read(self) -> pd.DataFrame:
+        if self.accesses >= self._budget:
+            raise TrainerFailure("holdout", f"the locked holdout may be read {self._budget} time(s); this would be "
+                                            f"read {self.accesses + 1}")
+        self.accesses += 1
+        return self._snap.frame.iloc[self._hold].reset_index(drop=True)
+
+
 @dataclass(frozen=True)
 class _HoldoutPredictions:
     """The one holdout access: the rows, labels, the finalist's and every baseline's predictions, and when."""
@@ -408,46 +452,94 @@ class _HoldoutPredictions:
     accessed_at: str
 
 
-def _score_holdout(snap: Snapshot, enc: EncodedLabel, hold: IntArr, finalist: TrainedPredictor,
-                   fitted: Sequence[BL.FittedBaseline]) -> _HoldoutPredictions:
-    """Reads the locked holdout once and predicts it with the finalist and every baseline."""
-    X_hold = snap.frame.iloc[hold].reset_index(drop=True)
-    X_hold_b = _with_incumbent(X_hold, snap, hold)
+def _score_holdout(reader: _HoldoutReader, snap: Snapshot, enc: EncodedLabel, hold: IntArr,
+                   finalist: TrainedPredictor, fitted: Sequence[BL.FittedBaseline]) -> _HoldoutPredictions:
+    """Reads the locked holdout once and predicts it with the finalist and every baseline.
+
+    Raises:
+        TrainerFailure: Stage `holdout`, when a prediction fails or a classification holdout lacks a declared class
+            (its log loss would be defined, but AUC, the calibration fit and the paired tests would not).
+    """
+    X_hold = reader.read()
     accessed_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    y_hold = np.asarray(enc.y, dtype=np.float64)[hold]
+    if enc.class_order is not None:
+        present = {int(v) for v in y_hold.tolist()}
+        absent = [c for k, c in enumerate(enc.class_order) if k not in present]
+        if absent:
+            raise TrainerFailure("holdout", f"the locked holdout has no row of class {absent}; every declared class "
+                                            f"{enc.class_order} must occur in it")
     try:
         pred = np.asarray(finalist.predict(X_hold), dtype=np.float64)
-        bpred = {b.name: np.asarray(b.predictor.predict(X_hold_b), dtype=np.float64) for b in fitted}
+        bpred = {b.name: np.asarray(b.predictor.predict(_with_incumbent(X_hold, snap, hold)), dtype=np.float64)
+                 for b in fitted}
     except ValueError as exc:
         raise TrainerFailure("holdout", str(exc)) from exc
-    return _HoldoutPredictions(X_hold, np.asarray(enc.y, dtype=np.float64)[hold], pred, bpred, accessed_at)
+    return _HoldoutPredictions(X_hold, y_hold, pred, bpred, accessed_at)
+
+
+def _non_finite_path(value: object, path: str) -> Optional[str]:
+    """The path of the first non-finite number inside a dumped result, or None."""
+    if isinstance(value, float):
+        return None if math.isfinite(value) else path
+    if isinstance(value, dict):
+        for k, v in value.items():
+            found = _non_finite_path(v, f"{path}.{k}")
+            if found is not None:
+                return found
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            found = _non_finite_path(v, f"{path}[{i}]")
+            if found is not None:
+                return found
+    return None
+
+
+def refuse_non_finite(result: TrainerCompleted) -> TrainerCompleted:
+    """The result, unchanged, when every number in it is finite (the wire is JSON, which has no NaN or infinity).
+
+    Raises:
+        TrainerFailure: Stage `holdout`, naming the path of the first non-finite number.
+    """
+    path = _non_finite_path(result.model_dump(mode="python"), "result")
+    if path is not None:
+        raise TrainerFailure("holdout", f"the result holds a number that is undefined on these rows, at {path}")
+    return result
 
 
 def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, hold: IntArr,
              out: SelectionOutcome, columns: Sequence[encoding.ColumnSpec], code: CodeVersion, clock: RunClock,
-             leakage_flags: Sequence[LeakageFlag]) -> TrainerCompleted:
-    """The holdout stage for one selected finalist; see the module docstring for the fixed order."""
+             leakage_flags: Sequence[LeakageFlag], incumbent_artifact: Optional[bytes]) -> TrainerCompleted:
+    """The holdout stage for one selected finalist; see the module docstring for the fixed order.
+
+    Raises:
+        TrainerFailure: Stage `holdout`/`baselines` for a failure in this stage; `timeout`/`budget-exceeded` from the
+            run clock, checked after the baselines, after the holdout scoring and after every holdout statistic.
+    """
     p = req.protocol
     primary = scores.primary_score(p.primaryScore.metric, enc.tweedie_power)
+    level = p.intervals.level
     ordinals = SN.period_ordinals(snap)
     X_dev = snap.frame.iloc[dev].reset_index(drop=True)
     y_dev = np.asarray(enc.y, dtype=np.float64)[dev]
     y_val = y_dev[out.validated]
     finalist_spec = next(c for c in req.candidates if c.name == out.selection.finalist)
     finalist_oof = out.cv[finalist_spec.name].oof
-    val_groups = [snap.group_keys[int(dev[int(i)])] or snap.entity_keys[int(dev[int(i)])] for i in out.validated]
     # (1)-(2): calibration decision and baselines, development rows only
-    calibrator, cal_decision = decide_calibration(req, enc, finalist_oof, y_val, val_groups)
+    calibrator, cal_decision = decide_calibration(req, enc, finalist_oof, y_val,
+                                                  TR.unit_groups(snap, dev[out.validated]))
     finalist = out.finalist
     finalist.calibrator = calibrator
     fitted = _fit_baselines(req, columns, X_dev, y_dev, enc, out, snap, dev)
     clock.check("baselines")
     # (3): the one holdout access
-    h = _score_holdout(snap, enc, hold, finalist, fitted)
+    reader = _HoldoutReader(snap, hold, p.holdoutAccessBudget)
+    h = _score_holdout(reader, snap, enc, hold, finalist, fitted)
     # (4): everything below uses `h.pred` / `h.bpred` only
     g = _groups(req, snap, hold, ordinals)
     n = len(hold)
     prim = _mwi(p.primaryScore.metric, primary.aggregate(h.y, h.pred),
-                IV.bootstrap_ci(h.y, h.pred, primary.aggregate, p.intervals.resamples, p.seed, g, LEVEL), n)
+                IV.bootstrap_ci(h.y, h.pred, primary.aggregate, p.intervals.resamples, p.seed, g, level), n, level)
     gr = _run_gate(req, enc, fitted, finalist_spec, calibrator, primary, h.y, h.pred, h.bpred, g)
     d = gr.decision
     comparisons = {k: PairedComparison(value=v.value, ci=(v.lower, v.upper), beats=v.beats)
@@ -455,22 +547,28 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
     clock.check("holdout scoring")
     arts = _artifacts(req, snap, enc, finalist_spec.name, finalist, fitted)
     shipped_pred = None if d.shipped is None else (h.pred if d.outcome == "model" else h.bpred[d.shipped])
-    inc_diff = incumbent_diff(req, h.X, h.y, shipped_pred, primary, g, clock)
+    inc_diff = incumbent_diff(req, incumbent_artifact, enc, h.X, h.y, shipped_pred, primary, g)
     regression = enc.family not in ("binary", "multiclass")
     r_oof = y_val - finalist_oof if regression else np.zeros(0, dtype=np.float64)
+    secondary = _secondary_metrics(req, enc, h.y, h.pred, g)
+    base_results = _baseline_results(req, fitted, primary, h.y, h.bpred, g)
+    calibration = _calibration_report(req, enc, h.y, h.pred, cal_decision)
+    op = operating_point(req, snap, hold, ordinals, h.y, h.pred, g)
+    coverage = interval_coverage(req, enc, r_oof, h.y, h.pred)
+    sl = slice_results(req, snap, hold, ordinals, h.y, h.pred, primary, g)
+    clock.check("holdout statistics")
+    budget = p.holdoutAccessBudget
+    if reader.accesses != budget:
+        raise TrainerFailure("holdout", f"the locked holdout was read {reader.accesses} time(s); the protocol's "
+                                        f"budget is {budget}")
     cost = clock.compute_seconds()
-    return TrainerCompleted(
+    return refuse_non_finite(TrainerCompleted(
         status="completed", trainingRunId=req.trainingRunId, codeVersion=code, computeSeconds=cost,
         innerScores=inner_scores(out.cv, p.primaryScore.metric), finalist=finalist_spec.name,
-        holdoutAccess=HoldoutAccess(accessedAt=h.accessed_at, count=1, finalist=finalist_spec.name),
-        holdout=HoldoutScores(primary=prim, secondary=_secondary_metrics(req, enc, h.y, h.pred, g)),
-        baselines=_baseline_results(req, fitted, primary, h.y, h.bpred, g), comparisons=comparisons,
-        gate=gate_model(d), artifacts=arts, incumbentDiff=inc_diff,
-        calibration=_calibration_report(req, enc, h.y, h.pred, cal_decision),
-        slices=slice_results(req, snap, hold, h.y, h.pred, primary, g),
-        operatingPoint=operating_point(req, snap, hold, ordinals, h.y, h.pred, g),
-        cost=RunCost(computeSeconds=cost, tokens=0, usd=0.0, budget=p.budgets, stoppedByBudget=False),
-        importance=[], leakageFlags=list(leakage_flags),
-        predictionIntervalCoverage=interval_coverage(req, enc, r_oof, h.y, h.pred), residualDiagnostics=None,
+        holdoutAccess=HoldoutAccess(accessedAt=h.accessed_at, count=budget, finalist=finalist_spec.name),
+        holdout=HoldoutScores(primary=prim, secondary=secondary), baselines=base_results, comparisons=comparisons,
+        gate=gate_model(d), artifacts=arts, incumbentDiff=inc_diff, calibration=calibration, slices=sl,
+        operatingPoint=op, cost=RunCost(computeSeconds=cost, tokens=0, usd=0.0, budget=p.budgets, stoppedByBudget=False),
+        importance=[], leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage, residualDiagnostics=None,
         forecast=None, innerSplitContrast=None,
-    )
+    ))

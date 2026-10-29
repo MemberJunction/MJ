@@ -229,3 +229,32 @@ def test_train_endpoint_returns_400_naming_text_column() -> None:
     resp = client.post("/train", json=req)
     assert resp.status_code == 400
     assert "Region" in resp.json()["detail"]
+
+
+# scikit-learn 1.4.2's LogisticRegression passes `iprint` to scipy 1.17.1's L-BFGS-B, which deprecates it; both
+# versions are pinned in requirements.txt, so the notice is a library pairing, not something this test exercises.
+@pytest.mark.filterwarnings("ignore:scipy.optimize. The `disp` and `iprint` options:DeprecationWarning")
+@pytest.mark.parametrize("n_classes", [2, 3])
+def test_legacy_predict_returns_every_class_probability_in_label_order(n_classes: int) -> None:
+    """Legacy classification predictions carry every class's probability in the trained label order, which the
+    response names as `classOrder`; `score` keeps its meaning (P(positive) for binary, the predicted class's else)."""
+    X, y = make_classification(n_samples=300, n_features=6, n_informative=4, n_redundant=1, n_classes=n_classes,
+                               random_state=5)
+    names = ["c0", "c1", "c2"][:n_classes]
+    columns = [f"f{i}" for i in range(X.shape[1])] + ["label"]
+    rows = [[float(v) for v in X[i]] + [names[int(y[i])]] for i in range(len(y))]
+    req = _train_request("logistic_regression", "classification")
+    req["data"] = {"columns": columns, "rows": rows}
+    req["feature_schema"] = _feature_schema(columns, "label")
+    req["preprocessing"] = [{"op": "standardize", "cols": columns[:-1]}]
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    pred_rows = [{fs["Name"]: v for fs in req["feature_schema"]} for v in (-1.0, 0.0, 1.0)]
+    out = _predict(body["artifact_b64"], None, body["fitted_preprocessing"], req["feature_schema"], pred_rows)
+    assert out["classOrder"] == names
+    for p in out["predictions"]:
+        probs = p["probabilities"]
+        assert len(probs) == n_classes and sum(probs) == pytest.approx(1.0)
+        assert p["class"] == names[int(np.argmax(probs))]
+        assert p["score"] == pytest.approx(probs[1] if n_classes == 2 else max(probs))

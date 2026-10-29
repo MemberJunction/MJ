@@ -388,6 +388,26 @@ def test_period_ordinals_bucket_each_decision_period(period: SN.DecisionPeriod, 
     assert SN.period_ordinals(_dated(SN.parse_snapshot(*_files(), HASH), period, dates)).tolist() == expected
 
 
+@pytest.mark.parametrize(
+    "period,starts",
+    [
+        ("year", ["2024-01-01", "2024-01-01", "2024-01-01", "2024-01-01", "2025-01-01"]),
+        ("quarter", ["2024-01-01", "2024-01-01", "2024-04-01", "2024-10-01", "2025-01-01"]),
+        ("month", ["2024-01-01", "2024-03-01", "2024-04-01", "2024-12-01", "2025-01-01"]),
+        ("week", [dt.date.fromordinal(dt.date(2024, m, d).toordinal() // 7 * 7).isoformat()
+                  for m, d in ((1, 1), (3, 31), (4, 1), (12, 31))] + [dt.date.fromordinal(dt.date(2025, 1, 1).toordinal() // 7 * 7).isoformat()]),
+        ("day", ["2024-01-01", "2024-03-31", "2024-04-01", "2024-12-31", "2025-01-01"]),
+    ],
+)
+def test_period_start_is_the_first_day_of_each_rows_period(period: SN.DecisionPeriod, starts: list[str]) -> None:
+    """The start of a period buckets back to the same ordinal, so slices and ordinals cannot disagree."""
+    dates = ["2024-01-01", "2024-03-31", "2024-04-01", "2024-12-31", "2025-01-01"]
+    ordinals = SN.period_ordinals(_dated(SN.parse_snapshot(*_files(), HASH), period, dates)).tolist()
+    got = [SN.period_start(o, period) for o in ordinals]
+    assert [d.isoformat() for d in got] == starts
+    assert SN.period_ordinals(_dated(SN.parse_snapshot(*_files(), HASH), period, starts)).tolist() == ordinals
+
+
 def test_the_manifest_period_takes_precedence_over_the_decision_date() -> None:
     snap = _dated(SN.parse_snapshot(*_files(), HASH), "quarter", ["2024-01-15", "2024-01-15"], ["2024-07-01", None])
     assert SN.period_ordinals(snap).tolist() == [2024 * 4 + 2, 2024 * 4 + 0]

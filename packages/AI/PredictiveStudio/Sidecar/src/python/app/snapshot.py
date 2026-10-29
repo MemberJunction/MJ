@@ -530,6 +530,19 @@ def _ordinal(day: dt.date, period: DecisionPeriod) -> int:
     return day.toordinal()
 
 
+def period_start(ordinal: int, period: DecisionPeriod) -> dt.date:
+    """The first day of the decision period whose ordinal (`period_ordinals`, at `period`) is `ordinal`."""
+    if period == "year":
+        return dt.date(ordinal, 1, 1)
+    if period == "quarter":
+        return dt.date(ordinal // 4, ordinal % 4 * 3 + 1, 1)
+    if period == "month":
+        return dt.date(ordinal // 12, ordinal % 12 + 1, 1)
+    if period == "week":
+        return dt.date.fromordinal(ordinal * 7)
+    return dt.date.fromordinal(ordinal)
+
+
 def period_ordinals(snap: Snapshot) -> npt.NDArray[np.int64]:
     """Integer period index per row at the unit's decision period, so gaps between training and test rows are counted
     in whole decision periods. The manifest's `period` wins when it is set (an empty one is malformed, not a fallback

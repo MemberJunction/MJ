@@ -66,7 +66,11 @@ def run_trainer(req: TrainerRequest) -> TrainerOutcome:
 
 def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
     p = req.protocol
-    snap = SN.load(req, dt.datetime.now(dt.timezone.utc), clock)
+    now = dt.datetime.now(dt.timezone.utc)
+    snap = SN.load(req, now, clock)
+    # The incumbent's artifact is downloaded and verified with the snapshot, so an expired or wrong file fails before
+    # any fit; it is loaded and scored in the holdout stage.
+    incumbent = None if req.incumbent is None else SN.fetch_verified(req.incumbent.artifact, now, clock)
     enc = TR.encode_label(req.task, snap.label)
     roles = np.array(snap.roles)
     dev = np.flatnonzero(roles == "development").astype(np.int64)
@@ -78,4 +82,4 @@ def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
     clock.check("snapshot load")
     columns: List[encoding.ColumnSpec] = list(snap.columns)
     out = TR.select_finalist(p, snap, columns, enc, dev, req.candidates, req.threads, clock, periods)
-    return EV.evaluate(req, snap, enc, dev, hold, out, columns, code, clock, [])
+    return EV.evaluate(req, snap, enc, dev, hold, out, columns, code, clock, [], incumbent)
