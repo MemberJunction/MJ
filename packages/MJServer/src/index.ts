@@ -159,6 +159,7 @@ export * from './directives/index.js';
 export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
+export * from './requestOrigin.js';
 export {
     getSystemUser,
     getSigningKeys,
@@ -1271,6 +1272,7 @@ const setupComplete$ = new ReplaySubject(1);
       },
       // context() now just reads the already-validated payload — no I/O, no logging
       context: async (ctx) => {
+        // No RequestOrigin here: the upgrade request's Origin is not carried onto subscription contexts.
         return { userPayload: ctx.extra.userPayload as UserPayload };
       },
       onClose: (ctx) => {
