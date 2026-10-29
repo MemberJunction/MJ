@@ -54,6 +54,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     },
 }));
 
+const resolveRequestTypeMock = vi.fn(async (name: string) => (name === 'Approval' ? 'approval-type-id' : null));
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
@@ -62,6 +63,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                 return agentsList;
             },
             CanUserRunAgent: (...args: unknown[]) => canUserRunAgentMock(...args),
+            ResolveAgentRequestTypeID: (name: string, user: unknown) => resolveRequestTypeMock(name, user),
         },
     },
 }));
@@ -78,11 +80,11 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 import { ScheduleNextAgentWakeAction } from '../custom/ai/schedule-next-agent-wake.action';
 import { ConfigureAgentUserPolicyAction } from '../custom/ai/configure-agent-user-policy.action';
-import { ChiefOfStaffInterAgentRequestAction } from '../custom/ai/chief-of-staff-inter-agent-request.action';
+import { SendInterAgentRequestAction } from '../custom/ai/send-inter-agent-request.action';
 import {
-    PrepareChiefOfStaffOutboundCallAction,
-    ChiefOfStaffOutboundCallBrief,
-} from '../custom/ai/prepare-chief-of-staff-outbound-call.action';
+    PrepareOutboundCallBriefAction,
+    OutboundCallBrief,
+} from '../custom/ai/prepare-outbound-call-brief.action';
 import type { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 
 interface TestableAction {
@@ -298,7 +300,7 @@ describe('Chief of Staff Actions Suite', () => {
         });
     });
 
-    describe('ChiefOfStaffInterAgentRequestAction', () => {
+    describe('SendInterAgentRequestAction', () => {
         it('refuses when sender policy has CoordinationMode=Observer', async () => {
             getPolicyMock.mockResolvedValueOnce({
                 Status: 'Active',
@@ -317,12 +319,12 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new ChiefOfStaffInterAgentRequestAction(), params);
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
             expect(res.Success).toBe(false);
             expect(res.ResultCode).toBe('POLICY_APPROVAL_REQUIRED');
         });
 
-        it('creates an MJAIAgentRequestEntity with InterAgentCoS delivery mode when target user has an active CoS policy', async () => {
+        it('creates an MJAIAgentRequestEntity with InterAgent delivery mode when target user has an active CoS policy', async () => {
             // 1st call: sender policy; 2nd call: target policy
             getPolicyMock
                 .mockResolvedValueOnce({
@@ -339,6 +341,7 @@ describe('Chief of Staff Actions Suite', () => {
             const requestStub = {
                 ID: 'req-555',
                 AgentID: '',
+                RequestTypeID: null as string | null,
                 RequestedAt: null as Date | null,
                 RequestForUserID: null as string | null,
                 Status: 'Requested' as MJAIAgentRequestEntity['Status'],
@@ -362,15 +365,43 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new ChiefOfStaffInterAgentRequestAction(), params);
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
             expect(res.Success).toBe(true);
             expect(requestStub.RequestForUserID).toBe('user-target');
-            expect(params.Params.find((p: ActionParam) => p.Name === 'DeliveryMode')?.Value).toBe('InterAgentCoS');
+            // The Approval request type is resolved by name through the AI engine cache, never hardcoded.
+            expect(requestStub.RequestTypeID).toBe('approval-type-id');
+            expect(resolveRequestTypeMock).toHaveBeenCalledWith('Approval', params.ContextUser);
+            expect(params.Params.find((p: ActionParam) => p.Name === 'DeliveryMode')?.Value).toBe('InterAgent');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('req-555');
+        });
+
+        it('fails with REQUEST_TYPE_NOT_FOUND instead of saving when the Approval request type is not in metadata', async () => {
+            getPolicyMock
+                .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' })
+                .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' });
+            resolveRequestTypeMock.mockResolvedValueOnce(null);
+            const save = vi.fn().mockResolvedValue(true);
+            getEntityObjectMock.mockResolvedValue({ ID: 'req-556', Save: save });
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-sender', 'Alice Executive'),
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'user-target' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Q4 OKR Check-in' },
+                    { Name: 'Message', Type: 'Input', Value: 'Please share current metric for KR-2.' },
+                ],
+            };
+
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('REQUEST_TYPE_NOT_FOUND');
+            expect(save).not.toHaveBeenCalled();
         });
     });
 
-    describe('PrepareChiefOfStaffOutboundCallAction', () => {
+    describe('PrepareOutboundCallBriefAction', () => {
         it('blocks outbound calls when PhoneChannelMode is InboundOnly', async () => {
             getPolicyMock.mockResolvedValueOnce({
                 Status: 'Active',
@@ -388,7 +419,7 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new PrepareChiefOfStaffOutboundCallAction(), params);
+            const res = await invokeAction(new PrepareOutboundCallBriefAction(), params);
             expect(res.Success).toBe(false);
             expect(res.ResultCode).toBe('POLICY_DENIED');
         });
@@ -403,6 +434,7 @@ describe('Chief of Staff Actions Suite', () => {
             const reqStub = {
                 ID: 'call-req-1',
                 AgentID: '',
+                RequestTypeID: null as string | null,
                 RequestedAt: null as Date | null,
                 RequestForUserID: null as string | null,
                 Status: 'Requested' as MJAIAgentRequestEntity['Status'],
@@ -425,17 +457,18 @@ describe('Chief of Staff Actions Suite', () => {
                 ],
             };
 
-            const res = await invokeAction(new PrepareChiefOfStaffOutboundCallAction(), params);
+            const res = await invokeAction(new PrepareOutboundCallBriefAction(), params);
             expect(res.Success).toBe(true);
             expect(res.ResultCode).toBe('APPROVAL_REQUIRED');
             const brief = params.Params.find((p: ActionParam) => p.Name === 'CallBrief')
-                ?.Value as ChiefOfStaffOutboundCallBrief;
+                ?.Value as OutboundCallBrief;
             expect(brief.requireUpfrontAiDisclosure).toBe(true);
             expect(brief.mandatoryUpfrontDisclosure).toContain(
                 'I am Jarvis, an AI assistant calling on behalf of Alice Executive'
             );
             expect(params.Params.find((p: ActionParam) => p.Name === 'Status')?.Value).toBe('PENDING_APPROVAL');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('call-req-1');
+            expect(reqStub.RequestTypeID).toBe('approval-type-id');
         });
     });
 });

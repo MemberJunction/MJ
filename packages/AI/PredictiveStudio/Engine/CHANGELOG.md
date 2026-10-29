@@ -1,5 +1,62 @@
 # @memberjunction/predictive-studio
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- ff73341: Add the Predictive Studio planted-truth test suite (`packages/AI/PredictiveStudio/TruthSuite`: the datasets and the harness that loads and scores them) and Phase-0 containment safeguards. The containment gates are MJ Tests run with `mj test suite "Predictive Studio Gates — Containment"`. Containment fixes: uncapped default row reads for training and filter-scoped scoring, lifecycle status gates and dry-run isolation for model scoring, typed refusal codes the gates assert on, a feature-importance kind that decides which model drivers may be shown, polarity-aware risk bands and non-causal driver copy across UI and prompt templates, seeded, reproducible training (a fixed random state; the truth-suite sidecar also pins one thread for its determinism gate) and honest out-of-sample validation metrics (`kfold`/`holdout`), refusal of no-effect `AsOfStrategy` configurations, withholding of non-origin-split time-series forecasts, majority-class baseline enforcement on imbalanced classifiers, disabling the Run Experiment Session action, and keeping the maintenance job disabled, since nothing runs either yet.
+
+  Note: Pre-existing models trained with locked holdout explicitly disabled (`LockedHoldoutFraction = 0`) or graded on accuracy alone (without `AUC` or a recorded `BaselineAccuracy`) will display as unmeasured until retrained. Existing models' global driver lists stay hidden until retrained, because a model with no stored feature-importance kind has its drivers hidden.
+
+### Patch Changes
+
+- Updated dependencies [622f166]
+- Updated dependencies [68bb7e4]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [cc41d33]
+- Updated dependencies [281724a]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [142d524]
+- Updated dependencies [0ff7523]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [ff73341]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [fd84ab1]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/ai-agents@6.2.0-edge.6
+  - @memberjunction/actions-base@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/record-set-processor-base@6.2.0-edge.6
+  - @memberjunction/record-set-processor@6.2.0-edge.6
+  - @memberjunction/actions@6.2.0-edge.6
+  - @memberjunction/predictive-studio-sidecar@6.2.0-edge.6
+  - @memberjunction/predictive-studio-core@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes
