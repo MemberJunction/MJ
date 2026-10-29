@@ -64,16 +64,25 @@ const PE4_PROMPT_NAME = 'IT: Echo Agent - System Prompt';
 const PE4_MODEL_NAME = 'GPT 5-nano';
 const PE4_VENDOR_NAME = 'OpenAI';
 
-/** The model-vendor row for a model and vendor named in metadata; asserts it exists. */
-function resolvePinnedModelVendor(modelName: string, vendorName: string): MJAIModelVendorEntity {
+/** A pinned model-vendor row and the driver class a run on it resolves to. */
+interface PinnedModelVendor {
+    ModelVendor: MJAIModelVendorEntity;
+    /** The inference row's driver class — what a run on this pair instantiates. */
+    DriverClass: string;
+}
+
+/** The model-vendor row for a model and vendor named in metadata, with its effective driver class; asserts both exist. */
+function resolvePinnedModelVendor(modelName: string, vendorName: string): PinnedModelVendor {
     const model = AIEngine.Instance.Models.find((m) => m.Name === modelName);
     Assert(!!model, `Model '${modelName}' is not in this database`);
     const vendor = AIEngine.Instance.Vendors.find((v) => v.Name === vendorName);
     Assert(!!vendor, `Vendor '${vendorName}' is not in this database`);
+    // A model and vendor can have two rows: the vendor as Model Developer (no driver) and as
+    // Inference Provider (the driver that runs it). Only the inference row is runnable.
     const modelVendor = AIEngine.Instance.ModelVendors.find((mv) =>
-        UUIDsEqual(mv.ModelID, model!.ID) && UUIDsEqual(mv.VendorID, vendor!.ID));
-    Assert(!!modelVendor, `No '${modelName}' / '${vendorName}' model-vendor row in this database`);
-    return modelVendor!;
+        UUIDsEqual(mv.ModelID, model!.ID) && UUIDsEqual(mv.VendorID, vendor!.ID) && mv.Status === 'Active' && !!mv.DriverClass);
+    Assert(!!modelVendor, `No active '${modelName}' / '${vendorName}' inference row (with a driver class) in this database`);
+    return { ModelVendor: modelVendor!, DriverClass: modelVendor!.DriverClass! };
 }
 
 /**
@@ -365,9 +374,10 @@ const checks: NamedCheck[] = [
             await AIEngine.Instance.Config(false, ctx.User);
             const prompt = AIEngine.Instance.Prompts.find((p) => p.Name === PE4_PROMPT_NAME);
             Assert(!!prompt, `Fixture prompt '${PE4_PROMPT_NAME}' is not in this database — push metadata-optional/integration-test`);
-            const modelVendor = resolvePinnedModelVendor(PE4_MODEL_NAME, PE4_VENDOR_NAME);
-            Assert(STUBBED_DRIVER_CLASSES.includes(modelVendor.DriverClass ?? ''),
-                `Pinned model/vendor ${PE4_MODEL_NAME}/${PE4_VENDOR_NAME} uses driver '${modelVendor.DriverClass}', ` +
+            const pinned = resolvePinnedModelVendor(PE4_MODEL_NAME, PE4_VENDOR_NAME);
+            const modelVendor = pinned.ModelVendor;
+            Assert(STUBBED_DRIVER_CLASSES.includes(pinned.DriverClass),
+                `Pinned model/vendor ${PE4_MODEL_NAME}/${PE4_VENDOR_NAME} uses driver '${pinned.DriverClass}', ` +
                 `which TestLLM does not replace — PE4 would make a real model call`);
 
             const llm = new TestLLM();

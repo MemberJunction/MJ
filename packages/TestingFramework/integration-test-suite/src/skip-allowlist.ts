@@ -120,6 +120,16 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'Connects a UI reader over the wire: needs MJ_API_KEY for a running MJAPI.'
     },
     {
+        CheckId: 'storage.ST8',
+        Gate: 'credentials',
+        Reason: 'Creates a fixture storage account whose MJ: Credentials row is field-encrypted: needs a field-encryption key, which the deterministic lane does not configure.'
+    },
+    {
+        CheckId: 'storage.ST9',
+        Gate: 'credentials',
+        Reason: 'Creates a fixture storage account whose MJ: Credentials row is field-encrypted: needs a field-encryption key, which the deterministic lane does not configure.'
+    },
+    {
         CheckId: 'prompt-eval-harness.PE7',
         Gate: 'fixture',
         Reason: 'Needs the prompt-eval corpus in the database; CI pushes only metadata and metadata-optional/integration-test, '
