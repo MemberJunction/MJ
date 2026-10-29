@@ -11,6 +11,18 @@ describe('NormalizeOrigin', () => {
     expect(NormalizeOrigin('https://a.com:443')).toBe('https://a.com:443');
     expect(NormalizeOrigin('http://localhost:4200/')).toBe('http://localhost:4200');
   });
+
+  it('returns a value made only of slashes as empty', () => {
+    expect(NormalizeOrigin('///')).toBe('');
+  });
+
+  it('handles a long run of slashes that is not at the end in linear time', () => {
+    const hostile = 'https://a.com' + '/'.repeat(100_000) + 'x';
+    const started = Date.now();
+    expect(NormalizeOrigin(hostile)).toBe(hostile);
+    expect(ReadRequestOrigin(hostile)).toBeUndefined();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe('ReadRequestOrigin', () => {

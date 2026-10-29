@@ -10,13 +10,28 @@
  */
 const HTTP_ORIGIN_PATTERN = /^https?:\/\/[^/?#@\s]+$/;
 
+/** Character code of `/`. */
+const SLASH_CHAR_CODE = 47;
+
 /**
  * Normalizes an origin for stable comparison: trims whitespace, lowercases, and strips trailing
  * slashes. It does not parse the value or rewrite ports, so `https://a.com:443` stays as written.
  * @param origin an origin as written in a header or an allowlist entry
  */
 export function NormalizeOrigin(origin: string): string {
-  return origin.trim().toLowerCase().replace(/\/+$/, '');
+  return StripTrailingSlashes(origin.trim().toLowerCase());
+}
+
+/**
+ * Removes trailing `/` characters with a linear scan. A `/\/+$/` regex is quadratic on input with
+ * many `/` not at the end, and this runs on a request header the client controls.
+ */
+function StripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === SLASH_CHAR_CODE) {
+    end--;
+  }
+  return value.slice(0, end);
 }
 
 /**
