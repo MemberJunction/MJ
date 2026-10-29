@@ -137,7 +137,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
 
     const saved = await file.Save();
     if (!saved) {
-      const message = file.LatestResult?.CompleteMessage ?? 'unknown error';
+      const message = file.LatestResult?.CompleteMessage || 'unknown error';
       LogError(`MJFilesArtifactStore: failed to persist artifact file row '${name}': ${message}`);
       throw new Error(`Failed to persist model artifact file: ${message}`);
     }
@@ -152,7 +152,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
       LogError(`MJFilesArtifactStore: persisted File row '${file.ID}' but failed to write bytes under '${this.baseDir}': ${message}`);
       // The row records bytes that were never written: remove it, so a failed save leaves nothing behind.
       if (!(await file.Delete())) {
-        LogError(`MJFilesArtifactStore: could not delete File row '${file.ID}' after the failed byte write: ${file.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        LogError(`MJFilesArtifactStore: could not delete File row '${file.ID}' after the failed byte write: ${file.LatestResult?.CompleteMessage || 'unknown error'}`);
       }
       throw new Error(`Failed to persist model artifact bytes: ${message}`);
     }
@@ -165,7 +165,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
     const file = await this.entityFactory.getEntityObject<MJFileEntity>('MJ: Files', contextUser);
     if (!(await file.Load(fileId))) throw new Error(`MJFilesArtifactStore: artifact file ${fileId} not found`);
     if (!(await file.Delete())) {
-      throw new Error(`MJFilesArtifactStore: deleting artifact file ${fileId} failed: ${file.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      throw new Error(`MJFilesArtifactStore: deleting artifact file ${fileId} failed: ${file.LatestResult?.CompleteMessage || 'unknown error'}`);
     }
     await rm(LocalArtifactPath(this.baseDir, fileId), { force: true });
   }

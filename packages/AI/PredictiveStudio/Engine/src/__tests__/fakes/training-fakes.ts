@@ -259,26 +259,6 @@ export const fakeProvider = {
 } as unknown as IMetadataProvider;
 export const fakeUser = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
 
-export function buildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeline | null; response?: TrainResponse }): {
-  deps: TrainingDeps;
-  factory: FakeEntityFactory;
-  sidecar: FakeSidecar;
-  store: InMemoryArtifactStore;
-} {
-  const factory = (overrides?.entityFactory as FakeEntityFactory) ?? new FakeEntityFactory();
-  const sidecar = new FakeSidecar(overrides?.response ?? cleanResponse);
-  const store = new InMemoryArtifactStore();
-  const pipeline = overrides?.pipeline === undefined ? new FakeMLPipeline() : overrides.pipeline;
-  const deps: TrainingDeps = {
-    entityFactory: factory,
-    recordLoader: new FakeRecordLoader(pipeline),
-    sidecar,
-    artifactStore: store,
-    contextUser: fakeUser,
-    provider: fakeProvider,
-  };
-  return { deps, factory, sidecar, store };
-}
 
 /** Trainer fake: records every request and answers with the given function of it. */
 export class FakeTrainer implements ITrainerEvaluator {
@@ -302,37 +282,62 @@ export class FakeEvaluationProtocolStore implements IEvaluationProtocolStore {
 // Prediction Unit pipelines: the unit store, the assembly metadata and a counting data access over the unit world.
 // ---------------------------------------------------------------------------
 
-/** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows; every run row gets `runId`. */
-export function unitHarness(
-  rows: SourceRow[],
-  unitColumns: PredictionUnitColumns,
-  featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] },
-  runId = 'run-1',
-): {
-  engine: TrainingEngine;
-  deps: TrainingDeps;
-  sidecar: FakeSidecar;
-  pipeline: FakeMLPipeline;
-  runs: FakeMLRun[];
-  models: FakeMLModel[];
-  snapshots: FakeTrainingSnapshot[];
-  files: InMemorySnapshotFileStore;
-  snapshotStore: FakeTrainingSnapshotStore;
-} {
-  const pipeline = new FakeMLPipeline();
-  pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
-  pipeline.TargetEntity = 'Years';
-  pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
-  pipeline.FeatureSteps = JSON.stringify(featureSteps);
-  const { deps, factory, sidecar } = buildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
-  deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
-  deps.assemblyMetadata = UnitYearsWorld.Metadata();
-  deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
-  const files = new InMemorySnapshotFileStore('provider-local');
-  deps.snapshotFiles = files;
-  const snapshotStore = new FakeTrainingSnapshotStore(factory);
-  deps.snapshots = snapshotStore;
-  return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
+/** Builders for a TrainingEngine's dependencies over the fakes in this module. */
+export class TrainingHarness {
+  /** Deps over the fakes: a pipeline (default `FakeMLPipeline`, `null` for none), a canned legacy answer and an in-memory artifact store. */
+  public static BuildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeMLPipeline | null; response?: TrainResponse }): {
+    deps: TrainingDeps;
+    factory: FakeEntityFactory;
+    sidecar: FakeSidecar;
+    store: InMemoryArtifactStore;
+  } {
+    const factory = (overrides?.entityFactory as FakeEntityFactory) || new FakeEntityFactory();
+    const sidecar = new FakeSidecar(overrides?.response || cleanResponse);
+    const store = new InMemoryArtifactStore();
+    const pipeline = overrides?.pipeline === undefined ? new FakeMLPipeline() : overrides.pipeline;
+    const deps: TrainingDeps = {
+      entityFactory: factory,
+      recordLoader: new FakeRecordLoader(pipeline),
+      sidecar,
+      artifactStore: store,
+      contextUser: fakeUser,
+      provider: fakeProvider,
+    };
+    return { deps, factory, sidecar, store };
+  }
+
+  /** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows; every run row gets `runId`. */
+  public static ForUnit(
+    rows: SourceRow[],
+    unitColumns: PredictionUnitColumns,
+    featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] },
+    runId = 'run-1',
+  ): {
+    engine: TrainingEngine;
+    deps: TrainingDeps;
+    sidecar: FakeSidecar;
+    pipeline: FakeMLPipeline;
+    runs: FakeMLRun[];
+    models: FakeMLModel[];
+    snapshots: FakeTrainingSnapshot[];
+    files: InMemorySnapshotFileStore;
+    snapshotStore: FakeTrainingSnapshotStore;
+  } {
+    const pipeline = new FakeMLPipeline();
+    pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    pipeline.TargetEntity = 'Years';
+    pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
+    pipeline.FeatureSteps = JSON.stringify(featureSteps);
+    const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
+    deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
+    deps.assemblyMetadata = UnitYearsWorld.Metadata();
+    deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));
+    const files = new InMemorySnapshotFileStore('provider-local');
+    deps.snapshotFiles = files;
+    const snapshotStore = new FakeTrainingSnapshotStore(factory);
+    deps.snapshots = snapshotStore;
+    return { engine: new TrainingEngine(), deps, sidecar, pipeline, runs: factory.Runs, models: factory.Models, snapshots: factory.Snapshots, files, snapshotStore };
+  }
 }
 
 /** Finds the snapshots the factory saved by content hash, as the RunView store finds the saved rows. */

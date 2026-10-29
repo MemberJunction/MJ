@@ -46,11 +46,10 @@ import {
   FakeSidecar,
   FakeTrainer,
   FakeTrainingSnapshot,
-  buildDeps,
+  TrainingHarness,
   cleanResponse,
   fakeProvider,
   fakeUser,
-  unitHarness,
 } from '../../__tests__/fakes/training-fakes';
 import type { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
 import { SnapshotFiles, type SnapshotContent } from '../../snapshot/snapshot-serialization';
@@ -122,7 +121,7 @@ function buildEngine(dataAccess: InMemoryDataAccess = new InMemoryDataAccess({ M
 describe('TrainingEngine.trainModel — happy path', () => {
   it('produces a Draft ML Model + Completed Training Run with a correctly-shaped TrainRequest', async () => {
     const engine = buildEngine();
-    const { deps, factory, sidecar, store } = buildDeps();
+    const { deps, factory, sidecar, store } = TrainingHarness.BuildDeps();
 
     const { model, run } = await engine.trainModel({ pipelineId: 'pipe-1', sidecarVersion: 'sidecar-1.0' }, deps);
 
@@ -192,7 +191,7 @@ describe('TrainingEngine.trainModel — happy path', () => {
 describe('TrainingEngine.trainModel — locked holdout (§8.2)', () => {
   it('excludes the locked holdout from the training data and scores it once into HoldoutMetrics', async () => {
     const engine = buildEngine();
-    const { deps, sidecar } = buildDeps();
+    const { deps, sidecar } = TrainingHarness.BuildDeps();
 
     const { model } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
 
@@ -225,7 +224,7 @@ describe('TrainingEngine.trainModel — leakage dominance (§6.4)', () => {
       feature_importance: { cancelled_flag: 0.92, tenure: 0.05, city: 0.03 },
     };
     const engine = buildEngine();
-    const { deps } = buildDeps({ response: leaky });
+    const { deps } = TrainingHarness.BuildDeps({ response: leaky });
 
     const { model, run } = await engine.trainModel({ pipelineId: 'pipe-1' }, deps);
 
@@ -245,7 +244,7 @@ describe('TrainingEngine.trainModel — failures', () => {
       m.failNextSaveWith('FK violation on PipelineID');
       return m;
     });
-    const { deps } = buildDeps({ entityFactory: factory });
+    const { deps } = TrainingHarness.BuildDeps({ entityFactory: factory });
 
     await expect(engine.trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/FK violation on PipelineID/);
     // The run was created (Running) then marked Failed by the catch path.
@@ -255,7 +254,7 @@ describe('TrainingEngine.trainModel — failures', () => {
 
   it('throws when the pipeline is not found', async () => {
     const engine = buildEngine();
-    const { deps } = buildDeps({ pipeline: null });
+    const { deps } = TrainingHarness.BuildDeps({ pipeline: null });
     await expect(engine.trainModel({ pipelineId: 'missing' }, deps)).rejects.toThrow(/not found/);
   });
 });
@@ -263,7 +262,7 @@ describe('TrainingEngine.trainModel — failures', () => {
 describe('TrainingEngine.trainModel — experiment session iteration linkage (§4.4)', () => {
   it('hangs the run off an ExperimentSessionIteration when provided', async () => {
     const engine = buildEngine();
-    const { deps, factory } = buildDeps();
+    const { deps, factory } = TrainingHarness.BuildDeps();
     await engine.trainModel({ pipelineId: 'pipe-1', experimentSessionIterationId: 'iter-7' }, deps);
     expect(factory.Runs[0].ExperimentSessionIterationID).toBe('iter-7');
   });
@@ -275,7 +274,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
     it(`refuses AsOfStrategy.Mode='${asOf.Mode}' with unit-required, records it on the run, and never calls the sidecar`, async () => {
       const pipeline = new FakeMLPipeline();
       pipeline.AsOfStrategy = JSON.stringify(asOf);
-      const { deps, factory, sidecar } = buildDeps({ pipeline });
+      const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline });
       await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toMatchObject({
         name: 'TrainingRefusedError',
         Refusal: { stage: 'pipeline', reason: { kind: 'unit-required', pipelineId: 'pipe-1' } },
@@ -289,7 +288,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
   }
 
   it("still trains Mode='none'", async () => {
-    const { deps } = buildDeps();
+    const { deps } = TrainingHarness.BuildDeps();
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(model.Status).toBe('Draft');
   });
@@ -297,7 +296,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
   it("trains a stored AsOfStrategy of {} as Mode='none'", async () => {
     const pipeline = new FakeMLPipeline();
     pipeline.AsOfStrategy = '{}';
-    const { deps } = buildDeps({ pipeline });
+    const { deps } = TrainingHarness.BuildDeps({ pipeline });
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(model.Status).toBe('Draft');
     expect(JSON.parse(model.Lineage!).asOfStrategy).toEqual({ Mode: 'none' });
@@ -306,7 +305,7 @@ describe('TrainingEngine.trainModel — a legacy pipeline with a point-in-time a
 
 describe('TrainingEngine — evaluation record and the time-index containment (T4 → S6.5, F-SCN-1)', () => {
   it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
-    const { deps } = buildDeps();
+    const { deps } = TrainingHarness.BuildDeps();
     const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: 'split_or_impurity' });
     expect(run.Notes).not.toContain('Trust withheld');
@@ -315,7 +314,7 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
   it("records the pipeline's majority-baseline rule in Lineage.evaluation (D2-C5d)", async () => {
     const pipeline = new FakeMLPipeline();
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' });
-    const { deps } = buildDeps({ pipeline });
+    const { deps } = TrainingHarness.BuildDeps({ pipeline });
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(EvaluationLineage.Read(model.Lineage)?.MajorityBaselineRule).toBe('warn');
   });
@@ -323,7 +322,7 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
   it('refuses an unknown majority-baseline rule before any row is written', async () => {
     const pipeline = new FakeMLPipeline();
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'off' });
-    const { deps, factory, sidecar } = buildDeps({ pipeline });
+    const { deps, factory, sidecar } = TrainingHarness.BuildDeps({ pipeline });
     await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(InvalidMajorityBaselineRuleError);
     expect(factory.Runs).toHaveLength(0);
     expect(factory.Models).toHaveLength(0);
@@ -333,7 +332,7 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
   it('withholds trust for a pipeline that declares a time index, and stores the reason on the model and the run', async () => {
     const pipeline = new FakeMLPipeline();
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
-    const { deps } = buildDeps({ pipeline });
+    const { deps } = TrainingHarness.BuildDeps({ pipeline });
     const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
     expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
@@ -342,7 +341,7 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
 
   it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {
     const legacySidecarResponse: TrainResponse = { ...cleanResponse, validation_out_of_sample: undefined };
-    const { deps } = buildDeps({ response: legacySidecarResponse });
+    const { deps } = TrainingHarness.BuildDeps({ response: legacySidecarResponse });
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(EvaluationLineage.Read(model.Lineage)?.ValidationOutOfSample).toBe(false);
   });
@@ -352,7 +351,7 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
   it("orders the target read by the entity's primary key, with or without maxRows", async () => {
     for (const maxRows of [undefined, 1000]) {
       const dataAccess = new InMemoryDataAccess({ Members: syntheticMembers() });
-      const { deps } = buildDeps();
+      const { deps } = TrainingHarness.BuildDeps();
       await buildEngine(dataAccess).trainModel({ pipelineId: 'pipe-1', maxRows }, deps);
       expect(dataAccess.Reads[0]).toMatchObject({ EntityName: 'Members', OrderBy: 'ID', MaxRows: maxRows });
     }
@@ -361,20 +360,20 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
   it('refuses before reading when the target entity has no primary key in metadata', async () => {
     const pipeline = new FakeMLPipeline();
     pipeline.TargetEntity = 'Unknown Entity';
-    const { deps } = buildDeps({ pipeline });
+    const { deps } = TrainingHarness.BuildDeps({ pipeline });
     await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/no primary key/);
   });
 
   it('holds out the same rows on every run of the same data', async () => {
-    const first = buildDeps();
-    const second = buildDeps();
+    const first = TrainingHarness.BuildDeps();
+    const second = TrainingHarness.BuildDeps();
     await buildEngine().trainModel({ pipelineId: 'pipe-1' }, first.deps);
     await buildEngine().trainModel({ pipelineId: 'pipe-1' }, second.deps);
     expect(second.sidecar.LastHoldout!.rows).toEqual(first.sidecar.LastHoldout!.rows);
   });
 
   it('writes the locked holdout class counts into the model Lineage next to lockedHoldoutRowCount', async () => {
-    const { deps } = buildDeps();
+    const { deps } = TrainingHarness.BuildDeps();
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     const lineage = JSON.parse(model.Lineage!);
     expect(lineage.lockedHoldoutRowCount).toBe(2);
@@ -384,7 +383,7 @@ describe('TrainingEngine — deterministic training read and locked holdout (I1)
   it('writes empty locked holdout class counts for a regression model', async () => {
     const pipeline = new FakeMLPipeline();
     pipeline.ProblemType = 'regression';
-    const { deps } = buildDeps({ pipeline });
+    const { deps } = TrainingHarness.BuildDeps({ pipeline });
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(JSON.parse(model.Lineage!).lockedHoldoutClassCounts).toEqual({});
   });
@@ -419,7 +418,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   const unitColumns = UnitYearsWorld.UnitColumns();
 
   it('excludes the unresolved 2026 cycle, stores the counts, and records the unit in the model lineage', async () => {
-    const { engine, deps, sidecar, pipeline } = unitHarness(years, unitColumns);
+    const { engine, deps, sidecar, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const data = sidecar.LastRequest?.data ?? { columns: [], rows: [] };
     const labelIdx = data.columns.indexOf('__ps_label');
@@ -433,7 +432,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('reads an updatable field of another entity as of each decision date, and stores the feature spec and levels in the lineage', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
-    const { engine, deps, sidecar, pipeline, models } = unitHarness(years, unitColumns, steps);
+    const { engine, deps, sidecar, pipeline, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const sent = sentRows(sidecar);
     expect(sent).toHaveLength(8);
@@ -449,7 +448,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('refuses a text column declared numeric at the assembly stage, naming the column, before calling the sidecar', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'Region'], Encodings: { Region: 'numeric' } }] };
-    const { engine, deps, sidecar, pipeline, runs, models } = unitHarness(years, unitColumns, steps);
+    const { engine, deps, sidecar, pipeline, runs, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'non-numeric-in-numeric-column', column: 'Region' } } });
     expect(sidecar.CallCount).toBe(0);
     expect(models).toHaveLength(0);
@@ -460,7 +459,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('assembles the same matrix on its own (pipeline ID and deps only) as the training run sends', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
-    const { engine, deps, pipeline } = unitHarness(years, unitColumns, steps);
+    const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns, steps);
     const assembly = await engine.AssembleForTraining(pipeline.ID, deps);
     expect(assembly.Assembled.Status).toBe('assembled');
     if (assembly.Assembled.Status !== 'assembled') return;
@@ -474,7 +473,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('round-trips the stored lineage: the scoring path reads back what training wrote and assembles the same values', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
-    const { engine, deps, pipeline, models } = unitHarness(years, unitColumns, steps);
+    const { engine, deps, pipeline, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const trained = models[0];
     trained.Status = 'Validated';
@@ -503,7 +502,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('refuses a one-class target before calling the sidecar and records the refusal on the run', async () => {
-    const { engine, deps, sidecar, pipeline, runs } = unitHarness(years.filter((y) => y.Renewed === true), { ...unitColumns, Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2030-01-01' } }) });
+    const { engine, deps, sidecar, pipeline, runs } = TrainingHarness.ForUnit(years.filter((y) => y.Renewed === true), { ...unitColumns, Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2030-01-01' } }) });
     // Typed: the refusal is identified by its structured fields, never by the message text.
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ name: 'TrainingRefusedError', Refusal: { stage: 'unit', reason: { kind: 'single-valued-target' } } });
     expect(sidecar.CallCount).toBe(0);
@@ -513,19 +512,19 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('refuses maxRows for a unit pipeline (a capped read is not a complete read)', async () => {
-    const { engine, deps, pipeline } = unitHarness(years, unitColumns);
+    const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     await expect(engine.trainModel({ pipelineId: pipeline.ID, maxRows: 5 }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'maxRows' } } });
   });
 
   it('refuses an as-of strategy for a unit pipeline before calling the sidecar (decision dates come from the unit)', async () => {
-    const { engine, deps, sidecar, pipeline } = unitHarness(years, unitColumns);
+    const { engine, deps, sidecar, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     pipeline.AsOfStrategy = JSON.stringify({ Mode: 'column', Column: 'StartDate' } satisfies AsOfStrategy);
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf' } } });
     expect(sidecar.CallCount).toBe(0);
   });
 
   it("records the sidecar's measured seconds as the run's compute, unpriced when no rate is configured", async () => {
-    const { engine, deps, pipeline } = unitHarness(years, unitColumns);
+    const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(run.Status).toBe('Completed');
     expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec); // real compute, never 0
@@ -540,7 +539,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('freezes the unit rows into one Training Snapshot and trains from its development and locked-holdout rows', async () => {
-    const { engine, deps, sidecar, pipeline, runs, models, snapshots, files } = unitHarness(years, unitColumns);
+    const { engine, deps, sidecar, pipeline, runs, models, snapshots, files } = TrainingHarness.ForUnit(years, unitColumns);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(snapshots).toHaveLength(1);
     const s = snapshots[0];
@@ -559,7 +558,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('reuses the snapshot for a second training of identical data: one snapshot row, two runs pointing at it', async () => {
-    const { engine, deps, pipeline, runs, snapshots, files, snapshotStore } = unitHarness(years, unitColumns);
+    const { engine, deps, pipeline, runs, snapshots, files, snapshotStore } = TrainingHarness.ForUnit(years, unitColumns);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const objectsAfterFirst = files.Saved.size;
     expect(snapshotStore.ReusedLookups).toBe(0);
@@ -572,7 +571,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('refuses to train a unit pipeline without a snapshot file store, before calling the sidecar', async () => {
-    const { engine, deps, sidecar, pipeline, snapshots, runs } = unitHarness(years, unitColumns);
+    const { engine, deps, sidecar, pipeline, snapshots, runs } = TrainingHarness.ForUnit(years, unitColumns);
     delete deps.snapshotFiles;
     await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/snapshot file store/);
     expect(sidecar.CallCount).toBe(0);
@@ -582,7 +581,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it("records on the run the same hyperparameters the trainer was sent (a column that is not a JSON object sends none)", async () => {
-    const { engine, deps, sidecar, pipeline, runs } = unitHarness(years, unitColumns);
+    const { engine, deps, sidecar, pipeline, runs } = TrainingHarness.ForUnit(years, unitColumns);
     pipeline.Hyperparameters = JSON.stringify([3, 4]);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const results = JSON.parse(runs[0].ValidationResults!);
@@ -592,7 +591,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
-    const { engine, deps, pipeline } = unitHarness(years, unitColumns);
+    const { engine, deps, pipeline } = TrainingHarness.ForUnit(years, unitColumns);
     await expect(engine.trainModel({ pipelineId: pipeline.ID, labelEventDates: { p0: new Date('2024-01-01T00:00:00Z') } }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
   });
 });
@@ -632,8 +631,8 @@ function protocolHarness(
   protocolRow = ProtocolRowFixture.Row(),
   artifacts: InMemoryArtifactStore = new InMemoryArtifactStore(),
   featureSteps?: FeatureStepGraph,
-): ReturnType<typeof unitHarness> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
-  const harness = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), featureSteps, TRAINER_RUN_ID);
+): ReturnType<typeof TrainingHarness.ForUnit> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
+  const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), featureSteps, TRAINER_RUN_ID);
   harness.pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
   const trainer = new FakeTrainer(answer);
   harness.deps.protocols = new FakeEvaluationProtocolStore([protocolRow]);
@@ -678,7 +677,7 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
   });
 
   it('freezes no slice or incumbent-score column for a pipeline without a protocol', async () => {
-    const { engine, deps, pipeline, files, snapshots } = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const { engine, deps, pipeline, files, snapshots } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const content = await storedContent(files, snapshots[0]);
     expect([content.Header.sliceColumns, content.Header.incumbentScoreColumn]).toEqual([{}, null]);
@@ -818,7 +817,7 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
 describe('TrainingEngine — compute pricing on the run', () => {
   it('prices the measured seconds at the configured rate per second', async () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.5');
-    const { deps } = buildDeps();
+    const { deps } = TrainingHarness.BuildDeps();
     const { run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(run.ComputeSeconds).toBe(cleanResponse.duration_sec);
     expect(run.ComputeCost).toBeCloseTo(cleanResponse.duration_sec * 0.5, 12);
@@ -826,7 +825,7 @@ describe('TrainingEngine — compute pricing on the run', () => {
 
   it('prices a Prediction Unit run by the same rule', async () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0');
-    const { engine, deps, pipeline } = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    const { engine, deps, pipeline } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
     const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect([run.ComputeSeconds, run.ComputeCost]).toEqual([cleanResponse.duration_sec, 0]);
   });
@@ -838,7 +837,7 @@ describe('TrainingEngine — compute pricing on the run', () => {
       m.failNextSaveWith('FK violation on PipelineID');
       return m;
     });
-    const { deps } = buildDeps({ entityFactory: factory });
+    const { deps } = TrainingHarness.BuildDeps({ entityFactory: factory });
     await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(/FK violation on PipelineID/);
     expect(factory.Runs[0].Status).toBe('Failed');
     expect([factory.Runs[0].ComputeSeconds, factory.Runs[0].ComputeCost]).toEqual([cleanResponse.duration_sec, cleanResponse.duration_sec * 0.5]);
@@ -846,7 +845,7 @@ describe('TrainingEngine — compute pricing on the run', () => {
 
   it('refuses a malformed rate before any row is written or any model is trained', async () => {
     vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', 'cheap');
-    const { deps, factory, sidecar } = buildDeps();
+    const { deps, factory, sidecar } = TrainingHarness.BuildDeps();
     await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toThrow(RangeError);
     expect(sidecar.CallCount).toBe(0);
     expect(factory.Runs.length).toBe(0);

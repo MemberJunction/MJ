@@ -3,7 +3,7 @@ import type { MatrixData, TrainRequest, TrainResponse } from '@memberjunction/pr
 import { SnapshotIntegrityError, SnapshotRetrainer } from '../snapshot-retrainer';
 import type { ISidecarTrainer } from '../../training/types';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
-import { cleanResponse, unitHarness } from '../../__tests__/fakes/training-fakes';
+import { cleanResponse, TrainingHarness } from '../../__tests__/fakes/training-fakes';
 
 /**
  * A trainer whose holdout metrics are a pure function of the rows it is sent: the same rows give the same metrics, so
@@ -34,7 +34,7 @@ class DeterministicSidecar implements ISidecarTrainer {
 
 /** A unit pipeline over the `UnitYearsWorld` rows, trained once with the given trainer. */
 async function trainedUnitRun(sidecar: DeterministicSidecar) {
-  const harness = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+  const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
   harness.deps.sidecar = sidecar;
   const { run } = await harness.engine.trainModel({ pipelineId: harness.pipeline.ID }, harness.deps);
   return { ...harness, run };

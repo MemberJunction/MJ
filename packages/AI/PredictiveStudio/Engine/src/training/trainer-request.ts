@@ -73,6 +73,8 @@ export class TrainerRequestBuilder {
       protocol: i.Protocol,
       task: i.Task,
       candidates: i.Candidates,
+      // `??`, not `||`: seed 0 and zero retries are real settings, and a 0 thread count or timeout must reach the
+      // sidecar's own validation (which refuses it) instead of being silently replaced by the default.
       seed: i.Seed ?? i.Protocol.seed,
       threads: i.Threads ?? 1,
       timeoutSeconds: i.TimeoutSeconds ?? i.Protocol.budgets.maxComputeSeconds,
