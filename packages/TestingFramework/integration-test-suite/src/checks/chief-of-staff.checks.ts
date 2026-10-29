@@ -14,8 +14,9 @@
  *     consulted, and DraftOnly refuses a Send without queueing anything.
  *
  * The "other user" is the seeded no-grant user from metadata-optional/integration-test/users; the
- * ownership checks only call Validate(), so that user needs no permissions. The context user's own
- * Chief of Staff policy is created if absent (deleted in teardown) or snapshotted and restored.
+ * ownership checks only call Validate() or the action's own code, so that user needs no permissions.
+ * The bundle creates the context user's Chief of Staff policy and deletes it in teardown; when one
+ * already exists the bundle is reference-only toward it and the policy checks (COS6–COS8) skip.
  */
 import { BaseEntity, CompositeKey, RunView } from '@memberjunction/core';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
@@ -25,7 +26,8 @@ import {
     MJUserRoutineEntity,
 } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, ActionResult, RunActionParams } from '@memberjunction/actions-base';
+import { ActionParam, ActionResult, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { RunUserRoutineNowAction } from '@memberjunction/scheduling-engine';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -44,20 +46,13 @@ const TAG = '(mj-integration-test — safe to delete)';
 const SUBJECT_TAG = `mj-cos-it-${Date.now()}`;
 const CHIEF_OF_STAFF = 'Chief of Staff';
 
-/** Snapshot of the context user's policy fields this bundle changes, so teardown can restore them. */
-interface PolicySnapshot {
-    EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
-    RequireApprovalForExternalComms: boolean;
-    Status: MJAIAgentUserPolicyEntity['Status'];
-}
-
 interface ChiefOfStaffFixture {
     AgentID: string;
     CalcActionID: string;
     OtherUser: UserInfo | null;
-    PolicyID: string;
+    /** The bundle's own policy row; null when the context user already had one (reference-only: never modified). */
+    PolicyID: string | null;
     PolicyCreatedByBundle: boolean;
-    PolicySnapshot: PolicySnapshot | null;
     CreatedRoutineIds: string[];
     CreatedRequestIds: string[];
     CreatedLogIds: string[];
@@ -106,9 +101,21 @@ function input(name: string, value: unknown): ActionParam {
     return { Name: name, Type: 'Input', Value: value } as ActionParam;
 }
 
+/**
+ * True when the bundle owns a policy row it may change. When the context user already had a Chief
+ * of Staff policy the bundle is reference-only toward it, so the policy checks report a skip.
+ */
+function ownsPolicy(checkId: string): boolean {
+    if (!fx().PolicyID) {
+        console.warn(`  ⚠ ${checkId} SKIPPED — the context user already has a Chief of Staff policy; this bundle never modifies pre-existing rows.`);
+        return false;
+    }
+    return true;
+}
+
 async function loadPolicy(ctx: IntegrationCheckContext): Promise<MJAIAgentUserPolicyEntity> {
     const policy = await prov(ctx).GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', ctx.User);
-    Assert(await policy.Load(fx().PolicyID), 'could not load the bundle policy');
+    Assert(await policy.Load(fx().PolicyID!), 'could not load the bundle policy');
     return policy;
 }
 
@@ -192,16 +199,22 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
     // ── Run User Routine Now ────────────────────────────────────────────────────────────
     {
         Id: 'chief-of-staff.COS4',
-        Name: "COS4: Run User Routine Now refuses a routine the caller does not own, and runs nothing",
+        Name: "COS4: Run User Routine Now's own ownership check refuses a routine the caller does not own, and runs nothing",
         Fn: async (ctx) => {
             const other = otherUser('COS4');
             if (!other) return;
             const routine = await makeOneShot(ctx, 'COS4 not yours');
-            const result = await runAction(ctx, 'Run User Routine Now', other, [input('RoutineID', routine.ID)]);
+            // Call the action's own code, not the engine: the engine refuses a user with no action
+            // permission before the action runs, which would never exercise the ownership check.
+            const params = new RunActionParams();
+            params.ContextUser = other;
+            params.Provider = ctx.Provider;
+            params.Params = [input('RoutineID', routine.ID)];
+            const action = new RunUserRoutineNowAction() as unknown as { InternalRunAction(p: RunActionParams): Promise<ActionResultSimple> };
+            const result = await action.InternalRunAction(params);
             Assert(!result.Success, "running another user's routine must fail");
-            const code = String(result.Result?.ResultCode ?? result.ResultCode);
-            Assert(code === 'NOT_OWNER' || code === 'ROUTINE_NOT_FOUND',
-                `expected NOT_OWNER or ROUTINE_NOT_FOUND, got ${code} (${result.Message})`);
+            Assert(result.ResultCode === 'NOT_OWNER' || result.ResultCode === 'ROUTINE_NOT_FOUND',
+                `expected NOT_OWNER or ROUTINE_NOT_FOUND, got ${result.ResultCode} (${result.Message})`);
             await settle(1500);
             AssertEqual((await routineRuns(routine.ID, ctx.User)).length, 0, 'a refused run must leave no run row');
         }
@@ -223,6 +236,13 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
                 runs = await routineRuns(routine.ID, ctx.User);
             }
             AssertEqual(runs.length, 1, 'the background run must leave exactly one run row');
+            let status = '';
+            const statusDeadline = Date.now() + 30000;
+            do {
+                status = String((await runStatus(runs[0].ID, ctx.User)) ?? '');
+                if (status === 'Running') await settle(500);
+            } while (status === 'Running' && Date.now() < statusDeadline);
+            AssertEqual(status, 'Success', 'the background run must succeed');
 
             const after = await routineRow(routine.ID, ctx.User);
             AssertEqual(String(after.Status), 'Active', 'the one-shot must stay Active');
@@ -234,6 +254,7 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
         Id: 'chief-of-staff.COS6',
         Name: 'COS6: a policy saved through the entity layer replaces the cached copy in the policy engine',
         Fn: async (ctx) => {
+            if (!ownsPolicy('COS6')) return;
             await setPolicyEmail(ctx, 'DraftOnly', true);
             const cached = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(fx().AgentID, ctx.User.ID, ctx.User, true);
             AssertEqual(cached?.EmailChannelMode, 'DraftOnly', 'the engine must start from DraftOnly');
@@ -249,6 +270,7 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
         Id: 'chief-of-staff.COS7',
         Name: 'COS7: a Send under SendAsUser with approval required queues the approval before any mail provider is consulted',
         Fn: async (ctx) => {
+            if (!ownsPolicy('COS7')) return;
             await setPolicyEmail(ctx, 'SendAsUser', true);
             const result = await runAction(ctx, 'Manage My Email Inbox and Drafts', ctx.User, [
                 input('AgentName', CHIEF_OF_STAFF),
@@ -277,6 +299,7 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
         Id: 'chief-of-staff.COS8',
         Name: 'COS8: under DraftOnly a Send is refused by policy and queues nothing',
         Fn: async (ctx) => {
+            if (!ownsPolicy('COS8')) return;
             await setPolicyEmail(ctx, 'DraftOnly', true);
             const before = (await requestsWithSubjectTag(ctx.User)).length;
             const result = await runAction(ctx, 'Manage My Email Inbox and Drafts', ctx.User, [
@@ -307,6 +330,7 @@ async function makeOneShot(ctx: IntegrationCheckContext, name: string): Promise<
     r.CronExpression = null;
     r.Timezone = 'UTC';
     r.NextRunAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    r.StartingPayload = JSON.stringify({ Expression: '6*7' });
     Assert(await r.Save(), `creating routine "${name}" failed: ${r.LatestResult?.CompleteMessage}`);
     fx().CreatedRoutineIds.push(r.ID);
     return r;
@@ -318,6 +342,13 @@ async function routineRow(id: string, user: UserInfo): Promise<Record<string, un
     }, user);
     Assert(result.Success && result.Results.length === 1, `routine ${id} not found`);
     return result.Results[0];
+}
+
+async function runStatus(runId: string, user: UserInfo): Promise<string | null> {
+    const result = await new RunView().RunView<{ Status: string }>({
+        EntityName: 'MJ: User Routine Runs', ExtraFilter: `ID='${runId}'`, Fields: ['Status'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    return result.Success && result.Results.length === 1 ? result.Results[0].Status : null;
 }
 
 async function routineRuns(routineId: string, user: UserInfo): Promise<Array<{ ID: string }>> {
@@ -352,26 +383,23 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('chief-of-staff', {
             BypassCache: true,
         }, user);
         let createdByBundle = false;
-        let snapshot: PolicySnapshot | null = null;
-        if (existing.Success && existing.Results.length > 0) {
-            Assert(await policy.Load(existing.Results[0].ID), 'could not load the existing policy');
-            snapshot = { EmailChannelMode: policy.EmailChannelMode, RequireApprovalForExternalComms: policy.RequireApprovalForExternalComms, Status: policy.Status };
-        } else {
+        let policyID: string | null = null;
+        if (!(existing.Success && existing.Results.length > 0)) {
             policy.NewRecord();
             policy.AgentID = agent!.ID;
             policy.UserID = user.ID;
             policy.Status = 'Active';
             Assert(await policy.Save(), `creating the bundle policy failed: ${policy.LatestResult?.CompleteMessage}`);
             createdByBundle = true;
+            policyID = policy.ID;
         }
 
         fixture = {
             AgentID: agent!.ID,
             CalcActionID: calc!.ID,
             OtherUser: findUserByEmail(UserCache.Instance.Users, SEEDED_NOGRANT_EMAIL) ?? null,
-            PolicyID: policy.ID,
+            PolicyID: policyID,
             PolicyCreatedByBundle: createdByBundle,
-            PolicySnapshot: snapshot,
             CreatedRoutineIds: [],
             CreatedRequestIds: [],
             CreatedLogIds: [],
@@ -417,19 +445,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('chief-of-staff', {
         }
         for (const id of f.CreatedLogIds) await del('MJ: Action Execution Logs', id);
 
-        if (f.PolicyCreatedByBundle) {
+        if (f.PolicyCreatedByBundle && f.PolicyID) {
             await del('MJ: AI Agent User Policies', f.PolicyID);
             AgentUserPolicyEngine.Instance.ClearCache(f.AgentID, user.ID);
-        } else if (f.PolicySnapshot) {
-            try {
-                const policy = await provider.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', user);
-                if (await policy.Load(f.PolicyID)) {
-                    policy.EmailChannelMode = f.PolicySnapshot.EmailChannelMode;
-                    policy.RequireApprovalForExternalComms = f.PolicySnapshot.RequireApprovalForExternalComms;
-                    policy.Status = f.PolicySnapshot.Status;
-                    await policy.Save();
-                }
-            } catch { /* best-effort restore */ }
         }
         fixture = null;
     }

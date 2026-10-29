@@ -515,6 +515,7 @@ export const UserRoutinesChecks: NamedCheck[] = [
                 x.ScheduleMode = 'OneShot';
                 x.CronExpression = null;
                 x.NextRunAt = scheduledFor;
+                x.StartingPayload = JSON.stringify({ Expression: '6*7' });
             });
             const before = await fetchById('MJ: User Routines', r.ID, user);
             const stored = new Date(String(before.NextRunAt)).getTime();
@@ -539,6 +540,7 @@ export const UserRoutinesChecks: NamedCheck[] = [
                 x.ScheduleMode = 'OneShot';
                 x.CronExpression = null;
                 x.NextRunAt = null;
+                x.StartingPayload = JSON.stringify({ Expression: '6*7' });
             });
 
             const summary = await new UserRoutineDispatcherDriver().RunRoutineNow(r, user);
