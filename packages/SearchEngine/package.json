@@ -27,6 +27,9 @@
     "@memberjunction/tag-engine-base": "6.2.0-edge.6",
     "nunjucks": "^3.2.4"
   },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.3.1"
+  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "@types/nunjucks": "^3.2.6",
