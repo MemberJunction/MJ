@@ -424,14 +424,17 @@ def gate_model(d: GateRecord) -> GateModel | GateKeepSimple | GateNoSignal:
 def _artifacts(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, finalist_name: str, finalist: TrainedPredictor,
                fitted: Sequence[BL.FittedBaseline]) -> List[ReturnedArtifact]:
     """v2 artifacts for the finalist and every fitted simple baseline the gate could ship (one-feature, GLM). The dummy
-    and the incumbent heuristic are yardsticks and never ship. Each envelope lists the columns its predictor uses."""
+    and the incumbent heuristic are yardsticks and never ship. Each envelope lists the columns its predictor uses and,
+    for a linear predictor, the mean encoded training row its per-row drivers are measured from."""
     shippable: List[Tuple[str, TrainedPredictor]] = [(finalist_name, finalist)]
     shippable += [(b.name, b.predictor) for b in fitted
                   if b.role == "simple" and isinstance(b.predictor, TrainedPredictor)]
     out: List[ReturnedArtifact] = []
     for name, predictor in shippable:
+        b = predictor.driver_baseline
         built = artifacts_v2.build(name, predictor, predictor.columns, req.task.kind, enc.class_order,
-                                   snap.feature_schema_hash, None, None)
+                                   snap.feature_schema_hash, None if b is None else b.mean,
+                                   None if b is None else b.columns)
         out.append(ReturnedArtifact(candidate=built.candidate, bytesBase64=built.bytes_base64, sha256=built.sha256,
                                     featureSchemaHash=built.feature_schema_hash, classOrder=built.class_order))
     return out

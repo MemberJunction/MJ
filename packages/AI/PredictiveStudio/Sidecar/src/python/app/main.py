@@ -36,7 +36,7 @@ from .importance import permutation_importance
 from .preprocessing import FittedPreprocessing
 from .scores import PrimaryMetric, primary_score
 from .run import run_trainer
-from .trainer import TrainedPredictor
+from .trainer import DriverBaseline, TrainedPredictor, single_coef_row
 from .trainer_schemas import TrainerRequest
 from .schemas import (
     ImportanceKind,
@@ -44,6 +44,7 @@ from .schemas import (
     PredictRequest,
     PredictResponse,
     Prediction,
+    PredictionContribution,
     TrainRequest,
     TrainResponse,
 )
@@ -730,7 +731,8 @@ def _load_v2(artifact_b64: Optional[str]) -> Optional[Tuple[TrainedPredictor, Pr
 def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: PredictRequest) -> PredictResponse:
     """Score raw rows with a v2 predictor, its own in-fold encoding applied (never re-fit). Classification returns
     every class's probability in the artifact's declared classOrder; `score` is P(classOrder[1]) for binary, else
-    the predicted class's probability."""
+    the predicted class's probability. A linear predictor's rows carry signed drivers measured from the envelope's
+    training mean; an envelope without one gives no driver."""
     names = [c.name for c in envelope.featureColumns if c.encoding.kind != "identifier"]
     missing = sorted(n for n in names if not any(n in r for r in req.rows))
     if req.rows and missing:
@@ -738,36 +740,29 @@ def _predict_v2(predictor: TrainedPredictor, envelope: PredictorEnvelope, req: P
     frame = pd.DataFrame([{n: r.get(n) for n in names} for r in req.rows], columns=names)
     try:
         out = np.asarray(predictor.predict(frame), dtype=np.float64)
+        drivers = predictor.contributions(frame, _envelope_driver_baseline(envelope))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    contribs = [None if d is None else [PredictionContribution(feature=f, value=v) for f, v in d] for d in drivers]
     order = envelope.classOrder
     if order is None:
-        return PredictResponse(predictions=[Prediction(score=float(v)) for v in out], classOrder=None)
+        return PredictResponse(predictions=[Prediction(score=float(v), contributions=c) for v, c in zip(out, contribs)],
+                               classOrder=None)
     probs = np.column_stack([1 - out, out]) if out.ndim == 1 else out
     preds: List[Prediction] = []
-    for row in probs:
+    for row, c in zip(probs, contribs):
         k = int(np.argmax(row))
         score = float(row[1]) if len(order) == 2 else float(row[k])
-        preds.append(Prediction.model_validate({"score": score, "class": order[k],
+        preds.append(Prediction.model_validate({"score": score, "class": order[k], "contributions": c,
                                                 "probabilities": [float(v) for v in row]}))
     return PredictResponse(predictions=preds, classOrder=list(order))
 
 
-def _linear_coef_row(estimator: Any) -> Optional[np.ndarray]:
-    """The single coefficient vector for a linear model, or None when per-row attribution isn't exact.
-
-    Returns the 1-D ``coef_`` for regression (Ridge) or binary classification (LogisticRegression,
-    ``coef_`` shape ``(1, n)``). Returns None for tree/ensemble models (no ``coef_``) and for multiclass
-    (``coef_`` shape ``(k, n)``, k>1) — those fall back to global importance rather than a dishonest guess.
-    """
-    if not hasattr(estimator, "coef_"):
+def _envelope_driver_baseline(envelope: PredictorEnvelope) -> Optional[DriverBaseline]:
+    """The training mean a v2 envelope carries with its encoded column names, or None when either is absent."""
+    if envelope.driverBaseline is None or envelope.transformedColumns is None:
         return None
-    coef = np.asarray(estimator.coef_, dtype=float)
-    if coef.ndim == 1:
-        return coef
-    if coef.ndim == 2 and coef.shape[0] == 1:
-        return coef[0]
-    return None
+    return DriverBaseline(np.asarray(envelope.driverBaseline, dtype=np.float64), list(envelope.transformedColumns))
 
 
 def _row_contributions(
@@ -775,20 +770,26 @@ def _row_contributions(
 ) -> List[Optional[List[Dict[str, Any]]]]:
     """Top signed per-record feature contributions for a LINEAR model (P1-5), else all-None.
 
-    For a linear model the exact contribution of feature j to row i's output is ``coef[j] * X[i, j]``
-    (the log-odds contribution for classification, the value contribution for regression). We rank by
-    magnitude and return the top ``top_k`` non-negligible ones per row. Any shape mismatch or unexpected
-    estimator yields ``[None, ...]`` so /predict never fails because of the explanation layer — the score
-    path is unaffected and the UI falls back to global importance.
+    For a linear model the contribution of feature j to row i's output, measured from the mean development row
+    ``x_bar`` stashed at training as ``mj_driver_baseline_``, is ``coef[j] * (X[i, j] - x_bar[j])`` (the log-odds
+    contribution for classification, the value contribution for regression), so a driver says how the row differs
+    from the training population rather than from zero. We rank by magnitude and return the top ``top_k``
+    non-negligible ones per row. A model without the stashed mean (trained before it was stashed), any shape
+    mismatch or an unexpected estimator yields ``[None, ...]``: no driver rather than one measured from zero, and
+    /predict never fails because of the explanation layer — the score path is unaffected and the UI falls back to
+    global importance.
     """
     n_rows = int(X.shape[0]) if hasattr(X, "shape") and X.ndim >= 1 else 0
     try:
-        coef = _linear_coef_row(estimator)
-        if coef is None or X.ndim != 2 or X.shape[1] != coef.shape[0] or len(feature_names) != coef.shape[0]:
+        coef = single_coef_row(estimator)
+        stashed = getattr(estimator, "mj_driver_baseline_", None)
+        baseline = None if stashed is None else np.asarray(stashed, dtype=float).reshape(-1)
+        if coef is None or baseline is None or X.ndim != 2 or X.shape[1] != coef.shape[0] \
+                or len(feature_names) != coef.shape[0] or baseline.shape[0] != coef.shape[0]:
             return [None] * n_rows
         out: List[Optional[List[Dict[str, Any]]]] = []
         for i in range(n_rows):
-            contrib = coef * np.asarray(X[i], dtype=float)
+            contrib = coef * (np.asarray(X[i], dtype=float) - baseline)
             order = np.argsort(-np.abs(contrib))[:top_k]
             row = [
                 {"feature": feature_names[j], "value": float(contrib[j])}

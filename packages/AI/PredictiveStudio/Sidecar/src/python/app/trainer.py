@@ -88,6 +88,15 @@ def encode_label(task: TaskType, label: npt.NDArray[np.generic]) -> EncodedLabel
     return EncodedLabel(y, fam, None, power)
 
 
+@dataclass(frozen=True)
+class DriverBaseline:
+    """The mean encoded training row of a linear predictor and the encoded column names it is aligned with. Per-row
+    drivers are measured from it, so a driver says how a row differs from the training population, not from zero."""
+
+    mean: FArr
+    columns: list[str]
+
+
 class CalibrationMap(Protocol):
     """A fitted calibration map: raw probabilities in, calibrated probabilities out."""
 
@@ -107,6 +116,18 @@ class TrainedPredictor(BaseEstimator):  # type: ignore[misc]
         self.family = family
         self.n_classes = n_classes
         self.calibrator: Optional[CalibrationMap] = None
+        # Set by `fit_predictor` for a linear final step. Never pickled: a shipped artifact carries the mean in its
+        # envelope (`driverBaseline`, `transformedColumns`), the one place a scorer reads it from.
+        self.driver_baseline: Optional[DriverBaseline] = None
+
+    def __getstate__(self) -> dict[str, object]:
+        state: dict[str, object] = dict(super().__getstate__())
+        state.pop("driver_baseline", None)
+        return state
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        super().__setstate__(state)
+        self.driver_baseline = None
 
     def predict_raw(self, X: pd.DataFrame) -> FArr:
         """The pipeline's prediction before calibration, with native thread pools held to the fit's thread count."""
@@ -120,6 +141,29 @@ class TrainedPredictor(BaseEstimator):  # type: ignore[misc]
                 return full[:, 1] if self.family == "binary" else full
             out = np.asarray(self.pipeline.predict(frame), dtype=np.float64)
         return np.maximum(out, 1e-9) if self.family in ("count", "non-negative") else out
+
+    def contributions(self, X: pd.DataFrame, baseline: Optional[DriverBaseline],
+                      top_k: int = 5) -> list[Optional[list[tuple[str, float]]]]:
+        """Each row's top `top_k` signed drivers for a linear final step with one coefficient row: coef * (z - z_bar),
+        where z is the row's encoded vector and z_bar the training mean in `baseline`, ranked by magnitude. A row gets
+        None when the model is not linear, has one coefficient row per class (multiclass), or `baseline` is absent or
+        not aligned with this predictor's encoded columns: no driver rather than one measured from zero."""
+        coef = single_coef_row(self.pipeline.steps[-1][1])
+        if coef is None or baseline is None:
+            return [None] * len(X)
+        encoder = self.pipeline[:-1]
+        names = [str(n) for n in encoder.get_feature_names_out()]
+        if names != baseline.columns or len(names) != coef.shape[0] or baseline.mean.shape != coef.shape:
+            return [None] * len(X)
+        with threadpool_limits(limits=self.threads):
+            Z = np.asarray(encoder.transform(encoding.normalize(self.columns, X)), dtype=np.float64)
+        out: list[Optional[list[tuple[str, float]]]] = []
+        for z in Z:
+            contrib = coef * (z - baseline.mean)
+            order = np.argsort(-np.abs(contrib))[:top_k]
+            row = [(names[j], float(contrib[j])) for j in order if abs(float(contrib[j])) > 1e-9]
+            out.append(row or None)
+        return out
 
     def predict(self, X: pd.DataFrame) -> FArr:
         raw = self.predict_raw(X)
@@ -167,7 +211,34 @@ def fit_predictor(spec: CandidateSpec, columns: Sequence[encoding.ColumnSpec], X
     with threadpool_limits(limits=threads):
         pipe.fit(train_frame, np.asarray(enc.y)[fit_idx])
     n_classes = len(enc.class_order) if enc.class_order is not None else 0
-    return TrainedPredictor(pipe, enc.family, n_classes, columns, threads)
+    predictor = TrainedPredictor(pipe, enc.family, n_classes, columns, threads)
+    predictor.driver_baseline = _driver_baseline(pipe, train_frame, threads)
+    return predictor
+
+
+def single_coef_row(model: BaseEstimator) -> Optional[FArr]:
+    """A fitted linear model's one coefficient row (regression, binary): the only models whose per-row drivers are
+    exact. None for a model without coefficients (trees, boosters, the MLP) or with one row per class (multiclass),
+    which fall back to global importance rather than a dishonest guess."""
+    coef = getattr(model, "coef_", None)
+    if coef is None:
+        return None
+    c = np.asarray(coef, dtype=np.float64)
+    if c.ndim == 2 and c.shape[0] == 1:
+        return np.asarray(c[0], dtype=np.float64)
+    return c if c.ndim == 1 else None
+
+
+def _driver_baseline(pipe: Pipeline, train_frame: pd.DataFrame, threads: int) -> Optional[DriverBaseline]:
+    """The mean encoded row of the rows the pipeline was fitted on, for a final step with one coefficient row; None
+    for every other model, which has no per-row drivers."""
+    if single_coef_row(pipe.steps[-1][1]) is None:
+        return None
+    encoder = pipe[:-1]
+    with threadpool_limits(limits=threads):
+        Z = np.asarray(encoder.transform(train_frame), dtype=np.float64)
+    return DriverBaseline(np.asarray(Z.mean(axis=0), dtype=np.float64),
+                          [str(n) for n in encoder.get_feature_names_out()])
 
 
 def unit_groups(snap: Snapshot, rows: IntArr) -> list[str]:
