@@ -94,52 +94,6 @@ export interface RealtimeTurnDetectionSettings {
  */
 export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
 
-// Allowed-literal lists. `satisfies` makes the compiler reject a literal the type does not declare;
-// the Exclude check below makes it reject a declared literal the list forgot — so they cannot drift.
-const TURN_DETECTION_MODES = ['default', 'serverVad', 'semanticVad', 'native'] as const satisfies readonly RealtimeTurnDetectionMode[];
-const TURN_DETECTION_EAGERNESS = ['low', 'auto', 'high'] as const satisfies ReadonlyArray<NonNullable<RealtimeTurnDetectionSettings['Eagerness']>>;
-const TURN_COVERAGES = ['audioActivityOnly', 'audioActivityAndAllVideo'] as const satisfies readonly RealtimeTurnCoverage[];
-type AssertNever<T extends never> = T;
-export type _TurnDetectionLiteralListsComplete = [
-    AssertNever<Exclude<RealtimeTurnDetectionMode, (typeof TURN_DETECTION_MODES)[number]>>,
-    AssertNever<Exclude<NonNullable<RealtimeTurnDetectionSettings['Eagerness']>, (typeof TURN_DETECTION_EAGERNESS)[number]>>,
-    AssertNever<Exclude<RealtimeTurnCoverage, (typeof TURN_COVERAGES)[number]>>,
-];
-
-function pickLiteral<T extends string>(allowed: readonly T[], value: unknown): T | undefined {
-    return allowed.find((candidate) => candidate === value);
-}
-
-function pickFiniteNumber(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-/**
- * Structurally validates an open-JSON turn-detection block (a cascade layer, or the `turnDetection`
- * session-bag key) into {@link RealtimeTurnDetectionSettings}: only recognized, correctly-typed
- * knobs survive. Returns `undefined` when nothing valid is present, so an absent or garbage value
- * contributes nothing (tolerant, like every other cascade input). Numbers are checked for
- * finiteness only — range policy (e.g. Threshold 0..1) belongs to the driver that maps them.
- */
-export function NormalizeTurnDetectionSettings(raw: unknown): RealtimeTurnDetectionSettings | undefined {
-    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
-    }
-    const source = raw as Record<string, unknown>;
-    const result: RealtimeTurnDetectionSettings = {};
-    const mode = pickLiteral(TURN_DETECTION_MODES, source['Mode']);
-    if (mode !== undefined) result.Mode = mode;
-    const eagerness = pickLiteral(TURN_DETECTION_EAGERNESS, source['Eagerness']);
-    if (eagerness !== undefined) result.Eagerness = eagerness;
-    const threshold = pickFiniteNumber(source['Threshold']);
-    if (threshold !== undefined) result.Threshold = threshold;
-    const silenceDurationMs = pickFiniteNumber(source['SilenceDurationMs']);
-    if (silenceDurationMs !== undefined) result.SilenceDurationMs = silenceDurationMs;
-    const coverage = pickLiteral(TURN_COVERAGES, source['Coverage']);
-    if (coverage !== undefined) result.Coverage = coverage;
-    return Object.keys(result).length > 0 ? result : undefined;
-}
-
 /**
  * Which plane handles reasoning during a realtime session:
  * - `'local'` — the application/agent loop handles reasoning, Actions, and tool results (MJ default).

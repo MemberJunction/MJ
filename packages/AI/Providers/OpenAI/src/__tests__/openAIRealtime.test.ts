@@ -37,8 +37,9 @@ vi.mock('@memberjunction/ai', async () => {
     // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
     // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    // NormalizeTurnDetectionSettings is the single shared normalizer (PURE; only its import of the mocked global is unused here) — run the real one so tests cannot drift from it.
-    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/modelConfiguration');
+    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
+    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
+    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
     // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in

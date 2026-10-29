@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NormalizeTurnDetectionSettings } from '../generic/modelConfiguration';
+import { NormalizeTurnDetectionSettings } from '../generic/turnDetectionSettings';
 
 describe('NormalizeTurnDetectionSettings', () => {
     it('copies all five fields', () => expect(NormalizeTurnDetectionSettings({ Mode: 'serverVad', Eagerness: 'low', Threshold: 0.3, SilenceDurationMs: 900, Coverage: 'audioActivityOnly' }))
