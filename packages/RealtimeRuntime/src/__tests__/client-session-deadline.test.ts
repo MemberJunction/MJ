@@ -138,4 +138,25 @@ describe('ClientSessionDeadline alarm', () => {
     expect(hits).toHaveLength(1);
     d.Dispose();
   });
+
+  it('a wall clock that jumps back after Set does not delay a far deadline across a hop', () => {
+    let clock = 1_000_000;
+    const d = new ClientSessionDeadline(() => clock);
+    const hits: number[] = [];
+    d.Reached$.subscribe(() => hits.push(1));
+    const farMs = MAX_TIMER_MS + 60_000;
+    d.Set(new Date(clock + farMs));
+    clock -= 24 * 3600 * 1000; // the laptop clock is set back a day after the alarm was armed
+    vi.advanceTimersByTime(farMs - 1);
+    expect(hits).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(hits).toHaveLength(1);
+    d.Dispose();
+  });
+
+  it('the shared default options cannot be mutated through Options', () => {
+    const options = new ClientSessionDeadline().Options;
+    expect(Object.isFrozen(options)).toBe(true);
+    expect(Object.isFrozen(options.warnBeforeMs)).toBe(true);
+  });
 });

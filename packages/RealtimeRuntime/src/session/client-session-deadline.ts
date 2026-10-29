@@ -32,7 +32,8 @@ export interface SessionDeadlineOptions {
  * emits synchronously inside the timer callback and the runtime decides what follows.
  */
 export class ClientSessionDeadline {
-  private static readonly DEFAULT_OPTIONS: Readonly<Required<SessionDeadlineOptions>> = { autoEnd: true, warnBeforeMs: [] };
+  /** Shared by every instance until its first Set, so frozen (array too): a caller mutating `Options` cannot change another instance's defaults. */
+  private static readonly DEFAULT_OPTIONS: Readonly<Required<SessionDeadlineOptions>> = Object.freeze({ autoEnd: true, warnBeforeMs: Object.freeze([]) });
 
   private readonly subject = new BehaviorSubject<Date | null>(null);
   private readonly warningSubject = new Subject<{ deadline: Date; remainingMs: number }>();

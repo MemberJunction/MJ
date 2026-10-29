@@ -21,7 +21,8 @@ import {
   type RealtimeConnectionState,
   type RealtimeContextActionResult,
   type RealtimeHostChannelDeclaration,
-  type RealtimeSessionRuntime
+  type RealtimeSessionRuntime,
+  type SessionEndReason
 } from '@memberjunction/realtime-runtime';
 import { ResolveAuthMode } from '../config';
 import type {
@@ -631,7 +632,7 @@ export class WidgetController {
     });
   }
 
-  private onSessionEnded(sessionId: string, runtimeReason: 'explicit' | 'error'): void {
+  private onSessionEnded(sessionId: string, runtimeReason: SessionEndReason): void {
     this.deps.pageClose.Disarm();
     this.clearDeadlineTimer();
     this.surfaceOpenSubject.next(false);

@@ -50,7 +50,7 @@ import {
 } from '@memberjunction/ai-realtime-client';
 import { DefaultRealtimeSessionLauncher, HasClientCredential, type IRealtimeSessionLauncher } from './session-launcher';
 import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
-import { ClientSessionDeadline } from './client-session-deadline';
+import { ClientSessionDeadline, type SessionDeadlineOptions } from './client-session-deadline';
 import {
   RealtimeCaptures,
   REALTIME_CAPTURES_OFF,
@@ -592,11 +592,26 @@ export interface RealtimeSessionRunOptions {
   readonly appContext?: AppContextSnapshot | null;
 }
 
-/** Why a call ended, as the runtime reports it on `SessionEnded$`. */
-export type SessionEndReason = 'explicit' | 'error';
+/**
+ * Why a call ended, as the runtime reports it on `SessionEnded$`: `'explicit'` when the host or user ended it,
+ * `'error'` when the runtime ended it over a failure, `'deadline'` when it ended because the session deadline was
+ * reached (the runtime's own auto-end, or a host's `EndRealtimeSession('deadline')`).
+ */
+export type SessionEndReason = 'explicit' | 'error' | 'deadline';
 
-/** The `CloseReason` values a client may stamp on its own session row; the others belong to the server. */
-export type ClientCloseReason = 'Explicit' | 'Error';
+/**
+ * The `CloseReason` values a client may stamp on its own session row; the others belong to the server. `TimeLimit`
+ * is a claim the server verifies against the session's stored deadline (and downgrades to `Explicit` when it does
+ * not hold).
+ */
+export type ClientCloseReason = 'Explicit' | 'Error' | 'TimeLimit';
+
+/** The one mapping from how a call ended to the `CloseReason` the client claims for its row; a new end reason is a compile error here. */
+const CLOSE_REASON_BY_END: Readonly<Record<SessionEndReason, ClientCloseReason>> = {
+  explicit: 'Explicit',
+  error: 'Error',
+  deadline: 'TimeLimit',
+};
 
 /** Thrown by a start while a call is live: the runtime holds one driver, and never replaces a live one. */
 export class RealtimeSessionAlreadyActiveError extends Error {
@@ -636,6 +651,7 @@ export class RealtimeSessionRuntime {
    *                  encoder the platform offers).
    */
   constructor(protected readonly mediaHost: IRealtimeMediaHost) {
+    this.wireSessionDeadline();
     // Re-upload shards a previous, interrupted call left in the local store. Deferred a tick so a
     // host can assign `Provider` right after construction; when it still has no transport the drain
     // defers itself and session start tries again. Unref'd so it never holds a Node process open.
@@ -836,7 +852,8 @@ export class RealtimeSessionRuntime {
    * `agentSessionId` (so subscribers can correlate against `SessionStarted$`'s
    * sessionId) and the client-distinguishable reason — `'explicit'` when the
    * user called `EndRealtimeSession`, `'error'` when the runtime ended the call over a failure: a
-   * failed start, or a fatal error from the provider mid-call. Server-side close paths (janitor, shutdown) do NOT propagate here —
+   * failed start, or a fatal error from the provider mid-call; `'deadline'` when the session deadline ended it
+   * (the runtime's auto-end, or `EndRealtimeSession('deadline')`). Server-side close paths (janitor, shutdown) do NOT propagate here —
    * they happen out-of-process and have no client push channel today.
    */
   public readonly SessionEnded$: Observable<{ sessionId: string; reason: SessionEndReason }> =
@@ -1329,6 +1346,22 @@ export class RealtimeSessionRuntime {
   public IdentityVerifiedSpokenResponse: string | ((payload: IdentityVerifiedEventPayload) => string | null) | null = null;
 
   private readonly clientDeadline = new ClientSessionDeadline();
+  private readonly _sessionDeadlineWarning$ = new Subject<{ sessionId: string; deadline: Date; remainingMs: number }>();
+  private readonly _sessionDeadlineReached$ = new Subject<{ sessionId: string; deadline: Date }>();
+
+  /**
+   * Fires once per offset the host passed in `warnBeforeMs` to {@link SetSessionDeadline}, as that moment arrives, with
+   * the live session's id. `remainingMs` is the offset. Emits only while a session is live.
+   */
+  public readonly SessionDeadlineWarning$: Observable<{ sessionId: string; deadline: Date; remainingMs: number }> =
+    this._sessionDeadlineWarning$.asObservable();
+
+  /**
+   * Fires once when the session deadline is reached, with the live session's id — BEFORE the runtime's own auto-end, so
+   * a host that ends the call here (`autoEnd: false`, or a goodbye of its own) is the end that counts; a second end is
+   * coalesced onto the first. Emits only while a session is live.
+   */
+  public readonly SessionDeadlineReached$: Observable<{ sessionId: string; deadline: Date }> = this._sessionDeadlineReached$.asObservable();
 
   /**
    * The client's copy of the session's absolute deadline (`null` when none is known). A host that
@@ -1346,9 +1379,52 @@ export class RealtimeSessionRuntime {
     return this.clientDeadline.Value;
   }
 
-  /** Sets the baseline deadline a host knows at session start (`null` clears). See {@link SessionDeadline$}. */
-  public SetSessionDeadline(deadline: Date | null): void {
-    this.clientDeadline.Set(deadline);
+  /**
+   * Sets the baseline deadline a host knows at session start (`null` clears) and arms the alarm. See
+   * {@link SessionDeadline$}. By default the runtime ends the call with reason `'deadline'` when it is reached; pass
+   * `{ autoEnd: false }` to own the hang-up (then end with `EndRealtimeSession('deadline')` to stamp `TimeLimit`), and
+   * `warnBeforeMs` for {@link SessionDeadlineWarning$}. The runtime never arms this by itself.
+   */
+  public SetSessionDeadline(deadline: Date | null, options?: SessionDeadlineOptions): void {
+    this.clientDeadline.Set(deadline, options);
+  }
+
+  /**
+   * Re-publishes the deadline clock's warnings and reach with the live session id, and runs the auto-end. Subscribed
+   * once, from the constructor; the clock is owned by this runtime and shares its lifetime, and the runtime has no
+   * dispose step, so the subscriptions are never torn down separately. Session teardown clears the clock, which
+   * cancels every pending timer.
+   */
+  private wireSessionDeadline(): void {
+    this.clientDeadline.Warning$.subscribe((warning) => {
+      const sessionId = this.liveDeadlineSessionId();
+      if (sessionId) {
+        this._sessionDeadlineWarning$.next({ sessionId, deadline: warning.deadline, remainingMs: warning.remainingMs });
+      }
+    });
+    this.clientDeadline.Reached$.subscribe((reached) => this.onSessionDeadlineReached(reached.deadline));
+  }
+
+  /** Tells the host first, then auto-ends unless the host opted out or already ended the call from inside the event. */
+  private onSessionDeadlineReached(deadline: Date): void {
+    const sessionId = this.liveDeadlineSessionId();
+    if (!sessionId) {
+      return;
+    }
+    this._sessionDeadlineReached$.next({ sessionId, deadline });
+    if (this.clientDeadline.Options.autoEnd && this.liveDeadlineSessionId() === sessionId) {
+      this.teardown('deadline').catch((error: unknown) => {
+        console.error(`[RealtimeSession] Ending session ${sessionId} at its deadline failed:`, error);
+      });
+    }
+  }
+
+  /**
+   * The session a deadline event belongs to: the minted session, unless it is already being torn down. Not
+   * {@link isSessionLive}: a call that is resuming reads `'connecting'`, and its deadline still holds.
+   */
+  private liveDeadlineSessionId(): string | null {
+    return this.teardownInFlight ? null : this.agentSessionId;
   }
 
   /**
@@ -2253,12 +2329,15 @@ export class RealtimeSessionRuntime {
   /**
    * End the active session: stop the mic, tear down the provider connection, and close
    * the server-side agent session. Safe to call when no session is active.
+   *
+   * @param reason `'deadline'` for a host that owns the hang-up at its deadline (`autoEnd: false`): the end is reported
+   *   as `'deadline'` and the row is claimed as `TimeLimit`. Default `'explicit'`.
    */
-  public async EndRealtimeSession(): Promise<void> {
+  public async EndRealtimeSession(reason: 'explicit' | 'deadline' = 'explicit'): Promise<void> {
     if (!this.IsActive && !this.agentSessionId) {
       return;
     }
-    await this.teardown('explicit');
+    await this.teardown(reason);
   }
 
   /**
@@ -5387,8 +5466,9 @@ export class RealtimeSessionRuntime {
    * that dies before it can say anything; it is never the plan.
    *
    * @param end why the call ended — `'explicit'` when the host or user ended it, `'error'` when the
-   *   runtime ended it because the start or the call failed. Reported on `SessionEnded$` and stamped on
-   *   the server row as its `CloseReason` (`Explicit` / `Error`).
+   *   runtime ended it because the start or the call failed, `'deadline'` when the session deadline ended it.
+   *   Reported on `SessionEnded$` and stamped on the server row as its `CloseReason` through
+   *   {@link CLOSE_REASON_BY_END} (`Explicit` / `Error` / `TimeLimit`).
    */
   private async teardown(end: SessionEndReason): Promise<void> {
     // Invalidate any start still in flight BEFORE anything else, so it abandons itself at its next
@@ -5492,7 +5572,7 @@ export class RealtimeSessionRuntime {
     this.resetUsageRelay();
 
     if (this.agentSessionId) {
-      await this.closeServerSession(this.agentSessionId, end === 'error' ? 'Error' : 'Explicit');
+      await this.closeServerSession(this.agentSessionId, CLOSE_REASON_BY_END[end]);
     }
 
     // Wait for the terminal's ack only AFTER the close: nothing after an aborted await ever runs, so
