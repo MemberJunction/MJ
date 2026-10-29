@@ -117,6 +117,8 @@ export type WhiteboardWidgetErrorCode =
   | 'async_required'
   /** The widget never reported ready within the deadline. */
   | 'widget_not_ready'
+  /** The widget was ready but still handling an earlier command until the deadline; retry. */
+  | 'widget_busy'
   /** The widget accepted the command but did not answer within the deadline. */
   | 'widget_timeout'
   /** The widget's document reloaded while the command was in flight. */
@@ -146,7 +148,7 @@ export type WhiteboardWidgetErrorCode =
 
 const ERROR_CODES: ReadonlySet<string> = new Set<WhiteboardWidgetErrorCode>([
   'widget_not_found', 'not_html', 'surface_unavailable', 'async_required', 'widget_not_ready',
-  'widget_timeout', 'widget_reloaded', 'widget_unmounted', 'stale_ref', 'ambiguous_target',
+  'widget_busy', 'widget_timeout', 'widget_reloaded', 'widget_unmounted', 'stale_ref', 'ambiguous_target',
   'target_not_found', 'disabled', 'not_operable', 'unknown_action', 'action_failed',
   'access_denied', 'vetoed', 'invalid_args'
 ]);

@@ -96,6 +96,15 @@ describe('RealtimeWhiteboardHostComponent — widget tools (DOM)', () => {
     expect([fix.componentInstance.Board!.PanX, fix.componentInstance.Board!.PanY]).toEqual(pan);
   });
 
+  it('a widget that reports MORE step outcomes than were sent still succeeds (review NB2)', async () => {
+    const { fix } = render();
+    const r = await runWidgetTool(fix, WHITEBOARD_TOOL_NAMES.OperateWidget,
+      { itemId: 'html-1', steps: [{ target: 'Submit', op: 'click' }] },
+      { steps: [{ ok: true }, { ok: true }], outline: 'done' });
+    expect(r).toMatchObject({ success: true });
+    expect(fix.componentInstance.WidgetToastText).toBe('Ava clicked "Submit" (2 steps) in Planet quiz');
+  });
+
   it('a multi-step toast names the last step, and a bare ref reads as "a control" (E2E polish)', async () => {
     const { fix } = render();
     await runWidgetTool(fix, WHITEBOARD_TOOL_NAMES.OperateWidget,

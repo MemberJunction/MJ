@@ -202,7 +202,7 @@ The agent-facing surface is intentionally transport-agnostic — it is just *nam
 
    Prefer the host's `ApplyAgentTool(toolName, argsJson)` when a surface is bound — same round-trip plus the UI garnish (violet pop-in, action toast with Undo, gliding presence cursor).
 
-   The three **widget tools** talk to a live widget frame, so they need a rendered board and resolve asynchronously: route them to the host's `ApplyAgentToolAsync(toolName, argsJson): Promise<string>` (it accepts every tool, never rejects). The synchronous paths stay as they were and answer a widget tool with a structured failure instead: `ApplyWhiteboardAgentTool` returns `errorCode: 'surface_unavailable'`, the host's `ApplyAgentTool` returns `'async_required'`. `IsWhiteboardWidgetToolName(name)` tells the two kinds apart.
+   The three **widget tools** talk to a live widget frame, so they need a rendered board and resolve asynchronously: route them to the host's `ApplyAgentToolAsync(toolName, argsJson): Promise<string>` (it accepts every tool, never rejects). The synchronous paths stay as they were and answer a widget tool with a structured failure instead: `ApplyWhiteboardAgentTool` returns `errorCode: 'surface_unavailable'`, the host's `ApplyAgentTool` returns a failed result with `errorCode: 'async_required'`. `IsWhiteboardWidgetToolName(name)` tells the two kinds apart.
 3. **Feed perception.** Subscribe the host's `SceneDelta` output (debounced 750 ms, coalesced) and pipe each JSON delta into the agent's context as background information. Use `CurrentSeq` / `BuildSceneDelta(sinceToken)` directly if you manage your own cadence.
 
 The tool set (18): `AddNote`, `AddShape`, `AddText`, `AddMarkdown`, `AddHtml`, `UpdateContent`, `DrawConnector`, `Highlight`, `MoveItem`, `RemoveItem`, `StyleItem`, `SetTag` (`{ itemId, tag? }` — set or clear an item's role tag; empty clears), the page tools `AddPage` (`{ name? }` — create + switch), `SwitchPage` (`{ name }` — page name, case-insensitive, or id) and `RenamePage` (`{ name, newName }`), and the widget tools `InspectWidget`, `OperateWidget` and `CallWidget` (`WHITEBOARD_WIDGET_TOOL_NAMES`, see [Agents and live widgets](#agents-and-live-widgets)) — see `WHITEBOARD_TOOL_NAMES` and the per-tool schemas in `whiteboard-tools.ts`. Item and widget tools always target the **active page**; page-tool results carry `pageId` instead of `itemId`. Content sizes are capped (`WHITEBOARD_MARKDOWN_MAX_CHARS` = 32 000, `WHITEBOARD_HTML_MAX_CHARS` = 64 000).
@@ -271,7 +271,7 @@ The only way data flows between widget and host is `postMessage`, in both direct
 1. `InjectWhiteboardSubmitHelper` prepends (idempotently) ONE helper script to every widget's srcdoc. It defines the `MJWhiteboard` API below, the ambient interaction recorder, and the frame's half of the command channel.
 2. The board owns a single `window` `'message'` listener. Submissions are validated with `EvaluateWidgetSubmitMessage` (bridge marker present, `event.source` resolves to a *tracked* widget iframe, payload capped at `WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS` = 8 000 chars); ready / actions / state / reply messages with `EvaluateWidgetChannelMessage` (same source rule, shape-checked and size-capped). Anything else is dropped.
 3. Accepted submissions flow through `WidgetSubmitting` (cancelable) → `WidgetSubmitted`; protocol messages go to the board's `WhiteboardWidgetBroker`.
-4. Host → widget commands (`inspect` / `operate` / `call` / `restoreState` / `hello`) carry `__mjWhiteboardCommand`; the helper accepts them only from `parent`. The full wire contract is the table at the top of `whiteboard-widget-protocol.ts`.
+4. Host → widget commands (`inspect` / `operate` / `call` / `restoreState` / `hello`) carry `__mjWhiteboardCommand`; the helper accepts them only from `parent`. They are posted with target origin `'*'` on purpose: a `srcdoc` frame runs at the opaque origin `null`, so no concrete origin can be named. Safety comes from addressing the frame's own window object and from the helper's parent-only check, not from the origin argument. The full wire contract is the table at the top of `whiteboard-widget-protocol.ts`.
 
 ### The widget-author API (`MJWhiteboard`)
 
@@ -335,6 +335,7 @@ Error codes (`errorCode`, `WhiteboardWidgetErrorCode`):
 | `surface_unavailable` | No rendered board (the pure `ApplyWhiteboardAgentTool`, or no surface bound). |
 | `async_required` | A widget tool was sent through the sync `ApplyAgentTool`. |
 | `widget_not_ready` / `widget_timeout` | The widget never reported ready / did not answer within the deadline. |
+| `widget_busy` | The widget was ready but still handling an earlier command until the deadline (commands to one widget run one at a time); retry. |
 | `widget_reloaded` / `widget_unmounted` | The widget's document reloaded, or its frame unmounted, while the command was in flight. |
 | `stale_ref` / `ambiguous_target` / `target_not_found` | The ref is from an older outline / a label matched several controls (the candidates are listed) / nothing matched. |
 | `disabled` / `not_operable` | The control is disabled or read-only / the widget or control opted out, or the field is protected. |

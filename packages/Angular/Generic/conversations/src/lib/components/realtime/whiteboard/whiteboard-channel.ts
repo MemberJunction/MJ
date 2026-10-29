@@ -307,6 +307,8 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private widgetStateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   /** When the widget-state path last requested a save (epoch ms). */
   private lastWidgetStateSaveAt = Number.NEGATIVE_INFINITY;
+  /** True while {@link RestoreState} runs: saves are held so none carries a half-restored board. */
+  private restoring = false;
   public get ChannelName(): string {
     return 'Whiteboard';
   }
@@ -480,7 +482,9 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
       StartBridgePoller: true
     });
     this.stateChangedSub = this.State.Changed$.subscribe((change) => {
-      this.Context?.RequestSave(this.BuildSavePayload());
+      if (!this.restoring) {
+        this.Context?.RequestSave(this.BuildSavePayload());
+      }
       this.RecordChange({ Author: change.Author, Perceive: false });
       // Only user edits (and scene replacements like undo) drive the settle-debounce pipeline.
       // Agent edits are confirmed with a single frame in ApplyAgentTool.
@@ -551,7 +555,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * the latest state). Nothing is requested when `persistWidgetState` is off.
    */
   private scheduleWidgetStateSave(): void {
-    if (!this.config.PersistWidgetState || this.widgetStateSaveTimer !== null) {
+    if (this.restoring || !this.config.PersistWidgetState || this.widgetStateSaveTimer !== null) {
       return;
     }
     const wait = this.lastWidgetStateSaveAt + WHITEBOARD_WIDGET_STATE_SAVE_THROTTLE_MS - Date.now();
@@ -788,14 +792,25 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * the {@link State} instance and its subscriptions are preserved). Returns `true` on
    * success; malformed / incompatible JSON returns `false` and the board stays fresh
    * (never throws — {@link WhiteboardState.LoadFromJSON} is tolerant by contract).
+   *
+   * Saves: none are requested while the board and its widget states are being loaded (so no
+   * save can pair the restored board with stale in-memory widget states); after a successful
+   * restore, exactly one save is requested carrying both. A failed restore requests nothing.
    */
   public override RestoreState(stateJson: string): boolean {
-    if (!this.State.LoadFromJSON(stateJson)) {
-      return false;
+    this.restoring = true;
+    try {
+      if (!this.State.LoadFromJSON(stateJson)) {
+        return false;
+      }
+      // A legacy payload (no `widgetStates` key) simply restores no widget state. With
+      // `persistWidgetState` off nothing is restored either: state lives in memory only.
+      this.State.LoadWidgetStates(this.config.PersistWidgetState ? readSavedWidgetStates(stateJson) : {});
     }
-    // A legacy payload (no `widgetStates` key) simply restores no widget state. With
-    // `persistWidgetState` off nothing is restored either: state lives in memory only.
-    this.State.LoadWidgetStates(this.config.PersistWidgetState ? readSavedWidgetStates(stateJson) : {});
+    finally {
+      this.restoring = false;
+    }
+    this.Context?.RequestSave(this.BuildSavePayload());
     return true;
   }
 

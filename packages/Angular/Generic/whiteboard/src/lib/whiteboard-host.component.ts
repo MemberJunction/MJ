@@ -888,7 +888,11 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     if (ran === 0) {
       return null;
     }
-    const step = args.Steps[ran - 1];
+    // A misbehaving widget can report more outcomes than steps were sent; never index past them.
+    const step = args.Steps[Math.min(ran, args.Steps.length) - 1];
+    if (!step) {
+      return `ran ${ran} steps`;
+    }
     const phrase = RealtimeWhiteboardHostComponent.stepPhrase(step);
     return ran > 1 ? `${phrase} (${ran} steps)` : phrase;
   }

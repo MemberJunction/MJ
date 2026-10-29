@@ -152,7 +152,8 @@ describe('WhiteboardWidgetBroker', () => {
     await flush();
     expect(frame.Sent.map((m) => m.op)).toEqual(['call']); // serialized: second waits
     vi.advanceTimersByTime(2000);
-    await expect(second).resolves.toMatchObject({ Ok: false, Code: 'widget_not_ready' });
+    // Review NB1: the widget IS ready, the call only waited in the queue, so it is busy, not unready.
+    await expect(second).resolves.toMatchObject({ Ok: false, Code: 'widget_busy' });
     vi.advanceTimersByTime(3000);
     await expect(first).resolves.toMatchObject({ Ok: false, Code: 'widget_timeout' });
     await flush();

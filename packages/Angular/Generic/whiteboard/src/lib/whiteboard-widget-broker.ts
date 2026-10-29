@@ -522,9 +522,16 @@ class CommandRun {
 
   private onDeadline(): void {
     const seconds = Math.round(this.deadlineMs / 100) / 10;
-    this.settle(this.posted
-      ? failure('widget_timeout', `The widget did not answer within ${seconds}s. It may be busy or broken; try again or rebuild it.`)
-      : failure('widget_not_ready', `The widget did not become ready within ${seconds}s. It may still be loading or its script failed; try again.`));
+    if (this.posted) {
+      this.settle(failure('widget_timeout', `The widget did not answer within ${seconds}s. It may be busy or broken; try again or rebuild it.`));
+    }
+    else if (this.broker.ReadyEntry(this.request.ItemID)) {
+      // Ready, but the call spent its whole budget queued behind an earlier command to this widget.
+      this.settle(failure('widget_busy', `The widget was still handling an earlier command after ${seconds}s. Try again in a moment.`));
+    }
+    else {
+      this.settle(failure('widget_not_ready', `The widget did not become ready within ${seconds}s. It may still be loading or its script failed; try again.`));
+    }
   }
 
   private settle(outcome: WhiteboardWidgetCommandOutcome): void {

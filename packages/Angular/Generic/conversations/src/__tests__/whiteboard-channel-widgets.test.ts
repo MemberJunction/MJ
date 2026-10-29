@@ -474,9 +474,28 @@ describe('RealtimeWhiteboardChannel — widget state save / restore', () => {
     const id = addWidget();
     channel.State.SetWidgetState(id, '"stale"');
     const legacy = channel.State.ToJSON();
+    const before = log.Saves.length;
     expect(channel.RestoreState(legacy)).toBe(true);
     expect(channel.State.GetWidgetState(id)).toBeNull();
+    // Review NB3 + Q2: the restore requests exactly ONE save, and it never carries the stale
+    // in-memory widget state (the board and its widget states are saved together).
+    const restoreSaves = log.Saves.slice(before);
+    expect(restoreSaves).toHaveLength(1);
+    expect(JSON.parse(restoreSaves[0])['widgetStates']).toBeUndefined();
+    const failedBefore = log.Saves.length;
     expect(channel.RestoreState('{not json')).toBe(false);
+    expect(log.Saves.length).toBe(failedBefore); // a failed restore requests nothing
+  });
+
+  it('a restore over in-memory widget states saves the RESTORED states, never the stale ones (review Q2)', () => {
+    channel.Initialize(makeContext(log));
+    const id = addWidget();
+    channel.State.SetWidgetState(id, '"stale"');
+    const payload = JSON.stringify({ ...JSON.parse(channel.State.ToJSON()), widgetStates: { [id]: '"restored"' } });
+    const before = log.Saves.length;
+    expect(channel.RestoreState(payload)).toBe(true);
+    const restoreSaves = log.Saves.slice(before).map((p) => JSON.parse(p)['widgetStates']);
+    expect(restoreSaves).toEqual([{ [id]: '"restored"' }]);
   });
 
   it('flushes a pending trailing widget-state save on Dispose', () => {

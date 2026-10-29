@@ -79,7 +79,7 @@ in-frame helper (one <script>, ES5)  ⇄  protocol (pure)  ⇄  WhiteboardWidget
 
 ## 6. Verification
 
-- **Unit and DOM:** `ng-whiteboard` 638 passing, `ng-conversations` 3000 passing. The helper is executed in jsdom, the broker is tested with fake timers, and a subclass contract test covers `ApplyAgentTool`.
+- **Unit and DOM:** `ng-whiteboard` 641 passing, `ng-conversations` 3001 passing. The helper is executed in jsdom, the broker is tested with fake timers, and a subclass contract test covers `ApplyAgentTool`.
 - **Live** (Explorer on a clean-room DB), on Gemini 3.8 Live and GPT Realtime 2.1, with typed input to the live session and a spoken pass on OpenAI:
   - agent operate with no self-echo, and "what did I pick?";
   - off-screen inspect and operate, and operate with the panel collapsed;
@@ -93,6 +93,8 @@ in-frame helper (one <script>, ES5)  ⇄  protocol (pure)  ⇄  WhiteboardWidget
   - auto-state key collisions;
   - off-screen inspect failing (frame unmounts went unseen after local re-renders; now a `MutationObserver`);
   - named fields reading by `name` instead of their visible label.
+
+**Code review, round 1 (Robert):** focus and blur no longer report protected fields (now `isGuarded`, like change and input); a call that only waited in a widget's queue returns `widget_busy` instead of `widget_not_ready`; the toast tolerates a widget reporting more step outcomes than were sent; `RestoreState` holds saves while it loads and then requests one save with the board and widget states together. Each has a regression test that fails without it.
 
 ## 7. Follow-ups
 

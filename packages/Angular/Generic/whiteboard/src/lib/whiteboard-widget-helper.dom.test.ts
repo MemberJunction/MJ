@@ -566,6 +566,19 @@ describe('D2: operate', () => {
 
 // ───────────────────────────────────────────────────────────── D3 author tagging
 
+describe('review R1: focus / blur never report protected fields', () => {
+  it('focusing and leaving a card-number field sends nothing; an ordinary field still reports', async () => {
+    const frame = makeFrame('<label>Card number <input name="cc_number"></label><label>Nickname <input name="nick"></label>');
+    el(frame, 'input[name="cc_number"]').focus();
+    el(frame, 'input[name="nick"]').focus();
+    el(frame, 'input[name="nick"]').blur();
+    await vi.advanceTimersByTimeAsync(1600);
+    const events = batches(frame).flatMap((b) => b.events ?? []);
+    expect(events.some((e) => /cc_number|Card number/i.test(e.target))).toBe(false);
+    expect(events.some((e) => e.kind === 'focus' && e.target === 'nick')).toBe(true);
+  });
+});
+
 describe('D3: author tagging', () => {
   it('an untrusted click OUTSIDE the agent window is the user (no `by`)', async () => {
     const frame = makeFrame('<button aria-label="Hint">?</button>');
