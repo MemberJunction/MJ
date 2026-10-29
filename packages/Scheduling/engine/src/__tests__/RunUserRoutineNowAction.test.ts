@@ -99,6 +99,15 @@ describe('RunUserRoutineNowAction', () => {
         expect(runNow.mock.calls[0][1]).toBe(OWNER);
     });
 
+    it('returns ROUTINE_NOT_FOUND instead of throwing when the caller cannot read the routine', async () => {
+        const h = makeHarness() as Harness & { provider: unknown };
+        (h.routine.Load as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('User: X does not have read permissions on MJ: User Routines'));
+        const result = await h.action.InternalRunAction(params(OTHER, 'R-1', h.provider));
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('ROUTINE_NOT_FOUND');
+        expect(runNow).not.toHaveBeenCalled();
+    });
+
     it('reports a missing RoutineID and an unknown routine without starting anything', async () => {
         const h = makeHarness(false) as Harness & { provider: unknown };
         const missing = await h.action.InternalRunAction(params(OWNER, null, h.provider));

@@ -38,7 +38,7 @@ export class RunUserRoutineNowAction extends BaseAction {
 
         const md = (params.Provider ?? new Metadata()) as unknown as IMetadataProvider; // global-provider-ok: fallback when no provider was passed to the action
         const routine = await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser);
-        if (!(await routine.Load(routineID))) {
+        if (!(await this.tryLoad(routine, routineID))) {
             return this.fail(params, 'ROUTINE_NOT_FOUND', `No routine with ID ${routineID} is visible to you.`);
         }
         if (!this.canRun(routine, contextUser)) {
@@ -58,6 +58,18 @@ export class RunUserRoutineNowAction extends BaseAction {
             Message: `Started "${routine.Name}". The result lands in its conversation and a notification.${keeps}`,
             Params: params.Params,
         };
+    }
+
+    /**
+     * Load the routine as the caller. A caller without read permission makes Load throw; that is a
+     * refusal, not an error, and an action must return a result rather than throw.
+     */
+    private async tryLoad(routine: MJUserRoutineEntity, routineID: string): Promise<boolean> {
+        try {
+            return await routine.Load(routineID);
+        } catch {
+            return false;
+        }
     }
 
     private canRun(routine: MJUserRoutineEntity, user: UserInfo): boolean {
