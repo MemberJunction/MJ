@@ -253,14 +253,13 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
      */
     public async Execute(input: TInput, options: RemoteOpInvokeOptions = {}): Promise<RemoteOpResult<TOutput>> {
         let provider: IRemoteOperationProvider | undefined;
-        const candidateProvider: IMetadataProvider | undefined = options.provider ?? (() => {
-            try {
-                return Metadata.Provider;
-            } catch {
-                // Metadata.Provider throws when no global provider has been configured — treat as "no provider".
-                return undefined;
-            }
-        })();
+        let candidateProvider: IMetadataProvider | undefined;
+        try {
+            candidateProvider = options.provider ?? Metadata.Provider;
+        } catch {
+            // Metadata.Provider throws when no global provider has been configured — treat as "no provider".
+            candidateProvider = undefined;
+        }
         if (candidateProvider && 'RouteOperation' in candidateProvider) {
             provider = candidateProvider as IMetadataProvider & IRemoteOperationProvider;
         }
