@@ -54,6 +54,11 @@ describe('ArchiveSeedState', () => {
       expect(ValidateArchiveSeedStartInput({ ...bad, SasToken: 'sig' })).toBeUndefined();
       expect(ValidateArchiveSeedStartInput({ ...bad, BackupUrls: '/var/db.bak' })).toBeUndefined();
     });
+    it("requires a typed staging name to carry the 'MJ_Staging_' prefix the drop action accepts", () => {
+      expect(ValidateArchiveSeedStartInput({ ...URL_INPUT, StagingDatabaseName: 'Payroll' })).toContain("'MJ_Staging_'");
+      expect(ValidateArchiveSeedStartInput({ ...URL_INPUT, StagingDatabaseName: 'mj_staging_erp' })).toBeUndefined();
+      expect(ValidateArchiveSeedStartInput({ ...URL_INPUT, StagingDatabaseName: '  ' })).toBeUndefined();
+    });
   });
 
   describe('DefaultStagingDatabaseName', () => {
@@ -161,6 +166,16 @@ describe('ArchiveSeedState', () => {
         StagingDatabaseName: work.StagingDatabaseName, ContainerUrl: 'https://acct/c',
         CompanyIntegrationID: 'ci-1', ProgressRunID: 'run-3',
       });
+    });
+    it('passes the restore start as CreatedAfter, DropDatabase false only when keeping, and never AllowAnyName', () => {
+      const started = MakeWork({ ContainerUrl: 'https://acct/c', RestoreStartedAt: '2026-10-28T12:00:00.000Z' });
+      expect(ByName(BuildDropActionParams(started, 'ci-1'))).toEqual({
+        StagingDatabaseName: started.StagingDatabaseName, ContainerUrl: 'https://acct/c',
+        CreatedAfter: '2026-10-28T12:00:00.000Z', CompanyIntegrationID: 'ci-1',
+      });
+      const keep = ByName(BuildDropActionParams(started, 'ci-1', undefined, { KeepDatabase: true }));
+      expect(keep.DropDatabase).toBe('false');
+      expect('AllowAnyName' in keep).toBe(false);
     });
     it('makes every value a string Input param', () => {
       for (const p of BuildLoadActionParams(work, 'ci', 'r')) {

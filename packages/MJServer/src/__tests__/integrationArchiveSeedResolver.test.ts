@@ -76,6 +76,20 @@ describe('IntegrationArchiveSeedResolver', () => {
         expect(check).toContain('EscapeSQLString(');
     });
 
+    it('IntegrationArchiveSeedStart refuses a node without background workers before starting the job', () => {
+        const body = memberBody('async IntegrationArchiveSeedStart(');
+        const guard = body.indexOf('this.assertRunsBackgroundWorkers()');
+        expect(guard).toBeGreaterThan(body.indexOf('this.authorize('));
+        expect(guard).toBeLessThan(body.indexOf('ArchiveSeedJobInstance.Start('));
+    });
+
+    it('the background-worker guard resolves the role as serve() does and names the requirement', () => {
+        const guard = memberBody('private assertRunsBackgroundWorkers(');
+        expect(guard).toContain('ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE))');
+        expect(guard).toContain("'Archive seeding requires a node that runs background workers'");
+        expect(indexSource).toContain('ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE))');
+    });
+
     it('uses the shared job instance, never its own', () => {
         expect(source).toContain('ArchiveSeedJobInstance');
         expect(source).not.toContain('new ArchiveSeedJob(');

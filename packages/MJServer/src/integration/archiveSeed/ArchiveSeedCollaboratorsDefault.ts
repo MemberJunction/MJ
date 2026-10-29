@@ -12,6 +12,7 @@ import { IntegrationDiscoveryResolver, type ApplyAllBatchInput } from '../../res
 import type {
   ArchiveSeedActions,
   ArchiveSeedApply,
+  ArchiveSeedApplyResult,
   ArchiveSeedApplyWorkStatus,
   ArchiveSeedDiscovery,
   ArchiveSeedStore,
@@ -80,14 +81,14 @@ export class DefaultArchiveSeedApply implements ArchiveSeedApply {
     tableNames: string[],
     user: UserInfo,
     provider: IMetadataProvider,
-  ): Promise<{ Success: boolean; Message: string }> {
+  ): Promise<ArchiveSeedApplyResult> {
     const input: ApplyAllBatchInput = {
       Connectors: [{ CompanyIntegrationID: companyIntegrationID, SourceObjects: tableNames.map(n => ({ SourceObjectName: n })) }],
       StartSync: false,
       UnselectedAction: 'ignore',
     };
     const result = await new IntegrationDiscoveryResolver().ApplyAllBatchCore(input, APPLY_PLATFORM, APPLY_SKIP_GIT_COMMIT, false, user, provider);
-    return { Success: result.Success, Message: result.Message };
+    return { Success: result.Success, Message: result.Message, APIRestarted: result.APIRestarted === true };
   }
 }
 

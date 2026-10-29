@@ -35,6 +35,20 @@ export interface ArchiveSeedCompanyIntegrationValues {
   Configuration: string;
 }
 
+/** A company integration's identity, as the decision-A refusal names it. */
+export interface ArchiveSeedCompanyIntegrationRef {
+  ID: string;
+  Name: string;
+}
+
+/** What the schema apply reports back. */
+export interface ArchiveSeedApplyResult {
+  Success: boolean;
+  Message: string;
+  /** The pipeline triggered an API restart. Without one the new entities never load, so phase B never runs. */
+  APIRestarted: boolean;
+}
+
 /** An entity map of the seeded company integration. */
 export interface ArchiveSeedEntityMap {
   ID: string;
@@ -46,7 +60,8 @@ export interface ArchiveSeedEntityMap {
 export interface ArchiveSeedRecords {
   /** The SQL Server `MJ: Integrations` row (current or legacy ClassName), or undefined. */
   FindSqlServerIntegrationID(user: UserInfo, provider: IMetadataProvider): Promise<string | undefined>;
-  CountCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<number>;
+  /** Every company integration of this integration (ID and name), so a refusal can name the existing one. */
+  FindCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<ArchiveSeedCompanyIntegrationRef[]>;
   /** Throws when no External Data Source Type has that driver class. */
   FindDataSourceTypeID(driverClass: 'SQLServerExternalDriver', user: UserInfo, provider: IMetadataProvider): Promise<string>;
   CreateDataSource(values: ArchiveSeedDataSourceValues, user: UserInfo, provider: IMetadataProvider): Promise<string>;
@@ -75,7 +90,7 @@ export interface ArchiveSeedApply {
     tableNames: string[],
     user: UserInfo,
     provider: IMetadataProvider,
-  ): Promise<{ Success: boolean; Message: string }>;
+  ): Promise<ArchiveSeedApplyResult>;
 }
 
 /** Runs a registered action by name. */

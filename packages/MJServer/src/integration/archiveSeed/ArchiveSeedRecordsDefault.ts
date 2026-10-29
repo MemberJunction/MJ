@@ -10,6 +10,7 @@ import type {
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type {
+  ArchiveSeedCompanyIntegrationRef,
   ArchiveSeedCompanyIntegrationValues,
   ArchiveSeedDataSourceValues,
   ArchiveSeedEntityMap,
@@ -41,11 +42,11 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     return undefined;
   }
 
-  public async CountCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<number> {
-    const rows = await this.simpleRows<{ ID: string }>(
-      'MJ: Company Integrations', `IntegrationID='${EscapeSQLString(integrationID)}'`, ['ID'], user, provider,
+  public async FindCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<ArchiveSeedCompanyIntegrationRef[]> {
+    const rows = await this.simpleRows<ArchiveSeedCompanyIntegrationRef>(
+      'MJ: Company Integrations', `IntegrationID='${EscapeSQLString(integrationID)}'`, ['ID', 'Name'], user, provider,
     );
-    return rows.length;
+    return rows.map(r => ({ ID: r.ID, Name: r.Name }));
   }
 
   public async FindDataSourceTypeID(driverClass: 'SQLServerExternalDriver', user: UserInfo, provider: IMetadataProvider): Promise<string> {

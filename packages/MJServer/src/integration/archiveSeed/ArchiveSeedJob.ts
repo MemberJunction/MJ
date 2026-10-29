@@ -10,6 +10,7 @@
  * action call the emitter is re-created (it resumes from the run's file) before emitting again.
  */
 import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UUIDMap } from '@memberjunction/global';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { ArchiveSeedState, ArchiveSeedSummary, ArchiveSeedWork } from '@memberjunction/schema-engine';
@@ -41,6 +42,7 @@ export const ARCHIVE_SEED_LOAD_ACTION = 'Load SQL Server Integration From Stagin
 const DATA_SOURCE_DRIVER = 'SQLServerExternalDriver';
 const ARCHIVE_CONNECTION_CONFIG = '{"authMode":"host"}';
 const HANDOFF_MESSAGE = 'Tables created; the API will restart to load the new entities';
+const NO_RESTART_MESSAGE = 'The API did not restart after creating tables; configure RSU_RESTART_COMMAND or run MJAPI under PM2';
 const DEFAULT_POLL_INTERVAL_MS = 5000;
 
 /** States in which a restart interrupted work that cannot be picked up again; resuming fails the job. */
@@ -89,6 +91,14 @@ interface ArchiveSeedContext {
   Provider: IMetadataProvider;
 }
 
+/** How {@link ArchiveSeedJob} fails a job. */
+interface ArchiveSeedFailOptions {
+  /** The action already reported the stage error on the run. */
+  StageErrorReported?: boolean;
+  /** Keep the staging database (the caller chose to keep it); its storage credential is still dropped. */
+  KeepStaging?: boolean;
+}
+
 /** The `seededFromBackup` block of the company integration's configuration. */
 interface SeededFromBackup {
   jobID: string;
@@ -115,6 +125,8 @@ export class ArchiveSeedJob {
   private pending: Promise<void> = Promise.resolve();
   /** Jobs this instance is resuming or running phase B for, so a repeated Resume is a no-op. */
   private readonly active = new Set<string>();
+  /** In-process cleanup-decision timers of parked jobs, so a decision that never comes still ends the job. */
+  private readonly cleanupTimers = new UUIDMap<ReturnType<typeof setTimeout>>();
   private readonly pollIntervalMs: number;
 
   constructor(
@@ -223,7 +235,32 @@ export class ArchiveSeedJob {
     if (ctx.Work.State !== 'AwaitingCleanupDecision') {
       throw new Error(`Archive seed job "${jobID}" is ${ctx.Work.State}, not AwaitingCleanupDecision`);
     }
+    this.disarmCleanupTimer(jobID);
     await this.finishContext(ctx, dropStaging);
+  }
+
+  /**
+   * Fails a job whose stored owner no longer exists instead of resuming it as someone else. The
+   * boot dispatcher calls this as the system user. Never throws; a no-op while the job is active.
+   */
+  public async FailUnresolvableOwner(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    if (this.active.has(jobID)) {
+      return;
+    }
+    this.active.add(jobID);
+    try {
+      const stored = await this.deps.Store.Read(jobID, user, provider);
+      if (!stored || stored.Work.State === 'Done' || stored.Work.State === 'Failed') {
+        return;
+      }
+      const ctx = this.contextOf(stored, user, provider);
+      ctx.StagingRestored = ctx.Work.State !== 'Created';
+      await this.fail(ctx, `Seed owner ${ctx.Work.UserID} no longer exists`);
+    } catch (err) {
+      LogError(`Archive seed job ${jobID}: failing for an unresolvable owner failed: ${this.messageOf(err)}`);
+    } finally {
+      this.active.delete(jobID);
+    }
   }
 
   // ---------------------------------------------------------------- start helpers
@@ -238,8 +275,11 @@ export class ArchiveSeedJob {
     if (!integrationID) {
       throw new Error('SQL Server connector is not installed');
     }
-    if ((await this.deps.Records.CountCompanyIntegrations(integrationID, user, provider)) > 0) {
-      throw new Error('An archive seed is limited to the first SQL Server connection in this workspace; one already exists');
+    const existing = await this.deps.Records.FindCompanyIntegrations(integrationID, user, provider);
+    if (existing.length > 0) {
+      throw new Error(
+        `An archive seed is limited to the first SQL Server connection in this workspace; '${existing[0].Name}' already exists — delete it to seed again`,
+      );
     }
     return integrationID;
   }
@@ -296,7 +336,9 @@ export class ArchiveSeedJob {
 
   /** Runs the restore action and records its outputs; false when the job was failed. */
   private async restore(ctx: ArchiveSeedContext, sasToken: string | undefined): Promise<boolean> {
-    await this.advance(ctx, 'Restoring');
+    // Recorded before the action runs: every drop passes it as CreatedAfter, so a database that already
+    // carried the staging name (the action's absence check comes after its credential/inspect stages) is never dropped.
+    await this.advance(ctx, 'Restoring', { RestoreStartedAt: this.deps.Now().toISOString() });
     const params = BuildRestoreActionParams(ctx.Work, ctx.CompanyIntegrationID, this.runID(ctx.Work), sasToken);
     const result = await this.runAction(ctx, ARCHIVE_SEED_RESTORE_ACTION, params, 'Restore');
     if (!result.Success) {
@@ -344,6 +386,9 @@ export class ArchiveSeedJob {
       const result = await this.deps.Apply.ApplyTables(ctx.CompanyIntegrationID, ctx.Work.SelectedTables ?? [], ctx.User, ctx.Provider);
       if (!result.Success) {
         await this.fail(ctx, `Applying the selected tables failed: ${result.Message}`);
+      } else if (!result.APIRestarted) {
+        // This process is still running and nothing will restart it, so phase B would never start.
+        await this.fail(ctx, NO_RESTART_MESSAGE);
       }
     } catch (err) {
       await this.fail(ctx, `Applying the selected tables failed: ${this.messageOf(err)}`);
@@ -373,8 +418,8 @@ export class ArchiveSeedJob {
       // From Restoring on, a staging database may exist (even half-restored); the drop is idempotent.
       ctx.StagingRestored = state !== 'Created';
       await this.fail(ctx, `interrupted during ${state}`);
-    } else if (state === 'AwaitingCleanupDecision' && this.cleanupDecisionExpired(ctx.Work)) {
-      await this.finishContext(ctx, false);
+    } else if (state === 'AwaitingCleanupDecision') {
+      await this.resumeCleanupDecision(ctx);
     }
     return undefined;
   }
@@ -390,8 +435,52 @@ export class ArchiveSeedJob {
     }
   }
 
-  private cleanupDecisionExpired(work: ArchiveSeedWork): boolean {
-    return this.deps.Now().getTime() - Date.parse(work.StateChangedAt) > ARCHIVE_SEED_CLEANUP_DECISION_TIMEOUT_MS;
+  /** An expired decision finishes keeping staging now; otherwise the timer is armed for what remains. */
+  private async resumeCleanupDecision(ctx: ArchiveSeedContext): Promise<void> {
+    if (this.cleanupDecisionRemainingMs(ctx.Work) <= 0) {
+      await this.finishContext(ctx, false);
+      return;
+    }
+    this.armCleanupTimer(ctx.JobID, ctx.Work, ctx.User, ctx.Provider);
+  }
+
+  /** Milliseconds left before the parked job's cleanup decision times out (≤ 0 once it has). */
+  private cleanupDecisionRemainingMs(work: ArchiveSeedWork): number {
+    return ARCHIVE_SEED_CLEANUP_DECISION_TIMEOUT_MS - (this.deps.Now().getTime() - Date.parse(work.StateChangedAt));
+  }
+
+  /**
+   * Arms (or re-arms) the in-process timer that finishes a parked job keeping staging once the
+   * decision times out. Unref'd, so it never keeps the process alive; a restart re-arms it on resume.
+   */
+  private armCleanupTimer(jobID: string, work: ArchiveSeedWork, user: UserInfo, provider: IMetadataProvider): void {
+    this.disarmCleanupTimer(jobID);
+    const timer = setTimeout(() => {
+      this.cleanupTimers.Delete(jobID);
+      this.track(this.finishOnTimeout(jobID, user, provider));
+    }, Math.max(0, this.cleanupDecisionRemainingMs(work)));
+    timer.unref?.();
+    this.cleanupTimers.Set(jobID, timer);
+  }
+
+  private disarmCleanupTimer(jobID: string): void {
+    const timer = this.cleanupTimers.Get(jobID);
+    if (timer) {
+      clearTimeout(timer);
+      this.cleanupTimers.Delete(jobID);
+    }
+  }
+
+  /** The timeout's `Finish(jobID, false)`; a job already decided or gone is left alone. Never throws. */
+  private async finishOnTimeout(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    try {
+      const state = (await this.deps.Store.Read(jobID, user, provider))?.Work.State;
+      if (state === 'AwaitingCleanupDecision') {
+        await this.Finish(jobID, false, user, provider);
+      }
+    } catch (err) {
+      LogError(`Archive seed job ${jobID}: finishing after the cleanup decision timed out failed: ${this.messageOf(err)}`);
+    }
   }
 
   // ---------------------------------------------------------------- phase B
@@ -483,6 +572,7 @@ export class ArchiveSeedJob {
     // The action's own Watermarks stage already seeded the watermarks, so Seeding is passed straight through.
     await this.advance(ctx, 'Seeding');
     await this.advance(ctx, 'AwaitingCleanupDecision', { Summary: summary });
+    this.armCleanupTimer(ctx.JobID, ctx.Work, ctx.User, ctx.Provider);
     const emitter = this.emitterFor(ctx);
     emitter.Emit('stage.complete', { stage: 'Summary', data: { ...summary } });
     await emitter.Flush();
@@ -510,6 +600,8 @@ export class ArchiveSeedJob {
       await this.retireArchiveSource(ctx);
       if (dropStaging) {
         await this.dropStagingOnFinish(ctx);
+      } else {
+        await this.dropCredentialOnFinish(ctx);
       }
       // RunClosed is persisted before run B is completed, so a later failure never emits after run.complete.
       await this.advance(ctx, 'Done', { RunClosed: true });
@@ -538,6 +630,21 @@ export class ArchiveSeedJob {
       return;
     }
     await this.patch(ctx, { Summary: { ...this.summaryOf(ctx.Work), StagingDatabaseDropped: true } });
+    emitter.StageComplete('Cleanup');
+  }
+
+  /** Keeping staging still drops the storage credential (it holds the SAS token); a failure is a warning. */
+  private async dropCredentialOnFinish(ctx: ArchiveSeedContext): Promise<void> {
+    if (!ctx.Work.ContainerUrl) {
+      return;
+    }
+    const params = BuildDropActionParams(ctx.Work, ctx.CompanyIntegrationID, this.runID(ctx.Work), { KeepDatabase: true });
+    const result = await this.runAction(ctx, ARCHIVE_SEED_DROP_ACTION, params, 'Cleanup');
+    const emitter = this.emitterFor(ctx);
+    if (!result.Success) {
+      emitter.Warning('Cleanup', 'CREDENTIAL_DROP_FAILED', `The storage credential for '${ctx.Work.ContainerUrl}' was kept: ${result.Message ?? 'no message'}`);
+      return;
+    }
     emitter.StageComplete('Cleanup');
   }
 
@@ -612,27 +719,37 @@ export class ArchiveSeedJob {
    * the job alone terminates runs), removes the archive data source, drops the staging database when
    * one was restored, and marks the store row failed. Cleanup errors are appended to the recorded
    * failure rather than masking it. `StageErrorReported` skips the stage error an action already
-   * emitted; `KeepStaging` leaves the staging database (the caller chose to keep it).
+   * emitted; `KeepStaging` leaves the staging database (the caller chose to keep it) but still drops
+   * its storage credential. The cleanup and the store close run even when persisting `Failed` throws,
+   * so a store error never leaves an Active host-mode source behind; that error is rethrown after.
    */
-  private async fail(
-    ctx: ArchiveSeedContext,
-    message: string,
-    options: { StageErrorReported?: boolean; KeepStaging?: boolean } = {},
-  ): Promise<void> {
+  private async fail(ctx: ArchiveSeedContext, message: string, options: ArchiveSeedFailOptions = {}): Promise<void> {
     if (ctx.Work.State === 'Failed' || ctx.Work.State === 'Done') {
       LogError(`Archive seed job ${ctx.JobID} is already ${ctx.Work.State}; not failing again: ${message}`);
       return;
     }
+    this.disarmCleanupTimer(ctx.JobID);
     const stage = STAGE_FOR_STATE[ctx.Work.State] ?? ctx.Work.State;
-    await this.advance(ctx, 'Failed', { Error: message });
-    if (!ctx.Work.RunClosed && !options.StageErrorReported) {
-      this.emitterFor(ctx).StageError(stage, message);
+    try {
+      await this.advance(ctx, 'Failed', { Error: message });
+      if (!ctx.Work.RunClosed && !options.StageErrorReported) {
+        this.emitterFor(ctx).StageError(stage, message);
+      }
+    } finally {
+      await this.cleanUpAndClose(ctx, message, options);
     }
+  }
+
+  /** The failure cleanup and the store close; the recorded message carries the cleanup errors. */
+  private async cleanUpAndClose(ctx: ArchiveSeedContext, message: string, options: ArchiveSeedFailOptions): Promise<void> {
     const archiveErrors = await this.removeArchiveSource(ctx);
-    const cleanupErrors = [...archiveErrors, ...(options.KeepStaging ? [] : await this.dropStaging(ctx))];
+    const stagingErrors = options.KeepStaging ? await this.dropCredentialOnly(ctx) : await this.dropStaging(ctx);
+    const cleanupErrors = [...archiveErrors, ...stagingErrors];
     const recorded = cleanupErrors.length > 0 ? `${message} (cleanup: ${cleanupErrors.join('; ')})` : message;
     if (!ctx.Work.RunClosed) {
-      await this.emitterFor(ctx).Fail(recorded);
+      await this.emitterFor(ctx).Fail(recorded).catch((err: unknown) =>
+        LogError(`Archive seed job ${ctx.JobID}: could not report the failure on its run: ${this.messageOf(err)}`),
+      );
     }
     await this.deps.Store.Fail(ctx.JobID, recorded, ctx.User, ctx.Provider);
   }
@@ -652,19 +769,39 @@ export class ArchiveSeedJob {
     }
   }
 
-  /** Drops the staging database when a restore produced one that is not yet dropped; the errors. */
+  /**
+   * Drops the staging database when a restore produced one that is not yet dropped; the errors. The
+   * drop is refused by the action for a database created before `RestoreStartedAt`, and is not
+   * attempted at all when no restore start is recorded (nothing proves the database is the job's).
+   */
   private async dropStaging(ctx: ArchiveSeedContext): Promise<string[]> {
     const restored = ctx.StagingRestored === true || ctx.Work.BackupStartDate !== undefined;
     if (!restored || ctx.Work.Summary?.StagingDatabaseDropped) {
       return [];
     }
+    if (!ctx.Work.RestoreStartedAt) {
+      return [`staging database '${ctx.Work.StagingDatabaseName}' was kept: the job recorded no restore start`];
+    }
+    return this.runCleanupDrop(ctx, false, `dropping staging database '${ctx.Work.StagingDatabaseName}' failed`);
+  }
+
+  /** Drops only the storage credential (the staging database stays); the errors. */
+  private async dropCredentialOnly(ctx: ArchiveSeedContext): Promise<string[]> {
+    if (!ctx.Work.ContainerUrl) {
+      return [];
+    }
+    return this.runCleanupDrop(ctx, true, `dropping the storage credential for '${ctx.Work.ContainerUrl}' failed`);
+  }
+
+  /** Runs the drop action for a failure cleanup; the errors, each prefixed with `what`. */
+  private async runCleanupDrop(ctx: ArchiveSeedContext, keepDatabase: boolean, what: string): Promise<string[]> {
     try {
       const runID = ctx.Work.RunClosed ? undefined : this.runID(ctx.Work);
-      const params = BuildDropActionParams(ctx.Work, ctx.CompanyIntegrationID, runID);
+      const params = BuildDropActionParams(ctx.Work, ctx.CompanyIntegrationID, runID, { KeepDatabase: keepDatabase });
       const result = await this.runAction(ctx, ARCHIVE_SEED_DROP_ACTION, params, 'Cleanup');
-      return result.Success ? [] : [`dropping staging database '${ctx.Work.StagingDatabaseName}' failed: ${result.Message ?? 'no message'}`];
+      return result.Success ? [] : [`${what}: ${result.Message ?? 'no message'}`];
     } catch (err) {
-      return [`dropping staging database '${ctx.Work.StagingDatabaseName}' failed: ${this.messageOf(err)}`];
+      return [`${what}: ${this.messageOf(err)}`];
     }
   }
 

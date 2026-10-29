@@ -442,6 +442,11 @@ export interface ArchiveSeedWork {
   BackupDatabaseName?: string;
   BackupStartDate?: string;
   ContainerUrl?: string;
+  /**
+   * When the job entered `Restoring` (ISO UTC). Every staging drop the job issues passes it as the
+   * drop action's `CreatedAfter`, so a database that already carried the staging name is never dropped.
+   */
+  RestoreStartedAt?: string;
   DeferredDataSourceID?: string;
   ArchiveDataSourceID?: string;
   CurrentRunID?: string;

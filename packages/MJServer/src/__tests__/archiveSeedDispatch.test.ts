@@ -23,6 +23,8 @@ describe('processRSUPendingWork: archive-seed dispatch', () => {
     it('resumes the job and continues without completing or failing the row', () => {
         const branch = source.slice(archive, promote);
         expect(branch).toContain('.Resume(');
+        expect(branch).toContain('PlanArchiveSeedResume(');
+        expect(branch).toContain('.FailUnresolvableOwner(pendingWorkID, systemUser,');
         expect(branch).toContain('continue;');
         expect(branch).not.toContain('CompletePendingWork');
         expect(branch).not.toContain('FailPendingWork');

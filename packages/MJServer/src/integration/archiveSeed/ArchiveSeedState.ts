@@ -8,6 +8,7 @@ export const ARCHIVE_SEED_APPLY_TIMEOUT_MS = 30 * 60_000;
 export const ARCHIVE_SEED_CLEANUP_DECISION_TIMEOUT_MS = 24 * 60 * 60_000;
 
 const DEFAULT_BATCH_SIZE = 250000;
+/** The staging-name prefix the drop action accepts without `AllowAnyName` (which the job never passes). */
 const STAGING_PREFIX = 'MJ_Staging_';
 
 /** Caller-supplied inputs for starting an archive seed. */
@@ -37,6 +38,10 @@ export function ValidateArchiveSeedStartInput(input: ArchiveSeedStartInput): str
   const hasUrl = input.BackupUrls.split(',').some(u => /^https?:\/\//i.test(u.trim()));
   if (hasUrl && !input.SasToken?.trim() && !input.StorageCredentialID?.trim()) {
     return "An Azure Blob backup needs either 'SasToken' or 'StorageCredentialID'.";
+  }
+  const staging = input.StagingDatabaseName?.trim();
+  if (staging && !staging.toLowerCase().startsWith(STAGING_PREFIX.toLowerCase())) {
+    return `'StagingDatabaseName' must start with '${STAGING_PREFIX}', so the job can drop it afterwards.`;
   }
   return undefined;
 }
@@ -172,12 +177,21 @@ export function BuildLoadActionParams(work: ArchiveSeedWork, companyIntegrationI
 
 /**
  * Params for 'Drop SQL Server Staging Database'. Omit `runID` when the job's run is already closed,
- * so the action reports nothing after the run's terminal event.
+ * so the action reports nothing after the run's terminal event. `CreatedAfter` is always the job's
+ * restore start, so the action refuses a database that existed before the job; `keepDatabase` drops
+ * only the storage credential. `AllowAnyName` is never passed.
  */
-export function BuildDropActionParams(work: ArchiveSeedWork, companyIntegrationID: string, runID?: string): ActionParam[] {
+export function BuildDropActionParams(
+  work: ArchiveSeedWork,
+  companyIntegrationID: string,
+  runID?: string,
+  options: { KeepDatabase?: boolean } = {},
+): ActionParam[] {
   return toActionParams({
     StagingDatabaseName: work.StagingDatabaseName,
     ContainerUrl: work.ContainerUrl,
+    CreatedAfter: work.RestoreStartedAt,
+    DropDatabase: options.KeepDatabase ? false : undefined,
     CompanyIntegrationID: companyIntegrationID,
     ProgressRunID: runID,
   });

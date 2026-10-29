@@ -6,6 +6,8 @@ import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { ArchiveSeedDiscoveredTable, ArchiveSeedSummary } from '@memberjunction/schema-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
+import { configInfo } from '../config.js';
+import { ResolveServerRole, ShouldRunBackgroundWorkers } from '../serverRoleConfigUnits.js';
 import { GetReadWriteProvider } from '../util.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { AssertCanRunAction } from '../auth/actionRunGuard.js';
@@ -91,6 +93,7 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
   ): Promise<IntegrationArchiveSeedStartOutput> {
     try {
       const caller = await this.authorize(ctx, 'IntegrationArchiveSeedStart');
+      this.assertRunsBackgroundWorkers();
       const started = await ArchiveSeedJobInstance.Start(input, caller.User, caller.Provider);
       LogStatus(`Archive seed job ${started.JobID} started (run ${started.RunID}) by ${caller.User.Email}`);
       return {
@@ -148,6 +151,17 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
       return this.stateOutput(job, `Archive seed job ${job.JobID} is ${job.State}.`);
     } catch (e) {
       return this.failure('IntegrationArchiveSeedState', e);
+    }
+  }
+
+  /**
+   * Refuses a node that does not run background workers (`MJ_SERVER_ROLE=api`): the job's phases run
+   * detached in this process and resume on this node's boot, so starting one here would strand it.
+   * The role is resolved exactly as `serve()` resolves it.
+   */
+  private assertRunsBackgroundWorkers(): void {
+    if (!ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE))) {
+      throw new Error('Archive seeding requires a node that runs background workers');
     }
   }
 

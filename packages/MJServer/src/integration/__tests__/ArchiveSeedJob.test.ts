@@ -16,7 +16,9 @@ vi.mock('../../resolvers/IntegrationDiscoveryResolver.js', () => ({
 import type {
   ArchiveSeedActions,
   ArchiveSeedApply,
+  ArchiveSeedApplyResult,
   ArchiveSeedApplyWorkStatus,
+  ArchiveSeedCompanyIntegrationRef,
   ArchiveSeedCompanyIntegrationValues,
   ArchiveSeedDataSourceValues,
   ArchiveSeedDeps,
@@ -49,7 +51,7 @@ const TABLES: ArchiveSeedDiscoveredTable[] = [
 
 class FakeRecords implements ArchiveSeedRecords {
   public IntegrationID: string | undefined = 'int-sql';
-  public ExistingCount = 0;
+  public Existing: ArchiveSeedCompanyIntegrationRef[] = [];
   public DataSources = new Map<string, ArchiveSeedDataSourceValues>();
   public DeletedDataSources: string[] = [];
   public CompanyIntegrations = new Map<string, ArchiveSeedCompanyIntegrationValues>();
@@ -58,8 +60,8 @@ class FakeRecords implements ArchiveSeedRecords {
   public async FindSqlServerIntegrationID(): Promise<string | undefined> {
     return this.IntegrationID;
   }
-  public async CountCompanyIntegrations(): Promise<number> {
-    return this.ExistingCount;
+  public async FindCompanyIntegrations(): Promise<ArchiveSeedCompanyIntegrationRef[]> {
+    return this.Existing;
   }
   public async FindDataSourceTypeID(): Promise<string> {
     return 'type-sql';
@@ -128,7 +130,11 @@ class FakeStore implements ArchiveSeedStore {
   public async Read(jobID: string): Promise<ArchiveSeedStoredJob | undefined> {
     return this.Jobs.get(jobID);
   }
+  /** When set, an Update persisting this state throws (a store outage mid-failure). */
+  public FailUpdateTo: ArchiveSeedWork['State'] | undefined;
+
   public async Update(jobID: string, work: ArchiveSeedWork): Promise<void> {
+    if (this.FailUpdateTo === work.State) throw new Error('store unavailable');
     const job = this.Jobs.get(jobID);
     if (!job) throw new Error(`no job ${jobID}`);
     job.Work = work;
@@ -226,6 +232,11 @@ class FakeActions implements ArchiveSeedActions {
   }
 }
 
+/** An action call's params by name. */
+function ParamsOf(call: { Params: ActionParam[] } | undefined): Record<string, unknown> {
+  return Object.fromEntries((call?.Params ?? []).map(p => [p.Name, p.Value]));
+}
+
 function Output(name: string, value: string): ActionParam {
   const p = new ActionParam();
   p.Name = name;
@@ -244,10 +255,10 @@ class FakeDiscovery implements ArchiveSeedDiscovery {
 
 class FakeApply implements ArchiveSeedApply {
   public Calls: { CompanyIntegrationID: string; TableNames: string[] }[] = [];
-  public Result = { Success: true, Message: 'applied' };
+  public Result: ArchiveSeedApplyResult = { Success: true, Message: 'applied', APIRestarted: true };
   /** When set, ApplyTables does not return until this settles (an apply still running). */
   public Gate?: Promise<void>;
-  public async ApplyTables(companyIntegrationID: string, tableNames: string[]): Promise<{ Success: boolean; Message: string }> {
+  public async ApplyTables(companyIntegrationID: string, tableNames: string[]): Promise<ArchiveSeedApplyResult> {
     this.Calls.push({ CompanyIntegrationID: companyIntegrationID, TableNames: tableNames });
     if (this.Gate) await this.Gate;
     return this.Result;
@@ -353,10 +364,10 @@ describe('ArchiveSeedJob', () => {
     expect(store.Failed).toEqual([]);
   });
 
-  it('Start refuses when a SQL Server company integration already exists', async () => {
-    records.ExistingCount = 1;
+  it('Start refuses when a SQL Server company integration already exists, naming it', async () => {
+    records.Existing = [{ ID: 'ci-old', Name: 'Old ERP' }];
     await expect(job.Start(INPUT, USER, PROVIDER)).rejects.toThrow(
-      'An archive seed is limited to the first SQL Server connection in this workspace; one already exists',
+      "An archive seed is limited to the first SQL Server connection in this workspace; 'Old ERP' already exists — delete it to seed again",
     );
     expect(records.DataSources.size).toBe(0);
     expect(records.CompanyIntegrations.size).toBe(0);
@@ -453,7 +464,7 @@ describe('ArchiveSeedJob', () => {
 
   it('SelectTables fails the job when ApplyTables returns Success false', async () => {
     const { JobID, RunID } = await StartToSelection();
-    apply.Result = { Success: false, Message: 'CodeGen failed' };
+    apply.Result = { Success: false, Message: 'CodeGen failed', APIRestarted: false };
 
     await job.SelectTables(JobID, ['dbo.Orders'], USER, PROVIDER);
     await job.WaitForIdle();
@@ -681,6 +692,12 @@ describe('ArchiveSeedJob', () => {
     expect(state?.State).toBe('Failed');
     expect(state?.Error).toBe('interrupted during Restoring');
     expect(actions.Names().slice(callsBefore)).toEqual([DROP]);
+    // The drop is told when this job's restore began, so the action refuses a database that predates it.
+    expect(state?.RestoreStartedAt).toBe(clock.toISOString());
+    const dropParams = ParamsOf(actions.Calls.at(-1));
+    expect(dropParams.CreatedAfter).toBe(state?.RestoreStartedAt);
+    expect(dropParams.DropDatabase).toBeUndefined();
+    expect(dropParams.AllowAnyName).toBeUndefined();
     expect(records.DeletedDataSources).toEqual([archiveID]);
     expect(store.Failed).toEqual([{ JobID, Message: 'interrupted during Restoring' }]);
     const events = Events(RunID);
@@ -741,7 +758,7 @@ describe('ArchiveSeedJob', () => {
     expect(events.at(-1)?.eventType).toBe('run.complete');
   });
 
-  it('Finish without dropStaging keeps staging and reports StagingDatabaseDropped false', async () => {
+  it('Finish without dropStaging keeps staging, drops only the storage credential, and reports StagingDatabaseDropped false', async () => {
     const { JobID } = await ToCleanupDecision();
     const callsBefore = actions.Calls.length;
 
@@ -750,7 +767,13 @@ describe('ArchiveSeedJob', () => {
     const state = await job.GetState(JobID, USER, PROVIDER);
     expect(state?.State).toBe('Done');
     expect(state?.Summary?.StagingDatabaseDropped).toBe(false);
-    expect(actions.Calls.length).toBe(callsBefore);
+    expect(actions.Names().slice(callsBefore)).toEqual([DROP]);
+    expect(ParamsOf(actions.Calls.at(-1))).toMatchObject({
+      StagingDatabaseName: 'MJ_Staging_ERP',
+      ContainerUrl: 'https://acct.blob.core.windows.net/b',
+      DropDatabase: 'false',
+      CreatedAfter: state?.RestoreStartedAt,
+    });
     expect(store.Completed).toEqual([JobID]);
     expect(Events(CurrentRun(JobID)).at(-1)?.eventType).toBe('run.complete');
   });
@@ -772,7 +795,164 @@ describe('ArchiveSeedJob', () => {
     const state = await job.GetState(JobID, USER, PROVIDER);
     expect(state?.State).toBe('Done');
     expect(state?.Summary?.StagingDatabaseDropped).toBe(false);
-    expect(actions.Calls.length).toBe(callsBefore);
+    expect(actions.Calls.slice(callsBefore).map(c => ParamsOf(c).DropDatabase)).toEqual(['false']);
     expect(store.Completed).toEqual([JobID]);
+  });
+
+  // ---------------------------------------------------------------- final-review fixes
+
+  it('every drop the job issues carries CreatedAfter = the restore start', async () => {
+    discovery.Error = new Error('introspection timed out');
+    const { JobID } = await StartToSelection();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    const restoring = store.Updates.find(u => u.State === 'Restoring');
+    expect(restoring?.RestoreStartedAt).toBe(clock.toISOString());
+    const drop = actions.Calls.find(c => c.Name === DROP);
+    expect(ParamsOf(drop)).toMatchObject({ StagingDatabaseName: 'MJ_Staging_ERP', CreatedAfter: state?.RestoreStartedAt });
+  });
+
+  it('a failure with no recorded restore start keeps the staging database rather than drop it unguarded', async () => {
+    const { JobID } = await StartToSelection();
+    SetState(JobID, { State: 'Restoring', RestoreStartedAt: undefined });
+    const callsBefore = actions.Calls.length;
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    expect(actions.Calls.length).toBe(callsBefore);
+    expect(store.Failed.at(-1)?.Message).toContain("staging database 'MJ_Staging_ERP' was kept: the job recorded no restore start");
+  });
+
+  it('SelectTables fails the job when the apply succeeds but the API did not restart', async () => {
+    const { JobID } = await StartToSelection();
+    apply.Result = { Success: true, Message: 'applied', APIRestarted: false };
+
+    await job.SelectTables(JobID, ['dbo.Orders'], USER, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('The API did not restart after creating tables; configure RSU_RESTART_COMMAND or run MJAPI under PM2');
+    expect(actions.Names().at(-1)).toBe(DROP);
+    expect(records.DeletedDataSources).toEqual([state?.ArchiveDataSourceID]);
+  });
+
+  it('a failure that keeps staging still drops the storage credential', async () => {
+    const { JobID } = await ToCleanupDecision();
+    const callsBefore = actions.Calls.length;
+    // The archive source is gone already, so repointing succeeds but deleting it fails and the finish fails.
+    records.DeleteDataSource = async () => { throw new Error('delete refused'); };
+
+    await job.Finish(JobID, false, USER, PROVIDER);
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    const drops = actions.Calls.slice(callsBefore).filter(c => c.Name === DROP).map(ParamsOf);
+    expect(drops.length).toBeGreaterThan(0);
+    expect(drops.every(p => p.DropDatabase === 'false')).toBe(true);
+  });
+
+  it('when persisting Failed throws, the cleanup still runs and the store row is still failed', async () => {
+    const { JobID } = await StartToSelection();
+    const archiveID = store.Jobs.get(JobID)?.Work.ArchiveDataSourceID;
+    const ciID = store.Jobs.get(JobID)?.CompanyIntegrationID ?? '';
+    const deferredID = store.Jobs.get(JobID)?.Work.DeferredDataSourceID;
+    SetState(JobID, { State: 'Discovering' });
+    store.FailUpdateTo = 'Failed';
+    const callsBefore = actions.Calls.length;
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await job.Resume(JobID, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    // The store error itself is still surfaced (Resume logs it rather than throwing).
+    expect(logged.mock.calls.some(args => String(args[0]).includes('store unavailable'))).toBe(true);
+    logged.mockRestore();
+
+    expect(records.DeletedDataSources).toEqual([archiveID]);
+    expect(records.Configuration(ciID).externalDataSourceID).toBe(deferredID);
+    expect(actions.Names().slice(callsBefore)).toEqual([DROP]);
+    expect(store.Failed).toEqual([{ JobID, Message: 'interrupted during Discovering' }]);
+  });
+
+  it('FailUnresolvableOwner fails the job naming the missing owner and cleans up, without resuming it', async () => {
+    const { JobID } = await ToBuilding();
+    const archiveID = store.Jobs.get(JobID)?.Work.ArchiveDataSourceID;
+    const SYSTEM = { ID: 'system' } as UserInfo;
+
+    await job.FailUnresolvableOwner(JobID, SYSTEM, PROVIDER);
+    await job.WaitForIdle();
+
+    const state = await job.GetState(JobID, USER, PROVIDER);
+    expect(state?.State).toBe('Failed');
+    expect(state?.Error).toBe('Seed owner u-1 no longer exists');
+    expect(actions.Names()).not.toContain(LOAD);
+    expect(records.EntityMapsCalls).toBe(0);
+    expect(records.DeletedDataSources).toEqual([archiveID]);
+    expect(store.Failed).toEqual([{ JobID, Message: 'Seed owner u-1 no longer exists' }]);
+  });
+
+  it('FailUnresolvableOwner leaves a finished job alone and never throws for a missing one', async () => {
+    const { JobID } = await ToCleanupDecision();
+    await job.Finish(JobID, true, USER, PROVIDER);
+    const updates = store.Updates.length;
+
+    await expect(job.FailUnresolvableOwner(JobID, USER, PROVIDER)).resolves.toBeUndefined();
+    await expect(job.FailUnresolvableOwner('job-missing', USER, PROVIDER)).resolves.toBeUndefined();
+    expect(store.Updates.length).toBe(updates);
+    expect(store.Failed).toEqual([]);
+  });
+
+  describe('cleanup decision timer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('a job parked at AwaitingCleanupDecision finishes keeping staging once the decision times out', async () => {
+      const { JobID } = await ToCleanupDecision();
+      expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('AwaitingCleanupDecision');
+
+      await vi.advanceTimersByTimeAsync(24 * 60 * MINUTE - 1);
+      expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('AwaitingCleanupDecision');
+
+      clock = new Date(clock.getTime() + 24 * 60 * MINUTE);
+      await vi.advanceTimersByTimeAsync(1);
+      await job.WaitForIdle();
+      const state = await job.GetState(JobID, USER, PROVIDER);
+      expect(state?.State).toBe('Done');
+      expect(state?.Summary?.StagingDatabaseDropped).toBe(false);
+      expect(store.Completed).toEqual([JobID]);
+    });
+
+    it('Resume arms the timer for the time remaining on an already-parked job', async () => {
+      const { JobID } = await ToCleanupDecision();
+      vi.clearAllTimers();
+      const parkedAt = Date.parse(store.Jobs.get(JobID)?.Work.StateChangedAt ?? '');
+      clock = new Date(parkedAt + 23 * 60 * MINUTE);
+
+      await job.Resume(JobID, USER, PROVIDER);
+      await job.WaitForIdle();
+      expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('AwaitingCleanupDecision');
+
+      clock = new Date(parkedAt + 24 * 60 * MINUTE);
+      await vi.advanceTimersByTimeAsync(60 * MINUTE);
+      await job.WaitForIdle();
+      expect((await job.GetState(JobID, USER, PROVIDER))?.State).toBe('Done');
+    });
+
+    it('a decision made in time disarms the timer', async () => {
+      const { JobID } = await ToCleanupDecision();
+      await job.Finish(JobID, true, USER, PROVIDER);
+      const updates = store.Updates.length;
+
+      await vi.advanceTimersByTimeAsync(25 * 60 * MINUTE);
+      await job.WaitForIdle();
+      expect(store.Updates.length).toBe(updates);
+      expect(store.Completed).toEqual([JobID]);
+    });
   });
 });

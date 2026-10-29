@@ -81,7 +81,7 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ArchiveSeedJobInstance, ArchiveSeedRecordsInstance } from './integration/archiveSeed/ArchiveSeedJobInstance.js';
-import { ResolveArchiveSeedResumeUser } from './integration/archiveSeed/ArchiveSeedDispatch.js';
+import { PlanArchiveSeedResume } from './integration/archiveSeed/ArchiveSeedDispatch.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
@@ -1934,9 +1934,13 @@ async function processRSUPendingWork(): Promise<void> {
       // An archive-seed row is the job's own state store: it stays Pending for the job's whole life
       // and the job completes or fails it itself, so this branch never closes the row.
       if (item.WorkType === 'archive-seed') {
-        const resumeUser = ResolveArchiveSeedResumeUser(item, systemUser, ArchiveSeedRecordsInstance);
-        void ArchiveSeedJobInstance.Resume(pendingWorkID, resumeUser, Metadata.Provider) // global-provider-ok: server startup recovery — this process's one provider
-          .catch(err => console.error(`[RSU] archive-seed resume failed: ${err instanceof Error ? err.message : String(err)}`));
+        // Resumes as the job's own owner; an owner who no longer exists fails the job (as the system
+        // user) instead of handing the job to anyone else.
+        const plan = PlanArchiveSeedResume(item, ArchiveSeedRecordsInstance);
+        const settled = plan.Kind === 'Resume'
+          ? ArchiveSeedJobInstance.Resume(pendingWorkID, plan.User, Metadata.Provider) // global-provider-ok: server startup recovery — this process's one provider
+          : ArchiveSeedJobInstance.FailUnresolvableOwner(pendingWorkID, systemUser, Metadata.Provider); // global-provider-ok: server startup recovery — this process's one provider
+        void settled.catch(err => console.error(`[RSU] archive-seed resume failed: ${err instanceof Error ? err.message : String(err)}`));
         continue;
       }
 
@@ -2225,15 +2229,11 @@ async function processRSUPendingWork(): Promise<void> {
 }
 
 /**
- * Creates a MSSQL ConnectionPool-compatible wrapper around a pg.Pool.
- * This allows existing code that references DataSourceInfo.dataSource (typed as sql.ConnectionPool)
- * to work with PostgreSQL pools. Only the .query() and .connected properties are used.
- */
-/**
  * Lets External Data Sources with `authMode: "host"` connect with this server's own SQL Server login
  * (used for local hops such as a staging database restored onto the API's server). Registered only
  * when the configured connection uses a SQL login with both user and password; otherwise host mode
- * stays unavailable and drivers refuse it.
+ * stays unavailable and drivers refuse it. The MJ database is passed along so drivers refuse a
+ * host-mode source that targets it.
  */
 function registerHostConnectionResolver(): void {
   const config = createMSSQLConfig();
@@ -2250,10 +2250,16 @@ function registerHostConnectionResolver(): void {
       InstanceName: c.options?.instanceName,
       Encrypt: c.options?.encrypt,
       TrustServerCertificate: c.options?.trustServerCertificate,
+      Database: c.database,
     };
   });
 }
 
+/**
+ * Creates a MSSQL ConnectionPool-compatible wrapper around a pg.Pool.
+ * This allows existing code that references DataSourceInfo.dataSource (typed as sql.ConnectionPool)
+ * to work with PostgreSQL pools. Only the .query() and .connected properties are used.
+ */
 function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   const wrapper = {
     connected: true,
