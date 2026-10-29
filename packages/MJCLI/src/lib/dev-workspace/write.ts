@@ -14,13 +14,18 @@ import { copyFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { GeneratedFile, WriteResult } from './types.js';
 
-/** The four workspace files `mj dev workspace` owns at the parent directory. */
+/** The three workspace files `mj dev workspace` owns at the parent directory. */
 export const WORKSPACE_FILE_NAMES: readonly string[] = [
   'pnpm-workspace.yaml',
   '.npmrc',
   'package.json',
-  'turbo.json',
 ];
+
+/**
+ * Files earlier versions of the generator wrote and this one no longer does (`turbo.json`, #4913).
+ * They are removed only where the parent's sentinel lists them, which proves the generator wrote them.
+ */
+export const LEGACY_WORKSPACE_FILE_NAMES: readonly string[] = ['turbo.json'];
 
 /**
  * The sentinel manifest, written through this module like any other generated
@@ -29,7 +34,7 @@ export const WORKSPACE_FILE_NAMES: readonly string[] = [
  */
 export const SENTINEL_FILE_NAME = '.mj-dev-workspace.json';
 
-/** Every file `mj dev workspace` writes at the parent: the four plus the sentinel. */
+/** Every file `mj dev workspace` writes at the parent: the three plus the sentinel. */
 export const GENERATED_FILE_NAMES: readonly string[] = [...WORKSPACE_FILE_NAMES, SENTINEL_FILE_NAME];
 
 /**
