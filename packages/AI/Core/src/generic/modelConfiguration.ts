@@ -69,7 +69,11 @@ export interface RealtimeTurnDetectionSettings {
     Mode?: RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored by profiles without a mapping. */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored by profiles without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored by profiles without a mapping. A profile whose provider has
+     * coarser controls maps it lossily: Gemini Live has two start-of-speech buckets, so below 0.5 is START_SENSITIVITY_HIGH
+     * and 0.5 or more is START_SENSITIVITY_LOW.
+     */
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;

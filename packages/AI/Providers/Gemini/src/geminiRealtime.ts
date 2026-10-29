@@ -28,6 +28,8 @@ import {
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
+    NormalizeTurnDetectionSettings,
+    type RealtimeTurnDetectionSettings,
     RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
@@ -72,6 +74,7 @@ import {
 } from './geminiLiveProfiles';
 import { GeminiBridgedAvatarOutput } from './geminiBridgedAvatar';
 import { ResolveGeminiAvatarVideoBitrateBps } from './geminiAvatarVideoBitrate';
+import { MapGeminiActivityDetection } from './geminiActivityDetection';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -93,7 +96,8 @@ type GeminiSharedKeyShape = 'object' | 'named effort';
 /**
  * The keys in `REALTIME_SHARED_CONFIG_KEYS` that this driver applies after the config-bag merge, reading them from the
  * original bag in `applyModelLegality`, with the value each must hold: `turnDetection` (its `Coverage` sets the turn
- * coverage), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
+ * coverage; `SilenceDurationMs`, `Eagerness` and `Threshold` map onto `automaticActivityDetection`, where `Threshold` is
+ * lossy: below 0.5 is START_SENSITIVITY_HIGH, 0.5 or more is START_SENSITIVITY_LOW; `Mode` has no Gemini field), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
  * thinking level). The scrub in `BuildConnectConfig` keeps them out of the merge without calling them non-Gemini
  * (#5334). The other shared keys the driver applies (`voice`, `disableAutoResponse`, `tooling`, `toolBehavior`) are
  * consumed before the scrub.
@@ -1003,6 +1007,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             bag['includeThoughts'] === true ||
             bag['includeThoughtSummaries'] === true;
         const coverageSetting = GeminiRealtime.readString(turnDetection?.['Coverage']);
+        const turnSettings = NormalizeTurnDetectionSettings(turnDetection);
 
         // C1 — affective dialogue is REMOVED from the API on the 3.8 family; sending it errors. The
         // SDK still declares `enableAffectiveDialog` (it remains valid for 3.1), so it will not stop
@@ -1043,6 +1048,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         }
 
         GeminiRealtime.applyTurnCoverage(config, coverageSetting, profile, params.Model);
+        GeminiRealtime.applyActivityDetection(config, turnSettings, params.Model);
 
         // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
         // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
@@ -1110,6 +1116,23 @@ export class GeminiRealtime extends BaseRealtimeModel {
             );
         }
         config.realtimeInputConfig = { ...(config.realtimeInputConfig ?? {}), turnCoverage: wire };
+    }
+
+    /**
+     * Merges the mapped silence, eagerness and threshold into `automaticActivityDetection`, over what is already
+     * there so meeting mode's `disabled: true` survives. Gemini has no field for `Mode`; a `serverVad` or `semanticVad`
+     * request gets one line and the mapped fields still apply.
+     */
+    private static applyActivityDetection(config: LiveConnectConfig, settings: RealtimeTurnDetectionSettings | undefined, model: string): void {
+        if (settings?.Mode === 'serverVad' || settings?.Mode === 'semanticVad') {
+            console.warn(`[GeminiRealtime] Turn-detection Mode "${settings.Mode}" has no Gemini Live equivalent for ${model}; Gemini always uses its own activity detection. SilenceDurationMs, Eagerness and Threshold still apply.`);
+        }
+        const mapped = MapGeminiActivityDetection(settings);
+        if (Object.keys(mapped).length === 0) {
+            return;
+        }
+        const existing = config.realtimeInputConfig ?? {};
+        config.realtimeInputConfig = { ...existing, automaticActivityDetection: { ...existing.automaticActivityDetection, ...mapped } };
     }
 
     /** Maps MJ's turn coverage onto the SDK's {@link TurnCoverage} wire value. */
