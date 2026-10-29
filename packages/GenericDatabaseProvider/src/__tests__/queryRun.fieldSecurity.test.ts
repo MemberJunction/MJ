@@ -223,6 +223,74 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
         expect(provider.Executed).toEqual([]);
     });
 
+    // The refusal returned to the CALLER names no field or clause, on purpose. That makes a
+    // refusal unattributable from the outside: three different paths produce the same
+    // caller-visible shape. These pin the operator-side log that tells them apart — without it a
+    // recurring integration-tier failure could not be diagnosed at all, because the only line
+    // that came close was verboseOnly and CI does not enable verbose.
+    describe('the server-side log says WHY a run was refused', () => {
+        let logged: string[];
+
+        beforeEach(() => {
+            logged = [];
+            vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { logged.push(a.map(String).join(' ')); });
+        });
+
+        const refusalLine = () => logged.find(l => l.includes('refused for user')) ?? '';
+
+        it('names field-level security, with the kind and the reference', async () => {
+            const result = await runAs('SELECT ID, Salary FROM vwPeople', staff);
+            expect(result.Success).toBe(false);
+            expect(refusalLine()).toMatch(/refused for user .* by field-level security \(/);
+        });
+
+        it('names the unreadable entities when that is the reason', async () => {
+            const result = await runAs('SELECT ID, Amount FROM vwPayroll', staff);
+            expect(result.Success).toBe(false);
+            expect(refusalLine()).toMatch(/by unreadable entities \(Payroll\)/);
+        });
+
+        it("names the query's role list when a permission-bearing query denies the user", async () => {
+            // A role list the user does not hold: authorized by that list alone, so neither a
+            // denied entity nor a field violation is produced — the case that previously logged
+            // nothing whatsoever.
+            const result = await runAs('SELECT ID, Name FROM vwPeople', staff, { PermissionRoles: ['Some Other Role'] });
+            expect(result.Success).toBe(false);
+            expect(refusalLine()).toMatch(/by the query's own role list \(MJ: Query Permissions: \[Role-Some Other Role\]\)/);
+        });
+
+        it('records how many roles were loaded and their names, so an empty or mismatched role set is distinguishable', async () => {
+            // The signature worth catching: UserRoles empty or undefined denies EVERY
+            // permission-bearing query at once, which reads identically to a genuine denial.
+            await runAs('SELECT ID, Name FROM vwPeople', staff, { PermissionRoles: ['Some Other Role'] });
+            expect(refusalLine()).toMatch(/Roles loaded for this user: 1 \(\[Role-R0000000-0000-0000-0000-0000000000A2\]\)/);
+        });
+
+        it('logs when a cache-checked batch refuses on the render-free UserCanRun path (no CacheValidationSQL / first fetch)', async () => {
+            provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT ID, Name FROM vwPeople', PermissionRoles: ['Some Other Role'] })]);
+            const item: RunQueryWithCacheCheckParams = { params: { QueryID: 'q-1' } };
+            const response = await provider.RunQueriesWithCacheCheck([item], staff);
+            expect(response.results[0].status).toBe('error');
+            expect(refusalLine()).toMatch(/by the query's own role list \(MJ: Query Permissions: \[Role-Some Other Role\]\)/);
+        });
+
+        it('does not double-log on the pre-cache authorization probe before execution', async () => {
+            provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT ID, Salary FROM vwPeople' })]);
+            expect(provider.CacheAuthorization({ QueryID: 'q-1' }, staff).authorized).toBe(false);
+            expect(refusalLine()).toBe('');
+            const result = await provider.Run({ QueryID: 'q-1' }, staff);
+            expect(result.Success).toBe(false);
+            const refusalLogs = logged.filter(l => l.includes('refused for user'));
+            expect(refusalLogs).toHaveLength(1);
+        });
+
+        it('says nothing when the run is allowed', async () => {
+            const result = await runAs('SELECT p.ID, p.Name FROM vwPeople p', staff);
+            expect(result.Success).toBe(true);
+            expect(refusalLine()).toBe('');
+        });
+    });
+
     it('checks an entity read only inside a subquery', async () => {
         const result = await runAs('SELECT ID FROM vwProjects WHERE OwnerID IN (SELECT ID FROM __mj.vwPayroll)', staff);
         expect(result.Success).toBe(false);
