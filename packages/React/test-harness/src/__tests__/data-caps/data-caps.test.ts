@@ -182,6 +182,7 @@ describe('DescribeQueryTarget', () => {
     expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: 'MJ/AI/Agents' })).toBe('/MJ/AI/Agents/Foo');
     expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: '/MJ/AI/Agents/' })).toBe('/MJ/AI/Agents/Foo');
     expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: '/' })).toBe('/Foo');
+    expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: '///MJ//AI///' })).toBe('/MJ//AI/Foo');
   });
 
   it('distinguishes same-named queries in different categories', () => {
@@ -269,5 +270,14 @@ describe('structured identity (correlatable against declared dataRequirements)',
   it('omits absent fields rather than emitting undefined keys', () => {
     expect(ResolveQueryTarget({}).identity).toEqual({});
     expect(ResolveViewTarget({}).identity).toEqual({});
+  });
+});
+
+describe('DescribeQueryTarget on long runs of slashes', () => {
+  it('trims them in linear time', () => {
+    const path = '/'.repeat(200_000) + 'x' + '/'.repeat(200_000);
+    const started = performance.now();
+    expect(DescribeQueryTarget({ QueryName: 'Foo', CategoryPath: path })).toBe('/x/Foo');
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });

@@ -341,7 +341,12 @@ export function DescribeDataCap(record: DataAccessRecord): string {
  * `/MJ/AI/Agents/Foo`. Tolerates missing or doubled slashes on either side.
  */
 function joinCategoryPath(categoryPath: string, name: string): string {
-  const trimmed = categoryPath.replace(/^\/+|\/+$/g, '');
+  // Trimmed by scanning rather than /^\/+|\/+$/g, which backtracks quadratically on long runs of '/'
+  let start = 0;
+  let end = categoryPath.length;
+  while (start < end && categoryPath[start] === '/') start++;
+  while (end > start && categoryPath[end - 1] === '/') end--;
+  const trimmed = categoryPath.slice(start, end);
   return trimmed.length === 0 ? `/${name}` : `/${trimmed}/${name}`;
 }
 
@@ -560,6 +565,32 @@ interface BrowserRuntimeErrorEntry {
   source?: Violation['source'];
 }
 
+/** One distinct runtime error collected from the page, with how often it occurred. */
+interface CollectedRuntimeError {
+  /** The message as reported, with "(occurred N times)" appended when N > 1. */
+  message: string;
+  /** The message without the occurrence suffix, which identifies the error across collections. */
+  baseMessage: string;
+  stack?: string;
+  componentStack?: string;
+  source?: string;
+  type?: string;
+  rule?: string;
+  occurrences: number;
+}
+
+/** A runtime error as reported in {@link ComponentExecutionResult.errors}. */
+type RuntimeErrorViolation = {
+  message: string;
+  severity: Violation['severity'];
+  rule: string;
+  line: number;
+  column: number;
+  source?: Violation['source'];
+  stack?: string;
+  componentStack?: string;
+};
+
 /** The harness's own globals on the page's `window`. */
 interface HarnessPageGlobals {
   __testHarnessRuntimeErrors?: BrowserRuntimeErrorEntry[];
@@ -670,6 +701,80 @@ export class ComponentRunner {
     return ComponentRunner.BROWSER_CRASH_PATTERNS.some(pattern =>
       lowerMessage.includes(pattern)
     );
+  }
+
+  /**
+   * Occurrences of one JSX element-type error at which it stops being treated as noise and
+   * fails the run.
+   *
+   * These errors can be spurious: a child component that resolves a moment late produces one
+   * or two before settling, which is why they were once dropped entirely. But dropping them
+   * has no limit. A component rendering an object where a component belongs throws one per
+   * render, and runs have reached thousands in a single component while reporting success.
+   * A handful is a race; a few dozen is a defect.
+   */
+  private static readonly JSX_ERROR_FAILURE_THRESHOLD = 25;
+
+  /** Whether `e` is an "invalid JSX element type" or "undefined component" error. */
+  private static isJSXElementError(e: Pick<CollectedRuntimeError, 'type' | 'rule'>): boolean {
+    return e.type === 'invalid-element-type' || e.type === 'undefined-component' ||
+      e.rule === 'invalid-jsx-element' || e.rule === 'undefined-jsx-component';
+  }
+
+  /** A JSX element-type error rare enough to be treated as a transient resolution miss. */
+  private static isSuppressibleJSXError(e: CollectedRuntimeError): boolean {
+    return ComponentRunner.isJSXElementError(e) && e.occurrences < ComponentRunner.JSX_ERROR_FAILURE_THRESHOLD;
+  }
+
+  /**
+   * Folds an error from the second (post-async) collection into the first. Collection is
+   * cumulative, so a JSX error seen again carries a higher count and a different message: it
+   * replaces its earlier entry instead of being added beside it, and it counts toward the
+   * run's errors once it reaches the threshold.
+   */
+  private static mergeAsyncRuntimeError(err: CollectedRuntimeError, errors: string[], collected: CollectedRuntimeError[]): void {
+    if (!ComponentRunner.isJSXElementError(err)) {
+      if (!errors.includes(err.message)) {
+        errors.push(err.message);
+        collected.push(err);
+      }
+      return;
+    }
+    const index = collected.findIndex(e => e.type === err.type && e.baseMessage === err.baseMessage);
+    if (index >= 0) {
+      const previousMessage = errors.indexOf(collected[index].message);
+      if (previousMessage >= 0) errors.splice(previousMessage, 1);
+      collected[index] = err;
+    } else {
+      collected.push(err);
+    }
+    if (!ComponentRunner.isSuppressibleJSXError(err)) errors.push(err.message);
+  }
+
+  /**
+   * The reported violation for a collected runtime error. Most are critical. A JSX
+   * element-type error is low below the threshold, so it stays visible without failing the
+   * run, and high at or above it, which fails `codeExecutionSuccess`.
+   */
+  private static buildRuntimeErrorViolation(e: CollectedRuntimeError, debug: boolean): RuntimeErrorViolation {
+    const isJSXError = ComponentRunner.isJSXElementError(e);
+    const isFailingJSXError = isJSXError && !ComponentRunner.isSuppressibleJSXError(e);
+    const severity: Violation['severity'] = !isJSXError ? 'critical' : isFailingJSXError ? 'high' : 'low';
+    if (isJSXError && debug) {
+      console.log(`📝 JSX element error (${e.occurrences}x, severity=${severity}):`, e.message);
+    }
+    return {
+      message: isFailingJSXError
+        ? `${e.message} — repeated ${e.occurrences} times, which indicates a genuinely invalid element type rather than a transient resolution miss`
+        : e.message,
+      severity,
+      rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
+      line: 0,
+      column: 0,
+      source: e.source as Violation['source'],
+      stack: e.stack,
+      componentStack: e.componentStack,
+    };
   }
 
   /**
@@ -1254,6 +1359,13 @@ export class ComponentRunner {
 
             // Wrap React.createElement to detect invalid element types
             const originalCreateElement = (window as any).React?.createElement;
+            // React.memo, forwardRef, lazy and context providers/consumers are objects tagged
+            // with one of these symbols, and are valid element types. Library components are
+            // often built this way, so treating every object as invalid flagged working code.
+            const reactComponentObjectTags = new Set(
+              ['react.memo', 'react.forward_ref', 'react.lazy', 'react.provider', 'react.context', 'react.consumer']
+                .map(tag => Symbol.for(tag))
+            );
             if (originalCreateElement) {
               (window as any).React.createElement = function(type: any, props: any, ...children: any[]) {
                 (window as any).__testHarnessRenderCount++;
@@ -1263,7 +1375,8 @@ export class ComponentRunner {
                   const typeOf = typeof type;
                   
                   // Check for the common "object instead of component" error
-                  if (typeOf === 'object' && !(window as any).React.isValidElement(type)) {
+                  if (typeOf === 'object' && !(window as any).React.isValidElement(type) &&
+                      !reactComponentObjectTags.has(type.$$typeof)) {
                     // Try to get a meaningful name for the object
                     let objectInfo = 'unknown object';
                     try {
@@ -1641,14 +1754,9 @@ export class ComponentRunner {
 
       // Collect all errors with source information
       const runtimeErrorsWithSource = await this.collectRuntimeErrors(page);
-      // Filter out JSX element type errors when adding to errors array
+      // Low-volume JSX element-type errors stay out of the error count (see JSX_ERROR_FAILURE_THRESHOLD)
       errors.push(...runtimeErrorsWithSource
-        .filter(e => {
-          // Skip JSX element type errors from error count
-          const isJSXError = e.type === 'invalid-element-type' || 
-                            e.type === 'undefined-component';
-          return !isJSXError;
-        })
+        .filter(e => !ComponentRunner.isSuppressibleJSXError(e))
         .map(e => e.message)); // Extract messages for backward compat
 
       // Collect warnings (separate from errors)
@@ -1660,18 +1768,7 @@ export class ComponentRunner {
       await page.waitForTimeout(asyncWaitTime);
       
       const asyncErrors = await this.collectRuntimeErrors(page);
-      // Only add new errors (excluding JSX element type errors)
-      asyncErrors.forEach(err => {
-        const isJSXError = err.type === 'invalid-element-type' || 
-                          err.type === 'undefined-component';
-        if (!isJSXError && !errors.includes(err.message)) {
-          errors.push(err.message);
-          runtimeErrorsWithSource.push(err); // Keep the structured version too
-        } else if (isJSXError && !runtimeErrorsWithSource.some(e => e.message === err.message)) {
-          // Still track JSX errors for logging but don't add to errors array
-          runtimeErrorsWithSource.push(err);
-        }
-      });
+      asyncErrors.forEach(err => ComponentRunner.mergeAsyncRuntimeError(err, errors, runtimeErrorsWithSource));
       
       // Also check for new warnings
       const asyncWarnings = await this.collectWarnings(page);
@@ -1796,39 +1893,10 @@ export class ComponentRunner {
       // Combine runtime errors with data errors
       const allErrors = [...errors, ...dataErrors];
       
-      // Map runtime errors with source info and specific rules
-      // Filter out JSX element type errors - they're too noisy and often false positives
-      const errorViolations = runtimeErrorsWithSource
-        .filter(e => {
-          // Skip JSX element type errors - still logged but not reported as violations
-          const isJSXError = e.rule === 'invalid-jsx-element' || 
-                            e.rule === 'undefined-jsx-component' ||
-                            e.type === 'invalid-element-type' ||
-                            e.type === 'undefined-component';
-          if (isJSXError && debug) {
-            console.log('📝 JSX element error detected but not reported as violation:', e.message);
-          }
-          return !isJSXError;
-        })
-        .map(e => ({
-          message: e.message,
-          severity: 'critical' as const,
-          rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
-          line: 0,
-          column: 0,
-          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined),
-          stack: (e as any).stack as string | undefined,
-          componentStack: (e as any).componentStack as string | undefined,
-        })) as Array<{
-          message: string;
-          severity: 'critical';
-          rule: string;
-          line: number;
-          column: number;
-          source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
-          stack?: string;
-          componentStack?: string;
-        }>;
+      // Map runtime errors with source info and specific rules. JSX element-type errors are
+      // graded by volume rather than dropped (see JSX_ERROR_FAILURE_THRESHOLD).
+      const errorViolations: RuntimeErrorViolation[] = runtimeErrorsWithSource
+        .map(e => ComponentRunner.buildRuntimeErrorViolation(e, debug));
       
       // Add timeout error if detected
       if (hasTimeout) {
@@ -2541,7 +2609,7 @@ export class ComponentRunner {
   /**
    * Collect runtime errors from the page
    */
-  private async collectRuntimeErrors(page: any): Promise<Array<{message: string; source?: string; type?: string; rule?: string}>> {
+  private async collectRuntimeErrors(page: any): Promise<CollectedRuntimeError[]> {
     const errorData = await page.evaluate(() => {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
@@ -2655,14 +2723,7 @@ export class ComponentRunner {
     });
 
     // Convert map to array with occurrence counts
-    const errors: Array<{
-      message: string;
-      stack?: string;
-      componentStack?: string;
-      source?: string;
-      type?: string;
-      rule?: string;
-    }> = [];
+    const errors: CollectedRuntimeError[] = [];
     errorMap.forEach(({error, count}) => {
       // Append count if > 1
       const message = count > 1
@@ -2671,7 +2732,10 @@ export class ComponentRunner {
 
       errors.push({
         ...error,
-        message
+        message,
+        baseMessage: error.message,
+        // Carried as a field, not only in the message, so severity can threshold on volume
+        occurrences: count
       });
     });
 

@@ -133,3 +133,69 @@ describe('utilities the harness was not given', () => {
     expect(warnings[0].message).toContain('utilities.ai.ExecutePrompt is not available in the test harness');
   });
 });
+
+describe('JSX element-type errors are graded by volume', () => {
+  type Collected = Awaited<ReturnType<ComponentRunner['collectRuntimeErrors']>>[number];
+
+  function jsxError(occurrences: number): Collected {
+    const baseMessage = 'Invalid JSX element type: React received an object (Object) instead of a React component function.';
+    return {
+      message: occurrences > 1 ? `${baseMessage} (occurred ${occurrences} times)` : baseMessage,
+      baseMessage, type: 'invalid-element-type', rule: 'invalid-jsx-element', occurrences,
+    };
+  }
+
+  it('collects the occurrence count as a field', async () => {
+    const entry = { message: 'boom', type: 'invalid-element-type' };
+    const page = new StandInPage({ runtimeErrors: [entry, entry, entry], consoleErrors: [], testFailed: false, sourceMaps: {} });
+
+    const [error] = await buildRunner()['collectRuntimeErrors'](page);
+
+    expect(error.occurrences).toBe(3);
+    expect(error.baseMessage).toBe('boom');
+    expect(error.message).toBe('boom (occurred 3 times)');
+  });
+
+  it.each([
+    [1, 'low'],
+    [24, 'low'],
+    [25, 'high'],
+    [400, 'high'],
+  ])('a JSX error seen %i times is reported as %s', (occurrences, severity) => {
+    const violation = ComponentRunner['buildRuntimeErrorViolation'](jsxError(occurrences), false);
+    expect(violation.severity).toBe(severity);
+    expect(violation.rule).toBe('invalid-jsx-element');
+  });
+
+  it('says why a high-volume JSX error fails', () => {
+    const violation = ComponentRunner['buildRuntimeErrorViolation'](jsxError(30), false);
+    expect(violation.message).toContain('repeated 30 times');
+  });
+
+  it('reports every other runtime error as critical', () => {
+    const violation = ComponentRunner['buildRuntimeErrorViolation'](
+      { message: 'boom', baseMessage: 'boom', type: 'react-render-error', rule: 'react-render-error', occurrences: 1 }, false);
+    expect(violation.severity).toBe('critical');
+  });
+
+  it('replaces a JSX error seen again later instead of adding it twice, and counts it once over the threshold', () => {
+    const collected = [jsxError(10)];
+    const errors: string[] = []; // 10 occurrences: below the threshold, so not counted
+
+    ComponentRunner['mergeAsyncRuntimeError'](jsxError(30), errors, collected);
+
+    expect(collected).toHaveLength(1);
+    expect(collected[0].occurrences).toBe(30);
+    expect(errors).toEqual([jsxError(30).message]);
+  });
+
+  it('keeps a JSX error that stays below the threshold out of the counted errors', () => {
+    const collected = [jsxError(2)];
+    const errors: string[] = [];
+
+    ComponentRunner['mergeAsyncRuntimeError'](jsxError(5), errors, collected);
+
+    expect(collected.map(e => e.occurrences)).toEqual([5]);
+    expect(errors).toEqual([]);
+  });
+});
