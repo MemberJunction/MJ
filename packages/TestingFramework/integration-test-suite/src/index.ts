@@ -163,3 +163,5 @@ export * from './checks/materialized-entity-read.checks';
 export * from './checks/form-contributions.checks';
 export * from './checks/cache-architecture.checks';
 export * from './checks/performance-benchmark.checks';
+// The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
+export * from './skip-allowlist';

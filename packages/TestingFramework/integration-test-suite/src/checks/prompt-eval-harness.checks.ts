@@ -14,18 +14,15 @@
  *   - a record the GENERATOR produced satisfies the DRIVER that consumes it (PE7).
  *
  * **Which of these run on a PR.** PE1–PE3, PE5 and PE6 read the corpus FILES and the evaluator
- * functions, so they run everywhere and gate every PR. PE4 and PE7 are environment-dependent and
- * SKIP-AS-PASS on a CI runner:
+ * functions, so they run everywhere and gate every PR. PE4 runs everywhere too: it pins a fixture
+ * prompt and a model/vendor whose driver TestLLM replaces, and passes RuntimeOnly dummy keys for the
+ * stubbed drivers, so model selection succeeds with no configured credentials and cannot pick a real
+ * provider.
  *
- *   - PE7 needs the corpus in the DATABASE, and CI deliberately pushes only `metadata` and
- *     `metadata-optional/integration-test` — the corpus is a measurement fixture, not product
- *     metadata, so it is not pushed and PE7 has nothing to drive.
- *   - PE4 needs at least one model-vendor with configured credentials, because model selection
- *     rejects candidates on credentials BEFORE the ClassFactory can hand back the registered
- *     TestLLM. A runner with no keys never reaches the stub.
- *
- * Both therefore prove something only on a developer database or an eval host. Treat their green
- * on a PR as "not evaluated", not as "passed". Tracked in #4438.
+ * PE7 needs the corpus in the DATABASE, and CI deliberately pushes only `metadata` and
+ * `metadata-optional/integration-test` — the corpus is a measurement fixture, not product metadata,
+ * so it is not pushed and PE7 reports SKIPPED there. That skip is on the suite's skip allowlist;
+ * PE7 proves something only on a database the corpus was pushed to.
  *
  * PE5 and PE6 are the ones that matter most. A harness that never fails is indistinguishable from
  * a harness that always passes, and the entire native-tool-calling argument rests on a malformed
@@ -41,7 +38,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { PromptEvalDriver, AgentDecisionOracle, ResponseWellFormedOracle } from '@memberjunction/testing-engine';
 import type { IOracle } from '@memberjunction/testing-engine';
@@ -49,13 +46,35 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { TestLLM, RegisterTestLLM } from '@memberjunction/unit-testing';
 import { parseCorpusCase, normalizeDecision, evaluateCorpusExpectation, evaluateWellFormed, type CorpusCase } from '@memberjunction/testing-engine';
-import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
+import type { MJAIModelVendorEntity } from '@memberjunction/core-entities';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const CORPUS_DIR = join(REPO_ROOT, 'metadata-optional/prompt-eval-corpus/cases');
 const GENERATED_TESTS_DIR = join(REPO_ROOT, 'metadata-optional/prompt-eval-corpus/tests');
 const MATRIX_DIR = join(REPO_ROOT, 'metadata-optional/prompt-eval-corpus/matrix');
 const GENERATED_PROVENANCE = join(REPO_ROOT, 'metadata-optional/prompt-eval-corpus/tests/generated-from.json');
+
+/** Driver classes TestLLM replaces in PE4 and PE7. A run that selects any other driver is a real model call. */
+const STUBBED_DRIVER_CLASSES: readonly string[] = ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM'];
+
+/** PE4's pinned fixture prompt (metadata-optional/integration-test/ai-prompts/.it-agent-prompts.json). */
+const PE4_PROMPT_NAME = 'IT: Echo Agent - System Prompt';
+/** PE4's pinned model and vendor — one of the fixture prompt's own model bindings, run by OpenAILLM. */
+const PE4_MODEL_NAME = 'GPT 5-nano';
+const PE4_VENDOR_NAME = 'OpenAI';
+
+/** The model-vendor row for a model and vendor named in metadata; asserts it exists. */
+function resolvePinnedModelVendor(modelName: string, vendorName: string): MJAIModelVendorEntity {
+    const model = AIEngine.Instance.Models.find((m) => m.Name === modelName);
+    Assert(!!model, `Model '${modelName}' is not in this database`);
+    const vendor = AIEngine.Instance.Vendors.find((v) => v.Name === vendorName);
+    Assert(!!vendor, `Vendor '${vendorName}' is not in this database`);
+    const modelVendor = AIEngine.Instance.ModelVendors.find((mv) =>
+        UUIDsEqual(mv.ModelID, model!.ID) && UUIDsEqual(mv.VendorID, vendor!.ID));
+    Assert(!!modelVendor, `No '${modelName}' / '${vendorName}' model-vendor row in this database`);
+    return modelVendor!;
+}
 
 /**
  * The matrix the generated records were actually built from.
@@ -334,9 +353,22 @@ const checks: NamedCheck[] = [
             // ChatResult → the driver's turn extraction → normalizer → oracle. Everything except
             // the provider is real; TestLLM is registered over the driver classes so the
             // ClassFactory hands back scripted output through a genuine `new`.
+            //
+            // Offline by construction, on any database:
+            //   - the prompt is a pinned fixture (metadata-optional/integration-test/ai-prompts), not
+            //     whichever active prompt a database happens to list first;
+            //   - the model and vendor are pinned by override, and that pair's driver class must be
+            //     one TestLLM replaces, so selection cannot land on an unstubbed provider;
+            //   - credentials are RuntimeOnly with a dummy key per stubbed driver class, so selection
+            //     finds a usable candidate without any configured key, and a candidate whose driver
+            //     is not stubbed has no key at all and cannot be selected.
             await AIEngine.Instance.Config(false, ctx.User);
-            const prompt = AIEngine.Instance.Prompts.find((p) => p.Status === 'Active');
-            Assert(!!prompt, 'No active prompt available to drive the runner');
+            const prompt = AIEngine.Instance.Prompts.find((p) => p.Name === PE4_PROMPT_NAME);
+            Assert(!!prompt, `Fixture prompt '${PE4_PROMPT_NAME}' is not in this database — push metadata-optional/integration-test`);
+            const modelVendor = resolvePinnedModelVendor(PE4_MODEL_NAME, PE4_VENDOR_NAME);
+            Assert(STUBBED_DRIVER_CLASSES.includes(modelVendor.DriverClass ?? ''),
+                `Pinned model/vendor ${PE4_MODEL_NAME}/${PE4_VENDOR_NAME} uses driver '${modelVendor.DriverClass}', ` +
+                `which TestLLM does not replace — PE4 would make a real model call`);
 
             const llm = new TestLLM();
             llm.Script({ kind: 'succeed', content: JSON.stringify({
@@ -345,31 +377,26 @@ const checks: NamedCheck[] = [
             }) });
             // The ClassFactory registration is process-wide and this suite runs every bundle in one
             // process: without the restore, later bundles' real prompt calls get this scripted reply.
-            const restoreDrivers = RegisterTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            const restoreDrivers = RegisterTestLLM(llm, [...STUBBED_DRIVER_CLASSES]);
             try {
 
                 const runner = new AIPromptRunner();
-                const result = await runner.ExecutePrompt({ prompt: prompt!, contextUser: ctx.User, skipValidation: true });
+                const result = await runner.ExecutePrompt({
+                    prompt: prompt!,
+                    contextUser: ctx.User,
+                    skipValidation: true,
+                    override: { modelId: modelVendor.ModelID, vendorId: modelVendor.VendorID },
+                    CredentialScope: 'RuntimeOnly',
+                    apiKeys: STUBBED_DRIVER_CLASSES.map((driverClass) => ({ driverClass, apiKey: 'pe4-offline-unused-key' }))
+                });
                 // Fire-and-forget persistence — settle it exactly as the driver does.
                 await runner.WaitForPendingPromptRunSaves();
-                if (!result.success && (result.errorMessage ?? '').includes('No valid API credentials')) {
-                    // Registering TestLLM over the driver classes is NOT enough to make this run
-                    // offline: model selection filters candidates on configured credentials before the
-                    // ClassFactory ever instantiates a driver, so with no keys every candidate is
-                    // rejected and TestLLM is never reached. A CI runner has no keys and this bundle
-                    // must not require them, so skip loudly rather than fail.
-                    //
-                    // Cost of this skip: PE4 provides NO per-PR coverage on a credential-less runner —
-                    // it only proves anything on a database that has some. Making it run in CI for real
-                    // needs a credential fixture in metadata-optional/integration-test (which CI does
-                    // push), not a change here. `errorMessage` is matched as a string because
-                    // AIPromptRunResult carries no typed error; base-agent.ts:5253 does the same.
-                    console.log('      → skipped: no model-vendor in this database has configured '
-                        + 'credentials (selection rejects every candidate before TestLLM is reached)');
-                    return;
-                }
                 Assert(result.success, `Scripted prompt run failed: ${result.errorMessage}`);
                 Assert(llm.CalledModels.length > 0, 'TestLLM was never reached — the ClassFactory did not resolve it');
+                const selection = result.modelSelectionInfo;
+                Assert(UUIDsEqual(selection?.ModelSelected?.ID, modelVendor.ModelID) && UUIDsEqual(selection?.vendorSelected?.ID, modelVendor.VendorID),
+                    `Selection ran ${selection?.ModelSelected?.Name ?? '?'}/${selection?.vendorSelected?.Name ?? '?'}, ` +
+                    `not the pinned ${PE4_MODEL_NAME}/${PE4_VENDOR_NAME}`);
 
                 // The same extraction PromptEvalDriver performs.
                 const choice = result.chatResult?.data?.choices?.[0];
@@ -426,13 +453,12 @@ const checks: NamedCheck[] = [
                 // The corpus is a MEASUREMENT FIXTURE, not product metadata, so CI deliberately does
                 // not push metadata-optional/prompt-eval-corpus — only metadata and
                 // metadata-optional/integration-test. Without those rows this check has nothing to
-                // drive, so skip loudly rather than fail a lane that was never going to have them.
-                // The generator↔driver contract this covers still gets exercised wherever the corpus
-                // IS pushed (a dev database, the eval runs themselves), and PE1–PE3 keep covering the
+                // drive. It is on the skip allowlist (skip-allowlist.ts) for that reason; the
+                // generator↔driver contract it covers is still exercised wherever the corpus IS
+                // pushed (a dev database, the eval runs themselves), and PE1–PE3 keep covering the
                 // corpus FILES on every PR for zero tokens.
-                console.log(`      → skipped: '${record.fields.Name}' is not in this database `
+                SkipCheck(`'${record.fields.Name}' is not in this database `
                     + `(corpus not pushed — mj sync push --dir=metadata-optional/prompt-eval-corpus)`);
-                return;
             }
             Assert(found.Results.length === 1,
                 `Generated record '${record.fields.Name}' is ambiguous — ${found.Results.length} rows share that name`);
@@ -447,7 +473,7 @@ const checks: NamedCheck[] = [
             llm.Script({ kind: 'succeed', content: JSON.stringify(synthesizeEnvelope(branch!)) });
             // The ClassFactory registration is process-wide and this suite runs every bundle in one
             // process: without the restore, later bundles' real prompt calls get this scripted reply.
-            const restoreDrivers = RegisterTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            const restoreDrivers = RegisterTestLLM(llm, [...STUBBED_DRIVER_CLASSES]);
             try {
 
                 await AIEngine.Instance.Config(false, ctx.User);
