@@ -36,7 +36,7 @@ from .importance import permutation_importance
 from .preprocessing import FittedPreprocessing
 from .scores import PrimaryMetric, primary_score
 from .run import run_trainer
-from .trainer import DriverBaseline, TrainedPredictor, single_coef_row
+from .trainer import DriverBaseline, TrainedPredictor, single_coef_row, top_signed_drivers
 from .trainer_schemas import TrainerRequest
 from .schemas import (
     ImportanceKind,
@@ -789,14 +789,8 @@ def _row_contributions(
             return [None] * n_rows
         out: List[Optional[List[Dict[str, Any]]]] = []
         for i in range(n_rows):
-            contrib = coef * (np.asarray(X[i], dtype=float) - baseline)
-            order = np.argsort(-np.abs(contrib))[:top_k]
-            row = [
-                {"feature": feature_names[j], "value": float(contrib[j])}
-                for j in order
-                if abs(float(contrib[j])) > 1e-9
-            ]
-            out.append(row or None)
+            drivers = top_signed_drivers(coef * (np.asarray(X[i], dtype=float) - baseline), feature_names, top_k)
+            out.append(None if drivers is None else [{"feature": f, "value": v} for f, v in drivers])
         return out
     except Exception:  # never let the explanation layer break scoring
         return [None] * n_rows

@@ -50,6 +50,8 @@ ResampleMethod = Literal["class-weight", "undersample", "oversample"]
 INNER_INTERVAL_LEVEL = 0.95
 # Drivers whose estimators take sklearn's `class_weight`; the `class-weight` resampling sets it to `balanced`.
 _CLASS_WEIGHT_DRIVERS = frozenset({"logistic_regression", "random_forest", "lightgbm"})
+# A per-row driver at or below this magnitude is not reported.
+_NEGLIGIBLE_DRIVER = 1e-9
 
 
 @dataclass(frozen=True)
@@ -157,13 +159,7 @@ class TrainedPredictor(BaseEstimator):  # type: ignore[misc]
             return [None] * len(X)
         with threadpool_limits(limits=self.threads):
             Z = np.asarray(encoder.transform(encoding.normalize(self.columns, X)), dtype=np.float64)
-        out: list[Optional[list[tuple[str, float]]]] = []
-        for z in Z:
-            contrib = coef * (z - baseline.mean)
-            order = np.argsort(-np.abs(contrib))[:top_k]
-            row = [(names[j], float(contrib[j])) for j in order if abs(float(contrib[j])) > 1e-9]
-            out.append(row or None)
-        return out
+        return [top_signed_drivers(coef * (z - baseline.mean), names, top_k) for z in Z]
 
     def predict(self, X: pd.DataFrame) -> FArr:
         raw = self.predict_raw(X)
@@ -227,6 +223,14 @@ def single_coef_row(model: BaseEstimator) -> Optional[FArr]:
     if c.ndim == 2 and c.shape[0] == 1:
         return np.asarray(c[0], dtype=np.float64)
     return c if c.ndim == 1 else None
+
+
+def top_signed_drivers(contrib: FArr, names: Sequence[str], top_k: int) -> Optional[list[tuple[str, float]]]:
+    """One row's `top_k` signed drivers, largest magnitude first, leaving out negligible ones; None when every driver
+    is negligible. The one ranking rule for per-row drivers on the trainer and legacy paths."""
+    order = np.argsort(-np.abs(contrib))[:top_k]
+    row = [(names[int(j)], float(contrib[j])) for j in order if abs(float(contrib[j])) > _NEGLIGIBLE_DRIVER]
+    return row or None
 
 
 def _driver_baseline(pipe: Pipeline, train_frame: pd.DataFrame, threads: int) -> Optional[DriverBaseline]:
