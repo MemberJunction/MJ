@@ -546,6 +546,26 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.CreateBodies[0].conversationConfig?.turn?.turnEagerness).toBe('patient');
     });
 
+    /**
+     * turnTimeout is the wait before re-engaging a SILENT user and silenceEndCallTimeout ends the
+     * call; neither is an end-of-speech silence duration, so no normalized turn field may move them.
+     */
+    it('leaves turnTimeout and silenceEndCallTimeout unset whatever the normalized turn fields say', async () => {
+        await driver.CreateClientSession(makeParams({
+            Tools: [WEATHER_TOOL],
+            Config: {
+                turnDetection: {
+                    Mode: 'serverVad', Eagerness: 'high', Threshold: 0.2, SilenceDurationMs: 900,
+                    Coverage: 'audioActivityOnly',
+                },
+            },
+        }));
+        const turn = driver.CreateBodies[0].conversationConfig?.turn;
+        expect(turn).toEqual({ turnEagerness: 'eager' });
+        expect(turn?.turnTimeout).toBeUndefined();
+        expect(turn?.silenceEndCallTimeout).toBeUndefined();
+    });
+
     it('omits the turn block entirely when no eagerness is configured', async () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
         expect(driver.CreateBodies[0].conversationConfig?.turn).toBeUndefined();
