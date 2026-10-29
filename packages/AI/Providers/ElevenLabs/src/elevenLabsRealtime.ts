@@ -442,7 +442,7 @@ export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManaged
  */
 @RegisterClass(BaseRealtimeModel, 'ElevenLabsRealtime')
 export class ElevenLabsRealtime extends BaseRealtimeModel {
-    /** ElevenLabs conversational-agent session ceiling (2 hours) as stated in the #6182 brief. */
+    /** ElevenLabs conversational-agent session ceiling (2 hours): the provider ceiling MJ uses for ElevenLabs Agents (#6182 design). */
     public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 7200 };
 
     private elevenClient: ElevenLabsClient | null = null;

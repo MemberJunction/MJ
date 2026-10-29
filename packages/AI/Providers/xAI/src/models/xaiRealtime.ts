@@ -183,13 +183,14 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
  * Live realtime session for Grok Voice — the shared {@link OpenAIRealtimeSession} protocol
  * implementation bound to {@link XAI_REALTIME_PROFILE}. Exists as a named subclass so tests and
  * logs identify xAI sessions, and so direct construction (`new xAIRealtimeSession(connection)`)
- * keeps working exactly as it did when this was a standalone clone.
+ * keeps working exactly as it did when this was a standalone clone; a directly built session reports
+ * the facts of its own driver's static ({@link xAIRealtime.DriverFacts}).
  */
 export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
     /**
      * @param connection The injectable provider-connection seam (a real `OpenAIRealtimeWebSocket`
      * in production, a fake in tests).
-     * @param driverFacts The creating driver's static facts; defaults to xAI's for direct construction.
+     * @param driverFacts The creating driver's static facts; defaults to {@link xAIRealtime.DriverFacts} (xAI's own static) for direct construction.
      */
     constructor(connection: IxAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts) {
         super(connection, XAI_REALTIME_PROFILE, driverFacts);

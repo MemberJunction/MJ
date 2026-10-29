@@ -1062,8 +1062,6 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
-     */
-    /**
      * @param driverFacts The creating driver's static facts. Passed in (not read from a hard-coded
      * class) so a subclass driver's own ceiling wins; direct construction defaults to OpenAI's.
      */

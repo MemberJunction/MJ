@@ -1884,6 +1884,12 @@ importers:
         specifier: 6.2.0-edge.6
         version: link:../Zhipu
     devDependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.6
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.6
+        version: link:../../../MJGlobal
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

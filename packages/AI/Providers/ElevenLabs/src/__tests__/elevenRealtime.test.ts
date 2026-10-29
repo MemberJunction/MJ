@@ -48,8 +48,9 @@ vi.mock('@memberjunction/ai', async () => {
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    // Mirrors the real RealtimeDriverFactsOf: reads the static off the instance's actual constructor.
-    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts?: object }).DriverFacts ?? {};
+    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
+    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
+    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
     return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
