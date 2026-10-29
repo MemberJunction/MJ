@@ -20,6 +20,24 @@ import type {
 /** The SQL Server connector's ClassName, then the legacy one. */
 const SQLSERVER_CLASS_NAMES = ['@memberjunction/connector-sqlserver', 'SQLServerConnector'];
 
+/** The `seededFromBackup.jobID` of a company integration's configuration, or undefined. */
+function SeededJobIDOf(configuration: string | null): string | undefined {
+  if (!configuration) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(configuration);
+    if (typeof parsed !== 'object' || parsed === null) {
+      return undefined;
+    }
+    const seeded = (parsed as Record<string, unknown>)['seededFromBackup'];
+    const jobID = typeof seeded === 'object' && seeded !== null ? (seeded as Record<string, unknown>)['jobID'] : undefined;
+    return typeof jobID === 'string' && jobID !== '' ? jobID : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Saves the record, throwing the provider's complete message on failure. */
 async function SaveOrThrow(entity: BaseEntity, what: string): Promise<void> {
   if (!(await entity.Save())) {
@@ -43,10 +61,27 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
   }
 
   public async FindCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<ArchiveSeedCompanyIntegrationRef[]> {
-    const rows = await this.simpleRows<ArchiveSeedCompanyIntegrationRef>(
-      'MJ: Company Integrations', `IntegrationID='${EscapeSQLString(integrationID)}'`, ['ID', 'Name'], user, provider,
+    const rows = await this.simpleRows<{ ID: string; Name: string; Configuration: string | null }>(
+      'MJ: Company Integrations', `IntegrationID='${EscapeSQLString(integrationID)}'`, ['ID', 'Name', 'Configuration'], user, provider,
     );
-    return rows.map(r => ({ ID: r.ID, Name: r.Name }));
+    return rows.map(r => {
+      const ref: ArchiveSeedCompanyIntegrationRef = { ID: r.ID, Name: r.Name };
+      const jobID = SeededJobIDOf(r.Configuration);
+      if (jobID) {
+        ref.SeededJobID = jobID;
+      }
+      return ref;
+    });
+  }
+
+  public async DeleteCompanyIntegration(id: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    const ci = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+    if (!(await ci.Load(id))) {
+      throw new Error(`CompanyIntegration "${id}" not found`);
+    }
+    if (!(await ci.Delete())) {
+      throw new Error(`Failed to delete Company Integration '${ci.Name}': ${ci.LatestResult?.CompleteMessage ?? 'delete failed'}`);
+    }
   }
 
   public async FindDataSourceTypeID(driverClass: 'SQLServerExternalDriver', user: UserInfo, provider: IMetadataProvider): Promise<string> {

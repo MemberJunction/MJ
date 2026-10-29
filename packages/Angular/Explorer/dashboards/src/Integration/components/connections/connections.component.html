@@ -91,6 +91,9 @@
                 <div class="delete-confirm-content">
                   <i class="fa-solid fa-triangle-exclamation delete-warn-icon"></i>
                   <span class="delete-confirm-text">Delete this integration and all its entity maps?</span>
+                  @if (DeleteError) {
+                    <mj-alert Size="sm" Variant="error">{{ DeleteError }}</mj-alert>
+                  }
                   <div class="delete-confirm-actions">
                     <button mjButton
                             variant="danger"

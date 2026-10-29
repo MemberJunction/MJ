@@ -39,6 +39,8 @@ export interface ArchiveSeedCompanyIntegrationValues {
 export interface ArchiveSeedCompanyIntegrationRef {
   ID: string;
   Name: string;
+  /** The archive-seed job that created it (`seededFromBackup.jobID` in its configuration), when it was seeded. */
+  SeededJobID?: string;
 }
 
 /** What the schema apply reports back. */
@@ -60,8 +62,13 @@ export interface ArchiveSeedEntityMap {
 export interface ArchiveSeedRecords {
   /** The SQL Server `MJ: Integrations` row (current or legacy ClassName), or undefined. */
   FindSqlServerIntegrationID(user: UserInfo, provider: IMetadataProvider): Promise<string | undefined>;
-  /** Every company integration of this integration (ID and name), so a refusal can name the existing one. */
+  /** Every company integration of this integration (ID, name and seeding job), so a refusal can name the existing one. */
   FindCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<ArchiveSeedCompanyIntegrationRef[]>;
+  /**
+   * Deletes a company integration through its entity, which for a seeded one also removes its archive-seed
+   * job rows and data source. Throws when it does not exist or the delete is refused.
+   */
+  DeleteCompanyIntegration(id: string, user: UserInfo, provider: IMetadataProvider): Promise<void>;
   /** Throws when no External Data Source Type has that driver class. */
   FindDataSourceTypeID(driverClass: 'SQLServerExternalDriver', user: UserInfo, provider: IMetadataProvider): Promise<string>;
   CreateDataSource(values: ArchiveSeedDataSourceValues, user: UserInfo, provider: IMetadataProvider): Promise<string>;

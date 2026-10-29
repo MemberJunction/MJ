@@ -16,6 +16,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import type { ArchiveSeedState, ArchiveSeedSummary, ArchiveSeedWork } from '@memberjunction/schema-engine';
 import {
   DefaultArchiveSeedDeps,
+  type ArchiveSeedCompanyIntegrationRef,
   type ArchiveSeedDataSourceValues,
   type ArchiveSeedDeps,
   type ArchiveSeedEntityMap,
@@ -265,7 +266,10 @@ export class ArchiveSeedJob {
 
   // ---------------------------------------------------------------- start helpers
 
-  /** The SQL Server integration ID, or throws the refusal (invalid input, no connector, decision A). */
+  /**
+   * The SQL Server integration ID, or throws the refusal (invalid input, no connector, decision A). A
+   * connection left by a failed seed is replaced: deleting it removes its job row and data source.
+   */
   private async assertCanStart(input: ArchiveSeedStartInput, user: UserInfo, provider: IMetadataProvider): Promise<string> {
     const invalid = ValidateArchiveSeedStartInput(input);
     if (invalid) {
@@ -276,12 +280,32 @@ export class ArchiveSeedJob {
       throw new Error('SQL Server connector is not installed');
     }
     const existing = await this.deps.Records.FindCompanyIntegrations(integrationID, user, provider);
-    if (existing.length > 0) {
+    const failedSeed = await this.failedSeedAmong(existing, user, provider);
+    if (existing.length > 0 && !failedSeed) {
       throw new Error(
         `An archive seed is limited to the first SQL Server connection in this workspace; '${existing[0].Name}' already exists — delete it to seed again`,
       );
     }
+    if (failedSeed) {
+      await this.deps.Records.DeleteCompanyIntegration(failedSeed.ID, user, provider);
+    }
     return integrationID;
+  }
+
+  /**
+   * The one existing connection when it is the leftover of a failed archive seed (its job is Failed,
+   * or its job row is gone); undefined otherwise. A finished seed holds data and is never replaced.
+   */
+  private async failedSeedAmong(
+    existing: ArchiveSeedCompanyIntegrationRef[],
+    user: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<ArchiveSeedCompanyIntegrationRef | undefined> {
+    if (existing.length !== 1 || !existing[0].SeededJobID) {
+      return undefined;
+    }
+    const stored = await this.deps.Store.Read(existing[0].SeededJobID, user, provider);
+    return !stored || stored.Work.State === 'Failed' ? existing[0] : undefined;
   }
 
   /** Creates the company integration; on failure removes the deferred source created just before it. */

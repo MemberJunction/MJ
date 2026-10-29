@@ -28,7 +28,7 @@ import type {
   ArchiveSeedStore,
   ArchiveSeedStoredJob,
 } from '../archiveSeed/ArchiveSeedDeps';
-import type { ArchiveSeedStartInput } from '../archiveSeed/ArchiveSeedState';
+import { NewArchiveSeedWork, type ArchiveSeedStartInput } from '../archiveSeed/ArchiveSeedState';
 import { ArchiveSeedJob } from '../archiveSeed/ArchiveSeedJob';
 
 const USER = { ID: 'u-1' } as UserInfo;
@@ -62,6 +62,11 @@ class FakeRecords implements ArchiveSeedRecords {
   }
   public async FindCompanyIntegrations(): Promise<ArchiveSeedCompanyIntegrationRef[]> {
     return this.Existing;
+  }
+  public DeletedCompanyIntegrations: string[] = [];
+  public async DeleteCompanyIntegration(id: string): Promise<void> {
+    this.DeletedCompanyIntegrations.push(id);
+    this.Existing = this.Existing.filter(ref => ref.ID !== id);
   }
   public async FindDataSourceTypeID(): Promise<string> {
     return 'type-sql';
@@ -372,6 +377,47 @@ describe('ArchiveSeedJob', () => {
     expect(records.DataSources.size).toBe(0);
     expect(records.CompanyIntegrations.size).toBe(0);
     expect(store.Jobs.size).toBe(0);
+    expect(records.DeletedCompanyIntegrations).toEqual([]);
+  });
+
+  it('Start replaces the connection a failed seed left behind, then seeds as usual', async () => {
+    const failedWork: ArchiveSeedWork = { ...NewArchiveSeedWork(INPUT, USER.ID, 'int-sql', clock), State: 'Failed', Error: 'RESTORE failed' };
+    store.Jobs.set('job-old', { ID: 'job-old', Work: failedWork, Status: 'Failed', CompanyIntegrationID: 'ci-old' });
+    records.Existing = [{ ID: 'ci-old', Name: 'Legacy ERP', SeededJobID: 'job-old' }];
+
+    const started = await job.Start(INPUT, USER, PROVIDER);
+    await job.WaitForIdle();
+
+    expect(records.DeletedCompanyIntegrations).toEqual(['ci-old']);
+    expect(started.CompanyIntegrationID).not.toBe('ci-old');
+    expect(store.Jobs.get(started.JobID)?.Work.State).toBe('AwaitingSelection');
+  });
+
+  it('Start replaces a seeded connection whose job row is gone', async () => {
+    records.Existing = [{ ID: 'ci-orphan', Name: 'Legacy ERP', SeededJobID: 'job-missing' }];
+    const started = await job.Start(INPUT, USER, PROVIDER);
+    await job.WaitForIdle();
+    expect(records.DeletedCompanyIntegrations).toEqual(['ci-orphan']);
+    expect(store.Jobs.get(started.JobID)?.Work.State).toBe('AwaitingSelection');
+  });
+
+  it.each(['Restoring', 'AwaitingSelection', 'Building', 'Done'] as const)('Start still refuses a seeded connection whose job is %s', async state => {
+    const work: ArchiveSeedWork = { ...NewArchiveSeedWork(INPUT, USER.ID, 'int-sql', clock), State: state };
+    store.Jobs.set('job-live', { ID: 'job-live', Work: work, Status: state === 'Done' ? 'Completed' : 'Pending', CompanyIntegrationID: 'ci-live' });
+    records.Existing = [{ ID: 'ci-live', Name: 'Legacy ERP', SeededJobID: 'job-live' }];
+    await expect(job.Start(INPUT, USER, PROVIDER)).rejects.toThrow("'Legacy ERP' already exists — delete it to seed again");
+    expect(records.DeletedCompanyIntegrations).toEqual([]);
+  });
+
+  it('Start refuses a live (unseeded) connection even when a failed seed also exists', async () => {
+    const failedWork: ArchiveSeedWork = { ...NewArchiveSeedWork(INPUT, USER.ID, 'int-sql', clock), State: 'Failed' };
+    store.Jobs.set('job-old', { ID: 'job-old', Work: failedWork, Status: 'Failed', CompanyIntegrationID: 'ci-old' });
+    records.Existing = [
+      { ID: 'ci-live', Name: 'Production CRM' },
+      { ID: 'ci-old', Name: 'Legacy ERP', SeededJobID: 'job-old' },
+    ];
+    await expect(job.Start(INPUT, USER, PROVIDER)).rejects.toThrow("'Production CRM' already exists");
+    expect(records.DeletedCompanyIntegrations).toEqual([]);
   });
 
   it('Start refuses when the connector is not installed', async () => {

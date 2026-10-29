@@ -256,6 +256,8 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Delete confirmation state
   DeleteConfirmID: string | null = null;
   IsDeleting = false;
+  /** Why the last delete attempt in the open confirmation was refused or failed. */
+  DeleteError: string | null = null;
 
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
@@ -824,32 +826,37 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   ShowDeleteConfirm(integrationID: string): void {
     this.DeleteConfirmID = integrationID;
+    this.DeleteError = null;
     this.cdr.detectChanges();
   }
 
   CancelDelete(): void {
     this.DeleteConfirmID = null;
+    this.DeleteError = null;
     this.cdr.detectChanges();
   }
 
+  /** Deletes the connection; a refused or failed delete stays in the confirmation with its reason. */
   async ConfirmDelete(integrationID: string): Promise<void> {
     this.IsDeleting = true;
+    this.DeleteError = null;
     this.cdr.detectChanges();
 
     try {
-      const md = this.ProviderToUse;
-      const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
-      await ci.Load(integrationID);
-      const deleted = await ci.Delete();
-      if (deleted) {
+      const p = this.ProviderToUse;
+      const ci = await p.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', p.CurrentUser);
+      if (!(await ci.Load(integrationID))) {
+        this.DeleteError = 'This connection no longer exists.';
+        return;
+      }
+      if (await ci.Delete()) {
         this.DeleteConfirmID = null;
         await this.LoadData();
       } else {
-        console.error('[IntegrationConnections] Delete failed:',
-          ci.LatestResult?.CompleteMessage ?? ci.LatestResult?.Message);
+        this.DeleteError = ci.LatestResult?.CompleteMessage ?? ci.LatestResult?.Message ?? 'The connection could not be deleted.';
       }
     } catch (err) {
-      console.error('[IntegrationConnections] Delete error:', err);
+      this.DeleteError = err instanceof Error ? err.message : String(err);
     } finally {
       this.IsDeleting = false;
       this.cdr.detectChanges();
