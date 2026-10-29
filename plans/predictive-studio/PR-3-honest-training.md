@@ -14979,7 +14979,7 @@ later: G2.4 `W2 → S5.2` (flipped in M9.6), G2.1 `N1c → S6.5`, G2.2 `N1r → 
   bins=10) -> list[ReliabilityBin]`, `calibration.Calibrator(method).fit(y, p_oof).apply(p)`,
   `calibration.choose_method(kind, n_rows, threshold_rows)`, `calibration.slope_hides_family(slope) -> bool`.
 
-- [ ] Step 1: Write the failing test (expected numbers are refpipe's and the review's DeLong on the same inputs). The
+- [x] Step 1: Write the failing test (expected numbers are refpipe's and the review's DeLong on the same inputs). The
   proper scores per family are the ranking metric from here on (F-SC-7); the intervals close F-REF-3's "one AUC with
   no interval"; the calibration fit is F-SC-8's measurement.
 
@@ -15060,9 +15060,9 @@ def test_ranking_a_tweedie_task_by_rmse_is_refused() -> None:
     assert (e.value.task_kind, e.value.family, e.value.metric) == ("non-negative", "continuous", "rmse")
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_scores_intervals.py`. Expected: collection
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_scores_intervals.py`. Expected: collection
   error, `ImportError: cannot import name 'calibration' from 'app'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Append to `packages/AI/PredictiveStudio/Sidecar/src/python/app/scores.py`:
 
@@ -15506,8 +15506,8 @@ def choose_method(kind: Literal["platt", "isotonic", "auto"], n_rows: int, thres
     return kind
 ```
 
-- [ ] Step 4: Rerun. Expected: 6 passed.
-- [ ] Step 5: Runtime check — none (pure functions); Task M6.8 reproduces refpipe's intervals on planted data.
+- [x] Step 4: Rerun. Expected: 6 passed.
+- [x] Step 5: Runtime check — none (pure functions); Task M6.8 reproduces refpipe's intervals on planted data.
 
 #### Task M6.2: One metric-direction declaration in Core (F-TR-6, shipped with F-SC-7)
 
@@ -15529,7 +15529,7 @@ A-PR2-ALIASES): this task deletes it under §2.5's alias rule and moves its call
 `MetricDirections.IsErrorMetric` — `git grep -nw "isErrorMetric" -- packages ':(exclude,glob)**/CHANGELOG.md'` → 0 hits;
 the release note (§10) names it.
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 Edit `packages/AI/PredictiveStudio/Core/src/__tests__/contracts.test.ts` — replace
 
@@ -15570,10 +15570,10 @@ describe('metric direction (F-TR-6 with F-SC-7)', () => {
 });
 ```
 
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test`. Expected: `contracts.test.ts` 1 failed
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test`. Expected: `contracts.test.ts` 1 failed
   (`expected false to be true` for `brier`); `metrics-direction.test.ts` fails to load (`MetricDirections` is not
   exported).
-- [ ] Step 3: Implement — replace `packages/AI/PredictiveStudio/Core/src/metrics-util.ts` with:
+- [x] Step 3: Implement — replace `packages/AI/PredictiveStudio/Core/src/metrics-util.ts` with:
 
 ```ts
 /**
@@ -15629,10 +15629,10 @@ export class MetricDirections {
 }
 ```
 
-- [ ] Step 4: `pnpm run build && pnpm test` → 0 failed (+3 in `metrics-direction.test.ts`). Then
+- [x] Step 4: `pnpm run build && pnpm test` → 0 failed (+3 in `metrics-direction.test.ts`). Then
   `cd ../Engine && pnpm run build && pnpm test` → 0 failed (the leaderboard and maintenance consumers of
   `MetricDirections.IsErrorMetric` keep their tests green; `experiment-orchestrator.test.ts:689` is F-TR-5's and unchanged).
-- [ ] Step 5: Runtime check — none (pure function; consumed by the leaderboard; M9.4 uses `MetricDirections.MetricDirectionOf` for
+- [x] Step 5: Runtime check — none (pure function; consumed by the leaderboard; M9.4 uses `MetricDirections.MetricDirectionOf` for
   ranking and does not redefine it).
 
 #### Task M6.3: The gate, transcribed from refpipe with the protocol's margin
@@ -15651,7 +15651,7 @@ comparisons, member_scores, best_simple)` with comparisons keyed `modelVsDummy`,
 `TrainerResult.gate`; the stored outcome is decided in TypeScript (`GateRules.DecideGate`, M10.1, authoritative — D3-23), M10.2
 proves `gate_decision` and `GateRules.DecideGate` agree on 25,000 seeded cases, and M10.3 refuses a run whose two answers differ.
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_gate.py`:
 
@@ -15691,9 +15691,9 @@ def test_gate_decision_is_refpipes_tuple_form() -> None:
     assert len(G.GATE_BRANCHES) == 4
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_gate.py`. Expected: collection error,
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_gate.py`. Expected: collection error,
   `ImportError: cannot import name 'gate' from 'app'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/gate.py`:
 
@@ -15804,8 +15804,8 @@ def run_gate(y: npt.NDArray[np.generic], fn: ScoreFn, model_name: str, model: np
 
   (`gate_decision` was checked against refpipe's on 2,000 random inputs while this plan was written: 0 differences.
   M10.2 owns the recorded parity proof.)
-- [ ] Step 4: Rerun. Expected: 6 passed (one per branch, the delivered-member case and the tuple form).
-- [ ] Step 5: Runtime check — Task M6.8 (C2 `keep-simple-baseline`/`glm`, shuffled `no-signal`).
+- [x] Step 4: Rerun. Expected: 6 passed (one per branch, the delivered-member case and the tuple form).
+- [x] Step 5: Runtime check — Task M6.8 (C2 `keep-simple-baseline`/`glm`, shuffled `no-signal`).
 
 #### Task M6.4: Baselines and v2 predictor artifacts through the restricted unpickler
 
@@ -15826,7 +15826,7 @@ def run_gate(y: npt.NDArray[np.generic], fn: ScoreFn, model_name: str, model: np
   allow-list grows by the exact pairs the trainer's families need (recorded by `test_artifacts_v2.py`, which loads every
   driver × family, calibrated classifiers and the baseline predictors).
 
-- [ ] Step 1: Write the failing test. Every simple member is scored against the dummy on the same holdout rows with a
+- [x] Step 1: Write the failing test. Every simple member is scored against the dummy on the same holdout rows with a
   paired interval in M6.5 — the comparison F-SEL-3 found missing.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_artifacts_v2.py`:
@@ -15906,9 +15906,9 @@ def test_a_payload_naming_another_global_is_refused() -> None:
         artifacts.load_v2_envelope(env)
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_artifacts_v2.py`. Expected: collection
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_artifacts_v2.py`. Expected: collection
   error, `ImportError: cannot import name 'artifacts_v2' from 'app'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/baselines.py`:
 
@@ -16172,9 +16172,9 @@ def load_v2_envelope(envelope_bytes: bytes) -> Tuple[Any, Dict[str, Any]]:
     return _bytes_to_model(payload), envelope
 ```
 
-- [ ] Step 4: Rerun. Expected: 25 passed (23 driver × family round trips with identical predictions, the baseline
+- [x] Step 4: Rerun. Expected: 25 passed (23 driver × family round trips with identical predictions, the baseline
   predictors, and a payload naming `os.system` refused). `tests/test_artifact_unpickle_guard.py` still 31 passed.
-- [ ] Step 5: Runtime check — Task M6.5 Step 5 scores a shipped v2 artifact through the live `/predict`.
+- [x] Step 5: Runtime check — Task M6.5 Step 5 scores a shipped v2 artifact through the live `/predict`.
 
 #### Task M6.5: The holdout stage, `POST /trainer`, and `/predict` for v2 artifacts with the class vector
 
@@ -16200,7 +16200,7 @@ def load_v2_envelope(envelope_bytes: bytes) -> Tuple[Any, Dict[str, Any]]:
   order). Count and non-negative candidates use the task's Poisson/Tweedie objective (M5.7) and predictions are
   floored at 1e-9, so a shipped model predicts no negatives (F-SCN-2).
 
-- [ ] Step 1: Write the failing test.
+- [x] Step 1: Write the failing test.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/tests/test_trainer_route.py`:
 
@@ -16352,10 +16352,10 @@ def test_incumbent_diff_compares_on_the_same_rows(server: FileServer) -> None:
     assert abs(second.incumbentDiff.value) < 1e-12 and second.incumbentDiff.lower <= 0 <= second.incumbentDiff.upper
 ```
 
-- [ ] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_trainer_route.py`. Expected: 10 failed — no
+- [x] Step 2: Run `pnpm run test:python -- -p no:cacheprovider tests/test_trainer_route.py`. Expected: 10 failed — no
   `/trainer` route, so every POST returns 404 `{"detail": "Not Found"}` and `TrainerCompleted.model_validate` /
   `TrainerFailed.model_validate` raise `ValidationError` (or `assert 404 == 400/200`).
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Create `packages/AI/PredictiveStudio/Sidecar/src/python/app/evaluation.py`:
 
@@ -16989,12 +16989,12 @@ with
         return out
 ```
 
-- [ ] Step 4: Rerun. Expected: 10 passed (complete result with one holdout access, three baselines and five
+- [x] Step 4: Rerun. Expected: 10 passed (complete result with one holdout access, three baselines and five
   comparisons, a v2 artifact that predicts through the restricted loader, noise → `no-signal`, cross-family → 400
   before any fit, the three other request refusals → 400, a hash mismatch → `failed`/`load-snapshot` with exactly the five failure keys, too many candidates →
   `budget-exceeded`, and an incumbent diff of 0 against itself). Whole suite: `pnpm run test:python -- -p no:cacheprovider
   --ignore=tests/gates` → 135 passed (M5's 88 non-gate tests + 47 from M6.1–M6.5).
-- [ ] Step 5: Runtime check against the live sidecar (bootstrap) — the reference pipeline's numbers on the same rows:
+- [x] Step 5: Runtime check against the live sidecar (bootstrap) — the reference pipeline's numbers on the same rows:
 
   ```bash
   cd packages/AI/PredictiveStudio/Sidecar/src/python
@@ -17040,7 +17040,7 @@ with
 TrainerRequest): Promise<TrainerResult> }`, `MJSidecarTrainer.RunTrainer(req)` (retries transport failures and 5xx up
 to `req.maxRetries`, rethrows a 4xx `SidecarError`, else returns `failed`/`timeout`).
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 Append to `packages/AI/PredictiveStudio/Core/src/__tests__/trainer-contract.test.ts` (and add `TrainerContract, type CalibrationReport` to its import from `'../index'`):
 
@@ -17170,10 +17170,10 @@ describe('MJSidecarTrainer.RunTrainer (C3.4: timeout, bounded retries, then fail
 });
 ```
 
-- [ ] Step 2: Run the three packages' tests. Expected: Core — `TrainerContract.CalibrationHidesFamily is not a function` (1
+- [x] Step 2: Run the three packages' tests. Expected: Core — `TrainerContract.CalibrationHidesFamily is not a function` (1
   failed); Sidecar — `s.RunTrainer is not a function` (2 failed); Engine — `RunTrainer` missing on
   `MJSidecarTrainer` / `MLSidecar` (3 failed).
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Edit `packages/AI/PredictiveStudio/Core/src/sidecar-contract.ts` — replace
 
@@ -17482,9 +17482,9 @@ with
 }
 ```
 
-- [ ] Step 4: Build and test in dependency order — `Core` → `Sidecar` → `Engine`: `pnpm run build && pnpm test` in each.
+- [x] Step 4: Build and test in dependency order — `Core` → `Sidecar` → `Engine`: `pnpm run build && pnpm test` in each.
   Expected: build exit 0 in all three; Core +1 test, Sidecar 17 passed (15 + 2), Engine +3; 0 failed.
-- [ ] Step 5: Runtime check — the TypeScript client against the live sidecar:
+- [x] Step 5: Runtime check — the TypeScript client against the live sidecar:
 
   ```bash
   cd packages/AI/PredictiveStudio/Sidecar/src/python
@@ -17536,7 +17536,7 @@ snapshot is built (the protocol decides the incumbent-score and slice columns), 
 **finalist's** artifact — the gate is not enforced before M10.3. A unit pipeline **without** a protocol keeps M4's
 `SnapshotRetrainer.TrainOnSnapshot` path unchanged; M9.2 makes the protocol mandatory and deletes that branch.
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 Create `packages/AI/PredictiveStudio/Engine/src/training/__tests__/fixtures/trainer-result.ts` (a complete, typed
 `TrainerCompleted` the engine tests and M10's tests reuse):
@@ -17709,11 +17709,11 @@ class FakeTrainer implements ITrainerEvaluator {
      `{ 'log-loss': 0.452, auc: 0.67, brier: 0.15 }`, and the second request reuses `trainerRequest`'s candidates and
      seed with freshly issued downloads.
 
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test -- trainer-contract` → 1 failed
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test -- trainer-contract` → 1 failed
   (`TrainerContract.ToStoredTrainerResult is not a function`); `cd ../Engine && pnpm test -- trainer-request training-engine` →
   `Failed to resolve import "../trainer-request"` and the three new engine cases fail (`deps.sidecar.train` is called
   instead of the trainer).
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 Edit `packages/AI/PredictiveStudio/Core/src/trainer-contract.ts` — add these types above `export class TrainerContract`:
 
@@ -18242,10 +18242,10 @@ used by both branches, `loadProtocol` parses the row with `EvaluationProtocol.Pa
   `stage === 'budget-exceeded'` → `'BUDGET_EXCEEDED'` (any other trainer stage stays `null`); one `CodeOf` case each in
   the M3.6 test file.
 
-- [ ] Step 4: `cd packages/AI/PredictiveStudio/Core && pnpm run build && pnpm test` → 0 failed (+2 in
+- [x] Step 4: `cd packages/AI/PredictiveStudio/Core && pnpm run build && pnpm test` → 0 failed (+2 in
   `trainer-contract.test.ts`); `cd ../Engine && pnpm run build && pnpm test` → 0 failed (+3 `trainer-request.test.ts`,
   +3 in `training-engine.test.ts`, +2 `CodeOf` cases; the M2–M4 cases are unchanged because their pipelines have no protocol).
-- [ ] Step 5: Runtime verification (database `MJ_PS_PR3_<agent>`, MJAPI on 4031, the sidecar from the bootstrap
+- [x] Step 5: Runtime verification (database `MJ_PS_PR3_<agent>`, MJAPI on 4031, the sidecar from the bootstrap
   started by `MLSidecar`). Bind a protocol to the C1 renewal pipeline M2.7 provisions: save a version-1
   `MJ: Evaluation Protocols` row (`ID = LineageRootID = <new uuid>`, the binary protocol of M1.2's test with
   `Holdout {"kind":"date-carved","dateColumn":"DecisionDate","cutoff":"2024-01-01","holdoutEnd":null,"newEntityReport":null}`
@@ -18314,7 +18314,7 @@ not exist until the flipping milestone, §4.2): G2.8 `C2 -> S4.5`
 `::test_N1r_S6_5_noise_publish`, G2.3 `W2 -> S6.5` `::test_W2_S6_5_noise_publish` (M10.5); G2.4 `W2 -> S5.2`
 `::test_W2_S5_2_winner_optimism` (M9.6).
 
-- [ ] Step 1: Write the gate tests.
+- [x] Step 1: Write the gate tests.
 
 Edit `packages/AI/PredictiveStudio/Sidecar/src/python/tests/gates/conftest.py` — replace
 
@@ -18845,8 +18845,8 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
     assert low <= covered <= high
 ```
 
-- [ ] Step 2: Before Tasks M6.1–M6.5 these fail (`/trainer` missing; `completed` raises).
-- [ ] Step 3: Seed sets and the pytest run. M5.2 generated the `base` set. This milestone generates two more, because
+- [x] Step 2: Before Tasks M6.1–M6.5 these fail (`/trainer` missing; `completed` raises).
+- [x] Step 3: Seed sets and the pytest run. M5.2 generated the `base` set. This milestone generates two more, because
   this step's runs are the first to read them: W2-noise s100–s159 (`t2`) for the run of
   `test_seeds400.py::test_W2_S5_2_winner_optimism` below (G2.4's node is written here; its gate's row and check are
   written when it flips, M9.6), and C2's `n400` set for G2.35, which flips here (the `n400` set is M5.2's, D3-73).
@@ -18865,7 +18865,7 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
   interval [0.00842, 0.01545] covers the planted difference 0.01196. The calibration gate measured slopes inside 0.8–1.2
   for 14 of 15 family × seed cells; LightGBM s43 measured 0.7999 and is hidden (allowed by the gate's "a family that
   fails is hidden").
-- [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
+- [x] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
   `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
@@ -18887,7 +18887,7 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
   | G2.38 | `.gate-W9-S6.3.json` | `ps-gate-w9-s6-3.checks.ts` · `PsGateW9S63Checks` | `'G2.38 W9 → S6.3: per-class AUC within 0.03 of the oracle for 3 of 3 classes; top-label slope 0.8–1.2'` | pytest body, `expectedCases = 1`: `tests/gates/test_evaluation_score_gates.py::test_W9_S6_3_per_class_auc_and_top_label_slope` |
   | G2.39 | `.gate-W1-S6.3.json` | `ps-gate-w1-s6-3.checks.ts` · `PsGateW1S63Checks` | `'G2.39 W1 → S6.3: every offered family is calibrated (slope 0.8–1.2) on 3 of 3 seeds or hidden'` | pytest body, `expectedCases = 15`: `tests/gates/test_evaluation_score_gates.py::test_W1_S6_3_every_family_calibrated_or_hidden` |
 
-- [ ] Step 5: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
+- [x] Step 5: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
   `export * from './checks/ps-gate-r3-s4-3.checks';`
   `export * from './checks/ps-gate-r2p-s4-3.checks';`
   `export * from './checks/ps-gate-r1-s6-6.checks';`
@@ -18902,13 +18902,13 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
   `export * from './checks/ps-gate-d1c-s6-4.checks';`
   `export * from './checks/ps-gate-w9-s6-3.checks';`
   `export * from './checks/ps-gate-w1-s6-3.checks';`
-- [ ] Step 6: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-r3-s4-3': 1`, `'ps-gate-r2p-s4-3': 1`, `'ps-gate-r1-s6-6': 1`, `'ps-gate-c3-s4-1': 1`, `'ps-gate-c2-s4-1': 1`, `'ps-gate-c2-s1-2': 1`, `'ps-gate-r2-real-s4-4': 1`, `'ps-gate-w7-s6-2': 1`, `'ps-gate-c2-s6-2': 1`, `'ps-gate-c2-s6-2-2': 1`, `'ps-gate-c1-s6-4': 1`, `'ps-gate-d1c-s6-4': 1`, `'ps-gate-w9-s6-3': 1`, `'ps-gate-w1-s6-3': 1` to
+- [x] Step 6: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-r3-s4-3': 1`, `'ps-gate-r2p-s4-3': 1`, `'ps-gate-r1-s6-6': 1`, `'ps-gate-c3-s4-1': 1`, `'ps-gate-c2-s4-1': 1`, `'ps-gate-c2-s1-2': 1`, `'ps-gate-r2-real-s4-4': 1`, `'ps-gate-w7-s6-2': 1`, `'ps-gate-c2-s6-2': 1`, `'ps-gate-c2-s6-2-2': 1`, `'ps-gate-c1-s6-4': 1`, `'ps-gate-d1c-s6-4': 1`, `'ps-gate-w9-s6-3': 1`, `'ps-gate-w1-s6-3': 1` to
   `EXPECTED_BUNDLE_COUNTS`; the bundle total `toHaveLength(169)` → `toHaveLength(183)` (+ any bundle `next` added); add
   `'ps-gate-r3-s4-3.G2.15'`, `'ps-gate-r2p-s4-3.G2.16'`, `'ps-gate-r1-s6-6.G2.17'`, `'ps-gate-c3-s4-1.G2.18'`, `'ps-gate-c2-s4-1.G2.19'`, `'ps-gate-c2-s1-2.G2.21'`, `'ps-gate-r2-real-s4-4.G2.28'`, `'ps-gate-w7-s6-2.G2.33'`, `'ps-gate-c2-s6-2.G2.34'`, `'ps-gate-c2-s6-2-2.G2.35'`, `'ps-gate-c1-s6-4.G2.36'`, `'ps-gate-d1c-s6-4.G2.37'`, `'ps-gate-w9-s6-3.G2.38'`, `'ps-gate-w1-s6-3.G2.39'` to the gated-skip snapshot's `RequiresMutation` list.
-- [ ] Step 7: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
+- [x] Step 7: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
   Append to `metadata-optional/integration-test/test-suites/.ps-gates-training-suite.json` (3 members before): `R3 -> S4.3` (`Sequence` 4), `R2p -> S4.3` (`Sequence` 5), `R1 -> S6.6` (`Sequence` 6), `C3 -> S4.1` (`Sequence` 7), `C2 -> S4.1` (`Sequence` 8), `C2 -> S1.2` (`Sequence` 9), `R2-real -> S4.4` (`Sequence` 10), `W7 -> S6.2` (`Sequence` 11), `C2 -> S6.2` (`Sequence` 12), `C1 -> S6.4` (`Sequence` 13), `D1c -> S6.4` (`Sequence` 14), `W9 -> S6.3` (`Sequence` 15), `W1 -> S6.3` (`Sequence` 16).
   **Create** `metadata-optional/integration-test/test-suites/.ps-gates-training-statistical-suite.json` (suite `Predictive Studio Gates — Training (statistical)`, `Status: "Active"`, `Description` "The six statistical training gates (G2.1, G2.2, G2.3, G2.13, G2.35 at 400 seeds; G2.4 at 60 seeds); each member row's MaxExecutionTimeMS is set from a measured run, and the suite runs and passes once on the final head before merge. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Training (statistical)\"", `uuidgen` key) holding `C2 -> S6.2 #2` (`Sequence` 1).
-- [ ] Step 8: **Runtime check** (§6 preamble, Gate flip 6):
+- [x] Step 8: **Runtime check** (§6 preamble, Gate flip 6):
   `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → 0 failed (pins and parity);
   `pnpm mj sync push --dir=metadata-optional/integration-test --ci` → exit 0; restart MJAPI; then, one gate at a time,
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "<name>"` → pass for `R3 -> S4.3`, `R2p -> S4.3`, `R1 -> S6.6`, `C3 -> S4.1`, `C2 -> S4.1`, `C2 -> S1.2`, `R2-real -> S4.4`, `W7 -> S6.2`, `C2 -> S6.2`, `C1 -> S6.4`, `D1c -> S6.4`, `W9 -> S6.3`, `W1 -> S6.3`.
@@ -18917,21 +18917,21 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
   `Predictive Studio Gates — Training (statistical)` is not run here (D3-63: it runs once on the final head, M12.1); its 1 member(s) are checked by the pins/parity test and the mutation check below.
   The PR 3 row count (§6 preamble) → `29`.
   Measured values to see and record in §11: G2.39 `collected=15 passed=15` (LightGBM s43 measured slope 0.7999 and is hidden, which the threshold allows); G2.33 `collected=3 passed=3`; every other deterministic gate `collected=1 passed=1`.
-- [ ] Step 9: **Mutation check G2.15:** the count task's objective falls back to squared error (deviance above 1.1713 or negative predictions) → `R3 -> S4.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.15:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.16:** the Tweedie objective falls back to squared error (negative predictions > 0) → `R2p -> S4.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.16:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.17:** prediction intervals come from training residuals instead of the calibration rows (coverage outside the band) → `R1 -> S6.6` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.17:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G2.18:** `/predict` drops the `probabilities` class vector (0 of 3,000 rows carry it) → `C3 -> S4.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.18:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G2.19:** `METRIC_DIRECTION` ranks on accuracy (the constant predictor ranks above better-log-loss models) → `C2 -> S4.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.19:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 14: **Mutation check G2.21:** the trainer result omits precision@k (not reported) → `C2 -> S1.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.21:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 15: **Mutation check G2.28:** the cross-family RMSE refusal is removed (the request is accepted) → `R2-real -> S4.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.28:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 16: **Mutation check G2.33:** the stored metric rows drop the difference's bounds (< 3 of 3 seeds) → `W7 -> S6.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.33:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 17: **Mutation check G2.34:** the AUC bootstrap reports a 68% interval (ratio below 0.67) → `C2 -> S6.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.34:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 18: **Mutation check G2.35:** the difference interval is centred on the model's score alone (not paired with dummy) (coverage below 372; run at 40 seeds, band scaled) → `C2 -> S6.2 #2` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.35:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 19: **Mutation check G2.36:** slice results drop their interval (< 100% of slices) → `C1 -> S6.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.36:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 20: **Mutation check G2.37:** post-cutoff periods are merged into one slice (< 100% of periods) → `D1c -> S6.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.37:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 21: **Mutation check G2.38:** `/predict` returns the class vector in sorted, not declared, order (per-class AUC off by > 0.03) → `W9 -> S6.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.38:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 22: **Mutation check G2.39:** `TrainerContract.CalibrationHidesFamily` returns false (a family with slope outside 0.8–1.2 is shown) → `W1 -> S6.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.39:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 23: Runtime check — the same 30 tests through the live server: `PS_SIDECAR_URL=http://127.0.0.1:4391
+- [x] Step 9: **Mutation check G2.15:** the count task's objective falls back to squared error (deviance above 1.1713 or negative predictions) → `R3 -> S4.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.15:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 10: **Mutation check G2.16:** the Tweedie objective falls back to squared error (negative predictions > 0) → `R2p -> S4.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.16:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 11: **Mutation check G2.17:** prediction intervals come from training residuals instead of the calibration rows (coverage outside the band) → `R1 -> S6.6` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.17:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 12: **Mutation check G2.18:** `/predict` drops the `probabilities` class vector (0 of 3,000 rows carry it) → `C3 -> S4.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.18:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 13: **Mutation check G2.19:** `METRIC_DIRECTION` ranks on accuracy (the constant predictor ranks above better-log-loss models) → `C2 -> S4.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.19:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 14: **Mutation check G2.21:** the trainer result omits precision@k (not reported) → `C2 -> S1.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.21:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 15: **Mutation check G2.28:** the cross-family RMSE refusal is removed (the request is accepted) → `R2-real -> S4.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.28:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 16: **Mutation check G2.33:** the stored metric rows drop the difference's bounds (< 3 of 3 seeds) → `W7 -> S6.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.33:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 17: **Mutation check G2.34:** the AUC bootstrap reports a 68% interval (ratio below 0.67) → `C2 -> S6.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.34:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 18: **Mutation check G2.35:** the difference interval is centred on the model's score alone (not paired with dummy) (coverage below 372; run at 40 seeds, band scaled) → `C2 -> S6.2 #2` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.35:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 19: **Mutation check G2.36:** slice results drop their interval (< 100% of slices) → `C1 -> S6.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.36:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 20: **Mutation check G2.37:** post-cutoff periods are merged into one slice (< 100% of periods) → `D1c -> S6.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.37:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 21: **Mutation check G2.38:** `/predict` returns the class vector in sorted, not declared, order (per-class AUC off by > 0.03) → `W9 -> S6.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.38:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 22: **Mutation check G2.39:** `TrainerContract.CalibrationHidesFamily` returns false (a family with slope outside 0.8–1.2 is shown) → `W1 -> S6.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.39:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 23: Runtime check — the same 30 tests through the live server: `PS_SIDECAR_URL=http://127.0.0.1:4391
   PREDICTIVE_STUDIO_PYTHON=$TS_PY PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python -- -p no:cacheprovider tests/gates/test_evaluation_score_gates.py` → 30 passed.
 
 **Mutation checks (M6)** (as M1; AI-run, ruling S1):
@@ -30700,6 +30700,19 @@ corrected, B-REGISTRY-TEST).
 - **D3-116** · Exit-line restatements (M5 close): M5.10 adds 9 legacy-route tests, not 8 (the seed-reaches-every-estimator spy); Feature Pipelines is environment-blocked (D3-78) and recorded, not counted. Three M5 mutation rows cannot go red as written and use substitutes (§11 M5 entry, list E): in-fold preprocessing → `test_the_preprocessor_learns_from_the_fit_rows_only` (the encoding-level test fits on its training slice itself); one-hot cap → the in-fold cap branch (no `max_categories`, D3-109), and G2.27's realistic leak; `blocked_time` gap → `test_blocked_time_gap_removes_training_periods_closer_than_the_gap`. *Rejected:* rewording the shipped tests to fit the table.
 - **D3-117** · The trainer path (`encoding.py`, `scores.py`, `folds.py`, `selection.py`, `trainer.py`) sits beside the legacy `/train` route's `preprocessing.py`, `metrics.py` and `_kfold_splits`, which are untouched by design until the trainer route replaces them; M5.10's legacy seed change (an absent seed means 42 for every estimator, an explicit 0 is honoured) moved every recorded legacy/unit gate value, re-recorded at M5.10 (G1.3's dominant share 0.4819 against 0.75). *Rejected:* refactoring the legacy route in M5 (out of the milestone's scope).
 - **D3-118** · A snapshot download is bounded (M5 close): `snapshot.load` takes the run clock — the clock is checked before the download opens and after every chunk, and a socket operation times out at the time left — and each file is capped at `MAX_SNAPSHOT_FILE_BYTES` (1 GiB), refused as `download-failed`; a redirect is followed only to http or https. A manifest `period` that is set but empty is `malformed`, not a fallback to the decision date. *Rejected:* a per-socket timeout alone (a slow server outlasts it); unbounded reads.
+- **D3-119** · The Poisson and Tweedie GLM drivers (`poisson_glm`, `tweedie_glm`) are baseline-only: the gate's `glm` member names them internally, and a request candidate that names them is refused by `refuse_invalid` (400, nothing fitted); count and non-negative candidates use a catalog driver (xgboost or lightgbm) with the task's objective, and G2.28's Tweedie case uses lightgbm at the declared power (M6 preflight Q1; catalog rows stay owner flag o). *Rejected:* catalog rows for the GLMs (`metadata/ml-algorithms/**` is outside the allowlist).
+- **D3-120** · One run clock per `/trainer` run: the `RunClock` created in `run_trainer` reaches `SN.load`, `fetch_verified` and the holdout stage, and the clock is checked after the baselines, after the holdout scoring and after the last holdout statistic, so time spent there is enforced and counted. The incumbent's artifact is downloaded and SHA-256-verified with the snapshot (stage `load-snapshot`, before any fit) and scored in the holdout stage (M6.5 fix round; the close's test makes candidate selection and the holdout stage raise, so "before any fit" is asserted). *Rejected:* fetching the incumbent after training (an expired URL then costs a full training).
+- **D3-121** · Snapshot and artifact downloads are issued by the file's own storage provider (`fileLocationOf(fileId)` → `readDriver(ProviderID)`), and the URL's lifetime comes from one Engine table keyed by the provider's server driver key (`PreAuthDownloads.LifetimeSecondsOf`): null for Local File System (`file://` URLs do not expire), 600 s for the cloud drivers whose shipped code fixes ten minutes, null otherwise; `expiresAt`/`driverLifetimeSeconds` are null when the table says null. `data:` URLs stay refused by the sidecar; `InMemorySnapshotFileStore` is test-only (M6 preflight Q4–Q6; owner flag p stands for a driver-level lifetime member). *Rejected:* editing `FileStorageBase` (generic MJStorage code, outside the allowlist).
+- **D3-122** · The engine trains every unit pipeline bound to an Evaluation Protocol through `/trainer`: `trainUnitPipeline` loads the protocol through a `TrainingDeps.protocols` seam (RunView default) and passes it into the shipped `freezeSnapshot` (incumbent score and slice fields from it); the stored envelope's `trainer`/`trainerRequest` are optional on read (absent = null), so envelopes written before M6 still parse; the request copies the snapshot row's `FeatureSchemaHash` (never recomputed) (M6 preflight Q3, Q7–Q11). *Rejected:* a second envelope schema version.
+- **D3-123** · Protocol/unit mismatches are refused before assembly: `TrainerRequestBuilder.RefuseGroupKeyMismatch` runs right after the unit spec loads, and slice fields are checked right after feature resolution against the names the assembler will produce, derived from its one naming owner (`AsOfFeatureAssembler.ColumnsFor`, read through `ColumnNamesOf`), so a derived column (`StartDate__days_since_decision`) is accepted and an unknown name is refused with no snapshot written (M6 preflight Q12; M6.7 fix rounds m-6, N-1). *Rejected:* a second derivation of the assembled names.
+- **D3-124** · v2 predictor artifacts load through a restricted unpickler whose allow-list is exactly the 32 qualified globals recorded from every family × driver pickle (functions and `MissingPolicy` included, no prefix wildcard), with a coverage test both ways and typed refusals (`DisallowedGlobalError`, `NotShippableError`, `NotATrainerPredictorError`); only fitted members are artifacts (the dummy and the incumbent heuristic never are). The anchor `sc-artifacts-allowlist` therefore reads `_ALLOWED_GLOBALS: … = PREDICTOR_V2_GLOBALS | frozenset(` — an intended change (M6 preflight Q13, Q25; M6.4).
+- **D3-125** · An undefined number never becomes a 500 or a fake value: metric functions return NaN when the quantity is undefined (single class, non-convergent or divergent calibration fit, empty precision/recall denominators, zero bootstrap draws); the route then fails a holdout lacking a declared class as `failed`/`holdout` naming it, omits an undefined secondary metric (Core's `holdout.secondary` is a list, nothing requires every declared metric), reports an undefined calibration fit as `calibration: null`, and refuses any remaining non-finite number as `failed`/`holdout` naming the field path (M6.1 and M6.5 fix rounds). *Rejected:* a contract change to carry null metrics.
+- **D3-126** · The wire `TrainerResult` has one runtime owner in Core, `TrainerResultSchemas` (strict zod, a parity test against the Python models), read through `TrainerContract.ParseTrainerResult`; `MLSidecar.RunTrainer` parses every answer through it and a malformed answer raises `TrainerResultMalformedError`, never retried. `MJSidecarTrainer.RunTrainer` starts a managed sidecar inside each attempt (a crashed child is respawned), retries only transport failures up to `maxRetries` (a retried request can train twice on a live remote sidecar: same seed, same result, compute repeats — documented), and an exhausted retry reports the wall seconds spent across attempts (M6.6, M6.7 fix rounds). *Rejected:* casting the JSON to `TrainerResult`.
+- **D3-127** · Returned artifacts are checked against the run before they are stored (SHA-256 of the decoded bytes, `featureSchemaHash` against the snapshot, `trainingRunId`); a check that fails ends the run `failed` with the reason; a partial save deletes the files this run saved (`IArtifactStore.Delete`), and a save that fails while writing bytes deletes its own `MJ: Files` row before rethrowing (M6.7 m-2, m-3, N-2). Local artifact bytes are still never deleted by cleanup (owner flag r).
+- **D3-128** · Gate-node rules from M6.8: the coverage gate (G2.35, `C2 -> S6.2 #2`) runs at 400 seeds only and refuses any `PS_SEED_LIMIT` (a 37–39 band on 40 seeds passes honest code only about 70% of the time); G2.39 is a sidecar-level measurement that declares the measured hidden set (lightgbm s43 slope 0.7999, random_forest s42 1.2227, mlp s42 0.7994 after isotonic maps — the hide rule working, owner flag t) and can still fail; G2.28 uses override-free candidates and catches the removed refusal directly (400 → 200); G2.15/G2.16 pin xgboost's inner score to refpipe's `innerCvScore` within 1e-6 on R3 and R2p, and lightgbm is not pinned (shared-encoder centring, owner flag u); substitute mutations for G2.19 (`select_finalist` ranks by inner accuracy), G2.33 (a comparison's interval becomes `(value, upper)`) and G2.39 (`slope_hides_family` returns false) (M6 preflight Q18–Q19). *Rejected:* a 40-seed rule; loosening any band.
+- **D3-129** · M6 close: the mutation table's rows map to the tests that shipped — `_fit_baselines` dev ∪ holdout → `test_baselines_are_fitted_on_development_rows_only` and G2.8's node `test_C2_S4_5_…` (the route test's holdout count is the literal budget, unaffected); the `incumbent_diff` column check → `test_an_incumbent_needing_columns_the_snapshot_lacks_fails_the_holdout_stage` (`test_incumbent_diff_compares_on_the_same_rows` drops no column); `decide_calibration` always-apply → `test_a_logistic_finalist_on_logistic_data_ships_uncalibrated` and `W1_S6_3[lightgbm-43]`; the gate-branch swap reddens the three `test_gate_record_table` rows whose branch it swaps (the Q15-only and no-signal rows are untouched by construction) and G2.8's node. Exit counts are restated from measured numbers (Q20). *Rejected:* rewording shipped tests to fit the table.
+- **D3-130** · Test output is pristine: the Sidecar's `pytest.ini` is the one owner of warning policy (each filter names one third-party message with its reason; no test file adds its own), and Engine tests that drive an error or status path on purpose capture the console through `ConsoleCapture` and assert the exact lines, so a missing or extra line fails the test (M6 close items B, F, M). The live suite's measurement lines (`[PS integration] …`) are its report and stay.
+- **D3-131** · D-053 applied in M6: every edited file lost its `@deprecated` lowercase aliases with callers moved — `isErrorMetric`, `extractNormalizedScore`, `resolveComparisonMetric`, `readMetric`, `detectStaleness`, `rescoreScheduledBinding`, `triggerRetrainIfStale`, `compareChallenger`, `runMaintenancePass` (M6.2), `MLSidecar.start/stop/train/predict/health` (M6.6), four `artifact-store.ts` aliases (M6.7) and `InMemoryArtifactLoader.set` (M6 close); `ProblemType` (`sidecar-contract.ts`) is a deprecated type tied to the legacy `TrainRequest`, not a lowercase alias, and stays until M11.3. M6.2's automatic comparison metric picks only keys declared higher- or lower-is-better (never closer-to-one or unknown). The M12 changeset lists the removed aliases (release note).
 
 ### 9.2 Risks
 
@@ -31210,6 +31223,87 @@ Product-direction questions keep a working automated default; the others are dec
   - (g) List G: commits as under Done; no M5 start merge; servers as under State.
   - (h) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`; (e) Engine's full run prints stderr lines from failure-path tests on `next` (none from an M5 test); (f) the sensitive-fields bracket (D3-85); (g) 101 Sidecar pytest library deprecation warnings (starlette, anyio, sklearn, scipy), none from a PR 3 assertion; (h) `.IT114-ai-vendor-effort.json` on `next` has no `primaryKey` (9 rows here); (i) `MJStorage/src/config.ts` has no `local` key and its README does not describe the driver; (j) the later migration-description edits; (k) converging `MJFilesArtifactStore` onto the snapshot file store with its 4 `@deprecated` aliases; (l) fresh installs need `STORAGE_LOCAL_ROOT`; (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver; (n) `SampleRowIds`/`RowId` spell `Id`; (o) `metadata/ml-algorithms/**` is outside the allowlist, so `poisson_glm`/`tweedie_glm` have no catalog row (baseline-only, D3-112); (p) `MJStorage`'s `CreatePreAuthDownloadUrl` exposes no lifetime (AWS hard-codes 10 minutes), so M6.7 cannot state `driverLifetimeSeconds` honestly without a driver-level member; (q) new: IT33's `MJ/Demos/User Activity Summary` catalog query (on `next`) scans `vwRecordChanges` once per active user and passes IT33's 30 s limit as `MJ: Record Changes` grows — 122 s on this database; the fix (rewrite the demo query or index its access path) belongs to `next`.
 
+### 2026-10-29 14:20 EDT — Claude Opus 5.5 (controller) + Opus/Sonnet subagents; close by Claude Opus 5.5 — M6
+
+- **Branch / HEAD:** `ps/pr-3-honest-training` @ the checkpoint commit that follows `0c68d2a658` (pushed: yes, after step 9).
+- **Database / ports:** `MJ_PS_PR3_claude` (state: clean of truth-suite fixtures — `__mj.PredictionUnit` 0, `PSTruth:` pipelines 0, `PSTruth:` protocols 0, `__mj.TrainingSnapshot` 0, 0 stored objects under `STORAGE_LOCAL_ROOT`; 509 trainer artifact `.bin` files under `$TMPDIR/mj-ps-artifacts` (owner flag r); the C1 corpus and the Record Changes stay by design; 9 `IT114 - AI Vendor Effort Levels` Test rows, owner flag s), MJAPI :4031 (PID 3787, started normally with `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:62510`, dispatcher running; log `/tmp/mjapi-4031.log`), truth sidecar http://127.0.0.1:62510 (Python PID 54521, launcher `pnpm run truth:sidecar` PID 54496; the close's sidecar code).
+- **Done this session:** M6 start merge `554852a6a4` (`git fetch origin && git merge origin/next`: 92 `next` commits, the v6.2.0-edge.6 release; Engine/TruthSuite `package.json` conflicts resolved to next's versions plus `@memberjunction/storage`; Core's `@memberjunction/global` 6.2.0-edge.5 → edge.6; migration `V202610280035__v6.2.x__Metadata_Sync.sql` applied, 25 `metadata/` files, 0 IT bundles); M6.1 `388c621db1` + `70055b6a86` (secondary metrics, one direction table, cross-family refusal, bootstrap/paired intervals, calibration fit; undefined → NaN); M6.2 `181fa378f9` + `e021a545fc` (`MetricDirections` in Core, `IsErrorMetric`; D-053 aliases gone; the automatic comparison metric picks only declared higher/lower-is-better keys); M6.3 `a7aebabe1b` + `c57bb681b1` (`gate_decision` and its paired-interval runner); M6.4 `35c99cd227` + `d1c70f8008` (baselines, v2 artifacts, restricted unpickler with an exact 32-name allow-list, typed refusals); M6.5 `c9f815f7e8` + `b2665d36b9` (the holdout stage, `POST /trainer`, `/predict` for v2 artifacts with the class vector; undefined numbers never 500; the incumbent verified at `load-snapshot`); M6.6 `b6e34b7a36` + `f3131db4f6` + `a530be419f` + `a3046e4703` (`MLSidecar.RunTrainer`, `MJSidecarTrainer.RunTrainer` with bounded retries and a respawn per attempt, `TrainerResultSchemas` + `TrainerContract.ParseTrainerResult`, `CalibrationHidesFamily`; Engine build excludes nested `__tests__`); M6.7 `a3712ca562` + `7021b7fe79` + `699ba52652` + `c10c2f7d16` (the engine trains a protocol-bound unit pipeline through `/trainer`; early group-key/slice refusals; returned artifacts checked against the run; rollback of partial saves); M6.8 `cd3b6de31f` + `b6fe6ca1a7` (30 gate nodes, the seeds400 rules, 14 gate rows flipped, Training suite 3 → 16 members, the statistical suite); this close: `90750a17fc` (items A, B, E, M), `9c99b8f727` (item F), `c8f59bf50a` (self-audit fixes), `63f8790e75` (D-053 in `artifact-loader.ts`), `6c18fe8b30` (static import in the sidecar client test), `0c68d2a658` (managed-mode sidecar tests isolated from an ambient sidecar URL), the checkpoint (plan edits).
+- **Close items (`m6-close-items.md`):**
+  - (A) `folds`, `selection`, `trainer`, `snapshot` import `FArr`/`IntArr` from `app/array_types.py` (no second definition; `snapshot.period_ordinals` returns `IntArr`; `test_selection.py` imports the alias from its owner). mypy strict: 40 files clean.
+  - (B) `pytest.ini` is the one owner of warning policy: four filters, each one third-party message with its reason (scipy's `disp`/`iprint` L-BFGS-B deprecation that scikit-learn 1.4.2 triggers, the MLP "Stochastic Optimizer" iteration cap, starlette's python-multipart and anyio renames); the seven per-file copies are gone. Plain Sidecar run: 432 passed, 0 warnings.
+  - (C) Owner flags (a)–(q) restated below, plus r–u (and v, found at this close).
+  - (D) Anchor `sc-artifacts-allowlist` reads `_ALLOWED_GLOBALS: … = PREDICTOR_V2_GLOBALS | frozenset(` — an intended change (M6.4, D3-124); anchors against `origin/next` (`61b24684db`) `# ok 163 · moved 4 · changed 0`; at HEAD the anchors M6 changes by design read `changed` — `core-is-error-metric`, `core-test-error-keys` (M6.2 deletes `isErrorMetric`), `sc-artifacts-allowlist` (M6.4), `sc-main-predict-return` (M6.5, the class vector), `sc-ts-http-post`, `eng-seams-import`, `p3-mj-sidecar-trainer` (M6.6) — all intended; no anchor edited.
+  - (E) `test_an_incumbent_that_does_not_verify_fails_before_any_fit` replaces `TR.select_finalist` and `EV.evaluate` with functions that raise, so "before any fit" is asserted; moving the incumbent check after selection turns it red (`AssertionError: a model was fitted before the incumbent was verified`), file restored from HEAD.
+  - (F) The Engine run printed 40 console blocks from 18 test files (actions, scheduler, orchestrator, pipeline builder, scoring, write-back, artifact store). Each is an expected-error or status path; every such test now captures the channel through `ConsoleCapture` (`src/__tests__/fakes/console-capture.ts`, `vi.spyOn(console, …)`; the shared config restores spies) and asserts the exact lines. One block was not an expected path: the empty-feature guardrail test ran the pipeline-row fallback with no provider (`Cannot read properties of undefined (reading 'RunView')`); it now supplies a provider whose pipeline query returns no row and asserts the query. Engine 707 passed, 0 console blocks.
+  - (G) The M12 changeset must list the removed aliases: `MLSidecar.start/stop/train/predict/health` (M6.6), the M6.2 maintenance/metric aliases, the four `artifact-store.ts` aliases (M6.7) and `InMemoryArtifactLoader.set` (this close) (D3-131).
+  - (H) Owner flag r restated (below); not acted on (D-062).
+  - (I) The M6 mutation table run against the shipped tests (below, D3-129).
+  - (J) Counts below are measured.
+  - (K) Owner flags s and t restated (below).
+  - (L) The benchmark logs the tier runs rewrite are left unstaged for the controller (no stash by this close): `packages/TestingFramework/integration-test-suite/benchmark-logs/{history.jsonl,latest.json,latest.md}` rewritten by this close's Deterministic run.
+  - (M) `test_artifacts_v2.py`'s file-level `ConvergenceWarning` ignore is removed (with the other per-file filters, item B); unfiltered, only the MLP "Stochastic Optimizer" message fires (24 instances across `test_artifacts_v2`, `test_legacy_validation`, `test_trainer_algorithms`), which `pytest.ini` names.
+- **Standards self-audit (`git diff 554852a6a4..HEAD -- packages/` — M6's 25 commits after the start merge, this close's included up to `6c18fe8b30`; `badbec6f81..HEAD` also carries the 92 `next` commits of the merge — 132 files, 6,901 added lines: 2,743 TypeScript outside TruthSuite and `checks/ps-*`, 3,664 sidecar Python) against `$PLANS/reference/coding-standards.md` (= dev-best-practices.md) and constraints §2; findings fixed first:**
+  - Scans: no `any`/`as any`, no `.Get(`/`.Set(` on entities, no `.then(`, no `PrimaryKeys[0]`, no loose equality in TS, no bare `new RunView()`/`new Metadata()`, no `@deprecated` left in an M6-edited file except `ProblemType` (`sidecar-contract.ts`, a type, D3-131); one dynamic `import()` (`Sidecar/src/__tests__/ml-sidecar.test.ts`, a line M6.6 edited; fixed, S6); `JSON.parse` only in two test assertions; `unknown` only in the documented zod input type of `training-run-results.ts` and test-double casts at a seam; plan vocabulary in product lines only the shipped wire values (`a:Q15-only-model-beats-dummy`, refpipe's `decisionTable: 'Q13+Q14+Q15'` in fixtures) and the gate markers in `tests/gates/`; Python: no new `Any`, six reasoned `# type: ignore[misc|arg-type]` (sklearn/joblib ship no stubs; one refusal under test); long functions: `evaluation.evaluate` (65 lines, a fixed sequence of one-call steps the module docstring lists) and legacy `main.py`/`ml-sidecar.ts` functions M6 did not lengthen.
+  - Fixed: (S1) the test fakes' exported free functions `buildDeps`/`unitHarness` become `TrainingHarness.BuildDeps`/`TrainingHarness.ForUnit` (41 call sites) with `||` fallbacks; (S2) `TrainerRequestBuilder`'s four `??` defaults keep `??` with a comment (seed 0 and zero retries are real; a 0 thread count or timeout must reach the sidecar's validation, `threads >= 1`, `timeoutSeconds > 0`); (S3) `MJFilesArtifactStore` falls back on an empty `CompleteMessage` (`||`, three places); (S4) D-053 in `artifact-loader.ts` (edited by M6.7): `InMemoryArtifactLoader.set` deleted, five test callers moved to `Set`; (S5) items A, B, E, F, M above; (S6) `ml-sidecar.test.ts` and `ml-sidecar-managed.test.ts` import `../ml-sidecar.js` statically (`vi.mock` is hoisted above imports); (S7) found by the first milestone-exit run (`# checks 37 · failed 1`, `cmd:test Sidecar`): with `PREDICTIVE_STUDIO_SIDECAR_URL` exported beside the truth sidecar, `new MLSidecar()` connects remotely and five managed-mode tests failed (`Cannot read properties of undefined (reading 'stdout')`); each now stubs the variable empty (`vi.stubEnv`, undone after each test). Sidecar TS 29 passed with and without the variable. Engine test type-check (scratch no-emit tsconfig over `src/**`) exit 0 after each.
+  - Not changed (owner flag v): the Engine's exported free functions `ResolveComparisonMetric`, `ReadMetric`, `RunMaintenancePass`, `ExtractNormalizedScore`, `ResolveLocalArtifactBaseDir`, `LocalArtifactPath`, `BuildArtifactStore`, `WasTrainingLeakageFlagged`, `BuildProductionMLInferenceDeps`, `BuildScoreRecordSetRunner`, `ScoreRecordSetViaRunner`, `PromoteModelViaGate` predate PR 3; M6 only deleted their lowercase aliases. Moving them onto owner classes renames published Engine API (no caller outside the Engine) — a scope addition.
+- **Mutation checks (M6 table, 14 rows, 17 mutations; each a single-occurrence edit applied by script, the named tests run, the original bytes written back and the SHA-256 compared — all `identical`; run at this close):**
+  1. `scores.refuse_cross_family` returns without raising → `test_ranking_a_tweedie_task_by_rmse_is_refused`, `test_cross_family_request_is_400_before_any_fit`, G2.28's `test_R2_real_S4_4_rmse_across_families_is_refused` (3 failed).
+  2. `run.refuse_invalid`: seed rule deleted → `[_seed_differs]` (1 failed / 5 passed); unique-name rule → `[_duplicate_name]` (1/5); reserved-name rule → `[_reserved_name]` and `[_heuristic_prefix]` (the same rule; 2/4).
+  3. `run_trainer` candidate budget deleted → `test_too_many_candidates_is_budget_exceeded` (1 failed: the run completes, `TrainerFailed` validation refuses it).
+  4. `artifacts._bytes_to_model` uses `pickle.loads` → `test_a_payload_naming_another_global_is_refused` (1 failed).
+  5. `gate.gate_decision` `model` ⇄ `keep-simple-baseline` branches swapped → `test_gate_record_table` 3 rows (`True-True-members0-None`, `True-False-members2-None`, `True-True-members3-glm`; the Q15-only and no-signal rows do not pass through the swapped branches) and G2.8's `test_C2_S4_5_baselines_with_intervals_and_outcomes` (4 failed / 2 passed).
+  6. `evaluation.decide_calibration` always applies → `test_a_logistic_finalist_on_logistic_data_ships_uncalibrated` and `test_W1_S6_3_every_family_calibrated_or_hidden[lightgbm-43]` (2 failed / 14 passed, 190 s).
+  7. `_fit_baselines` on every snapshot row → `test_baselines_are_fitted_on_development_rows_only` and G2.8's node (2 failed); `test_trainer_route_returns_a_complete_result` stays green (its holdout count is the protocol budget, D3-129).
+  8. `incumbent_diff` column check deleted → `test_an_incumbent_needing_columns_the_snapshot_lacks_fails_the_holdout_stage` (1 failed: `KeyError` escapes as a 500); `test_incumbent_diff_compares_on_the_same_rows` stays green (it drops no column).
+  9. `TrainerContract.CalibrationHidesFamily` without `!Number.isFinite` → `› offers a family with slope inside 0.8–1.2 and hides one outside or undefined` (1 failed / 10 passed).
+  10. `MJSidecarTrainer.RunTrainer` retries a 4xx → `› does not retry a refused request (4xx) and rethrows it` and `› does not retry a malformed answer…` (2 failed); loop `< maxRetries + 2` → `› ends failed at stage timeout after maxRetries + 1 attempts…` and `› makes exactly one attempt when maxRetries is 0` (2 failed).
+  11. `TrainerContract.ToStoredTrainerResult` keeps an artifact without a fileId → `› refuses an artifact that was not stored` (1 failed).
+  12. `TrainerRequestBuilder.CandidateFromPipeline` accepts objects → `› keeps scalar hyperparameters and refuses a nested one by name` (1 failed).
+  13. `InMemorySnapshotFileStore.CreatePreAuthDownload` returns an empty download for a missing file → `› refuses a download for a file the store does not hold` (1 failed).
+  14. `TrainingEngine.trainThroughTrainer` records `failed` as completed → `training-engine › stores a failed trainer result as a trainer refusal` (1 failed / 54 passed).
+  Result: 17 of 17 mutations red; every file restored byte-identical; `git status` clean afterwards.
+- **Gate mutation checks (M6.8 and its fix round; evidence in `task-M6.8-report.md`; each mutation applied, run through `pnpm mj test run` and the pytest node, restored by byte copy):**
+  - **Mutation output G2.15:** `0 of 1 pytest case(s) passed` — candidates only on squared error (xgb `reg:squarederror`, lgbm `regression`): `xgb inner score 1.1497109350689168 vs the reference pipeline's 1.137359257`; GLM and candidates: `GLM baseline 1.8163 vs 1.118965468`.
+  - **Mutation output G2.16:** `0 of 1 pytest case(s) passed` — candidates only: `xgb inner score 4548.681660946963 vs the reference pipeline's 22.91817936`; GLM and candidates: `GLM baseline 122680.27 vs 21.73642712`.
+  - **Mutation output G2.17:** `0 of 1 pytest case(s) passed` — intervals from training residuals (`r_oof = y_dev - finalist.predict(X_dev)`): `0.8: observed=0.3613 n=1500`.
+  - **Mutation output G2.18:** `0 of 1 pytest case(s) passed` — `/predict` returns `probabilities: None`: `0 of 3000 rows carry a 3-class probability vector`.
+  - **Mutation output G2.19:** `0 of 1 pytest case(s) passed` — substitute, `select_finalist` ranks by inner accuracy: `the near-constant candidate ranked above ['glm_candidate']`.
+  - **Mutation output G2.21:** `0 of 1 pytest case(s) passed` — operating point omitted (`op = None`): `assert (None is not None)`.
+  - **Mutation output G2.28:** `0 of 1 pytest case(s) passed` — the `refuse_cross_family` line deleted, override-free candidates: `200: {'status': 'completed', …}`, `assert 200 == 400`.
+  - **Mutation output G2.33:** `0 of 3 pytest case(s) passed` — substitute, comparisons `ci=(value, upper)`: `comparisons without both bounds: ['modelVsDummy 0.00549 (0.00549, 0.01522)', …]`.
+  - **Mutation output G2.34:** `0 of 1 pytest case(s) passed` — AUC secondary at level 0.68: `ratio 0.361`.
+  - **Mutation output G2.35:** `0 of 1 pytest case(s) passed` — `paired_bootstrap` does not resample the base, run at 400 seeds: `covers … on 400 of 400 seeds (band 372-388)`.
+  - **Mutation output G2.36:** `0 of 1 pytest case(s) passed` — slice interval `(v, v)`: `slices without a 95% interval: [… [0.4209, 0.4209] …]`.
+  - **Mutation output G2.37:** `0 of 1 pytest case(s) passed` — every holdout row in the first period: `['2022-01-01'] == ['2022-01-01', … '2024-01-01']`.
+  - **Mutation output G2.38:** `0 of 1 pytest case(s) passed` — `/predict` columns in sorted order with `classOrder` still declared: `model [0.344, 0.263, 0.759] vs oracle [0.656, 0.740, 0.761]`.
+  - **Mutation output G2.39:** `12 of 15 pytest case(s) passed` — substitute, `calibration.slope_hides_family` returns False: `lightgbm s43: slope 0.7999, declared hidden`.
+- **Tests (after the self-audit, at the checkpoint's tree):**
+  - `cd packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- -p no:cacheprovider` (plain, product venv) → 432 passed / 0 failed / 0 skipped, 0 warnings (317 at M5 + 115 M6). Gate nodes in the TruthSuite venv (`PREDICTIVE_STUDIO_PYTHON=$MJ/…/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/…/TruthSuite/python … tests/gates`) → 35 passed / 0 failed, 5 deselected (`seeds400`), 0 warnings (5 M5 trainer-contract gates + 30 M6 gate nodes; 389 s). The plan's "170 passed (93 + 47 + 30)" is restated by these two measured lines (D3-129).
+  - `cd packages/AI/PredictiveStudio/Core && pnpm run build && pnpm test` → build 0; 206 passed / 0 failed / 0 skipped (18 files; 187 at M5 + 19: metrics-direction, trainer-contract, trainer-result-schemas, training-run-results).
+  - `cd packages/AI/PredictiveStudio/Sidecar && pnpm test` → 29 passed / 0 failed / 0 skipped (4 files; 24 at M5 + 5).
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 707 passed / 0 failed / 0 skipped (69 files; 666 at M5 + 41), 0 console blocks; test type-check exit 0; `pnpm run test:integration` (sidecar :62510) → 3 passed (its `[PS integration]` measurement lines are the live suite's report).
+  - `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test` → 93 passed / 0 failed / 0 skipped (17 files); `pnpm run test:python` → 20 passed, mypy "no issues found in 40 source files".
+  - `git grep -nw "isErrorMetric" -- packages ':(exclude,glob)**/CHANGELOG.md'` → 0 hits.
+  - `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → build 0; 790 passed / 0 failed (51 files; `toHaveLength(183)`); PR 3 gate rows (`Tags LIKE '%owner:PR3%' AND Status='Active'`) → 29. Its run prints stderr from `run-with-compliance.test.ts` and `fls-closeout-skips.test.ts` (outside the allowlist; not PR 3 tests).
+  - `pnpm run build` at the root → exit 0 (310 tasks). `npm run check:standards` → exit 0 (no errors, 13369 warnings). `check:guards` → exit 0. `check:codegen-tail` → exit 0 (433 entities, 765 migrations).
+  - `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → Completed 16 / 16 passed (17:21–17:29 UTC); `"Predictive Studio Gates — Prediction Units"` → Completed 12 / 12 passed; both against MJAPI 55146 (this close's build, dispatcher disabled) and the restarted truth sidecar. `Training (statistical)` (G2.35 at 400 seeds) is not run before M12.1 (D3-63); M6.8 ran it once: passed (606 s).
+  - Keep-list: Containment → Completed 10 of 10 passed, 0 skipped. Feature Pipelines → ENVIRONMENT-BLOCKED (D3-78): 0 of 5, each "Gate C1 → C2.x needs bizapps-common installed with its Feature Pipeline changes …". Deterministic (MJAPI 55146, `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, `RUN_MUTATION_TESTS=1`, 17:34–17:53 UTC) → Completed 116 passed / 0 failed / 1 skipped (of 117): IT52 skipped (RUN_SEARCH_TESTS not set); IT29 and IT33 passed this run (M5 close baseline 114/2/1; IT33 stays owner flag q — its catalog query time depends on `MJ: Record Changes` volume). No new failure.
+  - Milestone-exit gate: see the commit body.
+- **Runtime verification:**
+  - Gate `Measured` (M6.8, `task-M6.8-report.md`): C2 S4.5 keep-simple-baseline/glm 0.0866005 [0.07685, 0.09774] (= refpipe within 1e-6), shuffled → no-signal; C2 S4.1 the near-constant candidate never the finalist; C2 S6.2 AUC 0.7956 [0.7633, 0.8250], width ratio 0.718; C2 S1.2 base rate 151/7500; R3 S4.3 glm 1.1189655, R2p S4.3 glm 21.7364271 (both = refpipe within 1e-6; xgb inner score = refpipe's `innerCvScore` within 1e-6); R1 S6.6 coverage 0.818 / 0.906 (n 1500); C3 S4.1 3000/3000 class vectors; R2-real S4.4 400 "ranking across families"; W7 S6.2 3/3; W9 S6.3 per-class AUC gaps ≤ 0.03; C1/D1c S6.4 every slice with an interval; W1 S6.3 12/15 offered, hidden lightgbm s43 0.7999, random_forest s42 1.2227, mlp s42 0.7994; C2 S6.2 #2 374/400 at 400 seeds.
+  - M6.5 Step 5 (live sidecar vs refpipe: C2/R3/R2p/R1 keep-simple-baseline/glm as refpipe, glm holdout within 2.4e-10), M6.6 Step 5 (`completed [ 'glm_candidate', 'keep-simple-baseline', 4.971000452242571 ]`), M6.7 Step 5 (C1 pipeline bound to a protocol, trained through MJAPI: Completed, ComputeSeconds 1.321, ComputeCost 0.000000, 3 artifact files, no bytes in `ValidationResults`; `Region` refused in 166 ms before assembly; teardown to 0) and M6.8 Step 23 (gate nodes through a live sidecar, 30/0) are in their reports.
+  - This close: the M6.7 Step 5 probe (`TruthSuite/.run/m67-trainer-probe.mts`, untracked) replayed against MJAPI 55146 on this close's build: a C1 renewal pipeline bound to a version-1 protocol (slice `TierSKU`) trained through MJAPI in 2.0 s — `Ok`, holdout `log-loss 0.37747, auc 0.63844, calibration-slope 0.93658, brier 0.11186`. sqlcmd on run `0A879A1A-…`: `Completed | ComputeSeconds 1.372 | ComputeCost 0.000000 | TrainingSnapshotID set | envelope completed | gate keep-simple-baseline | shipped glm | finalist logistic_regression | no bytes`; 3 `MJ: Files` rows for its artifacts; model `Draft`. After `RunFixtures.CleanupRun`: `PredictionUnit` 0, `PSTruth:` pipelines 0, `TrainingSnapshot` 0, `PSTruth:` protocols 0, the run row 0, PR 3 active gate rows 29, IT114 rows 9.
+- **State left behind:** MJAPI on :4031 (PID 3787, `.env.MJ_PS_PR3_claude` + `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:62510`, dispatcher running; log `/tmp/mjapi-4031.log`); truth sidecar http://127.0.0.1:62510 (Python PID 54521, `TruthSuite/.run/sidecar.url`); the three benchmark-log rewrites unstaged for the controller (item L); no `metadata/**` write-backs (no sync push at this close); 509 trainer artifact files on disk (owner flag r); untracked owner files only.
+- **Next step (exact):** M7 start: `git fetch origin && git merge origin/next` (then the §6 preamble's milestone-start steps; the controller rules on the M7 preflight scan before M7.1), then Task M7.1 Step 1.
+- **Gotchas / decisions:**
+  - (a) §9.1 D3-119…D3-131; the M6 start merge `554852a6a4` anchors `# ok 163 · moved 4 · changed 0` (§12); this close's anchor run: anchors against `origin/next` (`61b24684db`) `# ok 163 · moved 4 · changed 0`; at HEAD the anchors M6 changes by design read `changed` — `core-is-error-metric`, `core-test-error-keys` (M6.2 deletes `isErrorMetric`), `sc-artifacts-allowlist` (M6.4), `sc-main-predict-return` (M6.5, the class vector), `sc-ts-http-post`, `eng-seams-import`, `p3-mj-sidecar-trainer` (M6.6) — all intended; no anchor edited.
+  - (b) `/trainer` is the engine's path for every unit pipeline with an Evaluation Protocol (D3-122); the legacy `/train` path stays for pipelines without one until M11.3. The sidecar decides which artifacts it returns; the stored outcome is decided in TypeScript by M10 (D3-23).
+  - (c) Restart the truth sidecar after any change to a module it loads, and MJAPI after it with the new URL. Restarts at this close: sidecar 21720 → 54521 (the item A imports), MJAPI 83129 → 55146 (dispatcher disabled, suites and Deterministic) → 3787 (normal).
+  - (d) Run the Deterministic tier against an MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, with `RUN_MUTATION_TESTS=1`; then restart MJAPI normally. IT33 (owner flag q) depends on `MJ: Record Changes` volume.
+  - (e) List E (mutation-table mapping, D3-129): rows 6–8 use the M6.5 fix-round tests; row 5 reddens only the swapped rows; G2.8's node (`test_C2_S4_5_…`, flipped in M10.5) already exists and is red under rows 5 and 7.
+  - (f) List F (parked notes): M6.1 — `paired_bootstrap` returns NaN bounds when every draw is NaN and records the effective draw count. M6.4 — the later forecast task widens `artifacts_v2.build`'s predictor type (carried to M7). M6.5 — legacy `main.py` `/train`/`/predict`, `preprocessing.py`, `metrics.py` stay outside strict mypy (M11.3 deletes them). M6.6 — `probabilities?`/`classOrder?` stay optional `| null` for hand-built doubles outside the allowlist; a retried request can train twice on a live remote sidecar (documented). M6.7 — the sidecar git SHA `"unrecorded"` is accepted by lineage (per plan); the early slice check scans every unit row. M6.8 — strict mypy on `tests/gates/*.py` pulls in `app/main.py` (not strict-clean), so the gate files stay out of the strict list; a 400-seed coverage gate takes ~10 min.
+  - (g) Owner flags (D-062, not acted on): (a) the general client-provider PK-on-create fix (M1); (b) a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); (d) `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next`; (e) Engine stderr lines from failure-path tests — resolved at this close (item F); (f) the sensitive-fields bracket (D3-85); (g) the 101 Sidecar pytest library warnings — resolved (M6.8 and item B: 0 warnings); (h) `.IT114-ai-vendor-effort.json` on `next` has no `primaryKey`; (i) `MJStorage/src/config.ts` has no `local` key and its README does not describe the driver; (j) the later migration-description edits; (k) converging `MJFilesArtifactStore` onto the snapshot file store (its four `@deprecated` aliases are gone, M6.7); (l) fresh installs need `STORAGE_LOCAL_ROOT`; (m) `ClientDriverKey: 'Local File System Storage'` has no browser driver; (n) `SampleRowIds`/`RowId` spell `Id`; (o) `metadata/ml-algorithms/**` is outside the allowlist, so `poisson_glm`/`tweedie_glm` have no catalog row (baseline-only, D3-112, D3-119); (p) `MJStorage`'s `CreatePreAuthDownloadUrl` exposes no lifetime (the Engine table states 600 s for the cloud drivers, D3-121); (q) IT33's `MJ/Demos/User Activity Summary` catalog query (on `next`) scans `vwRecordChanges` once per active user and passes IT33's 30 s limit as `MJ: Record Changes` grows; the fix belongs to `next`; (r) new (M6.7 review m-5): `MJFilesArtifactStore.save` writes artifact bytes to `<PS_ARTIFACT_DIR|tmpdir>/mj-ps-artifacts/<FileID>.bin` and nothing deletes them (HarnessCleanup removes only the `MJ: Files` row, in another process than MJAPI); trainer runs write three artifacts each (457 files seen at M6.7); proposed fix: the artifact store writes and deletes through the storage provider (`PutObject`/`DeleteObject`) like the snapshot files, and cleanup deletes through the driver; (s) new: IT114's metadata file has no `primaryKey`, so every `mj sync push` duplicates its row (9 rows in `MJ_PS_PR3_claude`; outside the allowlist; IT114 kept out of PR 2 by the owner); (t) new (M6.8 review): calibration design — an isotonic map with `y_min=0` can ship 1e-6 probabilities for rows where the event happens (MLP W1 s42), and a map fitted on out-of-fold fold-model predictions can push an already calibrated refit out of range (RF W1 s42 1.0011 → 1.2227, holdout log loss slightly worse); both are hidden correctly by the 0.8–1.2 rule today; (u) new (M6.8): tree drivers receive centred numeric columns from the one shared encoder; LightGBM keeps a bin boundary at zero, so centring changes its trees versus refpipe (up to 2.2e-4 inner score on R3; xgboost `hist` is invariant); skipping centring for tree drivers would change every trained artifact — owner decision; (v) new (this close's self-audit): twelve exported free functions in the Engine (listed under the self-audit) predate PR 3; moving them onto owner classes renames published API — owner decision.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — written (trigger a not yet run) — Claude Opus 5.5
@@ -31455,3 +31549,7 @@ Product-direction questions keep a working automated default; the others are dec
 ### 2026-10-28 — M5 close (no refresh trigger: origin/next had no new commits at the M5 start) — Claude Opus 5.5
 
 - Anchors `# ok 163 · moved 4 · changed 0` at the M5 start (`bd40318c3b`, no merge; the same four `__mj.ts` entity hints moved as at the M3 and M4 starts; no pattern changed); no migrations and no integration bundles from `next`; no anchor edited.
+
+### 2026-10-29 — M6 close (refresh trigger c at the M6 start merge `554852a6a4`) — Claude Opus 5.5
+
+- Anchors `# ok 163 · moved 4 · changed 0` at the M6 start merge `554852a6a4` (92 `next` commits, the v6.2.0-edge.6 release; the same four `__mj.ts` entity hints moved as at the M3–M5 starts; no pattern changed); from `next`: migration `V202610280035__v6.2.x__Metadata_Sync.sql` (applied on the private DB), 25 `metadata/` files, no integration bundles; no anchor edited. At the close `origin/next` (`61b24684db`) still reads `# ok 163 · moved 4 · changed 0`; the seven anchors M6 changes by design (`core-is-error-metric`, `core-test-error-keys`, `sc-artifacts-allowlist`, `sc-main-predict-return`, `sc-ts-http-post`, `eng-seams-import`, `p3-mj-sidecar-trainer`) read `changed` at HEAD, as intended (D3-124, D3-131).
