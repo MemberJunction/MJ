@@ -256,7 +256,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ConversationId = value;
   }
 
-  @Input() Conversation: MJConversationEntity | null = null;
+  private _conversation: MJConversationEntity | null = null;
+  @Input()
+  set Conversation(value: MJConversationEntity | null) {
+    this._conversation = value;
+    if (value?.ID && value.Name) {
+      this.syncCachedMessageInputName(value.ID, value.Name);
+    }
+  }
+  get Conversation(): MJConversationEntity | null {
+    return this._conversation;
+  }
 
   /** @deprecated Use {@link Conversation}. */
   @Input() set conversation(value: MJConversationEntity | null) {
@@ -1599,7 +1609,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly initialDraftSnapshots = new Map<string, string | null>();
 
   public GetInitialDraftFor(conversationId: string | null): string | null {
-    const key = conversationId ? conversationId.trim().toLowerCase() : 'new';
+    const key = conversationId ? NormalizeUUID(conversationId) : 'new';
     if (!this.initialDraftSnapshots.has(key)) {
       let snapshot: string | null;
       if (this._composerAgentMention) {
@@ -1636,14 +1646,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     // New/unsaved conversations render the empty-state composer; established ones
     // use the active cached input. Both resolve the agent to a pill.
-    const target = this.emptyStateComponent ? 'empty-state' : this.messageInputComponents?.first ? 'active-input' : null;
+    const activeInput =
+      this.getActiveMessageInputComponent() ??
+      this.messageInputComponents?.last ??
+      this.messageInputComponents?.first;
+    const target = this.emptyStateComponent ? 'empty-state' : activeInput ? 'active-input' : null;
     if (attempt === 0 || attempt % 10 === 0 || target) {
       console.log(`[Omnibar→Chat] chat-area apply('${agentName}') attempt ${attempt}: target=${target ?? 'none-mounted'}`);
     }
     const insert: Promise<boolean> | null = this.emptyStateComponent
       ? this.emptyStateComponent.InsertAgentMention(agentName, true)
-      : this.messageInputComponents?.first
-        ? this.messageInputComponents.first.InsertAgentMention(agentName, true)
+      : activeInput
+        ? activeInput.InsertAgentMention(agentName, true)
         : null;
     if (insert) {
       void insert.then((applied: boolean) => {
@@ -3523,11 +3537,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.clearStopFallbackTimer(id);
     }
 
+    // Leaving the chat surface altogether ends any live voice call (including
+    // minimized calls or calls minted from the empty state).
+    if (this.RealtimeSession?.IsActive) {
+      void this.RealtimeSession.EndRealtimeSession();
+    }
+
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.boundOnResizeMove);
-    window.removeEventListener('mouseup', this.boundOnResizeEnd);
-    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
-    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mousemove', this.boundOnResizeMove);
+      window.removeEventListener('mouseup', this.boundOnResizeEnd);
+      window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+      window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+    }
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
@@ -3697,27 +3719,120 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private _cachedInputsArray: Array<{conversationId: string; conversationName: string | null}> = [];
   private _cachedInputsKey = '';
 
-  /** Max hidden composers kept mounted for draft/state preservation; older ones are unmounted. */
+  /** Max hidden composers kept mounted for draft/state preservation; older idle ones are unmounted. */
   private static readonly MAX_CACHED_MESSAGE_INPUTS = 10;
+
+  /** Stable case-normalized track key for `@for` so case-only UUID changes reuse the mounted composer. */
+  public NormalizeCachedInputId(conversationId: string): string {
+    return NormalizeUUID(conversationId);
+  }
+
+  private findMessageInputCacheEntry(
+    conversationId: string
+  ): { key: string; meta: { conversationId: string; conversationName: string | null } } | undefined {
+    const exact = this.messageInputMetadataCache.get(conversationId);
+    if (exact) {
+      return { key: conversationId, meta: exact };
+    }
+    for (const [key, meta] of this.messageInputMetadataCache.entries()) {
+      if (UUIDsEqual(key, conversationId)) {
+        return { key, meta };
+      }
+    }
+    return undefined;
+  }
+
+  private resolveConversationNameForCache(conversationId: string): string | null {
+    const activeConv = this.Conversation;
+    if (activeConv?.Name && (!activeConv.ID || UUIDsEqual(activeConv.ID, conversationId))) {
+      return activeConv.Name;
+    }
+    return this.engine?.GetConversation?.(conversationId)?.Name || null;
+  }
+
+  private syncCachedMessageInputName(conversationId: string, name: string): void {
+    if (!this.messageInputMetadataCache || !conversationId || !name) {
+      return;
+    }
+    const found = this.findMessageInputCacheEntry(conversationId);
+    if (found && found.meta.conversationName !== name) {
+      this.messageInputMetadataCache.set(found.key, {
+        ...found.meta,
+        conversationName: name,
+      });
+    }
+  }
+
+  private findMessageInputComponent(conversationId: string): MessageInputComponent | undefined {
+    if (!this.messageInputComponents || !conversationId) {
+      return undefined;
+    }
+    return this.messageInputComponents.find(component =>
+      UUIDsEqual(component.ConversationId ?? component.conversationId, conversationId)
+    );
+  }
+
+  /**
+   * True when a cached hidden composer for `candidateId` is idle and safe to unmount.
+   * Never evicts the newly-activated conversation, a conversation awaiting auto-send of
+   * `PendingMessage`, a conversation hosting a live voice session, a conversation with
+   * running tasks in `ActiveTasksService`, or a mounted composer with in-flight streaming
+   * callbacks / DB watches / unsent file attachments (`HasActiveWork`).
+   */
+  private canEvictCachedMessageInput(candidateId: string, activeConversationId: string): boolean {
+    if (UUIDsEqual(candidateId, activeConversationId) || UUIDsEqual(candidateId, this.ConversationId)) {
+      return false;
+    }
+    if (this._pendingMessage && this.ShouldDeliverPendingMessageTo(candidateId)) {
+      return false;
+    }
+    if (this.RealtimeSession?.IsActiveFor?.(candidateId)) {
+      return false;
+    }
+    if (this.activeTasks?.HasActiveTasksForConversation?.(candidateId)) {
+      return false;
+    }
+    const mounted = this.findMessageInputComponent(candidateId);
+    if (mounted?.HasActiveWork) {
+      return false;
+    }
+    return true;
+  }
 
   /**
    * Registers `conversationId` as the most-recently-used composer and unmounts the
-   * least-recently-used ones beyond the cap. Each cache entry keeps a live
+   * least-recently-used idle ones beyond the cap. Each cache entry keeps a live
    * `mj-message-input` component, so without a bound memory grows with every
-   * conversation visited. Drafts live in the draft store, so an evicted composer's
-   * frozen restore snapshot is dropped to let a remount re-read the latest draft.
+   * conversation visited. Composers actively running an agent turn, holding unsent
+   * file attachments, or hosting a live voice call are skipped until idle. Drafts
+   * live in the draft store, so an evicted composer's frozen restore snapshot is
+   * dropped to let a remount re-read the latest draft.
    */
   private touchMessageInputCache(conversationId: string): void {
-    const existing = this.messageInputMetadataCache.get(conversationId);
-    this.messageInputMetadataCache.delete(conversationId); // re-insert to refresh recency
-    this.messageInputMetadataCache.set(conversationId, existing ?? {
-      conversationId: conversationId,
-      conversationName: this.Conversation?.Name || null
+    const existing = this.findMessageInputCacheEntry(conversationId);
+    if (existing) {
+      this.messageInputMetadataCache.delete(existing.key); // re-insert to refresh recency & align casing
+    }
+    const conversationName =
+      existing?.meta.conversationName ?? this.resolveConversationNameForCache(conversationId);
+    this.messageInputMetadataCache.set(conversationId, {
+      conversationId,
+      conversationName,
     });
-    while (this.messageInputMetadataCache.size > ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
-      const oldest = this.messageInputMetadataCache.keys().next().value as string;
-      this.messageInputMetadataCache.delete(oldest);
-      this.initialDraftSnapshots.delete(oldest.trim().toLowerCase());
+
+    if (this.messageInputMetadataCache.size <= ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+      return;
+    }
+
+    for (const [candidateKey, entry] of [...this.messageInputMetadataCache.entries()]) {
+      if (this.messageInputMetadataCache.size <= ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+        break;
+      }
+      if (!this.canEvictCachedMessageInput(entry.conversationId, conversationId)) {
+        continue;
+      }
+      this.messageInputMetadataCache.delete(candidateKey);
+      this.initialDraftSnapshots?.delete(NormalizeUUID(entry.conversationId));
     }
   }
 
@@ -3765,12 +3880,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * we need to find the one that matches the current conversationId.
    */
   private getActiveMessageInputComponent(): MessageInputComponent | undefined {
-    if (!this.messageInputComponents || !this.ConversationId) {
+    if (!this.ConversationId) {
       return undefined;
     }
-    return this.messageInputComponents.find(
-      component => component.conversationId === this.ConversationId
-    );
+    return this.findMessageInputComponent(this.ConversationId);
   }
 
   private async loadMessages(conversationId: string, loadToken: number): Promise<void> {
@@ -7713,6 +7826,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   OnConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     LogStatusEx({message: '🎉 Conversation renamed', verboseOnly: true, additionalArgs: [event]});
+    if (event?.conversationId && event.name) {
+      this.syncCachedMessageInputName(event.conversationId, event.name);
+    }
     // Pass the event up to workspace component for animation
     this.ConversationRenamed.emit(event);
   }

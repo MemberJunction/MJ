@@ -15,6 +15,7 @@ import {
     EntityFieldInfo,
     EntityFieldTSType,
     EntityInfo,
+    IMetadataProvider,
     RunView
 } from '@memberjunction/core';
 import { ClassRegistration, MJGlobal, MJLruCache, OptionalKeyedSpecialization } from '@memberjunction/global';
@@ -127,9 +128,15 @@ export interface RecordPreviewAnchorRect {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implements OnDestroy {
+    protected static readonly CACHE_MAX_ENTRIES = 500;
     protected static readonly CACHE_TTL_MS = 60_000;
     /** Bounded: one entry per previewed record would otherwise accumulate for the whole session. */
-    protected static readonly summaryCache = new MJLruCache<string, { LoadedAt: number; Summary: RecordPreviewSummary }>({ maxSize: 500, ttlMs: 60_000 });
+    protected static readonly summaryCache = new MJLruCache<string, { LoadedAt: number; Summary: RecordPreviewSummary }>({
+        maxSize: MjRecordPreviewPopoverComponent.CACHE_MAX_ENTRIES,
+        ttlMs: MjRecordPreviewPopoverComponent.CACHE_TTL_MS
+    });
+    private static providerScopeIds = new WeakMap<object, number>();
+    private static nextProviderScopeId = 1;
 
     protected cdr = inject(ChangeDetectorRef);
     protected _destroyed = false;
@@ -241,6 +248,23 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
     /** Clear the static summary cache (useful in unit tests). */
     public static ClearCache(): void {
         MjRecordPreviewPopoverComponent.summaryCache.Clear();
+    }
+
+    private static getProviderScopeId(provider: IMetadataProvider | null | undefined): number {
+        if (!provider || (typeof provider !== 'object' && typeof provider !== 'function')) {
+            return 0;
+        }
+        let scopeId = MjRecordPreviewPopoverComponent.providerScopeIds.get(provider);
+        if (scopeId === undefined) {
+            scopeId = MjRecordPreviewPopoverComponent.nextProviderScopeId++;
+            MjRecordPreviewPopoverComponent.providerScopeIds.set(provider, scopeId);
+        }
+        return scopeId;
+    }
+
+    protected buildSummaryCacheKey(entityName: string, recordKey: string): string {
+        const providerScope = MjRecordPreviewPopoverComponent.getProviderScopeId(this.ProviderToUse);
+        return `p${providerScope}::${entityName.trim().toLowerCase()}::${recordKey.trim().toLowerCase()}`;
     }
 
     public ngOnDestroy(): void {
@@ -448,7 +472,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
                 return;
             }
 
-            const cacheKey = `${summary.EntityName.toLowerCase()}::${summary.RecordID.toLowerCase()}`;
+            const cacheKey = this.buildSummaryCacheKey(summary.EntityName, summary.RecordID);
             MjRecordPreviewPopoverComponent.summaryCache.Delete(cacheKey);
             this.resetEditState();
             await this.loadSummary(true);
@@ -549,7 +573,8 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         }
 
         const recordIdStr = this._recordID?.trim() || pk.Values();
-        const cacheKey = `${entityName.toLowerCase()}::${recordIdStr.toLowerCase()}`;
+        const canonicalEntityName = entityInfo?.Name || entityName;
+        const cacheKey = this.buildSummaryCacheKey(canonicalEntityName, recordIdStr);
         if (!forceRefresh) {
             const cached = MjRecordPreviewPopoverComponent.summaryCache.Get(cacheKey);
             if (cached && Date.now() - cached.LoadedAt < MjRecordPreviewPopoverComponent.CACHE_TTL_MS) {

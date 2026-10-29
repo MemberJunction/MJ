@@ -472,7 +472,7 @@
               }
               <!-- Input Component - Multiple instances cached, only one visible -->
               <div class="message-input-container-wrapper">
-                @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
+                @for (inputRef of getCachedInputs(); track NormalizeCachedInputId(inputRef.conversationId)) {
                   <mj-message-input
                     #messageInput
                     [hidden]="inputRef.conversationId !== conversationId"
