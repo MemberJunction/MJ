@@ -193,6 +193,12 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Every query, tag and agent-note save embeds its text with the default local model, which is
+      # otherwise the highest-PowerRank active one (all-mpnet-base-v2, ~3 s per embed on this
+      # runner). The deterministic tier checks the pipelines around embedding, not embedding
+      # quality, so it pins the smallest local model. Read by MJAPI and the `mj` CLI alike, so both
+      # embed with, and judge stored vectors against, the same model.
+      MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
