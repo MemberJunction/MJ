@@ -557,6 +557,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Bag keys that would let untrusted JSON poison object prototypes; skipped by {@link mergeDeep}. */
+const UNSAFE_MERGE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Turn-detection block used for a meeting when none was built and the bag removed or broke it. */
+const MEETING_DEFAULT_TURN_DETECTION = { type: 'server_vad', create_response: false, interrupt_response: true } as const;
+
 /**
  * Recursively merges `override` onto `base` without mutating either. Two plain objects merge key
  * by key; a `null` override leaf deletes the key; any other override value replaces the base value.
@@ -564,6 +570,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function mergeDeep(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
     const merged: Record<string, unknown> = { ...base };
     for (const [key, value] of Object.entries(override)) {
+        if (UNSAFE_MERGE_KEYS.has(key)) {
+            continue; // the bag is untrusted JSON; never let it reach Object.prototype
+        }
         const current = merged[key];
         if (value === null) {
             delete merged[key];
@@ -601,8 +610,9 @@ function readTurnDetection(audio: Record<string, unknown>): Record<string, unkno
  * - A non-object override (string, null, array, ...) is ignored; `built` is returned unchanged.
  * - A `turn_detection.type` that differs from the built one replaces the whole `turn_detection`
  *   object, because fields of one detector kind (e.g. `silence_duration_ms`) are invalid on another.
- * - After the merge, in meeting mode the floor `turn_detection.create_response: false` is
- *   re-applied, so the bag cannot make the model answer unprompted in a meeting.
+ * - After the merge, in meeting mode the result always carries a `turn_detection` object with
+ *   `create_response: false` (restored from the built block, else a default server_vad, if the bag
+ *   deleted or broke it), so the bag cannot make the model answer unprompted in a meeting.
  *
  * Neither argument is mutated.
  *
@@ -629,10 +639,15 @@ export function MergeAudioOverride(
         merged.input = { ...merged.input, turn_detection: mergeDeep({}, overrideDetection) };
     }
 
-    const detection = readTurnDetection(merged);
-    if (meetingMode && detection && isPlainObject(merged.input)) {
-        merged.input = { ...merged.input, turn_detection: { ...detection, create_response: false } };
+    if (meetingMode) {
+        // The floor must survive any bag: a null/non-object `input` or `turn_detection` would otherwise
+        // make OpenAI fall back to its default VAD, which auto-responds. Restore from the built block.
+        const builtInput = isPlainObject(base.input) ? base.input : {};
+        const input = isPlainObject(merged.input) ? merged.input : builtInput;
+        const detection = readTurnDetection({ input }) ?? readTurnDetection(base) ?? MEETING_DEFAULT_TURN_DETECTION;
+        merged.input = { ...input, turn_detection: { ...detection, create_response: false } };
     }
+    // The bag's shape is unvalidated JSON, passed through for the provider to validate.
     return merged as RealtimeSessionCreateRequest['audio'];
 }
 
