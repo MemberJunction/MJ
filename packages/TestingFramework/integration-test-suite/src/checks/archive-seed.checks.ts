@@ -5,16 +5,18 @@
  * TRANSPORT: **SERVER** — the staging actions run in-process through `ActionEngineServer.Instance` against the
  * SQLServerDataProvider (`ctx.Provider`), and the data source resolves through `ExternalDataSourceRouter`.
  *
- * TIER: deterministic, self-cleaning. The bundle creates one throwaway database on the tier's SQL Server
- * (`MJ_IT_ArchiveSeed_<timestamp>`) and one `MJ: External Data Sources` row; Teardown drops / deletes both. When the
- * tier's login lacks CREATE ANY DATABASE (a least-privilege dev login; CI connects as `sa`), no database is created
- * and AS1 reports Skipped.
+ * TIER: deterministic, self-cleaning. The bundle creates two throwaway databases on the tier's SQL Server
+ * (`MJ_Staging_IT_ArchiveSeed_<timestamp>` for AS1, `MJ_Staging_IT_ArchiveSeedHost_<timestamp>` for AS2 — the
+ * `MJ_Staging_` prefix is what the drop action accepts) and one `MJ: External Data Sources` row; Teardown drops /
+ * deletes them. When the tier's login lacks CREATE ANY DATABASE (a least-privilege dev login; CI connects as `sa`),
+ * no database is created and AS1 and AS2 report Skipped.
  *
  *   - AS1: `Drop SQL Server Staging Database` drops a database that exists — the action reports SUCCESS and
  *          `DB_ID` is null afterwards.
  *   - AS2: an `MJ: External Data Sources` row in `{"authMode":"host"}` mode (no server, no credential,
- *          `DefaultDatabase` = the tier's own database) resolves through `ExternalDataSourceRouter` and the
- *          SQL Server driver's `TestConnection` succeeds with the host's own login.
+ *          `DefaultDatabase` = AS2's throwaway database — host mode refuses the tier's own database) resolves
+ *          through `ExternalDataSourceRouter` and the SQL Server driver's `TestConnection` succeeds with the
+ *          host's own login.
  *   - AS3: `Load SQL Server Integration From Staging` against a staging database that does not exist fails with
  *          `STAGING_NOT_FOUND` before touching any entity map.
  *
@@ -23,8 +25,8 @@
  * packages/Integration/actions/README.md.
  *
  * HOST RESOLVER: `host` mode needs the resolver MJServer registers at boot. `mj test` does not boot MJServer, so
- * Setup registers one from the tier's own DB config (`LoadDbConfig`) when none is registered, and Teardown clears
- * it only if Setup registered it.
+ * Setup registers one from the tier's own DB config (`LoadDbConfig`, including its database, as MJServer's does)
+ * when none is registered, and Teardown clears it only if Setup registered it.
  */
 import { DatabaseProviderBase, RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -58,10 +60,10 @@ const SQL_SERVER_TYPE_NAME = 'SQL Server (External)';
 interface ArchiveSeedFixture {
     /** The throwaway database AS1 drops (Teardown drops it again if AS1 did not). */
     ThrowawayDatabase: string;
-    /** False when the tier's login cannot create a database; AS1 then reports Skipped. */
+    /** The throwaway database AS2's host-mode data source targets (Teardown drops it). */
+    HostDatabase: string;
+    /** False when the tier's login cannot create a database; AS1 and AS2 then report Skipped. */
     CanCreateDatabase: boolean;
-    /** The tier's own database, the host-mode data source's `DefaultDatabase`. */
-    TierDatabase: string;
     /** The `MJ: External Data Sources` row AS2 creates, once saved. */
     DataSourceID?: string;
     /** True when Setup registered the host connection resolver (so Teardown clears it). */
@@ -96,10 +98,15 @@ async function canCreateDatabase(ctx: IntegrationCheckContext): Promise<boolean>
     return !!rows && rows.length > 0 && rows[0].CanCreate === 1;
 }
 
-/** Drops the named database if it exists (best effort; used by Teardown). */
+/**
+ * Drops the named database if it exists (best effort; used by Teardown). Open connections — AS2's driver pool —
+ * are rolled back first so they cannot block the drop.
+ */
 async function dropIfExists(ctx: IntegrationCheckContext, name: string): Promise<void> {
+    const literal = EscapeSQLString(name);
     await databaseProvider(ctx).ExecuteSQL(
-        `IF DB_ID(N'${EscapeSQLString(name)}') IS NOT NULL DROP DATABASE [${name}];`, undefined, { description: 'archive-seed: teardown drop' }, ctx.User);
+        `IF DB_ID(N'${literal}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END`,
+        undefined, { description: 'archive-seed: teardown drop' }, ctx.User);
 }
 
 /** Runs a named action through the real engine. */
@@ -135,6 +142,7 @@ async function ensureHostResolver(): Promise<boolean> {
         Password: db.Password,
         Encrypt: false,
         TrustServerCertificate: true,
+        Database: db.Database,
     }));
     return true;
 }
@@ -158,7 +166,7 @@ async function createHostDataSource(ctx: IntegrationCheckContext): Promise<MJExt
     row.NewRecord();
     row.Name = `mj-it-archive-seed-${Date.now()} (mj-integration-test — safe to delete)`;
     row.TypeID = await sqlServerTypeID(ctx);
-    row.DefaultDatabase = fx().TierDatabase;
+    row.DefaultDatabase = fx().HostDatabase;
     row.ConnectionConfig = JSON.stringify({ authMode: 'host' });
     row.Status = 'Active';
     const saved = await row.Save();
@@ -195,6 +203,10 @@ export const ArchiveSeedChecks: NamedCheck[] = [
         Id: 'archive-seed.AS2',
         Name: 'AS2: a host-mode SQL Server data source resolves through the router and connects',
         Fn: async (ctx: IntegrationCheckContext) => {
+            if (!fx().CanCreateDatabase) {
+                SkipCheck('AS2: the tier login lacks CREATE ANY DATABASE, so there is no throwaway database to target');
+            }
+            Assert(await databaseExists(ctx, fx().HostDatabase), `AS2: Setup did not create [${fx().HostDatabase}]`);
             const row = await createHostDataSource(ctx);
             const resolved = await ExternalDataSourceRouter.Instance.Resolve(row.ID, ctx.User, ctx.Provider);
             Assert(resolved.driver instanceof SQLServerExternalDataSourceDriver,
@@ -225,15 +237,17 @@ for (const check of ArchiveSeedChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('archive-seed', {
     Setup: async (ctx: IntegrationCheckContext) => {
-        const db = await LoadDbConfig();
+        const stamp = Date.now();
         fixture = {
-            ThrowawayDatabase: `MJ_IT_ArchiveSeed_${Date.now()}`,
+            ThrowawayDatabase: `MJ_Staging_IT_ArchiveSeed_${stamp}`,
+            HostDatabase: `MJ_Staging_IT_ArchiveSeedHost_${stamp}`,
             CanCreateDatabase: await canCreateDatabase(ctx),
-            TierDatabase: db.Database,
             RegisteredHostResolver: false,
         };
         if (fixture.CanCreateDatabase) {
-            await databaseProvider(ctx).ExecuteSQL(`CREATE DATABASE [${fixture.ThrowawayDatabase}];`, undefined, { description: 'archive-seed: create throwaway database' }, ctx.User);
+            for (const name of [fixture.ThrowawayDatabase, fixture.HostDatabase]) {
+                await databaseProvider(ctx).ExecuteSQL(`CREATE DATABASE [${name}];`, undefined, { description: 'archive-seed: create throwaway database' }, ctx.User);
+            }
         }
         fixture.RegisteredHostResolver = await ensureHostResolver();
     },
@@ -241,12 +255,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('archive-seed', {
         if (!fixture) {
             return;
         }
-        const { ThrowawayDatabase, CanCreateDatabase, DataSourceID, RegisteredHostResolver } = fixture;
+        const { ThrowawayDatabase, HostDatabase, CanCreateDatabase, DataSourceID, RegisteredHostResolver } = fixture;
         if (DataSourceID) {
             await deleteDataSource(ctx, DataSourceID).catch(() => undefined);
         }
         if (CanCreateDatabase) {
             await dropIfExists(ctx, ThrowawayDatabase).catch(() => undefined);
+            await dropIfExists(ctx, HostDatabase).catch(() => undefined);
         }
         if (RegisteredHostResolver) {
             SetHostConnectionResolver(undefined);

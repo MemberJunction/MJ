@@ -78,6 +78,9 @@ interface SqlColumnMeta {
   isLossyNumeric: boolean;
 }
 
+/** System databases a `host` auth-mode data source may never target (lower-cased). */
+const HOST_MODE_SYSTEM_DATABASES: ReadonlySet<string> = new Set(['master', 'model', 'msdb', 'tempdb']);
+
 /**
  * SQL Server driver for External Data Sources. Read-only, live-proxied access
  * to an external Microsoft SQL Server database via node-mssql (`mssql`). One pooled
@@ -140,7 +143,8 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
    * `server`/`host` (the target is always the host's own server) and the row must carry no
    * `CredentialID` (host mode never mixes with a stored credential), and the row must name its
    * target in `DefaultDatabase` (otherwise the host login would land in its own default database —
-   * the MJ database). Throws a configuration error.
+   * the MJ database). A system database (`master`, `model`, `msdb`, `tempdb`) is refused too. Throws a
+   * configuration error.
    */
   protected assertHostModeAllowed(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): void {
     if (config.server || config.host) {
@@ -151,7 +155,19 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     if (dataSource.CredentialID) {
       throw new Error(`host auth mode requires an external data source with no CredentialID (external data source '${dataSource.Name}').`);
     }
-    this.requireHostDatabase(dataSource);
+    const database = this.requireHostDatabase(dataSource);
+    if (HOST_MODE_SYSTEM_DATABASES.has(database.toLowerCase())) {
+      throw new Error(`host auth mode refuses DefaultDatabase '${database}': it is a system database (external data source '${dataSource.Name}').`);
+    }
+  }
+
+  /** Refuses a `DefaultDatabase` that names the host's own database (compared case-insensitively). */
+  private assertNotHostDatabase(dataSource: MJExternalDataSourceEntity, host: HostSqlConnectionInfo): void {
+    const database = this.requireHostDatabase(dataSource);
+    const hostDatabase = host.Database?.trim();
+    if (hostDatabase && hostDatabase.toLowerCase() === database.toLowerCase()) {
+      throw new Error(`host auth mode refuses DefaultDatabase '${database}': it is the host's own database (external data source '${dataSource.Name}').`);
+    }
   }
 
   /** The `DefaultDatabase` a `host` auth-mode data source targets; throws when it is missing or blank. */
@@ -177,6 +193,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     if (!host.User || !host.Password) {
       throw new Error(`host auth mode requires a host connection with a SQL login user and password (external data source '${dataSource.Name}').`);
     }
+    this.assertNotHostDatabase(dataSource, host);
     return host;
   }
 

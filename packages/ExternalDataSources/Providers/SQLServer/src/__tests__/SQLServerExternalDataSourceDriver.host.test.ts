@@ -95,6 +95,20 @@ describe('SQLServerExternalDataSourceDriver — host auth mode', () => {
       expect(() => d.assertAllowed(ds({ DefaultDatabase: '   ' }), { authMode: 'host' })).toThrow(/host auth mode requires a DefaultDatabase/);
     });
 
+    it.each(['master', 'MODEL', 'msdb', 'TempDB'])('refuses host mode targeting the system database %s', name => {
+      expect(() => d.assertAllowed(ds({ DefaultDatabase: name }), { authMode: 'host' })).toThrow(/^host auth mode refuses DefaultDatabase/);
+      SetHostConnectionResolver(() => hostInfo);
+      expect(() => d.hostGuard(ds({ DefaultDatabase: name }), { authMode: 'host' })).toThrow(/^host auth mode refuses DefaultDatabase .*system database/);
+    });
+
+    it("refuses host mode targeting the host's own database, case-insensitively", () => {
+      SetHostConnectionResolver(() => ({ ...hostInfo, Database: 'MJ_Main' }));
+      expect(() => d.hostGuard(ds({ DefaultDatabase: 'mj_main' }), { authMode: 'host' })).toThrow(
+        /^host auth mode refuses DefaultDatabase 'mj_main': it is the host's own database/,
+      );
+      expect(d.hostGuard(ds({ DefaultDatabase: 'MJ_Staging_X' }), { authMode: 'host' })).toEqual({ ...hostInfo, Database: 'MJ_Main' });
+    });
+
     it('refuses host mode when no resolver is registered', () => {
       expect(() => d.hostGuard(ds(), { authMode: 'host' })).toThrow(/host auth mode/);
     });

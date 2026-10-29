@@ -17,6 +17,11 @@ export interface HostSqlConnectionInfo {
     InstanceName?: string;
     Encrypt?: boolean;
     TrustServerCertificate?: boolean;
+    /**
+     * The host's own database (the MJ database). Host mode refuses a data source whose
+     * `DefaultDatabase` names it, so a host-mode source can never read the host's own data.
+     */
+    Database?: string;
 }
 
 /** Returns the host's SQL Server connection info, or undefined when the host has none to offer. */

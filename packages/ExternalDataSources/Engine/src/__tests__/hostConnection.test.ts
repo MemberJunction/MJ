@@ -9,7 +9,7 @@ describe("host connection resolver", () => {
     });
 
     it("returns the resolver value", () => {
-        const info: HostSqlConnectionInfo = { Server: "localhost", Port: 1433, User: "sa", Password: "pw", Encrypt: true };
+        const info: HostSqlConnectionInfo = { Server: "localhost", Port: 1433, User: "sa", Password: "pw", Encrypt: true, Database: "MJ_Main" };
         SetHostConnectionResolver(() => info);
         expect(ResolveHostConnection()).toEqual(info);
     });
