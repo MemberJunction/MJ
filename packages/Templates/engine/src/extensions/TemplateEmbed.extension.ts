@@ -26,6 +26,9 @@ export type TemplateEmbedConfig = {
     data?: any;
 };
 
+/** The render context's escape mode; nunjucks keeps it at `env.opts` at runtime (`@types/nunjucks` says `options`). */
+type RenderEnvironmentView = { env?: { opts?: { autoescape?: boolean } } };
+
 /**
  * Context tracking for cycle detection during template rendering.
  * Tracks the chain of templates being rendered to prevent infinite recursion.
@@ -198,8 +201,8 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
             const originalContentType = renderContext.currentContentType;
             renderContext.currentContentType = templateContent.Type;
 
-            // Render the embedded template asynchronously
-            this.renderEmbeddedTemplate(templateEngine, templateContent, embeddedData)
+            // Render the embedded template asynchronously, in the outer render's escape mode
+            this.renderEmbeddedTemplate(templateEngine, targetTemplate, templateContent, embeddedData, TemplateEmbedExtension.RendersEscaped(context))
                 .then((result) => {
                     // Remove template from stack after successful rendering
                     renderContext.templateStack.pop();
@@ -279,12 +282,26 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
         return { ...currentContext, ...additionalData };
     }
 
+    /** Whether the render that reached this tag escapes its output; an embed inside a raw render renders raw too. */
+    protected static RendersEscaped(context: RenderEnvironmentView): boolean {
+        return context.env?.opts?.autoescape !== false;
+    }
+
     /**
-     * Renders the embedded template content with the provided data context.
+     * Renders the embedded template content with the provided data context. A raw render goes through
+     * {@link TemplateEngineServer.RenderTemplate}, whose raw environment carries the extensions.
+     * The raw path renders through RenderTemplate so the registered extensions (nested embeds) stay available; unlike the escaped RenderTemplateSimple path it also merges the template's parameter defaults.
      */
-    private async renderEmbeddedTemplate(templateEngine: any, templateContent: MJTemplateContentEntity, data: any): Promise<string> {
-        // Use the template engine's simple rendering method which handles Nunjucks environment setup
-        const result = await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data);
+    private async renderEmbeddedTemplate(
+        templateEngine: TemplateEngineServer,
+        template: MJTemplateEntityExtended,
+        templateContent: MJTemplateContentEntity,
+        data: Record<string, unknown>,
+        autoescape: boolean
+    ): Promise<string> {
+        const result = autoescape
+            ? await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data)
+            : await templateEngine.RenderTemplate(template, templateContent, data, true, true, { autoescape: false });
         
         if (!result.Success) {
             throw new Error(`Failed to render embedded template: ${result.Message}`);

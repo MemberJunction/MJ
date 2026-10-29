@@ -110,6 +110,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
 | `MJ_REALTIME_ENABLED` | Enable WebRTC SDP broker router (`/realtime/sdp-exchange`) | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
+| `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` | `MJ: AI Models` name every process embeds locally with — see [Changing the local embedding model](#changing-the-local-embedding-model) | highest-PowerRank active local model |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
 ### Configuration File (`mj.config.cjs`)
@@ -201,6 +202,31 @@ module.exports = {
   },
 };
 ```
+
+### Changing the local embedding model
+
+The `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` environment variable picks the model that embeds agent notes
+and examples, tags, queries and components, e.g. `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL='EmbeddingGemma 2 (Local)'`.
+It is an environment variable, not an `mj.config.cjs` key, because every process that embeds (MJAPI,
+the `mj` CLI, MCP/A2A servers, workers) must agree on it; set it in `.env` or the deployment
+environment and restart. Unset, the highest-PowerRank active local model is used. A name that matches
+no active local model turns local embedding off, with an error in the log.
+
+When it changes, vectors stored by the old model are left out of the in-memory indexes until they are
+re-embedded, and a record re-embeds on its next save. Run the **Re-embed Local Vectors** action to
+move them all at once, then restart the MJ server processes so their in-memory indexes reload:
+
+```bash
+mj ai actions run -n "Re-embed Local Vectors" --param "DryRun=true"   # count what is stale
+mj ai actions run -n "Re-embed Local Vectors"                         # re-embed it
+mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"    # re-embed everything, e.g. after
+                                                                      # an upgrade changed a model's vectors
+```
+
+Each run is recorded in `MJ: Process Runs`, with a detail row for every record it touched.
+
+Entity search vectors (`MJ: Entity Record Documents`) belong to their Entity Document's Vector Index;
+re-point the Entity Document and run entity vector sync for those.
 
 ### Prompt run template data (`aiPromptRuns`)
 
@@ -968,7 +994,33 @@ databaseSettings: {
 
 ### Authentication Token Caching
 
-Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
+Validated JWT tokens are cached using an LRU cache (`AuthCache`), storing both the `UserPayload` and the decoded `jwt.JwtPayload` claims to avoid repeated cryptographic verification and base64 decoding for the same token within its lifetime.
+
+### Scalability & Cache Broadcast Architecture
+
+MJServer implements a 4-pillar horizontal and vertical scalability architecture. For full details, refer to the **[Server Scaling and Broadcast Architecture Guide](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)**.
+
+#### 1. Pluggable Cache Invalidation Broadcast Providers (`CacheInvalidationBroadcastManager`)
+Every entity save/delete is assigned a monotonically increasing sequence number (`X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP headers + `Sequence` field on `CacheInvalidationNotification`) and stored in a bounded ring buffer for deterministic client delta catch-up (`GetCacheInvalidationsSince(sinceSequence)`).
+
+Permission and RLS filtering is coalesced by **Role Fingerprint Bucket** ($O(\text{Roles})$ instead of $O(\text{Subscribers})$), and can be offloaded to managed cloud WebSocket planes registered via `@RegisterClass(BaseCacheInvalidationBroadcastProvider, ...)`:
+- **`SequencedRoleBucket`** (default): In-process + Redis Pub/Sub role-bucket memoization.
+- **`AzureWebPubSub`**: Offloads fan-out to Azure Web PubSub groups (`mj.role.<roleFingerprint>`).
+- **`AWSIoTCore`**: Offloads fan-out to AWS IoT Core MQTT topics (`mj/cache/role/<roleFingerprint>`).
+- **`GCPPubSub`**: Publishes role-bucketed messages to Google Cloud Pub/Sub topics with `roleFingerprint` attributes.
+
+#### 2. $O(1)$ Session-Scoped `PushStatusUpdates` Routing
+`PushStatusUpdates(sessionId)` routes status messages directly to per-session topics (`PUSH_STATUS_UPDATES:session:<sessionId>`) via `CreateSessionRoutingPubSub` and memoizes parsed JSON payloads via a `WeakMap` (`ParseStatusUpdateMessage`), eliminating $O(N \times M)$ cross-session filter scans and JSON re-parsing.
+
+#### 3. Zero-Copy Per-Request Context & Root-Only Middleware
+- **Root-Only `VariablesLoggingMiddleware`**: Applied exclusively to root `Query`, `Mutation`, and `Subscription` fields (`ApplyRootVariablesLoggingMiddleware`) rather than `globalMiddlewares`, avoiding per-field promise allocations on large result sets.
+- **Prototype-Delegated Metadata Shell**: Per-request providers reuse the global metadata graph via `Object.create(shared)` (`ProviderBase.CreateSharedMetadataShell`) and defer RxJS transaction subject allocation until `BeginTransaction()` is invoked.
+
+#### 4. Horizontal Scaling via `MJ_SERVER_ROLE`
+Split interactive GraphQL/REST traffic from background jobs across multi-replica deployments using `serverRole` (`MJ_SERVER_ROLE`):
+- **`all`** (default): Runs HTTP/GraphQL/WebSocket servers and all background workers (`ScheduledJobsService`, `KnowledgeHubIndexingBootstrap`, `ApplicationTrackRecordSyncBootstrap`).
+- **`api`**: Serves interactive HTTP/GraphQL/WebSocket traffic only; skips background cron and indexing workers.
+- **`worker`**: Runs background workers and a lightweight `/health` probe; skips interactive GraphQL/REST/MCP/A2A route mounting.
 
 ## Server Extensions
 

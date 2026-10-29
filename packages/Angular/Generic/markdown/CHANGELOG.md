@@ -1,5 +1,19 @@
 # @memberjunction/ng-markdown
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- 09c7d57: `<mj-markdown>` images can be capped by the host with the `--mj-markdown-image-max-height` CSS custom property (unset: no cap, as before), and a new `ImageClicked` output reports a clicked or keyboard-activated image (not one inside a link; images stay inert unless the output is bound). The conversation message item binds it and opens the image in the chat's existing image viewer, the same way an attachment thumbnail opens. The image viewer's Download opens a cross-origin image in a new tab instead of navigating the app away (browsers ignore `download` across origins).
+  - @memberjunction/markdown-core@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- c271ddf: `<mj-markdown>` re-renders when a PascalCase input changes (`[Data]`, `[EnableHtml]`, ...), not only its deprecated camelCase alias. MathML detection no longer matches custom elements such as `<math-field>`.
+  - @memberjunction/markdown-core@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

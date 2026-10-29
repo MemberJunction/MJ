@@ -9,7 +9,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength,
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, NormalizeUUID, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -368,6 +368,203 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
 
 }
 
+/**
+ * Metadata describing a governed alternate SQL view on an entity that maintains 100% column
+ * parity with the entity's canonical `BaseView` while applying a curated canonical filter
+ * or join (for example, `Active` members or `Open` orders).
+ *
+ * Alternate base views can form a same-entity derivation hierarchy via {@link ParentID}
+ * (for example, `ActiveAutoRenew` selecting from `vwActiveMembers`).
+ *
+ * Maps to the `MJ: Entity Alternate Base Views` metadata entity.
+ */
+export class EntityAlternateBaseViewInfo extends BaseInfo {
+    ID: string = null;
+    EntityID: string = null;
+    ParentID: string | null = null;
+    Name: string = null;
+    DisplayName: string | null = null;
+    Description: string = null;
+    SchemaName: string | null = null;
+    ViewName: string = null;
+    CachePolicy: 'Default' | 'Bypass' = 'Default';
+    Status: 'Active' | 'Deprecated' | 'Disabled' = 'Active';
+    Sequence: number = 0;
+
+    __mj_CreatedAt: Date = null;
+    __mj_UpdatedAt: Date = null;
+
+    // Virtual fields from vwEntityAlternateBaseViews
+    Entity: string = null;
+    Parent: string | null = null;
+    RootParentID: string | null = null;
+
+    private _entitySchemaName: string | null = null;
+    // Named without matching `ParentView` / `ChildViews` getter names so `BaseInfo.toJSON()`
+    // does not serialize parent<->child object references into a circular JSON graph.
+    private _resolvedParentViewRef: EntityAlternateBaseViewInfo | undefined = undefined;
+    private _resolvedChildViewsList: EntityAlternateBaseViewInfo[] = [];
+
+    /**
+     * The parent alternate base view on the same entity when {@link ParentID} is set,
+     * or `undefined` for a top-level alternate base view.
+     */
+    get ParentView(): EntityAlternateBaseViewInfo | undefined {
+        return this._resolvedParentViewRef;
+    }
+
+    /**
+     * Direct child alternate base views on the same entity that derive from this view via {@link ParentID}.
+     */
+    get ChildViews(): EntityAlternateBaseViewInfo[] {
+        return this._resolvedChildViewsList;
+    }
+
+    /**
+     * Effective database schema name for this alternate base view: uses {@link SchemaName}
+     * when explicitly populated, falling back to the parent entity's `SchemaName`.
+     */
+    get EffectiveSchemaName(): string {
+        const explicit = this.SchemaName?.trim();
+        if (explicit && explicit.length > 0) {
+            return explicit;
+        }
+        return this._entitySchemaName ?? '';
+    }
+
+    /**
+     * Human-friendly label for UI surfaces: returns {@link DisplayName} when set,
+     * falling back to {@link Name}.
+     */
+    get EffectiveDisplayName(): string {
+        const display = this.DisplayName?.trim();
+        if (display && display.length > 0) {
+            return display;
+        }
+        return this.Name;
+    }
+
+    /**
+     * True when this alternate base view (and every ancestor in its {@link ParentView} chain)
+     * has `Status` equal to `'Active'` or `'Deprecated'`. Disabled views (or views derived
+     * from a disabled or missing ancestor) return `false`.
+     */
+    get IsUsable(): boolean {
+        return this.checkIsUsable(new Set<string>());
+    }
+
+    private checkIsUsable(visited: Set<string>): boolean {
+        if (this.Status !== 'Active' && this.Status !== 'Deprecated') {
+            return false;
+        }
+        if (!this.ParentID) {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false; // ParentID is set but parent view was not found on the entity
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false; // Defensive cycle guard
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsUsable(visited);
+    }
+
+    /**
+     * True when this view (or any ancestor in its {@link ParentView} chain) has
+     * `Status === 'Deprecated'`. Deprecated alternate base views remain usable at runtime
+     * so existing views and queries do not break, but emit a deprecation warning.
+     */
+    get IsDeprecated(): boolean {
+        return this.checkIsDeprecated(new Set<string>());
+    }
+
+    private checkIsDeprecated(visited: Set<string>): boolean {
+        if (this.Status === 'Deprecated') {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false;
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false;
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsDeprecated(visited);
+    }
+
+    /**
+     * True when `CachePolicy === 'Bypass'` on this view or any ancestor in its {@link ParentView}
+     * chain, instructing `ProviderBase` to skip local/server result caching for reads through
+     * this alternate base view (used when the view reads the clock or joins other tables whose
+     * updates do not fire `BaseEntity` events on this entity).
+     */
+    get IsBypassCache(): boolean {
+        return this.checkIsBypassCache(new Set<string>());
+    }
+
+    private checkIsBypassCache(visited: Set<string>): boolean {
+        if (this.CachePolicy === 'Bypass') {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false;
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false;
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsBypassCache(visited);
+    }
+
+    /**
+     * Links `ParentView` and `ChildViews` references across the alternate base views belonging
+     * to a single entity and stamps the owning entity's `SchemaName` fallback.
+     */
+    public static LinkHierarchy(views: EntityAlternateBaseViewInfo[], entitySchemaName?: string | null): void {
+        const byId = new Map<string, EntityAlternateBaseViewInfo>();
+        for (const v of views) {
+            if (entitySchemaName !== undefined) {
+                v._entitySchemaName = entitySchemaName;
+            }
+            v._resolvedParentViewRef = undefined;
+            v._resolvedChildViewsList = [];
+            if (v.ID) {
+                byId.set(NormalizeUUID(v.ID), v);
+            }
+        }
+        for (const v of views) {
+            if (v.ParentID && !UUIDsEqual(v.ParentID, v.ID)) {
+                const parent = byId.get(NormalizeUUID(v.ParentID));
+                if (parent) {
+                    v._resolvedParentViewRef = parent;
+                    parent._resolvedChildViewsList.push(v);
+                }
+            }
+        }
+    }
+
+    constructor(initData: Record<string, unknown> = null, entitySchemaName?: string | null) {
+        super();
+        if (entitySchemaName !== undefined) {
+            this._entitySchemaName = entitySchemaName;
+        }
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
+
 export const EntityPermissionType = {
     Read: 'Read',
     Create: 'Create',
@@ -575,11 +772,17 @@ export const ReadableFieldsTransportKey = 'ReadableFields___';
  * set and aggregate it — see {@link EntityFieldInfo.AggregateFieldRulesForUser}.
  */
 export function IsRestrictingFieldRule(rule: FieldPermissionRuleVerbs | null | undefined): boolean {
-    return (
-        rule?.ReadAccess === FieldPermissionAccess.Deny ||
-        rule?.UpdateAccess === FieldPermissionAccess.Deny ||
-        rule?.CreateAccess === FieldPermissionAccess.Deny
-    );
+    return isDenyAccess(rule?.ReadAccess) || isDenyAccess(rule?.UpdateAccess) || isDenyAccess(rule?.CreateAccess);
+}
+
+/**
+ * Whether one Access value means `Deny`, compared the way the aggregation compares: ignoring case
+ * and surrounding whitespace. The column's CHECK constraint runs under a case-insensitive
+ * collation, so `'deny'` stores, and the aggregation enforces it as a Deny; a strict `===` here
+ * would call that same rule harmless.
+ */
+function isDenyAccess(access: string | null | undefined): boolean {
+    return (access ?? '').trim().toLowerCase() === 'deny';
 }
 
 /**
@@ -2397,10 +2600,15 @@ export class EntityFieldInfo extends BaseInfo {
         return FormatValue(this.Type, value, decimals, currency, maxLength, trailingChars);
     }
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFieldValues', '_EntityFieldValues',
+        'EntityFieldPermissions', '_FieldPermissions', 'FieldPermissions',
+    ]);
+
     constructor(initData: any = null) {
         super();
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityFieldInfo.CHILD_INIT_KEYS);
 
             // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
             // construct typed instances on first access via the getter.
@@ -2617,16 +2825,101 @@ const _entityFieldIndexCache = new WeakMap<EntityInfo, {
     byCodeName: Map<string, number>;
 }>();
 
-const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, {
+/**
+ * One memoized set of denied-field answers for an (entity, user) pair, valid while the
+ * field-security generation, the entity's field list, its resolved IS-A ancestors and the user's
+ * roles are what they were when it was filled.
+ */
+type DeniedFieldsMemoEntry = {
     fieldsRef: EntityFieldInfo[];
-    fieldsLen: number;
-    totalPerms: number;
-    rolesRef: UserRoleInfo[] | undefined;
-    rolesLen: number;
+    generation: number;
+    ancestors: readonly EntityInfo[];
+    rolesKey: string;
     read?: Set<string>;
     update?: Set<string>;
     create?: Set<string>;
-}>>();
+};
+
+const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, DeniedFieldsMemoEntry>>();
+
+/**
+ * The field-security generation: one process-wide number that moves whenever an answer derived
+ * from field-security configuration may have changed. It moves when an `EntityInfo` is built (a
+ * metadata refresh rebuilds every entity), when an entity's {@link EntityInfo.EnableFieldLevelSecurity}
+ * flag is assigned, and when {@link EntityInfo.InvalidateFieldSecurityCache} is called. Every memo
+ * of a field-security answer records the number it was filled under and is discarded once the
+ * number has moved, so a memo is never served across any of those changes. Numbers only grow.
+ */
+let _fieldSecurityGeneration = 0;
+
+/** Marks every memoized field-security answer stale (see {@link CurrentFieldSecurityGeneration}). */
+function advanceFieldSecurityGeneration(): void {
+    _fieldSecurityGeneration++;
+}
+
+/**
+ * The current field-security generation. A memo of anything derived from field-security
+ * configuration (denied sets, whether field security applies, a user's denial profile across a
+ * catalog) is valid only while this returns the number the memo was filled under. It moves when an
+ * `EntityInfo` is built, when an entity's `EnableFieldLevelSecurity` flag is assigned, and when
+ * `EntityInfo.InvalidateFieldSecurityCache()` is called.
+ */
+export function CurrentFieldSecurityGeneration(): number {
+    return _fieldSecurityGeneration;
+}
+
+/**
+ * An entity's IS-A ancestors as {@link EntityInfo.ParentEntityInfo} resolves them, nearest first,
+ * with what the resolution depended on: the field-security generation (which moves whenever any
+ * `EntityInfo` is built, so a rebuilt ancestor is noticed), the provider it went through, that
+ * provider's entity array and the entity's own `ParentID`.
+ */
+type LiveAncestorsMemo = {
+    generation: number;
+    provider: IMetadataProvider | undefined;
+    entities: EntityInfo[] | undefined;
+    parentID: string | null;
+    ancestors: readonly EntityInfo[];
+};
+
+const NO_ANCESTORS: readonly EntityInfo[] = Object.freeze([]);
+
+/** Whether two ancestor lists hold the same entities, by identity, in the same order. */
+function sameAncestors(a: readonly EntityInfo[], b: readonly EntityInfo[]): boolean {
+    if (a === b) {
+        return true;
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * The role IDs a user holds, in order, as one string: changes whenever a role is added, removed
+ * or swapped. Field-level security reads nothing else about a user, so this, with
+ * {@link CurrentFieldSecurityGeneration}, keys any memo of a user's field-security answers.
+ */
+export function FieldSecurityUserRolesKey(user: UserInfo): string {
+    return userRolesKey(user);
+}
+
+function userRolesKey(user: UserInfo): string {
+    const roles = user.UserRoles;
+    if (!roles || roles.length === 0) {
+        return '';
+    }
+    let key = '';
+    for (let i = 0; i < roles.length; i++) {
+        key += `${roles[i]?.RoleID ?? ''}|`;
+    }
+    return key;
+}
 
 const _entityChildEntitiesCache = new WeakMap<EntityInfo, {
     provider: IMetadataProvider | undefined;
@@ -2950,8 +3243,18 @@ export class EntityInfo extends BaseInfo {
      * Turning it on snapshots the entity's existing entity-level permissions into per-field
      * rows, so enabling changes no behavior until an administrator tightens a field. Turning it
      * off leaves the rows in place, inactive, so re-enabling does not lose the configuration.
+     *
+     * Assigning it moves the field-security generation ({@link CurrentFieldSecurityGeneration}),
+     * so every memoized field-security answer that read the old value is recomputed.
      */
-    EnableFieldLevelSecurity: boolean = false
+    public get EnableFieldLevelSecurity(): boolean {
+        return this._enableFieldLevelSecurity;
+    }
+    public set EnableFieldLevelSecurity(value: boolean) {
+        this._enableFieldLevelSecurity = value;
+        advanceFieldSecurityGeneration();
+    }
+    private _enableFieldLevelSecurity: boolean = false
     /**
      * Whether this entity is available through the GraphQL API
      */
@@ -3418,6 +3721,7 @@ export class EntityInfo extends BaseInfo {
     private _settings: EntitySettingInfo[]
     private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _organicKeys: EntityOrganicKeyInfo[] = []
+    private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
     HasIdField: boolean = false
 
     /** @deprecated Use {@link HasIdField}. */
@@ -3486,6 +3790,93 @@ export class EntityInfo extends BaseInfo {
     private _displayNamePluralCache: { source: string; plural: string } | undefined = undefined;
 
     /**
+     * Whether field-level security decides anything on this entity: its own
+     * {@link EnableFieldLevelSecurity} flag is on, or an IS-A ancestor's is.
+     *
+     * **Enforcement points gate on this, never on the raw flag.** An IS-A child carries each
+     * ancestor's fields as mirror fields of its own, read from the same row. Gating on the child's
+     * own flag — off on nearly every child, because nobody turns it on there — let a role denied
+     * `Phone` on the parent read it through the child's RunView, load and `GetAll()`. The denied
+     * sets ({@link GetDeniedReadFields} and siblings) carry the ancestor's denials for those mirror
+     * fields; this is the matching gate, so a caller that skips work when it is false never skips
+     * an ancestor's rules.
+     *
+     * The raw flag stays the right question for CONFIGURATION — which entities reconciliation,
+     * CodeGen and the system-user sweeps cover — because the rules themselves live on the entity
+     * that owns the field.
+     */
+    public get FieldLevelSecurityApplies(): boolean {
+        if (this.EnableFieldLevelSecurity) {
+            return true; // checked first: one boolean for every entity that has it on
+        }
+        if (!this.ParentID) {
+            return false; // one boolean for every entity outside an IS-A chain
+        }
+        // The ancestors are memoized; their flags are read live, so an in-place flip is seen at once.
+        const ancestors = this.liveAncestors();
+        for (let i = 0; i < ancestors.length; i++) {
+            if (ancestors[i].EnableFieldLevelSecurity) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** See {@link liveAncestors}. A `_` field with no matching getter, so `toJSON()` leaves it out. */
+    private _liveAncestorsMemo: LiveAncestorsMemo | null = null;
+
+    /**
+     * This entity's IS-A ancestors, nearest first, as {@link ParentEntityInfo} resolves them NOW
+     * rather than the cached {@link ParentChain}. The denied walk ({@link addFieldsDeniedOnParent})
+     * follows the live parent, so the gate and the memo key must too: read from a chain cached
+     * before a metadata refresh replaced an ancestor, the gate could answer "no" while the
+     * ancestor now in place has rules, and every enforcement point would skip them.
+     *
+     * The walk is memoized, valid while the field-security generation (which moves whenever any
+     * `EntityInfo` is built, so a rebuilt ancestor is noticed), the provider this entity resolves
+     * its parent through (its owning provider, else the global one), that provider's entity array
+     * and this entity's `ParentID` are unchanged. Ancestors resolve their own parents through
+     * their own providers; a chain whose entities came from one provider, the only way providers
+     * build them, is covered by that provider's array. A walk cut
+     * short because a `ParentID` did not resolve (asked before the provider held its entities) is
+     * returned but not kept, so it cannot pin an incomplete answer.
+     */
+    private liveAncestors(): readonly EntityInfo[] {
+        if (!this.ParentID) {
+            return NO_ANCESTORS;
+        }
+        const provider = MetadataProviderFor(this); // the provider ParentEntityInfo resolves through
+        const entities = provider?.Entities;
+        const memo = this._liveAncestorsMemo;
+        if (memo !== null && memo.generation === _fieldSecurityGeneration && memo.provider === provider
+            && memo.entities === entities && memo.parentID === this.ParentID) {
+            return memo.ancestors;
+        }
+        const generation = _fieldSecurityGeneration;
+        const { ancestors, complete } = this.walkLiveAncestors();
+        if (complete) {
+            this._liveAncestorsMemo = { generation, provider, entities, parentID: this.ParentID, ancestors };
+        }
+        return ancestors;
+    }
+
+    /** The uncached walk behind {@link liveAncestors}; stops at the root or at a cycle. */
+    private walkLiveAncestors(): { ancestors: readonly EntityInfo[]; complete: boolean } {
+        const ancestors: EntityInfo[] = [];
+        const visited = new Set<EntityInfo>([this]);
+        let current: EntityInfo = this;
+        let ancestor = this.ParentEntityInfo;
+        while (ancestor && !visited.has(ancestor)) {
+            visited.add(ancestor);
+            ancestors.push(ancestor);
+            current = ancestor;
+            ancestor = ancestor.ParentID ? ancestor.ParentEntityInfo : null;
+        }
+        const complete = !current.ParentID || ancestor !== null;
+        return { ancestors: Object.freeze(ancestors), complete };
+    }
+
+    /**
      * The set of field names this user may NOT READ on this entity — the per-request primitive
      * every field-security enforcement point is built on.
      *
@@ -3495,8 +3886,9 @@ export class EntityInfo extends BaseInfo {
      * re-scans `user.UserRoles` and allocates. A Set lookup costs neither.
      *
      * Names are lowercased so callers can match case-insensitively, consistent with
-     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when the entity has
-     * field security switched off and when the user is denied nothing, so callers can treat
+     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when field security
+     * does not apply (see {@link FieldLevelSecurityApplies}) and when the user is denied nothing,
+     * so callers can treat
      * `size === 0` as the single "nothing to do" condition.
      */
     public GetDeniedReadFields(user: UserInfo): Set<string> {
@@ -3517,10 +3909,10 @@ export class EntityInfo extends BaseInfo {
      * The caller still decides what to render in place of the value, which is the part that
      * differs per surface and should not be hidden inside a getter.
      *
-     * **Fails open** on a missing user, a missing field name, or an entity with field security
-     * switched off — matching `BaseEntity`'s own gate and `MjFormFieldComponent`. The server is
-     * the real boundary; a UI that blanked out fields because no user had resolved yet would be
-     * worse than one that shows them.
+     * **Fails open** on a missing user, a missing field name, or an entity where field security
+     * does not apply ({@link FieldLevelSecurityApplies}) — matching `BaseEntity`'s own gate and
+     * `MjFormFieldComponent`. The server is the real boundary; a UI that blanked out fields
+     * because no user had resolved yet would be worse than one that shows them.
      *
      * PERFORMANCE: this delegates to {@link GetDeniedReadFields}, which walks every field on the
      * entity. Fine for the handful of chrome reads it exists for; do NOT call it per row in a
@@ -3530,7 +3922,7 @@ export class EntityInfo extends BaseInfo {
      * @param user the acting user
      */
     public IsFieldReadableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedReadFields(user).has(fieldName.trim().toLowerCase());
@@ -3543,7 +3935,7 @@ export class EntityInfo extends BaseInfo {
      * three conditions.
      */
     public IsFieldUpdatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedUpdateFields(user).has(fieldName.trim().toLowerCase());
@@ -3558,7 +3950,7 @@ export class EntityInfo extends BaseInfo {
      * the user typed, which is the case this exists to prevent.
      */
     public IsFieldCreatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedCreateFields(user).has(fieldName.trim().toLowerCase());
@@ -3587,59 +3979,74 @@ export class EntityInfo extends BaseInfo {
         return this.getCachedDeniedFields(user, 'create', (p) => !p.CanCreate);
     }
 
+    /**
+     * Discards the memoized field-security answers: this entity's denied-field sets, those of
+     * every IS-A descendant, and every other memo keyed on the field-security generation
+     * ({@link CurrentFieldSecurityGeneration}), such as a user's denial profile across a catalog.
+     * Invalidation is process-wide because a rule on one entity can change answers about others.
+     *
+     * A metadata refresh needs no call: it builds new `EntityInfo` objects, which start with
+     * empty memos. Call this only after changing field rules IN PLACE on an existing
+     * `EntityInfo`, for example editing an {@link EntityFieldPermissionInfo}'s access values.
+     */
+    public InvalidateFieldSecurityCache(): void {
+        advanceFieldSecurityGeneration();
+    }
+
+    /**
+     * Memoized front for {@link getDeniedFields}, per (entity, user, verb).
+     *
+     * An entry is reused while four things are unchanged: the field-security generation (see
+     * {@link CurrentFieldSecurityGeneration}; it moves on every rebuild, flag assignment and
+     * {@link InvalidateFieldSecurityCache}), the IS-A ancestors as they resolve now, the field
+     * array itself, and the role IDs the user holds. Counting fields or rules is not enough:
+     * editing a rule from `Allow` to `Deny` changes neither count.
+     */
     private getCachedDeniedFields(
         user: UserInfo,
         verb: 'read' | 'update' | 'create',
         isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
     ): Set<string> {
-        if (!this.EnableFieldLevelSecurity) {
-            return new Set<string>();
+        if (!this.FieldLevelSecurityApplies) {
+            return new Set<string>(); // gate on inheritance too: an ancestor's rules still apply
         }
         if (!user || typeof user !== 'object') {
-            return this.getDeniedFields(user, isDenied);
+            return this.getDeniedFields(user, verb, isDenied);
         }
-        let totalPerms = 0;
-        for (let i = 0; i < this._fields.length; i++) {
-            totalPerms += this._fields[i].FieldPermissions.length;
+        const entry = this.deniedFieldsMemoEntryFor(user);
+        const existing = entry[verb];
+        if (existing !== undefined) {
+            return existing;
         }
-        const rolesRef = user.UserRoles;
-        const rolesLen = rolesRef?.length ?? 0;
+        const computed = this.getDeniedFields(user, verb, isDenied);
+        entry[verb] = computed;
+        return computed;
+    }
 
+    /** The current memo entry for `user`, replaced with an empty one when any part of its key moved. */
+    private deniedFieldsMemoEntryFor(user: UserInfo): DeniedFieldsMemoEntry {
+        const generation = _fieldSecurityGeneration;
+        const ancestors = this.liveAncestors();
+        const rolesKey = userRolesKey(user);
         let byUser = _entityDeniedFieldsCache.get(this);
         if (!byUser) {
             byUser = new WeakMap();
             _entityDeniedFieldsCache.set(this, byUser);
         }
         let entry = byUser.get(user);
-        if (
-            !entry ||
-            entry.fieldsRef !== this._fields ||
-            entry.fieldsLen !== this._fields.length ||
-            entry.totalPerms !== totalPerms ||
-            entry.rolesRef !== rolesRef ||
-            entry.rolesLen !== rolesLen
-        ) {
-            entry = {
-                fieldsRef: this._fields,
-                fieldsLen: this._fields.length,
-                totalPerms,
-                rolesRef,
-                rolesLen,
-            };
+        if (!entry || entry.fieldsRef !== this._fields || entry.generation !== generation
+            || !sameAncestors(entry.ancestors, ancestors) || entry.rolesKey !== rolesKey) {
+            entry = { fieldsRef: this._fields, generation, ancestors, rolesKey };
             byUser.set(user, entry);
         }
-        const existing = entry[verb];
-        if (existing !== undefined) {
-            return existing;
-        }
-        const computed = this.getDeniedFields(user, isDenied);
-        entry[verb] = computed;
-        return computed;
+        return entry;
     }
 
     /**
      * Shared walk behind {@link GetDeniedReadFields} / {@link GetDeniedUpdateFields} /
-     * {@link GetDeniedCreateFields}, short-circuiting on {@link EnableFieldLevelSecurity}.
+     * {@link GetDeniedCreateFields}. Walks this entity's own fields when its
+     * {@link EnableFieldLevelSecurity} is on, then adds the fields an IS-A parent denies (see
+     * {@link addFieldsDeniedOnParent}).
      *
      * Every field is aggregated, including those carrying no permission records — on an enabled
      * entity those are denied. Unrestrictable fields (primary keys, `__mj_` columns) come back
@@ -3662,18 +4069,65 @@ export class EntityInfo extends BaseInfo {
      * that collide on `CodeName` already collide on their generated property, which is not a
      * schema CodeGen can emit.
      */
-    private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
+    private getDeniedFields(
+        user: UserInfo,
+        verb: 'read' | 'update' | 'create',
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): Set<string> {
         const denied = new Set<string>();
-        if (!this.EnableFieldLevelSecurity) {
-            return denied;
-        }
-        for (const field of this._fields) {
-            if (isDenied(field.GetUserFieldPermissions(user, true))) {
-                denied.add(field.Name.trim().toLowerCase());
-                denied.add(field.CodeName.trim().toLowerCase());
+        if (this.EnableFieldLevelSecurity) {
+            for (const field of this._fields) {
+                if (isDenied(field.GetUserFieldPermissions(user, true))) {
+                    this.addDeniedField(denied, field);
+                }
             }
         }
+        this.addFieldsDeniedOnParent(denied, user, verb, isDenied);
         return denied;
+    }
+
+    /**
+     * IS-A inheritance for the denied sets: a field the immediate parent denies is denied on this
+     * entity's mirror of it, whatever this entity's own flag says. The parent's set already
+     * includes ITS parent's denials (this method runs there too), so one hop covers any depth.
+     *
+     * A mirror is a field of this entity whose `Name` is the `Name` of one of the parent's own
+     * fields: an IS-A child's view exposes each parent column under the parent's column name, and
+     * a child cannot declare a column of its own with that name. Matching goes through the
+     * parent's field list rather than straight into the parent's denied set, because that set also
+     * holds each denied field's `CodeName`: a parent field `Base Salary` puts `base_salary` in it,
+     * and a child's OWN field named `Base_Salary` must not be denied for that.
+     *
+     * Additive only. When this entity ALSO has field security on, a mirror with no rows of its own
+     * is already denied by the walk above (no rows on an enabled entity means denied); the parent's
+     * rules cannot re-open it.
+     */
+    private addFieldsDeniedOnParent(
+        denied: Set<string>,
+        user: UserInfo,
+        verb: 'read' | 'update' | 'create',
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): void {
+        const parent = this.ParentEntityInfo;
+        if (!parent?.FieldLevelSecurityApplies) {
+            return;
+        }
+        const parentDenied = parent.getCachedDeniedFields(user, verb, isDenied);
+        if (parentDenied.size === 0) {
+            return;
+        }
+        for (const field of this._fields) {
+            const parentField = parent.FieldByName(field.Name);
+            if (parentField && parentDenied.has(parentField.Name.trim().toLowerCase())) {
+                this.addDeniedField(denied, field);
+            }
+        }
+    }
+
+    /** Adds a field under BOTH key spaces — see {@link getDeniedFields} for why. */
+    private addDeniedField(denied: Set<string>, field: EntityFieldInfo): void {
+        denied.add(field.Name.trim().toLowerCase());
+        denied.add(field.CodeName.trim().toLowerCase());
     }
 
     /**
@@ -3951,6 +4405,59 @@ export class EntityInfo extends BaseInfo {
         return this._organicKeys;
     }
 
+    /**
+     * Gets all registered alternate base views for this entity, sorted by `Sequence`, `Name`, and `ID`.
+     * Alternate base views maintain 100% column parity with {@link BaseView} while applying a
+     * curated canonical filter or join.
+     * @returns {EntityAlternateBaseViewInfo[]} Array of alternate base view metadata definitions
+     */
+    get AlternateBaseViews(): EntityAlternateBaseViewInfo[] {
+        return this._alternateBaseViews;
+    }
+
+    /**
+     * Finds a registered alternate base view on this entity by its semantic `Name`
+     * (case-insensitive, whitespace-trimmed).
+     *
+     * @param name Semantic name of the alternate base view (for example, `'Active'`).
+     * @returns The matching {@link EntityAlternateBaseViewInfo}, or `undefined` if not found.
+     */
+    public GetAlternateBaseView(name: string | null | undefined): EntityAlternateBaseViewInfo | undefined {
+        const trimmed = name?.trim().toLowerCase();
+        if (!trimmed) {
+            return undefined;
+        }
+        return this._alternateBaseViews.find(v => v.Name?.trim().toLowerCase() === trimmed);
+    }
+
+    /**
+     * Finds a registered alternate base view on this entity by its physical SQL `ViewName`
+     * (and optional `schemaName`), matched case-insensitively and whitespace-trimmed.
+     *
+     * @param viewName Physical SQL view name (for example, `'vwActiveMembers'`).
+     * @param schemaName Optional schema name; when supplied, must match `EffectiveSchemaName` case-insensitively.
+     * @returns The matching {@link EntityAlternateBaseViewInfo}, or `undefined` if not found.
+     */
+    public GetAlternateBaseViewByViewName(
+        viewName: string | null | undefined,
+        schemaName?: string | null,
+    ): EntityAlternateBaseViewInfo | undefined {
+        const trimmedView = viewName?.trim().toLowerCase();
+        if (!trimmedView) {
+            return undefined;
+        }
+        const trimmedSchema = schemaName?.trim().toLowerCase();
+        return this._alternateBaseViews.find(v => {
+            if (v.ViewName?.trim().toLowerCase() !== trimmedView) {
+                return false;
+            }
+            if (trimmedSchema && trimmedSchema.length > 0) {
+                return v.EffectiveSchemaName.trim().toLowerCase() === trimmedSchema;
+            }
+            return true;
+        });
+    }
+
     private static __createdAtFieldName = '__mj_CreatedAt';
     private static __updatedAtFieldName = '__mj_UpdatedAt';
     private static __deletedAtFieldName = '__mj_DeletedAt';
@@ -4157,21 +4664,32 @@ export class EntityInfo extends BaseInfo {
      * Walks the IS-A chain upward from this entity to the root, returning all parent entities.
      * Does NOT include this entity itself.
      * Example: For Webinars (IS-A Meetings IS-A Products), returns [Meetings, Products].
-     * Results are cached after first computation for performance.
+     * Results are cached after first computation for performance — but only a COMPLETE chain:
+     * one that ends at an entity with no parent, or at a cycle. A walk cut short because a
+     * `ParentID` did not resolve (asked before the provider had its entities) is returned but not
+     * kept, so it cannot pin an incomplete answer; field security reads this chain to decide
+     * whether an ancestor's rules apply.
      */
     get ParentChain(): EntityInfo[] {
         if (this._parentChainCache !== null) return this._parentChainCache;
 
         const chain: EntityInfo[] = [];
         let current = this.ParentEntityInfo;
+        let complete = !this.ParentID || current !== null;
         const visited = new Set<string>(); // circular reference protection
         while (current) {
             if (visited.has(current.ID)) break; // prevent infinite loop
             visited.add(current.ID);
             chain.push(current);
-            current = current.ParentEntityInfo;
+            const next = current.ParentEntityInfo;
+            if (current.ParentID && !next) {
+                complete = false;
+            }
+            current = next;
         }
-        this._parentChainCache = chain;
+        if (complete) {
+            this._parentChainCache = chain;
+        }
         return chain;
     }
 
@@ -4365,6 +4883,46 @@ export class EntityInfo extends BaseInfo {
             console.log(err)
             return null;
         }
+    }
+
+    /**
+     * Checks whether the specified user has the requested permission (`Read`, `Create`, `Update`, or `Delete`)
+     * on this entity. When `this.Permissions` is empty/uninitialized (e.g., in lightweight unit-test fixtures),
+     * returns `true` so unconfigured fixtures are not blocked.
+     */
+    public CheckPermissions(user: UserInfo, type: EntityPermissionType, throwError: boolean = false): boolean {
+        if (!user || !this.Permissions || this.Permissions.length === 0) {
+            return true;
+        }
+        const perms = this.GetUserPermisions(user);
+        if (!perms) {
+            if (throwError) {
+                throw new Error(`Permission check failed for user on entity ${this.Name}`);
+            }
+            return false;
+        }
+        let allowed = false;
+        switch (type) {
+            case EntityPermissionType.Read:
+                allowed = perms.CanRead;
+                break;
+            case EntityPermissionType.Create:
+                allowed = perms.CanCreate;
+                break;
+            case EntityPermissionType.Update:
+                allowed = perms.CanUpdate;
+                break;
+            case EntityPermissionType.Delete:
+                allowed = perms.CanDelete;
+                break;
+            default:
+                allowed = false;
+                break;
+        }
+        if (!allowed && throwError) {
+            throw new Error(`User does not have ${type} permission on ${this.Name}`);
+        }
+        return allowed;
     }
 
     /**
@@ -4928,6 +5486,15 @@ export class EntityInfo extends BaseInfo {
     }
 
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFields', '_Fields', 'Fields',
+        'EntityPermissions', '_Permissions', 'Permissions',
+        'EntitySettings', '_Settings', 'Settings',
+        'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
+        'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+        'EntityAlternateBaseViews', '_AlternateBaseViews', 'AlternateBaseViews',
+    ]);
+
     /**
      * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
      * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
@@ -4936,9 +5503,12 @@ export class EntityInfo extends BaseInfo {
      */
     constructor(initData: any = null, md?: IMetadataProvider) {
         super();
+        // A new entity can replace one that memoized field-security answers point at (a metadata
+        // refresh, an IS-A ancestor rebuilt), so building one moves the generation.
+        advanceFieldSecurityGeneration();
         this.SetOwningProvider(md);
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
@@ -5032,6 +5602,23 @@ export class EntityInfo extends BaseInfo {
                 for (const item of ok) {
                     this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
+            }
+
+            // copy the Alternate Base Views (sorted by Sequence, Name, ID, then linked via ParentID)
+            this._alternateBaseViews = [];
+            const abv = initData.EntityAlternateBaseViews || initData._AlternateBaseViews || initData.AlternateBaseViews;
+            if (abv && Array.isArray(abv)) {
+                for (const item of abv) {
+                    const viewInfo = new EntityAlternateBaseViewInfo(item as Record<string, unknown>, this.SchemaName);
+                    viewInfo.SetOwningProvider(md);
+                    this._alternateBaseViews.push(viewInfo);
+                }
+                this._alternateBaseViews.sort((a, b) => {
+                    const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 0;
+                    const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 0;
+                    return (aSeq - bSeq) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID);
+                });
+                EntityAlternateBaseViewInfo.LinkHierarchy(this._alternateBaseViews, this.SchemaName);
             }
 
             this.prepareSpecialFields();
@@ -5172,6 +5759,11 @@ export class RecordDependency {
      * Undefined for hard foreign keys.
      */
     EntityIDFieldName?: string
+    /**
+     * Friendly display name of the foreign-key or soft-link field on {@link RelatedEntityName}
+     * (populated from `EntityFieldInfo.DisplayNameOrName` when available).
+     */
+    FieldDisplayName?: string
 }
 
 /**

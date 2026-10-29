@@ -6,10 +6,11 @@ import {
     type IMetadataProvider,
 } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { MJComponentEntityExtended } from "@memberjunction/core-entities";
-import { EmbedTextLocalHelper } from "./util";
+import { ComputeComponentFingerprintAsync, MJComponentEntityExtended } from "@memberjunction/core-entities";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import { FormScopeRefusalResult } from "./FormScopeGuard";
 import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponentGuard";
+import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
 
 /**
  * Server-side `MJ: Components` entity.
@@ -35,6 +36,9 @@ import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponent
  * found by comparing with the stored row, not with the values as loaded. When a read fails, the
  * write is refused. The check needs a query and `Validate()` is synchronous, so it runs in `Save()`
  * (an ordinary save and a `ReplayOnly` save alike) and in `Delete()`, before the write.
+ *
+ * Approval (`ApprovalStatus`) is a server act: a save that moves it to Approved records the context
+ * user, the time and the fingerprint of this version's specification (`ApplyApprovalRulesAsync`).
  */
 @RegisterClass(BaseEntity, 'MJ: Components')
 export class MJComponentEntityServer extends MJComponentEntityExtended  {
@@ -43,6 +47,9 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
         const refusal = await ComponentGuardRefusal(this.guardedRow, operation);
         if (refusal) {
             this.RegisterResultHistoryEntry(FormScopeRefusalResult(operation, refusal));
+            return false;
+        }
+        if (!await this.applyApprovalAsync(options)) {
             return false;
         }
         await this.GenerateEmbeddingsByFieldName([
@@ -63,6 +70,23 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
         return saveResult;
     }
 
+    /**
+     * Applies the approval rules. Nothing in this save derives the specification or version, so an
+     * approving save stamps the fingerprint now and writes it with the row.
+     * @returns false when the save was refused (the reason is in `LatestResult`)
+     */
+    private async applyApprovalAsync(options?: EntitySaveOptions): Promise<boolean> {
+        try {
+            if (!options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'ApprovalStatus', this.ApprovalStatus)) {
+                this.ApprovedFingerprint = await ComputeComponentFingerprintAsync(this);
+            }
+            return true;
+        } catch (e) {
+            this.RegisterResultHistoryEntry(ApprovalRefusalResult(this, e));
+            return false;
+        }
+    }
+
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const refusal = await ComponentGuardRefusal(this.guardedRow, 'delete');
         if (refusal) {
@@ -79,6 +103,11 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
      */
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
+    }
+
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
     }
 
     /** This component as the guard reads it. Built here because `ActiveUser` is protected on `BaseEntity`. */

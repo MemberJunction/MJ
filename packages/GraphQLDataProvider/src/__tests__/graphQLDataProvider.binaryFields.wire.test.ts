@@ -219,17 +219,54 @@ describe('GraphQLDataProvider binary-field wire behavior', () => {
     });
 
     describe('RunViewsWithCacheCheck', () => {
-        it('forwards IncludeBinaryFields in each params entry', async () => {
+        it('forwards IncludeBinaryFields and AlternateBaseView in each params entry', async () => {
             GraphQLWire.EnqueueResponse({ RunViewsWithCacheCheck: { success: true, errorMessage: null, results: [] } });
 
             await provider.RunViewsWithCacheCheck([
-                { params: { EntityName: 'Customers', IncludeBinaryFields: true } },
+                { params: { EntityName: 'Customers', IncludeBinaryFields: true, AlternateBaseView: 'Active Customers' } },
+                { params: { EntityName: 'Customers', AlternateBaseView: '' } },
                 { params: { EntityName: 'Customers' } },
             ]);
 
             const input = GraphQLWire.LastInput as { params: Record<string, unknown> }[];
             expect(input[0].params['IncludeBinaryFields']).toBe(true);
+            expect(input[0].params['AlternateBaseView']).toBe('Active Customers');
             expect(input[1].params['IncludeBinaryFields']).toBeUndefined();
+            expect(input[1].params['AlternateBaseView']).toBe('');
+            expect(input[2].params['IncludeBinaryFields']).toBeUndefined();
+            expect(input[2].params['AlternateBaseView']).toBeUndefined();
+        });
+    });
+
+    describe('AlternateBaseView wire forwarding', () => {
+        it('InternalRunView forwards AlternateBaseView only when set (named / empty string / unset)', async () => {
+            GraphQLWire.EnqueueResponse(singleViewResponse('RunCRMCustomerDynamicView', []));
+            await provider.CallInternalRunView({ EntityName: 'Customers', AlternateBaseView: 'Active Customers' });
+            expect(lastInputRecord()['AlternateBaseView']).toBe('Active Customers');
+
+            GraphQLWire.EnqueueResponse(singleViewResponse('RunCRMCustomerDynamicView', []));
+            await provider.CallInternalRunView({ EntityName: 'Customers', AlternateBaseView: '' });
+            expect(lastInputRecord()['AlternateBaseView']).toBe('');
+
+            GraphQLWire.EnqueueResponse(singleViewResponse('RunCRMCustomerDynamicView', []));
+            await provider.CallInternalRunView({ EntityName: 'Customers' });
+            expect(hasKey(lastInputRecord(), 'AlternateBaseView')).toBe(false);
+        });
+
+        it('InternalRunViews forwards AlternateBaseView per view, omitting it where unset', async () => {
+            GraphQLWire.EnqueueResponse({ RunViews: [] });
+
+            await provider.CallInternalRunViews([
+                { EntityName: 'Customers', AlternateBaseView: 'Active Customers' },
+                { EntityName: 'Customers', AlternateBaseView: '' },
+                { EntityName: 'Customers' },
+            ]);
+
+            const input = GraphQLWire.LastInput as Record<string, unknown>[];
+            expect(input).toHaveLength(3);
+            expect(input[0]['AlternateBaseView']).toBe('Active Customers');
+            expect(input[1]['AlternateBaseView']).toBe('');
+            expect(hasKey(input[2], 'AlternateBaseView')).toBe(false);
         });
     });
 

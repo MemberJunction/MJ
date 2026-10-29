@@ -25,6 +25,7 @@ import {
   buildRealisticCatalog,
   MODEL_TYPE,
   VENDOR,
+  VENDOR_TYPE,
   type AICatalog,
 } from './__fixtures__/ai-metadata.fixtures';
 
@@ -127,7 +128,7 @@ const h = vi.hoisted(() => {
     GetHighestPriorityContent: () => { ID: string; TemplateText: string } | null;
   }> = [];
 
-  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>) => {
+  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>, _skipValidation?: boolean, _skipFeedback?: boolean, _options?: { autoescape?: boolean }) => {
     return {
       Success: true,
       Output: `Rendered state for entity ${data?.entityId ?? 'default'}`,
@@ -568,6 +569,38 @@ describe('AIDecisionRunner', () => {
     expect(result.Answers).toEqual({});
   });
 
+  const renderCaller = new UserInfo(null, { ID: 'decision-caller', Name: 'Caller', Email: 'caller@test.com', IsActive: true });
+
+  it('renders the state template raw when templateAutoescape is false', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+    params.templateAutoescape = false;
+    params.contextUser = renderCaller;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ autoescape: false, ContextUser: renderCaller });
+  });
+
+  it('renders the state template with the engine default, as the caller, when templateAutoescape is unset', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+    params.contextUser = renderCaller;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    // The render runs as the decision's caller, never as whoever last configured the engine.
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ ContextUser: renderCaller });
+  });
+
   // 4. Template rendering path: when State is omitted from params, renders template and passes rendered string to driver
   it('4. renders template when State is omitted and passes rendered output to driver', async () => {
     const prompt = makeDecisionPrompt({
@@ -782,6 +815,28 @@ describe('AIDecisionRunner', () => {
     expect(scope?.configurationId).toBe('config-1');
     expect(scope?.CredentialScope).toBe('RuntimeOnly');
     expect(scope?.contextUser).toBe(testUser);
+  });
+
+  it('runs the prompt-model row\'s vendor even when another vendor of the same model ranks higher', async () => {
+    const OTHER_DRIVER = 'TestDecisionDriverB';
+    const native = h.state.models.find(m => m.ID === DECISION_MODEL_ID) as unknown as { ModelVendors: Array<Record<string, unknown>> };
+    // Inference-provider rows, so each vendor is a candidate (without a TypeID the model's own driver runs).
+    const higher = { ID: 'mv-decision-2', ModelID: DECISION_MODEL_ID, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', Priority: 200, Status: 'Active', DriverClass: OTHER_DRIVER, APIName: 'native-decision-v1', TypeID: VENDOR_TYPE.InferenceProvider };
+    native.ModelVendors[0].TypeID = VENDOR_TYPE.InferenceProvider;
+    native.ModelVendors.push(higher);
+    (h.state.modelVendors as unknown as Array<Record<string, unknown>>).push(higher);
+    h.state.configuredDrivers.add(OTHER_DRIVER);
+    vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation(() => mockDriver as never);
+
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ SelectionStrategy: 'Default' }); // failover off
+    params.Questions = defaultQuestions;
+    params.State = 'Test state to evaluate';
+    params.provider = fakeProvider;
+    const result = await runner.ExecuteDecision(params);
+
+    expect(result.success).toBe(true);
+    expect(result.DriverClass).toBe(NATIVE_DRIVER); // the row's vendor (OpenAI), not Anthropic's higher priority
   });
 
   // 8. Driver dispatch and answer mapping: verifies Likelihood, Choice, and Score answers are correctly mapped into AIDecisionRunResult

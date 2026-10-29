@@ -1,5 +1,26 @@
 # @memberjunction/integration-progress-artifacts
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- 48c974e: A runtime schema update survives the process being killed, and says so if it doesn't. Child builds get a heap ceiling sized to free memory instead of inheriting the parent's, so a large build can no longer take down the server. Pending work is recorded before the build starts, so a restart resumes it. At startup, MJServer closes out any run a dead process left open (`SweepInterruptedRuns`) and marks it failed with a `process-killed` result, so the wizard and the active-operations panel stop waiting on it.
+- Updated dependencies [709de1a]
+- Updated dependencies [914e6ff]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [5b41d48]
+  - @memberjunction/global@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [17a4137]
+  - @memberjunction/global@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

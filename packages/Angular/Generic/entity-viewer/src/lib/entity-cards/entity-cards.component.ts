@@ -2,7 +2,15 @@ import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChange
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView, CoerceImageSrc, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
-import { BuildCompositeKey, BuildPkString, ComputeFieldsList } from '../utils/record.util';
+import {
+  BuildCompositeKey,
+  BuildPkString,
+  ComputeFieldsList,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 import { PillColorUtil } from '../pill/pill.component';
 import { HighlightUtil } from '../utils/highlight.util';
 
@@ -255,6 +263,9 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     if (contentChanged) {
       // Full rebuild also recomputes isSelected correctly (buildCardViewModel does).
       this.buildCardViewModels();
+      if (this.entity && this.EffectiveRecords.length > 0) {
+        void this.resolvePolymorphicNamesForCards();
+      }
     } else if (changes['selectedRecordId']) {
       // Selection-only change: just update the isSelected flags on the existing
       // VMs (string compare per card — no rebuild, no regex, no allocation).
@@ -489,10 +500,40 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   // VALUE FORMATTING
   // ========================================
 
+  private _polymorphicRecordNames = new Map<string, string>();
+
+  private async resolvePolymorphicNamesForCards(): Promise<void> {
+    if (!this.entity || this.EffectiveRecords.length === 0) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      this.EffectiveRecords,
+      this.entity,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      this.buildCardViewModels();
+      this.cdr.detectChanges();
+    }
+  }
+
   GetFieldValue(record: Record<string, unknown>, fieldName: string | null): string {
     if (!fieldName) return '';
     const value = record[fieldName];
     if (value === null || value === undefined) return '';
+    if (this.entity?.Fields) {
+      const fieldInfo = this.entity.Fields.find(f => f.Name === fieldName);
+      if (fieldInfo?.EntityIDFieldName) {
+        const targetEntity = ResolvePolymorphicTargetEntity(record, fieldInfo, this.ProviderToUse);
+        if (targetEntity) {
+          const compositeKey = BuildPolymorphicCompositeKey(value, targetEntity);
+          if (compositeKey) {
+            const resolved = this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey));
+            if (resolved) return resolved;
+          }
+        }
+      }
+    }
     return String(value);
   }
 

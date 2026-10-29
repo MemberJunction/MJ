@@ -106,7 +106,7 @@ describe('SkipForServerExtensionRoots', () => {
         router.get('/{*rest}', (_req, res) => { res.json({ owner: 'extension' }); });
         app.use('/ballot', router);
         app.get('/elsewhere', (_req, res) => { res.json({ owner: 'core' }); });
-        server = app.listen(0);
+        server = app.listen(0, '127.0.0.1');
         await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
         const { port } = server.address() as AddressInfo;
         return `http://127.0.0.1:${port}`;

@@ -34,7 +34,7 @@ import type {
   MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 
-import { SCORE_RECORD_SET_DRIVER_CLASS } from './score-record-set.action';
+import { SCORE_RECORD_SET_DRIVER_CLASS } from './driver-classes';
 
 /** Name of the find-or-create Action Category that holds per-model scoring actions. */
 const MODELS_CATEGORY_NAME = 'Predictive Studio Models';
