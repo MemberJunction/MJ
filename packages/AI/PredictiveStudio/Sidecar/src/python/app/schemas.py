@@ -22,7 +22,7 @@ Cell = Union[str, float, int, bool, None]
 
 FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived'
 # Which kind of number a feature-importance map holds.
-ImportanceKind = Literal["coefficient", "split_or_impurity", "none"]
+ImportanceKind = Literal["coefficient", "split_or_impurity", "held_out_permutation", "none"]
 ProblemType = str  # 'classification' | 'regression'
 
 

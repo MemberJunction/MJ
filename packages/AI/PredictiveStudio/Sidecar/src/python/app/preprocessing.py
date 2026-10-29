@@ -344,6 +344,26 @@ def transform(
     return matrix
 
 
+def source_map(fitted: FittedPreprocessing) -> Dict[str, List[str]]:
+    """Each source column's output columns, in output order, from a fitted payload.
+
+    A one-hot op's ``<col>=<level>`` columns and an impute op's ``<col>__missing`` indicator belong to ``<col>``; a
+    pass-through column is its own source. Read from the fitted ops, never parsed from the names, so a source whose
+    name holds ``=`` or ``__`` still groups correctly.
+    """
+    owner: Dict[str, str] = {}
+    for op in fitted.get("ops", []):
+        if op["op"] == "impute" and op.get("indicator"):
+            owner[f"{op['col']}__missing"] = op["col"]
+        elif op["op"] == "onehot":
+            for category in op["vocabulary"]:
+                owner[f"{op['col']}={category}"] = op["col"]
+    out: Dict[str, List[str]] = {}
+    for column in fitted["output_columns"]:
+        out.setdefault(owner.get(column, column), []).append(column)
+    return out
+
+
 def _build_matrix(
     records: List[Dict[str, Any]],
     fitted_ops: List[Dict[str, Any]],

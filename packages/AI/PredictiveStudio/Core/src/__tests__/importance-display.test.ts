@@ -5,6 +5,8 @@ const lineage = (kind: string | undefined): string => JSON.stringify({ evaluatio
 
 describe('ImportanceDisplay.GlobalDriversShowable', () => {
   it('shows coefficient importance', () => expect(ImportanceDisplay.GlobalDriversShowable(lineage('coefficient'))).toBe(true));
+  it('shows held-out permutation importance', () =>
+    expect(ImportanceDisplay.GlobalDriversShowable(lineage('held_out_permutation'))).toBe(true));
   it('hides split/impurity importance', () => expect(ImportanceDisplay.GlobalDriversShowable(lineage('split_or_impurity'))).toBe(false));
   it("hides a model whose algorithm reports no importance ('none')", () => expect(ImportanceDisplay.GlobalDriversShowable(lineage('none'))).toBe(false));
   it('hides a model with no stored kind (trained before the kind was recorded)', () => {

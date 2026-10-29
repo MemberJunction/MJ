@@ -1,5 +1,16 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { EvaluationLineage, InvalidMajorityBaselineRuleError } from '../evaluation-record';
+import type { ImportanceKind } from '../sidecar-contract';
+
+/** The members of the sidecar's `ImportanceKind = Literal[...]` in `schemas.py`, in declaration order. */
+function pythonImportanceKinds(source: string): string[] {
+  const literal = /^ImportanceKind = Literal\[(.*)\]$/m.exec(source);
+  if (!literal) throw new Error('schemas.py declares no ImportanceKind Literal');
+  return [...literal[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+}
 
 describe('evaluation record', () => {
   it('records what the caller says about out-of-sample validation, and no withheld reason for an ordinary pipeline', () => {
@@ -29,6 +40,19 @@ describe('evaluation record', () => {
     expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: legacy }))).toEqual({
       ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'warn', ImportanceKind: null,
     });
+  });
+  it("reads ImportanceKind 'held_out_permutation'", () => {
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: 'held_out_permutation' } }))?.ImportanceKind).toBe(
+      'held_out_permutation',
+    );
+  });
+  it('accepts exactly the importance kinds the sidecar declares in schemas.py', () => {
+    // A Record over the type: a member added to or removed from `ImportanceKind` without updating this is a compile error.
+    const everyKind: Record<ImportanceKind, true> = { coefficient: true, split_or_impurity: true, held_out_permutation: true, none: true };
+    const pythonFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../Sidecar/src/python/app/schemas.py');
+    const python = pythonImportanceKinds(readFileSync(pythonFile, 'utf8'));
+    expect([...EvaluationLineage.ImportanceKinds].sort()).toEqual([...python].sort());
+    expect(Object.keys(everyKind).sort()).toEqual([...python].sort());
   });
   it("reads ImportanceKind 'none' and drops an unknown kind", () => {
     expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: 'none' } }))?.ImportanceKind).toBe('none');

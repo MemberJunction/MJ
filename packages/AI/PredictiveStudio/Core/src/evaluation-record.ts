@@ -42,6 +42,8 @@ export class EvaluationLineage {
   public static readonly DefaultMajorityBaselineRule: MajorityBaselineRule = 'enforce';
   /** Every value `MajorityBaselineRule` accepts. */
   public static readonly MajorityBaselineRules: ReadonlyArray<MajorityBaselineRule> = ['enforce', 'warn'];
+  /** Every value `ImportanceKind` takes; a stored kind outside it reads as null. */
+  public static readonly ImportanceKinds: ReadonlyArray<ImportanceKind> = ['coefficient', 'split_or_impurity', 'held_out_permutation', 'none'];
 
   /** The rule a pipeline asks for: absent or empty → the default; an unknown value is refused, never ignored. */
   public static ParseMajorityBaselineRule(value: string | null | undefined): MajorityBaselineRule {
@@ -95,7 +97,7 @@ export class EvaluationLineage {
   }
 
   private static isImportanceKind(value: unknown): value is ImportanceKind {
-    return value === 'coefficient' || value === 'split_or_impurity' || value === 'none';
+    return typeof value === 'string' && (EvaluationLineage.ImportanceKinds as ReadonlyArray<string>).includes(value);
   }
 
   private static isMajorityBaselineRule(value: string): value is MajorityBaselineRule {

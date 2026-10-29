@@ -116,14 +116,18 @@ export interface ValidationConfig {
 export type ModelMetrics = Record<string, number>;
 
 /**
- * Per-feature contribution map (importance/coefficient magnitude). Used by the
- * leakage guard's single-feature-dominance check (plan §6.4) and surfaced in the
- * experiment-results artifact.
+ * Feature importance as a name -> share map; `ImportanceKind` says which number it holds. The sidecar's held-out
+ * permutation importance is keyed by source column (one-hot levels and missing indicators count toward their
+ * source); older models hold |coefficient| or split/impurity values per encoded column. Used by the leakage guard's
+ * single-feature-dominance check and surfaced in the experiment-results artifact.
  */
 export type FeatureImportance = Record<string, number>;
 
-/** Which kind of number a `FeatureImportance` map holds: |coefficient|, tree split/impurity counts, or none. */
-export type ImportanceKind = 'coefficient' | 'split_or_impurity' | 'none';
+/**
+ * Which kind of number a `FeatureImportance` map holds: |coefficient|, tree split/impurity counts, the held-out
+ * permutation share per source column (the increase of the held-out loss when the column is permuted), or none.
+ */
+export type ImportanceKind = 'coefficient' | 'split_or_impurity' | 'held_out_permutation' | 'none';
 
 /**
  * Inline data payload — the assembled feature matrix in columnar header +
@@ -195,7 +199,7 @@ export interface TrainResponse {
   fitted_preprocessing: FittedPreprocessing;
   /** Train + validation metrics. */
   metrics: ModelMetrics;
-  /** Per-feature importance/contribution. */
+  /** Feature importance shares; see `FeatureImportance`. */
   feature_importance: FeatureImportance;
   /** Which kind of number `feature_importance` holds. Absent on sidecars that predate it. */
   feature_importance_kind?: ImportanceKind;

@@ -28,8 +28,13 @@ if TYPE_CHECKING:  # scikit-learn is imported function-local at runtime; this im
     from sklearn.preprocessing import LabelEncoder
 
 from . import algorithms, artifacts, metrics, preprocessing
+from .array_types import FArr
 from .artifacts_v2 import PredictorEnvelope
+from .evaluation import PERMUTATION_REPEATS
 from .failures import RequestRefused
+from .importance import permutation_importance
+from .preprocessing import FittedPreprocessing
+from .scores import PrimaryMetric, primary_score
 from .run import run_trainer
 from .trainer import TrainedPredictor
 from .trainer_schemas import TrainerRequest
@@ -215,7 +220,8 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
          (never re-fit) to the holdout rows.
       4. Fit + score via :func:`_fit_and_score` (honest, train-fold-only validation),
          then re-fit the production estimator on all dev rows.
-      5. Score the locked holdout exactly once.
+      5. Score the locked holdout exactly once, and measure held-out permutation importance per source column on
+         the same rows (the importance re-predicts permuted copies; it never refits).
 
     Returns:
         A dict with ``estimator``, ``fitted``, ``metrics``, ``feature_importance``,
@@ -303,8 +309,20 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     # Stash decode map so the serialized model can map int predictions -> labels.
     if is_classification:
         estimator.mj_label_classes_ = label_classes
+    # The mean development row in the frozen-preprocessed column space, stashed with the model so per-row drivers can
+    # be measured from the average training row rather than from zero.
+    estimator.mj_driver_baseline_ = np.asarray(X_dev, dtype=float).mean(axis=0)
 
-    feature_importance, importance_kind = _extract_importance(estimator, output_columns)
+    # Importance is measured on the locked-holdout rows, transformed with the frozen `fitted` payload.
+    if hold_rows:
+        X_hold, y_hold = _transform_holdout(
+            hold_columns, hold_rows, target, fitted, feature_cols, is_classification, encoder
+        )
+    else:
+        X_hold, y_hold = np.empty((0, len(output_columns))), np.empty(0)
+    feature_importance, importance_kind = _extract_importance(
+        estimator, fitted, X_hold, y_hold, is_classification, rng
+    )
 
     result: Dict[str, Any] = {
         "estimator": estimator,
@@ -317,9 +335,6 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     }
 
     if hold_rows:
-        X_hold, y_hold = _transform_holdout(
-            hold_columns, hold_rows, target, fitted, feature_cols, is_classification, encoder
-        )
         result["holdout_metrics"] = _score(estimator, X_hold, y_hold, is_classification)
     return result
 
@@ -583,29 +598,61 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
     return np.asarray(estimator.predict(X), dtype=float)
 
 
-def _extract_importance(estimator: Any, columns: List[str]) -> Tuple[Dict[str, float], ImportanceKind]:
-    """Build a ``(feature_name -> importance map, kind)`` pair from a fitted estimator.
+# The legacy response carries importance shares only (no interval), so no bootstrap draws are spent on one.
+_LEGACY_IMPORTANCE_DRAWS = 0
 
-    Prefers ``feature_importances_`` (tree models); falls back to the absolute,
-    class-summed ``coef_`` magnitude (linear models). Returns ``({}, "none")`` when the
-    estimator exposes neither. The kind says which of the two numbers the map holds. The map drives the leakage guard's single-feature-
-    dominance check (plan §6.4).
+
+def _importance_predictions(
+    estimator: Any, is_classification: bool, columns: List[str]
+) -> Callable[[pd.DataFrame], FArr]:
+    """The predictions the held-out loss scores: P(class 1) for a binary classifier, the class probabilities for a
+    multiclass one, the prediction for a regressor. Each is the shape `scores` expects."""
+
+    def predict(frame: pd.DataFrame) -> FArr:
+        X = frame[columns].to_numpy(dtype=float)
+        if not is_classification:
+            return np.asarray(estimator.predict(X), dtype=np.float64)
+        proba = np.asarray(estimator.predict_proba(X), dtype=np.float64)
+        return proba[:, 1] if proba.shape[1] == 2 else proba
+
+    return predict
+
+
+def _extract_importance(
+    estimator: Any,
+    fitted: FittedPreprocessing,
+    X_eval: np.ndarray,
+    y_eval: np.ndarray,
+    is_classification: bool,
+    seed: int,
+) -> Tuple[Dict[str, float], ImportanceKind]:
+    """Held-out permutation importance per source column, as shares of the total, on the locked-holdout rows.
+
+    Every output column one source produces (one-hot levels, the missing indicator) is permuted together, so an
+    encoding cannot split a source's importance, and the importance is the increase of the held-out loss (log loss
+    for classification, RMSE for regression; a decrease counts as zero). It is model-agnostic, so every algorithm
+    reports it, and it carries none of the impurity or split-count bias toward noisy and many-valued columns. The map
+    drives the leakage guard's single-feature-dominance check. Returns ``({}, "none")`` below 2 held-out rows;
+    otherwise the kind is ``"held_out_permutation"``.
     """
-    if hasattr(estimator, "feature_importances_"):
-        values = np.asarray(estimator.feature_importances_, dtype=float)
-        kind: ImportanceKind = "split_or_impurity"
-    elif hasattr(estimator, "coef_"):
-        raw = np.asarray(estimator.coef_, dtype=float)
-        # Multi-class linear models produce (n_classes, n_features); sum magnitudes across classes
-        values = np.sum(np.abs(raw), axis=0) if raw.ndim > 1 else np.abs(raw)
-        kind = "coefficient"
-    else:
+    if X_eval.shape[0] < 2:
         return {}, "none"
-    total = float(np.sum(np.abs(values)))
-    if total > 0:
-        values = values / total
-    n = min(len(columns), len(values))
-    return {columns[i]: float(values[i]) for i in range(n)}, kind
+    columns = list(fitted["output_columns"])
+    metric: PrimaryMetric = "log-loss" if is_classification else "rmse"
+    found = permutation_importance(
+        _importance_predictions(estimator, is_classification, columns),
+        pd.DataFrame(X_eval, columns=columns),
+        np.asarray(y_eval, dtype=np.float64),
+        primary_score(metric, None).aggregate,
+        preprocessing.source_map(fitted),
+        PERMUTATION_REPEATS,
+        seed,
+        _LEGACY_IMPORTANCE_DRAWS,
+        None,
+    )
+    drops = {c.source_column: max(0.0, c.drop) for c in found}
+    total = sum(drops.values())
+    return {src: (drop / total if total > 0 else 0.0) for src, drop in drops.items()}, "held_out_permutation"
 
 
 # ---------------------------------------------------------------------------
