@@ -8,9 +8,8 @@ import datetime as dt
 import hashlib
 import json
 import math
-import warnings
 from collections.abc import Callable
-from typing import ParamSpec, TypeVar
+from typing import NoReturn, ParamSpec, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -22,14 +21,9 @@ from app.encoding import ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol, TrainerCompleted, TrainerFailed, TrainerRequest
 
-# Starlette's TestClient and form parser warn at import about their own dependencies (python-multipart's module name,
-# anyio's BlockingPortal alias); the pinned versions pair that way and nothing here exercises either.
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", "Please use `import python_multipart` instead", PendingDeprecationWarning)
-    warnings.filterwarnings("ignore", "The anyio.abc.BlockingPortal alias is deprecated", DeprecationWarning)
-    from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
-    from app.main import app
+from app.main import app
 from tests.tools.trainer_fixture import (
     NUMERIC,
     DriverSpec,
@@ -42,10 +36,6 @@ from tests.tools.trainer_fixture import (
     snapshot_files,
 )
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
-
-# scikit-learn 1.4.2's LogisticRegression passes `iprint` to scipy 1.17.1's L-BFGS-B, which deprecates it; both
-# versions are pinned in requirements.txt, so the notice is a library pairing, not something these tests exercise.
-pytestmark = pytest.mark.filterwarnings("ignore:scipy.optimize. The `disp` and `iprint` options:DeprecationWarning")
 
 client = TestClient(app)
 LABELS = {0: "no", 1: "yes"}
@@ -358,7 +348,14 @@ def test_an_incumbent_of_another_class_order_fails_the_holdout_stage(server: Fil
     assert r.stage == "holdout" and "class order" in r.message
 
 
-def test_an_incumbent_that_does_not_verify_fails_before_any_fit(server: FileServer) -> None:
+def test_an_incumbent_that_does_not_verify_fails_before_any_fit(server: FileServer,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """Candidate selection (the first fit) and the holdout stage (baselines, calibration) are never reached."""
+    def never(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError("a model was fitted before the incumbent was verified")
+
+    monkeypatch.setattr(TR, "select_finalist", never)
+    monkeypatch.setattr(EV, "evaluate", never)
     req = _request(server, binary_frame(300))
     inc = _incumbent(server, base64.b64encode(b"{}").decode("ascii"))
     _obj(inc["artifact"])["sha256"] = "2" * 64

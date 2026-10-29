@@ -47,11 +47,11 @@ from .encoding import (
     MissingPolicy,
     NumericEncoding,
 )
+from .array_types import FArr, IntArr
 from .failures import RunClock, SnapshotLoadFailure
 from .snapshot_format import INCUMBENT_SCORE_COLUMN, MATRIX_FORMAT, REFERENCE_SCORE_COLUMN
 from .trainer_schemas import PreAuthDownload, TrainerRequest
 
-FArr = npt.NDArray[np.float64]
 Cell = Union[str, int, float, bool, None]
 RowRole = Literal["development", "locked-holdout"]
 DecisionPeriod = Literal["day", "week", "month", "quarter", "year"]
@@ -543,7 +543,7 @@ def period_start(ordinal: int, period: DecisionPeriod) -> dt.date:
     return dt.date.fromordinal(ordinal)
 
 
-def period_ordinals(snap: Snapshot) -> npt.NDArray[np.int64]:
+def period_ordinals(snap: Snapshot) -> IntArr:
     """Integer period index per row at the unit's decision period, so gaps between training and test rows are counted
     in whole decision periods. The manifest's `period` wins when it is set (an empty one is malformed, not a fallback
     to the decision date); a null period buckets the decision date.

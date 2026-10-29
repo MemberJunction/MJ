@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from app import folds as F, scores, selection, snapshot as SN, trainer as TR
+from app.array_types import IntArr
 from app.encoding import CategoricalEncoding, ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
 from app.trainer_schemas import BinaryTask, CandidateSpec, CountTask, EvaluationProtocol, TrainerRequest
@@ -24,10 +25,6 @@ from tests.tools.trainer_fixture import (
     snapshot_files,
 )
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
-
-# scikit-learn 1.4.2's LogisticRegression passes `iprint` to scipy 1.17.1's L-BFGS-B, which deprecates it; both
-# versions are pinned in requirements.txt, so the notice is a library pairing, not something these tests exercise.
-pytestmark = pytest.mark.filterwarnings("ignore:scipy.optimize. The `disp` and `iprint` options:DeprecationWarning")
 
 NOW = dt.datetime(2026, 10, 12, tzinfo=dt.timezone.utc)
 # Two cheap candidates, simplest first (the one-standard-error rule's complexity order).
@@ -96,7 +93,7 @@ def test_a_primary_score_without_a_proper_definition_is_refused(metric: str, pow
 
 # ------------------------------------------------------------------------------------------------ fold kinds -------
 
-def _folds_for(server: FileServer, inner: JsonObject) -> tuple[SN.Snapshot, TR.IntArr, list[F.Fold]]:
+def _folds_for(server: FileServer, inner: JsonObject) -> tuple[SN.Snapshot, IntArr, list[F.Fold]]:
     req = _req(server, binary_frame(), innerValidation=inner)
     snap = SN.load(req, NOW, RunClock(600, 600))
     enc = TR.encode_label(req.task, snap.label)
@@ -104,7 +101,7 @@ def _folds_for(server: FileServer, inner: JsonObject) -> tuple[SN.Snapshot, TR.I
     return snap, dev, TR.build_folds(req.protocol, snap, dev, enc, SN.period_ordinals(snap))
 
 
-def _entities(snap: SN.Snapshot, dev: TR.IntArr) -> list[str]:
+def _entities(snap: SN.Snapshot, dev: IntArr) -> list[str]:
     return [snap.entity_keys[int(i)] for i in dev]
 
 

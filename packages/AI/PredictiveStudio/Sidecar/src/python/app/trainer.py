@@ -25,6 +25,7 @@ from sklearn.pipeline import Pipeline
 from threadpoolctl import threadpool_limits
 
 from . import algorithms, encoding, folds as F, scores
+from .array_types import FArr, IntArr
 from .failures import RunClock, TrainerFailure
 from .selection import InnerScore, Selection, corrected_resampled_t, select_one_se
 from .snapshot import RowRole, Snapshot
@@ -42,8 +43,6 @@ from .trainer_schemas import (
     TaskType,
 )
 
-FArr = npt.NDArray[np.float64]
-IntArr = npt.NDArray[np.int64]
 Family = algorithms.TabularFamily
 ResampleMethod = Literal["class-weight", "undersample", "oversample"]
 # The inner interval level the contract fixes for every candidate's inner score.

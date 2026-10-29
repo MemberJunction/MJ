@@ -17,10 +17,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 from scipy import stats
 
-FArr = npt.NDArray[np.float64]
+from .array_types import FArr
 
 
 @dataclass(frozen=True)

@@ -9,12 +9,7 @@ import pytest
 from app import algorithms
 from app.trainer_schemas import HyperparameterValue
 
-# These tests pin reproducibility and that the fit runs, not convergence: the short iteration caps that keep them fast
-# stop the MLP's optimizer before its tolerance is met, which sklearn reports as a ConvergenceWarning.
-_MLP_STOPS_AT_ITERATION_CAP = pytest.mark.filterwarnings("ignore::sklearn.exceptions.ConvergenceWarning")
 
-
-@_MLP_STOPS_AT_ITERATION_CAP
 @pytest.mark.parametrize("driver", ["random_forest", "mlp", "xgboost", "lightgbm"])
 def test_refit_is_deterministic(driver: str) -> None:
     """Two fits with the protocol seed and one thread predict identically (1e-9)."""
@@ -29,7 +24,6 @@ def test_refit_is_deterministic(driver: str) -> None:
     assert np.max(np.abs(preds[0] - preds[1])) <= 1e-9
 
 
-@_MLP_STOPS_AT_ITERATION_CAP
 def test_mlp_catalog_default_trains() -> None:
     """The catalog stores hidden_layer_sizes as the string "100"; it is parsed to a tuple of ints, then the MLP fits."""
     assert algorithms.parse_hidden_layer_sizes("100") == (100,)

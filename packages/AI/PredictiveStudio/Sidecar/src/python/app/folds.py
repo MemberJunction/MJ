@@ -25,7 +25,7 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
-IntArr = npt.NDArray[np.int64]
+from .array_types import IntArr
 
 
 @dataclass(frozen=True)

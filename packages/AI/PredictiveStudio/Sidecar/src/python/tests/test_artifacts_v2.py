@@ -32,12 +32,6 @@ from app.array_types import FArr
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol
 from tests.tools.trainer_fixture import protocol
 
-# scikit-learn 1.4.2's L-BFGS-B fits (logistic regression and the Poisson/Tweedie GLMs) pass `iprint` to scipy
-# 1.17.1, which deprecates it; and the MLP on this unstructured fixture label stops at its iteration cap before its
-# tolerance is met. Neither bears on whether the fitted predictor round-trips.
-pytestmark = [pytest.mark.filterwarnings("ignore:scipy.optimize. The `disp` and `iprint` options:DeprecationWarning"),
-              pytest.mark.filterwarnings("ignore::sklearn.exceptions.ConvergenceWarning")]
-
 RNG = np.random.default_rng(0)
 N = 300
 X = pd.DataFrame({"a": RNG.normal(size=N), "b": RNG.integers(0, 5, N).astype(float),

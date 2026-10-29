@@ -231,9 +231,6 @@ def test_train_endpoint_returns_400_naming_text_column() -> None:
     assert "Region" in resp.json()["detail"]
 
 
-# scikit-learn 1.4.2's LogisticRegression passes `iprint` to scipy 1.17.1's L-BFGS-B, which deprecates it; both
-# versions are pinned in requirements.txt, so the notice is a library pairing, not something this test exercises.
-@pytest.mark.filterwarnings("ignore:scipy.optimize. The `disp` and `iprint` options:DeprecationWarning")
 @pytest.mark.parametrize("n_classes", [2, 3])
 def test_legacy_predict_returns_every_class_probability_in_label_order(n_classes: int) -> None:
     """Legacy classification predictions carry every class's probability in the trained label order, which the

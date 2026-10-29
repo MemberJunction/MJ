@@ -12,11 +12,6 @@ from app.main import app
 
 client = TestClient(app)
 
-# An MLP on a noise target stops at its iteration cap before its tolerance is met, which sklearn reports as a
-# ConvergenceWarning; the cap is the setting under test, so the warning is expected.
-pytestmark = pytest.mark.filterwarnings("ignore::sklearn.exceptions.ConvergenceWarning")
-
-
 def _noise_request(algorithm: str, strategy: str, k: int | None = None, hp: dict[str, object] | None = None,
                    random_state: int = 42) -> dict[str, object]:
     rng = np.random.default_rng(600)
