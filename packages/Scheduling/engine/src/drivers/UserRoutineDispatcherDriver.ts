@@ -125,10 +125,23 @@ interface RoutineTargetOutcome {
 }
 
 /** Per-routine bookkeeping returned from an isolated routine execution. */
-interface RoutineExecutionSummary {
+export interface RoutineExecutionSummary {
     RoutineID: string;
     RunStatus: MJUserRoutineRunEntity['Status'];
     Notified: boolean;
+}
+
+/**
+ * What one routine's execution needs from its caller. The sweep passes its full
+ * {@link ScheduledJobExecutionContext}; a manual run ({@link UserRoutineDispatcherDriver.RunRoutineNow})
+ * passes only these.
+ */
+export interface RoutineRunContext {
+    /** The bookkeeping user: run rows and routine roll-up are saved as this user (the scheduler's system user). */
+    ContextUser: UserInfo;
+    heartbeat?: ScheduledJobExecutionContext['heartbeat'];
+    /** True for a run the user asked for by hand: the wake gate is not consulted. */
+    BypassWakeGate?: boolean;
 }
 
 /**
@@ -356,6 +369,28 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     }
 
     // ========================================================================
+    // Manual run
+    // ========================================================================
+
+    /**
+     * Run one routine now, on request, without touching its schedule.
+     *
+     * The sweep claims a routine before running it, which advances `NextRunAt` or, for a one-shot,
+     * clears it, and a cleared one-shot is Disabled after the run. A "Wake Now" implemented as
+     * "set NextRunAt to now" therefore SPENDS a one-shot: the reminder wanted tomorrow fires today
+     * and never fires again. This path skips the claim, so after the run `NextRunAt` still holds
+     * the scheduled time and the roll-up leaves the routine Active. It also skips the wake gate:
+     * the person asked for the run, so "nothing changed since last time" is not a reason to skip.
+     *
+     * `contextUser` is the bookkeeping identity (run row, routine roll-up), normally the scheduler's
+     * system user; the target still executes as the routine's owner, exactly as on the sweep.
+     * Ownership of the routine is the caller's check (see the `Run User Routine Now` action).
+     */
+    public async RunRoutineNow(routine: MJUserRoutineEntity, contextUser: UserInfo): Promise<RoutineExecutionSummary> {
+        return this.executeRoutine(routine, { ContextUser: contextUser, BypassWakeGate: true });
+    }
+
+    // ========================================================================
     // Per-routine execution
     // ========================================================================
 
@@ -374,13 +409,13 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      */
     private async executeRoutine(
         routine: MJUserRoutineEntity,
-        context: ScheduledJobExecutionContext
+        context: RoutineRunContext
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
         const ownerUser = await this.resolveRoutineOwnerUser(routine, contextUser);
 
         let gateResult: WakeGateEvaluationResult | undefined;
-        if (routine.WakeConfiguration || routine.WakeConfigurationObject) {
+        if (!context.BypassWakeGate && (routine.WakeConfiguration || routine.WakeConfigurationObject)) {
             gateResult = await this.wakeGateEvaluator.Evaluate(routine, ownerUser, new Date());
             routine.LastCheckedAt = new Date();
             if (!gateResult.shouldWake) {
@@ -440,7 +475,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     private async runAndRecord(
         routine: MJUserRoutineEntity,
         run: MJUserRoutineRunEntity,
-        context: ScheduledJobExecutionContext,
+        context: RoutineRunContext,
         ownerUser?: UserInfo,
         gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineExecutionSummary> {

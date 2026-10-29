@@ -21,6 +21,9 @@ import {
     ValidateChiefOfStaffTabParam,
     ValidateHealthFilterParam,
     ValidateSearchQueryParam,
+    IsSpentOneShotRoutine,
+    RoutineDisplayStatus,
+    SortRoutinesForDisplay,
 } from '../ChiefOfStaff/chief-of-staff-agent-context';
 import { AGENT_CONTEXT_NAME_LIST_CAP } from '../shared/agent-tool-validation';
 import { BuildScopeRootTasksFilter, BuildTodoItems, IsTodoTask, LoadTaskAssignees, type TaskAssignee } from '../ChiefOfStaff/chief-of-staff-agent-context';
@@ -843,6 +846,46 @@ describe('CalculateChiefOfStaffMetrics — an unassigned milestone is held by it
         const card = CalculateChiefOfStaffMetrics([root(), mine, theirs], [], [], new Date(), { CurrentPersonID: 'P2' }).PriorityCards[0];
         expect(card.IsOwner).toBe(false);
         expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1']);
+    });
+});
+
+describe('Spent one-shot routines read as fired, and sort below the live schedule', () => {
+    function routine(overrides: Partial<RoutineSummaryItem>): RoutineSummaryItem {
+        return {
+            ID: 'R', Name: 'Wake', Status: 'Active', ScheduleMode: 'OneShot', CronExpression: null,
+            NextRunAt: null, LastRunAt: null, LastRunStatus: null, ...overrides,
+        };
+    }
+
+    it('a disabled one-shot that has run and has no next time is spent', () => {
+        const r = routine({ Status: 'Disabled', LastRunAt: '2026-10-29T15:34:05Z' });
+        expect(IsSpentOneShotRoutine(r)).toBe(true);
+        expect(RoutineDisplayStatus(r)).toBe('Fired');
+    });
+
+    it('a one-shot still waiting for its time is not spent, whatever it has done before', () => {
+        expect(IsSpentOneShotRoutine(routine({ NextRunAt: '2026-10-30T15:00:00Z' }))).toBe(false);
+        expect(IsSpentOneShotRoutine(routine({ NextRunAt: '2026-10-30T15:00:00Z', LastRunAt: '2026-10-29T15:34:05Z' }))).toBe(false);
+    });
+
+    it('a disabled one-shot that never ran is just disabled, and a recurring routine is never spent', () => {
+        const never = routine({ Status: 'Disabled' });
+        expect(IsSpentOneShotRoutine(never)).toBe(false);
+        expect(RoutineDisplayStatus(never)).toBe('Disabled');
+        const daily = routine({ ScheduleMode: 'Recurring', CronExpression: '0 8 * * 1-5', Status: 'Disabled', LastRunAt: '2026-10-29T13:00:00Z' });
+        expect(IsSpentOneShotRoutine(daily)).toBe(false);
+        expect(RoutineDisplayStatus(daily)).toBe('Disabled');
+    });
+
+    it('sorts live routines by next wake, then the unscheduled, then spent one-shots most recent first', () => {
+        const sorted = SortRoutinesForDisplay([
+            routine({ ID: 'spent-old', Status: 'Disabled', LastRunAt: '2026-10-27T09:00:00Z' }),
+            routine({ ID: 'paused', Status: 'Paused', ScheduleMode: 'Recurring', CronExpression: '0 8 * * *' }),
+            routine({ ID: 'later', NextRunAt: '2026-11-02T15:00:00Z' }),
+            routine({ ID: 'spent-new', Status: 'Disabled', LastRunAt: '2026-10-29T15:34:05Z' }),
+            routine({ ID: 'soon', NextRunAt: '2026-10-30T15:00:00Z' }),
+        ]);
+        expect(sorted.map((r) => r.ID)).toEqual(['soon', 'later', 'paused', 'spent-new', 'spent-old']);
     });
 });
 

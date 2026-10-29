@@ -339,6 +339,28 @@
     color: var(--mj-status-error);
 }
 
+/* A one-time wake that has run: done, not broken. */
+.cos-status-chip--fired {
+    background-color: var(--mj-bg-subtle);
+    color: var(--mj-text-secondary);
+}
+
+.cos-routine-card--fired {
+    opacity: 0.8;
+}
+
+.cos-routine-card__fired-note {
+    margin-left: 8px;
+    color: var(--mj-text-secondary);
+    font-size: 0.85em;
+}
+
+.cos-routines-toggle {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+
 .cos-overdue-text {
     color: var(--mj-status-error);
 }

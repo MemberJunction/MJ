@@ -170,6 +170,48 @@ export interface RoutineSummaryItem {
     LastRunStatus: MJUserRoutineEntity['LastRunStatus'];
 }
 
+/** The status label the cockpit shows for a routine: the entity's Status, or 'Fired' for a spent one-shot. */
+export type RoutineDisplayStatusValue = RoutineSummaryItem['Status'] | 'Fired';
+
+/**
+ * True for a one-shot routine that has run and has no next time: the dispatcher disables a one-shot
+ * once it fires, so "Disabled" here means "done", not "broken". A one-shot still waiting for its
+ * time is not spent, whatever it has run before (a manual run keeps the schedule); a one-shot that
+ * was disabled before ever running is just disabled; a recurring routine is never spent.
+ */
+export function IsSpentOneShotRoutine(routine: Pick<RoutineSummaryItem, 'ScheduleMode' | 'NextRunAt' | 'LastRunAt' | 'Status'>): boolean {
+    return routine.ScheduleMode === 'OneShot'
+        && routine.Status === 'Disabled'
+        && routine.NextRunAt == null
+        && routine.LastRunAt != null;
+}
+
+/** 'Fired' for a spent one-shot, otherwise the routine's own Status. */
+export function RoutineDisplayStatus(routine: Pick<RoutineSummaryItem, 'ScheduleMode' | 'NextRunAt' | 'LastRunAt' | 'Status'>): RoutineDisplayStatusValue {
+    return IsSpentOneShotRoutine(routine) ? 'Fired' : routine.Status;
+}
+
+/**
+ * Display order for the wake schedule: routines with a next wake first, soonest first; then the
+ * unscheduled (paused, or disabled before ever running); spent one-shots last, most recent first.
+ * Returns a new array.
+ */
+export function SortRoutinesForDisplay<T extends Pick<RoutineSummaryItem, 'ScheduleMode' | 'NextRunAt' | 'LastRunAt' | 'Status'>>(routines: readonly T[]): T[] {
+    const rank = (r: T): number => (IsSpentOneShotRoutine(r) ? 2 : r.NextRunAt != null ? 0 : 1);
+    const time = (value: Date | string | null): number => {
+        const parsed = ParseOptionalDate(value);
+        return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY;
+    };
+    return [...routines].sort((a, b) => {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        if (ra === 0) return time(a.NextRunAt) - time(b.NextRunAt);
+        if (ra === 2) return time(b.LastRunAt) - time(a.LastRunAt);
+        return 0;
+    });
+}
+
 export interface RequestSummaryItem {
     ID: string;
     Request: string;

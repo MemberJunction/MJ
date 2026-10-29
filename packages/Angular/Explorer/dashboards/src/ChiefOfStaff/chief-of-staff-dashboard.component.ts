@@ -17,7 +17,7 @@ import {
     MJUserRoutineEntity,
     ResourceData,
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, UUIDSet, UUIDMap, MJGlobal } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, UUIDSet, UUIDMap, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import { ActionParam } from '@memberjunction/actions-base';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -54,6 +54,10 @@ import {
     RequestSummaryItem,
     ResolvePriorityObjectiveByIDOrName,
     RoutineSummaryItem,
+    IsSpentOneShotRoutine,
+    RoutineDisplayStatus,
+    SortRoutinesForDisplay,
+    type RoutineDisplayStatusValue,
     TaskHealthStatus,
     VALID_CHIEF_OF_STAFF_TABS,
     VALID_HEALTH_FILTERS,
@@ -321,16 +325,49 @@ export class ChiefOfStaffDashboardComponent
         );
     }
 
+    /** When true, the wake schedule also lists spent one-shots (reminders that have fired). Off by default. */
+    public ShowFiredRoutines = false;
+
+    /** Routines in display order: next wake first, unscheduled next, spent one-shots last. */
+    public get SortedRoutines(): MJUserRoutineEntity[] {
+        return SortRoutinesForDisplay(this.Routines);
+    }
+
+    /** Routines that still have something ahead of them: everything but spent one-shots. */
+    public get UpcomingRoutines(): MJUserRoutineEntity[] {
+        return this.SortedRoutines.filter((r) => !IsSpentOneShotRoutine(r));
+    }
+
+    /** Spent one-shots: reminders and one-time wakes that have already fired. */
+    public get FiredRoutineCount(): number {
+        return this.Routines.filter((r) => IsSpentOneShotRoutine(r)).length;
+    }
+
     public get FilteredRoutines(): MJUserRoutineEntity[] {
         const search = this.SearchText.trim().toLowerCase();
+        const base = this.ShowFiredRoutines ? this.SortedRoutines : this.UpcomingRoutines;
         if (!search) {
-            return this.Routines;
+            return base;
         }
-        return this.Routines.filter(
+        return base.filter(
             (r) =>
                 r.Name.toLowerCase().includes(search) ||
                 (r.Description ?? '').toLowerCase().includes(search),
         );
+    }
+
+    /** 'Fired' for a spent one-shot, otherwise the routine's Status. */
+    public RoutineStatusLabel(routine: MJUserRoutineEntity): RoutineDisplayStatusValue {
+        return RoutineDisplayStatus(routine);
+    }
+
+    public IsSpentRoutine(routine: MJUserRoutineEntity): boolean {
+        return IsSpentOneShotRoutine(routine);
+    }
+
+    public ToggleShowFiredRoutines(): void {
+        this.ShowFiredRoutines = !this.ShowFiredRoutines;
+        this.cdr.markForCheck();
     }
 
     async ngOnInit(): Promise<void> {
@@ -845,28 +882,34 @@ export class ChiefOfStaffDashboardComponent
         }
     }
 
-    private _updateRecordActionId: string | null = null;
+    private readonly actionIdsByName = new Map<string, string>();
     private async resolveUpdateRecordActionId(): Promise<string | null> {
-        if (this._updateRecordActionId) {
-            return this._updateRecordActionId;
+        return this.resolveActionIdByName('Update Record');
+    }
+
+    /** The ID of a core action, looked up by name once per cockpit instance. */
+    private async resolveActionIdByName(actionName: string): Promise<string | null> {
+        const cached = this.actionIdsByName.get(actionName);
+        if (cached) {
+            return cached;
         }
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{ ID: string }>({
                 EntityName: 'MJ: Actions',
-                ExtraFilter: "Name = 'Update Record'",
+                ExtraFilter: `Name = '${EscapeSQLString(actionName)}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
                 ResultType: 'simple',
             });
             if (result.Success && result.Results && result.Results.length > 0) {
-                this._updateRecordActionId = result.Results[0].ID;
-                return this._updateRecordActionId;
+                this.actionIdsByName.set(actionName, result.Results[0].ID);
+                return result.Results[0].ID;
             }
             return null;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            LogError(`ChiefOfStaffDashboard: failed to resolve 'Update Record' action: ${msg}`);
+            LogError(`ChiefOfStaffDashboard: failed to resolve '${actionName}' action: ${msg}`);
             return null;
         }
     }
@@ -1154,20 +1197,24 @@ export class ChiefOfStaffDashboardComponent
         this.cdr.markForCheck();
 
         try {
-            routine.Status = 'Active';
-            routine.NextRunAt = new Date();
-            const saved = await routine.Save();
-            if (saved) {
-                this.showBanner(
-                    'success',
-                    `Scheduled immediate wake for "${routine.Name}". The User Routine Scheduler will dispatch it on its next tick.`,
-                );
-                this.recalculateMetrics();
-                this.publishAgentContext();
+            // Run the routine out of schedule. Setting NextRunAt to now would make the dispatcher
+            // CLAIM it, and a claimed one-shot (a reminder) is spent: it fires now and never again.
+            // The action runs it without touching the schedule; the run row and the routine's
+            // conversation then update through the live refresh.
+            const actionId = await this.resolveActionIdByName('Run User Routine Now');
+            if (!actionId) {
+                this.showBanner('error', "The 'Run User Routine Now' action is not installed; push metadata/actions and restart MJAPI.");
+                return;
+            }
+            const actionClient = new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider);
+            const result = await actionClient.RunAction(actionId, [
+                { Name: 'RoutineID', Value: routine.ID, Type: 'Input' } as ActionParam,
+            ]);
+            if (result.Success) {
+                const keeps = routine.NextRunAt ? ' Its scheduled wake is unchanged.' : '';
+                this.showBanner('success', `Running "${routine.Name}" now. The result lands in its conversation and a notification.${keeps}`);
             } else {
-                const errText =
-                    routine.LatestResult?.CompleteMessage ?? 'Failed to schedule immediate wake.';
-                this.showBanner('error', errText);
+                this.showBanner('error', result.Message || `Could not run "${routine.Name}".`);
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

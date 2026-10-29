@@ -349,13 +349,13 @@
                                 </div>
                             } @else {
                                 <div class="cos-stack">
-                                    @for (routine of Routines.slice(0, 3); track routine.ID) {
+                                    @for (routine of UpcomingRoutines.slice(0, 3); track routine.ID) {
                                         <div class="cos-routine-mini">
                                             <div class="cos-routine-mini__info">
                                                 <div class="cos-routine-mini__title-row">
                                                     <span class="cos-routine-mini__name">{{ routine.Name }}</span>
-                                                    <span class="cos-status-chip cos-status-chip--{{ routine.Status.toLowerCase() }}">
-                                                        {{ routine.Status }}
+                                                    <span class="cos-status-chip cos-status-chip--{{ RoutineStatusLabel(routine).toLowerCase() }}">
+                                                        {{ RoutineStatusLabel(routine) }}
                                                     </span>
                                                 </div>
                                                 <div class="cos-routine-mini__meta">
@@ -376,8 +376,9 @@
                                                         (click)="OpenBriefingReader(routine, $event)">
                                                     <i class="fa-solid fa-book-open"></i> Read
                                                 </button>
-                                                <button mjButton variant="primary" size="sm"
+                                <button mjButton variant="primary" size="sm"
                                                         [disabled]="BusyRoutineID === routine.ID"
+                                                        title="Run this wake now. Its scheduled time is not changed."
                                                         (click)="TriggerWakeNow(routine, $event)">
                                                     <i class="fa-solid fa-bolt"></i> Wake Now
                                                 </button>
@@ -701,6 +702,17 @@
                             </div>
                         </div>
 
+                        @if (FiredRoutineCount > 0) {
+                            <div class="cos-routines-toggle">
+                                <button mjButton variant="flat" size="sm"
+                                        [title]="ShowFiredRoutines ? 'Hide one-time wakes that have already fired' : 'Show one-time wakes that have already fired'"
+                                        (click)="ToggleShowFiredRoutines()">
+                                    <i class="fa-solid" [class.fa-eye]="!ShowFiredRoutines" [class.fa-eye-slash]="ShowFiredRoutines"></i>
+                                    {{ ShowFiredRoutines ? 'Hide' : 'Show' }} fired ({{ FiredRoutineCount }})
+                                </button>
+                            </div>
+                        }
+
                         @if (FilteredRoutines.length === 0) {
                             <div class="cos-inline-empty">
                                 <i class="fa-regular fa-clock"></i>
@@ -709,13 +721,14 @@
                         } @else {
                             <div class="cos-stack">
                                 @for (routine of FilteredRoutines; track routine.ID) {
-                                    <div class="cos-routine-card">
+                                    <div class="cos-routine-card" [class.cos-routine-card--fired]="IsSpentRoutine(routine)">
                                         <div class="cos-routine-card__header">
                                             <div>
                                                 <div class="cos-routine-card__title-row">
                                                     <h4 class="cos-routine-card__name">{{ routine.Name }}</h4>
-                                                    <span class="cos-status-chip cos-status-chip--{{ routine.Status.toLowerCase() }}">
-                                                        {{ routine.Status }}
+                                                    <span class="cos-status-chip cos-status-chip--{{ RoutineStatusLabel(routine).toLowerCase() }}"
+                                                          [title]="IsSpentRoutine(routine) ? 'A one-time wake that has run. It will not fire again.' : ''">
+                                                        {{ RoutineStatusLabel(routine) }}
                                                     </span>
                                                     <span class="cos-meta-badge">
                                                         {{ routine.ScheduleMode }}
@@ -728,14 +741,21 @@
                                         </div>
 
                                         <div class="cos-routine-card__schedule">
-                                            <div>
-                                                <strong>Next Wake:</strong>
-                                                @if (routine.NextRunAt) {
-                                                    {{ routine.NextRunAt | date:'medium' }}
-                                                } @else {
-                                                    Not scheduled
-                                                }
-                                            </div>
+                                            @if (IsSpentRoutine(routine)) {
+                                                <div>
+                                                    <strong>Fired:</strong> {{ routine.LastRunAt | date:'medium' }}
+                                                    <span class="cos-routine-card__fired-note">one-time wake, will not fire again</span>
+                                                </div>
+                                            } @else {
+                                                <div>
+                                                    <strong>Next Wake:</strong>
+                                                    @if (routine.NextRunAt) {
+                                                        {{ routine.NextRunAt | date:'medium' }}
+                                                    } @else {
+                                                        Not scheduled
+                                                    }
+                                                </div>
+                                            }
                                             @if (routine.CronExpression) {
                                                 <div>
                                                     <strong>Cron:</strong> <code>{{ routine.CronExpression }}</code>
@@ -769,18 +789,21 @@
                                             </button>
                                             <button mjButton variant="outline" size="sm"
                                                     [disabled]="BusyRoutineID === routine.ID"
+                                                    title="Run this wake now. Its scheduled time is not changed."
                                                     (click)="TriggerWakeNow(routine, $event)">
                                                 <i class="fa-solid fa-bolt"></i> Wake Now
                                             </button>
-                                            <button mjButton variant="outline" size="sm"
-                                                    [disabled]="BusyRoutineID === routine.ID"
-                                                    (click)="ToggleRoutineStatus(routine, $event)">
-                                                @if (routine.Status === 'Active') {
-                                                    <i class="fa-solid fa-pause"></i> Pause
-                                                } @else {
-                                                    <i class="fa-solid fa-play"></i> Resume
-                                                }
-                                            </button>
+                                            @if (!IsSpentRoutine(routine)) {
+                                                <button mjButton variant="outline" size="sm"
+                                                        [disabled]="BusyRoutineID === routine.ID"
+                                                        (click)="ToggleRoutineStatus(routine, $event)">
+                                                    @if (routine.Status === 'Active') {
+                                                        <i class="fa-solid fa-pause"></i> Pause
+                                                    } @else {
+                                                        <i class="fa-solid fa-play"></i> Resume
+                                                    }
+                                                </button>
+                                            }
                                             <button mjButton variant="flat" size="sm"
                                                     (click)="OpenRoutineEntityRecord(routine.ID, $event)">
                                                 <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
