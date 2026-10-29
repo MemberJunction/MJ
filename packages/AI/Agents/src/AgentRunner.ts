@@ -249,6 +249,9 @@ export class AgentRunner {
      */
     private static readonly ARTIFACT_NAME_MAX_LENGTH = 255;
 
+    /** How long the end of a run waits for the generated conversation name before keeping the initial one. */
+    private static readonly NAMING_WAIT_MS = 5000;
+
     private readonly _provider: IMetadataProvider;
 
     constructor(provider?: IMetadataProvider) {
@@ -485,11 +488,13 @@ export class AgentRunner {
         const conversationWriter = options.ConversationWriter ?? contextUser;
 
         let agentResponseDetail: MJConversationDetailEntityExtended | undefined;
+        let saveGeneratedName: (() => Promise<void>) | undefined;
 
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
+            let isNewConversation = false;
 
             if (options.agentResponseDetail) {
                 // The server created the reply row for this run (RunAIAgentFromConversationDetail): write into it.
@@ -555,34 +560,20 @@ export class AgentRunner {
                 conversationId = options.conversationId || '';
 
                 if (!conversationId) {
+                    isNewConversation = true;
                     LogStatus('Creating new conversation');
                     const conversation = await md.GetEntityObject<MJConversationEntity>(
                         'MJ: Conversations',
                         conversationWriter
                     );
 
-                    // Smart conversation naming:
-                    // 1. Use provided name if given
-                    // 2. Otherwise, use AI prompt to generate a good name from user message
-                    // 3. Fallback to "Chat with [AgentName]"
-                    let conversationName = options.conversationName;
-                    let conversationDescription: string | null = null;
-
-                    if (!conversationName && options.userMessage) {
-                        // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.generateConversationName(options.userMessage, contextUser, md, params);
-                        if (nameResult) {
-                            conversationName = nameResult.name;
-                            conversationDescription = nameResult.description;
-                        }
-                    }
-
-                    if (!conversationName) {
-                        conversationName = `Chat with ${params.agent.Name}`;
-                    }
-
-                    conversation.Name = conversationName;
-                    conversation.Description = conversationDescription || ''; // Set description too (like UI does)
+                    // Save immediately with provided name or fallback so agent execution does not block
+                    // on the ~1,000ms "Name Conversation" LLM call. When no name was provided, fire
+                    // generateConversationName in parallel with RunAgent and save the generated name
+                    // after the run's own writes (in the finally below), before returning.
+                    const initialConversationName = options.conversationName || `Chat with ${params.agent.Name}`;
+                    conversation.Name = initialConversationName;
+                    conversation.Description = '';
                     conversation.UserID = params.userId || conversationWriter.ID;
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
@@ -597,7 +588,11 @@ export class AgentRunner {
                     }
 
                     conversationId = conversation.ID;
-                    LogStatus(`Created conversation ${conversationId}: ${conversationName}`);
+                    LogStatus(`Created conversation ${conversationId}: ${initialConversationName}`);
+
+                    if (!options.conversationName && options.userMessage) {
+                        saveGeneratedName = this.startConversationNaming(conversation, options.userMessage, contextUser, md, params);
+                    }
                 }
 
                 // Step 2: Create conversation detail for user message
@@ -700,7 +695,10 @@ export class AgentRunner {
             // the conversation with the artifact already available." This means ALL artifacts
             // on that path (both agent-produced Output and user-attached Input) should
             // be available to the agent via artifact tools.
-            const inputArtifacts = await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId);
+            // Brand-new conversations created right above have zero prior artifacts, so skip the 3 DB queries.
+            const inputArtifacts = isNewConversation
+                ? []
+                : await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId);
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
@@ -759,14 +757,11 @@ export class AgentRunner {
                     // then for any other save still in flight on this entity
                     await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
+                    // No reload first, for latency. Save sends every loaded column, so a pin (SavePinState) or
+                    // rating written to this row between the last progress save and this one is overwritten.
+                    // The progress saves already have that window; the reload only rescued a late pin.
 
                     LogStatus('Updating agent response detail with final result');
-
-                    // Reload to get any updates from agent execution
-                    const loaded = await agentResponseDetail.Load(agentResponseDetailId);
-                    if (!loaded) {
-                        LogError(`Failed to reload agent response detail ${agentResponseDetailId}`);
-                    }
 
                     const finalState = AgentRunner.ResolveFinalDetailState(agentResult);
                     agentResponseDetail.Message = finalState.Message;
@@ -978,6 +973,9 @@ export class AgentRunner {
                 }
             }
             throw error;
+        } finally {
+            // After the run's own writes, success or failure: the name call was already paid for.
+            await saveGeneratedName?.();
         }
     }
 
@@ -1384,6 +1382,46 @@ export class AgentRunner {
         };
 
         return targetParams;
+    }
+
+    /**
+     * Starts the "Name Conversation" prompt for a new conversation so it runs alongside the agent, and
+     * returns the step that saves the generated name. That step runs after the run's own writes, which
+     * share the request's connection. A failed generation or save keeps the initial name.
+     */
+    private startConversationNaming(
+        conversation: MJConversationEntity,
+        userMessage: string,
+        contextUser: UserInfo,
+        md: IMetadataProvider,
+        credentials: Pick<ExecuteAgentParams, 'configurationId' | 'apiKeys' | 'CredentialScope'>
+    ): () => Promise<void> {
+        const initialName = conversation.Name;
+        const naming = this.generateConversationName(userMessage, contextUser, md, credentials);
+        return async () => {
+            // Bounded: a run that failed or was cancelled early must not wait out the whole naming call.
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const gaveUp = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), AgentRunner.NAMING_WAIT_MS); });
+            const nameResult = await Promise.race([naming, gaveUp]).finally(() => clearTimeout(timer));
+            if (!nameResult?.name) {
+                return;
+            }
+            // Re-read first: Save writes every column, so a stale instance would undo a rename or an
+            // archive made during the run. A name someone already changed is kept. This runs in the run's
+            // finally, so a reload that throws must not replace the run's result.
+            if (!(await conversation.Load(conversation.ID).catch(() => false))) {
+                LogError(`Failed to reload conversation ${conversation.ID} before saving its generated name`);
+                return;
+            }
+            if (conversation.Name !== initialName) {
+                return;
+            }
+            conversation.Name = nameResult.name;
+            conversation.Description = nameResult.description || '';
+            if (!(await conversation.Save())) {
+                LogError(`Failed to save the generated name of conversation ${conversation.ID}: ${AgentRunner.saveFailureReason(conversation)}`);
+            }
+        };
     }
 
     /**

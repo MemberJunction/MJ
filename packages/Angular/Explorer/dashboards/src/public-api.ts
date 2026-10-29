@@ -260,3 +260,10 @@ export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserR
 export * from './video-studio-dashboards.module';
 export * from './VideoStudio';
 
+// Chief of Staff Executive Cockpit
+export {
+    ChiefOfStaffDashboardComponent,
+    LoadChiefOfStaffDashboard,
+} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+export * from './ChiefOfStaff/chief-of-staff-agent-context';
+

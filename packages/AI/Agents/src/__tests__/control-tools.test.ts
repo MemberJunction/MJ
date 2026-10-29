@@ -127,4 +127,8 @@ describe('buildNativeToolSet', () => {
         const set = BuildNativeToolSet(actionSet(), [agent('Copywriter Agent'), agent('Editor Agent')]);
         expect(set.tools.map((t) => t.name)).toEqual(['delegate_to_copywriter_agent', 'delegate_to_editor_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL]);
     });
+    it('declares sub-agents in name order whatever order they were loaded in, so the declarations repeat byte-for-byte', () => {
+        const set = BuildNativeToolSet(actionSet(), [agent('Editor Agent'), agent('Copywriter Agent')]);
+        expect(set.tools.map((t) => t.name).slice(0, 2)).toEqual(['delegate_to_copywriter_agent', 'delegate_to_editor_agent']);
+    });
 });

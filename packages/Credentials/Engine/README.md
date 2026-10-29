@@ -189,6 +189,82 @@ Every resolution records its `expirationStatus` in the audit log, so an auditor
 can answer "was any credential used while expired?" -- which matters precisely
 where such a use succeeds rather than failing loudly.
 
+## User-delegated (3LO) credentials
+
+Most credentials are shared, application-level secrets. A user-delegated
+credential is different: it holds an OAuth 2.0 token one specific user granted
+through a three-legged (`3LO`) consent flow, and only that user may ever read it.
+The engine stores these as ordinary `MJ: Credentials` rows with two extra rules:
+a reserved naming convention and an owner binding carried inside the encrypted
+`Values`. The flow that produces the token lives in `@memberjunction/core-actions`
+(`CommunicationUserOAuthService`) and is a prototype that is off by default; this
+section covers only the storage side.
+
+### Naming and stored shape
+
+The name is built by `BuildUserDelegatedCredentialName(providerName, ownerUserId)`
+and is always `UserOAuth3LO:<provider>:<ownerUserId>` (provider trimmed, user ID
+lower-cased), so one row exists per user per provider and a rotation overwrites
+rather than accumulates.
+
+`Values` is a `UserDelegatedOAuthCredentialValues` object: `ownerUserId`,
+`principalEmail`, `providerName`, `accessToken`, `refreshToken`, `tokenType`,
+`scope`, `tenantId`, `issuedAt`. Unless `credentialTypeName` is given, the row is
+filed under the `OAuth2 Client Credentials` type; it is never `IsDefault`.
+
+### Owner binding
+
+`ownerUserId` is the binding. On store, it must equal `contextUser.ID`; on read
+or revoke, the stored value must equal `contextUser.ID`. Any mismatch -- including
+a missing `contextUser` -- throws `CredentialOwnerMismatchError` (a
+`CredentialResolutionError` carrying `CredentialName`, `OwnerUserID` and
+`RequestingUserID`). An administrator does not get a bypass: the check is on the
+user identity, not a permission.
+
+### The four methods
+
+```typescript
+import { CredentialEngine, CredentialOwnerMismatchError } from '@memberjunction/credentials';
+
+const engine = CredentialEngine.Instance;
+
+// Store or rotate -- ownerUserId must be the calling user
+await engine.StoreUserDelegatedCredential({
+    providerName: 'Microsoft Graph',
+    ownerUserId: contextUser.ID,
+    principalEmail: contextUser.Email,
+    accessToken, refreshToken, scope, tenantId,
+    expiresAt: new Date(Date.now() + expiresInSeconds * 1000)
+}, contextUser);
+
+// Read -- null when the user has no active credential for this provider
+const cred = await engine.GetUserDelegatedCredential('Microsoft Graph', contextUser);
+if (cred) {
+    callGraph(cred.values.accessToken);
+}
+
+// Revoke -- deactivates the row and replaces the token values with { ownerUserId, revokedAt }
+const revoked = await engine.RevokeUserDelegatedCredential('Microsoft Graph', contextUser);
+```
+
+Each write is audit-logged under the `UserDelegatedOAuth3LO` subsystem (`Create`,
+`Update` or `Delete`), and `GetUserDelegatedCredential` goes through
+`GetCredential`, so reads inherit expiry enforcement and `Decrypt` audit entries.
+
+### Which paths can reach a delegated credential
+
+| Method | Behavior |
+|---|---|
+| `GetUserDelegatedCredential()` | Resolves the caller's own row; owner check via `GetCredential` |
+| `GetCredential(name, { contextUser })` | Any credential whose values carry `ownerUserId` throws `CredentialOwnerMismatchError` for another user |
+| `StoreUserDelegatedCredential()` / `RevokeUserDelegatedCredential()` | Owner check on the caller **and** on the stored `ownerUserId` of an existing row before it is mutated; the whole find-then-upsert is serialized per credential name, so concurrent first-time stores produce one row |
+| `GetCredentialById()`, `GetCredentialByName()`, `GetDefaultCredentialForType()`, the `Credentials` getter | **Never return a delegated row.** Rows whose name starts with `UserOAuth3LO:` are filtered out, so shared app-level lookups cannot hand out another user's decrypted token |
+
+The rule for callers is therefore: **always resolve a delegated credential through
+`GetUserDelegatedCredential` or `GetCredential(name, { contextUser })`.** The
+shared accessors are for application and provider credentials only; a delegated
+credential looked up through them is simply not found.
+
 ## Pre-defined Credential Types
 
 | Type | Interface | Fields |

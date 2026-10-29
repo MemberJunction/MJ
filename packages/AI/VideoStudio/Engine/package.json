@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/video-studio",
-  "version": "6.2.0-edge.5",
+  "version": "6.2.0-edge.6",
   "description": "Server-side engines, actions, and orchestration for MemberJunction Video Studio",
   "type": "module",
   "main": "dist/index.js",
@@ -16,25 +16,25 @@
     "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.2.0-edge.5",
-    "@memberjunction/actions-base": "6.2.0-edge.5",
-    "@memberjunction/ai": "6.2.0-edge.5",
-    "@memberjunction/ai-agent-harness": "6.2.0-edge.5",
-    "@memberjunction/ai-agents": "6.2.0-edge.5",
-    "@memberjunction/ai-core-plus": "6.2.0-edge.5",
-    "@memberjunction/ai-engine-base": "6.2.0-edge.5",
-    "@memberjunction/ai-prompts": "6.2.0-edge.5",
-    "@memberjunction/aiengine": "6.2.0-edge.5",
-    "@memberjunction/core": "6.2.0-edge.5",
-    "@memberjunction/core-entities": "6.2.0-edge.5",
-    "@memberjunction/global": "6.2.0-edge.5",
-    "@memberjunction/rubrics-base": "6.2.0-edge.5",
-    "@memberjunction/storage": "6.2.0-edge.5",
-    "@memberjunction/video-studio-core": "6.2.0-edge.5",
+    "@memberjunction/actions": "6.2.0-edge.6",
+    "@memberjunction/actions-base": "6.2.0-edge.6",
+    "@memberjunction/ai": "6.2.0-edge.6",
+    "@memberjunction/ai-agent-harness": "6.2.0-edge.6",
+    "@memberjunction/ai-agents": "6.2.0-edge.6",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.6",
+    "@memberjunction/ai-engine-base": "6.2.0-edge.6",
+    "@memberjunction/ai-prompts": "6.2.0-edge.6",
+    "@memberjunction/aiengine": "6.2.0-edge.6",
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
+    "@memberjunction/rubrics-base": "6.2.0-edge.6",
+    "@memberjunction/storage": "6.2.0-edge.6",
+    "@memberjunction/video-studio-core": "6.2.0-edge.6",
     "cosmiconfig": "9.0.0"
   },
   "optionalDependencies": {
-    "@memberjunction/video-studio-render-worker": "6.2.0-edge.5"
+    "@memberjunction/video-studio-render-worker": "6.2.0-edge.6"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

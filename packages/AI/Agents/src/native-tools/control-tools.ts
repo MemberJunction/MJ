@@ -10,7 +10,7 @@
  */
 import type { ChatTool } from '@memberjunction/ai';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { SanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
+import { SanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, CompareToolNames, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
 import type { ParamValueSchema } from './action-param-schema';
 import { DEFAULT_NATIVE_CONTROL_CONFIG, type CompleteTaskPayloadForm, type NativeControlConfig } from './native-control-config';
 import { BuildAgentTool, type AgentToolDefinition } from './agent-tools';
@@ -306,7 +306,9 @@ export function BuildNativeToolSet(
         }
     }
     const set: NativeToolSet = { tools: [...actionSet.tools], byToolName: new Map<string, NativeToolBinding>(actionSet.byToolName), controlToolNames: [] };
-    for (const agent of subAgents) {
+    // Name order, as the action tools are: the sub-agents arrive in load order, and the declarations
+    // have to read the same on every request for the provider's prompt cache to hold.
+    for (const agent of [...subAgents].sort((a, b) => CompareToolNames(a.Name, b.Name))) {
         const tool = BuildSubAgentTool(agent, resolveSubAgentOptions?.(agent));
         addBinding(set, { kind: 'subAgent', toolName: tool.name, agent, tool }, true);
     }

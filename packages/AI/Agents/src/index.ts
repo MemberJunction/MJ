@@ -66,6 +66,7 @@ export * from './memory-manager-agent';
 export * from './memory-note-gate';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
+export * from './AgentWakeTriggerService';
 export * from './KnowledgeAgent';
 export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/video-studio-core",
-  "version": "6.2.0-edge.5",
+  "version": "6.2.0-edge.6",
   "description": "Shared types, contracts, and pure validators for MemberJunction Video Studio (browser and server safe)",
   "type": "module",
   "main": "dist/index.js",

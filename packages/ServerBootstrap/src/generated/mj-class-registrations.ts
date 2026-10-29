@@ -1563,7 +1563,6 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -1662,10 +1661,11 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -1686,6 +1686,7 @@ import {
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -2845,7 +2846,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -2944,10 +2944,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2968,6 +2969,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -3039,7 +3041,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1231;
+export const CLASS_REGISTRATIONS_COUNT = 1232;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

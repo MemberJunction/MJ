@@ -31140,6 +31140,13 @@ export class MJCommunicationProvider_ {
     @MaxLength(36)
     DefaultCredentialID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: "Posture 3 master switch (Gate 1). When 1, users may connect their own mailbox/calendar to this provider through per-user delegated OAuth 2.0 (3LO) with PKCE, subject to AllowedEmailDomains and AllowedOAuthTenantIDs. Default 0: no user can initiate a personal OAuth flow."}) 
+    AllowUserDelegatedOAuth?: boolean;
+        
+    @Field({nullable: true, description: "Optional comma-separated allowlist of identity tenant identifiers (Gate 3) that a user-delegated OAuth token must carry: Azure AD tenant IDs (tid) or Google Workspace hosted domains (hd). NULL means no tenant restriction beyond AllowedEmailDomains."}) 
+    @MaxLength(1000)
+    AllowedOAuthTenantIDs?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     DefaultCredential?: string;
@@ -31199,6 +31206,12 @@ export class CreateMJCommunicationProviderInput {
     @Field({ nullable: true })
     DefaultCredentialID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    AllowUserDelegatedOAuth?: boolean;
+
+    @Field({ nullable: true })
+    AllowedOAuthTenantIDs: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -31253,6 +31266,12 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field({ nullable: true })
     DefaultCredentialID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowUserDelegatedOAuth?: boolean;
+
+    @Field({ nullable: true })
+    AllowedOAuthTenantIDs?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
