@@ -133,7 +133,7 @@ jobs:
       # any registry push. (arm64 is still built via QEMU and not booted — running a
       # full migrate+codegen under emulation is prohibitively slow; accepted gap.)
       - name: Build amd64 image for boot verification
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           load: true
           push: false
@@ -197,7 +197,7 @@ jobs:
           echo "MJAPI booted and answered /healthcheck — proceeding to push."
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           push: true
           tags: |
