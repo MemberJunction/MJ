@@ -56,6 +56,9 @@ const INTERRUPTED_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedSta
   'CleaningUp',
 ]);
 
+/** States in which the job waits for the caller and may be cancelled. */
+const CANCELLABLE_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedState>(['AwaitingSelection', 'AwaitingCleanupDecision']);
+
 /** States whose progress is reported on run B (the load run) rather than run A. */
 const PHASE_B_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedState>([
   'Mapping',
@@ -238,6 +241,22 @@ export class ArchiveSeedJob {
     }
     this.disarmCleanupTimer(jobID);
     await this.finishContext(ctx, dropStaging);
+  }
+
+  /**
+   * Abandons a job that is waiting for the caller (`AwaitingSelection` or `AwaitingCleanupDecision`):
+   * the job fails with a cancellation message, which drops the staging database and removes the
+   * archive data source like any other failure, so the connection can then be deleted or replaced.
+   * Throws when the job is missing or in any other state, since a running phase cannot be interrupted.
+   */
+  public async Cancel(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    const ctx = await this.loadContext(jobID, user, provider);
+    if (!CANCELLABLE_STATES.has(ctx.Work.State)) {
+      throw new Error(`Archive seed job "${jobID}" is ${ctx.Work.State}; only a job awaiting a selection or a cleanup decision can be cancelled`);
+    }
+    this.disarmCleanupTimer(jobID);
+    ctx.StagingRestored = true;
+    await this.fail(ctx, `Cancelled by ${user.Email || user.Name || 'the user'}`);
   }
 
   /**

@@ -484,6 +484,12 @@ export interface IntrospectSchemaOptions {
      */
     ObjectNames?: string[];
     /**
+     * When set, introspects these source schemas (namespaces) instead of the data source's default
+     * one, and returns every object name schema-qualified (`schema.object`) so objects of the same
+     * name in different schemas stay distinct. Connectors whose source has no schemas ignore it.
+     */
+    Schemas?: string[];
+    /**
      * U11 — optional live progress callback: invoked after each object's describe completes
      * (or is skipped) with (scanned, total). Lets a caller drive a DETERMINATE discovery bar
      * ("scanned N of M objects") instead of an indeterminate spinner. Best-effort — the

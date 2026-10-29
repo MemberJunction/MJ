@@ -410,6 +410,14 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     }
   }
 
+  /** Every schema of the database that holds a table or view, in name order. */
+  public override async ListSchemas(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<string[]> {
+    const pool = await this.getConnection(dataSource, contextUser);
+    const result = await pool.request().query<{ TABLE_SCHEMA: string }>(
+      `SELECT DISTINCT TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA`);
+    return result.recordset.map((r) => r.TABLE_SCHEMA);
+  }
+
   public async IntrospectSchema(
     dataSource: MJExternalDataSourceEntity,
     schemaName: string | undefined,

@@ -236,6 +236,9 @@
             <button mjButton variant="primary" [disabled]="Selected.size === 0 || IsSubmitting" (click)="CreateAndLoad()">
               <i class="fa-solid fa-wand-magic-sparkles"></i> Create and Load
             </button>
+            <button mjButton variant="danger" [disabled]="IsSubmitting" (click)="CancelSeed()" title="Abandon this seed: drops the restored staging database">
+              <i class="fa-solid fa-ban"></i> Cancel Seed
+            </button>
             <button mjButton variant="secondary" (click)="Close()">Close</button>
           }
           @case (4) {

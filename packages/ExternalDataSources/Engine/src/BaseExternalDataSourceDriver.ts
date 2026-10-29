@@ -48,6 +48,16 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
     contextUser?: UserInfo,
   ): Promise<ExternalSchemaDescriptor>;
 
+  /**
+   * The schemas (namespaces) of the source that hold objects, so a caller can introspect each of them
+   * with {@link IntrospectSchema}. The base returns an empty list, meaning the driver cannot enumerate
+   * schemas and only its default (or the data source's `DefaultSchema`) is reachable; drivers for
+   * sources with real schemas override it.
+   */
+  public async ListSchemas(_dataSource: MJExternalDataSourceEntity, _contextUser?: UserInfo): Promise<string[]> {
+    return [];
+  }
+
   /** RunView-equivalent paginated read against a single remote object. */
   public abstract RunView<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,

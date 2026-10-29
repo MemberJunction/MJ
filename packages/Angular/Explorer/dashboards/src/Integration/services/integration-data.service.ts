@@ -1055,6 +1055,11 @@ export class IntegrationDataService {
     return this.getIntegrationClient().FinishArchiveSeed(jobID, dropStaging);
   }
 
+  /** Abandons a job waiting for a selection or a cleanup decision; the server drops its staging database. */
+  async CancelArchiveSeed(jobID: string): Promise<Awaited<ReturnType<GraphQLIntegrationClient['CancelArchiveSeed']>>> {
+    return this.getIntegrationClient().CancelArchiveSeed(jobID);
+  }
+
   /** The archive seed job's current state. */
   async GetArchiveSeedState(jobID: string): Promise<{ Success: boolean; Message?: string; State?: IntegrationArchiveSeedState }> {
     return this.getIntegrationClient().GetArchiveSeedState(jobID);

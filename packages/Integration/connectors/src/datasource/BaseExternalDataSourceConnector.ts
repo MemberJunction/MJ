@@ -19,7 +19,8 @@ import {
     type ExternalRecord,
 } from '@memberjunction/integration-engine';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
-import { ExternalDataSourceRouter, parseIso8601AsUtc, type ExternalSeekAfter, type ResolvedExternalDataSource } from '@memberjunction/external-data-sources';
+import { ExternalDataSourceRouter, parseIso8601AsUtc, type BaseExternalDataSourceDriver, type ExternalSeekAfter, type ResolvedExternalDataSource } from '@memberjunction/external-data-sources';
+import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 
 /** A parsed keyset marker: the watermark and key values of the last consumed row of a page. */
 export interface ParsedKeysetMarker {
@@ -182,18 +183,47 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         options?: IntrospectSchemaOptions,
     ): Promise<SourceSchemaInfo> {
         const { dataSource, driver } = await this.Resolve(companyIntegration, contextUser);
-        const descriptor = await driver.IntrospectSchema(dataSource, dataSource.DefaultSchema ?? undefined, contextUser);
+        const schemas = options?.Schemas && options.Schemas.length > 0 ? options.Schemas : null;
+        const descriptorObjects = schemas
+            ? await this.IntrospectSchemas(driver, dataSource, schemas, contextUser)
+            : (await driver.IntrospectSchema(dataSource, dataSource.DefaultSchema ?? undefined, contextUser)).Objects;
         const wanted = options?.ObjectNames && options.ObjectNames.length > 0
             ? new Set(options.ObjectNames.map(n => n.toLowerCase()))
             : null;
         const objects = wanted
-            ? descriptor.Objects.filter(o => wanted.has(o.Name.toLowerCase()))
-            : descriptor.Objects;
+            ? descriptorObjects.filter(o => wanted.has(o.Name.toLowerCase()))
+            : descriptorObjects;
         return {
             Objects: objects.map(o => this.MapObjectToSourceObject(o)),
             // A scoped introspection is never authoritative over the whole surface (mirrors the base rule).
             IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted,
         };
+    }
+
+    /**
+     * Introspects each schema in turn and returns the objects with schema-qualified names
+     * (`schema.object`), so the same table name in two schemas stays distinct downstream.
+     */
+    protected async IntrospectSchemas(
+        driver: BaseExternalDataSourceDriver,
+        dataSource: MJExternalDataSourceEntity,
+        schemas: readonly string[],
+        contextUser: UserInfo,
+    ): Promise<ExternalSchemaObject[]> {
+        const objects: ExternalSchemaObject[] = [];
+        for (const schema of schemas) {
+            const descriptor = await driver.IntrospectSchema(dataSource, schema, contextUser);
+            for (const o of descriptor.Objects) {
+                objects.push(o.Name.includes('.') ? o : { ...o, Name: `${schema}.${o.Name}`, Schema: o.Schema ?? schema });
+            }
+        }
+        return objects;
+    }
+
+    /** The source's schemas that hold objects, from the driver; empty when the driver cannot enumerate them. */
+    public async ListSchemas(companyIntegration: MJCompanyIntegrationEntity, contextUser: UserInfo): Promise<string[]> {
+        const { dataSource, driver } = await this.Resolve(companyIntegration, contextUser);
+        return driver.ListSchemas(dataSource, contextUser);
     }
 
     public async DiscoverObjects(

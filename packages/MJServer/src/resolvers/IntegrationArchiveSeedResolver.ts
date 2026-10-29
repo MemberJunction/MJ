@@ -140,6 +140,21 @@ export class IntegrationArchiveSeedResolver extends ResolverBase {
     }
   }
 
+  @Mutation(() => IntegrationArchiveSeedStateOutput)
+  async IntegrationArchiveSeedCancel(
+    @Arg('jobID') jobID: string,
+    @Ctx() ctx: AppContext
+  ): Promise<IntegrationArchiveSeedStateOutput> {
+    try {
+      const caller = await this.authorize(ctx, 'IntegrationArchiveSeedCancel');
+      await this.loadReadableJob(jobID, caller);
+      await ArchiveSeedJobInstance.Cancel(jobID, caller.User, caller.Provider);
+      return this.stateOutput(await this.loadReadableJob(jobID, caller), 'Archive seed cancelled.');
+    } catch (e) {
+      return this.failure('IntegrationArchiveSeedCancel', e);
+    }
+  }
+
   @Query(() => IntegrationArchiveSeedStateOutput)
   async IntegrationArchiveSeedState(
     @Arg('jobID') jobID: string,

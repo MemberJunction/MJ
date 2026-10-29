@@ -962,6 +962,17 @@ export class GraphQLIntegrationClient {
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 
+    /** Abandons a job that waits for a selection or a cleanup decision; the server drops its staging database. */
+    public async CancelArchiveSeed(jobID: string): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationArchiveSeedCancel($jobID: String!) {
+                IntegrationArchiveSeedCancel(jobID: $jobID) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { jobID });
+            return result?.IntegrationArchiveSeedCancel ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
     /** The current state of an archive seed job. `State` is present only when the server found the job. */
     public async GetArchiveSeedState(jobID: string): Promise<MutationResult & { State?: IntegrationArchiveSeedState }> {
         try {

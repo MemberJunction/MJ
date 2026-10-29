@@ -380,6 +380,30 @@ describe('ArchiveSeedJob', () => {
     expect(records.DeletedCompanyIntegrations).toEqual([]);
   });
 
+  it('Cancel fails a job awaiting selection, drops its staging database and removes the archive source', async () => {
+    const started = await job.Start(INPUT, USER, PROVIDER);
+    await job.WaitForIdle();
+    expect(store.Jobs.get(started.JobID)?.Work.State).toBe('AwaitingSelection');
+    const archiveID = store.Jobs.get(started.JobID)?.Work.ArchiveDataSourceID;
+    expect(archiveID).toBeDefined();
+
+    await job.Cancel(started.JobID, { ...USER, Email: 'paul@example.com' } as UserInfo, PROVIDER);
+
+    const work = store.Jobs.get(started.JobID)?.Work;
+    expect(work?.State).toBe('Failed');
+    expect(work?.Error).toBe('Cancelled by paul@example.com');
+    expect(actions.Calls.filter(c => c.Name === DROP)).toHaveLength(1);
+    expect(records.DeletedDataSources).toContain(archiveID);
+    expect(store.Failed.map(f => f.JobID)).toEqual([started.JobID]);
+  });
+
+  it.each(['Restoring', 'Building', 'Loading'] as const)('Cancel refuses a job that is %s', async state => {
+    const work: ArchiveSeedWork = { ...NewArchiveSeedWork(INPUT, USER.ID, 'int-sql', clock), State: state };
+    store.Jobs.set('job-busy', { ID: 'job-busy', Work: work, Status: 'Pending', CompanyIntegrationID: 'ci-busy' });
+    await expect(job.Cancel('job-busy', USER, PROVIDER)).rejects.toThrow(`Archive seed job "job-busy" is ${state}; only a job awaiting a selection or a cleanup decision can be cancelled`);
+    expect(store.Jobs.get('job-busy')?.Work.State).toBe(state);
+  });
+
   it('Start replaces the connection a failed seed left behind, then seeds as usual', async () => {
     const failedWork: ArchiveSeedWork = { ...NewArchiveSeedWork(INPUT, USER.ID, 'int-sql', clock), State: 'Failed', Error: 'RESTORE failed' };
     store.Jobs.set('job-old', { ID: 'job-old', Work: failedWork, Status: 'Failed', CompanyIntegrationID: 'ci-old' });

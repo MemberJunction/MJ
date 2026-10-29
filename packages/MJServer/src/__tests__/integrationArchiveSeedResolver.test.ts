@@ -35,6 +35,7 @@ const OPERATIONS: Array<[string, 'Mutation' | 'Query']> = [
     ['IntegrationArchiveSeedStart', 'Mutation'],
     ['IntegrationArchiveSeedSelectTables', 'Mutation'],
     ['IntegrationArchiveSeedFinish', 'Mutation'],
+    ['IntegrationArchiveSeedCancel', 'Mutation'],
     ['IntegrationArchiveSeedState', 'Query'],
 ];
 

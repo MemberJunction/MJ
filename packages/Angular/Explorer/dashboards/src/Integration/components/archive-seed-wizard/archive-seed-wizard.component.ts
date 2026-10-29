@@ -300,6 +300,33 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.cdr.detectChanges();
   }
 
+  /**
+   * Abandons the job while it waits for a selection or a cleanup decision. The server fails it, which
+   * drops the staging database and removes the archive data source; the wizard then closes so the
+   * connections page reloads and shows the connection as a failed seed that can be deleted or replaced.
+   */
+  public async CancelSeed(): Promise<void> {
+    if (!this.JobID || this.IsSubmitting) return;
+    const generation = this.generation;
+    this.IsSubmitting = true;
+    this.ExecutionError = null;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.integrationService.CancelArchiveSeed(this.JobID);
+      if (generation !== this.generation) return;
+      if (!result.Success) {
+        this.ExecutionError = result.Message || 'The archive seed could not be cancelled.';
+        return;
+      }
+      this.Close();
+    } catch (err) {
+      this.ExecutionError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.IsSubmitting = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   /** Closes the wizard. The job keeps running on the server and can be resumed by its ID. */
   public Close(): void {
     const jobStarted = this.JobID !== null;

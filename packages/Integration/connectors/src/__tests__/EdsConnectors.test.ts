@@ -140,6 +140,31 @@ describe('BaseExternalDataSourceConnector — descriptor → SourceSchemaInfo ma
         expect(fkField?.ForeignKeyTarget).toBe('customers');
     });
 
+    it('introspects the requested schemas and qualifies the object names with them', async () => {
+        class SchemaDriver extends MockDriver {
+            public Asked: Array<string | undefined> = [];
+            public override async IntrospectSchema(_ds: MJExternalDataSourceEntity, schemaName: string | undefined): Promise<ExternalSchemaDescriptor> {
+                this.Asked.push(schemaName);
+                const object = DESCRIPTOR.Objects[0];
+                return { Database: 'db', Objects: [{ ...object, Schema: undefined, Name: schemaName === 'sales' ? 'customers' : 'regions' }] };
+            }
+            public override async ListSchemas(): Promise<string[]> { return ['dbo', 'sales', 'sys']; }
+        }
+        const driver = new SchemaDriver();
+        const c = new TestSqlConnector(resolvedFor(driver));
+        expect(await c.ListSchemas(CI, USER)).toEqual(['dbo', 'sales', 'sys']);
+        const schema = await c.IntrospectSchema(CI, USER, { Schemas: ['sales', 'geo'] });
+        expect(driver.Asked).toEqual(['sales', 'geo']);
+        expect(schema.Objects.map(o => o.ExternalName)).toEqual(['sales.customers', 'geo.regions']);
+        expect(schema.IsAuthoritative).toBe(true);
+    });
+
+    it('without Schemas, introspects the data source default schema with bare names', async () => {
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
+        const schema = await c.IntrospectSchema(CI, USER, { Schemas: [] });
+        expect(schema.Objects.map(o => o.ExternalName)).toEqual(['customers', 'orders']);
+    });
+
     it('document (sampled) discovery is NOT authoritative', async () => {
         const c = new TestDocConnector(resolvedFor(new MockDriver()));
         const schema = await c.IntrospectSchema(CI, USER);

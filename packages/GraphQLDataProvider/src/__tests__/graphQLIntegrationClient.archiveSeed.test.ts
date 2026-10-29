@@ -35,6 +35,14 @@ describe('GraphQLIntegrationClient archive seed', () => {
     expect(ExecuteGQL.mock.calls[0][1]).toEqual({ jobID: 'j1', dropStaging: true });
   });
 
+  it('CancelArchiveSeed sends jobID', async () => {
+    const { client, ExecuteGQL } = makeClient(async () => ({ IntegrationArchiveSeedCancel: { Success: true, Message: 'Archive seed cancelled.' } }));
+    const result = await client.CancelArchiveSeed('j1');
+    expect(String(ExecuteGQL.mock.calls[0][0])).toContain('IntegrationArchiveSeedCancel');
+    expect(ExecuteGQL.mock.calls[0][1]).toEqual({ jobID: 'j1' });
+    expect(result.Success).toBe(true);
+  });
+
   it('GetArchiveSeedState maps the flat response into State', async () => {
     const flat = {
       Success: true, Message: 'ok', JobID: 'j1', CompanyIntegrationID: 'c1', State: 'AwaitingSelection',

@@ -216,3 +216,26 @@ export function RunManifestFor(
     context: { kind: 'ArchiveSeed', jobID, phase },
   };
 }
+
+/** Schemas an archive seed never offers: SQL Server's own. MemberJunction's own are matched by prefix below. */
+const EXCLUDED_ARCHIVE_SCHEMAS: ReadonlySet<string> = new Set(['sys', 'information_schema', 'guest']);
+
+/**
+ * The schemas of a restored archive whose tables are offered for seeding (decision D): every schema
+ * the driver lists except SQL Server's own and MemberJunction's own (`__mj` and `__mj_*`, the platform
+ * metadata a backup of another MJ database carries). Case-insensitive, de-duplicated, in name order.
+ */
+export function SelectArchiveSchemas(schemas: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const selected: string[] = [];
+  for (const raw of schemas) {
+    const name = raw.trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key) || EXCLUDED_ARCHIVE_SCHEMAS.has(key) || key === '__mj' || key.startsWith('__mj_')) {
+      continue;
+    }
+    seen.add(key);
+    selected.push(name);
+  }
+  return selected.sort((a, b) => a.localeCompare(b));
+}

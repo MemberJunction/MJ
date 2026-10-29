@@ -6,8 +6,9 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
 import type { ActionParam, ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
-import { ConnectorFactory, IntegrationSchemaSync, type SourceSchemaInfo } from '@memberjunction/integration-engine';
+import { ConnectorFactory, IntegrationSchemaSync, type BaseIntegrationConnector, type SourceSchemaInfo } from '@memberjunction/integration-engine';
 import { RuntimeSchemaManager, type ArchiveSeedDiscoveredTable, type ArchiveSeedWork, type RSUPendingWork } from '@memberjunction/schema-engine';
+import { SelectArchiveSchemas } from './ArchiveSeedState.js';
 import { IntegrationDiscoveryResolver, type ApplyAllBatchInput } from '../../resolvers/IntegrationDiscoveryResolver.js';
 import type {
   ArchiveSeedActions,
@@ -54,7 +55,8 @@ export class DefaultArchiveSeedDiscovery implements ArchiveSeedDiscovery {
       throw new Error(`Integration "${companyIntegration.IntegrationID}" not found`);
     }
     const connector = ConnectorFactory.Resolve(integration);
-    const schema = await connector.IntrospectSchema(companyIntegration, user);
+    const schemas = await this.archiveSchemas(connector, companyIntegration, user);
+    const schema = await connector.IntrospectSchema(companyIntegration, user, schemas.length > 0 ? { Schemas: schemas } : undefined);
     await IntegrationSchemaSync.PersistDiscoveredSchema({
       IntegrationID: companyIntegration.IntegrationID,
       CatalogSource: 'Shared',
@@ -65,6 +67,19 @@ export class DefaultArchiveSeedDiscovery implements ArchiveSeedDiscovery {
     return MapSourceSchemaToTables(schema);
   }
 
+  /**
+   * The archive's schemas to introspect (decision D): all the connector can list except the system and
+   * MemberJunction ones. Empty when the connector cannot list schemas, in which case the introspection
+   * falls back to the data source's default schema.
+   */
+  private async archiveSchemas(connector: BaseIntegrationConnector, companyIntegration: MJCompanyIntegrationEntity, user: UserInfo): Promise<string[]> {
+    const listing = connector as Partial<SchemaListingConnector>;
+    if (typeof listing.ListSchemas !== 'function') {
+      return [];
+    }
+    return SelectArchiveSchemas(await listing.ListSchemas.call(connector, companyIntegration, user));
+  }
+
   private async loadCompanyIntegration(id: string, user: UserInfo, provider: IMetadataProvider): Promise<MJCompanyIntegrationEntity> {
     const companyIntegration = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
     if (!(await companyIntegration.Load(id))) {
@@ -72,6 +87,11 @@ export class DefaultArchiveSeedDiscovery implements ArchiveSeedDiscovery {
     }
     return companyIntegration;
   }
+}
+
+/** A connector that can enumerate its source's schemas (the external-data-source connectors do). */
+interface SchemaListingConnector {
+  ListSchemas(companyIntegration: MJCompanyIntegrationEntity, contextUser: UserInfo): Promise<string[]>;
 }
 
 /** Applies the selected tables through the same batch pipeline the dashboard uses. */

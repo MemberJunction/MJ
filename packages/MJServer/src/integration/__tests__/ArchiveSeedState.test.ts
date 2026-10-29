@@ -12,6 +12,7 @@ import {
   DefaultStagingDatabaseName,
   NewArchiveSeedWork,
   RunManifestFor,
+  SelectArchiveSchemas,
   Transition,
   ValidateArchiveSeedStartInput,
   ValidateTableSelection,
@@ -182,6 +183,21 @@ describe('ArchiveSeedState', () => {
         expect(p.Type).toBe('Input');
         expect(typeof p.Value).toBe('string');
       }
+    });
+  });
+
+  describe('SelectArchiveSchemas', () => {
+    it('offers every user schema except SQL Server\'s own and MemberJunction\'s own, sorted', () => {
+      expect(SelectArchiveSchemas(['village', '__mj', 'dbo', 'sys', 'INFORMATION_SCHEMA', '__mj_UDT', 'guest', 'Sales'])).toEqual(['dbo', 'Sales', 'village']);
+    });
+
+    it('matches the exclusions case-insensitively and de-duplicates', () => {
+      expect(SelectArchiveSchemas(['__MJ', 'Dbo', 'dbo', ' DBO ', '__Mj_Audit', 'SYS'])).toEqual(['Dbo']);
+    });
+
+    it('is empty when the driver listed nothing or only excluded schemas', () => {
+      expect(SelectArchiveSchemas([])).toEqual([]);
+      expect(SelectArchiveSchemas(['__mj', 'sys', ''])).toEqual([]);
     });
   });
 
