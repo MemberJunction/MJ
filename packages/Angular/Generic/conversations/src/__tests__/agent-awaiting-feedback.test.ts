@@ -1,13 +1,15 @@
 /**
- * @fileoverview An agent run in AwaitingFeedback (or Paused) is ALIVE — the server has
- * parked it waiting for this user to answer a question. Two surfaces used to tell the
- * user otherwise, neither of them repeating anything the server said:
+ * @fileoverview An agent run in AwaitingFeedback is a SETTLED chat turn: a Chat final step
+ * ends the run with CompletedAt stamped (base-agent), and a reply that resumes it sets it back
+ * to Running. Two surfaces have to agree with that:
  *
- *  1. {@link AgentStateService} polled `Status IN ('Running', 'Paused')`, so an
- *     AwaitingFeedback run fell out of the active set on the very next cycle.
- *  2. The run reaches every failure path with `success: false` and — because a parked
- *     run carries no ErrorMessage — {@link MessageInputComponent.applyAgentFailureToDetail}
- *     rendered it as "❌ failed" with "Unknown error" text.
+ *  1. {@link AgentStateService} polls `Status IN ('Running', 'Paused')`. Counting
+ *     AwaitingFeedback as live put every past chat turn in the active set: the indicator
+ *     showed finished agents as "Completing", and polling never stopped because no cycle
+ *     ever came back empty.
+ *  2. The run reaches every failure path with `success: false` and — because it carries no
+ *     ErrorMessage — {@link MessageInputComponent.applyAgentFailureToDetail} rendered it as
+ *     "❌ failed" with "Unknown error" text. The agent asked the user a question; it did not fail.
  *
  * Both are pinned here behaviourally: the service is driven through a fake provider, and
  * the component method is driven off the prototype (no constructor/TestBed) with only the
@@ -71,7 +73,7 @@ async function pollOnce(service: AgentStateService, probe: ProviderProbe): Promi
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-describe('AgentStateService — an AwaitingFeedback run stays in the poll set', () => {
+describe('AgentStateService — a finished chat turn is not an active agent', () => {
     const services: AgentStateService[] = [];
 
     afterEach(() => {
@@ -84,7 +86,7 @@ describe('AgentStateService — an AwaitingFeedback run stays in the poll set', 
         return service;
     }
 
-    it('asks the server for AwaitingFeedback alongside Running and Paused', async () => {
+    it('asks the server for Running and Paused only', async () => {
         const service = newService();
         const probe = fakeProvider([]);
 
@@ -92,32 +94,57 @@ describe('AgentStateService — an AwaitingFeedback run stays in the poll set', 
 
         expect(probe.calls).toHaveLength(1);
         const filter = probe.calls[0].ExtraFilter ?? '';
-        expect(filter).toContain("'AwaitingFeedback'");
         expect(filter).toContain("'Running'");
         expect(filter).toContain("'Paused'");
+        expect(filter).not.toContain("'AwaitingFeedback'");
     });
 
-    it('keeps an AwaitingFeedback run in the active set rather than dropping it', async () => {
+    it('leaves finished chat turns (AwaitingFeedback) out of the active set', async () => {
         const service = newService();
-        const probe = fakeProvider([agentRun('AwaitingFeedback', 'run-awaiting')]);
+        const probe = fakeProvider([
+            agentRun('AwaitingFeedback', 'turn-60'),
+            agentRun('AwaitingFeedback', 'turn-30'),
+            agentRun('AwaitingFeedback', 'turn-10'),
+        ]);
 
         await pollOnce(service, probe);
 
         const active = await firstValueFrom(service.getActiveAgents(CONVERSATION_ID));
-
-        expect(active.map((a) => a.run.ID)).toEqual(['run-awaiting']);
-        expect(service.getAgent('run-awaiting')).toBeDefined();
+        expect(active).toEqual([]);
+        expect(service.getAgent('turn-10')).toBeUndefined();
     });
 
-    it('does not classify an AwaitingFeedback run as an error', async () => {
+    it('keeps a resumed run (Running) and a workflow-parked run (Paused) in the active set', async () => {
         const service = newService();
-        const probe = fakeProvider([agentRun('AwaitingFeedback', 'run-awaiting')]);
+        const probe = fakeProvider([
+            agentRun('Running', 'run-resumed'),
+            agentRun('Paused', 'run-parked'),
+            agentRun('AwaitingFeedback', 'turn-done'),
+        ]);
 
         await pollOnce(service, probe);
 
-        const agent = service.getAgent('run-awaiting');
-        expect(agent).toBeDefined();
-        expect(agent?.status).not.toBe('error');
+        const active = await firstValueFrom(service.getActiveAgents(CONVERSATION_ID));
+        expect(active.map((a) => a.run.ID).sort()).toEqual(['run-parked', 'run-resumed']);
+        expect(service.getAgent('run-resumed')?.status).not.toBe('error');
+    });
+
+    it('stops polling when only finished chat turns remain', async () => {
+        const service = newService();
+        const probe = fakeProvider([agentRun('AwaitingFeedback', 'turn-60'), agentRun('AwaitingFeedback', 'turn-30')]);
+        const internals = service as unknown as {
+            loadActiveAgents(conversationId?: string): Promise<void>;
+            minimumPollCycles: number;
+            pollSubscription?: unknown;
+        };
+        service.Provider = probe.provider;
+        service.StartPolling({ ID: 'user-1' } as unknown as UserInfo, CONVERSATION_ID);
+
+        for (let cycle = 0; cycle < internals.minimumPollCycles; cycle++) {
+            await internals.loadActiveAgents(CONVERSATION_ID);
+        }
+
+        expect(internals.pollSubscription).toBeUndefined();
     });
 });
 

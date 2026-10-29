@@ -18,7 +18,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ProviderBase } from '../generic/providerBase';
-import { AllMetadata } from '../generic/interfaces';
+import { AllMetadata, ProviderConfigDataBase } from '../generic/interfaces';
 import type {
     DatasetItemFilterType,
     DatasetResultType,
@@ -405,5 +405,59 @@ describe('a server that ANSWERED "no" is not an outage — a denial propagates, 
         provider.seedLocalMetadata(612);
 
         await expect(provider.CheckToSeeIfRefreshNeeded(undefined, true)).resolves.toBe(false);
+    });
+
+    it('degrades on a dead server whose error was sanitized, because the verdict travels with it', async () => {
+        // What ExecuteGQL rethrows when nothing answered: SafeGraphQLError has re-derived the
+        // message, so "fetch failed" / ECONNREFUSED are gone and only the recorded verdict remains.
+        const sanitized = () => Object.assign(new Error('GraphQL Error (Code: unknown)'), {
+            name: 'TypeError',
+            response: { status: undefined, errors: undefined },
+            IsTransportFailure: true,
+        });
+        const provider = new ProbeProvider({ statusRejectsWithError: sanitized() });
+        provider.seedLocalMetadata(612);
+
+        await expect(provider.CheckToSeeIfRefreshNeeded(undefined, true)).resolves.toBe(false);
+
+        // The same sanitized shape without a verdict is an unknown, and an unknown propagates.
+        const unknown = new ProbeProvider({
+            statusRejectsWithError: Object.assign(sanitized(), { IsTransportFailure: undefined }),
+        });
+        unknown.seedLocalMetadata(612);
+        await expect(unknown.CheckToSeeIfRefreshNeeded(undefined, true)).rejects.toThrow('GraphQL Error (Code: unknown)');
+    });
+});
+
+describe('Config — the composition a client actually calls', () => {
+    // The cases above drive the three members Config() composes. This drives Config() itself,
+    // the layer the FLS integration fixture's retry helper sees: it needs a throw to retry on.
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* silenced */ }); });
+    afterEach(() => { errorSpy.mockRestore(); });
+
+    const config = () => new ProviderConfigDataBase({}, '__mj', undefined, undefined, true);
+
+    it.each([
+        ['holding a snapshot', 612],
+        ['holding nothing', 0],
+    ])('rejects on a scope denial %s', async (_label, entityCount) => {
+        const provider = new ProbeProvider({ statusRejectsWith: SCOPE_DENIAL, storage: fakeStorage(new Map()) });
+        if (entityCount > 0) {
+            provider.seedLocalMetadata(entityCount);
+        }
+
+        await expect(provider.Config(config())).rejects.toThrow("requires the 'dataset:read' scope");
+    });
+
+    it('resolves on a transport failure while holding a snapshot, and keeps it', async () => {
+        const provider = new ProbeProvider({
+            statusRejectsWithError: Object.assign(new Error('Response not successful: Received status code 504'), { response: { status: 504 } }),
+            storage: fakeStorage(new Map()),
+        });
+        provider.seedLocalMetadata(612);
+
+        await expect(provider.Config(config())).resolves.toBe(true);
+        expect(provider.datasetFetches).toBe(0);
     });
 });

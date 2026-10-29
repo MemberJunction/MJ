@@ -89,7 +89,7 @@ export function isDisconnectWhileAgentMayStillBeRunning(
 }
 
 /**
- * AIAgentRun statuses that mean the run is ALIVE and parked on a human, not failed.
+ * AIAgentRun statuses that mean the run is waiting on a human, not failed.
  *
  * A run in either state has `success: false` on the envelope — the turn did not
  * complete — so every failure path sees it. It is not a failure: the server is
@@ -114,7 +114,7 @@ export type AgentFailureDisposition =
     /** Transport died after the ACK; the server may still finish this run. */
     | { status: 'In-Progress'; message: string }
     /**
-     * The run is alive and waiting on the user. `message` is the agent's own question
+     * The run is waiting on the user. `message` is the agent's own question
      * (`agentRun.Message`), or `''` when the run recorded none — callers supply their
      * own prompt copy in that case, since the agent's display name lives in the UI layer.
      */

@@ -166,11 +166,11 @@ export class AgentStateService implements OnDestroy {
       const rv = RunView.FromMetadataProvider(this.Provider);
       // Valid statuses: Running, Paused, AwaitingFeedback, Completed, Failed, Cancelled.
       //
-      // AwaitingFeedback and Paused are ALIVE — the run is parked waiting on a human, not
-      // finished. Leaving AwaitingFeedback out dropped such a run from the active set on the
-      // very next poll, so the surface stopped tracking a run that is still waiting for the
-      // user's reply and downstream code then treated the absence as a failure.
-      let filter = `Status IN ('Running', 'Paused', 'AwaitingFeedback')`;
+      // AwaitingFeedback is NOT live: a Chat final step ends the run with CompletedAt stamped,
+      // so it is how a conversational turn normally finishes. Counting it here kept every past
+      // turn in the active set and polling never stopped. A reply that resumes the run sets it
+      // back to Running; a run parked on a workflow is Paused. Both are read below.
+      let filter = `Status IN ('Running', 'Paused')`;
 
       if (conversationId) {
         const inScope = ConversationEngine.ScopeSubquery(scope ?? ConversationEngine.TrunkScope(conversationId));

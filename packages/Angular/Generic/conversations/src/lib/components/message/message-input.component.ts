@@ -3861,10 +3861,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * follows the row until the server writes a terminal status. A placeholder the server never
    * acknowledged shows the failure on screen only.
    *
-   * A run in AwaitingFeedback/Paused is not a failure at all — it is alive and parked on this user.
-   * It only reaches here because the envelope says `success: false`, and because such a run usually
-   * carries no ErrorMessage it used to render as "❌ failed — Unknown error": a verdict the server
-   * never returned. That branch surfaces the agent's question and completes the bubble instead.
+   * A run in AwaitingFeedback/Paused is not a failure at all — the agent asked this user a
+   * question, or is parked on a workflow. It only reaches here because the envelope says
+   * `success: false`, and because such a run usually carries no ErrorMessage it used to render as
+   * "❌ failed — Unknown error": a verdict the server never returned. That branch surfaces the
+   * agent's question and completes the bubble instead.
    *
    * Always completes the user message — the user turn finished regardless of what the agent is doing.
    */
@@ -3877,10 +3878,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ): Promise<void> {
     const disposition = agentFailureDisposition(result);
     if (disposition.status === 'Awaiting-Input') {
-      // Complete, not Error: the turn is over from the UI's point of view (the timer must
-      // stop) while the run itself stays alive server-side. `result` is passed through so
-      // any ResponseForm the agent attached to its question still renders. AgentStateService
-      // keeps the run in its active set until the user's reply resumes it.
+      // Complete, not Error: the turn is over (the timer must stop) and the agent's question is
+      // the reply. `result` is passed through so any ResponseForm the agent attached to its
+      // question still renders. The user's answer resumes the run, which re-enters
+      // AgentStateService's active set as Running.
       await this.updateConversationDetail(
         agentResponseMessage,
         disposition.message || `**${agentName}** needs more information to continue — please reply with details.`,

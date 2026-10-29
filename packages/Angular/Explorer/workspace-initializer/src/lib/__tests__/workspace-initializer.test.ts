@@ -167,6 +167,19 @@ describe('WorkspaceInitializerService.classifyError', () => {
     expect(result.shouldRetry).toBe(false);
   });
 
+  it('does not offer a network retry for a failed boot caused by a scope denial', () => {
+    // "the metadata download failed" contains "load failed", Safari's fetch-failure text. The
+    // server answered "no" here; telling the user to check their connection and retry is wrong.
+    const err = new Error(
+      'SetupGraphQLClient: no entity metadata was loaded from http://localhost:4000/ — the metadata download failed or returned nothing: ' +
+      "Access denied. This API key requires the 'dataset:read' scope for resource 'MJ_Metadata' to perform this operation. " +
+      'Denial reason: No matching key scope rules'
+    );
+    const result = service.classifyError(err);
+    expect(result.type).not.toBe('network');
+    expect(result.shouldRetry).toBe(false);
+  });
+
   it('classifies a ResourceTypes TypeError as unknown — there is no such heuristic', () => {
     // This assertion originally expected `no_roles`. It never ran, and the service has never
     // had a ResourceTypes branch: `isNoUserRolesError` matches only the

@@ -6519,8 +6519,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   snapshot may be a few seconds stale; a rejected status query is no reason to throw
      *   it away, and every caller of this method treats `false` as "carry on with what you
      *   have".
-     * - **We hold nothing** → answer `true`, so the caller attempts a real load and fails
-     *   against the actual metadata fetch. That failure is the one worth surfacing.
+     * - **We hold nothing** → answer `true`, so the caller attempts a real load against the
+     *   actual metadata fetch. That load logs its own failure and leaves the graph empty;
+     *   `SetupGraphQLClient` turns an empty graph into an error carrying it, while a caller
+     *   that only checks {@link Config}'s return value sees `true`.
      *
      * Before this, an unreachable status query propagated an exception out of
      * {@link Config} and the Explorer's single boot catch turned it into a non-retryable
@@ -6592,7 +6594,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(
                 `[RefreshCheck] Could not read metadata timestamps from the server and there is no ` +
                 `cached snapshot to fall back on — reporting a refresh as needed so the caller loads ` +
-                `metadata and surfaces the real failure.`
+                `metadata; that load reports its own failure.`
             );
             return true;
         }

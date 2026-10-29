@@ -16,8 +16,11 @@ const BRANCH_SCOPE: ConversationScope = { ConversationID: 'CONV-1', BranchID: 'B
 /** `ConversationID=` outside brackets: a filter on the run's own conversation column. */
 const BARE_CONVERSATION_FILTER = /(^|[^[])ConversationID\s*=/;
 
-/** The statuses the poll treats as live: Paused and AwaitingFeedback are parked on a human, not finished. */
-const LIVE_STATUSES = `Status IN ('Running', 'Paused', 'AwaitingFeedback')`;
+/**
+ * The statuses the poll treats as live. AwaitingFeedback is not one: it is how a chat turn
+ * normally ends, with CompletedAt stamped. A reply that resumes the run sets it back to Running.
+ */
+const LIVE_STATUSES = `Status IN ('Running', 'Paused')`;
 
 /** The poll filter for a conversation: runs in scope, or conversation runs with no detail. */
 function conversationFilter(scope: ConversationScope, conversationId: string): string {

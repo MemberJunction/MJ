@@ -36,11 +36,20 @@ const TRANSPORT_ERROR_SIGNATURES: readonly string[] = [
     'etimedout',
     'enotfound',
     'epipe',
-    'load failed', // Safari's opaque fetch failure
     'aborterror',
     'the operation was aborted',
     'err_network',
     'err_connection',
+];
+
+/**
+ * Signatures that must start a word. Safari's opaque fetch failure is the bare text "Load failed",
+ * but "download failed" and "upload failed" end in the same letters, and SetupGraphQLClient's own
+ * boot error says "the metadata download failed" before quoting whatever the server answered.
+ * Matched against the lower-cased text, so `[^a-z]` is the word boundary.
+ */
+const TRANSPORT_ERROR_WORD_SIGNATURES: readonly RegExp[] = [
+    /(?:^|[^a-z])load failed/, // Safari's opaque fetch failure
 ];
 
 /** HTTP statuses that mean "the request never got a real answer" — always retryable. */
@@ -56,7 +65,9 @@ const TRANSPORT_STATUS_IN_TEXT = /\b(?:status(?:\s*code)?|http)\D{0,12}(?:408|42
 /**
  * True when the error describes the transport failing rather than the server refusing.
  *
- * Checks three independent places, because a GraphQL client can put the interesting part in
+ * Honours an `IsTransportFailure: true` a sanitizing client recorded on the error (see
+ * `SafeGraphQLError` in `@memberjunction/graphql-dataprovider`). Otherwise
+ * checks three independent places, because a GraphQL client can put the interesting part in
  * any of them: an HTTP status (`err.status` / `err.statusCode` / `err.response.status` /
  * `err.networkError.statusCode`), a `networkError` property at all, and the collected message
  * text from the error, its `networkError`, its nested `error` / `cause`, and every entry of a
@@ -70,6 +81,13 @@ export function IsTransportError(err: unknown): boolean {
         return false;
     }
     const candidate = err as Record<string, unknown>;
+
+    // 0. A verdict the client recorded before it discarded the text. GraphQLDataProvider's
+    //    SafeGraphQLError re-derives its message from the GraphQL response, so for a server that
+    //    never answered, "fetch failed" / ECONNREFUSED survive only as this flag.
+    if (candidate['IsTransportFailure'] === true) {
+        return true;
+    }
 
     // 1. An HTTP status, wherever the client hung it.
     const statusCandidates = [
@@ -95,6 +113,9 @@ export function IsTransportError(err: unknown): boolean {
         return false;
     }
     if (TRANSPORT_ERROR_SIGNATURES.some((sig) => text.includes(sig))) {
+        return true;
+    }
+    if (TRANSPORT_ERROR_WORD_SIGNATURES.some((re) => re.test(text))) {
         return true;
     }
     // 4. A status code quoted IN the text. Apollo's standard message for a failed HTTP round

@@ -27,9 +27,13 @@ describe('IsTransportError — transport failures, in every shape a GraphQL clie
         ['gateway reason phrase', new Error('504 Gateway Timeout')],
         ['bad gateway reason phrase', new Error('502 Bad Gateway')],
         ['Safari opaque', new Error('Load failed')],
+        ['Safari opaque, prefixed', new TypeError('TypeError: Load failed')],
         ['abort by name', Object.assign(new Error(''), { name: 'AbortError' })],
         ['nested cause', Object.assign(new Error('request failed'), { cause: new Error('connect ECONNREFUSED 127.0.0.1:4000') })],
         ['inside response.errors[]', Object.assign(new Error('GraphQL error'), { response: { errors: [{ message: 'HTTP 503 from upstream' }] } })],
+        // GraphQLDataProvider's SafeGraphQLError discards the upstream text, so it records the
+        // verdict it made on the raw error before doing so.
+        ['a sanitized error that recorded the verdict', Object.assign(new Error('GraphQL Error (Code: unknown)'), { IsTransportFailure: true })],
     ])('%s → transport', (_label, err) => {
         expect(IsTransportError(err)).toBe(true);
     });
@@ -46,6 +50,12 @@ describe('IsTransportError — a server that answered is never transport', () =>
         ['a 4xx that is a real answer', Object.assign(new Error('Forbidden'), { status: 403 })],
         ['a 401', Object.assign(new Error('Unauthorized'), { response: { status: 401 } })],
         ['a number that merely appears in the text', new Error('Row 504 of the import failed validation')],
+        // "download failed" ends in "load failed", Safari's fetch-failure text: the boot error
+        // SetupGraphQLClient throws must not turn the denial it carries into a network problem.
+        ['the boot error carrying a scope denial',
+            new Error(`SetupGraphQLClient: no entity metadata was loaded from http://localhost:4000/ — the metadata download failed or returned nothing: ${SCOPE_DENIAL}`)],
+        ['an upload that was refused', new Error('The upload failed: file type not allowed')],
+        ['a sanitized error recorded as not transport', Object.assign(new Error('GraphQL Error (Code: unknown)'), { IsTransportFailure: false })],
         ['a string', 'Failed to fetch'],
         ['nothing', undefined],
         ['null', null],
