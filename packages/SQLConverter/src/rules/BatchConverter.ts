@@ -12,6 +12,7 @@ import { dirname } from 'node:path';
 import { ClassifyBatch } from './StatementClassifier.js';
 import { SubSplitCompoundBatch } from './SubSplitter.js';
 import { PostProcess } from './PostProcessor.js';
+import { FindBracketIdentifiersInDollarBlocks } from './ExpressionHelpers.js';
 import { GetHeaderBuilder } from './DialectHeaderBuilder.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
@@ -247,7 +248,16 @@ function recordOutputGaps(output: string, stats: ConversionStats): void {
     stats.Gaps++;
     stats.GapBatches.push(line.trim().slice(0, 200));
   }
+  // A T-SQL bracket identifier left inside a dollar-quoted block carries no marker, but the
+  // line cannot run on PostgreSQL either (#6074)
+  for (const line of FindBracketIdentifiersInDollarBlocks(output)) {
+    stats.Gaps++;
+    stats.GapBatches.push(`${GAP_BRACKET_IN_DOLLAR_BLOCK} ${line}`.slice(0, 200));
+  }
 }
+
+/** The `GapBatches` prefix of a line that kept a T-SQL bracket identifier inside a dollar-quoted block. */
+const GAP_BRACKET_IN_DOLLAR_BLOCK = 'T-SQL bracket identifier left in a dollar-quoted block:';
 
 /** Replace Flyway placeholders with target schema */
 function preprocess(sql: string, schema: string): string {
