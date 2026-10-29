@@ -187,6 +187,11 @@ vi.mock('@memberjunction/global', async importOriginal => {
       Instance: {
         ClassFactory: {
           GetRegistrationAsync: vi.fn(async () => ({ SubClass: class {} })),
+          DescribeMissingRegistration: vi.fn(
+            (_base: unknown, key: string) =>
+              `ClassFactory: no registration found for base class 'BaseDashboard' with key '${key}'. ` +
+              `Registered keys for 'BaseDashboard': 'HomeDashboard'.`,
+          ),
         },
       },
     },
@@ -461,6 +466,30 @@ describe('DashboardResource tab scoping of child dashboards', () => {
 });
 
 describe('DashboardResource code-based dashboard error surfacing', () => {
+  it('explains an unresolved DriverClass with the registered keys and the likely causes', async () => {
+    const { DashboardResource } = await import('./dashboard-resource.component');
+    const { MJGlobal } = await import('@memberjunction/global');
+    const getRegistration = MJGlobal.Instance.ClassFactory.GetRegistrationAsync as ReturnType<typeof vi.fn>;
+    getRegistration.mockResolvedValueOnce(null);
+
+    const resource = new DashboardResource(
+      { createComponent: vi.fn() } as any,
+      { detectChanges: vi.fn(), markForCheck: vi.fn() } as any,
+    ) as any;
+    resource.containerElement = { nativeElement: { innerHTML: '', appendChild: vi.fn() } };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await resource.loadCodeBasedDashboard({ ID: 'dash-x', Name: 'Forms Home', DriverClass: 'FormsHomeDashboard' });
+    consoleError.mockRestore();
+
+    expect(MJGlobal.Instance.ClassFactory.DescribeMissingRegistration).toHaveBeenCalledWith(expect.anything(), 'FormsHomeDashboard');
+    expect(resource.errorMessage).toContain('Forms Home');
+    expect(resource.errorDetails).toContain("Dashboard class 'FormsHomeDashboard' is not registered.");
+    expect(resource.errorDetails).toContain("Registered keys for 'BaseDashboard': 'HomeDashboard'.");
+    expect(resource.errorDetails).toContain('not installed in this Explorer');
+    expect(resource.errorDetails).toContain('tree-shook it out');
+  });
+
   /**
    * BaseDashboard guarantees the loading screen is released when initDashboard()/loadData() throws
    * — it logs, emits its `Error` output, then fires NotifyLoadComplete() in a finally. The host must
