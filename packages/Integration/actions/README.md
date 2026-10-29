@@ -137,7 +137,7 @@ Restores the backup into a named staging database and stops. The staging databas
 |-----------|-----------|------|----------|-------------|
 | `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being seeded |
 | `BackupUrls` | Input | string | Yes | One backup URL or path, or a comma-separated list for a striped backup |
-| `StagingDatabaseName` | Input | string | Yes | Database to restore into |
+| `StagingDatabaseName` | Both | string | Yes | Database to restore into; echoed back as the restored staging database |
 | `SasToken` | Input | string | No | SAS token for Azure Blob container access (redacted from logs) |
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
 | `TargetDataFileDirectory` | Input | string | No | Where the staging data files go |
@@ -145,7 +145,6 @@ Restores the backup into a named staging database and stops. The staging databas
 | `ProgressRunID` | Input | string | No | Integration progress run to report stages to |
 | `BackupStartDate` | Output | string | — | ISO UTC time the backup began; the load phase seeds watermarks to it |
 | `BackupDatabaseName` | Output | string | — | Source database recorded in the backup header |
-| `StagingDatabaseName` | Output | string | — | The restored staging database |
 | `ContainerUrl` | Output | string | — | Storage container whose SQL Server credential was registered (empty for local paths) |
 
 **Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupUrls holds no valid URL or path), `RESTORE_FAILED`
@@ -159,38 +158,42 @@ Loads every active entity map's table from the staging database into the target 
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
 | `CompanyIntegrationID` | Input | string | Yes | ID of the Company Integration being seeded |
-| `StagingDatabaseName` | Input | string | Yes | The restored staging database; it must exist |
-| `BackupStartDate` | Input | string | Yes | ISO UTC backup start, as the restore phase reported it |
+| `StagingDatabaseName` | Both | string | Yes | The restored staging database; it must exist. Echoed back on success |
+| `BackupStartDate` | Both | string | Yes | ISO UTC backup start, as the restore phase reported it; the date the watermarks were seeded to |
 | `BatchSize` | Input | number | No | Chunk size for large tables (default 500,000; 0 for unchunked) |
 | `TruncateTargetBeforeLoad` | Input | string | No | `'true'` empties each target first (default `'false'`) |
 | `EntityMapIDs` | Input | string | No | Entity map IDs to restrict the load to |
-| `DropStagingDbOnComplete` | Input | string | No | `'true'` drops the staging database afterwards (default `'false'`) |
+| `DropStagingDbOnComplete` | Input | string | No | `'true'` drops the staging database afterwards (default `'false'`); refused as for the drop action below, checked before anything loads |
+| `AllowAnyName` | Input | string | No | `'true'` lets `DropStagingDbOnComplete` drop a name outside `MJ_Staging_` (default `'false'`) |
 | `ContainerUrl` | Input | string | No | Container whose SQL Server credential is dropped with the staging database |
 | `ProgressRunID` | Input | string | No | Integration progress run to report stages to |
-| `BackupStartDate` | Output | string | — | The date the watermarks were seeded to |
-| `StagingDatabaseName` | Output | string | — | The staging database that was loaded |
 | `TablesProcessed` | Output | number | — | Entity map tables loaded |
 | `TotalRowsTransferred` | Output | number | — | Rows moved into the target tables |
 | `DurationSeconds` | Output | number | — | Execution time of the phase |
 | `StagingDatabaseDropped` | Output | boolean | — | Whether the staging database was dropped |
 
-**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate is not a valid date), `STAGING_NOT_FOUND`, `LOAD_FAILED`
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (BackupStartDate is not a valid date), `STAGING_NOT_FOUND`, `DROP_REFUSED` (the requested drop-on-complete is not allowed), `LOAD_FAILED`
 
 ### 7. Drop SQL Server Staging Database
 
 **Action Name**: `Drop SQL Server Staging Database`
 
-Drops the staging database and, when the restore read from storage, its SQL Server storage credential. Dropping a database that no longer exists succeeds, so the job can always run this phase.
+Drops the staging database and, when the restore read from storage, its SQL Server storage credential; with `DropDatabase` `'false'` it drops only the credential and keeps the database. Dropping a database that no longer exists succeeds, so the job can always run this phase.
+
+Every drop is guarded, here and in the load's `DropStagingDbOnComplete`: a system database (`master`, `model`, `msdb`, `tempdb`) and the database the server itself runs on (`DB_NAME()`) are always refused; a name that does not start with `MJ_Staging_` is refused unless `AllowAnyName` is `'true'`; and with `CreatedAfter`, a database whose `create_date` is earlier is refused, so a staging name that collides with an existing database never drops it. The archive seed job passes `CreatedAfter` (the moment its restore started) on every drop and never passes `AllowAnyName`.
 
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
-| `StagingDatabaseName` | Input | string | Yes | The staging database to drop |
-| `ContainerUrl` | Input | string | No | Container whose SQL Server credential is dropped too |
+| `StagingDatabaseName` | Input | string | Unless `DropDatabase` is `'false'` | The staging database to drop |
+| `ContainerUrl` | Input | string | When `DropDatabase` is `'false'` | Container whose SQL Server credential is dropped too |
+| `DropDatabase` | Input | string | No | `'false'` drops only the storage credential (default `'true'`) |
+| `CreatedAfter` | Input | string | No | ISO UTC time; refuse a database created before it |
+| `AllowAnyName` | Input | string | No | `'true'` allows a name outside `MJ_Staging_` (default `'false'`) |
 | `CompanyIntegrationID` | Input | string | No | Recorded on the progress run's manifest only |
 | `ProgressRunID` | Input | string | No | Integration progress run to report the stage to |
-| `StagingDatabaseDropped` | Output | number | — | `1` once the database is gone |
+| `StagingDatabaseDropped` | Output | number | — | `1` once the database is gone, `0` when it was kept (`DropDatabase` `'false'`) |
 
-**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `DROP_FAILED`
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (CreatedAfter is not a valid date), `DROP_REFUSED`, `DROP_FAILED`
 
 ### Product decisions
 
@@ -207,12 +210,13 @@ An `archive-seed` pending-work job in MJAPI drives the three actions; Explorer's
 2. **Pick the backup.** Choose Local Disk File (a path the SQL Server instance can read, e.g. a path inside the SQL Server container) or Azure Blob Storage, verify it, then **Restore**. The job restores the backup into a new staging database on the API's own SQL Server (`Restore SQL Server Backup To Staging`).
 3. **Choose tables.** The job reads the staging database through an External Data Source in `authMode: "host"` mode, which connects with MJAPI's own SQL login and names the staging database in `DefaultDatabase`. Keep Select all or untick tables (views are listed too; untick them).
 4. **Create and load.** The job creates the selected tables as MJ entities, runs CodeGen and restarts MJAPI; the wizard waits for the API to come back and reconnects. The job resumes after the restart and loads the tables (`Load SQL Server Integration From Staging`), seeding each map's watermark to the backup's start time.
-5. **Remove the archive.** Choose Remove when the load finishes: the job drops the staging database (`Drop SQL Server Staging Database`).
+5. **Remove the archive.** Choose Remove when the load finishes: the job drops the staging database (`Drop SQL Server Staging Database`). Choosing Keep (or making no choice for 24 hours) keeps the database but still drops the storage credential.
 6. The integration's card shows **Seeded · source not connected**: the data is in MJ, and the live source can be connected later to sync changes made after the backup.
 
 ### Running it on a development machine
 
-- **The build step restarts MJAPI.** Set `RSU_RESTART_COMMAND` to a command that restarts the API process, or run the API under PM2 (process name `mjapi`, or set `RSU_PM2_PROCESS_NAME`). Without either, the restart falls back to `pm2 start ecosystem.config.cjs`, the running API is not restarted, and the new entities never reach it, so the load does not run.
+- **The build step restarts MJAPI.** Set `RSU_RESTART_COMMAND` to a command that restarts the API process, or run the API under PM2 (process name `mjapi`, or set `RSU_PM2_PROCESS_NAME`). Without either, the restart falls back to `pm2 start ecosystem.config.cjs`, the running API is not restarted, and the new entities never reach it. The job then fails at once with "The API did not restart after creating tables; configure RSU_RESTART_COMMAND or run MJAPI under PM2" rather than waiting in the build step.
+- **Archive seeding needs a node that runs background workers.** On an `MJ_SERVER_ROLE=api` node the start is refused; the job's phases run in, and resume on, the node that started it.
 - **MJAPI's SQL login must be allowed to restore.** `RESTORE DATABASE` into a new database needs `CREATE ANY DATABASE` (for example the `dbcreator` server role). A least-privilege login such as `MJ_Connect` fails the restore.
 - `authMode: "host"` needs MJAPI to connect with a SQL login (user and password); with any other authentication host mode is unavailable and the data source is refused.
 

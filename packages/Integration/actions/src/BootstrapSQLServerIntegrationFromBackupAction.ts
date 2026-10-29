@@ -14,6 +14,13 @@ import {
     TrimTrailingChars,
     type LongRunningSqlRunner
 } from './BaseIntegrationAction.js';
+import {
+    AssertDropAllowedByFacts,
+    AssertNotSystemDatabase,
+    StagingDropRefusedError,
+    type StagingDropFacts,
+    type StagingDropOptions
+} from './StagingDropGuard.js';
 
 /**
  * Reports the bootstrap's stages onto an integration run's progress artifact stream when the caller
@@ -669,14 +676,24 @@ WITH
     }
 
     /**
-     * Drops the staging database cleanly.
+     * Drops the staging database cleanly. Refuses (throws {@link StagingDropRefusedError}) a system
+     * database, the database this server runs on, and — with `options.CreatedAfter` — a database created
+     * before that instant, so a name that collides with an existing database can never drop it. A
+     * database that does not exist is a no-op.
      */
     protected async dropStagingDatabase(
         executor: DatabaseProviderBase,
         stagingDbName: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        options: StagingDropOptions = {}
     ): Promise<void> {
         ValidateIdentifier(stagingDbName, 'database');
+        AssertNotSystemDatabase(stagingDbName);
+        const facts = await this.queryStagingDropFacts(executor, stagingDbName, contextUser);
+        AssertDropAllowedByFacts(stagingDbName, facts, options);
+        if (!facts.CreatedAtUtc) {
+            return;
+        }
         const cleanDbName = EscapeSQLString(stagingDbName);
         // A database left in RESTORING state by a failed restore cannot be ALTERed, but it can be dropped.
         const sql = `
@@ -687,6 +704,26 @@ BEGIN
     DROP DATABASE [${stagingDbName}];
 END`;
         await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: `DROP DATABASE [${stagingDbName}]` }, contextUser);
+    }
+
+    /**
+     * The current database and the target's creation time in UTC (`create_date` is server-local, so it is
+     * shifted by the server's current UTC offset). Fails closed: no row back is a refusal.
+     */
+    protected async queryStagingDropFacts(executor: DatabaseProviderBase, stagingDbName: string, contextUser?: UserInfo): Promise<StagingDropFacts> {
+        const sql = `
+SELECT DB_NAME() AS CurrentDatabase,
+       (SELECT DATEADD(second, DATEDIFF(second, GETDATE(), GETUTCDATE()), create_date)
+          FROM sys.databases WHERE name = N'${EscapeSQLString(stagingDbName)}') AS CreatedAtUtc;`;
+        const rows = await executor.ExecuteSQL<{ CurrentDatabase: string | null; CreatedAtUtc: Date | string | null }>(
+            sql, undefined, { description: `Check staging database [${stagingDbName}] may be dropped` }, contextUser
+        );
+        const row = rows?.[0];
+        if (!row?.CurrentDatabase) {
+            throw new StagingDropRefusedError(`Refusing to drop [${stagingDbName}]: the server did not report the current database.`);
+        }
+        const created = row.CreatedAtUtc == null ? null : new Date(row.CreatedAtUtc);
+        return { CurrentDatabase: row.CurrentDatabase, CreatedAtUtc: created };
     }
 
     /**

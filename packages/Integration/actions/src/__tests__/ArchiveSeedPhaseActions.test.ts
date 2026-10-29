@@ -130,6 +130,10 @@ function outputs(result: ActionResultSimple): Record<string, unknown> {
 interface MockSqlOptions {
     stagingDbExists?: boolean;
     failOnRestore?: boolean;
+    /** `DB_NAME()` the drop guard sees (default 'MJ_Main'). */
+    currentDatabase?: string;
+    /** The target's `create_date` in UTC the drop guard sees (default 2026-10-28T12:00Z); null means absent. */
+    createdAtUtc?: Date | null;
 }
 
 /** SQL text of every call, in order. */
@@ -148,6 +152,9 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): DatabaseProviderBa
         }
         if (sql.includes('AS DatabaseId')) {
             return Promise.resolve([{ DatabaseId: options.stagingDbExists ? 7 : null }]);
+        }
+        if (sql.includes('AS CurrentDatabase')) {
+            return Promise.resolve([{ CurrentDatabase: options.currentDatabase ?? 'MJ_Main', CreatedAtUtc: options.createdAtUtc === undefined ? new Date('2026-10-28T12:00:00.000Z') : options.createdAtUtc }]);
         }
         if (sql.includes('COUNT_BIG(*) AS RowsInserted')) {
             return Promise.resolve([{ RowsInserted: 1500 }]);
@@ -357,6 +364,22 @@ describe('LoadSQLServerIntegrationFromStagingAction', () => {
         expect(outputs(dropped).StagingDatabaseDropped).toBe(1);
     });
 
+    it('Load action refuses DropStagingDbOnComplete for a name outside MJ_Staging_ before loading anything', async () => {
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Load action reports DROP_REFUSED when the drop-on-complete targets the server database', async () => {
+        load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true, currentDatabase: 'Payroll' });
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true, AllowAnyName: true }));
+
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
     it('Load action reports STAGING_NOT_FOUND as a stage error and never terminates the run', async () => {
         load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: false });
         await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z', ProgressRunID: 'run-A' }));
@@ -414,6 +437,83 @@ describe('DropSQLServerStagingDatabaseAction', () => {
         await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', ProgressRunID: 'run-A', CompanyIntegrationID: 'ci-001' }));
 
         expect(progressMethods().at(-1)).toBe('Flush');
+    });
+
+    it('Drop action refuses a database created before CreatedAfter and never drops it', async () => {
+        drop.CustomDatabaseProvider = createMockSqlExecutor({ createdAtUtc: new Date('2026-01-01T00:00:00.000Z') });
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', CreatedAfter: '2026-10-28T11:00:00.000Z' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.Message).toContain('[MJ_Staging_X]');
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it('Drop action drops a database created after CreatedAfter', async () => {
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', CreatedAfter: '2026-10-28T11:00:00.000Z' }));
+
+        expect(r.Success).toBe(true);
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE [MJ_Staging_X]'))).toBe(true);
+    });
+
+    it('Drop action is a no-op success for a database that does not exist', async () => {
+        drop.CustomDatabaseProvider = createMockSqlExecutor({ createdAtUtc: null });
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', CreatedAfter: '2026-10-28T11:00:00.000Z' }));
+
+        expect(r.Success).toBe(true);
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it.each(['master', 'MODEL', 'msdb', 'TempDB'])('Drop action always refuses the system database %s', async name => {
+        const r = await drop.Run(makeParams({ StagingDatabaseName: name, AllowAnyName: 'true' }));
+
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.Message).toContain('system database');
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it('Drop action always refuses the database the server runs on', async () => {
+        drop.CustomDatabaseProvider = createMockSqlExecutor({ currentDatabase: 'mj_main' });
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Main', AllowAnyName: 'true' }));
+
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.Message).toContain('[MJ_Main]');
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it('Drop action refuses a name outside MJ_Staging_ unless AllowAnyName is true', async () => {
+        const refused = await drop.Run(makeParams({ StagingDatabaseName: 'Payroll' }));
+        expect(refused.ResultCode).toBe('DROP_REFUSED');
+        expect(refused.Message).toContain("'MJ_Staging_'");
+        expect(sqlCalls).toHaveLength(0);
+
+        const allowed = await drop.Run(makeParams({ StagingDatabaseName: 'Payroll', AllowAnyName: 'true' }));
+        expect(allowed.Success).toBe(true);
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE [Payroll]'))).toBe(true);
+    });
+
+    it("Drop action with DropDatabase 'false' drops only the storage credential", async () => {
+        const containerUrl = 'https://acct.blob.core.windows.net/backups';
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', ContainerUrl: containerUrl, DropDatabase: 'false' }));
+
+        expect(r.Success).toBe(true);
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+        expect(sqlCalls.some(s => s.includes(`DROP CREDENTIAL [${containerUrl}]`))).toBe(true);
+        expect(outputs(r).StagingDatabaseDropped).toBe(0);
+    });
+
+    it("Drop action with DropDatabase 'false' requires a ContainerUrl", async () => {
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', DropDatabase: 'false' }));
+
+        expect(r.ResultCode).toBe('MISSING_PARAMETER');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Drop action refuses a CreatedAfter that is not a date', async () => {
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', CreatedAfter: 'yesterday' }));
+
+        expect(r.ResultCode).toBe('INVALID_PARAMETER');
+        expect(sqlCalls).toHaveLength(0);
     });
 
     it('Drop action reports a refused input as a stage error and never terminates the run', async () => {

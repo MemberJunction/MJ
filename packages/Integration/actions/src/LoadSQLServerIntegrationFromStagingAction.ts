@@ -8,6 +8,7 @@ import {
     BootstrapSQLServerIntegrationFromBackupAction,
     type BootstrapRunContext
 } from './BootstrapSQLServerIntegrationFromBackupAction.js';
+import { AssertStagingDatabaseName, StagingDropRefusedError } from './StagingDropGuard.js';
 
 /** The validated inputs of a load, or the reason the action cannot run. */
 type LoadInput =
@@ -26,7 +27,10 @@ type LoadInput =
  *   - BatchSize (optional): chunk size for large tables (default 500,000; 0 for unchunked)
  *   - TruncateTargetBeforeLoad (optional): 'true' to empty each target first (default 'false')
  *   - EntityMapIDs (optional): comma-separated entity map IDs to restrict the load to
- *   - DropStagingDbOnComplete (optional): 'true' to drop the staging database afterwards (default 'false')
+ *   - DropStagingDbOnComplete (optional): 'true' to drop the staging database afterwards (default 'false'). The
+ *     drop refuses a system database, the server's own database and — unless AllowAnyName is 'true' — a name
+ *     that does not start with `MJ_Staging_` (`DROP_REFUSED`, checked before anything loads)
+ *   - AllowAnyName (optional): 'true' to let DropStagingDbOnComplete drop a name outside `MJ_Staging_` (default 'false')
  *   - ContainerUrl (optional): the container whose SQL Server credential is dropped with the staging database
  *   - ProgressRunID (optional): the integration progress run to report the stages to
  *
@@ -81,12 +85,29 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
             return { ResultCode: 'INVALID_PARAMETER', Message: `Parameter 'BackupStartDate' is not a valid date: '${backupStartDateRaw}'.` };
         }
         ValidateIdentifier(stagingDatabaseName, 'database');
+        const refusal = this.dropRefusal(params, stagingDatabaseName);
+        if (refusal) {
+            return { ResultCode: 'DROP_REFUSED', Message: refusal };
+        }
         return {
             CompanyIntegrationID: companyIntegrationID,
             StagingDatabaseName: stagingDatabaseName,
             BackupStartDate: backupStartDate,
             ContainerUrl: this.getStringParam(params, 'ContainerUrl') ?? '',
         };
+    }
+
+    /** Why the requested drop-on-complete is refused, or undefined when it is allowed (or not requested). */
+    private dropRefusal(params: RunActionParams, stagingDatabaseName: string): string | undefined {
+        if (!this.getBoolParam(params, 'DropStagingDbOnComplete', false)) {
+            return undefined;
+        }
+        try {
+            AssertStagingDatabaseName(stagingDatabaseName, this.getBoolParam(params, 'AllowAnyName', false));
+            return undefined;
+        } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+        }
     }
 
     private readLoadOptions(params: RunActionParams, backupStartDate: Date) {
@@ -138,7 +159,8 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
     private async loadFailed(params: RunActionParams, progress: BootstrapProgress, error: unknown): Promise<ActionResultSimple> {
         const message = error instanceof Error ? error.message : String(error);
         LogError(`[LoadSQLServerIntegrationFromStagingAction] Failure: ${message}`);
-        await this.ReportFailure(progress, message, 'LOAD_FAILED');
-        return { Success: false, ResultCode: 'LOAD_FAILED', Message: message, Params: params.Params };
+        const resultCode = error instanceof StagingDropRefusedError ? error.ResultCode : 'LOAD_FAILED';
+        await this.ReportFailure(progress, message, resultCode);
+        return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
     }
 }

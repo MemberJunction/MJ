@@ -154,6 +154,10 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
             return Promise.resolve([{ DatabaseId: options.stagingDbExists ? 7 : null }]);
         }
 
+        if (sql.includes('AS CurrentDatabase')) {
+            return Promise.resolve([{ CurrentDatabase: 'MJ_Main', CreatedAtUtc: new Date('2026-10-28T12:00:00.000Z') }]);
+        }
+
         if (sql.includes('COUNT_BIG(*) AS RowsInserted')) {
             return Promise.resolve([{ RowsInserted: options.totalRows ?? 1500 }]);
         }

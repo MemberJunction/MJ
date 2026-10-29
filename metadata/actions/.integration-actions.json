@@ -610,10 +610,10 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "StagingDatabaseName",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the staging database to restore into; it must not already exist",
+            "Description": "Name of the database to restore into (it must not already exist); echoed back as the restored staging database",
             "IsRequired": true
           },
           "primaryKey": {
@@ -722,20 +722,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "StagingDatabaseName",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the restored staging database",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "E4CDEFA9-3AAF-4F2B-A40D-B48E897D9C3A"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "ContainerUrl",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -830,10 +816,10 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "StagingDatabaseName",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the restored staging database; it must exist",
+            "Description": "Name of the restored staging database to load from (it must exist); echoed back on success",
             "IsRequired": true
           },
           "primaryKey": {
@@ -844,10 +830,10 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "BackupStartDate",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "UTC start date (ISO) of the backup, as reported by the restore phase; watermarks are seeded to it",
+            "Description": "When the backup began (ISO UTC), as the restore phase reported it; the loaded maps' watermarks are seeded to it and it is echoed back on success",
             "IsRequired": true
           },
           "primaryKey": {
@@ -916,6 +902,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "AllowAnyName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'true' to let DropStagingDbOnComplete drop a staging database whose name does not start with 'MJ_Staging_' (default 'false')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E1655E6F-8485-48ED-82FB-AA7756FCF135"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ContainerUrl",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -939,34 +939,6 @@
           },
           "primaryKey": {
             "ID": "38C1B4C9-9501-4CAD-9C4D-E7F996E43804"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "BackupStartDate",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "The backup start date the watermarks were seeded to",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "6A23D236-106A-4E85-8D75-47CD07DEEDED"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "StagingDatabaseName",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the staging database that was loaded",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "6D5CE570-A1C3-4194-9B16-5A8CF97DC029"
           }
         },
         {
@@ -1074,6 +1046,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "DROP_REFUSED",
+            "Description": "DropStagingDbOnComplete was refused: a system database, the server's own database, or a name outside 'MJ_Staging_' without AllowAnyName",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "9CAD4D79-5608-49F4-B55C-318EC0FAB73C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "LOAD_FAILED",
             "Description": "An error occurred during the ETL load or watermark seeding; the staging database is kept so the load can be retried",
             "IsSuccess": false
@@ -1091,7 +1074,7 @@
   {
     "fields": {
       "Name": "Drop SQL Server Staging Database",
-      "Description": "Last phase of seeding a SQL Server integration from a backup archive: drops the staging database and, when the restore read from storage, its SQL Server storage credential. Dropping a database that no longer exists succeeds.",
+      "Description": "Last phase of seeding a SQL Server integration from a backup archive: drops the staging database and, when the restore read from storage, its SQL Server storage credential (or, with DropDatabase 'false', only the credential). Dropping a database that no longer exists succeeds. A system database and the server's own database are always refused, a name outside 'MJ_Staging_' is refused unless AllowAnyName is 'true', and with CreatedAfter a database created before that instant is refused.",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "DriverClass": "Drop SQL Server Staging Database",
       "Type": "Custom",
@@ -1108,8 +1091,8 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the staging database to drop",
-            "IsRequired": true
+            "Description": "Name of the staging database to drop; it must start with 'MJ_Staging_' unless AllowAnyName is 'true'. Required unless DropDatabase is 'false'",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "16641D24-096A-464C-94C7-B41D37EC7842"
@@ -1122,7 +1105,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Storage container whose SQL Server credential is dropped too",
+            "Description": "Storage container whose SQL Server credential is dropped too; required when DropDatabase is 'false'",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1160,11 +1143,53 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "DropDatabase",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'false' to drop only the storage credential for ContainerUrl and keep the staging database (default 'true')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B85DB3A1-B9EF-4BCB-A8B2-ECB107B857EF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedAfter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO UTC timestamp; the drop is refused (DROP_REFUSED) when the database was created before it. The archive seed job passes the time its restore started",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C1D64666-3058-42D5-826E-B61A46FEF21F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AllowAnyName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'true' to drop a database whose name does not start with 'MJ_Staging_' (default 'false'); system databases and the server's own database are refused regardless",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "91776083-25D8-4D0B-A773-3272CEAF7466"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "StagingDatabaseDropped",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "1 when the staging database was dropped (or was already absent)",
+            "Description": "1 when the staging database was dropped (or was already absent); 0 when DropDatabase is 'false'",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1188,11 +1213,33 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "MISSING_PARAMETER",
-            "Description": "Parameter StagingDatabaseName was missing",
+            "Description": "Parameter StagingDatabaseName (or, with DropDatabase 'false', ContainerUrl) was missing",
             "IsSuccess": false
           },
           "primaryKey": {
             "ID": "F6CB6C7C-2888-4D5D-A22B-EB538A7B9DA1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "Parameter CreatedAfter was not a valid date",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "DC10BA7B-CFD6-4991-94E5-F605499B60D9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DROP_REFUSED",
+            "Description": "The drop was refused: a system database, the server's own database, a name outside 'MJ_Staging_' without AllowAnyName, or a database created before CreatedAfter",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "0C7E9CDB-6901-4C61-BFDE-65A69AD2FF70"
           }
         },
         {
