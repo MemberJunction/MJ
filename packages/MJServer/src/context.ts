@@ -16,6 +16,7 @@ import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgre
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
+import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
@@ -840,6 +841,7 @@ export const ContextFunction =
       userPayload,
       providers,
       ClientIp: expressReq.ip,
+      RequestOrigin: ReadRequestOrigin(req.headers.origin),
     };
   };
 
