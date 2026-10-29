@@ -79,6 +79,34 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
         return result;
     }
 
+    /**
+     * Token-fenced terminal discard for `ExhaustionBehavior === 'Discard'`: stamps `DeadLetterReason`/`LastError`
+     * under the holder's `LeaseToken` via `DeadLetterDelivery`, then immediately transitions to `'Discarded'`
+     * via `Operator.DiscardDelivery` so ordered partition keys unblock automatically.
+     */
+    public async DiscardExhausted(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        try {
+            const fencedCount = await this.write(
+                this.sql.Consume.DeadLetterDelivery(delivery.DeliveryID, delivery.LeaseToken, reason, error),
+            );
+            if (fencedCount !== 1) {
+                return { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID };
+            }
+            await this.write(
+                this.sql.Operator.DiscardDelivery(
+                    this.ids.SubscriptionID,
+                    delivery.DeliveryID,
+                    false,
+                    this.deps.ContextUser?.ID ?? null,
+                    reason,
+                ),
+            );
+            return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Discarded' };
+        } catch (err) {
+            return { Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: ErrorText(err) };
+        }
+    }
+
     public Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settleWrite(delivery, 'Pending', this.sql.Consume.ReleaseDelivery(delivery.DeliveryID, delivery.LeaseToken));
     }
@@ -96,6 +124,20 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
     private async expireLeases(): Promise<void> {
         const policy = this.binding.Policy;
         const expired = await this.rows<ExpiredDeadLetterRow>(this.sql.Consume.ExpireLeases(this.ids.SubscriptionID, policy.MaxAttempts));
+        if (policy.ExhaustionBehavior === 'Discard') {
+            for (const row of expired) {
+                await this.write(
+                    this.sql.Operator.DiscardDelivery(
+                        this.ids.SubscriptionID,
+                        NormalizeRowID(row.DeliveryID),
+                        false,
+                        this.deps.ContextUser?.ID ?? null,
+                        row.Reason,
+                    ),
+                );
+            }
+            return;
+        }
         for (const row of expired) {
             this.deps.NotifyDeadLettered?.({
                 SubscriptionName: policy.SubscriptionName, DeliveryID: row.DeliveryID, Reason: row.Reason, PartitionKey: row.PartitionKey,

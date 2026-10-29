@@ -220,6 +220,43 @@ describe('InMemoryTransport operator and sweep', () => {
         expect((await consumer.Receive(10, 0, signal)).map((next) => next.DeliveryID)).not.toContain(delivery.DeliveryID);
     });
 
+    it('unblocks an Ordered partition automatically on DiscardExhausted and lease-expiry exhaustion when ExhaustionBehavior is Discard', async () => {
+        const clock = new ManualClock();
+        const transport = new InMemoryTransport({ Now: clock.Now });
+        const topic = BuildTopicBinding('t');
+        const subscription = BuildSubscriptionBinding(topic, 's', {
+            PartitionMode: 'Ordered',
+            MaxAttempts: 1,
+            LeaseSeconds: 30,
+            ExhaustionBehavior: 'Discard',
+        });
+        const consumer = transport.OpenConsumer(subscription);
+        await transport.Publish(topic, BuildMessages(topic, [
+            { PartitionKey: 'k1', Payload: { seq: 1 } },
+            { PartitionKey: 'k1', Payload: { seq: 2 } },
+            { PartitionKey: 'k1', Payload: { seq: 3 } },
+        ]), [subscription]);
+
+        // Message 1: handler exhausts -> DiscardExhausted frees k1 immediately for Message 2
+        const [first] = await consumer.Receive(10, 0, signal);
+        expect(first.Message.Payload).toEqual({ seq: 1 });
+        expect(await consumer.DiscardExhausted!(first, 'MaxAttemptsExceeded', 'boom')).toEqual({
+            Kind: 'Settled',
+            DeliveryID: first.DeliveryID,
+            Status: 'Discarded',
+        });
+
+        // Message 2: now claimable on Ordered partition k1! Simulate crash -> lease expiry discards & frees k1 for Message 3
+        const [second] = await consumer.Receive(10, 0, signal);
+        expect(second.Message.Payload).toEqual({ seq: 2 });
+        clock.Advance(31_000);
+        expect(transport.RunSweep()).toEqual({ ExpiredLeases: 1 });
+        expect(transport.Snapshot('s').find(r => r.DeliveryID === second.DeliveryID)?.Status).toBe('Discarded');
+
+        const [third] = await consumer.Receive(10, 0, signal);
+        expect(third.Message.Payload).toEqual({ seq: 3 });
+    });
+
     it('declares Database-transport capabilities', () => {
         expect(new InMemoryTransport().Capabilities).toBe(IN_MEMORY_TRANSPORT_CAPABILITIES);
         expect(IN_MEMORY_TRANSPORT_CAPABILITIES).toMatchObject({ SupportsOrdered: true, SupportsExternalHosts: false, CancelPending: true, CancelInFlight: true, PeekDeadLetters: 'Full' });

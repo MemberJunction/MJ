@@ -67,6 +67,15 @@ describe('SubscriptionUnsupportedReason', () => {
         expect(SubscriptionUnsupportedReason(binding('External', 'Ordered'), CLOUD_LIKE)).toContain('Ordered requires the Database transport');
     });
 
+    it('rejects ExhaustionBehavior Discard on a transport without ordering support', () => {
+        const discardBinding: SubscriptionBinding = {
+            ...binding('MJWorker', 'Exclusive'),
+            Policy: { ...binding('MJWorker', 'Exclusive').Policy, ExhaustionBehavior: 'Discard' },
+        };
+        expect(SubscriptionUnsupportedReason(discardBinding, DATABASE_LIKE)).toBeNull();
+        expect(SubscriptionUnsupportedReason(discardBinding, CLOUD_LIKE)).toContain("ExhaustionBehavior 'Discard' requires the Database transport");
+    });
+
     it('rejects a maximum backoff above the transport limit', () => {
         expect(SubscriptionUnsupportedReason(binding('MJWorker', 'None', 86400), CLOUD_LIKE)).toContain('BackoffMaxSeconds 86400');
     });

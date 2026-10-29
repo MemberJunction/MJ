@@ -1,6 +1,7 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJWorkQueueSubscriptionEntity } from '@memberjunction/core-entities';
+import { ResolveSubscriptionExhaustionBehavior } from '@memberjunction/work-queue-base';
 import type { WorkLogger } from '@memberjunction/work-queue-core';
 import { DeduplicationLedger } from '../dedup/DeduplicationLedger';
 import { CreateWorkQueueSqlBuilder } from '../sql/CreateWorkQueueSqlBuilder';
@@ -99,20 +100,31 @@ export class WorkQueueSweeper {
      */
     private async expireLeases(executor: WorkQueueSqlExecutor, sql: OperatorSqlBuilder): Promise<number> {
         const deadLettered = await ExecuteRows<ExpiredDeadLetterRow>(executor, sql.ExpireLeasesAll(), this.contextUser);
+        let retainedDeadLetters = 0;
         for (const row of deadLettered) {
+            const sub = this.findSubscription(row.SubscriptionID);
+            if (sub && ResolveSubscriptionExhaustionBehavior(sub) === 'Discard') {
+                await ExecuteWrite(
+                    executor,
+                    sql.DiscardDelivery(row.SubscriptionID, row.DeliveryID, false, this.contextUser.ID ?? null, 'LeaseExpired'),
+                    this.contextUser,
+                );
+                continue;
+            }
+            retainedDeadLetters++;
             this.engine.NotifyDeadLettered({
-                SubscriptionName: this.subscriptionName(row.SubscriptionID),
+                SubscriptionName: sub?.Name ?? row.SubscriptionID,
                 DeliveryID: row.DeliveryID,
                 Reason: 'LeaseExpired',
                 PartitionKey: row.PartitionKey,
             });
         }
-        return deadLettered.length;
+        return retainedDeadLetters;
     }
 
-    /** Falls back to the ID when metadata has not caught up with a subscription created since the last refresh. */
-    private subscriptionName(subscriptionID: string): string {
-        return this.engine.Subscriptions.find(s => UUIDsEqual(s.ID, subscriptionID))?.Name ?? subscriptionID;
+    /** Returns the cached subscription entity when metadata has caught up with it. */
+    private findSubscription(subscriptionID: string): MJWorkQueueSubscriptionEntity | undefined {
+        return this.engine.Subscriptions.find(s => UUIDsEqual(s.ID, subscriptionID));
     }
 
     private async purgeRetention(executor: WorkQueueSqlExecutor, sql: OperatorSqlBuilder): Promise<number> {

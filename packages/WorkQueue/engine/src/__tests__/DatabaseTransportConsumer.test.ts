@@ -162,6 +162,31 @@ describe('DatabaseTransportConsumer settles', () => {
         expect(events).toEqual([{ SubscriptionName: 'venue-import', DeliveryID: CLAIMED.DeliveryID, Reason: 'Poison', PartitionKey: 'venue-42' }]);
     });
 
+    it('token-fences DiscardExhausted via DeadLetterDelivery + DiscardDelivery and auto-discards lease expiries when ExhaustionBehavior is Discard', async () => {
+        const events: DeadLetteredEvent[] = [];
+        const source = new RecordingExecutor()
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([{ AffectedRows: 0 }]);
+        const consumer = Consumer(source, { ExhaustionBehavior: 'Discard' }, events);
+
+        expect(await consumer.DiscardExhausted!(Delivery(), 'MaxAttemptsExceeded', 'boom')).toEqual({
+            Kind: 'Settled',
+            DeliveryID: CLAIMED.DeliveryID,
+            Status: 'Discarded',
+        });
+        expect(source.Calls[0].SQL).toContain('[spWorkQueueDeadLetterDelivery]');
+        expect(source.Calls[1].SQL).toContain('[spWorkQueueDiscardDelivery]');
+        expect(events).toEqual([]);
+
+        // Token-fence mismatch returns LeaseLost without calling DiscardDelivery
+        expect(await consumer.DiscardExhausted!(Delivery(), 'MaxAttemptsExceeded', 'boom')).toEqual({
+            Kind: 'LeaseLost',
+            DeliveryID: CLAIMED.DeliveryID,
+        });
+        expect(source.Calls).toHaveLength(3);
+    });
+
     it('reports infrastructure failures as Failed', async () => {
         const source = new RecordingExecutor().QueueError(new Error('connection reset'));
         expect(await Consumer(source).Retry(Delivery(), 30, 'boom')).toEqual({ Kind: 'Failed', DeliveryID: CLAIMED.DeliveryID, Error: 'connection reset' });

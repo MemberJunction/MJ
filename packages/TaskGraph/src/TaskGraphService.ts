@@ -468,6 +468,14 @@ type TransactionCapableProvider = {
     BeginEntityTransaction?(): Promise<EntityTransactionScope>;
 };
 
+type PostCommitCapableProvider = IMetadataProvider & {
+    RunAfterCommit(task: () => Promise<void> | void, description?: string): void;
+};
+
+function hasRunAfterCommit(provider: IMetadataProvider): provider is PostCommitCapableProvider {
+    return 'RunAfterCommit' in provider && typeof provider.RunAfterCommit === 'function';
+}
+
 export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
     const offenders = spec.tasks.filter((t) => !DISPATCHABLE_KINDS.includes(t.kind));
     if (offenders.length === 0) return null;
@@ -700,7 +708,14 @@ export class TaskGraphService {
                 `[TaskGraphService] Submitted "${spec.workflowName}": parent ${parentTaskID}, ${taskIDMap.size} task(s). ` +
                 `Awaiting dispatcher pickup.`,
             );
-            KickTaskGraphDispatchers();
+            if (hasRunAfterCommit(context.Provider)) {
+                context.Provider.RunAfterCommit(
+                    () => { KickTaskGraphDispatchers(); },
+                    `TaskGraphService.Submit kick (${parentTaskID})`,
+                );
+            } else {
+                KickTaskGraphDispatchers();
+            }
             return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);

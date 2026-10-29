@@ -93,6 +93,11 @@ export interface ITransportConsumer<TPayload extends WorkJson = WorkJson> {
     Complete(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult>;
     Retry(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, error: string): Promise<SettleResult>;
     DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult>;
+    /**
+     * Token-fenced terminal discard when `ExhaustionBehavior === 'Discard'`: transitions an exhausted or fatal
+     * delivery directly to `'Discarded'` (freeing ordered partition keys without operator intervention).
+     */
+    DiscardExhausted?(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult>;
     /** Database: no attempt consumed. SQS: the receive is already counted (spec 03 §5.1). */
     Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult>;
     /**

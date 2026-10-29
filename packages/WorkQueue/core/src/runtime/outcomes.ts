@@ -19,7 +19,8 @@ export interface HandlerResult {
 export type SettleAction =
     | { Kind: 'Complete' }
     | { Kind: 'Retry'; DelaySeconds: number; Error: string }
-    | { Kind: 'DeadLetter'; Reason: string; Error: string | null };
+    | { Kind: 'DeadLetter'; Reason: string; Error: string | null }
+    | { Kind: 'Discard'; Reason: string; Error: string | null };
 
 export function IsWorkOutcome(value: unknown): value is WorkOutcome {
     if (typeof value !== 'object' || value === null || !('Kind' in value)) {
@@ -75,12 +76,18 @@ export function ResolveSettleAction(
     if (outcome.Kind === 'Complete') {
         return { Kind: 'Complete' };
     }
+    const discardOnExhaustion = policy.ExhaustionBehavior === 'Discard';
     if (outcome.Kind === 'DeadLetter') {
-        return { Kind: 'DeadLetter', Reason: truncate(outcome.Reason, MAX_DEAD_LETTER_REASON_LENGTH), Error: result.ErrorText };
+        const reason = truncate(outcome.Reason, MAX_DEAD_LETTER_REASON_LENGTH);
+        return discardOnExhaustion
+            ? { Kind: 'Discard', Reason: reason, Error: result.ErrorText }
+            : { Kind: 'DeadLetter', Reason: reason, Error: result.ErrorText };
     }
     const error = result.ErrorText ?? outcome.Reason ?? DEFAULT_RETRY_ERROR;
     if (attempt >= policy.MaxAttempts) {
-        return { Kind: 'DeadLetter', Reason: MAX_ATTEMPTS_EXCEEDED_REASON, Error: error };
+        return discardOnExhaustion
+            ? { Kind: 'Discard', Reason: MAX_ATTEMPTS_EXCEEDED_REASON, Error: error }
+            : { Kind: 'DeadLetter', Reason: MAX_ATTEMPTS_EXCEEDED_REASON, Error: error };
     }
     return { Kind: 'Retry', DelaySeconds: ComputeBackoffSeconds(policy, attempt, outcome.DelaySeconds, random), Error: error };
 }

@@ -33,6 +33,7 @@ export class RecordingExecutor implements WorkQueueExecutorSource, WorkQueueInde
     private readonly root: RecordingExecutor;
     private minted = 0;
     private openScopes = 0;
+    private postCommitQueue: Array<{ Depth: number; Task: () => Promise<void> | void }> = [];
 
     constructor(public readonly PlatformKey: DatabasePlatform = 'sqlserver', parent?: RecordingExecutor) {
         this.Dialect = PlatformKey === 'sqlserver' ? new SQLServerDialect() : new PostgreSQLDialect();
@@ -80,20 +81,37 @@ export class RecordingExecutor implements WorkQueueExecutorSource, WorkQueueInde
 
     public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
         this.Events.push('begin');
-        this.openScopes++;
+        const depth = ++this.openScopes;
+        const isNested = depth > 1;
         let settled = false;
-        const settle = (event: string): void => {
+        const settle = async (event: 'commit' | 'rollback'): Promise<void> => {
             if (!settled) {
                 settled = true;
                 this.openScopes--;
                 this.Events.push(event);
+                if (event === 'rollback') {
+                    this.postCommitQueue = this.postCommitQueue.filter(item => item.Depth < depth);
+                } else if (this.openScopes === 0 && this.postCommitQueue.length > 0) {
+                    const pending = this.postCommitQueue.splice(0, this.postCommitQueue.length);
+                    for (const item of pending) {
+                        await item.Task();
+                    }
+                }
             }
         };
         return {
-            IsNested: false,
-            Commit: async () => settle('commit'),
-            Rollback: async () => settle('rollback'),
+            IsNested: isNested,
+            Commit: () => settle('commit'),
+            Rollback: () => settle('rollback'),
         };
+    }
+
+    public RunAfterCommit(task: () => Promise<void> | void, _description?: string): void {
+        if (this.openScopes > 0) {
+            this.postCommitQueue.push({ Depth: this.openScopes, Task: task });
+        } else {
+            void task();
+        }
     }
 
     public async CreateIndependentInstance(): Promise<WorkQueueIndependentExecutor> {

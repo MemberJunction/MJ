@@ -1,6 +1,6 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ParseSubscriptionFilter, WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
-import type { FilterSupport, SubscriptionBinding, SubscriptionPolicy, TopicBinding } from '@memberjunction/work-queue-core';
+import type { ExhaustionBehavior, FilterSupport, SubscriptionBinding, SubscriptionPolicy, TopicBinding } from '@memberjunction/work-queue-core';
 import { ParseJsonObject } from '../entities/validation';
 import type { SubscriptionRow, TopicRow, TransportRow } from './rows';
 
@@ -37,6 +37,37 @@ export function ToTopicBinding(topic: TopicRow): TopicBinding {
     };
 }
 
+/**
+ * Resolves a subscription's optional `ExhaustionBehavior` (`'DeadLetter' | 'Discard'`), reading an explicit
+ * `ExhaustionBehavior` property first and falling back to `BindingConfig.ExhaustionBehavior` when configured in JSON.
+ */
+export function ResolveSubscriptionExhaustionBehavior(
+    subscription: Pick<SubscriptionRow, 'Name' | 'BindingConfig'> & { ExhaustionBehavior?: ExhaustionBehavior | null },
+): ExhaustionBehavior | undefined {
+    if (subscription.ExhaustionBehavior !== undefined && subscription.ExhaustionBehavior !== null) {
+        if (subscription.ExhaustionBehavior !== 'DeadLetter' && subscription.ExhaustionBehavior !== 'Discard') {
+            throw new WorkQueueConfigurationError(
+                `Subscription '${subscription.Name}' has invalid ExhaustionBehavior '${String(subscription.ExhaustionBehavior)}'`,
+            );
+        }
+        return subscription.ExhaustionBehavior;
+    }
+    if (typeof subscription.BindingConfig === 'string' && subscription.BindingConfig.trim() !== '') {
+        const parsed = ParseJsonObject(subscription.BindingConfig, `Subscription ${subscription.Name} BindingConfig`);
+        const raw = parsed.ExhaustionBehavior;
+        if (raw === undefined) {
+            return undefined;
+        }
+        if (raw === 'DeadLetter' || raw === 'Discard') {
+            return raw;
+        }
+        throw new WorkQueueConfigurationError(
+            `Subscription '${subscription.Name}' BindingConfig.ExhaustionBehavior must be 'DeadLetter' or 'Discard'`,
+        );
+    }
+    return undefined;
+}
+
 export function ToSubscriptionPolicy(subscription: SubscriptionRow, topic: TopicRow): SubscriptionPolicy {
     const policy: SubscriptionPolicy = {
         SubscriptionName: subscription.Name,
@@ -50,6 +81,10 @@ export function ToSubscriptionPolicy(subscription: SubscriptionRow, topic: Topic
     };
     if (subscription.MaxProcessingSeconds !== null) {
         policy.MaxProcessingSeconds = subscription.MaxProcessingSeconds;
+    }
+    const exhaustionBehavior = ResolveSubscriptionExhaustionBehavior(subscription);
+    if (exhaustionBehavior !== undefined) {
+        policy.ExhaustionBehavior = exhaustionBehavior;
     }
     return policy;
 }

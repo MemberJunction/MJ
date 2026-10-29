@@ -126,7 +126,7 @@ import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
+import { ActionResult, BuildEntityChangeContext, DurableEntityActionRegistry } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
@@ -595,6 +595,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         before: boolean,
         user: UserInfo,
         originatingEntityActionIDs?: string[],
+        runModeFilter?: 'DurableOnly' | 'NonDurableOnly',
     ): Promise<ActionResult[]> {
         const engine = EntityActionEngineServer.Instance;
         if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
@@ -629,6 +630,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
             const results: ActionResult[] = [];
             for (const a of activeActions) {
+                if (runModeFilter === 'DurableOnly' && a.RunMode !== 'Durable') {
+                    continue;
+                }
+                if (runModeFilter === 'NonDurableOnly' && a.RunMode === 'Durable') {
+                    continue;
+                }
                 if (guarded && originatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID))) {
                     // The caller declared this save IS this action's write-back. Used by work that
                     // detached from the async context the guard tracks — see
@@ -785,11 +792,58 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
     }
 
-    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, _context: SaveContext): void {
+    protected override async ShouldEnlistSaveInTransaction(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        isNewRecord: boolean,
+    ): Promise<boolean> {
+        if (options.SkipEntityActions === true || options.ReplayOnly === true) {
+            return false;
+        }
+        if (DurableEntityActionRegistry.Instance.Submitter === null) {
+            return false;
+        }
+        const engine = EntityActionEngineServer.Instance;
+        if (!engine.Loaded) {
+            await engine.Config(false, user);
+        }
+        const invocationType = isNewRecord ? 'AfterCreate' : 'AfterUpdate';
+        const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
+        return activeActions.some(
+            (a) =>
+                a.RunMode === 'Durable' &&
+                !options.OriginatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID)),
+        );
+    }
+
+    protected override async OnDurableAfterSaveExecute(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        context: SaveContext,
+    ): Promise<void> {
+        if (options.SkipEntityActions === true) {
+            return;
+        }
+        context.State['durableActionsEnlistedInTx'] = true;
+        await this.HandleEntityActions(
+            entity,
+            'save',
+            false,
+            user,
+            options.OriginatingEntityActionIDs,
+            'DurableOnly',
+        );
+    }
+
+    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): void {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-        if (options.SkipEntityActions !== true)
-            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs); // NO AWAIT INTENTIONALLY
+        if (options.SkipEntityActions !== true) {
+            const filter = context.State['durableActionsEnlistedInTx'] === true ? 'NonDurableOnly' : undefined;
+            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs, filter); // NO AWAIT INTENTIONALLY
+        }
     }
 
     protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {

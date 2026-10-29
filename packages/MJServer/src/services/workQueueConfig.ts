@@ -18,7 +18,7 @@ export const WorkQueueSubscriptionEntrySchema = z.object({
  */
 export const WorkQueueSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().default(true),
     systemUserEmail: z.string().optional().default('system@memberjunction.org'),
     subscriptions: z.array(WorkQueueSubscriptionEntrySchema).optional().default([{ name: '*', concurrency: 4 }]),
     idlePollMinMs: z.number().int().positive().optional().default(250),
@@ -36,12 +36,12 @@ export const WorkQueueSchema = z
 export type WorkQueueConfig = z.infer<typeof WorkQueueSchema>;
 
 /**
- * The merge base for mj.config.cjs. Like scheduledJobs and integrationSyncWorker, the EFFECTIVE default system user
- * is the placeholder: set workQueue.systemUserEmail explicitly, or StartWorkQueueHost fails fast and says so.
+ * The merge base for mj.config.cjs. Enabled by default with the Database transport out of the box; StartWorkQueueHost
+ * resolves `systemUserEmail` first and falls back to `UserCache.Instance.GetSystemUser()` when the default is unchanged.
  */
 export const DEFAULT_WORK_QUEUE_CONFIG: WorkQueueConfig = {
-  enabled: false,
-  systemUserEmail: 'not.set@nowhere.com',
+  enabled: true,
+  systemUserEmail: 'system@memberjunction.org',
   subscriptions: [{ name: '*', concurrency: 4 }],
   idlePollMinMs: 250,
   idlePollMaxMs: 5000,

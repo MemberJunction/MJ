@@ -35,6 +35,10 @@ export class InMemoryConsumer<TPayload extends WorkJson = WorkJson> implements I
         return this.store.DeadLetter(delivery, reason, error);
     }
 
+    public async DiscardExhausted(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        return this.store.DiscardExhausted(delivery, reason, error);
+    }
+
     public async Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.store.Release(delivery);
     }

@@ -103,6 +103,35 @@ describe('WorkQueueSweeper.RunOnce', () => {
         expect(events).toEqual([]);
     });
 
+    it('immediately discards lease-expired rows when subscription BindingConfig sets ExhaustionBehavior to Discard', async () => {
+        const discardSubscription = FakeSubscription({
+            ID: IDS.IntegrationSubscription,
+            Name: 'integration.apply',
+            TopicID: IDS.IntegrationTopic,
+            BindingConfig: '{"ExhaustionBehavior":"Discard"}',
+        });
+        const locked = new RecordingExecutor()
+            .QueueRows([
+                { DeliveryID: IDS.DeliveryA, SubscriptionID: IDS.IntegrationSubscription, PartitionKey: 'venue-42' },
+            ])
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([{ AffectedRows: 0 }])
+            .QueueRows([{ AffectedRows: 0 }]);
+        const events: DeadLetteredEvent[] = [];
+        const discardEngine: WorkQueueSweeperEngine = {
+            Subscriptions: [discardSubscription],
+            NotifyDeadLettered: event => { events.push(event); },
+        };
+        const sweeper = new WorkQueueSweeper(new RecordingExecutor(), discardEngine, TEST_USER, new SilentLogger(), harness(locked).Options);
+        const result = await sweeper.RunOnce();
+        expect(result.ExpireLeases).toBe(0);
+        expect(events).toEqual([]);
+        const operator = CreateWorkQueueSqlBuilder(locked).Operator;
+        expect(locked.Calls[1].SQL).toBe(
+            operator.DiscardDelivery(IDS.IntegrationSubscription, IDS.DeliveryA, false, TEST_USER.ID ?? null, 'LeaseExpired').SQL,
+        );
+    });
+
     it('repeats a purge while batches come back full, up to the per-run cap', async () => {
         const locked = new RecordingExecutor()
             .QueueRows([])

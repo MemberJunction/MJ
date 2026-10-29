@@ -264,6 +264,7 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                     params.EntityAction.Params,
                 ),
                 ContextUser: params.ContextUser,
+                Provider: params.EntityObject.ProviderToUse,
             });
 
             if (submission.Success) {
@@ -275,11 +276,22 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             }
 
             // Declining the deferral runs the action normally. See the doc comment above: dropping
-            // the work would make opting into durability worse than not opting in.
+            // the work would make opting into durability worse than not opting in. When the save's
+            // transaction is still open (transactional outbox enlistment), defer the inline fallback
+            // onto RunAfterCommit so it runs right after commit instead of nesting inside the save tx.
             LogError(
                 `Entity Action ${params.EntityAction.ID} asked for durable dispatch but ran inline instead: ` +
                 `${submission.ErrorMessage ?? 'the durable submission failed'}`,
             );
+            const savingProvider = params.EntityObject.ProviderToUse;
+            if (isProviderInAmbientTransactionWithPostCommit(savingProvider)) {
+                this.scheduleDurableLocalRun(params, action, runParams);
+                return {
+                    Success: true,
+                    ResultCode: 'DEFERRED_LOCAL',
+                    Message: 'Durable submission declined; inline fallback deferred until the ambient transaction commits.',
+                };
+            }
             return null;
         };
     }
@@ -578,4 +590,15 @@ export class EntityActionInvocationValidate extends EntityActionInvocationSingle
  */
 function hasPostCommitQueue(provider: object | undefined | null): provider is Pick<DatabaseProviderBase, 'RunAfterCommit'> {
     return !!provider && 'RunAfterCommit' in provider && typeof provider.RunAfterCommit === 'function';
+}
+
+function isProviderInAmbientTransactionWithPostCommit(
+    provider: object | undefined | null,
+): provider is Pick<DatabaseProviderBase, 'RunAfterCommit'> & { TransactionDepth: number } {
+    return (
+        hasPostCommitQueue(provider) &&
+        'TransactionDepth' in provider &&
+        typeof provider.TransactionDepth === 'number' &&
+        provider.TransactionDepth > 0
+    );
 }

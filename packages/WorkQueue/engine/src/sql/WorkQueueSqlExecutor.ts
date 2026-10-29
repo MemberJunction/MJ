@@ -22,6 +22,8 @@ export interface WorkQueueSqlExecutor {
 /** An executor whose statements can join a provider-arbitrated transaction. */
 export interface WorkQueueTransactionalExecutor extends WorkQueueSqlExecutor {
     BeginEntityTransaction(): Promise<EntityTransactionScope>;
+    /** Optional post-commit queue (implemented by DatabaseProviderBase / GenericDatabaseProvider). */
+    RunAfterCommit?(task: () => Promise<void> | void, description?: string): void;
 }
 
 /** An executor with its own transaction stack over a shared pool; must be released after use. */
