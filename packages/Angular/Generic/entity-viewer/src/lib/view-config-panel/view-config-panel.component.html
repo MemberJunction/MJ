@@ -547,7 +547,7 @@
                     type="checkbox"
                     [ngModel]="CustomWhereClause"
                     (ngModelChange)="OnToggleCustomWhereOverride($event)"
-                    [disabled]="!CanEditCustomSql"
+                    [disabled]="!CanEdit || (!CanEditCustomSql && !CustomWhereClause)"
                   />
                   <div class="sql-override-copy">
                     <div class="sql-override-title-row">
@@ -558,10 +558,12 @@
                       </span>
                     </div>
                     <p>
-                      @if (!CanEditCustomSql && CanEdit) {
-                        Inspecting the read-only SQL <code>WHERE</code> clause. Only administrators (Owner-type users) may override a view with custom SQL.
+                      @if (CustomWhereClause && !CanEditCustomSql && CanEdit) {
+                        Custom SQL override is active (read-only — only administrators (Owner-type users) may edit custom SQL). Uncheck the box above to revert this view to Smart Filter or Rule Builder.
                       } @else if (CustomWhereClause) {
                         Custom SQL override is active. RunView will execute the SQL expression below directly instead of Smart Filter or Rule Builder. (One-way: edits here cannot be converted back into visual rules.)
+                      } @else if (!CanEditCustomSql && CanEdit) {
+                        Inspecting the read-only SQL <code>WHERE</code> clause. Only administrators (Owner-type users) may override a view with custom SQL.
                       } @else {
                         Inspecting the read-only SQL <code>WHERE</code> clause compiled from your Smart Filter or Rule Builder. Check the box above to unlock the editor and override it with custom SQL (one-way).
                       }

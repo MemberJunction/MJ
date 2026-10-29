@@ -137,10 +137,21 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   @Input() Entity: EntityInfo | null = null;
 
+  private _boundViewEntity: MJUserViewEntityExtended | null = null;
+  private _detachedFromBoundView: boolean = false;
+
   /**
-   * The current view entity (null for default view)
+   * The current view entity (null for default view, or while the open studio session has
+   * switched from "Save as New Named View" to "Personal Default Layout" mode).
    */
-  @Input() ViewEntity: MJUserViewEntityExtended | null = null;
+  @Input()
+  get ViewEntity(): MJUserViewEntityExtended | null {
+    return this._detachedFromBoundView ? null : this._boundViewEntity;
+  }
+  set ViewEntity(value: MJUserViewEntityExtended | null) {
+    this._boundViewEntity = value;
+    this._detachedFromBoundView = false;
+  }
 
   /**
    * Whether the panel is open
@@ -244,11 +255,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   /**
    * Emitted when the user switches from "Save as New Named View" to "Personal Default Layout"
-   * while a saved ViewEntity was bound, so the host can deselect the saved view (#6037).
+   * so the host can exit its new-view flow (#6037).
    */
   @Output() SwitchToDefaultLayout = new EventEmitter<void>();
 
-  private _suppressNextInputReinit: boolean = false;
+  private _awaitingDefaultLayoutInputSync: boolean = false;
 
   // Form state
   public ViewName: string = '';
@@ -463,9 +474,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['IsOpen']) {
+      this._awaitingDefaultLayoutInputSync = false;
+      this._detachedFromBoundView = false;
+    }
+
     // Reset to first tab and clear search when panel opens
     if (changes['IsOpen'] && this.IsOpen) {
-      this._suppressNextInputReinit = false;
       // Unified View Studio: open on Filters & Source when creating a new view, otherwise Columns
       this.ActiveTab = this.DefaultSaveAsNew ? 'filters' : 'columns';
       this.ColumnSearchText = '';
@@ -494,10 +509,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       changes['PendingNewViewAlternateBaseView'] ||
       (changes['CurrentGridState'] && !this.IsOpen)
     ) {
-      if (this._suppressNextInputReinit && this.IsOpen && !changes['Entity']) {
-        this._suppressNextInputReinit = false;
+      if (this._awaitingDefaultLayoutInputSync && this.IsOpen && this.isDefaultLayoutEchoChange(changes)) {
+        // Host is echoing the null/false input reset from SwitchToDefaultLayout (across one or more
+        // change-detection passes); keep in-progress column/sort edits intact.
       } else {
-        this._suppressNextInputReinit = false;
+        this._awaitingDefaultLayoutInputSync = false;
         this.initializeFromEntity();
       }
     }
@@ -515,6 +531,31 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * True when every reinit-triggering input in `changes` is merely echoing the default-layout
+   * reset (`ViewEntity → null`, `DefaultSaveAsNew → false`, `PendingNewViewAlternateBaseView → null`).
+   * Any genuine entity change, newly selected view, or new-view flow request returns `false` so
+   * the panel re-initializes normally even if a host did not bind `(SwitchToDefaultLayout)`.
+   */
+  private isDefaultLayoutEchoChange(changes: SimpleChanges): boolean {
+    if (changes['Entity']) {
+      return false;
+    }
+    if (changes['ViewEntity'] && changes['ViewEntity'].currentValue != null) {
+      return false;
+    }
+    if (changes['DefaultSaveAsNew'] && Boolean(changes['DefaultSaveAsNew'].currentValue)) {
+      return false;
+    }
+    if (changes['PendingNewViewAlternateBaseView'] && Boolean(changes['PendingNewViewAlternateBaseView'].currentValue)) {
+      return false;
+    }
+    if (changes['CurrentGridState'] && !this.IsOpen) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Field names field-level security denies the current user READ on, lowercased. Empty when
    * there is no entity or resolved user, when the entity has field security off, or when nothing
    * is denied — so callers can treat it as "nothing to filter".
@@ -524,7 +565,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   private deniedReadFields(): Set<string> {
     const user = this.ProviderToUse?.CurrentUser;
-    if (!this.Entity || !user || typeof this.Entity.GetDeniedReadFields !== 'function') {
+    if (!this.Entity || !user) {
       return new Set<string>();
     }
     return this.Entity.GetDeniedReadFields(user);
@@ -709,7 +750,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     }
 
-    const declared = !this.IsSaveAsNewFlow ? this.ViewEntity?.PropertiesObject : null;
+    const declared = this.ViewEntity?.PropertiesObject;
     this.Properties = declared ? ToPlainJSON(declared) : [];
 
     // Auto-enable Advanced Mode if this view uses any advanced features
@@ -1113,18 +1154,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Check if the current user can create or modify a custom SQL WHERE clause on this view.
    * Server-side validation (`MJUserViewEntityServer.validateCustomWhereClauseAuthorization`)
-   * restricts `CustomWhereClause` to Owner-type administrators because raw SQL bypasses
-   * client-clause screening (#6037).
+   * restricts `CustomWhereClause` to Owner-type administrators (failing closed when user/Type
+   * is missing) because raw SQL bypasses client-clause screening (#6037).
    */
   get CanEditCustomSql(): boolean {
     if (!this.CanEdit) {
       return false;
     }
-    const userType = this.ProviderToUse?.CurrentUser?.Type?.trim();
-    if (!userType) {
-      return true;
-    }
-    return userType.toLowerCase() === 'owner';
+    return this.ProviderToUse?.CurrentUser?.Type?.trim().toLowerCase() === 'owner';
   }
 
   /**
@@ -1171,6 +1208,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Promote the panel from Personal Default View mode to Creating New Named View mode in-place
    */
   PromoteToNewView(): void {
+    this._awaitingDefaultLayoutInputSync = false;
     this.IsCreatingNewView = true;
     if (!this.ViewName.trim()) {
       this.ViewName = this.BuildSuggestedViewName();
@@ -1210,16 +1248,17 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   /**
    * Switch from "Save as New Named View" back to "Personal Default Layout" mode.
-   * Clears any filter, alternate base view, or bound ViewEntity so saving writes
-   * the user's default layout rather than overwriting a previously selected view (#6037).
+   * Detaches any bound ViewEntity for this Studio session and clears filters, alternate base view,
+   * and properties so saving writes the user's default layout rather than overwriting a previously
+   * selected view (#6037).
    */
   SwitchToDefaultLayoutMode(): void {
-    const hadViewEntity = !!this.ViewEntity;
+    const shouldNotifyHost = !!this._boundViewEntity || this.DefaultSaveAsNew || this.IsSaveAsNewFlow;
     this.ShowDefaultLayoutSwitchConfirm = false;
-    if (hadViewEntity) {
-      this._suppressNextInputReinit = true;
+    this._detachedFromBoundView = true;
+    if (shouldNotifyHost) {
+      this._awaitingDefaultLayoutInputSync = true;
     }
-    this.ViewEntity = null;
     this.IsCreatingNewView = false;
     this.IsSaveAsNewFlow = false;
     this.ViewName = '';
@@ -1236,7 +1275,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     this.FilterMode = 'smart';
     this.SmartFilterEnabled = true;
     this.Properties = [];
-    if (hadViewEntity) {
+    if (shouldNotifyHost) {
       this.SwitchToDefaultLayout.emit();
     }
     this.cdr.detectChanges();
@@ -2712,7 +2751,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   get SqlWhereSourceLabel(): string {
     if (this.CustomWhereClause) {
-      return 'Custom SQL Override (Editable)';
+      return this.CanEditCustomSql
+        ? 'Custom SQL Override (Editable)'
+        : 'Custom SQL Override (Read-Only)';
     }
     if (!this.SmartFilterEnabled && this.GetFilterCount() > 0) {
       const count = this.GetFilterCount();
@@ -2725,10 +2766,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Handle toggling the one-way Custom SQL WHERE Override checkbox
+   * Handle toggling the one-way Custom SQL WHERE Override checkbox.
+   * Non-Owner editors may turn an existing override OFF (`enabled === false`) to revert a view
+   * to Smart Filter or Rule Builder, matching `MJUserViewEntityServer`, while turning it ON
+   * requires `CanEditCustomSql` (#6037).
    */
   OnToggleCustomWhereOverride(enabled: boolean): void {
-    if (!this.CanEditCustomSql) return;
+    if (!this.CanEdit) return;
+    if (enabled && !this.CanEditCustomSql) return;
     // Capture generated SQL from the currently active filter mode BEFORE clearing SmartFilterEnabled
     const generated = enabled && !this.WhereClause.trim() ? this.GeneratedSqlWhereClause : '';
     this.CustomWhereClause = enabled;

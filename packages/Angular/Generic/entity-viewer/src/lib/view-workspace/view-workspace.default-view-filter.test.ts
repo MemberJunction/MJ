@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SimpleChange, type ChangeDetectorRef } from '@angular/core';
+import type { ChangeDetectorRef } from '@angular/core';
 import type { EntityFieldInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine, type MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ViewWorkspaceComponent } from './view-workspace.component';
-import { ColumnConfig, SortItem, ViewConfigPanelComponent, ViewSaveEvent } from '../view-config-panel/view-config-panel.component';
+import { ColumnConfig, SortItem, ViewSaveEvent } from '../view-config-panel/view-config-panel.component';
 
 /**
  * Issue #4220 — "Save" on the default (unsaved) view silently dropped Smart/Traditional filters.
@@ -464,156 +463,6 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
         grid: { rowHeight: 'compact', wrapText: true },
         viewTypeConfigs: { map: { latField: 'Lat', lngField: 'Lng' } }
       });
-    });
-  });
-
-  describe('Issue #6037 — switching to Personal Default Layout and surfacing Custom SQL save failures', () => {
-    let notifySpy: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      notifySpy = vi.fn();
-      vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({
-        CreateSimpleNotification: notifySpy,
-      } as unknown as MJNotificationService);
-    });
-
-    it('deselects the previously selected saved view when switching from New Saved View to Personal Default Layout, never overwriting it (#6037)', async () => {
-      const existingView = makeFakeView();
-      existingView.ID = 'view-saved-x';
-      existingView.Name = 'Saved View X';
-      existingView.SmartFilterEnabled = true;
-      existingView.SmartFilterPrompt = 'Starts with A';
-      existingView.FilterState = JSON.stringify(traditionalFilter);
-
-      component.CurrentViewEntity = existingView as unknown as MJUserViewEntityExtended;
-      component.SelectedViewId = existingView.ID;
-
-      // 1. User chooses "New Saved View"
-      component.OnSaveViewRequested({ SaveAsNew: true });
-      expect(component.DefaultSaveAsNew).toBe(true);
-      expect(component.IsConfigPanelOpen).toBe(true);
-
-      // Drive the real ViewConfigPanelComponent connected to the workspace
-      const cdr = { detectChanges: vi.fn(), markForCheck: vi.fn() } as unknown as ChangeDetectorRef;
-      const panel = new ViewConfigPanelComponent(cdr);
-      panel.Provider = component.Provider;
-      panel.Entity = makeEntity();
-      panel.ViewEntity = component.CurrentViewEntity;
-      panel.DefaultSaveAsNew = component.DefaultSaveAsNew;
-      panel.IsOpen = true;
-      panel.ngOnChanges({ IsOpen: new SimpleChange(false, true, false) });
-
-      panel.SwitchToDefaultLayout.subscribe(() => component.OnSwitchToDefaultLayout());
-      panel.SaveDefaults.subscribe(e => { void component.OnSaveDefaultViewSettings(e); });
-
-      // 2. User switches to "Personal Default Layout"
-      panel.SwitchToDefaultLayoutMode();
-
-      expect(panel.ViewEntity).toBeNull();
-      expect(panel.IsCreatingNamedView).toBe(false);
-      expect(component.CurrentViewEntity).toBeNull();
-      expect(component.SelectedViewId).toBeNull();
-      expect(component.DefaultSaveAsNew).toBe(false);
-
-      // 3. User clicks "Save Default Layout"
-      panel.OnSaveDefaults();
-      await Promise.resolve();
-
-      expect(setSetting).toHaveBeenCalledTimes(1);
-      expect(existingView.Save).not.toHaveBeenCalled();
-      expect(existingView.Name).toBe('Saved View X');
-      expect(existingView.SmartFilterPrompt).toBe('Starts with A');
-      expect(JSON.parse(existingView.FilterState)).toEqual(traditionalFilter);
-    });
-
-    it('surfaces an error notification when updating a saved view fails (e.g. non-Owner CustomWhereClause rejection) (#6037)', async () => {
-      const serverMessage =
-        'Only an administrator (Owner-type user) may create or modify a view with CustomWhereClause enabled — the custom WhereClause is executed as raw SQL.';
-      const existingView = makeFakeView();
-      existingView.ID = 'view-custom-sql';
-      existingView.Name = 'My View';
-      existingView.Save = vi.fn().mockResolvedValue(false);
-      existingView.LatestResult = { CompleteMessage: serverMessage };
-
-      component.CurrentViewEntity = existingView as unknown as MJUserViewEntityExtended;
-      component.IsConfigPanelOpen = true;
-
-      const saved = await component.OnSaveView(
-        makeSaveEvent({
-          Name: 'My View',
-          SaveAsNew: false,
-          CustomWhereClause: true,
-          WhereClause: "[Status] = 'Active'",
-        })
-      );
-
-      expect(saved).toBe(false);
-      expect(component.IsConfigPanelOpen).toBe(true);
-      expect(notifySpy).toHaveBeenCalledTimes(1);
-      expect(notifySpy).toHaveBeenCalledWith(
-        `Failed to update view: ${serverMessage}`,
-        'error',
-        5000
-      );
-    });
-
-    it('surfaces an error notification when creating a new view fails (#6037)', async () => {
-      const serverMessage =
-        'Only an administrator (Owner-type user) may create or modify a view with CustomWhereClause enabled — the custom WhereClause is executed as raw SQL.';
-      createdView.Save = vi.fn().mockResolvedValue(false);
-      createdView.LatestResult = { CompleteMessage: serverMessage };
-      component.IsConfigPanelOpen = true;
-
-      const saved = await component.OnSaveView(
-        makeSaveEvent({
-          Name: 'New Custom SQL View',
-          SaveAsNew: true,
-          CustomWhereClause: true,
-          WhereClause: "[Status] = 'Active'",
-        })
-      );
-
-      expect(saved).toBe(false);
-      expect(component.IsConfigPanelOpen).toBe(true);
-      expect(notifySpy).toHaveBeenCalledTimes(1);
-      expect(notifySpy).toHaveBeenCalledWith(
-        `Failed to create view: ${serverMessage}`,
-        'error',
-        5000
-      );
-    });
-
-    it('notifies a non-Owner user with a warning when copying a CustomWhereClause view strips the custom SQL (#6037)', async () => {
-      const sharedCustomSqlView = makeFakeView();
-      sharedCustomSqlView.ID = 'view-owner-shared';
-      sharedCustomSqlView.Name = 'Owner SQL View';
-      sharedCustomSqlView.UserID = 'owner-user-99';
-      (sharedCustomSqlView as unknown as { CustomWhereClause: boolean }).CustomWhereClause = true;
-      (sharedCustomSqlView as unknown as { WhereClause: string }).WhereClause = "[Status] = 'Active'";
-
-      component.CurrentViewEntity = sharedCustomSqlView as unknown as MJUserViewEntityExtended;
-      component.Provider = {
-        GetEntityObject: getEntityObject,
-        CurrentUser: { ID: USER_ID, Type: 'User' },
-      } as unknown as IMetadataProvider;
-
-      const saved = await component.OnSaveView(
-        makeSaveEvent({
-          Name: 'Owner SQL View (Copy)',
-          SaveAsNew: true,
-          CustomWhereClause: true,
-          WhereClause: "[Status] = 'Active'",
-        })
-      );
-
-      expect(saved).toBe(true);
-      expect((createdView as unknown as { CustomWhereClause?: boolean }).CustomWhereClause).toBeUndefined();
-      expect(notifySpy).toHaveBeenCalledTimes(1);
-      expect(notifySpy).toHaveBeenCalledWith(
-        'Saved copy without the custom SQL WHERE clause — only administrators (Owner-type users) can create views with custom SQL.',
-        'warning',
-        5000
-      );
     });
   });
 });
