@@ -102,6 +102,15 @@ const h = vi.hoisted(() => {
         prompts: [] as FakePrompt[],
     };
 
+    const byPromptID = <T extends { PromptID?: unknown }>(rows: T[]): Map<string, T[]> => {
+        const map = new Map<string, T[]>();
+        for (const row of rows) {
+            const key = norm(row.PromptID);
+            map.set(key, [...(map.get(key) ?? []), row]);
+        }
+        return map;
+    };
+
     const engine = {
         get VendorTypeDefinitions() { return [{ ID: inferenceTypeId, Name: 'Inference Provider' }]; },
         get Vendors() { return state.vendors; },
@@ -116,6 +125,7 @@ const h = vi.hoisted(() => {
         get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
         get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
         get ModelVendorsByModelID() { return new Map(state.models.map(m => [norm(m.ID), m.ModelVendors])); },
+        get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
         GetConfigurationChain() { return []; },
         /** Merges the model's and the model-vendor row's `Decision` section, as the real cascade does. */
         GetEffectiveModelConfiguration(modelID: string, modelVendorID?: string): AIModelConfiguration | null {

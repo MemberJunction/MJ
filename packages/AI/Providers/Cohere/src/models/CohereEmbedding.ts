@@ -12,6 +12,7 @@ import {
     FileCapabilities,
     ChatMessageContent,
     ChatMessageContentBlock,
+    EmbeddingInputType,
 } from '@memberjunction/ai';
 import { CohereClient, Cohere } from 'cohere-ai';
 
@@ -79,7 +80,7 @@ export class CohereEmbedding extends BaseEmbeddings {
         try {
             const response = await this._client.v2.embed({
                 model,
-                inputType: this.inputType,
+                inputType: this.resolveInputType(params.inputType),
                 embeddingTypes: ['float'],
                 texts: [params.text],
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
@@ -98,7 +99,7 @@ export class CohereEmbedding extends BaseEmbeddings {
         try {
             const response = await this._client.v2.embed({
                 model,
-                inputType: this.inputType,
+                inputType: this.resolveInputType(params.inputType),
                 embeddingTypes: ['float'],
                 texts: params.texts,
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
@@ -124,7 +125,7 @@ export class CohereEmbedding extends BaseEmbeddings {
             this.ValidateContentSupported(params.content);
             const response = await this._client.v2.embed({
                 model,
-                inputType: this.inputType,
+                inputType: this.resolveInputType(params.inputType),
                 embeddingTypes: ['float'],
                 inputs: [this.mapContentToEmbedInput(params.content)],
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
@@ -147,8 +148,14 @@ export class CohereEmbedding extends BaseEmbeddings {
         ];
     }
 
-    /** Cohere's required input_type, overridable via AdditionalSettings; defaults to search_document. */
-    private get inputType(): Cohere.EmbedInputType {
+    /**
+     * Cohere's required input_type: the call's `inputType` when given (query → `search_query`,
+     * document → `search_document`), else the AdditionalSettings override, else search_document.
+     */
+    private resolveInputType(requested: EmbeddingInputType | undefined): Cohere.EmbedInputType {
+        if (requested) {
+            return requested === 'query' ? 'search_query' : 'search_document';
+        }
         const it = this._additionalSettings['inputType'];
         return typeof it === 'string' ? (it as Cohere.EmbedInputType) : DEFAULT_INPUT_TYPE;
     }
