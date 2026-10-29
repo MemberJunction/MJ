@@ -23,7 +23,7 @@ import type { DatabasePlatform, IMetadataProvider, QueryDependencySpec, RunQuery
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryPermissionEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
@@ -1015,7 +1015,8 @@ async function roleNotHeldBy(user: UserInfo): Promise<{ ID: string; Name: string
     const roles = await new RunView().RunView<{ ID: string; Name: string }>({
         EntityName: 'MJ: Roles', Fields: ['ID', 'Name'], ResultType: 'simple'
     }, user);
-    return roles.Results.find(r => !user.UserRoles.some(ur => UUIDsEqual(ur.RoleID, r.ID)));
+    const held = new UUIDSet(user.UserRoles.map(ur => ur.RoleID));
+    return roles.Results.find(r => !held.Has(r.ID));
 }
 
 async function expectFailure(queryID: string, pattern: RegExp, label: string, user: UserInfo): Promise<void> {
