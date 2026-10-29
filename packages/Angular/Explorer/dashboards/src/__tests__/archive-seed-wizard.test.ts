@@ -47,6 +47,7 @@ function createWizard(): { wizard: ArchiveSeedWizardComponent; service: ServiceS
   internals['seedSummary'] = undefined;
   internals['isOpen'] = false;
   internals['resumeJobID'] = null;
+  internals['completedEmitted'] = false;
   wizard.CurrentStep = 1;
   wizard.Source = { ...DefaultBackupSourceValue(), BackupUrls: 'https://acct.blob.core.windows.net/backups/db.bak', SasToken: 'sp=rl&sig=x' };
   wizard.ConnectionName = 'Legacy CRM';
@@ -263,12 +264,43 @@ describe('ArchiveSeedWizardComponent', () => {
     expect(wizard.ExecutionError).toBe('CodeGen failed');
   });
 
-  it('Close stops following the job and emits Closed', () => {
+  it('Close stops following the job and emits Closed with whether a job was started', () => {
     const { wizard } = createWizard();
     wizard.JobID = 'job-1';
     wizard.Close();
     expect(wizard.JobID).toBeNull();
-    expect(wizard.Closed.emit).toHaveBeenCalled();
+    expect(wizard.Closed.emit).toHaveBeenCalledWith(true);
+    wizard.Close();
+    expect(wizard.Closed.emit).toHaveBeenLastCalledWith(false);
+  });
+
+  it('a job found already Done on resume emits Completed once with its summary', async () => {
+    const { wizard, service } = createWizard();
+    wizard.JobID = 'job-1';
+    const summary = { TablesProcessed: 3, TotalRowsTransferred: 900, DurationSeconds: 12, StagingDatabaseDropped: true };
+    service.GetArchiveSeedState.mockResolvedValue(seedState('Done', { Summary: summary }));
+
+    await pollOnce(wizard);
+    await pollOnce(wizard);
+
+    expect(wizard.CurrentStep).toBe(6);
+    expect(wizard.Completed.emit).toHaveBeenCalledTimes(1);
+    expect(wizard.Completed.emit).toHaveBeenCalledWith(expect.objectContaining({ Success: true, TablesProcessed: 3, StagingDatabaseDropped: true }));
+  });
+
+  it('opening the wizard defaults the staging name to the server prefix, unique per open', () => {
+    const { wizard } = createWizard();
+    const now = vi.spyOn(Date, 'now');
+    now.mockReturnValue(1000);
+    wizard.IsOpen = true;
+    const first = wizard.StagingDatabaseName;
+    wizard.IsOpen = false;
+    now.mockReturnValue(2000);
+    wizard.IsOpen = true;
+    now.mockRestore();
+    expect(first).toMatch(/^MJ_Staging_/);
+    expect(wizard.StagingDatabaseName).toMatch(/^MJ_Staging_/);
+    expect(wizard.StagingDatabaseName).not.toBe(first);
   });
 
   describe('stops following the job once the wizard is closed or destroyed', () => {

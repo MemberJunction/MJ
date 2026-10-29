@@ -18,6 +18,9 @@ function makeComponent(): ConnectionsComponent {
   comp.ArchiveSeedWizardOpen = false;
   comp.ArchiveSeedResumeJobID = null;
   comp.SeedStates = new UUIDMap<string>();
+  comp.SeedErrors = new UUIDMap<string>();
+  comp.SavedIntegrationID = null;
+  comp.ConnectModeError = null;
   comp.ConnectionName = 'SQL';
   (comp as unknown as Record<string, unknown>)['cdr'] = { detectChanges: vi.fn() };
   return comp;
@@ -72,15 +75,54 @@ describe('ConnectionsComponent — how to connect a SQL Server integration', () 
     expect(comp.ShowConnectModeChoice).toBe(false);
   });
 
-  it('choosing an archive closes the inline wizard and opens the archive seed wizard fresh', () => {
+  it('choosing an archive closes the inline wizard and opens the archive seed wizard fresh', async () => {
     const comp = makeComponent();
     comp.SelectedIntegration = makeDefinition('@memberjunction/connector-sqlserver');
     comp.ArchiveSeedResumeJobID = 'stale-job';
-    comp.ChooseConnectMode('archive');
+    await comp.ChooseConnectMode('archive');
     expect(comp.WizardOpen).toBe(false);
     expect(comp.ArchiveSeedWizardOpen).toBe(true);
     expect(comp.ArchiveSeedResumeJobID).toBeNull();
     expect(comp.SelectedCompanyID).toBe('co-1');
+  });
+
+  it('choosing an archive deletes the connection this wizard saved but did not finish, then closes through CloseWizard', async () => {
+    const comp = makeComponent();
+    comp.SelectedIntegration = makeDefinition('SQLServerConnector');
+    comp.SavedIntegrationID = 'ci-tested';
+    const ci = { Load: vi.fn().mockResolvedValue(true), Delete: vi.fn().mockResolvedValue(true), LatestResult: null };
+    const provider = { CurrentUser: { ID: 'u-1' }, GetEntityObject: vi.fn().mockResolvedValue(ci) };
+    Object.defineProperty(comp, 'ProviderToUse', { get: () => provider });
+    const load = vi.spyOn(comp, 'LoadData').mockResolvedValue();
+    const close = vi.spyOn(comp, 'CloseWizard');
+
+    await comp.ChooseConnectMode('archive');
+
+    expect(provider.GetEntityObject).toHaveBeenCalledWith('MJ: Company Integrations', provider.CurrentUser);
+    expect(ci.Load).toHaveBeenCalledWith('ci-tested');
+    expect(ci.Delete).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(load).toHaveBeenCalled();
+    expect(comp.SavedIntegrationID).toBeNull();
+    expect(comp.WizardOpen).toBe(false);
+    expect(comp.ArchiveSeedWizardOpen).toBe(true);
+  });
+
+  it('a failed delete keeps the inline wizard open with the reason and does not open the archive wizard', async () => {
+    const comp = makeComponent();
+    comp.SelectedIntegration = makeDefinition('SQLServerConnector');
+    comp.SavedIntegrationID = 'ci-tested';
+    const ci = { Load: vi.fn().mockResolvedValue(true), Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } };
+    const provider = { CurrentUser: { ID: 'u-1' }, GetEntityObject: vi.fn().mockResolvedValue(ci) };
+    Object.defineProperty(comp, 'ProviderToUse', { get: () => provider });
+
+    await comp.ChooseConnectMode('archive');
+
+    expect(comp.ConnectModeError).toContain('FK violation');
+    expect(comp.WizardOpen).toBe(true);
+    expect(comp.ArchiveSeedWizardOpen).toBe(false);
+    expect(comp.ConnectMode).toBeNull();
+    expect(comp.SavedIntegrationID).toBe('ci-tested');
   });
 
   it('going back to step 1 clears the chosen mode', () => {
@@ -109,6 +151,25 @@ describe('ConnectionsComponent — seeded status on cards', () => {
     expect(comp.GetStatusBadgeClass(summary)).toBe('status-badge status-badge-seeded');
   });
 
+  it('labels a failed seed "Seed failed" with the job error as its tooltip', () => {
+    const comp = makeComponent();
+    const summary = makeSummary(SEEDED_CONFIG, 'Disabled');
+    comp.SeedStates.Set('ci-1', 'Failed');
+    comp.SeedErrors.Set('ci-1', 'Restore failed (RESTORE_FAILED): access denied');
+    expect(comp.GetStatusBadge(summary)).toBe('Seed failed');
+    expect(comp.GetStatusBadgeClass(summary)).toBe('status-badge status-badge-failed');
+    expect(comp.GetStatusBadgeTooltip(summary)).toBe('Restore failed (RESTORE_FAILED): access denied');
+  });
+
+  it('a seed that has not failed keeps its badge and has no tooltip', () => {
+    const comp = makeComponent();
+    const summary = makeSummary(SEEDED_CONFIG, 'Disabled');
+    comp.SeedStates.Set('ci-1', 'Done');
+    expect(comp.GetStatusBadge(summary)).toBe('Seeded · source not connected');
+    expect(comp.GetStatusBadgeTooltip(summary)).toBeNull();
+    expect(comp.GetStatusBadge(makeSummary(null, 'Active'))).not.toBe('Seed failed');
+  });
+
   it('offers Resume seed only while the stored job is not terminal', () => {
     const comp = makeComponent();
     const summary = makeSummary(SEEDED_CONFIG, 'Disabled');
@@ -133,23 +194,28 @@ describe('ConnectionsComponent — seeded status on cards', () => {
 
   it('loads each seeded card job state once after load', async () => {
     const comp = makeComponent();
-    const getState = vi.fn().mockResolvedValue({ Success: true, State: { JobID: 'job-42', CompanyIntegrationID: 'ci-1', State: 'Seeding' } });
+    const getState = vi.fn().mockResolvedValue({ Success: true, State: { JobID: 'job-42', CompanyIntegrationID: 'ci-1', State: 'Failed', Error: 'boom' } });
     (comp as unknown as Record<string, unknown>)['dataService'] = { GetArchiveSeedState: getState } as unknown as IntegrationDataService;
     comp.Connections = [makeSummary(SEEDED_CONFIG, 'Disabled'), { ...makeSummary(null, 'Active'), Integration: { ID: 'ci-2', Configuration: null } as unknown as MJCompanyIntegrationEntity }];
     await comp.LoadSeedStates();
     expect(getState).toHaveBeenCalledTimes(1);
     expect(getState).toHaveBeenCalledWith('job-42');
-    expect(comp.SeedStates.Get('ci-1')).toBe('Seeding');
+    expect(comp.SeedStates.Get('ci-1')).toBe('Failed');
+    expect(comp.SeedErrors.Get('ci-1')).toBe('boom');
   });
 
-  it('closing the archive wizard and completing a seed reload the cards', async () => {
+  it('closing the archive wizard reloads the cards only when it started a job; completing a seed reloads them', async () => {
     const comp = makeComponent();
     const load = vi.spyOn(comp, 'LoadData').mockResolvedValue();
     comp.ArchiveSeedWizardOpen = true;
-    comp.CloseArchiveSeedWizard();
+    comp.CloseArchiveSeedWizard(false);
     expect(comp.ArchiveSeedWizardOpen).toBe(false);
+    expect(load).not.toHaveBeenCalled();
+    comp.ArchiveSeedWizardOpen = true;
+    comp.CloseArchiveSeedWizard(true);
+    expect(load).toHaveBeenCalledTimes(1);
     await comp.OnArchiveSeedCompleted();
-    expect(load).toHaveBeenCalled();
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });
 

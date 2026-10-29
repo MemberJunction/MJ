@@ -23,6 +23,8 @@ const RUN_POLL_INTERVAL_MS = 2500;
 const RECONNECT_WINDOW_MS = 5 * 60_000;
 /** Job states during which the API restarts, so an unreachable server is expected. */
 const RESTARTING_STATES = new Set(['Building', 'Mapping']);
+/** The prefix the server's drop action accepts; a staging name without it could never be cleaned up. */
+const STAGING_PREFIX = 'MJ_Staging_';
 /** Job states the wizard stops polling at: the user acts next, or the job is over. */
 const RESTING_STATES = new Set(['AwaitingSelection', 'AwaitingCleanupDecision', 'Done', 'Failed']);
 
@@ -90,7 +92,9 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     return this.resumeJobID;
   }
 
-  @Output() Closed = new EventEmitter<void>();
+  /** Emitted on close; `true` when a job was started or followed, so the host reloads its cards. */
+  @Output() Closed = new EventEmitter<boolean>();
+  /** Emitted once per job when it reaches Done (whether finished here or found Done on resume). */
   @Output() Completed = new EventEmitter<BootstrapResultSummary>();
 
   CurrentStep: ArchiveSeedWizardStep = 1;
@@ -139,6 +143,8 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   private generation = 0;
   private eventTables: IntegrationArchiveSeedTable[] | undefined = undefined;
   private seedSummary: IntegrationArchiveSeedSummary | undefined = undefined;
+  /** Completed was already emitted for the followed job. */
+  private completedEmitted = false;
 
   ngOnDestroy(): void {
     this.stopFollowing();
@@ -278,7 +284,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
       this.Summary = { ...summary, Success: true, Message: 'Archive seed completed.', StagingDatabaseDropped: drop };
       this.CurrentState = 'Done';
       this.CurrentStep = 6;
-      this.Completed.emit(this.Summary);
+      this.emitCompleted(this.Summary);
     } catch (err) {
       this.ExecutionError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -296,8 +302,9 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
 
   /** Closes the wizard. The job keeps running on the server and can be resumed by its ID. */
   public Close(): void {
+    const jobStarted = this.JobID !== null;
     this.stopFollowing();
-    this.Closed.emit();
+    this.Closed.emit(jobStarted);
   }
 
   public Finish(): void {
@@ -400,6 +407,10 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
       this.seedSummary = state.Summary ?? this.seedSummary;
       this.Summary = SummarizeArchiveSeed(this.seedSummary, undefined);
     }
+    if (state.State === 'Done' && this.Summary) {
+      // A job found already Done (resumed after it finished elsewhere) still completes once here.
+      this.emitCompleted(this.Summary);
+    }
     if (state.State === 'Failed') {
       this.stopPolling();
       this.ExecutionError = state.Error ?? 'The archive seed failed.';
@@ -413,6 +424,12 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     if (this.Tables.length > 0) return;
     this.Tables = stateTables && stateTables.length > 0 ? stateTables : this.eventTables ?? [];
     this.AllSelected = true;
+  }
+
+  private emitCompleted(summary: BootstrapResultSummary): void {
+    if (this.completedEmitted) return;
+    this.completedEmitted = true;
+    this.Completed.emit(summary);
   }
 
   private failJob(message: string): void {
@@ -457,6 +474,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.Summary = null;
     this.eventTables = undefined;
     this.seedSummary = undefined;
+    this.completedEmitted = false;
   }
 
   private resetWizard(): void {
@@ -466,7 +484,8 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
     this.Source = DefaultBackupSourceValue();
     this.ConnectionName = '';
     this.SelectedCompanyID = this.defaultCompanyID ?? '';
-    this.StagingDatabaseName = `MJ_ArchiveSeed_${Date.now().toString().slice(-6)}`;
+    // The server's prefix, so the job's drop accepts it; the timestamp keeps it unique per open.
+    this.StagingDatabaseName = `${STAGING_PREFIX}Seed_${Date.now()}`;
     this.BatchSize = 500000;
   }
 }

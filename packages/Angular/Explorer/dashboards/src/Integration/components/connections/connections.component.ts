@@ -48,11 +48,13 @@ const BRAND_COLOR_MAP: Array<{ Pattern: RegExp; Color: string }> = [
   { Pattern: /ftp|sftp/i, Color: '#555' }
 ];
 
-type StatusBadgeType = 'Connected' | 'Error' | 'Inactive' | 'Syncing' | typeof SEEDED_BADGE;
+type StatusBadgeType = 'Connected' | 'Error' | 'Inactive' | 'Syncing' | typeof SEEDED_BADGE | typeof SEED_FAILED_BADGE;
 type ConnectModeType = 'credentials' | 'archive';
 
 /** Badge text for a connection seeded from a backup whose live source is not connected yet. */
 const SEEDED_BADGE = 'Seeded · source not connected';
+/** Badge text for a connection whose archive seed job failed. */
+const SEED_FAILED_BADGE = 'Seed failed';
 
 /** The class names the SQL Server connector registers under: the package name and the legacy class name. */
 const SQL_SERVER_CONNECTOR_CLASS_NAMES = ['@memberjunction/connector-sqlserver', 'sqlserverconnector'];
@@ -161,6 +163,10 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   ArchiveSeedResumeJobID: string | null = null;
   /** Latest archive seed job state per seeded connection, keyed by company integration ID. */
   SeedStates = new UUIDMap<string>();
+  /** The failed archive seed job's error per seeded connection, keyed by company integration ID. */
+  SeedErrors = new UUIDMap<string>();
+  /** Why the inline wizard's unfinished connection could not be removed before switching to an archive. */
+  ConnectModeError: string | null = null;
 
   // Schedule state (for the selected integration)
   ScheduledJobID: string | null = null;
@@ -478,6 +484,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // ---------------------------------------------------------------------------
 
   GetStatusBadge(summary: IntegrationSummary): StatusBadgeType {
+    if (this.IsSeedFailed(summary)) return SEED_FAILED_BADGE;
     if (this.IsSeededAwaitingSource(summary)) return SEEDED_BADGE;
     if (summary.LatestRun?.Status === 'In Progress') return 'Syncing';
     if (summary.StatusColor === 'green') return 'Connected';
@@ -487,8 +494,19 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   GetStatusBadgeClass(summary: IntegrationSummary): string {
     const badge = this.GetStatusBadge(summary);
-    const modifier = badge === SEEDED_BADGE ? 'seeded' : badge.toLowerCase();
+    const modifier = badge === SEEDED_BADGE ? 'seeded' : badge === SEED_FAILED_BADGE ? 'failed' : badge.toLowerCase();
     return `status-badge status-badge-${modifier}`;
+  }
+
+  /** The badge tooltip: a failed seed shows the job's error; other badges have none. */
+  GetStatusBadgeTooltip(summary: IntegrationSummary): string | null {
+    if (!this.IsSeedFailed(summary)) return null;
+    return this.SeedErrors.Get(summary.Integration.ID) ?? 'The archive seed failed.';
+  }
+
+  /** True when the connection records an archive seed job whose latest state is Failed. */
+  IsSeedFailed(summary: IntegrationSummary): boolean {
+    return !!ReadSeededJobID(summary.Integration.Configuration) && this.SeedStates.Get(summary.Integration.ID) === 'Failed';
   }
 
   GetIntegrationIcon(name: string, icon?: string | null): string {
@@ -700,15 +718,41 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     return this.WizardStep === 2 && this.ConnectMode === null && this.IsSqlServerDefinition(this.SelectedIntegration);
   }
 
-  /** Credentials continue in the inline wizard; an archive hands over to the archive seed wizard. */
-  ChooseConnectMode(mode: ConnectModeType): void {
+  /**
+   * Credentials continue in the inline wizard; an archive hands over to the archive seed wizard. An
+   * archive seed must be the workspace's first SQL Server connection, so a connection this wizard
+   * already saved (tested but not finished) is deleted first; when that fails the wizard stays open
+   * with the reason.
+   */
+  async ChooseConnectMode(mode: ConnectModeType): Promise<void> {
+    this.ConnectModeError = null;
+    if (mode === 'archive' && !(await this.deleteUnfinishedIntegration())) {
+      this.cdr.detectChanges();
+      return;
+    }
     this.ConnectMode = mode;
     if (mode === 'archive') {
-      this.WizardOpen = false;
+      this.CloseWizard();
+      this.SavedIntegrationID = null;
       this.ArchiveSeedResumeJobID = null;
       this.ArchiveSeedWizardOpen = true;
     }
     this.cdr.detectChanges();
+  }
+
+  /** Deletes the connection this wizard saved but did not finish; true when there is none left. */
+  private async deleteUnfinishedIntegration(): Promise<boolean> {
+    if (!this.SavedIntegrationID) return true;
+    try {
+      const p = this.ProviderToUse;
+      const ci = await p.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', p.CurrentUser);
+      if (!(await ci.Load(this.SavedIntegrationID))) return true; // already gone
+      if (await ci.Delete()) return true;
+      this.ConnectModeError = `The connection saved by this wizard could not be removed: ${ci.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+    } catch (err) {
+      this.ConnectModeError = `The connection saved by this wizard could not be removed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    return false;
   }
 
   /** True when the connection was seeded from a backup and its data source still awaits a live source. */
@@ -732,10 +776,14 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
   }
 
-  CloseArchiveSeedWizard(): void {
+  /** Closes the archive wizard; when it started or followed a job, the cards reload to show it. */
+  CloseArchiveSeedWizard(jobStarted = false): void {
     this.ArchiveSeedWizardOpen = false;
     this.ArchiveSeedResumeJobID = null;
     this.cdr.detectChanges();
+    if (jobStarted) {
+      void this.LoadData();
+    }
   }
 
   async OnArchiveSeedCompleted(_result?: BootstrapResultSummary): Promise<void> {
@@ -745,21 +793,25 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   /** Reads the latest job state once for each connection that records an archive seed job. */
   async LoadSeedStates(): Promise<void> {
     const states = new UUIDMap<string>();
+    const errors = new UUIDMap<string>();
     const seeded = this.Connections
       .map(summary => ({ ID: summary.Integration.ID, JobID: ReadSeededJobID(summary.Integration.Configuration) }))
       .filter((row): row is { ID: string; JobID: string } => !!row.JobID);
     await Promise.all(seeded.map(async row => {
-      const state = await this.readSeedState(row.JobID);
-      if (state) states.Set(row.ID, state);
+      const read = await this.readSeedState(row.JobID);
+      if (read?.State) states.Set(row.ID, read.State);
+      if (read?.Error) errors.Set(row.ID, read.Error);
     }));
     this.SeedStates = states;
+    this.SeedErrors = errors;
     this.cdr.detectChanges();
   }
 
-  private async readSeedState(jobID: string): Promise<string | undefined> {
+  private async readSeedState(jobID: string): Promise<{ State: string; Error?: string } | undefined> {
     try {
       const result = await this.dataService.GetArchiveSeedState(jobID);
-      return result.Success ? result.State?.State : undefined;
+      const state = result.Success ? result.State : undefined;
+      return state?.State ? { State: state.State, Error: state.Error ?? undefined } : undefined;
     } catch (err) {
       console.error('[IntegrationConnections] Failed to read archive seed state:', err);
       return undefined;
@@ -1944,6 +1996,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.SearchQuery = '';
     this.SelectedIntegration = null;
     this.ConnectMode = null;
+    this.ConnectModeError = null;
     this.ConnectionName = '';
     this.SelectedCompanyID = null;
     this.ConnectionDescription = '';

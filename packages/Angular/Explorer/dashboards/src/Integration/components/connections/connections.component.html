@@ -53,7 +53,7 @@
                 <div class="icon-circle" [style.background-color]="GetIconBrandColor(summary.Integration.Integration)">
                   <i [class]="GetIntegrationIcon(summary.Integration.Integration, summary.Icon)" class="icon-large"></i>
                 </div>
-                <span [class]="GetStatusBadgeClass(summary)">{{ GetStatusBadge(summary) }}</span>
+                <span [class]="GetStatusBadgeClass(summary)" [attr.title]="GetStatusBadgeTooltip(summary)">{{ GetStatusBadge(summary) }}</span>
               </div>
 
               <!-- Card body -->
@@ -805,6 +805,9 @@
                 </div>
               </div>
             </div>
+            @if (ConnectModeError) {
+              <mj-alert Size="sm" Variant="error">{{ ConnectModeError }}</mj-alert>
+            }
           </div>
         }
 
@@ -1211,7 +1214,7 @@
       [DefaultCompanyID]="SelectedCompanyID"
       [IsOpen]="ArchiveSeedWizardOpen"
       [Provider]="Provider"
-      (Closed)="CloseArchiveSeedWizard()"
+      (Closed)="CloseArchiveSeedWizard($event)"
       (Completed)="OnArchiveSeedCompleted($event)">
     </app-archive-seed-wizard>
   </mj-page-body>

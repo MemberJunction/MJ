@@ -2646,6 +2646,11 @@ button.direction-toggle:hover {
   color: var(--mj-status-warning);
 }
 
+.status-badge-failed {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
 /* Step 2 (SQL Server): connect with credentials or seed from an archive */
 .connect-mode-selector {
   display: grid;
