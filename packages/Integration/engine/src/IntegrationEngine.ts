@@ -2006,6 +2006,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         config.memoryControl = new RunMemoryControl(
             {
                 HoldAdmissions: () => concController.Hold(),
+                ReleaseAdmissions: () => concController.Release(),
                 ReduceConcurrency: () => concController.OnThrottleOrError(),
                 CurrentInFlight: () => concController.Cap,
                 Report: plan =>
