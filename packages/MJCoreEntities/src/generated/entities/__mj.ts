@@ -57450,7 +57450,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`,
- *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`, `MJAIModelTypeEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
@@ -57816,6 +57816,21 @@ export interface MJAIModelTypeEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelTypeEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -57856,6 +57871,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57878,6 +57895,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57897,6 +57916,8 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58115,7 +58136,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`,
- *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`, `MJAIModelVendorEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
@@ -58481,6 +58502,21 @@ export interface MJAIModelVendorEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelVendorEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -58521,6 +58557,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58543,6 +58581,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58562,6 +58602,8 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58972,7 +59014,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`,
- *    `MJAIModelEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelEntity_PrivacyConfigurationSettings`, `MJAIModelEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
@@ -59338,6 +59380,21 @@ export interface MJAIModelEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -59378,6 +59435,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -59400,6 +59459,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -59419,6 +59480,8 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60552,7 +60615,7 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
  *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`,
- *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`, `MJAIPromptModelEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
@@ -60918,6 +60981,21 @@ export interface MJAIPromptModelEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIPromptModelEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -60958,6 +61036,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60980,6 +61060,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60999,6 +61081,8 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63355,7 +63439,7 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
  *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`,
- *    `MJAIPromptEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIPromptEntity_PrivacyConfigurationSettings`, `MJAIPromptEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
@@ -63721,6 +63805,21 @@ export interface MJAIPromptEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIPromptEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -63761,6 +63860,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63783,6 +63884,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63802,6 +63905,8 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -66742,7 +66847,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
  *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`,
- *    `MJAIVendorEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIVendorEntity_PrivacyConfigurationSettings`, `MJAIVendorEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
@@ -67108,6 +67213,21 @@ export interface MJAIVendorEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIVendorEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -67148,6 +67268,8 @@ export interface MJAIVendorEntity_IAIModelConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -67170,6 +67292,8 @@ export interface MJAIVendorEntity_IAIPromptConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -67189,6 +67313,8 @@ export interface MJAIVendorEntity_IAIPromptModelConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
