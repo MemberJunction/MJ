@@ -1,0 +1,12 @@
+{
+  "id": "W9-multiclass",
+  "seeds": [42, 43, 44],
+  "freshSeed": 9042,
+  "nPersons": 3000,
+  "cycles": [2024, 2025, 2026],
+  "targets": { "attend": 0.7, "cancelGivenNoAttend": 0.4 },
+  "betas": {
+    "attend": { "TicketTierVIP": 0.8, "DaysRegisteredBefore": -0.02, "PriorAttendance": 0.5 },
+    "cancel": { "TicketTierVIP": -0.5, "DaysRegisteredBefore": 0.01, "PriorAttendance": -0.3 }
+  }
+}

@@ -46,7 +46,7 @@ async function start(payload: WorkQueueRequestPayload | undefined, allowScope = 
     });
     app.use('/work-queue', CreateWorkQueuePublishRouter(dependencies));
     const server = await new Promise<Server>(resolve => {
-        const s = app.listen(0, () => resolve(s));
+        const s = app.listen(0, '127.0.0.1', () => resolve(s));
     });
     servers.push(server);
     return { Url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/work-queue/topics/email.events/messages`, Published: published, ScopeChecks: scopeChecks };

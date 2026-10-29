@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { BaseEntity, UserInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { IsPlatformSQL, type BaseEntity, type UserInfo, type IMetadataProvider, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 
 import { ModelScoringActionGenerator } from '../model-scoring-action-generator';
@@ -122,7 +122,9 @@ class FakeProvider {
 
   /** Honors the exact filter shapes the generator issues. */
   public async RunView<T = unknown>(params: RunViewParams): Promise<RunViewResult<T>> {
-    const matched = this.match(params.EntityName ?? '', params.ExtraFilter ?? '');
+    // The generator issues plain-string filters; a PlatformSQL filter is read by its default variant.
+    const filter = IsPlatformSQL(params.ExtraFilter) ? params.ExtraFilter.default : (params.ExtraFilter ?? '');
+    const matched = this.match(params.EntityName ?? '', filter);
     const results = matched.map((row) => makeEntity(this.store, params.EntityName ?? '', row));
     return { Success: true, Results: results as unknown as T[], RowCount: results.length } as RunViewResult<T>;
   }

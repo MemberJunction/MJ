@@ -7,6 +7,7 @@ import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache } from './cache.js';
@@ -15,6 +16,7 @@ import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgre
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
+import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
@@ -145,6 +147,28 @@ async function writeSessionAudit(args: {
   }
 }
 
+/**
+ * Logs a session whose User record is not the identity its token carries, and returns whether that
+ * is the case. Runs once per issued token (inside the session-audit dedup). A `USER_EMAIL_MAP`
+ * rewrite is reported as such; any other difference means the lookup reached another person's
+ * record. Anonymous magic-link sessions run as a synthetic principal by design and are skipped.
+ */
+function reportIdentityMismatch(loginEmail: LoginEmailResolution, sessionUser: UserInfo): boolean {
+  if (sessionUser.IsMagicLinkAnonymous || EmailsMatch(loginEmail.TokenEmail, sessionUser.Email)) {
+    return false;
+  }
+  if (loginEmail.Remapped) {
+    console.warn(
+      `[Auth] USER_EMAIL_MAP remapped login '${loginEmail.TokenEmail}' to '${loginEmail.LookupEmail}'; the session runs as user ${sessionUser.ID} (${sessionUser.Email})`,
+    );
+  } else {
+    console.warn(
+      `[Auth] Login identity '${loginEmail.TokenEmail ?? ''}' resolved to user ${sessionUser.ID} with a different email (${sessionUser.Email}); check the User records for this address`,
+    );
+  }
+  return true;
+}
+
 /** Best-effort failure audit: decodes the attempted identity, dedupes, attributes to the system user. */
 async function auditLoginFailure(
   bearerToken: string | undefined,
@@ -204,12 +228,17 @@ async function auditLoginFailure(
 // userRecord may be a SHARED cached instance (e.g. multiple recruiters on one per-company
 // link) — mutating it would leak one session's scope to another. Non-magic-link sessions,
 // and named sessions with no resource scope, are returned untouched.
-function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
+export function BuildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
   if (payload['mj_magic_link'] !== true) {
     return userRecord;
   }
   const md = Metadata.Provider; // global-provider-ok: server-side magic-link session built under the server's single default provider
   const isAnon = payload['mj_anon'] === true;
+  const rawSid = payload['mj_sid'];
+  const mjSid = typeof rawSid === 'string' ? rawSid.trim() : '';
+  if (isAnon && !mjSid) {
+    throw new AuthenticationError('Anonymous magic-link session token is missing required mj_sid claim');
+  }
   const scopes = payload['mj_scopes'];
 
   // Per-session resource scope (single-resource share; multi-resource union is a follow-on).
@@ -279,6 +308,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
     // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
     sessionUser.IsMagicLinkAnonymous = true;
+    sessionUser.AnonymousVisitorID = mjSid;
   }
   return sessionUser;
 }
@@ -420,7 +450,7 @@ export const GetUserPayload = async (
         // very often the SHARED UserCache instance, and stamping it in place
         // leaks one session's row-filter bindings / acting context to every
         // concurrent session of the same user (same pattern as
-        // buildMagicLinkSessionUser — see sessionUserClone.ts).
+        // BuildMagicLinkSessionUser — see sessionUserClone.ts).
         const userRecord = CloneUserForSessionContext(resolvedUser);
 
         // Row-filter bindings for this key, rebuilt PER REQUEST from the
@@ -522,7 +552,8 @@ export const GetUserPayload = async (
 
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);
-    const email = userInfo.email ? ((userEmailMap ?? {})[userInfo.email] ?? userInfo.email) : userInfo.preferredUsername;
+    const loginEmail = ResolveUserLookupEmail(userInfo, userEmailMap);
+    const email = loginEmail.LookupEmail;
     
     const userRecord = await VerifyUserRecord(
       email, 
@@ -544,11 +575,12 @@ export const GetUserPayload = async (
     // Anonymous principal with an in-memory UserInfo carrying the claimed role(s), so
     // the session enforces exactly the link's granted scope (no DB accretion). No-op
     // for everything else.
-    const sessionUser = buildMagicLinkSessionUser(userRecord, payload);
+    const sessionUser = BuildMagicLinkSessionUser(userRecord, payload);
 
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
     if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
+      const identityMismatch = reportIdentityMismatch(loginEmail, sessionUser);
       void writeSessionAudit({
         user: sessionUser,
         auditTypeName: SESSION_AUDIT_TYPE,
@@ -556,7 +588,16 @@ export const GetUserPayload = async (
         payload,
         requestContext,
         requestDomain,
-        description: `Session established via ${payload.iss ?? 'unknown provider'}`,
+        description: identityMismatch
+          ? `Session established via ${payload.iss ?? 'unknown provider'}: token identity '${loginEmail.TokenEmail ?? ''}' runs as user '${sessionUser.Email}'`
+          : `Session established via ${payload.iss ?? 'unknown provider'}`,
+        extraDetails: {
+          tokenEmail: loginEmail.TokenEmail ?? null,
+          lookupEmail: loginEmail.LookupEmail ?? null,
+          resolvedUserEmail: sessionUser.Email ?? null,
+          remappedByUserEmailMap: loginEmail.Remapped,
+          identityMismatch,
+        },
       });
     }
 
@@ -800,6 +841,7 @@ export const ContextFunction =
       userPayload,
       providers,
       ClientIp: expressReq.ip,
+      RequestOrigin: ReadRequestOrigin(req.headers.origin),
     };
   };
 

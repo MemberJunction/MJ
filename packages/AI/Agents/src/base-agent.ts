@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
@@ -534,6 +534,31 @@ export interface ExecuteSingleActionOptions {
  *   across any arguments.
  */
 export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'identical-arguments' | 'attempts-exhausted';
+
+/**
+ * What {@link BaseAgent.classifyActionFailure} names for a failed action: the breaker rule that fired, a refusal by
+ * the user's agent policy (`'policy'` — governance, not a parameter error, so the guidance must not tell the model
+ * to adjust its arguments and retry), or a plain `'warning'`.
+ */
+export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'warning';
+
+/** Result code of a call the user's agent policy denies outright (`checkUserActionPolicy`). */
+export const POLICY_DENIED_RESULT_CODE = 'POLICY_DENIED';
+/** Result code of a call the user's agent policy allows only with the user's approval. */
+export const POLICY_APPROVAL_REQUIRED_RESULT_CODE = 'POLICY_APPROVAL_REQUIRED';
+/** Result code of a call the user's agent policy defers to its next allowed time window. */
+export const POLICY_DEFERRED_RESULT_CODE = 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW';
+
+/**
+ * The result codes `checkUserActionPolicy` returns when the user's agent policy refuses a call. None of them is
+ * fixed by retrying: approval cannot be granted inside the run, a time window does not open by asking again, and
+ * a denial repeats for the same call.
+ */
+const POLICY_REFUSAL_RESULT_CODES: ReadonlySet<string> = new Set([
+    POLICY_DENIED_RESULT_CODE,
+    POLICY_APPROVAL_REQUIRED_RESULT_CODE,
+    POLICY_DEFERRED_RESULT_CODE,
+]);
 
 /** Identical-arguments rule: this many failures with the same arguments block further identical calls. */
 export const IDENTICAL_FAILURE_THRESHOLD = 2;
@@ -1213,7 +1238,7 @@ export class BaseAgent {
      * the action is blocked whatever the arguments are, and telling the model to change them
      * would send it in circles.
      */
-    protected classifyActionFailure(summary: ActionResultSummary): ActionCircuitBreakerReason | 'warning' {
+    protected classifyActionFailure(summary: ActionResultSummary): ActionFailureClass {
         if (summary.breakerReason) {
             return summary.breakerReason;
         }
@@ -1224,16 +1249,42 @@ export class BaseAgent {
             return 'fatal';
         }
         const record = this._actionFailureHistory.get(summary.actionName);
-        if (!record) {
-            return 'warning';
-        }
-        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+        if (record && record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
             return 'attempts-exhausted';
         }
-        if (record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+        // A policy refusal still counts in the history, so the budget above stays as the backstop; but it
+        // outranks the identical-arguments rule, whose guidance ("adjust your parameters") is exactly what
+        // a refused call must not be told. Approval and a time window do not come from different arguments.
+        if (POLICY_REFUSAL_RESULT_CODES.has(summary.resultCode)) {
+            return 'policy';
+        }
+        if (record && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
             return 'identical-arguments';
         }
         return 'warning';
+    }
+
+    /**
+     * The guidance line for a call the user's agent policy refused. The default `[WARNING/ACTION_FAILURE]`
+     * line tells the model to adjust its parameters and try again, up to the budget; a refusal is not a
+     * parameter error, and a retry burns the budget without ever succeeding.
+     */
+    private formatPolicyRefusalDirective(summary: ActionResultSummary): string {
+        const name = summary.actionName;
+        switch (summary.resultCode) {
+            case POLICY_APPROVAL_REQUIRED_RESULT_CODE:
+                return `[CRITICAL/POLICY_APPROVAL_REQUIRED] Action '${name}' requires the user's approval under their agent policy: "${summary.message}". ` +
+                    `Approval cannot be granted inside this run, so DO NOT retry '${name}'. Tell the user exactly what you intended to do and why, ` +
+                    'and ask them to approve it or do it themselves.';
+            case POLICY_DEFERRED_RESULT_CODE:
+                return `[CRITICAL/POLICY_DEFERRED] Action '${name}' is outside the time window the user's agent policy allows: "${summary.message}". ` +
+                    `Retrying now will not help; DO NOT call '${name}' again during this run. Tell the user it was deferred and when it can run.`;
+            default:
+                return `[CRITICAL/POLICY_DENIED] Action '${name}' was refused by the user's agent policy: "${summary.message}". ` +
+                    'This is a governance decision, not a problem with your arguments: the same call will be refused again. ' +
+                    `Call '${name}' again only with materially different parameters, and only if the reason says the refusal depends on them; ` +
+                    'otherwise use another tool or tell the user what you could not do.';
+        }
     }
 
     /** The guidance line appended to the history for one failed action. */
@@ -1241,6 +1292,8 @@ export class BaseAgent {
         const name = summary.actionName;
         const record = this._actionFailureHistory.get(name);
         switch (this.classifyActionFailure(summary)) {
+            case 'policy':
+                return this.formatPolicyRefusalDirective(summary);
             case 'audience':
                 return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
                     `returns could not be limited to what everyone in it may see ("${summary.message}"). It is not broken or misconfigured. ` +
@@ -5781,6 +5834,7 @@ export class BaseAgent {
 
     private async runDecisionsFromTool(requests: AgentDecisionRequest[], payload: object, params: ExecuteAgentParams): Promise<AgentToolResult> {
         const results = await this.executeDecisionRequestsAsSteps(requests, payload, this._agentTypePromptParams, params);
+        // fls-guard: decision outcomes, not entity rows
         return { Content: JSON.stringify(results), IsError: results.length > 0 && results.every((r) => !r.success) };
     }
 
@@ -11403,6 +11457,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         const message: AgentChatMessage = {
             role: 'user',
+            // fls-guard: decision outcomes, not entity rows
             content: `Decision results:\n${JSON.stringify(results)}`,
             metadata: {
                 turnAdded: this._promptTurnCount,
@@ -12954,10 +13009,10 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const resultCode =
             evaluation.verdict === 'Deny'
-                ? 'POLICY_DENIED'
+                ? POLICY_DENIED_RESULT_CODE
                 : evaluation.verdict === 'DeferUntilNextWindow'
-                ? 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW'
-                : 'POLICY_APPROVAL_REQUIRED';
+                ? POLICY_DEFERRED_RESULT_CODE
+                : POLICY_APPROVAL_REQUIRED_RESULT_CODE;
         return {
             Success: false,
             ResultCode: resultCode,
@@ -18078,9 +18133,13 @@ The context is now within limits. Please retry your request with the recovered c
                     actionName: result.action.name,
                     success: isActionSuccess,
                     params: sanitizedParams,
-                    resultCode: actionResult?.Result?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
+                    // The action's own code when it matches none of its metadata result codes (`Result` is then
+                    // undefined), so a custom failure code such as UNKNOWN_ENTITY_FIELDS reaches the model
+                    // instead of a bare 'ERROR'.
+                    resultCode: actionResult?.Result?.ResultCode || actionResult?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
                     message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
-                    aiDirectives: isActionSuccess ? actionResult?.AIDirectives : undefined,
+                    // Kept on failure too: an action's recovery guidance is most useful when it failed.
+                    aiDirectives: actionResult?.AIDirectives,
                     breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined
                 };
             });
@@ -18119,7 +18178,7 @@ The context is now within limits. Please retry your request with the recovered c
                     }
                 }
 
-                // Only add metadata if we have expiration settings
+                // Expiration settings only when the configuration has them; the tag itself is always stamped below.
                 if (minExpirationTurns !== null && expirationMode !== 'None') {
                     metadata = {
                         turnAdded: this._promptTurnCount,
@@ -18131,6 +18190,13 @@ The context is now within limits. Please retry your request with the recovered c
                         compactPromptId: compactPromptId
                     };
                 }
+            }
+
+            // Every action result is tagged, with or without expiration settings, so IsToolResultMessage
+            // and IsVolatileResultMessage recognize it: context recovery and post-run compaction can then
+            // compact it, and `pruneAndCompactExpiredMessages` still leaves it alone (no expirationTurns).
+            if (!metadata) {
+                metadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
             }
 
             if (addConversationMessage) {
@@ -18146,9 +18212,10 @@ The context is now within limits. Please retry your request with the recovered c
 
                 // Surface explicit AI directives from action results as a separate instruction message.
                 // Actions that need the AI to follow specific instructions (not just acknowledge data)
-                // populate AIDirectives on their ActionResultSimple return value.
+                // populate AIDirectives on their ActionResultSimple return value. Failed actions are
+                // included: a directive on a failure is the action telling the model how to recover.
                 const allDirectives = actionSummaries
-                    .filter(a => a.success && a.aiDirectives && a.aiDirectives.length > 0)
+                    .filter(a => a.aiDirectives && a.aiDirectives.length > 0)
                     .flatMap(a => a.aiDirectives!);
                 if (allDirectives.length > 0) {
                     const directiveText = allDirectives
@@ -19448,9 +19515,9 @@ The context is now within limits. Please retry your request with the recovered c
             return categoryStrategy;
         }
 
-        // 4. Request Type's DefaultAssignmentStrategy
-        if (requestTypeId && this._requestTypeCache) {
-            const requestType = this._requestTypeCache.find(t => UUIDsEqual(t.ID, requestTypeId));
+        // 4. Request Type's DefaultAssignmentStrategy (request types are cached on the AI engine)
+        if (requestTypeId) {
+            const requestType = AIEngine.Instance.AgentRequestTypes.find(t => UUIDsEqual(t.ID, requestTypeId));
             if (requestType) {
                 const rtStrategy = parseAssignmentStrategy(requestType.DefaultAssignmentStrategy);
                 if (rtStrategy) {
@@ -19569,34 +19636,22 @@ The context is now within limits. Please retry your request with the recovered c
      * - If there's a responseForm with fields, uses "Information"
      * - Otherwise defaults to "Information"
      *
-     * Caches the request type lookup for the duration of this agent execution.
+     * Request types come from the AI engine's cached `MJ: AI Agent Request Types` rows
+     * (`AIEngineBase.ResolveAgentRequestTypeID`), the same source the agent actions use.
      * @private
      */
-    private _requestTypeCache: MJAIAgentRequestTypeEntity[] | null = null;
-
     private async resolveRequestTypeId(
         previousDecision: BaseAgentNextStep,
         contextUser?: UserInfo
     ): Promise<string | null> {
         try {
-            // Load request types if not cached
-            if (!this._requestTypeCache) {
-                const rv = new RunView();
-                const result = await rv.RunView<MJAIAgentRequestTypeEntity>({
-                    EntityName: 'MJ: AI Agent Request Types',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                this._requestTypeCache = result.Success ? result.Results : [];
-            }
-
             // Determine type name based on responseForm content
             let typeName = 'Information'; // default
             if (previousDecision.responseForm) {
                 typeName = this.detectRequestTypeName(previousDecision.responseForm);
             }
 
-            const matchedType = this._requestTypeCache.find(t => t.Name === typeName);
-            return matchedType?.ID || null;
+            return await AIEngine.Instance.ResolveAgentRequestTypeID(typeName, contextUser);
         } catch (error) {
             LogError(`Error resolving request type: ${(error as Error).message}`);
             return null;

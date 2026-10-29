@@ -186,3 +186,25 @@ describe('buildModelsAgentContext', () => {
     });
   });
 });
+
+describe('BuildPredictionsAgentContext — capped at-risk read', () => {
+  const input = (capped: boolean) => ({
+    View: 'workspace' as const,
+    PredictionCount: 1,
+    ReadyPredictionCount: 1,
+    VisiblePredictionNames: ['Renewal Risk'],
+    ChatOpen: false,
+    Selected: { Name: 'Renewal Risk', TrustGrade: 'Excellent', CanOpen: true },
+    AtRiskLoaded: true,
+    AtRiskCount: 50000,
+    AtRiskCapped: capped,
+  });
+
+  it('tells the agent when the counts cover only the first rows of the run', () => {
+    expect(BuildPredictionsAgentContext(input(true))['AtRiskCapped']).toBe(true);
+  });
+
+  it('omits the flag for a complete read', () => {
+    expect(BuildPredictionsAgentContext(input(false))['AtRiskCapped']).toBeUndefined();
+  });
+});
