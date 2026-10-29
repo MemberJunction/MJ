@@ -67,7 +67,7 @@
 
 .panel-count {
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-brand-on-primary);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.125rem 0.5rem;
@@ -181,7 +181,7 @@
 
 .add-btn:hover {
   background: var(--mj-status-success);
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 .app-actions {
@@ -255,7 +255,7 @@
 
 .btn-primary {
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-brand-on-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
