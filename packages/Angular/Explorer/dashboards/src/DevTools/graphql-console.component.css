@@ -526,12 +526,12 @@
 .gc-schema-kind--active {
     background: var(--mj-brand-primary);
     border-color: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 .gc-schema-kind--active span {
     background: rgba(255, 255, 255, 0.25);
     border-color: transparent;
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .gc-schema-state {
@@ -818,7 +818,7 @@ mj-code-editor.gc-editor--vars ::ng-deep .cm-editor {
 }
 .gc-run-btn {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border: 1px solid var(--mj-brand-primary);
     padding: 8px 18px;
     border-radius: 8px;
