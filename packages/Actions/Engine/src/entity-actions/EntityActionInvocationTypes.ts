@@ -113,6 +113,7 @@ export abstract class EntityActionInvocationBase {
                     // The record's field values as a plain object. BaseEntity fields are getters, not
                     // enumerable own properties, so an action that spreads or JSON-serializes an
                     // 'Entity Object' value gets `{}` — GetAll() is what actually carries the data.
+                    // fls-guard: object built for params.ContextUser by the invoker; width follows its user
                     value = entityObject.GetAll();
                     break;
                 case 'Entity Field':

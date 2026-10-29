@@ -50,6 +50,21 @@ if (validation.success) {
 }
 ```
 
+## Context Tokens & SQL Escaping (`| sqlString`)
+
+Query templates have access to the server-populated `Context` object (`Context.UserID`, `Context.UserEmail`, `Context.UserName`, `Context.Now`, `Context.Today`, `Context.StartOfWeek`, `Context.StartOfMonth`, `Context.StartOfQuarter`, `Context.StartOfYear`).
+
+> **Warning:** `Context.UserEmail` and `Context.UserName` resolve to raw, unescaped strings (for example, `O'Brien`) and templates render with `autoescape: false`. Always pipe user string tokens through `| sqlString` in SQL templates — never interpolate them bare:
+>
+> ```sql
+> -- Correct (sqlString wraps in single quotes and doubles embedded apostrophes):
+> WHERE Email = {{ Context.UserEmail | sqlString }}
+>   AND DisplayName = {{ Context.UserName | sqlString }}
+>
+> -- WRONG (breaks on apostrophes like O'Brien and allows SQL injection):
+> WHERE Email = '{{ Context.UserEmail }}'
+> ```
+
 ## Dependencies
 
 - `@memberjunction/core` - For `RunQuerySQLFilterManager`, `QueryInfo`, `QueryParameterInfo` types

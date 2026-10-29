@@ -148,6 +148,13 @@ export interface FireAndForgetConfig<TResult> {
 
     /** Custom timeout error message */
     timeoutErrorMessage?: string;
+    /**
+     * Hold PubSub messages that arrive before the acknowledgement, then route them, in arrival order, once
+     * {@link validateAck} has accepted it. For an operation whose identity comes FROM the acknowledgement (the server
+     * names the record it created), so a message that beats the ack over the WebSocket can still be attributed rather
+     * than lost. Off by default: messages are routed as they arrive, exactly as before.
+     */
+    deferMessagesUntilAck?: boolean;
 
     /**
      * Create an error result when the server rejects the request
@@ -157,6 +164,15 @@ export interface FireAndForgetConfig<TResult> {
 
     /** Label for logging (e.g., 'RunTest', 'RunAIAgent') */
     operationLabel?: string;
+}
+
+/** What the PubSub subscription calls for one operation. */
+interface PubSubHandlers<TResult> {
+    onActivity: () => void;
+    onCompletion: (value: TResult) => void;
+    onStreamEnd: () => void;
+    /** Takes a message to route later and returns true; returns false to have it routed now. */
+    hold: (message: string) => boolean;
 }
 
 /** Internal resettable inactivity timer. */
@@ -280,15 +296,22 @@ export class FireAndForgetHelper {
         };
 
         const idleTimer = FireAndForgetHelper.createIdleTimer(idleMs, () => { void onStall(); });
+        // Messages held until the ack (deferMessagesUntilAck); null when messages route as they arrive.
+        let held: string[] | null = config.deferMessagesUntilAck ? [] : null;
+        const handlers: PubSubHandlers<TResult> = {
+            onActivity: () => { stallCount = 0; idleTimer.reset(); },
+            onCompletion: (value) => settleResolve(value),
+            onStreamEnd: () => { void onStall(); },
+            hold: (message) => {
+                held?.push(message);
+                return held !== null;
+            },
+        };
 
         try {
             idleTimer.reset();
 
-            subscription = FireAndForgetHelper.subscribeToPubSub(config, {
-                onActivity: () => { stallCount = 0; idleTimer.reset(); },
-                onCompletion: (value) => settleResolve(value),
-                onStreamEnd: () => { void onStall(); },
-            });
+            subscription = FireAndForgetHelper.subscribeToPubSub(config, handlers);
 
             // Execute the mutation (server returns immediately in fire-and-forget mode)
             const ackResult = await FireAndForgetHelper.executeMutation(config);
@@ -299,6 +322,13 @@ export class FireAndForgetHelper {
                     ?? 'Server rejected the request';
                 LogError(`[FireAndForget:${label}] Server rejected: ${errorMsg}`);
                 return config.createErrorResult(errorMsg);
+            }
+
+            // The ack has named the operation: route what arrived before it, then everything as it comes.
+            const early = held ?? [];
+            held = null;
+            for (const message of early) {
+                FireAndForgetHelper.routeMessage(config, handlers, message);
             }
 
             LogStatusEx({ message: `[FireAndForget:${label}] Server accepted, waiting for completion via WebSocket`, verboseOnly: true });
@@ -368,46 +398,15 @@ export class FireAndForgetHelper {
      */
     private static subscribeToPubSub<TResult>(
         config: FireAndForgetConfig<TResult>,
-        handlers: {
-            onActivity: () => void;
-            onCompletion: (value: TResult) => void;
-            onStreamEnd: () => void;
-        }
+        handlers: PubSubHandlers<TResult>
     ): Subscription {
         const sessionId = config.dataProvider.sessionId;
-        const label = config.operationLabel ?? config.mutationFieldName;
 
         return config.dataProvider.PushStatusUpdates(sessionId)
             .subscribe({
                 next: (message: string) => {
-                    let parsed: Record<string, unknown> | undefined;
-                    try {
-                        parsed = JSON.parse(message) as Record<string, unknown>;
-                    } catch (e) {
-                        // Unparseable, so it cannot be attributed to another operation. Treat it
-                        // as liveness (fail open) and stop — there is nothing further to route.
-                        console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
-                        handlers.onActivity();
-                        return;
-                    }
-
-                    // Only traffic for THIS operation counts as proof that THIS operation is
-                    // alive. Absent a predicate, any message does — the historical behaviour.
-                    if (!config.isRelevantMessage || config.isRelevantMessage(parsed)) {
-                        handlers.onActivity();
-                    }
-
-                    try {
-                        if (config.onMessage) {
-                            config.onMessage(parsed);
-                        }
-
-                        if (config.isCompletionEvent(parsed)) {
-                            LogStatusEx({ message: `[FireAndForget:${label}] Completion event received`, verboseOnly: true });
-                            handlers.onCompletion(config.extractResult(parsed));
-                        }
-                    } catch (e) {
-                        console.error(`[FireAndForget:${label}] Failed to route PubSub message:`, e);
+                    if (!handlers.hold(message)) {
+                        FireAndForgetHelper.routeMessage(config, handlers, message);
                     }
                 },
                 // Stream dropping mid-operation is itself a "we've gone silent" signal —
@@ -415,6 +414,44 @@ export class FireAndForgetHelper {
                 error: () => handlers.onStreamEnd(),
                 complete: () => handlers.onStreamEnd(),
             });
+    }
+
+    /** Routes one PubSub message: liveness, the operation's own message handler, then completion detection. */
+    private static routeMessage<TResult>(
+        config: FireAndForgetConfig<TResult>,
+        handlers: PubSubHandlers<TResult>,
+        message: string
+    ): void {
+        const label = config.operationLabel ?? config.mutationFieldName;
+        let parsed: Record<string, unknown> | undefined;
+        try {
+            parsed = JSON.parse(message) as Record<string, unknown>;
+        } catch (e) {
+            // Unparseable, so it cannot be attributed to another operation. Treat it
+            // as liveness (fail open) and stop — there is nothing further to route.
+            console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
+            handlers.onActivity();
+            return;
+        }
+
+        // Only traffic for THIS operation counts as proof that THIS operation is
+        // alive. Absent a predicate, any message does — the historical behaviour.
+        if (!config.isRelevantMessage || config.isRelevantMessage(parsed)) {
+            handlers.onActivity();
+        }
+
+        try {
+            if (config.onMessage) {
+                config.onMessage(parsed);
+            }
+
+            if (config.isCompletionEvent(parsed)) {
+                LogStatusEx({ message: `[FireAndForget:${label}] Completion event received`, verboseOnly: true });
+                handlers.onCompletion(config.extractResult(parsed));
+            }
+        } catch (e) {
+            console.error(`[FireAndForget:${label}] Failed to route PubSub message:`, e);
+        }
     }
 
     /**

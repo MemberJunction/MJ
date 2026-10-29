@@ -69,6 +69,10 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
+import {
+  ChiefOfStaffDashboardComponent,
+  LoadChiefOfStaffDashboard
+} from './ChiefOfStaff/chief-of-staff-dashboard.component';
 
 // Knowledge Hub components
 import {
@@ -165,7 +169,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
-    AIOverviewHubComponent
+    AIOverviewHubComponent,
+    ChiefOfStaffDashboardComponent
   ],
   imports: [
     CompareValueComponent,
@@ -254,6 +259,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
+    ChiefOfStaffDashboardComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -280,5 +286,6 @@ export class AIDashboardsModule {
         LoadRealtimeManagement();
         LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
+        LoadChiefOfStaffDashboard();
     }
 }

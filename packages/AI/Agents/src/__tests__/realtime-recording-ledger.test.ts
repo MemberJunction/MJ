@@ -210,3 +210,37 @@ describe('SqlRealtimeRecordingLedger reads', () => {
         expect(provider.ViewCalls).toHaveLength(0);
     });
 });
+
+describe('SqlRealtimeRecordingLedger.StampFile', () => {
+    const FILE = '1C2D3E4F-5A6B-4C7D-8E9F-0A1B2C3D4E5F';
+
+    it('calls spStampAIAgentSessionRecordingFile with 4 placeholders in proc order and maps the row', async () => {
+        provider.NextRows = [{ RecordingStatus: 'Pending' }];
+        const startedAt = new Date('2026-10-22T19:14:00Z');
+        const result = await ledger.StampFile(SESSION, { fileID: FILE, media: 'Audio', startedAt });
+
+        expect(lastCall().Sql).toBe('EXEC [__mj].[spStampAIAgentSessionRecordingFile] @p0, @p1, @p2, @p3;');
+        expect(lastCall().Params).toEqual([SESSION, FILE, 'Audio', startedAt]);
+        expect(lastCall().IsMutation).toBe(true);
+        expect(result).toEqual({ RecordingStatus: 'Pending' });
+    });
+
+    it('passes null for an omitted field', async () => {
+        provider.NextRows = [{ RecordingStatus: null }];
+        await ledger.StampFile(SESSION, { media: 'Audio' });
+        expect(lastCall().Params).toEqual([SESSION, null, 'Audio', null]);
+    });
+
+    it('rejects a malformed session id, file id, start time, or an empty stamp before touching SQL', async () => {
+        await expect(ledger.StampFile('nope', { media: 'Audio' })).rejects.toThrow(/session id/i);
+        await expect(ledger.StampFile(SESSION, { fileID: 'not-a-uuid' })).rejects.toThrow(/file id/i);
+        await expect(ledger.StampFile(SESSION, { startedAt: new Date('x') })).rejects.toThrow();
+        await expect(ledger.StampFile(SESSION, {})).rejects.toThrow(new RegExp(SESSION));
+        expect(provider.SqlCalls.length).toBe(0);
+    });
+
+    it('throws naming the proc when the session row is missing', async () => {
+        provider.NextRows = [];
+        await expect(ledger.StampFile(SESSION, { media: 'None' })).rejects.toThrow(/spStampAIAgentSessionRecordingFile returned no row/);
+    });
+});

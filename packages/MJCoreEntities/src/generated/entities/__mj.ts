@@ -2887,6 +2887,11 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: How many task-graph continuations led to this run. 0 (the default, and the value every ordinary run carries) means the run was not started by a finished graph. A run started because a graph declared continuation='reinvoke' records its source graph's depth plus one, and any graph that run subsequently submits inherits that value — which is what allows MAX_REINVOKE_DEPTH to bound a chain of graph-reinvokes-agent-emits-graph. Without a durable value here the cap could never fire, because a reinvoked agent has no other way to learn it was a continuation. Distinct from ParentRunID, which tracks sub-agent lineage within a single turn; a continuation is a NEW top-level turn caused by work that already completed.`),
+    BoundActionParams: z.string().nullable().describe(`
+        * * Field Name: BoundActionParams
+        * * Display Name: Bound Action Params
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The run's bound action parameters (ExecuteAgentParams.boundActionParams) as JSON, keyed by Action ID and then parameter name. Written when the run starts, so a run resumed from a stored request applies the same bindings. Null when the run had none.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -11546,6 +11551,145 @@ export const MJAuthorizationSchema = z.object({
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Calendar Event Links
+ */
+export const MJCalendarEventLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationProviderID: z.string().describe(`
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)`),
+    AccountIdentifier: z.string().describe(`
+        * * Field Name: AccountIdentifier
+        * * Display Name: Account Identifier
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The calendar account the event lives in: a mailbox address for MS Graph, the account for Google. Later syncs and changes go to the same account.`),
+    CalendarID: z.string().nullable().describe(`
+        * * Field Name: CalendarID
+        * * Display Name: Calendar ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The calendar within the account. Null means the account's default calendar.`),
+    ExternalEventID: z.string().describe(`
+        * * Field Name: ExternalEventID
+        * * Display Name: External Event ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The provider's ID for the event in this account. It differs between attendees' calendars; match across calendars on ICalUID.`),
+    ExternalSeriesID: z.string().nullable().describe(`
+        * * Field Name: ExternalSeriesID
+        * * Display Name: External Series ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The provider's ID for the recurring series this event belongs to, when it is an occurrence or exception of one.`),
+    ICalUID: z.string().nullable().describe(`
+        * * Field Name: ICalUID
+        * * Display Name: I Cal UID
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: The event's iCalendar UID (Graph iCalUId, Google iCalUID). The same in every attendee's calendar, so other apps match an imported event to this link by it.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity of the linked record.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: The linked record's primary key, in the compact URL-segment form (a bare value for a single-column key).`),
+    Status: z.union([z.literal('Active'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Cancelled
+        * * Description: Active, or Cancelled once the event is cancelled, in the calendar or through MemberJunction.`),
+    LastSyncedAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncedAt
+        * * Display Name: Last Synced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When a change to this event was last read from or written to the calendar.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationProvider: z.string().describe(`
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCalendarEventLinkEntityType = z.infer<typeof MJCalendarEventLinkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Calendar Sync States
+ */
+export const MJCalendarSyncStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CommunicationProviderID: z.string().describe(`
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)`),
+    AccountIdentifier: z.string().describe(`
+        * * Field Name: AccountIdentifier
+        * * Display Name: Account Identifier
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The calendar account: a mailbox address for MS Graph, the account for Google.`),
+    CalendarID: z.string().nullable().describe(`
+        * * Field Name: CalendarID
+        * * Display Name: Calendar ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The calendar within the account. Null means the account's default calendar.`),
+    SyncToken: z.string().nullable().describe(`
+        * * Field Name: SyncToken
+        * * Display Name: Sync Token
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The provider's cursor for the next incremental sync: a Graph delta link or a Google sync token. Null until the first sync.`),
+    LastSyncedAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncedAt
+        * * Display Name: Last Synced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this calendar was last synced.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CommunicationProvider: z.string().describe(`
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCalendarSyncStateEntityType = z.infer<typeof MJCalendarSyncStateSchema>;
+
+/**
  * zod schema definition for the entity MJ: Cluster Analysis
  */
 export const MJClusterAnalysisSchema = z.object({
@@ -12235,6 +12379,17 @@ export const MJCommunicationProviderSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.`),
+    AllowUserDelegatedOAuth: z.boolean().describe(`
+        * * Field Name: AllowUserDelegatedOAuth
+        * * Display Name: Allow User Delegated O Auth
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Posture 3 master switch (Gate 1). When 1, users may connect their own mailbox/calendar to this provider through per-user delegated OAuth 2.0 (3LO) with PKCE, subject to AllowedEmailDomains and AllowedOAuthTenantIDs. Default 0: no user can initiate a personal OAuth flow.`),
+    AllowedOAuthTenantIDs: z.string().nullable().describe(`
+        * * Field Name: AllowedOAuthTenantIDs
+        * * Display Name: Allowed O Auth Tenant I Ds
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional comma-separated allowlist of identity tenant identifiers (Gate 3) that a user-delegated OAuth token must carry: Azure AD tenant IDs (tid) or Google Workspace hosted domains (hd). NULL means no tenant restriction beyond AllowedEmailDomains.`),
     DefaultCredential: z.string().nullable().describe(`
         * * Field Name: DefaultCredential
         * * Display Name: Default Credential
@@ -14128,10 +14283,46 @@ export const MJComponentSchema = z.object({
         * * Display Name: Technical Design Vector Binary
         * * SQL Data Type: varbinary(MAX)
         * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.`),
+    ApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: ApprovalStatus
+        * * Display Name: Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+        * * Description: Whether this component version's definition is approved: Pending, Approved or Rejected. Separate from Status, which is publication. An approval is current only while ApprovedFingerprint matches the current definition.`),
+    ApprovalComments: z.string().nullable().describe(`
+        * * Field Name: ApprovalComments
+        * * Display Name: Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who approved this component version.`),
+    ApprovedAt: z.date().nullable().describe(`
+        * * Field Name: ApprovedAt
+        * * Display Name: Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this component version was approved.`),
+    ApprovedFingerprint: z.string().nullable().describe(`
+        * * Field Name: ApprovedFingerprint
+        * * Display Name: Approved Fingerprint
+        * * SQL Data Type: nvarchar(100)
+        * * Description: SHA-256 fingerprint of the definition that was approved: the component's specification for this version. The approval is current only while this matches the fingerprint of the current definition.`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
         * * SQL Data Type: nvarchar(255)`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJComponentEntityType = z.infer<typeof MJComponentSchema>;
@@ -14164,6 +14355,21 @@ export const MJContentFileTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ByteSignature: z.string().nullable().describe(`
+        * * Field Name: ByteSignature
+        * * Display Name: Byte Signature
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: How this file type is recognised from its own content, as JSON. Either magic bytes - {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true} - or, for a text format, the characters it opens with: {"TextPrefix":["<!doctype html","<html"]}, matched after a byte-order mark and leading whitespace are stripped and case is folded. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.`),
+    IsText: z.boolean().nullable().describe(`
+        * * Field Name: IsText
+        * * Display Name: Is Text
+        * * SQL Data Type: bit
+        * * Description: Whether this file type is text. Decides whether an unrecognised file is attempted as plain text or routed down the multi-modal path. NULL means unknown, and the pipeline falls back to inspecting the bytes.`),
+    ExtractorKey: z.string().nullable().describe(`
+        * * Field Name: ExtractorKey
+        * * Display Name: Extractor Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The registered content extractor that reads this file type. Lets a deployment add support for a format by pointing its file type at an extractor, rather than editing the extractor's own list of what it supports.`),
 });
 
 export type MJContentFileTypeEntityType = z.infer<typeof MJContentFileTypeSchema>;
@@ -14238,7 +14444,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Vector Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.`),
-    EmbeddingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+    EmbeddingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('MetadataOnly'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
         * * Field Name: EmbeddingStatus
         * * Display Name: Embedding Status
         * * SQL Data Type: nvarchar(20)
@@ -14248,6 +14454,7 @@ export const MJContentItemChunkSchema = z.object({
     *   * Active
     *   * Complete
     *   * Failed
+    *   * MetadataOnly
     *   * Pending
     *   * Processed
     *   * Processing
@@ -14366,6 +14573,16 @@ export const MJContentItemChunkSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Item Chunks (vwContentItemChunks.ID)
         * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
+    FieldConfidence: z.string().nullable().describe(`
+        * * Field Name: FieldConfidence
+        * * Display Name: Field Confidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.`),
+    Decorator: z.string().nullable().describe(`
+        * * Field Name: Decorator
+        * * Display Name: Decorator
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item Name
@@ -14628,16 +14845,19 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
         * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`),
-    EmbeddingStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+    EmbeddingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('MetadataOnly'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
         * * Field Name: EmbeddingStatus
         * * Display Name: Embedding Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Complete
     *   * Failed
+    *   * MetadataOnly
     *   * Pending
+    *   * Processed
     *   * Processing
     *   * Skipped
         * * Description: Vectorization status: Pending (not yet embedded), Processing (currently being embedded), Complete (vector stored), Failed (embedding error), Skipped (excluded from vectorization).`),
@@ -14686,6 +14906,82 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Display Link
         * * SQL Data Type: nvarchar(2000)
         * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
+    FieldConfidence: z.string().nullable().describe(`
+        * * Field Name: FieldConfidence
+        * * Display Name: Field Confidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it. Lets two stages that know nothing about each other resolve a shared field on merit rather than by running order.`),
+    ExtractionStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).nullable().describe(`
+        * * Field Name: ExtractionStatus
+        * * Display Name: Extraction Status
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+        * * Description: Status of the Extract stage for this item: Pending, Processing, Complete, Failed or Skipped.`),
+    SegmentationStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).nullable().describe(`
+        * * Field Name: SegmentationStatus
+        * * Display Name: Segmentation Status
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+        * * Description: Status of the Segment stage for this item: Pending, Processing, Complete, Failed or Skipped.`),
+    DeleteStatus: z.union([z.literal('Deleted'), z.literal('Pending')]).nullable().describe(`
+        * * Field Name: DeleteStatus
+        * * Display Name: Delete Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+        * * Description: Soft-delete marker: Pending once something has been removed at the source, Deleted once the Delete stage has cleaned up everything downstream of it. Marking rather than deleting keeps the outside-system cleanup in one place and makes it retryable.`),
+    ExtractorKey: z.string().nullable().describe(`
+        * * Field Name: ExtractorKey
+        * * Display Name: Extractor Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The registered content extractor that actually read this item, recorded as a receipt of what ran. Distinct from the defaults on Content Type and in the source configuration, which say what should run.`),
+    ExtractorKeyOverride: z.string().nullable().describe(`
+        * * Field Name: ExtractorKeyOverride
+        * * Display Name: Extractor Key Override
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Forces a specific content extractor for this item, overriding every default in the cascade. Set by a splitting extractor that already knows what one of its own children is, and by an operator correcting a misrouted item.`),
+    Modality: z.union([z.literal('audio'), z.literal('image'), z.literal('multimodal'), z.literal('text'), z.literal('video')]).nullable().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+        * * Description: What kind of content this item holds: text, image, audio, video or multimodal. Determines whether the item can be embedded without extracted text.`),
+    Date: z.date().nullable().describe(`
+        * * Field Name: Date
+        * * Display Name: Content Date
+        * * SQL Data Type: datetimeoffset
+        * * Description: The date the content itself carries — published, issued or authored — as opposed to when this row was created.`),
+    Decorator: z.string().nullable().describe(`
+        * * Field Name: Decorator
+        * * Display Name: Decorator
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Text that accompanies this item so it still makes sense retrieved on its own. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the content.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: The durable copy of the fetched artifact, held as an MJ File so the bytes live in whichever storage provider the source is configured for rather than in this database.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -14714,6 +15010,10 @@ export const MJContentItemSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent Content Name
         * * SQL Data Type: nvarchar(250)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File Details
+        * * SQL Data Type: nvarchar(500)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent Content
@@ -15217,6 +15517,27 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
         * * Description: Optional link to the Scheduled Job that runs this content source on a recurring basis. Replaces the retired ScheduledActionID link; the job is of type Action and carries its action + parameters in ScheduledJob.Configuration.`),
+    FieldConfidence: z.string().nullable().describe(`
+        * * Field Name: FieldConfidence
+        * * Display Name: Field Confidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.`),
+    ForceDiscovery: z.boolean().describe(`
+        * * Field Name: ForceDiscovery
+        * * Display Name: Force Discovery
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Scheduling is deployment-owned and the shipped Discover process selects ForceDiscovery = 1, which is why there is no discovery status column to re-arm.`),
+    LastDiscoveredAt: z.date().nullable().describe(`
+        * * Field Name: LastDiscoveredAt
+        * * Display Name: Last Discovered At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this source was last walked by the Discover stage. Stamped with the time a completed walk started, and passed back as Since on subsequent incremental walks.`),
+    LastSyncedAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncedAt
+        * * Display Name: Last Synced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -15364,6 +15685,11 @@ export const MJContentTypeSchema = z.object({
         * * Display Name: Cleaner Strategy
         * * SQL Data Type: nvarchar(100)
         * * Description: Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.`),
+    ExtractorKey: z.string().nullable().describe(`
+        * * Field Name: ExtractorKey
+        * * Display Name: Extractor Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The default content extractor for items of this content type, beside SegmenterKey and CleanerKey. A per-type default has no home in a source's Configuration, and reading it from a run's Options would make it per-run.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
@@ -17387,6 +17713,38 @@ export const MJDashboardSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
+    ApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: ApprovalStatus
+        * * Display Name: Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+        * * Description: Whether this dashboard's definition is approved: Pending, Approved or Rejected. An approval is current only while ApprovedFingerprint matches the current definition.`),
+    ApprovalComments: z.string().nullable().describe(`
+        * * Field Name: ApprovalComments
+        * * Display Name: Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who approved this dashboard.`),
+    ApprovedAt: z.date().nullable().describe(`
+        * * Field Name: ApprovedAt
+        * * Display Name: Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this dashboard was approved.`),
+    ApprovedFingerprint: z.string().nullable().describe(`
+        * * Field Name: ApprovedFingerprint
+        * * Display Name: Approved Fingerprint
+        * * SQL Data Type: nvarchar(100)
+        * * Description: SHA-256 fingerprint of the definition that was approved: its layout, parts, property mappings, wires and code. The approval is current only while this matches the fingerprint of the current definition.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -17403,6 +17761,10 @@ export const MJDashboardSchema = z.object({
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJDashboardEntityType = z.infer<typeof MJDashboardSchema>;
@@ -19373,6 +19735,101 @@ export const MJEntityActionSchema = z.object({
 });
 
 export type MJEntityActionEntityType = z.infer<typeof MJEntityActionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Alternate Base Views
+ */
+export const MJEntityAlternateBaseViewSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Owning entity whose column contract this alternate base view shares.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+        * * Description: Optional parent alternate base view on the same entity that this view derives from (e.g. an Active Auto-Renew Members view built on top of Active Members). NULL when the view selects directly from the entity's BaseView. Automatically populated on save via SQL AST extraction when the view's FROM clause references another registered alternate base view.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Cannot contain pipe (|) or colon (:) characters. Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-friendly label shown in UI pickers and badges. Falls back to Name when NULL.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition of which rows this alternate base view includes. Surfaced as help text in pickers and in agent and QueryGen discovery context.`),
+    SchemaName: z.string().nullable().describe(`
+        * * Field Name: SchemaName
+        * * Display Name: Schema Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Database schema of ViewName. When NULL, defaults to the owning entity's SchemaName. Cross-schema views allow an Open App to register an alternate view in its own schema on an upstream entity.`),
+    ViewName: z.string().describe(`
+        * * Field Name: ViewName
+        * * Display Name: View Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Physical SQL view name in the database. Must select all columns from the owning entity's BaseView.`),
+    CachePolicy: z.union([z.literal('Bypass'), z.literal('Default')]).describe(`
+        * * Field Name: CachePolicy
+        * * Display Name: Cache Policy
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Default
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bypass
+    *   * Default
+        * * Description: Controls RunView caching for this alternate view: Default caches results under an isolated abv: fingerprint segment and invalidates on entity writes; Bypass disables caching for views whose predicates depend on the clock or other tables.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Lifecycle status of the alternate view: Active (selectable and shown in pickers and agent context), Deprecated (executable with a warning, hidden from pickers and agents), or Disabled (rejected at runtime).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display ordering of this alternate view within its owning entity (lower numbers appear first).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Text
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Text
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJEntityAlternateBaseViewEntityType = z.infer<typeof MJEntityAlternateBaseViewSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Communication Fields
@@ -28570,6 +29027,27 @@ export const MJQuerySchema = z.object({
         * * Display Name: Embedding Vector Binary
         * * SQL Data Type: varbinary(MAX)
         * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
+    ApprovalComments: z.string().nullable().describe(`
+        * * Field Name: ApprovalComments
+        * * Display Name: Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who approved this query.`),
+    ApprovedAt: z.date().nullable().describe(`
+        * * Field Name: ApprovedAt
+        * * Display Name: Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this query was approved.`),
+    ApprovedFingerprint: z.string().nullable().describe(`
+        * * Field Name: ApprovedFingerprint
+        * * Display Name: Approved Fingerprint
+        * * SQL Data Type: nvarchar(100)
+        * * Description: SHA-256 fingerprint of the definition that was approved: its SQL, dialect variants and parameter contract. The approval is current only while this matches the fingerprint of the current definition.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -28585,6 +29063,10 @@ export const MJQuerySchema = z.object({
     ExternalDataSource: z.string().nullable().describe(`
         * * Field Name: ExternalDataSource
         * * Display Name: External Data Source
+        * * SQL Data Type: nvarchar(100)`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -28796,6 +29278,12 @@ export const MJQueryEntitySchema = z.object({
         * * Display Name: Auto Detect Confidence Score
         * * SQL Data Type: decimal(3, 2)
         * * Description: Confidence score (0.00-1.00) indicating how certain the AI was that this entity is actually used in the query. Only populated when DetectionMethod="AI". Considers factors like: direct table references vs indirect joins, clear entity names vs ambiguous aliases, and context from the query purpose. Lower scores might indicate the entity is only peripherally involved or the detection was uncertain.`),
+    AlternateBaseViewID: z.string().nullable().describe(`
+        * * Field Name: AlternateBaseViewID
+        * * Display Name: Alternate Base View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+        * * Description: When this query references an alternate base view rather than the entity's primary BaseView, records the specific MJ: Entity Alternate Base Views row while EntityID continues to reference the owning entity.`),
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -28804,6 +29292,10 @@ export const MJQueryEntitySchema = z.object({
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
+    AlternateBaseView: z.string().nullable().describe(`
+        * * Field Name: AlternateBaseView
+        * * Display Name: Alternate Base View Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJQueryEntityEntityType = z.infer<typeof MJQueryEntitySchema>;
@@ -28996,6 +29488,12 @@ export const MJQueryParameterSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IsServerSet: z.boolean().describe(`
+        * * Field Name: IsServerSet
+        * * Display Name: Is Server Set
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, only server code may supply this parameter's value (RunQueryParams.ServerParameters). A value for it from a client is refused.`),
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -30519,7 +31017,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Clone'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Clone'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model'), z.literal('Pipeline Stage')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -30531,6 +31029,7 @@ export const MJRecordProcessSchema = z.object({
     *   * FieldRules
     *   * Infer
     *   * ML Model
+    *   * Pipeline Stage
         * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
@@ -38124,6 +38623,44 @@ export const MJUserViewSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: View Types (vwViewTypes.ID)
         * * Description: Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.`),
+    Properties: z.any().nullable().describe(`
+        * * Field Name: Properties
+        * * Display Name: Properties
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJUserViewEntity_IUserViewProperty>
+        * * Description: JSON array of the view's declared properties: named, typed inputs, each of which adds one predicate on a target field when a run gives it a value or it has a default. A property with AllowOverride false may be set only by server code. Null for a view with no properties.`),
+    ApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: ApprovalStatus
+        * * Display Name: Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+        * * Description: Whether this view's definition is approved: Pending, Approved or Rejected. An approval is current only while ApprovedFingerprint matches the current definition.`),
+    ApprovalComments: z.string().nullable().describe(`
+        * * Field Name: ApprovalComments
+        * * Display Name: Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who approved this view.`),
+    ApprovedAt: z.date().nullable().describe(`
+        * * Field Name: ApprovedAt
+        * * Display Name: Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this view was approved.`),
+    ApprovedFingerprint: z.string().nullable().describe(`
+        * * Field Name: ApprovedFingerprint
+        * * Display Name: Approved Fingerprint
+        * * SQL Data Type: nvarchar(100)
+        * * Description: SHA-256 fingerprint of the definition that was approved: its entity, filters and properties. The approval is current only while this matches the fingerprint of the current definition.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
@@ -47769,6 +48306,19 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: BoundActionParams
+    * * Display Name: Bound Action Params
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The run's bound action parameters (ExecuteAgentParams.boundActionParams) as JSON, keyed by Action ID and then parameter name. Written when the run starts, so a run resumed from a stored request applies the same bindings. Null when the run had none.
+    */
+    get BoundActionParams(): string | null {
+        return this.Get('BoundActionParams');
+    }
+    set BoundActionParams(value: string | null) {
+        this.Set('BoundActionParams', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -49370,9 +49920,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RecordingMedia(): 'Audio' | 'AudioVideo' | 'None' | null {
         return this.Get('RecordingMedia');
     }
-    set RecordingMedia(value: 'Audio' | 'AudioVideo' | 'None' | null) {
-        this.Set('RecordingMedia', value);
-    }
 
     /**
     * * Field Name: RecordingStartedAt
@@ -49395,9 +49942,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingFileID(): string | null {
         return this.Get('RecordingFileID');
-    }
-    set RecordingFileID(value: string | null) {
-        this.Set('RecordingFileID', value);
     }
 
     /**
@@ -49443,9 +49987,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RecordingStatus(): 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null {
         return this.Get('RecordingStatus');
     }
-    set RecordingStatus(value: 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null) {
-        this.Set('RecordingStatus', value);
-    }
 
     /**
     * * Field Name: RecordingExpectedShards
@@ -49455,9 +49996,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingExpectedShards(): number | null {
         return this.Get('RecordingExpectedShards');
-    }
-    set RecordingExpectedShards(value: number | null) {
-        this.Set('RecordingExpectedShards', value);
     }
 
     /**
@@ -49469,9 +50007,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RecordingCapturedSamples(): number | null {
         return this.Get('RecordingCapturedSamples');
     }
-    set RecordingCapturedSamples(value: number | null) {
-        this.Set('RecordingCapturedSamples', value);
-    }
 
     /**
     * * Field Name: RecordingGaps
@@ -49481,9 +50016,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingGaps(): string | null {
         return this.Get('RecordingGaps');
-    }
-    set RecordingGaps(value: string | null) {
-        this.Set('RecordingGaps', value);
     }
 
     /**
@@ -49495,9 +50027,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingAssemblyVersion(): number {
         return this.Get('RecordingAssemblyVersion');
-    }
-    set RecordingAssemblyVersion(value: number) {
-        this.Set('RecordingAssemblyVersion', value);
     }
 
     /**
@@ -74222,6 +74751,364 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
 
 /**
+ * MJ: Calendar Event Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CalendarEventLink
+ * * Base View: vwCalendarEventLinks
+ * * @description Ties a record to an event in an external calendar (MS Graph, Google Calendar), so any record can be linked to an event without a calendar column on its own table.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Calendar Event Links')
+export class MJCalendarEventLinkEntity extends BaseEntity<MJCalendarEventLinkEntityType> {
+    /**
+    * Loads the MJ: Calendar Event Links record from the database
+    * @param ID: string - primary key value to load the MJ: Calendar Event Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCalendarEventLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationProviderID
+    * * Display Name: Communication Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+    */
+    get CommunicationProviderID(): string {
+        return this.Get('CommunicationProviderID');
+    }
+    set CommunicationProviderID(value: string) {
+        this.Set('CommunicationProviderID', value);
+    }
+
+    /**
+    * * Field Name: AccountIdentifier
+    * * Display Name: Account Identifier
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The calendar account the event lives in: a mailbox address for MS Graph, the account for Google. Later syncs and changes go to the same account.
+    */
+    get AccountIdentifier(): string {
+        return this.Get('AccountIdentifier');
+    }
+    set AccountIdentifier(value: string) {
+        this.Set('AccountIdentifier', value);
+    }
+
+    /**
+    * * Field Name: CalendarID
+    * * Display Name: Calendar ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The calendar within the account. Null means the account's default calendar.
+    */
+    get CalendarID(): string | null {
+        return this.Get('CalendarID');
+    }
+    set CalendarID(value: string | null) {
+        this.Set('CalendarID', value);
+    }
+
+    /**
+    * * Field Name: ExternalEventID
+    * * Display Name: External Event ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The provider's ID for the event in this account. It differs between attendees' calendars; match across calendars on ICalUID.
+    */
+    get ExternalEventID(): string {
+        return this.Get('ExternalEventID');
+    }
+    set ExternalEventID(value: string) {
+        this.Set('ExternalEventID', value);
+    }
+
+    /**
+    * * Field Name: ExternalSeriesID
+    * * Display Name: External Series ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The provider's ID for the recurring series this event belongs to, when it is an occurrence or exception of one.
+    */
+    get ExternalSeriesID(): string | null {
+        return this.Get('ExternalSeriesID');
+    }
+    set ExternalSeriesID(value: string | null) {
+        this.Set('ExternalSeriesID', value);
+    }
+
+    /**
+    * * Field Name: ICalUID
+    * * Display Name: I Cal UID
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: The event's iCalendar UID (Graph iCalUId, Google iCalUID). The same in every attendee's calendar, so other apps match an imported event to this link by it.
+    */
+    get ICalUID(): string | null {
+        return this.Get('ICalUID');
+    }
+    set ICalUID(value: string | null) {
+        this.Set('ICalUID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity of the linked record.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: The linked record's primary key, in the compact URL-segment form (a bare value for a single-column key).
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Cancelled
+    * * Description: Active, or Cancelled once the event is cancelled, in the calendar or through MemberJunction.
+    */
+    get Status(): 'Active' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: LastSyncedAt
+    * * Display Name: Last Synced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When a change to this event was last read from or written to the calendar.
+    */
+    get LastSyncedAt(): Date | null {
+        return this.Get('LastSyncedAt');
+    }
+    set LastSyncedAt(value: Date | null) {
+        this.Set('LastSyncedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationProvider
+    * * Display Name: Communication Provider
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CommunicationProvider(): string {
+        return this.Get('CommunicationProvider');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Calendar Sync States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CalendarSyncState
+ * * Base View: vwCalendarSyncStates
+ * * @description One sync cursor per external calendar, so an incremental sync reads only what changed since the last one.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Calendar Sync States')
+export class MJCalendarSyncStateEntity extends BaseEntity<MJCalendarSyncStateEntityType> {
+    /**
+    * Loads the MJ: Calendar Sync States record from the database
+    * @param ID: string - primary key value to load the MJ: Calendar Sync States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCalendarSyncStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationProviderID
+    * * Display Name: Communication Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+    */
+    get CommunicationProviderID(): string {
+        return this.Get('CommunicationProviderID');
+    }
+    set CommunicationProviderID(value: string) {
+        this.Set('CommunicationProviderID', value);
+    }
+
+    /**
+    * * Field Name: AccountIdentifier
+    * * Display Name: Account Identifier
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The calendar account: a mailbox address for MS Graph, the account for Google.
+    */
+    get AccountIdentifier(): string {
+        return this.Get('AccountIdentifier');
+    }
+    set AccountIdentifier(value: string) {
+        this.Set('AccountIdentifier', value);
+    }
+
+    /**
+    * * Field Name: CalendarID
+    * * Display Name: Calendar ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The calendar within the account. Null means the account's default calendar.
+    */
+    get CalendarID(): string | null {
+        return this.Get('CalendarID');
+    }
+    set CalendarID(value: string | null) {
+        this.Set('CalendarID', value);
+    }
+
+    /**
+    * * Field Name: SyncToken
+    * * Display Name: Sync Token
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The provider's cursor for the next incremental sync: a Graph delta link or a Google sync token. Null until the first sync.
+    */
+    get SyncToken(): string | null {
+        return this.Get('SyncToken');
+    }
+    set SyncToken(value: string | null) {
+        this.Set('SyncToken', value);
+    }
+
+    /**
+    * * Field Name: LastSyncedAt
+    * * Display Name: Last Synced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this calendar was last synced.
+    */
+    get LastSyncedAt(): Date | null {
+        return this.Get('LastSyncedAt');
+    }
+    set LastSyncedAt(value: Date | null) {
+        this.Set('LastSyncedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationProvider
+    * * Display Name: Communication Provider
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CommunicationProvider(): string {
+        return this.Get('CommunicationProvider');
+    }
+}
+
+
+/**
  * MJ: Cluster Analysis - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ClusterAnalysis
@@ -75965,6 +76852,33 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
     set DefaultCredentialID(value: string | null) {
         this.Set('DefaultCredentialID', value);
+    }
+
+    /**
+    * * Field Name: AllowUserDelegatedOAuth
+    * * Display Name: Allow User Delegated O Auth
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Posture 3 master switch (Gate 1). When 1, users may connect their own mailbox/calendar to this provider through per-user delegated OAuth 2.0 (3LO) with PKCE, subject to AllowedEmailDomains and AllowedOAuthTenantIDs. Default 0: no user can initiate a personal OAuth flow.
+    */
+    get AllowUserDelegatedOAuth(): boolean {
+        return this.Get('AllowUserDelegatedOAuth');
+    }
+    set AllowUserDelegatedOAuth(value: boolean) {
+        this.Set('AllowUserDelegatedOAuth', value);
+    }
+
+    /**
+    * * Field Name: AllowedOAuthTenantIDs
+    * * Display Name: Allowed O Auth Tenant I Ds
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional comma-separated allowlist of identity tenant identifiers (Gate 3) that a user-delegated OAuth token must carry: Azure AD tenant IDs (tid) or Google Workspace hosted domains (hd). NULL means no tenant restriction beyond AllowedEmailDomains.
+    */
+    get AllowedOAuthTenantIDs(): string | null {
+        return this.Get('AllowedOAuthTenantIDs');
+    }
+    set AllowedOAuthTenantIDs(value: string | null) {
+        this.Set('AllowedOAuthTenantIDs', value);
     }
 
     /**
@@ -80601,12 +81515,93 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
     }
 
     /**
+    * * Field Name: ApprovalStatus
+    * * Display Name: Approval Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+    * * Description: Whether this component version's definition is approved: Pending, Approved or Rejected. Separate from Status, which is publication. An approval is current only while ApprovedFingerprint matches the current definition.
+    */
+    get ApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
+        return this.Get('ApprovalStatus');
+    }
+    set ApprovalStatus(value: 'Approved' | 'Pending' | 'Rejected') {
+        this.Set('ApprovalStatus', value);
+    }
+
+    /**
+    * * Field Name: ApprovalComments
+    * * Display Name: Approval Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.
+    */
+    get ApprovalComments(): string | null {
+        return this.Get('ApprovalComments');
+    }
+    set ApprovalComments(value: string | null) {
+        this.Set('ApprovalComments', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who approved this component version.
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedAt
+    * * Display Name: Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this component version was approved.
+    */
+    get ApprovedAt(): Date | null {
+        return this.Get('ApprovedAt');
+    }
+    set ApprovedAt(value: Date | null) {
+        this.Set('ApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: ApprovedFingerprint
+    * * Display Name: Approved Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: SHA-256 fingerprint of the definition that was approved: the component's specification for this version. The approval is current only while this matches the fingerprint of the current definition.
+    */
+    get ApprovedFingerprint(): string | null {
+        return this.Get('ApprovedFingerprint');
+    }
+    set ApprovedFingerprint(value: string | null) {
+        this.Set('ApprovedFingerprint', value);
+    }
+
+    /**
     * * Field Name: SourceRegistry
     * * Display Name: Source Registry
     * * SQL Data Type: nvarchar(255)
     */
     get SourceRegistry(): string | null {
         return this.Get('SourceRegistry');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
     }
 }
 
@@ -80697,6 +81692,45 @@ export class MJContentFileTypeEntity extends BaseEntity<MJContentFileTypeEntityT
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ByteSignature
+    * * Display Name: Byte Signature
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: How this file type is recognised from its own content, as JSON. Either magic bytes - {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true} - or, for a text format, the characters it opens with: {"TextPrefix":["<!doctype html","<html"]}, matched after a byte-order mark and leading whitespace are stripped and case is folded. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.
+    */
+    get ByteSignature(): string | null {
+        return this.Get('ByteSignature');
+    }
+    set ByteSignature(value: string | null) {
+        this.Set('ByteSignature', value);
+    }
+
+    /**
+    * * Field Name: IsText
+    * * Display Name: Is Text
+    * * SQL Data Type: bit
+    * * Description: Whether this file type is text. Decides whether an unrecognised file is attempted as plain text or routed down the multi-modal path. NULL means unknown, and the pipeline falls back to inspecting the bytes.
+    */
+    get IsText(): boolean | null {
+        return this.Get('IsText');
+    }
+    set IsText(value: boolean | null) {
+        this.Set('IsText', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKey
+    * * Display Name: Extractor Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The registered content extractor that reads this file type. Lets a deployment add support for a format by pointing its file type at an extractor, rather than editing the extractor's own list of what it supports.
+    */
+    get ExtractorKey(): string | null {
+        return this.Get('ExtractorKey');
+    }
+    set ExtractorKey(value: string | null) {
+        this.Set('ExtractorKey', value);
     }
 }
 
@@ -80918,16 +81952,17 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     *   * Active
     *   * Complete
     *   * Failed
+    *   * MetadataOnly
     *   * Pending
     *   * Processed
     *   * Processing
     *   * Skipped
     * * Description: Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.
     */
-    get EmbeddingStatus(): 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
+    get EmbeddingStatus(): 'Active' | 'Complete' | 'Failed' | 'MetadataOnly' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
         return this.Get('EmbeddingStatus');
     }
-    set EmbeddingStatus(value: 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
+    set EmbeddingStatus(value: 'Active' | 'Complete' | 'Failed' | 'MetadataOnly' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
         this.Set('EmbeddingStatus', value);
     }
 
@@ -81180,6 +82215,32 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
     set ParentChunkID(value: string | null) {
         this.Set('ParentChunkID', value);
+    }
+
+    /**
+    * * Field Name: FieldConfidence
+    * * Display Name: Field Confidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.
+    */
+    get FieldConfidence(): string | null {
+        return this.Get('FieldConfidence');
+    }
+    set FieldConfidence(value: string | null) {
+        this.Set('FieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: Decorator
+    * * Display Name: Decorator
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.
+    */
+    get Decorator(): string | null {
+        return this.Get('Decorator');
+    }
+    set Decorator(value: string | null) {
+        this.Set('Decorator', value);
     }
 
     /**
@@ -81834,17 +82895,20 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Complete
     *   * Failed
+    *   * MetadataOnly
     *   * Pending
+    *   * Processed
     *   * Processing
     *   * Skipped
     * * Description: Vectorization status: Pending (not yet embedded), Processing (currently being embedded), Complete (vector stored), Failed (embedding error), Skipped (excluded from vectorization).
     */
-    get EmbeddingStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' {
+    get EmbeddingStatus(): 'Active' | 'Complete' | 'Failed' | 'MetadataOnly' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
         return this.Get('EmbeddingStatus');
     }
-    set EmbeddingStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped') {
+    set EmbeddingStatus(value: 'Active' | 'Complete' | 'Failed' | 'MetadataOnly' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
         this.Set('EmbeddingStatus', value);
     }
 
@@ -81950,6 +83014,162 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: FieldConfidence
+    * * Display Name: Field Confidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it. Lets two stages that know nothing about each other resolve a shared field on merit rather than by running order.
+    */
+    get FieldConfidence(): string | null {
+        return this.Get('FieldConfidence');
+    }
+    set FieldConfidence(value: string | null) {
+        this.Set('FieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: ExtractionStatus
+    * * Display Name: Extraction Status
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+    * * Description: Status of the Extract stage for this item: Pending, Processing, Complete, Failed or Skipped.
+    */
+    get ExtractionStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' | null {
+        return this.Get('ExtractionStatus');
+    }
+    set ExtractionStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' | null) {
+        this.Set('ExtractionStatus', value);
+    }
+
+    /**
+    * * Field Name: SegmentationStatus
+    * * Display Name: Segmentation Status
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+    * * Description: Status of the Segment stage for this item: Pending, Processing, Complete, Failed or Skipped.
+    */
+    get SegmentationStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' | null {
+        return this.Get('SegmentationStatus');
+    }
+    set SegmentationStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' | null) {
+        this.Set('SegmentationStatus', value);
+    }
+
+    /**
+    * * Field Name: DeleteStatus
+    * * Display Name: Delete Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+    * * Description: Soft-delete marker: Pending once something has been removed at the source, Deleted once the Delete stage has cleaned up everything downstream of it. Marking rather than deleting keeps the outside-system cleanup in one place and makes it retryable.
+    */
+    get DeleteStatus(): 'Deleted' | 'Pending' | null {
+        return this.Get('DeleteStatus');
+    }
+    set DeleteStatus(value: 'Deleted' | 'Pending' | null) {
+        this.Set('DeleteStatus', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKey
+    * * Display Name: Extractor Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The registered content extractor that actually read this item, recorded as a receipt of what ran. Distinct from the defaults on Content Type and in the source configuration, which say what should run.
+    */
+    get ExtractorKey(): string | null {
+        return this.Get('ExtractorKey');
+    }
+    set ExtractorKey(value: string | null) {
+        this.Set('ExtractorKey', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKeyOverride
+    * * Display Name: Extractor Key Override
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Forces a specific content extractor for this item, overriding every default in the cascade. Set by a splitting extractor that already knows what one of its own children is, and by an operator correcting a misrouted item.
+    */
+    get ExtractorKeyOverride(): string | null {
+        return this.Get('ExtractorKeyOverride');
+    }
+    set ExtractorKeyOverride(value: string | null) {
+        this.Set('ExtractorKeyOverride', value);
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+    * * Description: What kind of content this item holds: text, image, audio, video or multimodal. Determines whether the item can be embedded without extracted text.
+    */
+    get Modality(): 'audio' | 'image' | 'multimodal' | 'text' | 'video' | null {
+        return this.Get('Modality');
+    }
+    set Modality(value: 'audio' | 'image' | 'multimodal' | 'text' | 'video' | null) {
+        this.Set('Modality', value);
+    }
+
+    /**
+    * * Field Name: Date
+    * * Display Name: Content Date
+    * * SQL Data Type: datetimeoffset
+    * * Description: The date the content itself carries — published, issued or authored — as opposed to when this row was created.
+    */
+    get Date(): Date | null {
+        return this.Get('Date');
+    }
+    set Date(value: Date | null) {
+        this.Set('Date', value);
+    }
+
+    /**
+    * * Field Name: Decorator
+    * * Display Name: Decorator
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Text that accompanies this item so it still makes sense retrieved on its own. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the content.
+    */
+    get Decorator(): string | null {
+        return this.Get('Decorator');
+    }
+    set Decorator(value: string | null) {
+        this.Set('Decorator', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: The durable copy of the fetched artifact, held as an MJ File so the bytes live in whichever storage provider the source is configured for rather than in this database.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
     * * Field Name: ContentSource
     * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
@@ -82010,6 +83230,15 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File Details
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 
     /**
@@ -83773,6 +85002,59 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: FieldConfidence
+    * * Display Name: Field Confidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.
+    */
+    get FieldConfidence(): string | null {
+        return this.Get('FieldConfidence');
+    }
+    set FieldConfidence(value: string | null) {
+        this.Set('FieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: ForceDiscovery
+    * * Display Name: Force Discovery
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Scheduling is deployment-owned and the shipped Discover process selects ForceDiscovery = 1, which is why there is no discovery status column to re-arm.
+    */
+    get ForceDiscovery(): boolean {
+        return this.Get('ForceDiscovery');
+    }
+    set ForceDiscovery(value: boolean) {
+        this.Set('ForceDiscovery', value);
+    }
+
+    /**
+    * * Field Name: LastDiscoveredAt
+    * * Display Name: Last Discovered At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this source was last walked by the Discover stage. Stamped with the time a completed walk started, and passed back as Since on subsequent incremental walks.
+    */
+    get LastDiscoveredAt(): Date | null {
+        return this.Get('LastDiscoveredAt');
+    }
+    set LastDiscoveredAt(value: Date | null) {
+        this.Set('LastDiscoveredAt', value);
+    }
+
+    /**
+    * * Field Name: LastSyncedAt
+    * * Display Name: Last Synced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.
+    */
+    get LastSyncedAt(): Date | null {
+        return this.Get('LastSyncedAt');
+    }
+    set LastSyncedAt(value: Date | null) {
+        this.Set('LastSyncedAt', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
@@ -84311,6 +85593,19 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set CleanerKey(value: string | null) {
         this.Set('CleanerKey', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKey
+    * * Display Name: Extractor Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The default content extractor for items of this content type, beside SegmenterKey and CleanerKey. A per-type default has no home in a source's Configuration, and reading it from a run's Options would make it per-run.
+    */
+    get ExtractorKey(): string | null {
+        return this.Get('ExtractorKey');
+    }
+    set ExtractorKey(value: string | null) {
+        this.Set('ExtractorKey', value);
     }
 
     /**
@@ -89815,6 +91110,78 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     }
 
     /**
+    * * Field Name: ApprovalStatus
+    * * Display Name: Approval Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+    * * Description: Whether this dashboard's definition is approved: Pending, Approved or Rejected. An approval is current only while ApprovedFingerprint matches the current definition.
+    */
+    get ApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
+        return this.Get('ApprovalStatus');
+    }
+    set ApprovalStatus(value: 'Approved' | 'Pending' | 'Rejected') {
+        this.Set('ApprovalStatus', value);
+    }
+
+    /**
+    * * Field Name: ApprovalComments
+    * * Display Name: Approval Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.
+    */
+    get ApprovalComments(): string | null {
+        return this.Get('ApprovalComments');
+    }
+    set ApprovalComments(value: string | null) {
+        this.Set('ApprovalComments', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who approved this dashboard.
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedAt
+    * * Display Name: Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this dashboard was approved.
+    */
+    get ApprovedAt(): Date | null {
+        return this.Get('ApprovedAt');
+    }
+    set ApprovedAt(value: Date | null) {
+        this.Set('ApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: ApprovedFingerprint
+    * * Display Name: Approved Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: SHA-256 fingerprint of the definition that was approved: its layout, parts, property mappings, wires and code. The approval is current only while this matches the fingerprint of the current definition.
+    */
+    get ApprovedFingerprint(): string | null {
+        return this.Get('ApprovedFingerprint');
+    }
+    set ApprovedFingerprint(value: string | null) {
+        this.Set('ApprovedFingerprint', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -89848,6 +91215,15 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     */
     get Environment(): string {
         return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
     }
 }
 
@@ -95246,6 +96622,233 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     */
     get ScopeEntity(): string | null {
         return this.Get('ScopeEntity');
+    }
+}
+
+
+/**
+ * MJ: Entity Alternate Base Views - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityAlternateBaseView
+ * * Base View: vwEntityAlternateBaseViews
+ * * @description Registers alternate base views for an entity: SQL views that expose the same columns as the entity's BaseView while returning a canonical row subset (such as Active Members or Open Orders).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Alternate Base Views')
+export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternateBaseViewEntityType> {
+    /**
+    * Loads the MJ: Entity Alternate Base Views record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Alternate Base Views record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityAlternateBaseViewEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Owning entity whose column contract this alternate base view shares.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+    * * Description: Optional parent alternate base view on the same entity that this view derives from (e.g. an Active Auto-Renew Members view built on top of Active Members). NULL when the view selects directly from the entity's BaseView. Automatically populated on save via SQL AST extraction when the view's FROM clause references another registered alternate base view.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Cannot contain pipe (|) or colon (:) characters. Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-friendly label shown in UI pickers and badges. Falls back to Name when NULL.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition of which rows this alternate base view includes. Surfaced as help text in pickers and in agent and QueryGen discovery context.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SchemaName
+    * * Display Name: Schema Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Database schema of ViewName. When NULL, defaults to the owning entity's SchemaName. Cross-schema views allow an Open App to register an alternate view in its own schema on an upstream entity.
+    */
+    get SchemaName(): string | null {
+        return this.Get('SchemaName');
+    }
+    set SchemaName(value: string | null) {
+        this.Set('SchemaName', value);
+    }
+
+    /**
+    * * Field Name: ViewName
+    * * Display Name: View Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Physical SQL view name in the database. Must select all columns from the owning entity's BaseView.
+    */
+    get ViewName(): string {
+        return this.Get('ViewName');
+    }
+    set ViewName(value: string) {
+        this.Set('ViewName', value);
+    }
+
+    /**
+    * * Field Name: CachePolicy
+    * * Display Name: Cache Policy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Default
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bypass
+    *   * Default
+    * * Description: Controls RunView caching for this alternate view: Default caches results under an isolated abv: fingerprint segment and invalidates on entity writes; Bypass disables caching for views whose predicates depend on the clock or other tables.
+    */
+    get CachePolicy(): 'Bypass' | 'Default' {
+        return this.Get('CachePolicy');
+    }
+    set CachePolicy(value: 'Bypass' | 'Default') {
+        this.Set('CachePolicy', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Lifecycle status of the alternate view: Active (selectable and shown in pickers and agent context), Deprecated (executable with a warning, hidden from pickers and agents), or Disabled (rejected at runtime).
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display ordering of this alternate view within its owning entity (lower numbers appear first).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Text
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Text
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
     }
 }
 
@@ -119420,6 +121023,59 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: ApprovalComments
+    * * Display Name: Approval Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.
+    */
+    get ApprovalComments(): string | null {
+        return this.Get('ApprovalComments');
+    }
+    set ApprovalComments(value: string | null) {
+        this.Set('ApprovalComments', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who approved this query.
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedAt
+    * * Display Name: Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this query was approved.
+    */
+    get ApprovedAt(): Date | null {
+        return this.Get('ApprovedAt');
+    }
+    set ApprovedAt(value: Date | null) {
+        this.Set('ApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: ApprovedFingerprint
+    * * Display Name: Approved Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: SHA-256 fingerprint of the definition that was approved: its SQL, dialect variants and parameter contract. The approval is current only while this matches the fingerprint of the current definition.
+    */
+    get ApprovedFingerprint(): string | null {
+        return this.Get('ApprovedFingerprint');
+    }
+    set ApprovedFingerprint(value: string | null) {
+        this.Set('ApprovedFingerprint', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -119453,6 +121109,15 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     */
     get ExternalDataSource(): string | null {
         return this.Get('ExternalDataSource');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
     }
 }
 
@@ -119981,6 +121646,20 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     }
 
     /**
+    * * Field Name: AlternateBaseViewID
+    * * Display Name: Alternate Base View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+    * * Description: When this query references an alternate base view rather than the entity's primary BaseView, records the specific MJ: Entity Alternate Base Views row while EntityID continues to reference the owning entity.
+    */
+    get AlternateBaseViewID(): string | null {
+        return this.Get('AlternateBaseViewID');
+    }
+    set AlternateBaseViewID(value: string | null) {
+        this.Set('AlternateBaseViewID', value);
+    }
+
+    /**
     * * Field Name: Query
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
@@ -119996,6 +121675,15 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     */
     get Entity(): string {
         return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: AlternateBaseView
+    * * Display Name: Alternate Base View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AlternateBaseView(): string | null {
+        return this.Get('AlternateBaseView');
     }
 }
 
@@ -120474,6 +122162,20 @@ export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityTyp
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IsServerSet
+    * * Display Name: Is Server Set
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, only server code may supply this parameter's value (RunQueryParams.ServerParameters). A value for it from a client is refused.
+    */
+    get IsServerSet(): boolean {
+        return this.Get('IsServerSet');
+    }
+    set IsServerSet(value: boolean) {
+        this.Set('IsServerSet', value);
     }
 
     /**
@@ -124498,12 +126200,13 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     *   * FieldRules
     *   * Infer
     *   * ML Model
+    *   * Pipeline Stage
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' {
+    get WorkType(): 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' | 'Pipeline Stage' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model') {
+    set WorkType(value: 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' | 'Pipeline Stage') {
         this.Set('WorkType', value);
     }
 
@@ -145674,6 +147377,12 @@ export interface MJUserViewEntity_IDisplayState {
     /** Grid-specific configuration */
     grid?: MJUserViewEntity_IGridDisplayState;
     /**
+     * Logical name of an alternate base view (`MJ: Entity Alternate Base Views.Name`)
+     * that this view reads from. When omitted or null, the view reads from the
+     * entity's primary `BaseView`.
+     */
+    alternateBaseView?: string;
+    /**
      * Per-view-type configuration, one entry per view type the user has configured.
      * Keyed by the `MJ: View Types` row ID so each type (Grid, Cards, Timeline, Map,
      * Cluster, …) keeps its own settings in parallel — switching from one type to another
@@ -145743,6 +147452,54 @@ export interface MJUserViewEntity_IGridDisplayState {
     rowHeight?: 'compact' | 'normal' | 'comfortable';
     /** Enable text wrapping in grid cells — long text wraps and rows auto-size */
     wrapText?: boolean;
+}
+
+/**
+ * One declared property of a User View: a named, typed input that adds one
+ * predicate on a target field when a run gives it a value or it has a default.
+ *
+ * Stored as a JSON array in the `Properties` column of the `User Views` entity.
+ * The same shape is exported from `@memberjunction/core` as `UserViewProperty`,
+ * with the resolver that works out token defaults.
+ */
+export interface MJUserViewEntity_IUserViewProperty {
+    /** Unique within the view. */
+    Name: string;
+    /** The value's type. A value of another type is refused. */
+    Type: 'string' | 'number' | 'boolean' | 'date' | 'uuid';
+    /** Shown to whoever sets the property. */
+    Description?: string;
+    /** Used when a run gives no value: a fixed value or a context token. */
+    Default?: MJUserViewEntity_IUserViewPropertyDefault;
+    /** True: a run with no value and no default is refused. */
+    IsRequired?: boolean;
+    /** False: only server code may set it, and a client value is refused. Default true. */
+    AllowOverride?: boolean;
+    /** The predicate the value drives. */
+    Target: MJUserViewEntity_IUserViewPropertyTarget;
+}
+
+/** A fixed value, or a token worked out when the value is used. */
+export interface MJUserViewEntity_IUserViewPropertyDefault {
+    /** A fixed value. Set this or Token, not both. */
+    Value?: string | number | boolean | null;
+    /** A context token, worked out from the context user and the clock. */
+    Token?:
+        | 'Context.UserID' | 'Context.UserEmail' | 'Context.UserName'
+        | 'Context.Now' | 'Context.Today'
+        | 'Context.StartOfWeek' | 'Context.StartOfMonth' | 'Context.StartOfQuarter' | 'Context.StartOfYear';
+    /** Moves a date token; refused on a user token. */
+    Offset?: {
+        Amount: number;
+        Unit: 'day' | 'week' | 'month' | 'quarter' | 'year';
+    };
+}
+
+/** The field a property filters and how. */
+export interface MJUserViewEntity_IUserViewPropertyTarget {
+    /** A field of the view's entity. */
+    Field: string;
+    Operator: '=' | '<>' | 'IN' | '>' | '>=' | '<' | '<=';
 }
 
 /**
@@ -146163,6 +147920,107 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set ViewTypeID(value: string | null) {
         this.Set('ViewTypeID', value);
+    }
+
+    /**
+    * * Field Name: Properties
+    * * Display Name: Properties
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJUserViewEntity_IUserViewProperty>
+    * * Description: JSON array of the view's declared properties: named, typed inputs, each of which adds one predicate on a target field when a run gives it a value or it has a default. A property with AllowOverride false may be set only by server code. Null for a view with no properties.
+    */
+    get Properties(): string | null {
+        return this.Get('Properties');
+    }
+    set Properties(value: string | null) {
+        this.Set('Properties', value);
+    }
+
+    /**
+    * Typed accessor for Properties — a live view of the parsed JSON as Array<MJUserViewEntity_IUserViewProperty>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Properties field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PropertiesObject(): Array<MJUserViewEntity_IUserViewProperty> | null {
+        return this.GetJSONFieldObject<Array<MJUserViewEntity_IUserViewProperty>>('Properties');
+    }
+    set PropertiesObject(value: Array<MJUserViewEntity_IUserViewProperty> | null) {
+        this.SetJSONFieldObject<Array<MJUserViewEntity_IUserViewProperty>>('Properties', value);
+    }
+
+    /**
+    * * Field Name: ApprovalStatus
+    * * Display Name: Approval Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+    * * Description: Whether this view's definition is approved: Pending, Approved or Rejected. An approval is current only while ApprovedFingerprint matches the current definition.
+    */
+    get ApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
+        return this.Get('ApprovalStatus');
+    }
+    set ApprovalStatus(value: 'Approved' | 'Pending' | 'Rejected') {
+        this.Set('ApprovalStatus', value);
+    }
+
+    /**
+    * * Field Name: ApprovalComments
+    * * Display Name: Approval Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Reviewer comments recorded with the approval decision, such as the tests the definition passed.
+    */
+    get ApprovalComments(): string | null {
+        return this.Get('ApprovalComments');
+    }
+    set ApprovalComments(value: string | null) {
+        this.Set('ApprovalComments', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who approved this view.
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedAt
+    * * Display Name: Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this view was approved.
+    */
+    get ApprovedAt(): Date | null {
+        return this.Get('ApprovedAt');
+    }
+    set ApprovedAt(value: Date | null) {
+        this.Set('ApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: ApprovedFingerprint
+    * * Display Name: Approved Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: SHA-256 fingerprint of the definition that was approved: its entity, filters and properties. The approval is current only while this matches the fingerprint of the current definition.
+    */
+    get ApprovedFingerprint(): string | null {
+        return this.Get('ApprovedFingerprint');
+    }
+    set ApprovedFingerprint(value: string | null) {
+        this.Set('ApprovedFingerprint', value);
     }
 
     /**

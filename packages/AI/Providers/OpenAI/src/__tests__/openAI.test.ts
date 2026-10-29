@@ -509,6 +509,17 @@ describe('OpenAILLM', () => {
             expect(mockCreate).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
         });
 
+        it('asks for the trailing usage chunk on the streaming path, so streamed calls record tokens and cache reads', async () => {
+            mockCreate.mockResolvedValueOnce({});
+
+            await internals.createStreamingRequest(buildChatParams());
+
+            expect(mockCreate).toHaveBeenCalledWith(
+                expect.objectContaining({ stream: true, stream_options: { include_usage: true } }),
+                expect.anything()
+            );
+        });
+
         it('returns a Cancelled, non-failover-able result when the non-streaming request is aborted', async () => {
             const controller = new AbortController();
             const abortError = new MockAPIUserAbortError();

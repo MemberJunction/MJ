@@ -14,7 +14,15 @@ import {
   type FormVersionPreviewFieldDiff,
   type FormVersionPreviewState
 } from '../form-record-refresh.coordinator';
-import { type RecordPreviewAnchorRect } from '../preview-popover/record-preview-popover.component';
+import {
+  type RecordPreviewAnchorRect,
+  type RecordPreviewUpdatedEvent
+} from '../preview-popover/record-preview-popover.component';
+import { MjRecordPreviewPopoverService } from '../preview-popover/record-preview-popover.service';
+import {
+  ApplyQuickEditToHostRecord,
+  ResolveRecordLinkTarget
+} from '../links/record-link-utils';
 import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
@@ -212,6 +220,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   private fieldEdits = inject(FormFieldEditCoordinator, { optional: true });
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private previewPopoverService = inject(MjRecordPreviewPopoverService, { optional: true });
   private _coordinatorSubs: Subscription[] = [];
   private _remoteHighlightTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastPolymorphicEntityRef: string | null | undefined = undefined;
@@ -482,8 +491,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * `GetDeniedReadFields` walks every field on the entity and aggregates permissions across the
    * user's roles. `ngOnChanges` clears the memo when `Record` or `FieldName` changes.
    *
-   * Fails OPEN — on a missing entity, missing user, or an entity with field security switched
-   * off — matching `BaseEntity`'s own gate. A form that hid fields because no user had resolved
+   * Fails OPEN — on a missing entity, missing user, or an entity field security does not apply
+   * to (its own flag off and, for an IS-A child, every ancestor's flag off too) — matching
+   * `BaseEntity`'s own gate. A form that hid fields because no user had resolved
    * yet would be worse than one that shows them, since the server is the real boundary.
    */
   get IsFieldReadableByUser(): boolean {
@@ -495,7 +505,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldReadableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
@@ -659,7 +669,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldWritableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
@@ -3352,101 +3362,91 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     event.preventDefault();
     event.stopPropagation();
 
-    if (!this.FieldInfo || !this.Record) return;
-    const relatedEntity = this.getRelatedEntityInfo();
-    const relatedEntityName = relatedEntity?.Name || this.FieldInfo.RelatedEntity;
-    if (!relatedEntityName) return;
-
-    const fkValue = this.Value;
-    if (!fkValue) return;
-
-    let targetKey: CompositeKey;
-    if (this.IsPolymorphicFK) {
-      targetKey = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
-    } else {
-      const relatedFieldName = this.FieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID'; // first-pk-ok: foreign-key target, single-column by design (polymorphic FKs take the FromURLSegment branch)
-      targetKey = new CompositeKey([new KeyValuePair(relatedFieldName, fkValue)]);
-    }
+    const target = ResolveRecordLinkTarget({
+      Record: this.Record,
+      FieldName: this.FieldName,
+      Provider: this.ProviderToUse
+    });
+    if (!target) return;
 
     this.Navigate.emit({
       Kind: 'record',
-      EntityName: relatedEntityName,
-      PrimaryKey: targetKey,
+      EntityName: target.EntityName,
+      PrimaryKey: target.PrimaryKey,
       OpenInNewTab: event.ctrlKey || event.metaKey
     });
   }
 
   /**
-   * Open the `<mj-record-preview-popover>` hover card after a short hover intent delay on an FK link.
+   * Propagate inline Quick Edit updates from the linked record preview popover back onto this field's
+   * resolved display name and companion virtual name field on `this.Record`.
+   */
+  public OnLinkedRecordQuickEdited(event: RecordPreviewUpdatedEvent): void {
+    const target = ResolveRecordLinkTarget({
+      Record: this.Record,
+      FieldName: this.FieldName,
+      Provider: this.ProviderToUse
+    });
+    const updatedName = ApplyQuickEditToHostRecord(this.Record, target, event.UpdatedFields);
+    if (updatedName) {
+      this._resolvedFKName = updatedName;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Open the `<mj-record-preview-popover>` hover card via the shared `MjRecordPreviewPopoverService`.
    */
   public OnFKLinkMouseEnter(event: MouseEvent): void {
     if (!this.RecordLinksEnabled || !this.FieldInfo || !this.Record) return;
-    const fkValue = this.Value;
-    if (fkValue == null || fkValue === '') return;
     const anchorEl = event.currentTarget as HTMLElement | null;
     if (!anchorEl) return;
 
-    if (this._hoverPreviewCloseTimer) {
-      clearTimeout(this._hoverPreviewCloseTimer);
-      this._hoverPreviewCloseTimer = null;
-    }
-    if (this._hoverPreviewOpenTimer) {
-      clearTimeout(this._hoverPreviewOpenTimer);
-    }
+    const target = ResolveRecordLinkTarget({
+      Record: this.Record,
+      FieldName: this.FieldName,
+      DisplayName: this.FKDisplayName || this.FormatValue(),
+      Provider: this.ProviderToUse
+    });
+    if (!target) return;
 
-    this._hoverPreviewOpenTimer = setTimeout(() => {
-      this._hoverPreviewOpenTimer = null;
-      if (this._destroyed) return;
-      const relatedEntity = this.getRelatedEntityInfo();
-      const relatedEntityName = relatedEntity?.Name || this.FieldInfo?.RelatedEntity;
-      if (!relatedEntityName) return;
+    const r = anchorEl.getBoundingClientRect();
+    this.FKHoverAnchorRect = {
+      top: r.top,
+      bottom: r.bottom,
+      left: r.left,
+      right: r.right,
+      width: r.width,
+      height: r.height
+    };
+    this.FKHoverTargetKey = target.PrimaryKey;
+    this.ShowFKHoverPreview = true;
 
-      const r = anchorEl.getBoundingClientRect();
-      this.FKHoverAnchorRect = {
-        top: r.top,
-        bottom: r.bottom,
-        left: r.left,
-        right: r.right,
-        width: r.width,
-        height: r.height
-      };
-      if (this.IsPolymorphicFK) {
-        this.FKHoverTargetKey = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
-      } else {
-        const relatedFieldName = this.FieldInfo?.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID';
-        this.FKHoverTargetKey = new CompositeKey([new KeyValuePair(relatedFieldName, fkValue)]);
-      }
-      this.ShowFKHoverPreview = true;
-      this.cdr.markForCheck();
-    }, 260);
+    this.previewPopoverService?.RequestOpen({
+      SourceID: `form-field-${this.FieldName}`,
+      EntityName: target.EntityName,
+      PrimaryKey: target.PrimaryKey,
+      RecordID: target.RecordID,
+      DisplayName: target.DisplayName || this.FKDisplayName || this.FormatValue(),
+      AnchorElement: anchorEl,
+      AnchorRect: this.FKHoverAnchorRect,
+      Provider: this.ProviderToUse,
+      OnNavigate: (navEvent: FormNavigationEvent) => this.OnPreviewCardNavigate(navEvent),
+      OnRecordUpdated: (updatedEvent: RecordPreviewUpdatedEvent) => this.OnLinkedRecordQuickEdited(updatedEvent)
+    });
   }
 
   /**
    * Schedule closing the FK hover preview popover when the pointer leaves the link.
    */
   public OnFKLinkMouseLeave(): void {
-    if (this._hoverPreviewOpenTimer) {
-      clearTimeout(this._hoverPreviewOpenTimer);
-      this._hoverPreviewOpenTimer = null;
-    }
-    if (this._hoverPreviewCloseTimer) {
-      clearTimeout(this._hoverPreviewCloseTimer);
-    }
-    this._hoverPreviewCloseTimer = setTimeout(() => {
-      this._hoverPreviewCloseTimer = null;
-      if (!this._destroyed) {
-        this.ShowFKHoverPreview = false;
-        this.cdr.markForCheck();
-      }
-    }, 180);
+    this.ShowFKHoverPreview = false;
+    this.previewPopoverService?.RequestClose(`form-field-${this.FieldName}`);
   }
 
   /** Keep the hover preview card open while the pointer is inside the card. */
   public OnPreviewCardMouseEnter(): void {
-    if (this._hoverPreviewCloseTimer) {
-      clearTimeout(this._hoverPreviewCloseTimer);
-      this._hoverPreviewCloseTimer = null;
-    }
+    this.clearHoverPreviewTimers();
   }
 
   /** Close the hover preview card when the pointer leaves the card. */
@@ -3458,6 +3458,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   public OnPreviewCardNavigate(navEvent: FormNavigationEvent): void {
     this.clearHoverPreviewTimers();
     this.ShowFKHoverPreview = false;
+    this.previewPopoverService?.CloseImmediately(`form-field-${this.FieldName}`);
     this.Navigate.emit(navEvent);
     this.cdr.markForCheck();
   }
@@ -3471,6 +3472,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       clearTimeout(this._hoverPreviewCloseTimer);
       this._hoverPreviewCloseTimer = null;
     }
+    this.previewPopoverService?.CloseImmediately(`form-field-${this.FieldName}`);
   }
 
   /**
