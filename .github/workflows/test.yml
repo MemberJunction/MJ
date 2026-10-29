@@ -843,7 +843,7 @@ jobs:
       # The gitignored class-registration manifests the root postbuild writes into the SOURCE
       # tree. See the build job's packaging step for why the turbo cache cannot carry these.
       - name: Download generated host artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: generated-host-artifacts
 
