@@ -205,12 +205,39 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
 
 /** Time for QueryEngine to apply a local save, which it does asynchronously. */
 const ENGINE_SETTLE_MS = 300;
+
 /**
- * Time for QueryEngine to delete an edited query's cached results: it waits 3s after the last
- * result-affecting save. Creating a query counts, so a check waits this long after creating its
- * fixtures before warming a slot, or that deletion could remove the warmed slot mid-check.
+ * QueryEngine's result-deletion settle window, as shipped. Read from the engine rather than
+ * duplicated, so the two cannot drift — when this was a literal 3500 against a literal 3000
+ * inside QueryEngine, nothing said they had to move together.
+ *
+ * DO NOT LOWER IT FOR THIS BUNDLE. That was tried and reverted; the reasoning is worth keeping
+ * because the idea is an attractive one.
+ *
+ * The window is a deletion DELAY, and the checks here want opposite things from it:
+ *
+ *   * Q1-Q12 create or edit a query and then exercise its cache slots. They need the deletion
+ *     NOT to fire while they run. At the shipped 3s it lands after they finish, which is the
+ *     only reason they pass.
+ *   * Q13+ assert the deletion HAPPENED, so they wait it out. They want it short.
+ *
+ * One global window cannot satisfy both, and 3s is the value that happens to. Lowering it to
+ * 750ms moved the deletion INTO the first group: it broke Q2 (caught pre-merge) and then Q11
+ * ("repeat category-A request must hit its own slot — expected true, got false", run
+ * 40786888827) once Q2 was patched — Q11 creates two queries mid-check and warms slots inside
+ * the shortened window. Patching each victim is whack-a-mole; the premise was wrong.
+ *
+ * Making Q1-Q12 not depend on the timing at all is the real fix, and it is a redesign.
  */
-const DEFINITION_SETTLE_MS = 3500;
+const ENGINE_DELETION_SETTLE_MS = QueryEngine.DefaultDefinitionEditSettleMs;
+
+/**
+ * How long a check waits for QueryEngine to have deleted an edited query's cached results.
+ * Creating a query counts as a result-affecting save, so a check waits this long after creating
+ * its fixtures before warming a slot, or that deletion could remove the warmed slot mid-check.
+ * The margin absorbs the save round-trip between the write landing and the timer arming.
+ */
+const DEFINITION_SETTLE_MS = ENGINE_DELETION_SETTLE_MS + 500;
 
 /**
  * A throwaway query in the fixture category whose SQL returns a `Marker` column, so a check can
@@ -855,8 +882,25 @@ for (const check of RunQueryCacheChecks) {
 
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and the dispatcher script create/tear them down identically (was a hardcoded driver special-case).
+//
+// The lifecycle no longer touches QueryEngine's settle window — see ENGINE_DELETION_SETTLE_MS
+// above for why lowering it for this bundle does not work.
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
-    Setup: async ctx => { ctx.Fixtures = await CreateRunQueryFixtures(ctx); },
+    Setup: async ctx => {
+        ctx.Fixtures = await CreateRunQueryFixtures(ctx);
+        // Creating the fixtures is itself a result-affecting save, so it arms the slot-deletion
+        // timer. Wait it out HERE, once, so the deletion has already happened before the first
+        // check warms a slot.
+        //
+        // This is the one piece worth keeping from the settle-window experiment, and it fixes a
+        // race that predates it: the deletion lands 2.2-3.2s into the run — right on top of Q5,
+        // the measured cause of this bundle's ~0.7% flake (6 failures in ~840 runs). Q13+ wait
+        // the window out explicitly; Q1-Q12 only ever hoped to miss it.
+        //
+        // Costs 3.5s once per bundle, against ~28s of per-check waiting it does not remove.
+        // Worth it to stop a recurring flake, not a performance change.
+        await Sleep(DEFINITION_SETTLE_MS);
+    },
     Teardown: async ctx => {
         if (ctx.Fixtures) {
             await TeardownRunQueryFixtures(ctx, ctx.Fixtures);
