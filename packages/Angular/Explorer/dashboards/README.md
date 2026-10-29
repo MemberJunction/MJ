@@ -142,31 +142,50 @@ The Predictive Studio app (`src/PredictiveStudio/`) is a multi-section, lazy-loa
 
 ### Chief of Staff Executive Cockpit
 
-The Chief of Staff cockpit (`src/ChiefOfStaff/`, driver class `ChiefOfStaffDashboard`; also registered as `ChiefOfStaffResource`) is the single-page control surface for a user's personal Chief of Staff agent. It is a direct `BaseResourceComponent` subclass with four `<mj-tab-nav>` tabs under a shared `<mj-page-header>` (stat badges for priorities / at-risk / pending approvals / active wakes, a `<mj-page-search>` and a refresh button).
+The Chief of Staff cockpit (`src/ChiefOfStaff/`, driver class `ChiefOfStaffDashboard`; also registered as `ChiefOfStaffResource`) is the single-page control surface for a user's personal Chief of Staff agent. It is a direct `BaseResourceComponent` subclass with `<mj-tab-nav>` tabs under a shared `<mj-page-header>` (stat badges for pending approvals and active wakes, a `<mj-page-search>` and a refresh button). The cockpit uses core entities only; Open Apps add their own data through registered panels.
 
-Tabs:
-- **Overview** (`overview`): KPI cards (priority objectives, average objective progress, pending approvals, governance posture) plus condensed panels for the top priority cards, the pending approval queue with inline Approve / Reject, and the next wake routines
-- **Priorities & OKRs** (`priorities`): one expandable card per priority objective with its child milestones/tasks, the task's `Priority` badge (Critical / High / Medium / Low), effective health, progress, metric progress label and overdue flag; a health filter row (`all`, `OnTrack`, `AtRisk`, `OffTrack`, `Completed`, `Paused`); clicking a task opens a quick-edit drawer (status, health, percent complete, confidence, due date, description) with an "open full record" escape hatch
-- **Approvals & Wakes** (`approvals-wakes`): the pending `MJ: AI Agent Requests` queue with Approve / Reject / Details (the Details dialog is `<mj-agent-request-dialog>`), a "Recent Resolved Decisions" list, and the user's AgentWake `MJ: User Routines` with Wake Now / Pause-Resume / open-record actions
+Core tabs:
+- **Overview** (`overview`): KPI cards (pending approvals, high-priority approvals, active wakes, governance posture), the pending approval queue with inline Approve / Reject, the next wake routines, and an extension column for registered `overview` panels
+- **Approvals & Wakes** (`approvals-wakes`): the pending `MJ: AI Agent Requests` queue with Approve / Reject / Details (the Details dialog is `<mj-agent-request-dialog>`), a "Recent Resolved Decisions" list, and the user's AgentWake `MJ: User Routines` with Wake Now / Pause-Resume / Read Briefing / open-record actions
 - **Governance Policy** (`governance`): the user's `MJ: AI Agent User Policies` row for the Chief of Staff agent as an editable draft — coordination mode, status, data-access mode, the four channel modes (email / calendar / phone / messaging) as `<mj-dropdown>` controls, inter-agent coordination, the three approval guardrails, auto-approve amount threshold, display-name and standing-instructions overrides — with Save / Reset
 
+Registered `tab` panels appear between Overview and Approvals & Wakes, keyed by their `panelKey`.
+
 Data (one `RunViews` batch in `LoadCockpitData`; every filter comes from `BuildCockpitScopeFilters` and is bound to the signed-in user — with no current user the cockpit loads nothing and shows an error banner):
-- `MJ: AI Agent User Policies` filtered to the Chief of Staff agent (`CHIEF_OF_STAFF_AGENT_ID`) and the current user
+- `MJ: AI Agent User Policies` filtered to the Chief of Staff agent (resolved by name, `CHIEF_OF_STAFF_AGENT_NAME`) and the current user
 - `MJ: User Routines` for the current user where `RoutineType = 'AgentWake'` or the target is the Chief of Staff agent
 - `MJ: AI Agent Requests` for the Chief of Staff agent **and** `RequestForUserID = current user`, excluding `Information` requests (max 100); each queue row shows its `RequestType` as a badge
-- `MJ_BizApps_Tasks: Tasks` — only when that OpenApp entity is present in metadata (`EntityByName`), and only for the signed-in user: `ResolvePersonTaskScope` first finds the `MJ_BizApps_Common: People` row whose `LinkedUserID` is the current user, falling back to an exact, case-insensitive match on the user's `Email`, then that person's `MJ_BizApps_Tasks: Task Assignments` (matched on the polymorphic `AssigneeEntityID` = People entity + `AssigneeRecordID` = person), and filters tasks to those the person created (`CreatedByPersonID`) or is assigned to, plus the whole tree of every root objective they own (`RootParentID IN (...)`), so milestones added under their objective by someone else load with it. With no matching person the tasks query is skipped and the Priorities tab shows a "No People Record Linked" empty state. Rows load as `simple` (max 250) and are grouped into priority-objective cards by `CalculateChiefOfStaffMetrics`. The task primary key is derived from entity metadata via `CompositeKey.FromURLSegment`, never assumed to be `ID` A milestone the person is assigned to also brings in the objective above it (its `RootParentID`), so an assignee sees the objective, with every milestone when they own it (created it or are assigned to it) and only the milestones they hold otherwise; cards and milestone rows show who holds each item: the assignees from `MJ_BizApps_Tasks: Task Assignments`, or, for an unassigned milestone, its creator or the objective's owner (`MilestoneRowViewModel.Holders`, `IsImplicitlyHeld`). Wake routines are listed in display order (`SortRoutinesForDisplay`: next wake first, unscheduled, then spent one-shots most recent first); a spent one-shot (`IsSpentOneShotRoutine`, Disabled after running with no next time) shows as `Fired` (`RoutineDisplayStatus`) and is hidden behind a "Show fired" toggle. "Wake Now" runs the `Run User Routine Now` action, which executes the routine without touching `NextRunAt`, so a one-shot keeps its scheduled time. An approval request that carries an outbound email (the email action stores To/CC/Subject/Body as JSON in `Comments`) gets a "View draft" toggle on its card: `ParseEmailApprovalPayload` reads the draft, the card shows headers and body inline, and "Copy" puts `FormatEmailDraftForClipboard` output (headers, blank line, body) on the clipboard for a mail client.
 
-Priority-objective cards are built only from root tasks that qualify (a Type containing priority / objective / okr, or `HealthStatus` / `PlanningPeriod` set, or child tasks); there is no fallback to all root tasks. Card progress comes from the metric when `TargetValue` is set (`ComputeTaskMetricPercent`: current vs. baseline toward target, clamped 0–100), otherwise from `PercentComplete`, then completed-milestone ratio.
+Wake routines are listed in display order (`SortRoutinesForDisplay`: next wake first, unscheduled, then spent one-shots most recent first); a spent one-shot (`IsSpentOneShotRoutine`, Disabled after running with no next time) shows as `Fired` (`RoutineDisplayStatus`) and is hidden behind a "Show fired" toggle. "Wake Now" runs the `Run User Routine Now` action, which executes the routine without touching `NextRunAt`, so a one-shot keeps its scheduled time. An approval request that carries an outbound email (the email action stores To/CC/Subject/Body as JSON in `Comments`) gets a "View draft" toggle on its card: `ParseEmailApprovalPayload` reads the draft, the card shows headers and body inline, and "Copy" puts `FormatEmailDraftForClipboard` output (headers, blank line, body) on the clipboard for a mail client.
 
-Mutations (all `BaseEntity.Save()` with `LatestResult.CompleteMessage` surfaced in a banner, except `SaveTaskEdits` which runs via the server-side `Update Record` action so OpenApp entities update without requiring client-side GraphQL single-record queries): `QuickRespondToRequest` (sets `Status` to Approved/Rejected, `RespondedAt`, `ResponseSource = 'Dashboard'`, `ResponseByUserID`), `TriggerWakeNow` (sets the routine `Active` with `NextRunAt = now` for the scheduler's next tick), `ToggleRoutineStatus` (Active ↔ Paused), `SaveGovernancePolicy` (creates the policy row if none exists), and `SaveTaskEdits` (loads and saves the drawer draft via `Update Record`).
+Mutations (all `BaseEntity.Save()` with `LatestResult.CompleteMessage` surfaced in a banner): `QuickRespondToRequest` (sets `Status` to Approved/Rejected, `RespondedAt`, `ResponseSource = 'Dashboard'`, `ResponseByUserID`), `TriggerWakeNow` (runs the `Run User Routine Now` action), `ToggleRoutineStatus` (Active ↔ Paused) and `SaveGovernancePolicy` (creates the policy row if none exists).
 
-Deep links: `tab`, `search` and `health` round-trip through `UpdateQueryParams` / `OnQueryParamsChanged`; defaults (`overview`, empty search, `all`) are omitted from the URL.
+Deep links: `tab` and `search` round-trip through `UpdateQueryParams` / `OnQueryParamsChanged`; defaults (`overview`, empty search) are omitted from the URL. A registered panel's `panelKey` is a valid `tab` value.
+
+**Extension panels** ([`src/ChiefOfStaff/chief-of-staff-panel.ts`](src/ChiefOfStaff/chief-of-staff-panel.ts)). An Open App adds cockpit UI by registering a component that extends `BaseChiefOfStaffPanel`:
+
+```typescript
+@RegisterClassEx(BaseChiefOfStaffPanel, {
+    key: 'my-app:priorities',
+    skipNullKeyWarning: true,
+    metadata: { placement: 'tab', panelKey: 'priorities', label: 'Priorities & OKRs', icon: 'fa-solid fa-bullseye', sortKey: 10, liveEntities: ['My_App: Tasks'] },
+})
+@Component({ standalone: false, selector: 'my-app-cos-priorities', templateUrl: './priorities-panel.component.html' })
+export class MyPrioritiesPanel extends BaseChiefOfStaffPanel {
+    protected async LoadPanelData(): Promise<void> {
+        // load with this.ProviderToUse, then report what the agent should know
+        this.ReportAgentContext({ PriorityObjectiveCount: 3 });
+    }
+}
+```
+
+`CollectChiefOfStaffPanels` gathers the registrations (a later registration for the same `panelKey` wins) and sorts them by `sortKey`, then label. The cockpit mounts each one with `ngComponentOutlet` and passes `Registration`, `Provider` and a `Context` (`ChiefOfStaffPanelContext`: `RefreshToken`, `SearchText`, `AgentID`, `ReportAgentContext`, `ShowBanner`). A panel reloads when `RefreshToken` changes, gets `OnSearchTextChanged` when the cockpit search changes, and its reported fields are merged into the agent context (a core field always wins a name clash). A change to any entity in a panel's `liveEntities` reloads the cockpit (`IsCockpitEntityChange`).
 
 Where it appears: the single **Cockpit** nav item of the **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`). The application is opt-in (`DefaultForNewUser: false`) and is not registered in the AI application. It deliberately carries no other nav items: `DriverClass` values must be unique across all applications (integration check `app-wiring.AW4`), and the Agent Requests and Routines screens already belong to the AI and Routines applications; the cockpit's Approvals & Wakes tab links to those records directly.
 
-Not yet implemented from the Phase 2 plan: `QuietHoursStart` / `QuietHoursEnd` and `MaxAutonomousActionsPerRun` do not exist on `MJ: AI Agent User Policies` and are not shown; the plan's `IsPriorityObjective`, P0–P3 tiers, `CurrentMetricValue` / `TargetMetricValue` and `NextCheckInAt` names do not exist on the Tasks entity (the cockpit uses `Priority`, `CurrentValue` / `TargetValue` / `BaselineValue` and `NextCheckInDueAt`).
+Not yet implemented from the Phase 2 plan: `QuietHoursStart` / `QuietHoursEnd` and `MaxAutonomousActionsPerRun` do not exist on `MJ: AI Agent User Policies` and are not shown.
 
-Agent context and client tools (navigation / filter / search / inspect / refresh only — no mutations) are built by the pure helpers in [`src/ChiefOfStaff/chief-of-staff-agent-context.ts`](src/ChiefOfStaff/chief-of-staff-agent-context.ts); see the package `CLAUDE.md` registry row for the boundary.
+Agent context and client tools (tab switch / search / refresh only — no mutations) are built by the pure helpers in [`src/ChiefOfStaff/chief-of-staff-agent-context.ts`](src/ChiefOfStaff/chief-of-staff-agent-context.ts); see the package `CLAUDE.md` registry row for the boundary.
 
 ### Additional Dashboards
 - **API Keys**: API key management with scopes, applications, and usage tracking

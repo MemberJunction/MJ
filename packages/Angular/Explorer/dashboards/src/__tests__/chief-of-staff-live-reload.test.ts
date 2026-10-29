@@ -24,13 +24,17 @@ interface Harness {
   detached: { value: boolean };
 }
 
-function createComponent(): Harness {
+function createComponent(panelLiveEntities: string[] = []): Harness {
   const component = Object.create(ChiefOfStaffDashboardComponent.prototype) as ChiefOfStaffDashboardComponent;
   const open = component as unknown as Open;
   const load = vi.fn(async () => undefined);
   const reattached = new Subject<unknown>();
   const detached = { value: false };
   open['LoadCockpitData'] = load;
+  // Object.create skips field initializers; give it the registered panels the test wants.
+  open['Panels'] = panelLiveEntities.length
+    ? [{ Metadata: { placement: 'tab', panelKey: 'p', label: 'P', liveEntities: panelLiveEntities }, Component: class {} }]
+    : [];
   open['destroy$'] = new Subject<void>();
   open['navigationService'] = { IsResourceDetached: () => detached.value, ResourceReattached$: reattached };
   (open['subscribeToLiveEntityChanges'] as () => void).call(component);
@@ -68,6 +72,15 @@ describe('ChiefOfStaffDashboardComponent — reloads when what it shows changes'
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it('reloads for an entity a registered extension panel shows', async () => {
+    const { load } = createComponent(['My_App: Tasks']);
+
+    raise('My_App: Tasks');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
   it('defers the reload while the tab is detached and runs it once when the tab is shown again', async () => {

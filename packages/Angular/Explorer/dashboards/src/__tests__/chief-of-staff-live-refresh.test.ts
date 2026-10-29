@@ -21,7 +21,13 @@ describe('IsCockpitEntityChange', () => {
   it('matches a remote save of an entity the cockpit shows', () => {
     expect(IsCockpitEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent Requests'))).toBe(true);
     expect(IsCockpitEntityChange(entityEvent('remote-invalidate', 'MJ: User Routines'))).toBe(true);
-    expect(IsCockpitEntityChange(entityEvent('remote-invalidate', 'MJ_BizApps_Tasks: Tasks'))).toBe(true);
+    expect(IsCockpitEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent User Policies'))).toBe(true);
+  });
+
+  it('matches an entity an extension panel declared, and only when it is declared', () => {
+    const tasks = entityEvent('remote-invalidate', 'My_App: Tasks');
+    expect(IsCockpitEntityChange(tasks)).toBe(false);
+    expect(IsCockpitEntityChange(tasks, ['my_app: tasks'])).toBe(true);
   });
 
   it('matches a local save or delete of such an entity, whatever the name casing', () => {

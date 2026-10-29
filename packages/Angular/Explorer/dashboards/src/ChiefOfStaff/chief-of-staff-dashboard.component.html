@@ -1,24 +1,10 @@
 <mj-page-layout>
     <mj-page-header
         [Title]="ChiefOfStaffDisplayName"
-        Subtitle="Executive cockpit for strategic priorities, pending approvals, wake routines, and governance policy"
+        Subtitle="Executive cockpit for pending approvals, wake routines, briefings and governance policy"
         Icon="fa-solid fa-user-tie">
 
         <ng-container meta>
-            <mj-stat-badge
-                Icon="fa-solid fa-bullseye"
-                [Count]="Metrics.PriorityObjectiveCount"
-                Label="priorities"
-                Variant="info">
-            </mj-stat-badge>
-            @if (Metrics.AtRiskCount + Metrics.OffTrackCount > 0) {
-                <mj-stat-badge
-                    Icon="fa-solid fa-triangle-exclamation"
-                    [Count]="Metrics.AtRiskCount + Metrics.OffTrackCount"
-                    Label="at risk"
-                    Variant="warning">
-                </mj-stat-badge>
-            }
             @if (Metrics.PendingApprovalCount > 0) {
                 <mj-stat-badge
                     Icon="fa-solid fa-bell-concierge"
@@ -44,7 +30,7 @@
 
         <ng-container toolbar>
             <mj-page-search
-                Placeholder="Filter priorities, requests, or routines..."
+                Placeholder="Filter requests or routines..."
                 [Value]="SearchText"
                 (ValueChange)="OnSearchChange($event)">
             </mj-page-search>
@@ -90,32 +76,19 @@
             <!-- ========================================================= -->
             @if (ActiveTab === 'overview') {
                 <div class="cos-kpi-grid">
-                    <div class="cos-kpi-card" (click)="OnTabChange('priorities')">
+                    <div class="cos-kpi-card" (click)="OnTabChange('approvals-wakes')">
                         <div class="cos-kpi-card__header">
-                            <span class="cos-kpi-card__label">Priority Objectives</span>
+                            <span class="cos-kpi-card__label">Active Wakes</span>
                             <div class="cos-kpi-card__icon cos-kpi-card__icon--brand">
-                                <i class="fa-solid fa-bullseye"></i>
+                                <i class="fa-solid fa-clock-rotate-left"></i>
                             </div>
                         </div>
-                        <div class="cos-kpi-card__value">{{ Metrics.PriorityObjectiveCount }}</div>
+                        <div class="cos-kpi-card__value">{{ Metrics.ActiveWakeRoutineCount }}</div>
                         <div class="cos-kpi-card__sub">
-                            {{ Metrics.OnTrackCount }} on track · {{ Metrics.SubtaskCount }} milestones
-                        </div>
-                    </div>
-
-                    <div class="cos-kpi-card" (click)="OnTabChange('priorities')">
-                        <div class="cos-kpi-card__header">
-                            <span class="cos-kpi-card__label">Avg Objective Progress</span>
-                            <div class="cos-kpi-card__icon cos-kpi-card__icon--success">
-                                <i class="fa-solid fa-chart-line"></i>
-                            </div>
-                        </div>
-                        <div class="cos-kpi-card__value">{{ Metrics.AveragePriorityProgress }}%</div>
-                        <div class="cos-kpi-card__sub">
-                            @if (Metrics.AverageConfidenceScore !== null) {
-                                Avg confidence: {{ Metrics.AverageConfidenceScore }}%
+                            @if (Metrics.NextScheduledWakeAt) {
+                                Next: {{ Metrics.NextScheduledWakeAt | date:'short' }}
                             } @else {
-                                {{ Metrics.CompletedPriorityCount }} completed objectives
+                                No wake scheduled
                             }
                         </div>
                     </div>
@@ -154,115 +127,8 @@
                 </div>
 
                 <div class="cos-overview-columns">
-                    <!-- Column 1: Strategic Priorities -->
-                    <section class="cos-panel">
-                        <div class="cos-panel__header">
-                            <div>
-                                <h3 class="cos-panel__title">
-                                    <i class="fa-solid fa-bullseye"></i> Strategic Priorities & OKRs
-                                </h3>
-                                <p class="cos-panel__subtitle">
-                                    Active priority objectives tracked in MJ_BizApps_Tasks
-                                </p>
-                            </div>
-                            <button mjButton variant="outline" size="sm" (click)="OnTabChange('priorities')">
-                                View All ({{ Metrics.PriorityObjectiveCount }})
-                            </button>
-                        </div>
-
-                        @if (FilteredPriorityCards.length === 0) {
-                            <mj-empty-state Size="compact" Icon="fa-solid fa-bullseye" Message="No priority objectives found. Ask your Chief of Staff in chat to establish your quarterly priorities." />
-                        } @else {
-                            <div class="cos-stack">
-                                @for (card of FilteredPriorityCards.slice(0, 4); track card.Task.ID) {
-                                    <div class="cos-priority-mini" (click)="OnTabChange('priorities')">
-                                        <div class="cos-priority-mini__top">
-                                            <span class="cos-priority-mini__name">{{ card.Task.Name }}</span>
-                                            <span class="cos-health-pill cos-health-pill--{{ card.EffectiveHealth.toLowerCase() }}">
-                                                <i class="{{ GetHealthBadgeIcon(card.EffectiveHealth) }}"></i>
-                                                {{ GetHealthBadgeLabel(card.EffectiveHealth) }}
-                                            </span>
-                                        </div>
-                                        <div class="cos-progress-row">
-                                            <div class="cos-progress-bar">
-                                                <div class="cos-progress-bar__fill cos-progress-bar__fill--{{ card.EffectiveHealth.toLowerCase() }}"
-                                                     [style.width.%]="card.EffectivePercentComplete"></div>
-                                            </div>
-                                            <span class="cos-progress-row__pct">{{ card.EffectivePercentComplete }}%</span>
-                                        </div>
-                                        <div class="cos-priority-mini__meta">
-                                            <span>
-                                                <i class="fa-solid fa-list-check"></i>
-                                                {{ card.CompletedSubtaskCount }}/{{ card.Subtasks.length }} milestones
-                                            </span>
-                                            @if (card.Task.CheckInCadence) {
-                                                <span>
-                                                    <i class="fa-solid fa-repeat"></i> {{ card.Task.CheckInCadence }}
-                                                </span>
-                                            }
-                                            @if (card.Task.DueAt) {
-                                                <span [class.cos-overdue-text]="card.IsOverdue">
-                                                    <i class="fa-regular fa-calendar"></i> Due {{ card.Task.DueAt | date:'mediumDate' }}
-                                                </span>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </section>
-
-                    <!-- Column 2: To-dos, Pending Approvals & Wake Schedule -->
+                    <!-- Column 1: Pending Approvals -->
                     <div class="cos-stack">
-                        <section class="cos-panel">
-                            <div class="cos-panel__header">
-                                <div>
-                                    <h3 class="cos-panel__title">
-                                        <i class="fa-solid fa-list-check"></i> To-dos & Reminders
-                                    </h3>
-                                    <p class="cos-panel__subtitle">
-                                        Personal tasks and dated reminders your Chief of Staff keeps for you
-                                    </p>
-                                </div>
-                                <span class="cos-meta-badge">{{ Metrics.OpenTodoCount }} open</span>
-                            </div>
-                            @if (Metrics.TodoItems.length === 0) {
-                                <mj-empty-state Size="compact" Icon="fa-solid fa-list-check" Message='Nothing pending. Tell your Chief of Staff in chat, for example "remind me to call Mom on Wednesday", and it appears here.' />
-                            } @else {
-                                <div class="cos-todo-list">
-                                    @for (item of Metrics.TodoItems.slice(0, 8); track item.Task.ID) {
-                                        <div class="cos-todo-row" [class.cos-todo-row--overdue]="item.IsOverdue" (click)="OpenTaskRecord(item.Task.ID, $event)">
-                                            <button mjButton variant="icon" size="sm"
-                                                    [disabled]="BusyTodoID === item.Task.ID"
-                                                    [title]="'Mark \'' + item.Task.Name + '\' done'"
-                                                    [attr.aria-label]="'Mark ' + item.Task.Name + ' done'"
-                                                    (click)="MarkTodoDone(item.Task, $event)">
-                                                <i class="fa-regular" [class.fa-circle]="BusyTodoID !== item.Task.ID" [class.fa-circle-check]="BusyTodoID === item.Task.ID"></i>
-                                            </button>
-                                            <div class="cos-todo-row__main">
-                                                <div class="cos-todo-row__name">{{ item.Task.Name }}</div>
-                                                <div class="cos-todo-row__meta">
-                                                    @if (item.Task.Type) {
-                                                        <span class="cos-meta-badge">{{ item.Task.Type }}</span>
-                                                    }
-                                                    @if (item.Task.DueAt) {
-                                                        <span [class.cos-overdue-text]="item.IsOverdue">
-                                                            <i class="fa-regular fa-calendar"></i>
-                                                            @if (item.IsDueToday) { Today } @else { {{ item.Task.DueAt | date:'MMM d, h:mm a' }} }
-                                                            @if (item.IsOverdue) { (overdue) }
-                                                        </span>
-                                                    }
-                                                </div>
-                                            </div>
-                                            <i class="fa-solid fa-chevron-right cos-subtask-row__chevron"></i>
-                                        </div>
-                                    }
-                                    @if (Metrics.TodoItems.length > 8) {
-                                        <div class="cos-todo-list__more">and {{ Metrics.TodoItems.length - 8 }} more</div>
-                                    }
-                                </div>
-                            }
-                        </section>
                         <section class="cos-panel">
                             <div class="cos-panel__header">
                                 <div>
@@ -345,7 +211,10 @@
                                 </div>
                             }
                         </section>
+                    </div>
 
+                    <!-- Column 2: Wake Schedule, then panels registered by Open Apps -->
+                    <div class="cos-stack">
                         <section class="cos-panel">
                             <div class="cos-panel__header">
                                 <div>
@@ -404,213 +273,20 @@
                                 </div>
                             }
                         </section>
+                        @for (panel of OverviewPanels; track panel.Metadata.panelKey) {
+                            <ng-container *ngComponentOutlet="panel.Component; inputs: { Registration: panel.Metadata, Context: PanelContext, Provider: Provider }" />
+                        }
                     </div>
                 </div>
             }
 
             <!-- ========================================================= -->
-            <!-- TAB 2: PRIORITIES & OKRS                                  -->
+            <!-- EXTENSION TABS: panels registered by Open Apps            -->
             <!-- ========================================================= -->
-            @if (ActiveTab === 'priorities') {
-                <div class="cos-filter-bar">
-                    <div class="cos-filter-pills" role="group" aria-label="Filter priorities by health">
-                        @for (opt of HealthFilterOptions; track opt.Value) {
-                            <button mjButton
-                                    [variant]="HealthFilter === opt.Value ? 'primary' : 'outline'"
-                                    size="sm"
-                                    (click)="OnHealthFilterChange(opt.Value)">
-                                {{ opt.Label }}
-                            </button>
-                        }
-                    </div>
-                    @if (HealthFilter !== 'all' || SearchText.trim().length > 0) {
-                        <button mjButton variant="flat" size="sm" (click)="ClearFilters()">
-                            <i class="fa-solid fa-rotate-left"></i> Clear Filters
-                        </button>
-                    }
+            @if (ActiveTabPanel; as tabPanel) {
+                <div class="cos-extension-tab">
+                    <ng-container *ngComponentOutlet="tabPanel.Component; inputs: { Registration: tabPanel.Metadata, Context: PanelContext, Provider: Provider }" />
                 </div>
-
-                @if (FilteredPriorityCards.length === 0) {
-                    <mj-empty-state
-                        [Variant]="Metrics.PriorityCards.length === 0 ? 'empty' : 'no-results'"
-                        Icon="fa-solid fa-bullseye"
-                        [Title]="!HasLinkedPerson ? 'No People Record Linked to Your User' : Metrics.PriorityCards.length === 0 ? 'No Priority Objectives Tracked Yet' : 'No Priority Objectives Match Your Filter'"
-                        [Message]="!HasLinkedPerson ? 'Priorities are read from tasks you created or are assigned to. Ask an administrator to add your People record with your sign-in email, or to link it to your user account.' : Metrics.PriorityCards.length === 0 ? 'Chat with your Chief of Staff to onboard your quarterly priorities and milestone schedule.' : 'Try clearing your search or health filter.'"
-                        [ActionText]="Metrics.PriorityCards.length === 0 ? '' : 'Clear Filters'"
-                        ActionIcon="fa-solid fa-rotate-left"
-                        (Action)="ClearFilters()">
-                    </mj-empty-state>
-                } @else {
-                    <div class="cos-priority-list">
-                        @for (card of FilteredPriorityCards; track card.Task.ID) {
-                            <article class="cos-priority-card">
-                                <div class="cos-priority-card__header" (click)="TogglePriorityExpanded(card.Task.ID)">
-                                    <div class="cos-priority-card__title-group">
-                                        <button mjButton variant="flat" size="sm"
-                                                class="cos-expand-btn"
-                                                [attr.aria-expanded]="IsPriorityExpanded(card.Task.ID)"
-                                                (click)="TogglePriorityExpanded(card.Task.ID); $event.stopPropagation()">
-                                            <i class="fa-solid"
-                                               [class.fa-chevron-down]="IsPriorityExpanded(card.Task.ID)"
-                                               [class.fa-chevron-right]="!IsPriorityExpanded(card.Task.ID)"></i>
-                                        </button>
-                                        <div>
-                                            <div class="cos-priority-card__badges">
-                                                @if (card.Task.Priority) {
-                                                    <span class="cos-priority-tag {{ GetTaskPriorityClass(card.Task.Priority) }}">
-                                                        <i class="fa-solid fa-flag"></i> {{ card.Task.Priority }}
-                                                    </span>
-                                                }
-                                                <span class="cos-health-pill cos-health-pill--{{ card.EffectiveHealth.toLowerCase() }}">
-                                                    <i class="{{ GetHealthBadgeIcon(card.EffectiveHealth) }}"></i>
-                                                    {{ GetHealthBadgeLabel(card.EffectiveHealth) }}
-                                                </span>
-                                                @if (card.Task.PlanningPeriod) {
-                                                    <span class="cos-meta-badge">
-                                                        <i class="fa-regular fa-calendar-check"></i> {{ card.Task.PlanningPeriod }}
-                                                    </span>
-                                                }
-                                                @if (card.Task.CheckInCadence) {
-                                                    <span class="cos-meta-badge">
-                                                        <i class="fa-solid fa-repeat"></i> {{ card.Task.CheckInCadence }} Check-In
-                                                    </span>
-                                                }
-                                                @if (card.Task.ConfidenceScore !== null) {
-                                                    <span class="cos-meta-badge">
-                                                        <i class="fa-solid fa-gauge-high"></i> {{ card.Task.ConfidenceScore }}% Confidence
-                                                    </span>
-                                                }
-                                            </div>
-                                            <h3 class="cos-priority-card__title">{{ card.Task.Name }}</h3>
-                                            @if (card.Owner || card.Assignees.length > 0) {
-                                                <div class="cos-assignees">
-                                                    @if (card.Owner) {
-                                                        <span class="cos-assignees__label" title="The person who created this objective">
-                                                            <i class="fa-solid fa-crown"></i> Owner
-                                                        </span>
-                                                        <span class="cos-assignee-chip cos-assignee-chip--owner" [class.cos-assignee-chip--me]="card.OwnedByMe">{{ card.OwnedByMe ? 'You' : card.Owner.Name }}</span>
-                                                    }
-                                                    @if (card.Assignees.length > 0) {
-                                                        <span class="cos-assignees__label" title="Assigned to this objective">
-                                                            <i class="fa-solid fa-user-group"></i> Assigned
-                                                        </span>
-                                                        @for (who of card.Assignees; track who.PersonID) {
-                                                            <span class="cos-assignee-chip" [class.cos-assignee-chip--me]="IsCurrentPerson(who.PersonID)">{{ IsCurrentPerson(who.PersonID) ? 'You' : who.Name }}</span>
-                                                        }
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-
-                                    <div class="cos-priority-card__right">
-                                        <div class="cos-priority-card__progress-summary">
-                                            <span class="cos-priority-card__pct">{{ card.EffectivePercentComplete }}%</span>
-                                            <span class="cos-priority-card__milestone-count">
-                                                {{ card.CompletedSubtaskCount }}/{{ card.Subtasks.length }} milestones
-                                            </span>
-                                        </div>
-                                        <button mjButton variant="outline" size="sm"
-                                                (click)="OpenTaskRecord(card.Task.ID, $event)">
-                                            <i class="fa-solid fa-sliders"></i> Inspect & Edit
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="cos-priority-card__body">
-                                    @if (card.Task.Description) {
-                                        <p class="cos-priority-card__desc">{{ card.Task.Description }}</p>
-                                    }
-
-                                    <div class="cos-progress-row">
-                                        <div class="cos-progress-bar">
-                                            <div class="cos-progress-bar__fill cos-progress-bar__fill--{{ card.EffectiveHealth.toLowerCase() }}"
-                                                 [style.width.%]="card.EffectivePercentComplete"></div>
-                                        </div>
-                                        @if (card.MetricProgressLabel) {
-                                            <span class="cos-metric-target-label">
-                                                <i class="fa-solid fa-chart-simple"></i> {{ card.MetricProgressLabel }}
-                                            </span>
-                                        }
-                                    </div>
-
-                                    <div class="cos-priority-card__dates">
-                                        <span>
-                                            <strong>Status:</strong> {{ card.Task.Status }}
-                                        </span>
-                                        @if (card.Task.DueAt) {
-                                            <span [class.cos-overdue-text]="card.IsOverdue">
-                                                <i class="fa-regular fa-calendar"></i>
-                                                <strong>Target Due:</strong> {{ card.Task.DueAt | date:'mediumDate' }}
-                                                @if (card.IsOverdue) {
-                                                    <strong>(Overdue)</strong>
-                                                }
-                                            </span>
-                                        }
-                                        @if (card.Task.NextCheckInDueAt) {
-                                            <span>
-                                                <i class="fa-regular fa-bell"></i>
-                                                <strong>Next Check-In:</strong> {{ card.Task.NextCheckInDueAt | date:'mediumDate' }}
-                                            </span>
-                                        }
-                                    </div>
-
-                                    @if (IsPriorityExpanded(card.Task.ID) && card.Milestones.length > 0) {
-                                        <div class="cos-subtasks">
-                                            <div class="cos-subtasks__header">
-                                                <span>Milestones & Workstreams ({{ card.Milestones.length }})</span>
-                                                @if (!card.IsOwner && card.Milestones.length < card.Subtasks.length) {
-                                                    <span class="cos-subtasks__scope-note" title="You see the milestones assigned to you; the objective's owner sees all of them">
-                                                        Yours: {{ card.Milestones.length }} of {{ card.Subtasks.length }}
-                                                    </span>
-                                                }
-                                            </div>
-                                            <div class="cos-subtasks__list">
-                                                @for (row of card.Milestones; track row.Task.ID) {
-                                                    @let sub = row.Task;
-                                                    <div class="cos-subtask-row" [class.cos-subtask-row--mine]="row.AssignedToMe" (click)="OpenTaskRecord(sub.ID, $event)">
-                                                        <div class="cos-subtask-row__left">
-                                                            <i class="fa-solid"
-                                                               [class.fa-circle-check]="sub.Status === 'Completed' || sub.Status === 'Done'"
-                                                               [class.fa-circle-half-stroke]="sub.Status === 'In Progress'"
-                                                               [class.fa-regular]="sub.Status !== 'Completed' && sub.Status !== 'Done' && sub.Status !== 'In Progress'"
-                                                               [class.fa-circle]="sub.Status !== 'Completed' && sub.Status !== 'Done' && sub.Status !== 'In Progress'"></i>
-                                                            <div>
-                                                                <div class="cos-subtask-row__name">{{ sub.Name }}</div>
-                                                                @if (sub.Description) {
-                                                                    <div class="cos-subtask-row__desc">{{ sub.Description }}</div>
-                                                                }
-                                                            </div>
-                                                        </div>
-                                                        <div class="cos-subtask-row__right">
-                                                            @if (row.Holders.length > 0) {
-                                                                <span class="cos-assignees cos-assignees--inline"
-                                                                      [title]="row.IsImplicitlyHeld ? 'Not assigned to anyone, so it stays with the person who created it' : 'Assigned to'">
-                                                                    @for (who of row.Holders; track who.PersonID) {
-                                                                        <span class="cos-assignee-chip"
-                                                                              [class.cos-assignee-chip--me]="IsCurrentPerson(who.PersonID)"
-                                                                              [class.cos-assignee-chip--implicit]="row.IsImplicitlyHeld">{{ IsCurrentPerson(who.PersonID) ? 'You' : who.Name }}</span>
-                                                                    }
-                                                                </span>
-                                                            }
-                                                            <span class="cos-meta-badge">{{ sub.Status }}</span>
-                                                            @if (sub.DueAt) {
-                                                                <span class="cos-subtask-row__due">
-                                                                    <i class="fa-regular fa-calendar"></i> {{ sub.DueAt | date:'shortDate' }}
-                                                                </span>
-                                                            }
-                                                            <i class="fa-solid fa-chevron-right cos-subtask-row__chevron"></i>
-                                                        </div>
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                            </article>
-                        }
-                    </div>
-                }
             }
 
             <!-- ========================================================= -->
@@ -1135,187 +811,4 @@
         [Request]="SelectedRequest"
         (Close)="OnRequestDialogClose($event)">
     </mj-agent-request-dialog>
-}
-
-@if (ShowTaskDrawer && SelectedTask) {
-    <div class="cos-drawer-backdrop" (click)="CloseTaskDrawer()" aria-hidden="true"></div>
-    <aside class="cos-drawer" role="dialog" aria-modal="true" [attr.aria-label]="SelectedTask.Name">
-        <header class="cos-drawer__header">
-            <div>
-                <div class="cos-drawer__category-strip">
-                    @if (SelectedTaskIsObjective) {
-                        <span class="cos-badge-objective">
-                            <i class="fa-solid fa-bullseye"></i> Priority Objective
-                        </span>
-                    } @else {
-                        <span class="cos-badge-milestone">
-                            <i class="fa-solid fa-list-check"></i> Milestone
-                        </span>
-                        @if (SelectedTaskParent) {
-                            <button type="button" class="cos-drawer__parent-link" (click)="OpenTaskRecord(SelectedTaskParent.ID)">
-                                <i class="fa-solid fa-arrow-turn-up"></i> {{ SelectedTaskParent.Name }}
-                            </button>
-                        }
-                    }
-                </div>
-                <h3 class="cos-drawer__title">{{ SelectedTask.Name }}</h3>
-            </div>
-            <div class="cos-drawer__header-actions">
-                @if (CanOpenFullTaskForm) {
-                    <button mjButton variant="outline" size="sm" (click)="OpenFullTaskForm()" title="Open in standard record form">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Full Form
-                    </button>
-                }
-                <button mjButton variant="flat" size="sm" class="cos-drawer__close-btn" (click)="CloseTaskDrawer()" aria-label="Close task drawer">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        </header>
-
-        <div class="cos-drawer__body">
-            <!-- Health & Status Ribbon -->
-            <div class="cos-drawer__ribbon">
-                @if (SelectedTask.HealthStatus) {
-                    <span class="cos-health-pill cos-health-pill--{{ SelectedTask.HealthStatus.toLowerCase() }}">
-                        <i class="{{ GetHealthBadgeIcon(SelectedTask.HealthStatus) }}"></i>
-                        {{ GetHealthBadgeLabel(SelectedTask.HealthStatus) }}
-                    </span>
-                }
-                @if (SelectedTask.PlanningPeriod) {
-                    <span class="cos-meta-badge">
-                        <i class="fa-regular fa-calendar-check"></i> {{ SelectedTask.PlanningPeriod }}
-                    </span>
-                }
-                @if (SelectedTask.CheckInCadence) {
-                    <span class="cos-meta-badge">
-                        <i class="fa-solid fa-repeat"></i> {{ SelectedTask.CheckInCadence }}
-                    </span>
-                }
-                @if (SelectedTask.Priority) {
-                    <span class="cos-meta-badge">
-                        <i class="fa-solid fa-flag"></i> Priority: {{ SelectedTask.Priority }}
-                    </span>
-                }
-            </div>
-
-            <!-- Child Milestones list when viewing an Objective -->
-            @if (SelectedTaskIsObjective && SelectedTaskSubtasks.length > 0) {
-                <div class="cos-drawer__section">
-                    <h4 class="cos-drawer__section-title">
-                        Milestones & Workstreams ({{ SelectedTaskSubtasks.length }})
-                    </h4>
-                    <div class="cos-subtasks__list">
-                        @for (sub of SelectedTaskSubtasks; track sub.ID) {
-                            <div class="cos-subtask-row" (click)="OpenTaskRecord(sub.ID)">
-                                <div class="cos-subtask-row__left">
-                                    <i class="fa-solid"
-                                       [class.fa-circle-check]="sub.Status === 'Completed' || sub.Status === 'Done'"
-                                       [class.fa-circle-half-stroke]="sub.Status === 'In Progress'"
-                                       [class.fa-regular]="sub.Status !== 'Completed' && sub.Status !== 'Done' && sub.Status !== 'In Progress'"
-                                       [class.fa-circle]="sub.Status !== 'Completed' && sub.Status !== 'Done' && sub.Status !== 'In Progress'"></i>
-                                    <div>
-                                        <div class="cos-subtask-row__name">{{ sub.Name }}</div>
-                                        @if (sub.Description) {
-                                            <div class="cos-subtask-row__desc">{{ sub.Description }}</div>
-                                        }
-                                    </div>
-                                </div>
-                                <div class="cos-subtask-row__right">
-                                    <span class="cos-meta-badge">{{ sub.Status }}</span>
-                                    @if (sub.DueAt) {
-                                        <span class="cos-subtask-row__due">
-                                            <i class="fa-regular fa-calendar"></i> {{ sub.DueAt | date:'shortDate' }}
-                                        </span>
-                                    }
-                                    <i class="fa-solid fa-chevron-right cos-subtask-row__chevron"></i>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
-
-            <!-- Quick Edit Form Fields -->
-            <div class="cos-drawer__section">
-                <h4 class="cos-drawer__section-title">Update Status & Progress</h4>
-
-                <div class="cos-form-grid">
-                    <label class="cos-form-field">
-                        <span class="cos-form-field__label">Status</span>
-                        <select class="cos-select"
-                                [value]="DraftTaskEdits.Status"
-                                (change)="OnTaskStatusChange($event)">
-                            @for (st of TaskStatusOptions; track st) {
-                                <option [value]="st" [selected]="DraftTaskEdits.Status === st">{{ st }}</option>
-                            }
-                        </select>
-                    </label>
-
-                    <label class="cos-form-field">
-                        <span class="cos-form-field__label">Health Status</span>
-                        <select class="cos-select"
-                                [value]="DraftTaskEdits.HealthStatus ?? 'none'"
-                                (change)="OnTaskHealthChange($event)">
-                            <option value="none">None</option>
-                            <option value="OnTrack" [selected]="DraftTaskEdits.HealthStatus === 'OnTrack'">On Track</option>
-                            <option value="AtRisk" [selected]="DraftTaskEdits.HealthStatus === 'AtRisk'">At Risk</option>
-                            <option value="OffTrack" [selected]="DraftTaskEdits.HealthStatus === 'OffTrack'">Off Track</option>
-                            <option value="Completed" [selected]="DraftTaskEdits.HealthStatus === 'Completed'">Completed</option>
-                            <option value="Paused" [selected]="DraftTaskEdits.HealthStatus === 'Paused'">Paused</option>
-                        </select>
-                    </label>
-
-                    <label class="cos-form-field">
-                        <span class="cos-form-field__label">Percent Complete (%)</span>
-                        <input class="cos-input"
-                               type="number"
-                               min="0"
-                               max="100"
-                               [value]="DraftTaskEdits.PercentComplete ?? 0"
-                               (input)="OnTaskPercentChange($event)" />
-                    </label>
-
-                    <label class="cos-form-field">
-                        <span class="cos-form-field__label">Confidence Score (%)</span>
-                        <input class="cos-input"
-                               type="number"
-                               min="0"
-                               max="100"
-                               placeholder="0–100"
-                               [value]="DraftTaskEdits.ConfidenceScore ?? ''"
-                               (input)="OnTaskConfidenceChange($event)" />
-                    </label>
-
-                    <label class="cos-form-field cos-form-field--full">
-                        <span class="cos-form-field__label">Due Date</span>
-                        <input class="cos-input"
-                               type="date"
-                               [value]="DraftTaskEdits.DueAt"
-                               (change)="OnTaskDueAtChange($event)" />
-                    </label>
-
-                    <label class="cos-form-field cos-form-field--full">
-                        <span class="cos-form-field__label">Description & Notes</span>
-                        <textarea class="cos-textarea"
-                                  rows="4"
-                                  placeholder="Task description, objectives, milestones, or current blockers..."
-                                  [value]="DraftTaskEdits.Description"
-                                  (input)="OnTaskDescriptionChange($event)"></textarea>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <footer class="cos-drawer__footer">
-            <button mjButton variant="flat" size="sm" (click)="CloseTaskDrawer()">
-                Cancel
-            </button>
-            <button mjButton variant="primary" size="sm"
-                    [disabled]="!TaskDirty || IsSavingTask"
-                    (click)="SaveTaskEdits()">
-                <i class="fa-solid fa-floppy-disk"></i>
-                {{ IsSavingTask ? 'Saving...' : 'Save Changes' }}
-            </button>
-        </footer>
-    </aside>
 }

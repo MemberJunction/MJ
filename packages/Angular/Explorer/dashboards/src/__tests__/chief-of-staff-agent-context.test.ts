@@ -1,25 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import type { EntityInfo } from '@memberjunction/core';
 import {
     CHIEF_OF_STAFF_AGENT_NAME,
-    BizAppsTaskRecordLike,
+    CORE_CHIEF_OF_STAFF_TABS,
     BuildChiefOfStaffAgentContext,
-    BuildTaskRecordKey,
     BuildCockpitScopeFilters,
-    BuildPersonScopedTaskFilter,
-    BuildOwnedRootTasksFilter,
     CalculateChiefOfStaffMetrics,
-    ComputeTaskMetricPercent,
-    GetTaskPriorityClass,
     IsApprovalRequest,
     PolicyGovernanceSummary,
     RequestSummaryItem,
-    ResolvePersonTaskScope,
-    TaskScopeQueryRunner,
-    ResolvePriorityObjectiveByIDOrName,
     RoutineSummaryItem,
     ValidateChiefOfStaffTabParam,
-    ValidateHealthFilterParam,
     ValidateSearchQueryParam,
     IsSpentOneShotRoutine,
     RoutineDisplayStatus,
@@ -28,32 +18,29 @@ import {
     FormatEmailDraftForClipboard,
 } from '../ChiefOfStaff/chief-of-staff-agent-context';
 import { AGENT_CONTEXT_NAME_LIST_CAP } from '../shared/agent-tool-validation';
-import { BuildScopeRootTasksFilter, BuildTodoItems, IsTodoTask, LoadTaskAssignees, type TaskAssignee } from '../ChiefOfStaff/chief-of-staff-agent-context';
-import { UUIDMap } from '@memberjunction/global';
 
-function makeBaseTask(overrides: Partial<BizAppsTaskRecordLike>): BizAppsTaskRecordLike {
+function makeRoutine(overrides: Partial<RoutineSummaryItem>): RoutineSummaryItem {
     return {
-        ID: '00000000-0000-0000-0000-000000000001',
-        ParentID: null,
-        Name: 'Launch Revised Platform — Q4 (12 Weeks)',
-        Description: '12-week platform launch plan',
-        Status: 'In Progress',
-        Priority: 'High',
-        IsPriority: true,
-        HealthStatus: 'OnTrack',
-        ConfidenceScore: 85,
-        PercentComplete: null,
-        CheckInCadence: 'Weekly',
-        PlanningPeriod: '2026-Q4',
-        BaselineValue: 0,
-        TargetValue: 12,
-        CurrentValue: 3,
-        UnitOfMeasure: 'weeks',
-        MetricDirection: 'Up',
-        DueAt: '2027-01-17T00:00:00.000Z',
-        LastCheckInAt: null,
-        NextCheckInDueAt: '2026-10-31T00:00:00.000Z',
-        Type: 'Priority Objective',
+        ID: '22222222-0000-0000-0000-000000000001',
+        Name: 'Morning Executive Briefing',
+        Status: 'Active',
+        ScheduleMode: 'Recurring',
+        CronExpression: '0 8 * * 1-5',
+        NextRunAt: '2026-10-25T13:00:00.000Z',
+        LastRunAt: null,
+        LastRunStatus: null,
+        ...overrides,
+    };
+}
+
+function makeRequest(overrides: Partial<RequestSummaryItem>): RequestSummaryItem {
+    return {
+        ID: '33333333-0000-0000-0000-000000000001',
+        Request: 'Approve external partner announcement draft',
+        Status: 'Requested',
+        Priority: 80,
+        RequestedAt: '2026-10-24T12:00:00.000Z',
+        ExpiresAt: null,
         ...overrides,
     };
 }
@@ -79,99 +66,36 @@ function makeDefaultGovernance(): PolicyGovernanceSummary {
 }
 
 describe('CalculateChiefOfStaffMetrics', () => {
-    it('groups child milestones under priority objectives and computes progress and health', () => {
-        const parent = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000001',
-            Name: 'Launch Revised Platform — Q4 (12 Weeks)',
-            HealthStatus: 'OnTrack',
-            ConfidenceScore: 80,
-        });
-        const milestone1 = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000002',
-            ParentID: parent.ID,
-            Name: 'Week 3: Technical Design Complete',
-            IsPriority: false,
-            Status: 'Completed',
-            PercentComplete: 100,
-        });
-        const milestone2 = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000003',
-            ParentID: parent.ID,
-            Name: 'Week 4: UI/UX Approved',
-            IsPriority: false,
-            Status: 'In Progress',
-            PercentComplete: 25,
-        });
-
-        const routines: RoutineSummaryItem[] = [
-            {
-                ID: '22222222-0000-0000-0000-000000000001',
-                Name: 'Morning Executive Briefing',
-                Status: 'Active',
-                ScheduleMode: 'Recurring',
-                CronExpression: '0 8 * * 1-5',
-                NextRunAt: '2026-10-25T13:00:00.000Z',
-                LastRunAt: null,
-                LastRunStatus: null,
-            },
-        ];
-
-        const requests: RequestSummaryItem[] = [
-            {
-                ID: '33333333-0000-0000-0000-000000000001',
-                Request: 'Approve external partner announcement draft',
-                Status: 'Requested',
-                Priority: 80,
-                RequestedAt: '2026-10-24T12:00:00.000Z',
-                ExpiresAt: null,
-            },
-        ];
-
-        const now = new Date('2026-10-24T15:00:00.000Z');
+    it('counts pending approvals, high-priority ones, active wakes and the next wake', () => {
         const metrics = CalculateChiefOfStaffMetrics(
-            [parent, milestone1, milestone2],
-            routines,
-            requests,
-            now,
+            [
+                makeRoutine({ ID: 'R1', NextRunAt: '2026-10-26T13:00:00.000Z' }),
+                makeRoutine({ ID: 'R2', NextRunAt: '2026-10-25T13:00:00.000Z' }),
+                makeRoutine({ ID: 'R3', Status: 'Paused', NextRunAt: '2026-10-24T13:00:00.000Z' }),
+            ],
+            [
+                makeRequest({ ID: 'Q1', Priority: 80 }),
+                makeRequest({ ID: 'Q2', Priority: 20 }),
+                makeRequest({ ID: 'Q3', Status: 'Approved' }),
+            ],
         );
-
-        expect(metrics.PriorityObjectiveCount).toBe(1);
-        expect(metrics.SubtaskCount).toBe(2);
-        expect(metrics.OnTrackCount).toBe(1);
-        // Metric drives progress when a target exists: (3 - 0) / (12 - 0) = 25%, not the milestone ratio.
-        expect(metrics.AveragePriorityProgress).toBe(25);
-        expect(metrics.PriorityCards[0].EffectivePercentComplete).toBe(25);
-        expect(metrics.AverageConfidenceScore).toBe(80);
-        expect(metrics.PendingApprovalCount).toBe(1);
+        expect(metrics.PendingApprovalCount).toBe(2);
         expect(metrics.HighPriorityPendingCount).toBe(1);
-        expect(metrics.ActiveWakeRoutineCount).toBe(1);
+        expect(metrics.ActiveWakeRoutineCount).toBe(2);
+        // A paused routine's earlier time does not count as the next wake.
         expect(metrics.NextScheduledWakeAt?.toISOString()).toBe('2026-10-25T13:00:00.000Z');
-        expect(metrics.PriorityCards[0].CompletedSubtaskCount).toBe(1);
-        expect(metrics.PriorityCards[0].MetricProgressLabel).toBe('3 weeks / 12 weeks');
     });
 
     it('excludes conversational Information requests from PendingApprovalCount while keeping Approval requests', () => {
         const requests: RequestSummaryItem[] = [
-            {
-                ID: '33333333-0000-0000-0000-000000000001',
-                Request: 'Approve external partner announcement draft',
-                Status: 'Requested',
-                Priority: 80,
-                RequestedAt: '2026-10-24T12:00:00.000Z',
-                ExpiresAt: null,
-                RequestType: 'Approval',
-                RequestTypeID: '44444444-0000-0000-0000-000000000001',
-            },
-            {
+            makeRequest({ RequestType: 'Approval', RequestTypeID: '44444444-0000-0000-0000-000000000001' }),
+            makeRequest({
                 ID: '33333333-0000-0000-0000-000000000002',
                 Request: 'Want to tell me 2-3 things you are focused on this quarter?',
-                Status: 'Requested',
                 Priority: 50,
-                RequestedAt: '2026-10-24T12:05:00.000Z',
-                ExpiresAt: null,
                 RequestType: 'Information',
                 RequestTypeID: '44444444-0000-0000-0000-000000000002',
-            },
+            }),
         ];
 
         expect(IsApprovalRequest(requests[0])).toBe(true);
@@ -180,344 +104,80 @@ describe('CalculateChiefOfStaffMetrics', () => {
         expect(IsApprovalRequest({ RequestType: 'information', RequestTypeID: null })).toBe(false);
         expect(IsApprovalRequest({ RequestType: null, RequestTypeID: '44444444-0000-0000-0000-000000000002' })).toBe(true);
 
-        const metrics = CalculateChiefOfStaffMetrics([], [], requests);
+        const metrics = CalculateChiefOfStaffMetrics([], requests);
         expect(metrics.PendingApprovalCount).toBe(1);
         expect(metrics.HighPriorityPendingCount).toBe(1);
     });
 
-    it('recognizes Priority Objectives via TaskType/Type or child subtasks even when IsPriority column is absent', () => {
-        const parent = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000010',
-            Name: 'Launch Revised Platform — Q4 (12 Weeks)',
-            IsPriority: null,
-            Type: null,
-            TaskType: 'Priority Objective',
-            HealthStatus: 'OnTrack',
-        });
-        const step1 = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000011',
-            ParentID: parent.ID,
-            Name: 'Step 1: Finalize Technical Design',
-            IsPriority: null,
-            Type: null,
-            TaskType: 'General',
-            HealthStatus: null,
-            Status: 'Open',
-            PercentComplete: 0,
-        });
-
-        const metrics = CalculateChiefOfStaffMetrics([parent, step1], [], []);
-        expect(metrics.PriorityObjectiveCount).toBe(1);
-        expect(metrics.SubtaskCount).toBe(1);
-        expect(metrics.PriorityCards[0].Task.ID).toBe(parent.ID);
-        expect(metrics.PriorityCards[0].Subtasks.length).toBe(1);
+    it('has no next wake when nothing active is scheduled', () => {
+        const metrics = CalculateChiefOfStaffMetrics([makeRoutine({ NextRunAt: null })], []);
+        expect(metrics.ActiveWakeRoutineCount).toBe(1);
+        expect(metrics.NextScheduledWakeAt).toBeNull();
     });
 });
 
 describe('BuildChiefOfStaffAgentContext', () => {
-    it('publishes bounded names, counts, and governance summary without leaking raw request text', () => {
-        const tasks: BizAppsTaskRecordLike[] = Array.from(
-            { length: AGENT_CONTEXT_NAME_LIST_CAP + 4 },
-            (_, idx) =>
-                makeBaseTask({
-                    ID: `00000000-0000-0000-0000-${(idx + 1).toString().padStart(12, '0')}`,
-                    Name: `Priority Objective ${idx + 1}`,
-                }),
-        );
-        const metrics = CalculateChiefOfStaffMetrics(tasks, [], []);
+    const baseInput = () => ({
+        ActiveTab: 'governance',
+        SearchText: 'Briefing',
+        Metrics: CalculateChiefOfStaffMetrics([], []),
+        Governance: makeDefaultGovernance(),
+        Routines: [] as RoutineSummaryItem[],
+        PendingRequests: [] as RequestSummaryItem[],
+    });
 
+    it('publishes bounded routine names, counts and the governance summary without leaking raw request text', () => {
+        const routines = Array.from({ length: AGENT_CONTEXT_NAME_LIST_CAP + 4 }, (_, idx) =>
+            makeRoutine({ ID: `R${idx}`, Name: `Wake ${idx + 1}` }),
+        );
+        const requests = [makeRequest({ Request: 'Sensitive private email draft body', Priority: 90 })];
         const ctx = BuildChiefOfStaffAgentContext({
-            ActiveTab: 'priorities',
-            SearchText: 'Platform',
-            HealthFilter: 'OnTrack',
-            Metrics: metrics,
-            Governance: makeDefaultGovernance(),
-            Routines: [],
-            PendingRequests: [
-                {
-                    ID: '33333333-0000-0000-0000-000000000001',
-                    Request: 'Sensitive private email draft body',
-                    Status: 'Requested',
-                    Priority: 90,
-                    RequestedAt: '2026-10-24T12:00:00.000Z',
-                    ExpiresAt: null,
-                },
-            ],
+            ...baseInput(),
+            Metrics: CalculateChiefOfStaffMetrics(routines, requests),
+            Routines: routines,
+            PendingRequests: requests,
         });
 
         expect(ctx['Surface']).toBe('ChiefOfStaffDashboard');
-        expect(ctx['ActiveTab']).toBe('priorities');
-        expect(ctx['HealthFilter']).toBe('OnTrack');
-        expect((ctx['VisiblePriorityObjectiveNames'] as string[]).length).toBe(
-            AGENT_CONTEXT_NAME_LIST_CAP,
-        );
-        expect(ctx['VisiblePriorityObjectiveNamesTruncated']).toBe(true);
-        expect(ctx['VisiblePriorityObjectiveNamesTotal']).toBe(AGENT_CONTEXT_NAME_LIST_CAP + 4);
+        expect(ctx['ActiveTab']).toBe('governance');
+        expect(ctx['PendingApprovalCount']).toBe(1);
+        expect(ctx['ActiveWakeRoutineCount']).toBe(AGENT_CONTEXT_NAME_LIST_CAP + 4);
+        expect((ctx['VisibleWakeRoutineNames'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
+        expect((ctx['GovernanceSummary'] as Record<string, unknown>)['EmailChannelMode']).toBe('DraftOnly');
         expect(JSON.stringify(ctx)).not.toContain('Sensitive private email draft body');
     });
+
+    it('carries no BizApps fields of its own', () => {
+        const ctx = BuildChiefOfStaffAgentContext(baseInput());
+        expect(Object.keys(ctx).some((k) => /Priority(Objective|Progress)|Todo|HealthFilter/.test(k))).toBe(false);
+    });
+
+    it('merges extension panel fields, and a core field always wins a name clash', () => {
+        const ctx = BuildChiefOfStaffAgentContext({
+            ...baseInput(),
+            ExtensionContext: { PriorityObjectiveCount: 3, ActiveTab: 'spoofed' },
+        });
+        expect(ctx['PriorityObjectiveCount']).toBe(3);
+        expect(ctx['ActiveTab']).toBe('governance');
+    });
 });
 
-describe('Validation & Resolution Helpers', () => {
-    it('validates tab, health filter, and search query parameters tolerantly', () => {
-        expect(ValidateChiefOfStaffTabParam('governance')).toEqual({
-            ok: true,
-            value: 'governance',
-        });
-        expect(ValidateChiefOfStaffTabParam('invalid').ok).toBe(false);
+describe('Validation helpers', () => {
+    it('accepts the core tabs by default and rejects anything else', () => {
+        for (const tab of CORE_CHIEF_OF_STAFF_TABS) {
+            expect(ValidateChiefOfStaffTabParam(tab)).toEqual({ ok: true, value: tab });
+        }
+        expect(ValidateChiefOfStaffTabParam('priorities').ok).toBe(false);
+    });
 
-        expect(ValidateHealthFilterParam('AtRisk')).toEqual({
-            ok: true,
-            value: 'AtRisk',
-        });
-        expect(ValidateHealthFilterParam('unknown').ok).toBe(false);
+    it('accepts an extension tab when the caller passes it in the valid set', () => {
+        const valid = [...CORE_CHIEF_OF_STAFF_TABS, 'priorities'];
+        expect(ValidateChiefOfStaffTabParam('priorities', valid)).toEqual({ ok: true, value: 'priorities' });
+    });
 
+    it('validates the search query parameter', () => {
         expect(ValidateSearchQueryParam('Q4').ok).toBe(true);
         expect(ValidateSearchQueryParam(123).ok).toBe(false);
-    });
-
-    it('resolves priority objectives by ID, exact name, or unambiguous partial name', () => {
-        const metrics = CalculateChiefOfStaffMetrics(
-            [
-                makeBaseTask({
-                    ID: '11111111-0000-0000-0000-000000000001',
-                    Name: 'Launch Revised Platform — Q4',
-                }),
-                makeBaseTask({
-                    ID: '11111111-0000-0000-0000-000000000002',
-                    Name: 'Expand Enterprise Partner Network',
-                }),
-            ],
-            [],
-            [],
-        );
-
-        const byId = ResolvePriorityObjectiveByIDOrName(
-            metrics.PriorityCards,
-            '11111111-0000-0000-0000-000000000001',
-        );
-        expect(byId.ok).toBe(true);
-
-        const byPartial = ResolvePriorityObjectiveByIDOrName(metrics.PriorityCards, 'partner');
-        expect(byPartial.ok).toBe(true);
-        if (byPartial.ok) {
-            expect(byPartial.value.Task.Name).toBe('Expand Enterprise Partner Network');
-        }
-
-        const miss = ResolvePriorityObjectiveByIDOrName(metrics.PriorityCards, 'nonexistent');
-        expect(miss.ok).toBe(false);
-    });
-});
-
-describe('ComputeTaskMetricPercent', () => {
-    it('returns progress toward an Up target measured from the baseline', () => {
-        const task = makeBaseTask({ BaselineValue: 0, TargetValue: 12, CurrentValue: 3, MetricDirection: 'Up' });
-        expect(ComputeTaskMetricPercent(task)).toBe(25);
-    });
-
-    it('returns progress toward a Down target (reduce from baseline)', () => {
-        const task = makeBaseTask({ BaselineValue: 100, TargetValue: 50, CurrentValue: 75, MetricDirection: 'Down' });
-        expect(ComputeTaskMetricPercent(task)).toBe(50);
-    });
-
-    it('returns null when the task has no target or the target equals the baseline', () => {
-        expect(ComputeTaskMetricPercent(makeBaseTask({ TargetValue: null, CurrentValue: 3 }))).toBeNull();
-        expect(ComputeTaskMetricPercent(makeBaseTask({ BaselineValue: 12, TargetValue: 12, CurrentValue: 3 }))).toBeNull();
-    });
-
-    it('clamps overshoot and regression to the 0-100 range', () => {
-        expect(ComputeTaskMetricPercent(makeBaseTask({ BaselineValue: 0, TargetValue: 10, CurrentValue: 14 }))).toBe(100);
-        expect(ComputeTaskMetricPercent(makeBaseTask({ BaselineValue: 0, TargetValue: 10, CurrentValue: -2 }))).toBe(0);
-    });
-});
-
-describe('CalculateChiefOfStaffMetrics progress sources and scoping', () => {
-    it('falls back to milestone completion when the objective has no metric target', () => {
-        const parent = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000020',
-            TargetValue: null,
-            CurrentValue: null,
-            BaselineValue: null,
-        });
-        const done = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000021',
-            ParentID: parent.ID,
-            Status: 'Completed',
-            PercentComplete: 100,
-            TargetValue: null,
-            CurrentValue: null,
-        });
-        const open = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000022',
-            ParentID: parent.ID,
-            Status: 'Open',
-            PercentComplete: 0,
-            TargetValue: null,
-            CurrentValue: null,
-        });
-        const metrics = CalculateChiefOfStaffMetrics([parent, done, open], [], []);
-        expect(metrics.PriorityCards[0].EffectivePercentComplete).toBe(50);
-    });
-
-    it('shows no cards when no root task qualifies as a priority objective', () => {
-        const plainRoot = makeBaseTask({
-            ID: '11111111-0000-0000-0000-000000000030',
-            Name: 'Renew parking pass',
-            IsPriority: null,
-            Type: 'General',
-            TaskType: null,
-            HealthStatus: null,
-            PlanningPeriod: null,
-        });
-        const metrics = CalculateChiefOfStaffMetrics([plainRoot], [], []);
-        expect(metrics.PriorityObjectiveCount).toBe(0);
-        expect(metrics.PriorityCards).toEqual([]);
-    });
-});
-
-describe('BuildPersonScopedTaskFilter', () => {
-    it('matches tasks the person created or is assigned to', () => {
-        const filter = BuildPersonScopedTaskFilter('AAAAAAAA-0000-0000-0000-000000000001', [
-            'BBBBBBBB-0000-0000-0000-000000000001',
-            'BBBBBBBB-0000-0000-0000-000000000002',
-        ]);
-        expect(filter).toBe(
-            "CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001' OR ID IN ('BBBBBBBB-0000-0000-0000-000000000001', 'BBBBBBBB-0000-0000-0000-000000000002')",
-        );
-    });
-
-    it('omits the assignment clause when the person has no assignments', () => {
-        expect(BuildPersonScopedTaskFilter('AAAAAAAA-0000-0000-0000-000000000001', [])).toBe(
-            "CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001'",
-        );
-    });
-
-    it('escapes single quotes in identifiers', () => {
-        expect(BuildPersonScopedTaskFilter("x'y", ["a'b"], ["r'c"])).toBe(
-            "CreatedByPersonID = 'x''y' OR ID IN ('a''b') OR RootParentID IN ('r''c')",
-        );
-    });
-
-    it('includes every task under a root objective the person owns, whoever created the children', () => {
-        const filter = BuildPersonScopedTaskFilter('AAAAAAAA-0000-0000-0000-000000000001', [], ['RRRRRRRR-0000-0000-0000-000000000001']);
-        expect(filter).toBe(
-            "CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001' OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000001')",
-        );
-    });
-});
-
-describe('BuildOwnedRootTasksFilter', () => {
-    it('selects only root tasks the person created or is assigned to', () => {
-        expect(BuildOwnedRootTasksFilter('AAAAAAAA-0000-0000-0000-000000000001', ['BBBBBBBB-0000-0000-0000-000000000001'])).toBe(
-            "ParentID IS NULL AND (CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001' OR ID IN ('BBBBBBBB-0000-0000-0000-000000000001'))",
-        );
-    });
-});
-
-describe('GetTaskPriorityClass', () => {
-    it('maps the Tasks Priority value list onto the cockpit badge classes', () => {
-        expect(GetTaskPriorityClass('Critical')).toBe('priority-critical');
-        expect(GetTaskPriorityClass('High')).toBe('priority-high');
-        expect(GetTaskPriorityClass('Medium')).toBe('priority-normal');
-        expect(GetTaskPriorityClass('Low')).toBe('priority-low');
-        expect(GetTaskPriorityClass(null)).toBe('priority-normal');
-    });
-});
-
-describe('ResolvePersonTaskScope', () => {
-    const PEOPLE_ENTITY_ID = 'EEEEEEEE-0000-0000-0000-000000000001';
-    function makeRunner(responses: Record<string, Array<Record<string, string>>>): TaskScopeQueryRunner & { Calls: string[] } {
-        const calls: string[] = [];
-        return {
-            Calls: calls,
-            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string }) => {
-                calls.push(`${params.EntityName} :: ${params.ExtraFilter ?? ''}`);
-                return { Success: true, Results: (responses[params.EntityName] ?? []) as T[] };
-            },
-        };
-    }
-
-    it('resolves the linked person and builds a filter over created, assigned and owned-tree tasks', async () => {
-        const runner = makeRunner({
-            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
-            'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'TTTTTTTT-0000-0000-0000-000000000001' }],
-            'MJ_BizApps_Tasks: Tasks': [{ ID: 'RRRRRRRR-0000-0000-0000-000000000001' }],
-        });
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
-        expect(scope.HasLinkedPerson).toBe(true);
-        if (scope.HasLinkedPerson) {
-            expect(scope.PersonID).toBe('PPPPPPPP-0000-0000-0000-000000000001');
-            expect(scope.Filter).toBe(
-                "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001') OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000001')",
-            );
-        }
-        // Scope roots are looked up on the Tasks entity: root objectives the person created or is assigned to, plus the
-        // root above every milestone the person is assigned to, so children created by other people load with the objective.
-        expect(runner.Calls[2]).toBe(
-            "MJ_BizApps_Tasks: Tasks :: (ParentID IS NULL AND (CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001'))) OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001')",
-        );
-        expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
-        // Task Assignments has no PersonID column: the assignee is the polymorphic (AssigneeEntityID, AssigneeRecordID) pair.
-        expect(runner.Calls[1]).toBe(
-            `MJ_BizApps_Tasks: Task Assignments :: AssigneeEntityID = '${PEOPLE_ENTITY_ID}' AND AssigneeRecordID = 'PPPPPPPP-0000-0000-0000-000000000001'`,
-        );
-    });
-
-    it('reports the match source as LinkedUserID when the person is linked', async () => {
-        const runner = makeRunner({
-            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
-        });
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID, 'Paul@Example.com');
-        expect(scope.HasLinkedPerson && scope.MatchedBy).toBe('LinkedUserID');
-        // A linked person is found on the first query; the email fallback is never issued.
-        expect(runner.Calls.filter((c) => c.startsWith('MJ_BizApps_Common: People')).length).toBe(1);
-    });
-
-    it('falls back to an exact, case-insensitive email match when no person is linked to the user', async () => {
-        let peopleCalls = 0;
-        const runner: TaskScopeQueryRunner & { Calls: string[] } = {
-            Calls: [],
-            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string }) => {
-                runner.Calls.push(`${params.EntityName} :: ${params.ExtraFilter ?? ''}`);
-                if (params.EntityName === 'MJ_BizApps_Common: People') {
-                    peopleCalls += 1;
-                    // First call (LinkedUserID) finds nothing; second call (Email) finds the person.
-                    return { Success: true, Results: (peopleCalls === 1 ? [] : [{ ID: 'PPPPPPPP-0000-0000-0000-000000000002' }]) as T[] };
-                }
-                return { Success: true, Results: [] as T[] };
-            },
-        };
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID, '  Paul@Example.com ');
-        expect(scope.HasLinkedPerson).toBe(true);
-        if (scope.HasLinkedPerson) {
-            expect(scope.MatchedBy).toBe('Email');
-            expect(scope.PersonID).toBe('PPPPPPPP-0000-0000-0000-000000000002');
-        }
-        expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
-        expect(runner.Calls[1]).toBe("MJ_BizApps_Common: People :: LOWER(Email) = 'paul@example.com'");
-        expect(runner.Calls[2]).toBe(
-            `MJ_BizApps_Tasks: Task Assignments :: AssigneeEntityID = '${PEOPLE_ENTITY_ID}' AND AssigneeRecordID = 'PPPPPPPP-0000-0000-0000-000000000002'`,
-        );
-    });
-
-    it('reports no linked person without querying assignments, and skips the email fallback when the user has no email', async () => {
-        const runner = makeRunner({});
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID, '  ');
-        expect(scope.HasLinkedPerson).toBe(false);
-        expect(runner.Calls.length).toBe(1);
-    });
-
-    it('throws when the people lookup fails so the caller can surface the error', async () => {
-        const runner: TaskScopeQueryRunner = {
-            RunView: async () => ({ Success: false, Results: [], ErrorMessage: 'boom' }),
-        };
-        await expect(ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID)).rejects.toThrow('boom');
-    });
-    it('escapes the person id and the entity id in the assignment filter', async () => {
-        const runner = makeRunner({
-            'MJ_BizApps_Common: People': [{ ID: "P'1" }],
-        });
-        await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', "E'1");
-        expect(runner.Calls[1]).toBe("MJ_BizApps_Tasks: Task Assignments :: AssigneeEntityID = 'E''1' AND AssigneeRecordID = 'P''1'");
     });
 });
 
@@ -554,300 +214,6 @@ describe('BuildCockpitScopeFilters', () => {
 describe('CHIEF_OF_STAFF_AGENT_NAME', () => {
     it('is the metadata name the cockpit resolves to an agent id at runtime', () => {
         expect(CHIEF_OF_STAFF_AGENT_NAME).toBe('Chief of Staff');
-    });
-});
-
-describe('BuildTaskRecordKey', () => {
-    const baseTask = {
-        ID: 'task-1',
-        ParentID: null,
-        Name: 'Q4 plan',
-        Description: null,
-        Status: 'Open',
-        Priority: null,
-        IsPriority: null,
-        HealthStatus: null,
-        ConfidenceScore: null,
-        PercentComplete: null,
-        CheckInCadence: null,
-        PlanningPeriod: null,
-        BaselineValue: null,
-        TargetValue: null,
-        CurrentValue: null,
-        UnitOfMeasure: null,
-        MetricDirection: null,
-        DueAt: null,
-        LastCheckInAt: null,
-        NextCheckInDueAt: null,
-    } satisfies BizAppsTaskRecordLike;
-
-    it('builds the key from the entity metadata rather than assuming a column named ID', () => {
-        const entityInfo = { PrimaryKeys: [{ Name: 'TaskKey' }] } as unknown as EntityInfo;
-        const task = { ...baseTask, TaskKey: 'tk-99' } as BizAppsTaskRecordLike;
-
-        const key = BuildTaskRecordKey(entityInfo, task);
-
-        expect(key.KeyValuePairs).toEqual([{ FieldName: 'TaskKey', Value: 'tk-99' }]);
-    });
-
-    it('carries every column of a composite key', () => {
-        const entityInfo = { PrimaryKeys: [{ Name: 'TenantID' }, { Name: 'ID' }] } as unknown as EntityInfo;
-        const task = { ...baseTask, TenantID: 'tenant-a' } as BizAppsTaskRecordLike;
-
-        const key = BuildTaskRecordKey(entityInfo, task);
-
-        expect(key.KeyValuePairs.map((kv) => kv.FieldName)).toEqual(['TenantID', 'ID']);
-        expect(key.KeyValuePairs.map((kv) => kv.Value)).toEqual(['tenant-a', 'task-1']);
-    });
-});
-
-describe('ResolvePersonTaskScope — a milestone the person is assigned to brings its objective along', () => {
-    const PEOPLE_ENTITY_ID = 'EEEEEEEE-0000-0000-0000-000000000001';
-    function makeRunner(responses: Record<string, Array<Record<string, string | null>>>): TaskScopeQueryRunner & { Calls: Array<{ Entity: string; Filter: string; Fields?: string[] }> } {
-        const calls: Array<{ Entity: string; Filter: string; Fields?: string[] }> = [];
-        return {
-            Calls: calls,
-            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string; Fields?: string[] }) => {
-                calls.push({ Entity: params.EntityName, Filter: params.ExtraFilter ?? '', Fields: params.Fields });
-                return { Success: true, Results: (responses[params.EntityName] ?? []) as T[] };
-            },
-        };
-    }
-
-    it('adds the root above an assigned milestone to the scope so the whole objective renders for the assignee', async () => {
-        const runner = makeRunner({
-            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000002' }],
-            'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'MMMMMMMM-0000-0000-0000-000000000001' }],
-            // The roots query returns the assigned milestone itself (not a root) carrying its RootParentID.
-            'MJ_BizApps_Tasks: Tasks': [{ ID: 'MMMMMMMM-0000-0000-0000-000000000001', RootParentID: 'RRRRRRRR-0000-0000-0000-000000000009' }],
-        });
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000002', PEOPLE_ENTITY_ID);
-        expect(scope.HasLinkedPerson).toBe(true);
-        if (scope.HasLinkedPerson) {
-            expect(scope.Filter).toBe(
-                "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000002' OR ID IN ('MMMMMMMM-0000-0000-0000-000000000001') OR RootParentID IN ('RRRRRRRR-0000-0000-0000-000000000009')",
-            );
-        }
-        expect(runner.Calls[2].Fields).toEqual(['ID', 'RootParentID']);
-    });
-
-    it('de-duplicates roots that are both owned and reached through an assigned milestone', async () => {
-        const runner = makeRunner({
-            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
-            'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'MMMMMMMM-0000-0000-0000-000000000001' }],
-            'MJ_BizApps_Tasks: Tasks': [
-                { ID: 'RRRRRRRR-0000-0000-0000-000000000001', RootParentID: 'RRRRRRRR-0000-0000-0000-000000000001' },
-                { ID: 'MMMMMMMM-0000-0000-0000-000000000001', RootParentID: 'rrrrrrrr-0000-0000-0000-000000000001' },
-            ],
-        });
-        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001', PEOPLE_ENTITY_ID);
-        if (scope.HasLinkedPerson) {
-            expect(scope.Filter.match(/RootParentID IN \(([^)]*)\)/)?.[1]).toBe("'RRRRRRRR-0000-0000-0000-000000000001'");
-        }
-    });
-});
-
-describe('BuildScopeRootTasksFilter', () => {
-    it('covers owned roots and every assigned task, so the assigned tasks\' roots can be read off RootParentID', () => {
-        expect(BuildScopeRootTasksFilter('P1', ['T1'])).toBe("(ParentID IS NULL AND (CreatedByPersonID = 'P1' OR ID IN ('T1'))) OR ID IN ('T1')");
-        expect(BuildScopeRootTasksFilter('P1', [])).toBe("ParentID IS NULL AND (CreatedByPersonID = 'P1')");
-    });
-});
-
-describe('LoadTaskAssignees', () => {
-    const PEOPLE_ENTITY_ID = 'EEEEEEEE-0000-0000-0000-000000000001';
-    function makeRunner(responses: Record<string, Array<Record<string, string | null>>>): TaskScopeQueryRunner & { Calls: Array<{ Entity: string; Filter: string }> } {
-        const calls: Array<{ Entity: string; Filter: string }> = [];
-        return {
-            Calls: calls,
-            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string }) => {
-                calls.push({ Entity: params.EntityName, Filter: params.ExtraFilter ?? '' });
-                return { Success: true, Results: (responses[params.EntityName] ?? []) as T[] };
-            },
-        };
-    }
-
-    it('maps each task to the people assigned to it, by name', async () => {
-        const runner = makeRunner({
-            'MJ_BizApps_Tasks: Task Assignments': [
-                { TaskID: 'T1', AssigneeRecordID: 'p1' },
-                { TaskID: 'T1', AssigneeRecordID: 'P2' },
-                { TaskID: 'T2', AssigneeRecordID: 'P2' },
-            ],
-            'MJ_BizApps_Common: People': [
-                { ID: 'P1', FirstName: 'Paul', LastName: 'Christmann' },
-                { ID: 'P2', FirstName: 'Jimmy', LastName: 'Smits' },
-            ],
-        });
-        const map = await LoadTaskAssignees(runner, PEOPLE_ENTITY_ID, ['T1', 'T2']);
-        expect(map.Get('t1')?.map((a) => a.Name)).toEqual(['Paul Christmann', 'Jimmy Smits']);
-        expect(map.Get('T2')?.map((a) => a.PersonID)).toEqual(['P2']);
-        expect(runner.Calls[0].Filter).toBe(`AssigneeEntityID = '${PEOPLE_ENTITY_ID}' AND TaskID IN ('T1', 'T2')`);
-        expect(runner.Calls[1].Filter).toBe("ID IN ('p1', 'P2')");
-    });
-
-    it('runs no query for an empty task list', async () => {
-        const runner = makeRunner({});
-        const map = await LoadTaskAssignees(runner, PEOPLE_ENTITY_ID, []);
-        expect(map.Get('T1')).toBeUndefined();
-        expect(runner.Calls).toEqual([]);
-    });
-});
-
-describe('CalculateChiefOfStaffMetrics — assignees on cards and milestones', () => {
-    it('attaches assignees to the objective and each milestone, and marks the ones held by the current person', () => {
-        // P2 created the objective, so they own it and see every milestone (the visibility rule has its own suite below).
-        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack', CreatedByPersonID: 'P2' });
-        const mine = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core' });
-        const theirs = makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Finalize requirements' });
-        const assignees = new UUIDMap<TaskAssignee[]>();
-        assignees.Set('r1', [{ PersonID: 'P1', Name: 'Paul Christmann' }]);
-        assignees.Set('M1', [{ PersonID: 'p2', Name: 'Jimmy Smits' }]);
-
-        const metrics = CalculateChiefOfStaffMetrics([root, mine, theirs], [], [], new Date(), { Assignees: assignees, CurrentPersonID: 'P2' });
-
-        const card = metrics.PriorityCards[0];
-        expect(card.Assignees.map((a) => a.Name)).toEqual(['Paul Christmann']);
-        expect(card.AssignedToMe).toBe(false);
-        expect(card.Milestones.map((m) => [m.Task.ID, m.Assignees.map((a) => a.Name), m.AssignedToMe])).toEqual([
-            ['M1', ['Jimmy Smits'], true],
-            ['M2', [], false],
-        ]);
-        expect(card.Subtasks.map((s) => s.ID)).toEqual(['M1', 'M2']);
-    });
-
-    it('yields empty assignee lists when no assignment data is supplied', () => {
-        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack' });
-        const child = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Step' });
-        const card = CalculateChiefOfStaffMetrics([root, child], [], []).PriorityCards[0];
-        expect(card.Assignees).toEqual([]);
-        expect(card.AssignedToMe).toBe(false);
-        expect(card.Milestones[0].Assignees).toEqual([]);
-    });
-});
-
-describe('CalculateChiefOfStaffMetrics — the objective is shared context, the milestone list is yours unless you own it', () => {
-    const root = () => makeBaseTask({ ID: 'R1', Name: 'Launch', HealthStatus: 'OnTrack', CreatedByPersonID: 'P1', PercentComplete: null });
-    const m1 = () => makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core' });
-    const m2 = () => makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Finalize requirements' });
-    const m3 = () => makeBaseTask({ ID: 'M3', ParentID: 'R1', Name: 'Deploy', Status: 'Completed' });
-    function assigneesWith(entries: Array<[string, string]>): UUIDMap<TaskAssignee[]> {
-        const map = new UUIDMap<TaskAssignee[]>();
-        for (const [task, person] of entries) {
-            map.Set(task, [...(map.Get(task) ?? []), { PersonID: person, Name: person }]);
-        }
-        return map;
-    }
-
-    it('an assignee who does not own the objective sees only the milestones they hold, while progress still counts them all', () => {
-        const metrics = CalculateChiefOfStaffMetrics([root(), m1(), m2(), m3()], [], [], new Date(), {
-            Assignees: assigneesWith([['M1', 'P2']]),
-            CurrentPersonID: 'P2',
-        });
-        const card = metrics.PriorityCards[0];
-        expect(card.IsOwner).toBe(false);
-        expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1']);
-        expect(card.Subtasks.length).toBe(3);
-        expect(card.CompletedSubtaskCount).toBe(1);
-        // Progress is the objective's own (its metric, 3 of 12), untouched by what the viewer can see.
-        expect(card.EffectivePercentComplete).toBe(25);
-    });
-
-    it('the person who created the objective owns it and sees every milestone', () => {
-        const card = CalculateChiefOfStaffMetrics([root(), m1(), m2(), m3()], [], [], new Date(), {
-            Assignees: assigneesWith([['M1', 'P2']]),
-            CurrentPersonID: 'P1',
-        }).PriorityCards[0];
-        expect(card.IsOwner).toBe(true);
-        expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1', 'M2', 'M3']);
-    });
-
-    it('a person assigned to the objective itself owns it too', () => {
-        const card = CalculateChiefOfStaffMetrics([root(), m1(), m2()], [], [], new Date(), {
-            Assignees: assigneesWith([['R1', 'P3']]),
-            CurrentPersonID: 'p3',
-        }).PriorityCards[0];
-        expect(card.IsOwner).toBe(true);
-        expect(card.Milestones.length).toBe(2);
-    });
-
-    it('with no current person, nobody is an owner and every milestone shows (the pre-scoping behaviour)', () => {
-        const card = CalculateChiefOfStaffMetrics([root(), m1(), m2()], [], []).PriorityCards[0];
-        expect(card.IsOwner).toBe(false);
-        expect(card.Milestones.length).toBe(2);
-    });
-});
-
-describe('CalculateChiefOfStaffMetrics — the objective names its owner', () => {
-    it('reads the owner off the objective\'s creator, using the view\'s denormalized name', () => {
-        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: 'P1', CreatedByPerson: 'Paul Christmann' });
-        const child = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Step' });
-        const card = CalculateChiefOfStaffMetrics([root, child], [], [], new Date(), { CurrentPersonID: 'P2' }).PriorityCards[0];
-        expect(card.Owner).toEqual({ PersonID: 'P1', Name: 'Paul Christmann' });
-        expect(card.OwnedByMe).toBe(false);
-    });
-
-    it('marks the owner as the current person when they created it, and falls back to the ID when the view carries no name', () => {
-        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: 'p1', CreatedByPerson: null });
-        const card = CalculateChiefOfStaffMetrics([root], [], [], new Date(), { CurrentPersonID: 'P1' }).PriorityCards[0];
-        expect(card.Owner).toEqual({ PersonID: 'p1', Name: 'p1' });
-        expect(card.OwnedByMe).toBe(true);
-    });
-
-    it('has no owner when the objective carries no creator', () => {
-        const root = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: null });
-        const card = CalculateChiefOfStaffMetrics([root], [], []).PriorityCards[0];
-        expect(card.Owner).toBeNull();
-        expect(card.OwnedByMe).toBe(false);
-    });
-});
-
-describe('CalculateChiefOfStaffMetrics — an unassigned milestone is held by its creator, or by the objective\'s owner', () => {
-    const root = () => makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: 'P1', CreatedByPerson: 'Paul Christmann' });
-
-    it('a milestone with assignees is held by them, explicitly', () => {
-        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: 'P1' });
-        const assignees = new UUIDMap<TaskAssignee[]>();
-        assignees.Set('M1', [{ PersonID: 'P2', Name: 'Jimmy Smits' }]);
-        const row = CalculateChiefOfStaffMetrics([root(), m], [], [], new Date(), { Assignees: assignees, CurrentPersonID: 'P1' }).PriorityCards[0].Milestones[0];
-        expect(row.Holders).toEqual([{ PersonID: 'P2', Name: 'Jimmy Smits' }]);
-        expect(row.IsImplicitlyHeld).toBe(false);
-        expect(row.HeldByMe).toBe(false);
-    });
-
-    it('a milestone with no assignment is held by the person who created it', () => {
-        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: 'p1', CreatedByPerson: 'Paul Christmann' });
-        const row = CalculateChiefOfStaffMetrics([root(), m], [], [], new Date(), { CurrentPersonID: 'P1' }).PriorityCards[0].Milestones[0];
-        expect(row.Holders).toEqual([{ PersonID: 'p1', Name: 'Paul Christmann' }]);
-        expect(row.IsImplicitlyHeld).toBe(true);
-        expect(row.HeldByMe).toBe(true);
-        // Implicit ownership is not an assignment: the row is not highlighted as assigned work.
-        expect(row.AssignedToMe).toBe(false);
-    });
-
-    it('a milestone with no assignment and no creator falls back to the objective\'s owner', () => {
-        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: null });
-        const row = CalculateChiefOfStaffMetrics([root(), m], [], [], new Date(), { CurrentPersonID: 'p1' }).PriorityCards[0].Milestones[0];
-        expect(row.Holders).toEqual([{ PersonID: 'P1', Name: 'Paul Christmann' }]);
-        expect(row.IsImplicitlyHeld).toBe(true);
-        expect(row.HeldByMe).toBe(true);
-    });
-
-    it('has no holder when neither the milestone nor the objective carries a creator', () => {
-        const orphanRoot = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: null });
-        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: null });
-        const row = CalculateChiefOfStaffMetrics([orphanRoot, m], [], []).PriorityCards[0].Milestones[0];
-        expect(row.Holders).toEqual([]);
-        expect(row.IsImplicitlyHeld).toBe(false);
-        expect(row.HeldByMe).toBe(false);
-    });
-
-    it('a non-owner sees a milestone they created under someone else\'s objective even without an assignment row', () => {
-        const mine = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'My add-on', CreatedByPersonID: 'P2' });
-        const theirs = makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Core', CreatedByPersonID: 'P1' });
-        const card = CalculateChiefOfStaffMetrics([root(), mine, theirs], [], [], new Date(), { CurrentPersonID: 'P2' }).PriorityCards[0];
-        expect(card.IsOwner).toBe(false);
-        expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1']);
     });
 });
 
@@ -930,50 +296,5 @@ describe('Email approval payload: the draft travels in the request Comments as J
     it('omits the CC header when there is nobody on copy', () => {
         const draft = ParseEmailApprovalPayload(JSON.stringify({ To: 'a@b.io', Subject: 'Hi', Body: 'x' }));
         expect(FormatEmailDraftForClipboard(draft!)).toBe('To: a@b.io\nSubject: Hi\n\nx');
-    });
-});
-
-describe('To-dos and reminders', () => {
-    const now = new Date('2026-10-28T18:00:00.000Z');
-    const todo = (over: Partial<BizAppsTaskRecordLike>) => makeBaseTask({
-        ID: 'T-' + (over.Name ?? 'x'), Type: 'General', IsPriority: false, HealthStatus: null, PlanningPeriod: null,
-        TargetValue: null, CurrentValue: null, BaselineValue: null, Status: 'Open', ...over,
-    });
-
-    it('a root task of a to-do type that is not an objective is a to-do', () => {
-        expect(IsTodoTask(todo({ Name: 'Call Mom', Type: 'General' }))).toBe(true);
-        expect(IsTodoTask(todo({ Name: 'Send notes', Type: 'Action Item' }))).toBe(true);
-        expect(IsTodoTask(todo({ Name: 'Ping vendor', Type: 'follow-up' }))).toBe(true);
-        expect(IsTodoTask(todo({ Name: 'Birthday', Type: 'Reminder' }))).toBe(true);
-    });
-
-    it('objectives, milestones, key results and typeless tasks are not to-dos', () => {
-        expect(IsTodoTask(makeBaseTask({ Name: 'Launch' }))).toBe(false);
-        expect(IsTodoTask(todo({ Name: 'Step', ParentID: 'R1' }))).toBe(false);
-        expect(IsTodoTask(todo({ Name: 'KR', Type: 'Key Result' }))).toBe(false);
-        expect(IsTodoTask(todo({ Name: 'Untyped', Type: null }))).toBe(false);
-        expect(IsTodoTask(todo({ Name: 'Objective-ish', Type: 'General', HealthStatus: 'OnTrack' }))).toBe(false);
-    });
-
-    it('lists open to-dos by due date, undated last, and flags overdue and due-today ones', () => {
-        const items = BuildTodoItems([
-            todo({ Name: 'Undated' , DueAt: null }),
-            todo({ Name: 'Tomorrow', DueAt: '2026-10-29T15:00:00.000Z' }),
-            todo({ Name: 'Yesterday', DueAt: '2026-10-27T15:00:00.000Z' }),
-            todo({ Name: 'Today', DueAt: '2026-10-28T22:00:00.000Z' }),
-            todo({ Name: 'Done', DueAt: '2026-10-26T15:00:00.000Z', Status: 'Completed' }),
-            todo({ Name: 'Dropped', DueAt: '2026-10-26T15:00:00.000Z', Status: 'Cancelled' }),
-            makeBaseTask({ Name: 'Launch' }),
-        ], now);
-        expect(items.map((i) => i.Task.Name)).toEqual(['Yesterday', 'Today', 'Tomorrow', 'Undated']);
-        expect(items.map((i) => i.IsOverdue)).toEqual([true, false, false, false]);
-        expect(items.map((i) => i.IsDueToday)).toEqual([false, true, false, false]);
-    });
-
-    it('the metrics carry the to-dos and their open count', () => {
-        const metrics = CalculateChiefOfStaffMetrics([todo({ Name: 'Call Mom' }), todo({ Name: 'Done', Status: 'Completed' }), makeBaseTask({ Name: 'Launch' })], [], [], now);
-        expect(metrics.TodoItems.map((i) => i.Task.Name)).toEqual(['Call Mom']);
-        expect(metrics.OpenTodoCount).toBe(1);
-        expect(metrics.PriorityCards.map((c) => c.Task.Name)).toEqual(['Launch']);
     });
 });

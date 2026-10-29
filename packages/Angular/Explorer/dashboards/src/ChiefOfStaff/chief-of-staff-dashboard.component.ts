@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, filter, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, RunView, RunViewParams } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, RunViewParams } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
@@ -17,27 +17,24 @@ import {
     MJUserRoutineEntity,
     ResourceData,
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, UUIDSet, UUIDMap, MJGlobal, EscapeSQLString } from '@memberjunction/global';
+import { RegisterClass, UUIDMap, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import { ActionParam } from '@memberjunction/actions-base';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
-    BizAppsTaskRecordLike,
-    BuildTaskRecordKey,
+    AgentContextRecord,
     BuildChiefOfStaffAgentContext,
     BuildCockpitScopeFilters,
     CalculateChiefOfStaffMetrics,
     CHIEF_OF_STAFF_AGENT_NAME,
-    GetTaskPriorityClass,
     ChiefOfStaffMetrics,
     ChiefOfStaffTab,
-    HealthFilter,
+    CORE_CHIEF_OF_STAFF_TABS,
     IsApprovalRequest,
     PolicyCalendarChannelModeValue,
     PolicyCoordinationModeValue,
@@ -46,13 +43,8 @@ import {
     PolicyGovernanceSummary,
     PolicyMessagingChannelModeValue,
     PolicyPhoneChannelModeValue,
-    ResolvePersonTaskScope,
-    BIZAPPS_PEOPLE_ENTITY_NAME,
-    BIZAPPS_TASKS_ENTITY_NAME,
     PolicyStatusValue,
-    PriorityObjectiveCardViewModel,
     RequestSummaryItem,
-    ResolvePriorityObjectiveByIDOrName,
     RoutineSummaryItem,
     IsSpentOneShotRoutine,
     ParseEmailApprovalPayload,
@@ -61,18 +53,16 @@ import {
     RoutineDisplayStatus,
     SortRoutinesForDisplay,
     type RoutineDisplayStatusValue,
-    TaskHealthStatus,
-    VALID_CHIEF_OF_STAFF_TABS,
-    VALID_HEALTH_FILTERS,
     ValidateChiefOfStaffTabParam,
-    ValidateHealthFilterParam,
     ValidateSearchQueryParam,
-    LoadTaskAssignees,
-    TaskAssigneeMap,
 } from './chief-of-staff-agent-context';
+import {
+    ChiefOfStaffPanelContext,
+    ChiefOfStaffPanelRegistration,
+    CollectChiefOfStaffPanels,
+} from './chief-of-staff-panel';
 import { IsCockpitEntityChange } from './chief-of-staff-live-refresh';
 
-/** OpenApp entity the cockpit reads and edits for priorities and OKRs. Not a core entity: never assume its key is `ID`. */
 
 export interface GovernancePolicyDraft {
     DisplayNameOverride: string;
@@ -90,15 +80,6 @@ export interface GovernancePolicyDraft {
     RequireApprovalForDestructiveActions: boolean;
     AutoApproveAmountThreshold: number | null;
     InstructionsOverride: string;
-}
-
-export interface TaskQuickEditDraft {
-    Status: string;
-    HealthStatus: TaskHealthStatus | null;
-    PercentComplete: number | null;
-    ConfidenceScore: number | null;
-    DueAt: string;
-    Description: string;
 }
 
 @RegisterClass(BaseResourceComponent, 'ChiefOfStaffDashboard')
@@ -123,8 +104,6 @@ export class ChiefOfStaffDashboardComponent
     public IsSavingPolicy = false;
     public BusyRequestID: string | null = null;
     public BusyRoutineID: string | null = null;
-    /** The to-do being marked done, while its update is in flight. */
-    public BusyTodoID: string | null = null;
 
     // ── Briefing reader: a wake routine's conversation, read inside the cockpit ──────────
     /** The routine whose briefings the reader shows; null while the reader is closed. */
@@ -137,46 +116,18 @@ export class ChiefOfStaffDashboardComponent
 
     public ActiveTab: ChiefOfStaffTab = 'overview';
     public SearchText = '';
-    public HealthFilter: HealthFilter = 'all';
 
     public PolicyEntity: MJAIAgentUserPolicyEntity | null = null;
     public DraftPolicy: GovernancePolicyDraft = this.createDefaultDraftPolicy();
     public PolicyDirty = false;
 
-    public Tasks: BizAppsTaskRecordLike[] = [];
-    /** Who is assigned to each loaded task, for the objective cards and milestone rows. */
-    private taskAssignees: TaskAssigneeMap = new UUIDMap();
-    /** The signed-in user's People record, when one resolved; marks the milestones they hold. */
-    private currentPersonID: string | null = null;
-    /** False when the signed-in user has no `MJ_BizApps_Common: People` record linked via `LinkedUserID`; the Priorities tab then shows guidance instead of tasks. */
-    public HasLinkedPerson = true;
     public Routines: MJUserRoutineEntity[] = [];
     public Requests: MJAIAgentRequestEntity[] = [];
-    public Metrics: ChiefOfStaffMetrics = CalculateChiefOfStaffMetrics([], [], []);
+    public Metrics: ChiefOfStaffMetrics = CalculateChiefOfStaffMetrics([], []);
 
-    public ExpandedPriorityIDs = new UUIDSet();
     public SelectedRequest: MJAIAgentRequestEntity | null = null;
     public ShowRequestDialog = false;
 
-    public SelectedTask: BizAppsTaskRecordLike | null = null;
-    public ShowTaskDrawer = false;
-    public IsSavingTask = false;
-    public TaskDirty = false;
-    public DraftTaskEdits: TaskQuickEditDraft = {
-        Status: 'Open',
-        HealthStatus: 'OnTrack',
-        PercentComplete: 0,
-        ConfidenceScore: null,
-        DueAt: '',
-        Description: '',
-    };
-    public readonly TaskStatusOptions: readonly string[] = [
-        'Open',
-        'In Progress',
-        'Waiting on dependency',
-        'Blocked',
-        'Completed',
-    ];
 
     public readonly StatusOptions: readonly PolicyStatusValue[] = ['Active', 'Paused', 'Disabled'];
     public readonly CoordinationModeOptions: readonly {
@@ -243,30 +194,64 @@ export class ChiefOfStaffDashboardComponent
         { Value: 'Disabled', Label: 'Disabled' },
         { Value: 'Enabled', Label: 'Enabled' },
     ];
-    public readonly HealthFilterOptions: readonly {
-        Value: HealthFilter;
-        Label: string;
-    }[] = [
-        { Value: 'all', Label: 'All Health States' },
-        { Value: 'OnTrack', Label: 'On Track' },
-        { Value: 'AtRisk', Label: 'At Risk' },
-        { Value: 'OffTrack', Label: 'Off Track' },
-        { Value: 'Completed', Label: 'Completed' },
-        { Value: 'Paused', Label: 'Paused' },
-    ];
+
+    // ── Extension panels: Open Apps add tabs and Overview panels by registering a BaseChiefOfStaffPanel ──
+    /** Every registered extension panel, collected once when the cockpit is created. */
+    public readonly Panels: readonly ChiefOfStaffPanelRegistration[] = CollectChiefOfStaffPanels();
+    /** Increments on each reload; panels reload when it changes. */
+    private refreshToken = 0;
+    /** The latest agent-context fields each panel reported, keyed by panel key. */
+    private readonly panelAgentContext = new Map<string, AgentContextRecord>();
+    /** The context object handed to every panel; replaced (not mutated) so panel inputs see the change. */
+    public PanelContext: ChiefOfStaffPanelContext = this.buildPanelContext();
+
+    public get TabPanels(): readonly ChiefOfStaffPanelRegistration[] {
+        return this.Panels.filter((p) => p.Metadata.placement === 'tab');
+    }
+
+    public get OverviewPanels(): readonly ChiefOfStaffPanelRegistration[] {
+        return this.Panels.filter((p) => p.Metadata.placement === 'overview');
+    }
+
+    /** The registered extension tab shown now, or null on a core tab. */
+    public get ActiveTabPanel(): ChiefOfStaffPanelRegistration | null {
+        return this.TabPanels.find((p) => p.Metadata.panelKey === this.ActiveTab) ?? null;
+    }
+
+    /** Core tab keys plus every registered extension tab key. */
+    public get ValidTabs(): string[] {
+        return [...CORE_CHIEF_OF_STAFF_TABS, ...this.TabPanels.map((p) => p.Metadata.panelKey)];
+    }
+
+    /** Entities the registered panels want live reloads for. */
+    private get panelLiveEntities(): string[] {
+        return this.Panels.flatMap((p) => p.Metadata.liveEntities ?? []);
+    }
+
+    private buildPanelContext(): ChiefOfStaffPanelContext {
+        return {
+            RefreshToken: this.refreshToken,
+            SearchText: this.SearchText,
+            AgentID: this.chiefOfStaffAgentId ?? null,
+            ReportAgentContext: (panelKey, fields) => {
+                this.panelAgentContext.set(panelKey, fields);
+                this.publishAgentContext();
+            },
+            ShowBanner: (type, message) => this.showBanner(type, message),
+        };
+    }
+
+    /** Hands the panels a fresh context; `reload` also bumps the refresh token so they reload. */
+    private refreshPanelContext(reload: boolean): void {
+        if (reload) {
+            this.refreshToken++;
+        }
+        this.PanelContext = this.buildPanelContext();
+    }
 
     public get Tabs(): TabConfig[] {
-        return [
+        const core: TabConfig[] = [
             { key: 'overview', label: 'Overview', icon: 'fa-solid fa-compass' },
-            {
-                key: 'priorities',
-                label: 'Priorities & OKRs',
-                icon: 'fa-solid fa-bullseye',
-                badge:
-                    this.Metrics.PriorityObjectiveCount > 0
-                        ? this.Metrics.PriorityObjectiveCount
-                        : null,
-            },
             {
                 key: 'approvals-wakes',
                 label: 'Approvals & Wakes',
@@ -283,29 +268,18 @@ export class ChiefOfStaffDashboardComponent
                 icon: 'fa-solid fa-shield-halved',
             },
         ];
+        const extensionTabs: TabConfig[] = this.TabPanels.map((p) => ({
+            key: p.Metadata.panelKey,
+            label: p.Metadata.label,
+            icon: p.Metadata.icon ?? 'fa-solid fa-puzzle-piece',
+        }));
+        // Extension tabs sit after Overview, before the core work tabs.
+        return [core[0], ...extensionTabs, ...core.slice(1)];
     }
 
     public get ChiefOfStaffDisplayName(): string {
         const override = this.DraftPolicy.DisplayNameOverride.trim();
         return override.length > 0 ? override : 'My Chief of Staff';
-    }
-
-    public get FilteredPriorityCards(): PriorityObjectiveCardViewModel[] {
-        const search = this.SearchText.trim().toLowerCase();
-        return this.Metrics.PriorityCards.filter((card) => {
-            if (this.HealthFilter !== 'all' && card.EffectiveHealth !== this.HealthFilter) {
-                return false;
-            }
-            if (!search) {
-                return true;
-            }
-            const nameMatch = card.Task.Name.toLowerCase().includes(search);
-            const descMatch = (card.Task.Description ?? '').toLowerCase().includes(search);
-            const subtaskMatch = card.Subtasks.some((sub) =>
-                sub.Name.toLowerCase().includes(search),
-            );
-            return nameMatch || descMatch || subtaskMatch;
-        });
     }
 
     public get PendingRequests(): MJAIAgentRequestEntity[] {
@@ -403,7 +377,7 @@ export class ChiefOfStaffDashboardComponent
      */
     private subscribeToLiveEntityChanges(): void {
         MJGlobal.Instance.GetEventListener(false).pipe(
-            filter((event) => IsCockpitEntityChange(event)),
+            filter((event) => IsCockpitEntityChange(event, this.panelLiveEntities)),
             debounceTime(750),
             takeUntil(this.destroy$),
         ).subscribe(() => {
@@ -447,15 +421,11 @@ export class ChiefOfStaffDashboardComponent
     }
 
     private applyQueryParams(params: Record<string, string>): void {
-        const rawTab = params['tab'] as ChiefOfStaffTab | undefined;
-        this.ActiveTab =
-            rawTab && VALID_CHIEF_OF_STAFF_TABS.includes(rawTab) ? rawTab : 'overview';
+        const rawTab = params['tab'];
+        this.ActiveTab = rawTab && this.ValidTabs.includes(rawTab) ? rawTab : 'overview';
 
         this.SearchText = params['search'] ?? '';
-
-        const rawHealth = params['health'] as HealthFilter | undefined;
-        this.HealthFilter =
-            rawHealth && VALID_HEALTH_FILTERS.includes(rawHealth) ? rawHealth : 'all';
+        this.refreshPanelContext(false);
     }
 
     private syncQueryParams(): void {
@@ -465,7 +435,6 @@ export class ChiefOfStaffDashboardComponent
         this.UpdateQueryParams({
             tab: this.ActiveTab === 'overview' ? null : this.ActiveTab,
             search: this.SearchText.trim().length > 0 ? this.SearchText.trim() : null,
-            health: this.HealthFilter === 'all' ? null : this.HealthFilter,
         });
     }
 
@@ -489,7 +458,6 @@ export class ChiefOfStaffDashboardComponent
             }
             this.chiefOfStaffAgentId = chiefOfStaffAgentId;
 
-            const bizAppsTasksEntity = this.bizAppsTasksEntityInfo;
             const scope = BuildCockpitScopeFilters(currentUserId, chiefOfStaffAgentId);
 
             const viewParams: RunViewParams[] = [
@@ -514,15 +482,8 @@ export class ChiefOfStaffDashboardComponent
                 },
             ];
 
-            const taskScopeFilter = bizAppsTasksEntity
-                ? await this.resolveTaskScopeFilter(rv, currentUserId)
-                : null;
-            if (bizAppsTasksEntity && taskScopeFilter) {
-                viewParams.push(this.buildTasksViewParams(bizAppsTasksEntity, taskScopeFilter));
-            }
-
             const results = await rv.RunViews(viewParams);
-            const [policyRes, routineRes, requestRes, taskRes] = results;
+            const [policyRes, routineRes, requestRes] = results;
 
             const policies = policyRes?.Success
                 ? (policyRes.Results as MJAIAgentUserPolicyEntity[])
@@ -540,30 +501,13 @@ export class ChiefOfStaffDashboardComponent
                 ? (requestRes.Results as MJAIAgentRequestEntity[])
                 : [];
 
-            if (taskRes && !taskRes.Success) {
-                this.showBanner(
-                    'error',
-                    `Failed to load Priorities & OKRs: ${taskRes.ErrorMessage || 'Unknown error'}`,
-                );
-            }
-
-            this.Tasks =
-                taskRes && taskRes.Success
-                    ? (taskRes.Results as BizAppsTaskRecordLike[])
-                    : [];
-            this.taskAssignees = await this.loadTaskAssignees(rv);
-
             this.recalculateMetrics();
-
-            // Auto-expand the first priority card if none expanded yet
-            if (this.ExpandedPriorityIDs.Size === 0 && this.Metrics.PriorityCards.length > 0) {
-                this.ExpandedPriorityIDs.Add(this.Metrics.PriorityCards[0].Task.ID);
-            }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             this.showBanner('error', `Failed to load Chief of Staff data: ${msg}`);
         } finally {
             this.IsLoading = false;
+            this.refreshPanelContext(true);
             this.publishAgentContext();
             this.cdr.markForCheck();
         }
@@ -592,13 +536,7 @@ export class ChiefOfStaffDashboardComponent
             RequestTypeID: req.RequestTypeID,
         }));
 
-        this.Metrics = CalculateChiefOfStaffMetrics(
-            this.Tasks,
-            routineSummaries,
-            requestSummaries,
-            new Date(),
-            { Assignees: this.taskAssignees, CurrentPersonID: this.currentPersonID },
-        );
+        this.Metrics = CalculateChiefOfStaffMetrics(routineSummaries, requestSummaries);
     }
 
     private createDefaultDraftPolicy(): GovernancePolicyDraft {
@@ -672,8 +610,8 @@ export class ChiefOfStaffDashboardComponent
     // =========================================================================
 
     public OnTabChange(tabId: string): void {
-        if (VALID_CHIEF_OF_STAFF_TABS.includes(tabId as ChiefOfStaffTab)) {
-            this.ActiveTab = tabId as ChiefOfStaffTab;
+        if (this.ValidTabs.includes(tabId)) {
+            this.ActiveTab = tabId;
             this.syncQueryParams();
             this.publishAgentContext();
             this.cdr.markForCheck();
@@ -682,50 +620,10 @@ export class ChiefOfStaffDashboardComponent
 
     public OnSearchChange(value: string): void {
         this.SearchText = value;
+        this.refreshPanelContext(false);
         this.syncQueryParams();
         this.publishAgentContext();
         this.cdr.markForCheck();
-    }
-
-    public OnHealthFilterChange(filterVal: HealthFilter): void {
-        this.HealthFilter = filterVal;
-        this.syncQueryParams();
-        this.publishAgentContext();
-        this.cdr.markForCheck();
-    }
-
-    public ClearFilters(): void {
-        this.SearchText = '';
-        this.HealthFilter = 'all';
-        this.syncQueryParams();
-        this.publishAgentContext();
-        this.cdr.markForCheck();
-    }
-
-    public TogglePriorityExpanded(taskId: string): void {
-        if (this.ExpandedPriorityIDs.Has(taskId)) {
-            this.ExpandedPriorityIDs.Delete(taskId);
-        } else {
-            this.ExpandedPriorityIDs.Add(taskId);
-        }
-        this.cdr.markForCheck();
-    }
-
-    public IsPriorityExpanded(taskId: string): boolean {
-        return this.ExpandedPriorityIDs.Has(taskId);
-    }
-
-    public get CanOpenFullTaskForm(): boolean {
-        if (!this.SelectedTask) return false;
-        return !!MJGlobal.Instance.ClassFactory.GetRegistration(
-            BaseFormComponent,
-            BIZAPPS_TASKS_ENTITY_NAME,
-        );
-    }
-
-    public get SelectedTaskIsObjective(): boolean {
-        if (!this.SelectedTask) return false;
-        return !this.SelectedTask.ParentID;
     }
 
     /** Resolved once per load from the agent's metadata name; null until LoadCockpitData has run. */
@@ -742,155 +640,7 @@ export class ChiefOfStaffDashboardComponent
         return agent?.ID ?? null;
     }
 
-    private get bizAppsTasksEntityInfo(): EntityInfo | undefined {
-        return this.ProviderToUse.EntityByName(BIZAPPS_TASKS_ENTITY_NAME);
-    }
-
-    /**
-     * Builds the primary key for a BizApps task. Tasks is an OpenApp entity, so the key is
-     * derived from its metadata rather than assuming a column named `ID`. Returns null (and
-     * surfaces an error banner) when the entity is not installed in this environment.
-     */
-    private taskRecordKey(task: BizAppsTaskRecordLike): CompositeKey | null {
-        const entityInfo = this.requireTasksEntityInfo();
-        return entityInfo ? BuildTaskRecordKey(entityInfo, task) : null;
-    }
-
-    /** For a task id that is not in the loaded list: the bare value maps onto the entity's first key column. */
-    private taskRecordKeyFromId(taskId: string): CompositeKey | null {
-        const entityInfo = this.requireTasksEntityInfo();
-        return entityInfo ? CompositeKey.FromURLSegment(entityInfo, taskId) : null;
-    }
-
-    private requireTasksEntityInfo(): EntityInfo | undefined {
-        const entityInfo = this.bizAppsTasksEntityInfo;
-        if (!entityInfo) {
-            this.showBanner('error', 'The BizApps Tasks entity is not available in this environment.');
-        }
-        return entityInfo;
-    }
-
-    /** The drawer's milestone list follows the card's rule: every milestone for the owner, only the person's own otherwise. */
-    public get SelectedTaskSubtasks(): BizAppsTaskRecordLike[] {
-        if (!this.SelectedTask) return [];
-        const id = this.SelectedTask.ID;
-        const card = this.Metrics.PriorityCards.find((c) => UUIDsEqual(c.Task.ID, id));
-        if (card) {
-            return card.Milestones.map((m) => m.Task);
-        }
-        return this.Tasks.filter((t) => UUIDsEqual(t.ParentID, id));
-    }
-
-    public get SelectedTaskParent(): BizAppsTaskRecordLike | null {
-        if (!this.SelectedTask || !this.SelectedTask.ParentID) return null;
-        const parentId = this.SelectedTask.ParentID;
-        return this.Tasks.find((t) => UUIDsEqual(t.ID, parentId)) ?? null;
-    }
-
-    public OpenTaskRecord(taskId: string, event?: Event): void {
-        event?.stopPropagation();
-        const task = this.Tasks.find((t) => UUIDsEqual(t.ID, taskId));
-        if (task) {
-            this.SelectedTask = task;
-            this.DraftTaskEdits = {
-                Status: task.Status || 'Open',
-                HealthStatus: task.HealthStatus || null,
-                PercentComplete: task.PercentComplete ?? 0,
-                ConfidenceScore: task.ConfidenceScore ?? null,
-                DueAt: task.DueAt ? this.formatDateForInput(task.DueAt) : '',
-                Description: task.Description ?? '',
-            };
-            this.TaskDirty = false;
-            this.ShowTaskDrawer = true;
-            this.cdr.markForCheck();
-        } else {
-            const key = this.taskRecordKeyFromId(taskId);
-            if (key) {
-                this.navigationService.OpenEntityRecord(BIZAPPS_TASKS_ENTITY_NAME, key);
-            }
-        }
-    }
-
-    public CloseTaskDrawer(): void {
-        this.ShowTaskDrawer = false;
-        this.SelectedTask = null;
-        this.TaskDirty = false;
-        this.cdr.markForCheck();
-    }
-
-    public OpenFullTaskForm(): void {
-        if (!this.SelectedTask) return;
-        const key = this.taskRecordKey(this.SelectedTask);
-        if (key) {
-            this.navigationService.OpenEntityRecord(BIZAPPS_TASKS_ENTITY_NAME, key);
-        }
-    }
-
-    public MarkTaskDirty(): void {
-        this.TaskDirty = true;
-        this.cdr.markForCheck();
-    }
-
-    public OnTaskStatusChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            this.DraftTaskEdits.Status = event.target.value;
-            this.MarkTaskDirty();
-        }
-    }
-
-    public OnTaskHealthChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            const val = event.target.value;
-            this.DraftTaskEdits.HealthStatus =
-                val === 'none' ? null : (val as TaskHealthStatus);
-            this.MarkTaskDirty();
-        }
-    }
-
-    public OnTaskPercentChange(event: Event): void {
-        if (event.target instanceof HTMLInputElement) {
-            const num = Number(event.target.value);
-            this.DraftTaskEdits.PercentComplete = Number.isFinite(num)
-                ? Math.max(0, Math.min(100, Math.round(num)))
-                : null;
-            this.MarkTaskDirty();
-        }
-    }
-
-    public OnTaskConfidenceChange(event: Event): void {
-        if (event.target instanceof HTMLInputElement) {
-            const raw = event.target.value.trim();
-            if (!raw) {
-                this.DraftTaskEdits.ConfidenceScore = null;
-            } else {
-                const num = Number(raw);
-                this.DraftTaskEdits.ConfidenceScore = Number.isFinite(num)
-                    ? Math.max(0, Math.min(100, Math.round(num)))
-                    : null;
-            }
-            this.MarkTaskDirty();
-        }
-    }
-
-    public OnTaskDueAtChange(event: Event): void {
-        if (event.target instanceof HTMLInputElement) {
-            this.DraftTaskEdits.DueAt = event.target.value;
-            this.MarkTaskDirty();
-        }
-    }
-
-    public OnTaskDescriptionChange(event: Event): void {
-        if (event.target instanceof HTMLTextAreaElement) {
-            this.DraftTaskEdits.Description = event.target.value;
-            this.MarkTaskDirty();
-        }
-    }
-
     private readonly actionIdsByName = new Map<string, string>();
-    private async resolveUpdateRecordActionId(): Promise<string | null> {
-        return this.resolveActionIdByName('Update Record');
-    }
-
     /** The ID of a core action, looked up by name once per cockpit instance. */
     private async resolveActionIdByName(actionName: string): Promise<string | null> {
         const cached = this.actionIdsByName.get(actionName);
@@ -916,122 +666,6 @@ export class ChiefOfStaffDashboardComponent
             LogError(`ChiefOfStaffDashboard: failed to resolve '${actionName}' action: ${msg}`);
             return null;
         }
-    }
-
-    public async SaveTaskEdits(): Promise<void> {
-        if (!this.SelectedTask || this.IsSavingTask) return;
-        this.IsSavingTask = true;
-        this.cdr.markForCheck();
-
-        try {
-            const taskId = this.SelectedTask.ID;
-            const key = this.taskRecordKey(this.SelectedTask);
-            if (!key) {
-                return;
-            }
-
-            const actionId = await this.resolveUpdateRecordActionId();
-            if (!actionId) {
-                throw new Error("Action 'Update Record' not found in metadata.");
-            }
-
-            const updates: Record<string, string | number | Date | null> = {
-                Status: this.DraftTaskEdits.Status,
-                HealthStatus: this.DraftTaskEdits.HealthStatus,
-                PercentComplete: this.DraftTaskEdits.PercentComplete,
-                ConfidenceScore: this.DraftTaskEdits.ConfidenceScore,
-                DueAt: this.DraftTaskEdits.DueAt ? new Date(this.DraftTaskEdits.DueAt) : null,
-                Description:
-                    this.DraftTaskEdits.Description.trim().length > 0
-                        ? this.DraftTaskEdits.Description.trim()
-                        : null,
-            };
-
-            const primaryKeyObj: Record<string, unknown> = {};
-            for (const kvp of key.KeyValuePairs) {
-                primaryKeyObj[kvp.FieldName] = kvp.Value;
-            }
-
-            const provider = this.ProviderToUse as GraphQLDataProvider;
-            const actionClient = new GraphQLActionClient(provider);
-            const params: ActionParam[] = [
-                { Name: 'EntityName', Value: BIZAPPS_TASKS_ENTITY_NAME, Type: 'Input' } as ActionParam,
-                { Name: 'PrimaryKey', Value: primaryKeyObj, Type: 'Input' } as ActionParam,
-                { Name: 'Fields', Value: updates, Type: 'Input' } as ActionParam,
-            ];
-
-            const result = await actionClient.RunAction(actionId, params);
-            if (result.Success) {
-                this.showBanner('success', `Task "${this.SelectedTask.Name}" updated successfully.`);
-                this.TaskDirty = false;
-                await this.LoadCockpitData();
-                this.SelectedTask = this.Tasks.find((t) => UUIDsEqual(t.ID, taskId)) ?? null;
-            } else {
-                const errText = result.Message || 'Failed to update task.';
-                this.showBanner('error', errText);
-            }
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            this.showBanner('error', `Failed to update task: ${msg}`);
-        } finally {
-            this.IsSavingTask = false;
-            this.cdr.markForCheck();
-        }
-    }
-
-    /**
-     * Marks a to-do or reminder done: Status Completed and CompletedAt now, through the same
-     * `Update Record` action the task drawer uses, then reloads so the row leaves the list.
-     */
-    public async MarkTodoDone(task: BizAppsTaskRecordLike, event?: Event): Promise<void> {
-        event?.stopPropagation();
-        if (this.BusyTodoID) {
-            return;
-        }
-        const key = this.taskRecordKey(task);
-        if (!key) {
-            return;
-        }
-        this.BusyTodoID = task.ID;
-        this.cdr.markForCheck();
-        try {
-            const actionId = await this.resolveUpdateRecordActionId();
-            if (!actionId) {
-                throw new Error("Action 'Update Record' not found in metadata.");
-            }
-            const primaryKeyObj: Record<string, unknown> = {};
-            for (const kvp of key.KeyValuePairs) {
-                primaryKeyObj[kvp.FieldName] = kvp.Value;
-            }
-            const updates: Record<string, string | Date> = { Status: 'Completed', CompletedAt: new Date() };
-            const actionClient = new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider);
-            const result = await actionClient.RunAction(actionId, [
-                { Name: 'EntityName', Value: BIZAPPS_TASKS_ENTITY_NAME, Type: 'Input' } as ActionParam,
-                { Name: 'PrimaryKey', Value: primaryKeyObj, Type: 'Input' } as ActionParam,
-                { Name: 'Fields', Value: updates, Type: 'Input' } as ActionParam,
-            ]);
-            if (result.Success) {
-                this.showBanner('success', `Done: "${task.Name}".`);
-                await this.LoadCockpitData();
-            } else {
-                this.showBanner('error', result.Message || `Could not mark "${task.Name}" done.`);
-            }
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            this.showBanner('error', `Could not mark "${task.Name}" done: ${msg}`);
-        } finally {
-            this.BusyTodoID = null;
-            this.cdr.markForCheck();
-        }
-    }
-
-    private formatDateForInput(val: Date | string): string {
-        const d = val instanceof Date ? val : new Date(val);
-        if (isNaN(d.getTime())) return '';
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
     }
 
     public OpenPolicyEntityRecord(): void {
@@ -1441,74 +1075,6 @@ export class ChiefOfStaffDashboardComponent
         this.cdr.markForCheck();
     }
 
-    /** True when `personID` is the signed-in user's People record. */
-    public IsCurrentPerson(personID: string): boolean {
-        return !!this.currentPersonID && UUIDsEqual(personID, this.currentPersonID);
-    }
-
-    /** Assignees of the loaded tasks; an empty map when the BizApps Common app is absent or the lookup fails (the cards still render). */
-    private async loadTaskAssignees(rv: RunView): Promise<TaskAssigneeMap> {
-        const peopleEntity = this.ProviderToUse.EntityByName(BIZAPPS_PEOPLE_ENTITY_NAME);
-        if (!peopleEntity || this.Tasks.length === 0) {
-            return new UUIDMap();
-        }
-        try {
-            return await LoadTaskAssignees(rv, peopleEntity.ID, this.Tasks.map((t) => t.ID));
-        } catch (err) {
-            LogError(`Chief of Staff cockpit: could not load task assignees: ${err instanceof Error ? err.message : String(err)}`);
-            return new UUIDMap();
-        }
-    }
-
-    /**
-     * Resolve the filter scoping Tasks to the signed-in user's linked person. Returns null (and clears
-     * `HasLinkedPerson`) when no person is linked, or when the lookup fails after surfacing the error.
-     */
-    private async resolveTaskScopeFilter(rv: RunView, currentUserId: string): Promise<string | null> {
-        const peopleEntity = this.ProviderToUse.EntityByName(BIZAPPS_PEOPLE_ENTITY_NAME);
-        if (!peopleEntity) {
-            // The BizApps Common OpenApp is not installed, so no person can be linked.
-            this.HasLinkedPerson = false;
-            return null;
-        }
-        try {
-            const scope = await ResolvePersonTaskScope(rv, currentUserId, peopleEntity.ID, this.ProviderToUse.CurrentUser?.Email ?? null);
-            this.HasLinkedPerson = scope.HasLinkedPerson;
-            this.currentPersonID = scope.HasLinkedPerson ? scope.PersonID : null;
-            return scope.HasLinkedPerson ? scope.Filter : null;
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            this.showBanner('error', `Failed to resolve your People record for Priorities & OKRs: ${msg}`);
-            return null;
-        }
-    }
-
-    private buildTasksViewParams(tasksEntity: EntityInfo, extraFilter: string): RunViewParams {
-        const fieldNames = new Set((tasksEntity.Fields ?? []).map((f) => f.Name.toLowerCase()));
-        const orderParts: string[] = [];
-        if (fieldNames.has('ispriority')) {
-            orderParts.push('IsPriority DESC');
-        }
-        if (fieldNames.has('dueat')) {
-            orderParts.push('DueAt ASC');
-        }
-        if (fieldNames.has('name')) {
-            orderParts.push('Name ASC');
-        }
-        return {
-            EntityName: BIZAPPS_TASKS_ENTITY_NAME,
-            ExtraFilter: extraFilter,
-            OrderBy: orderParts.length > 0 ? orderParts.join(', ') : 'DueAt ASC, Name ASC',
-            MaxRows: 250,
-            ResultType: 'simple',
-        };
-    }
-
-    /** Badge class for a task's `Priority` (Critical/High/Medium/Low). */
-    public GetTaskPriorityClass(priority: string | null): string {
-        return GetTaskPriorityClass(priority);
-    }
-
     private showBanner(type: 'success' | 'error', message: string): void {
         this.FeedbackBanner = { Type: type, Message: message };
         this.cdr.markForCheck();
@@ -1517,40 +1083,6 @@ export class ChiefOfStaffDashboardComponent
     // =========================================================================
     // UI Formatting Helpers
     // =========================================================================
-
-    public GetHealthBadgeLabel(health: TaskHealthStatus): string {
-        switch (health) {
-            case 'OnTrack':
-                return 'On Track';
-            case 'AtRisk':
-                return 'At Risk';
-            case 'OffTrack':
-                return 'Off Track';
-            case 'Completed':
-                return 'Completed';
-            case 'Paused':
-                return 'Paused';
-            default:
-                return health;
-        }
-    }
-
-    public GetHealthBadgeIcon(health: TaskHealthStatus): string {
-        switch (health) {
-            case 'OnTrack':
-                return 'fa-solid fa-circle-check';
-            case 'AtRisk':
-                return 'fa-solid fa-triangle-exclamation';
-            case 'OffTrack':
-                return 'fa-solid fa-circle-exclamation';
-            case 'Completed':
-                return 'fa-solid fa-flag-checkered';
-            case 'Paused':
-                return 'fa-solid fa-circle-pause';
-            default:
-                return 'fa-solid fa-circle';
-        }
-    }
 
     public GetPriorityTierLabel(priority: number): string {
         if (priority >= 76) return 'Critical';
@@ -1600,10 +1132,14 @@ export class ChiefOfStaffDashboardComponent
             ExpiresAt: req.ExpiresAt,
         }));
 
+        const extensionContext: AgentContextRecord = {};
+        for (const fields of this.panelAgentContext.values()) {
+            Object.assign(extensionContext, fields);
+        }
         const context = BuildChiefOfStaffAgentContext({
             ActiveTab: this.ActiveTab,
             SearchText: this.SearchText,
-            HealthFilter: this.HealthFilter,
+            ExtensionContext: extensionContext,
             Metrics: this.Metrics,
             Governance: this.buildGovernanceSummary(),
             Routines: routineSummaries,
@@ -1618,13 +1154,13 @@ export class ChiefOfStaffDashboardComponent
             {
                 Name: 'SwitchChiefOfStaffTab',
                 Description:
-                    "Switch the active tab in the Chief of Staff Cockpit ('overview', 'priorities', 'approvals-wakes', or 'governance').",
+                    "Switch the active tab in the Chief of Staff Cockpit ('overview', 'approvals-wakes', 'governance', or a tab added by an installed extension).",
                 ParameterSchema: {
                     type: 'object',
                     properties: {
                         tab: {
                             type: 'string',
-                            enum: VALID_CHIEF_OF_STAFF_TABS,
+                            enum: this.ValidTabs,
                             description: 'Target tab ID',
                         },
                     },
@@ -1632,7 +1168,7 @@ export class ChiefOfStaffDashboardComponent
                 },
                 Handler: async (params) => {
                     const raw = params['tab'] as string | undefined;
-                    const check = ValidateChiefOfStaffTabParam(raw);
+                    const check = ValidateChiefOfStaffTabParam(raw, this.ValidTabs);
                     if (!check.ok) {
                         return check.result;
                     }
@@ -1641,43 +1177,9 @@ export class ChiefOfStaffDashboardComponent
                 },
             },
             {
-                Name: 'FilterPrioritiesByHealth',
-                Description:
-                    "Filter priority objectives by health status ('all', 'OnTrack', 'AtRisk', 'OffTrack', 'Completed', 'Paused').",
-                ParameterSchema: {
-                    type: 'object',
-                    properties: {
-                        health: {
-                            type: 'string',
-                            enum: VALID_HEALTH_FILTERS,
-                            description: 'Health status filter',
-                        },
-                    },
-                    required: ['health'],
-                },
-                Handler: async (params) => {
-                    const raw = params['health'] as string | undefined;
-                    const check = ValidateHealthFilterParam(raw);
-                    if (!check.ok) {
-                        return check.result;
-                    }
-                    this.OnHealthFilterChange(check.value);
-                    if (this.ActiveTab !== 'priorities') {
-                        this.OnTabChange('priorities');
-                    }
-                    return {
-                        Success: true,
-                        Data: {
-                            HealthFilter: this.HealthFilter,
-                            FilteredPriorityCount: this.FilteredPriorityCards.length,
-                        },
-                    };
-                },
-            },
-            {
                 Name: 'SearchChiefOfStaffCockpit',
                 Description:
-                    'Filter visible priority objectives, requests, and wake routines by search text. Pass empty string to clear.',
+                    'Filter visible requests and wake routines (and extension panels that filter) by search text. Pass empty string to clear.',
                 ParameterSchema: {
                     type: 'object',
                     properties: {
@@ -1699,43 +1201,8 @@ export class ChiefOfStaffDashboardComponent
                         Success: true,
                         Data: {
                             SearchText: this.SearchText,
-                            FilteredPriorityCount: this.FilteredPriorityCards.length,
-                        },
-                    };
-                },
-            },
-            {
-                Name: 'InspectPriorityObjective',
-                Description:
-                    'Expand and focus a priority objective card by ID or name in the Priorities & OKRs tab.',
-                ParameterSchema: {
-                    type: 'object',
-                    properties: {
-                        objective: {
-                            type: 'string',
-                            description: 'Priority objective ID or name (partial match supported)',
-                        },
-                    },
-                    required: ['objective'],
-                },
-                Handler: async (params) => {
-                    const raw = params['objective'] as string | undefined;
-                    const resolved = ResolvePriorityObjectiveByIDOrName(
-                        this.Metrics.PriorityCards,
-                        raw,
-                    );
-                    if (!resolved.ok) {
-                        return { Success: false, ErrorMessage: resolved.error };
-                    }
-                    this.ExpandedPriorityIDs.Add(resolved.value.Task.ID);
-                    this.OnTabChange('priorities');
-                    return {
-                        Success: true,
-                        Data: {
-                            TaskID: resolved.value.Task.ID,
-                            Name: resolved.value.Task.Name,
-                            SubtaskCount: resolved.value.Subtasks.length,
-                            EffectivePercentComplete: resolved.value.EffectivePercentComplete,
+                            PendingRequestCount: this.PendingRequests.length,
+                            VisibleRoutineCount: this.FilteredRoutines.length,
                         },
                     };
                 },
@@ -1743,7 +1210,7 @@ export class ChiefOfStaffDashboardComponent
             {
                 Name: 'RefreshChiefOfStaffCockpit',
                 Description:
-                    'Reload priority objectives, pending approvals, wake routines, and governance policy from the server.',
+                    'Reload pending approvals, wake routines, governance policy and extension panels from the server.',
                 ParameterSchema: {
                     type: 'object',
                     properties: {},
@@ -1753,7 +1220,6 @@ export class ChiefOfStaffDashboardComponent
                     return {
                         Success: true,
                         Data: {
-                            PriorityObjectiveCount: this.Metrics.PriorityObjectiveCount,
                             PendingApprovalCount: this.Metrics.PendingApprovalCount,
                             ActiveWakeRoutineCount: this.Metrics.ActiveWakeRoutineCount,
                         },

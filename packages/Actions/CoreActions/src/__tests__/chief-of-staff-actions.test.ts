@@ -152,7 +152,7 @@ describe('Chief of Staff Actions Suite', () => {
                     {
                         Name: 'WatchedEntities',
                         Type: 'Input',
-                        Value: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                        Value: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                     },
                     {
                         Name: 'WakeGate',
@@ -169,7 +169,7 @@ describe('Chief of Staff Actions Suite', () => {
             expect(routineStub.ScheduleMode).toBe('Adaptive');
             expect(routineStub.WakeConfigurationObject?.workstreamKey).toBe('q4-okr-rollup');
             expect(routineStub.WakeConfigurationObject?.watchedEntities?.[0].entityName).toBe(
-                'MJ_BizApps_Tasks: Tasks'
+                'MJ: AI Agent Requests'
             );
             expect(params.Params.find((p: ActionParam) => p.Name === 'RoutineID')?.Value).toBe('routine-999');
         });

@@ -2,8 +2,13 @@
  * Pure, unit-testable helpers for the "My Chief of Staff" Executive Cockpit's
  * agent context + client tools.
  *
+ * Core only: everything here reads core entities (`MJ: AI Agent User Policies`,
+ * `MJ: User Routines`, `MJ: AI Agent Requests`). Business data such as priorities, tasks and
+ * to-dos comes from Open Apps that extend the cockpit with registered panels
+ * (see `chief-of-staff-panel.ts`); core never names an Open App's entities.
+ *
  * 🚨 SAFETY BOUNDARY 🚨
- * The Chief of Staff Cockpit exposes ONLY navigation / tab-switch / filter / search /
+ * The Chief of Staff Cockpit exposes ONLY navigation / tab-switch / search /
  * refresh / detail-view tools to the co-agent. DELIBERATELY NOT exposed as client tools
  * (mutations stay human-driven in the UI):
  * - Approving or rejecting `MJ: AI Agent Requests`
@@ -20,8 +25,7 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import { CompositeKey, type EntityInfo, type RunViewParams } from '@memberjunction/core';
-import { EscapeSQLString, GroupByUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -36,24 +40,15 @@ import {
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
-export type ChiefOfStaffTab = 'overview' | 'priorities' | 'approvals-wakes' | 'governance';
-export const VALID_CHIEF_OF_STAFF_TABS: readonly ChiefOfStaffTab[] = [
+/** The cockpit's own tabs. Extension panels add tabs under their own keys. */
+export type CoreChiefOfStaffTab = 'overview' | 'approvals-wakes' | 'governance';
+export const CORE_CHIEF_OF_STAFF_TABS: readonly CoreChiefOfStaffTab[] = [
     'overview',
-    'priorities',
     'approvals-wakes',
     'governance',
 ] as const;
-
-export type TaskHealthStatus = 'OnTrack' | 'AtRisk' | 'OffTrack' | 'Completed' | 'Paused';
-export type HealthFilter = 'all' | TaskHealthStatus;
-export const VALID_HEALTH_FILTERS: readonly HealthFilter[] = [
-    'all',
-    'OnTrack',
-    'AtRisk',
-    'OffTrack',
-    'Completed',
-    'Paused',
-] as const;
+/** A tab key: one of the core tabs or the key of a registered extension tab panel. */
+export type ChiefOfStaffTab = string;
 
 export type PolicyStatusValue = MJAIAgentUserPolicyEntity['Status'];
 export type PolicyCoordinationModeValue = MJAIAgentUserPolicyEntity['CoordinationMode'];
@@ -64,100 +59,6 @@ export type PolicyPhoneChannelModeValue = MJAIAgentUserPolicyEntity['PhoneChanne
 export type PolicyMessagingChannelModeValue = MJAIAgentUserPolicyEntity['MessagingChannelMode'];
 export type RoutineStatusValue = MJUserRoutineEntity['Status'];
 export type RequestStatusValue = MJAIAgentRequestEntity['Status'];
-
-/**
- * Projection shape for rows returned from `MJ_BizApps_Tasks: Tasks` (`[__mj_BizAppsTasks].[vwTasks]`).
- */
-export interface BizAppsTaskRecordLike {
-    ID: string;
-    ParentID: string | null;
-    Name: string;
-    Description: string | null;
-    Status: string;
-    Priority: string | null;
-    IsPriority: boolean | number | null;
-    HealthStatus: TaskHealthStatus | null;
-    ConfidenceScore: number | null;
-    PercentComplete: number | null;
-    CheckInCadence: string | null;
-    PlanningPeriod: string | null;
-    BaselineValue: number | null;
-    TargetValue: number | null;
-    CurrentValue: number | null;
-    UnitOfMeasure: string | null;
-    MetricDirection: string | null;
-    DueAt: Date | string | null;
-    LastCheckInAt: Date | string | null;
-    NextCheckInDueAt: Date | string | null;
-    TypeID?: string | null;
-    Type?: string | null;
-    TaskType?: string | null;
-    /** The person who created the task; with the objective's assignees, decides who owns it. */
-    CreatedByPersonID?: string | null;
-    /** The creator's name, denormalized on the Tasks view. */
-    CreatedByPerson?: string | null;
-}
-
-/**
- * Grouped priority objective card with its child milestones/tasks and computed progress.
- */
-/** A person assigned to a task through `MJ_BizApps_Tasks: Task Assignments`. */
-export interface TaskAssignee {
-    PersonID: string;
-    Name: string;
-}
-
-/** Assignees keyed by task ID (case-insensitive: SQL Server returns upper-case IDs, PostgreSQL lower-case). */
-export type TaskAssigneeMap = UUIDMap<TaskAssignee[]>;
-
-/** A milestone row under an objective card, with who holds it. */
-export interface MilestoneRowViewModel {
-    Task: BizAppsTaskRecordLike;
-    Assignees: TaskAssignee[];
-    /** True when the signed-in user's person is among the assignees. */
-    AssignedToMe: boolean;
-    /**
-     * Who holds the milestone: its assignees when it has any; otherwise the person who created it,
-     * or failing that the objective's owner. An unassigned milestone is the owner's own work, not
-     * nobody's, so the cockpit never shows it as a gap.
-     */
-    Holders: TaskAssignee[];
-    /** True when `Holders` came from the creator or owner rather than an assignment row. */
-    IsImplicitlyHeld: boolean;
-    /** True when the signed-in user's person is among `Holders`. */
-    HeldByMe: boolean;
-}
-
-export interface PriorityObjectiveCardViewModel {
-    Task: BizAppsTaskRecordLike;
-    Subtasks: BizAppsTaskRecordLike[];
-    /**
-     * The milestone rows the template renders: every subtask for the objective's owner, only the
-     * ones the signed-in person holds otherwise. `Subtasks` keeps the full set for progress.
-     */
-    Milestones: MilestoneRowViewModel[];
-    /** People assigned to the objective itself. */
-    Assignees: TaskAssignee[];
-    /** True when the signed-in user's person is assigned to the objective itself. */
-    AssignedToMe: boolean;
-    /** True when the signed-in person created the objective or is assigned to it; owners see every milestone. */
-    IsOwner: boolean;
-    /** The objective's owner: the person who created it. Null when the task carries no creator. */
-    Owner: TaskAssignee | null;
-    /** True when the signed-in person is the creator. */
-    OwnedByMe: boolean;
-    CompletedSubtaskCount: number;
-    EffectivePercentComplete: number;
-    EffectiveHealth: TaskHealthStatus;
-    MetricProgressLabel: string | null;
-    IsOverdue: boolean;
-}
-
-/** Optional assignment data for {@link CalculateChiefOfStaffMetrics}. */
-export interface ChiefOfStaffMetricsOptions {
-    Assignees?: TaskAssigneeMap;
-    CurrentPersonID?: string | null;
-}
 
 export interface RoutineSummaryItem {
     ID: string;
@@ -304,40 +205,21 @@ export interface PolicyGovernanceSummary {
 }
 
 export interface ChiefOfStaffMetrics {
-    TotalTaskCount: number;
-    PriorityObjectiveCount: number;
-    SubtaskCount: number;
-    OnTrackCount: number;
-    AtRiskCount: number;
-    OffTrackCount: number;
-    CompletedPriorityCount: number;
-    AverageConfidenceScore: number | null;
-    AveragePriorityProgress: number;
     PendingApprovalCount: number;
     HighPriorityPendingCount: number;
     ActiveWakeRoutineCount: number;
     NextScheduledWakeAt: Date | null;
-    PriorityCards: PriorityObjectiveCardViewModel[];
-    /** Open to-dos and reminders, soonest due first; see {@link BuildTodoItems}. */
-    TodoItems: TodoItemViewModel[];
-    OpenTodoCount: number;
-}
-
-/** A personal to-do or reminder row: a root task of a to-do type that is not an objective. */
-export interface TodoItemViewModel {
-    Task: BizAppsTaskRecordLike;
-    IsOverdue: boolean;
-    IsDueToday: boolean;
 }
 
 export interface ChiefOfStaffAgentContextInput {
     ActiveTab: ChiefOfStaffTab;
     SearchText: string;
-    HealthFilter: HealthFilter;
     Metrics: ChiefOfStaffMetrics;
     Governance: PolicyGovernanceSummary;
     Routines: readonly RoutineSummaryItem[];
     PendingRequests: readonly RequestSummaryItem[];
+    /** Fields reported by extension panels, merged in after the core fields (core keys win). */
+    ExtensionContext?: AgentContextRecord;
 }
 
 export type AgentContextScalar = string | number | boolean | null;
@@ -371,105 +253,6 @@ export function ParseOptionalDate(val: Date | string | null | undefined): Date |
     return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/**
- * Builds the primary key of a BizApps task from the entity's own primary key column(s) and the
- * in-memory row. Tasks is an OpenApp entity, so neither the column name nor the column count is
- * assumed; the same key feeds `OpenEntityRecord` and the `PrimaryKey` parameter of `Update Record`.
- */
-export function BuildTaskRecordKey(entityInfo: EntityInfo, task: BizAppsTaskRecordLike): CompositeKey {
-    return CompositeKey.FromEntityRecord(entityInfo, { ...task });
-}
-
-/** Task type names (lower-case) that make a root task a personal to-do or reminder rather than an objective. */
-const TODO_TYPE_LABELS: ReadonlySet<string> = new Set(['general', 'action item', 'follow-up', 'followup', 'follow up', 'to-do', 'todo', 'reminder']);
-
-/**
- * True for a root task whose type says to-do (General, Action Item, Follow-up, Reminder) and that
- * is not a priority objective. Milestones (tasks with a parent), key results and typeless tasks
- * are not to-dos.
- */
-export function IsTodoTask(task: BizAppsTaskRecordLike): boolean {
-    if (task.ParentID != null || IsTaskPriorityObjective(task)) {
-        return false;
-    }
-    const typeLabel = (task.Type ?? task.TaskType ?? '').trim().toLowerCase();
-    return TODO_TYPE_LABELS.has(typeLabel);
-}
-
-const CLOSED_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'done', 'cancelled', 'canceled']);
-
-/**
- * The open to-dos among `tasks`, soonest due first and undated last, each flagged overdue (due
- * before `now`) or due today (same calendar day as `now`, local time).
- */
-export function BuildTodoItems(tasks: readonly BizAppsTaskRecordLike[], now: Date = new Date()): TodoItemViewModel[] {
-    const open = tasks.filter((t) => IsTodoTask(t) && !CLOSED_TASK_STATUSES.has((t.Status ?? '').trim().toLowerCase()));
-    const items = open.map((task) => {
-        const due = ParseOptionalDate(task.DueAt);
-        return {
-            Task: task,
-            IsOverdue: due !== null && due.getTime() < now.getTime(),
-            IsDueToday: due !== null && isSameLocalDay(due, now),
-        };
-    });
-    return items.sort((a, b) => {
-        const da = ParseOptionalDate(a.Task.DueAt);
-        const db = ParseOptionalDate(b.Task.DueAt);
-        if (da && db) return da.getTime() - db.getTime();
-        if (da) return -1;
-        if (db) return 1;
-        return a.Task.Name.localeCompare(b.Task.Name);
-    });
-}
-
-function isSameLocalDay(a: Date, b: Date): boolean {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-export function IsTaskPriorityObjective(task: BizAppsTaskRecordLike): boolean {
-    if (task.IsPriority === true || task.IsPriority === 1) {
-        return true;
-    }
-    const typeLabel = (task.Type ?? task.TaskType ?? '').toLowerCase();
-    if (
-        typeLabel.includes('priority') ||
-        typeLabel.includes('objective') ||
-        typeLabel.includes('okr')
-    ) {
-        return true;
-    }
-    return task.ParentID == null && (task.HealthStatus != null || task.PlanningPeriod != null);
-}
-
-export function NormalizeTaskHealth(task: BizAppsTaskRecordLike): TaskHealthStatus {
-    if (task.Status === 'Completed' || task.Status === 'Done' || task.HealthStatus === 'Completed') {
-        return 'Completed';
-    }
-    if (task.HealthStatus === 'AtRisk' || task.HealthStatus === 'OffTrack' || task.HealthStatus === 'Paused') {
-        return task.HealthStatus;
-    }
-    return 'OnTrack';
-}
-
-/**
- * Percent progress from `BaselineValue` toward `TargetValue`, clamped to 0-100.
- * Honors `MetricDirection` implicitly: a Down target (target < baseline) measures reduction.
- * Returns null when there is no target or the target equals the baseline (no measurable span).
- */
-export function ComputeTaskMetricPercent(task: BizAppsTaskRecordLike): number | null {
-    if (task.TargetValue == null) {
-        return null;
-    }
-    const baseline = task.BaselineValue ?? 0;
-    const span = task.TargetValue - baseline;
-    if (span === 0) {
-        return null;
-    }
-    const current = task.CurrentValue ?? baseline;
-    const raw = ((current - baseline) / span) * 100;
-    return Math.max(0, Math.min(100, Math.round(raw)));
-}
-
 /** ExtraFilters for the cockpit's three core-entity queries. Every clause is bound to the current user: the cockpit never shows another user's Chief of Staff data. */
 export interface CockpitScopeFilters {
     Policy: string;
@@ -487,387 +270,12 @@ export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgen
     };
 }
 
-/** OpenApp entity holding the person linked to the signed-in MJ user (`LinkedUserID`). */
-export const BIZAPPS_PEOPLE_ENTITY_NAME = 'MJ_BizApps_Common: People';
-/** OpenApp entity linking tasks to the people assigned to them. */
-export const BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME = 'MJ_BizApps_Tasks: Task Assignments';
-/** OpenApp entity holding priority objectives and their milestones. */
-export const BIZAPPS_TASKS_ENTITY_NAME = 'MJ_BizApps_Tasks: Tasks';
 
-/** CSS modifier for a task priority badge, keyed by the Tasks `Priority` value list (Critical/High/Medium/Low). */
-export function GetTaskPriorityClass(priority: string | null): string {
-    switch ((priority ?? '').toLowerCase()) {
-        case 'critical':
-            return 'priority-critical';
-        case 'high':
-            return 'priority-high';
-        case 'low':
-            return 'priority-low';
-        default:
-            return 'priority-normal';
-    }
-}
-
-/** Minimal RunView surface the task-scope resolver needs; `RunView` from @memberjunction/core satisfies it. */
-export interface TaskScopeQueryRunner {
-    RunView<T>(params: RunViewParams): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }>;
-}
-
-/** How the signed-in user was matched to a BizApps person. */
-export type PersonMatchSource = 'LinkedUserID' | 'Email';
-
-export type PersonTaskScope =
-    | { HasLinkedPerson: false }
-    | { HasLinkedPerson: true; PersonID: string; MatchedBy: PersonMatchSource; Filter: string };
-
-/**
- * Resolve the BizApps person for the signed-in user and the filter that limits the Tasks query to work
- * that person created or is assigned to. Throws when a lookup fails so the caller can show the error.
- *
- * The person is matched by `LinkedUserID` first. When no person is linked and `currentUserEmail` is
- * given, an exact, case-insensitive match on the person's `Email` is used instead, so an
- * administrator-entered People record works without a manual link.
- *
- * `peopleEntityId` is the `MJ: Entities` ID of {@link BIZAPPS_PEOPLE_ENTITY_NAME}: Task Assignments has no
- * PersonID column, its assignee is the polymorphic (`AssigneeEntityID`, `AssigneeRecordID`) pair, so the
- * person is matched on both.
- *
- * The scope covers the whole tree of every root objective the person owns: milestones added under their
- * objective by an administrator, a teammate or the agent load with it, whoever created them. Children of a
- * milestone the person is merely assigned to bring the objective above them in as well, so the assignee sees the milestone in context; scope never widens to an unrelated tree.
- */
-export async function ResolvePersonTaskScope(
-    runner: TaskScopeQueryRunner,
-    currentUserId: string,
-    peopleEntityId: string,
-    currentUserEmail?: string | null,
-): Promise<PersonTaskScope> {
-    const match = await resolvePersonForUser(runner, currentUserId, currentUserEmail);
-    if (!match) {
-        return { HasLinkedPerson: false };
-    }
-    const assignedTaskIDs = await loadAssignedTaskIDs(runner, peopleEntityId, match.PersonID);
-    const scopeRootIDs = await loadScopeRootTaskIDs(runner, match.PersonID, assignedTaskIDs);
-    return {
-        HasLinkedPerson: true,
-        PersonID: match.PersonID,
-        MatchedBy: match.MatchedBy,
-        Filter: BuildPersonScopedTaskFilter(match.PersonID, assignedTaskIDs, scopeRootIDs),
-    };
-}
-
-interface PersonMatch {
-    PersonID: string;
-    MatchedBy: PersonMatchSource;
-}
-
-/** The linked person, else the person whose email equals the user's, else null. */
-async function resolvePersonForUser(
-    runner: TaskScopeQueryRunner,
-    currentUserId: string,
-    currentUserEmail: string | null | undefined,
-): Promise<PersonMatch | null> {
-    const linked = await findPersonID(runner, `LinkedUserID = '${EscapeSQLString(currentUserId)}'`);
-    if (linked) {
-        return { PersonID: linked, MatchedBy: 'LinkedUserID' };
-    }
-    const email = (currentUserEmail ?? '').trim().toLowerCase();
-    if (!email) {
-        return null;
-    }
-    const byEmail = await findPersonID(runner, `LOWER(Email) = '${EscapeSQLString(email)}'`);
-    return byEmail ? { PersonID: byEmail, MatchedBy: 'Email' } : null;
-}
-
-async function findPersonID(runner: TaskScopeQueryRunner, extraFilter: string): Promise<string | null> {
-    const people = await runner.RunView<{ ID: string }>({
-        EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
-        ExtraFilter: extraFilter,
-        Fields: ['ID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-    });
-    if (!people.Success) {
-        throw new Error(people.ErrorMessage ?? 'Failed to resolve the linked person.');
-    }
-    return people.Results[0]?.ID ?? null;
-}
-
-async function loadAssignedTaskIDs(runner: TaskScopeQueryRunner, peopleEntityId: string, personID: string): Promise<string[]> {
-    const assignments = await runner.RunView<{ TaskID: string }>({
-        EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
-        ExtraFilter: `AssigneeEntityID = '${EscapeSQLString(peopleEntityId)}' AND AssigneeRecordID = '${EscapeSQLString(personID)}'`,
-        Fields: ['TaskID'],
-        ResultType: 'simple',
-    });
-    if (!assignments.Success) {
-        throw new Error(assignments.ErrorMessage ?? 'Failed to load task assignments.');
-    }
-    return assignments.Results.map((a) => a.TaskID).filter((id) => !!id);
-}
-
-/** IDs of the root objectives the person created or is assigned to; their whole trees belong on the cockpit. */
-/**
- * The root objectives whose whole tree belongs in the person's scope: the roots they created or
- * are assigned to, plus the root above every milestone they are assigned to (read off the
- * milestone's `RootParentID`, which on a root is the root's own ID). A person given one milestone
- * therefore sees the objective it belongs to, with the rest of its milestones as context.
- */
-async function loadScopeRootTaskIDs(runner: TaskScopeQueryRunner, personID: string, assignedTaskIDs: readonly string[]): Promise<string[]> {
-    const rows = await runner.RunView<{ ID: string; RootParentID: string | null }>({
-        EntityName: BIZAPPS_TASKS_ENTITY_NAME,
-        ExtraFilter: BuildScopeRootTasksFilter(personID, assignedTaskIDs),
-        Fields: ['ID', 'RootParentID'],
-        ResultType: 'simple',
-    });
-    if (!rows.Success) {
-        throw new Error(rows.ErrorMessage ?? 'Failed to load the scope root objectives.');
-    }
-    const roots: string[] = [];
-    const seen = new UUIDSet();
-    for (const row of rows.Results) {
-        const rootID = row.RootParentID || row.ID;
-        if (rootID && !seen.Has(rootID)) {
-            seen.Add(rootID);
-            roots.push(rootID);
-        }
-    }
-    return roots;
-}
-
-/** ExtraFilter for `MJ_BizApps_Tasks: Tasks` selecting the root tasks (no parent) the person created or is assigned to. */
-export function BuildOwnedRootTasksFilter(personID: string, assignedTaskIDs: readonly string[]): string {
-    return `ParentID IS NULL AND (${buildCreatedOrAssignedClause(personID, assignedTaskIDs)})`;
-}
-
-/**
- * {@link BuildOwnedRootTasksFilter} plus every assigned task, root or not, so a milestone's
- * `RootParentID` can name the objective above it.
- */
-export function BuildScopeRootTasksFilter(personID: string, assignedTaskIDs: readonly string[]): string {
-    const owned = BuildOwnedRootTasksFilter(personID, assignedTaskIDs);
-    if (assignedTaskIDs.length === 0) {
-        return owned;
-    }
-    return `(${owned}) OR ID IN (${quoteIDList(assignedTaskIDs)})`;
-}
-
-/**
- * Who is assigned to each of `taskIDs`, by name, from `MJ_BizApps_Tasks: Task Assignments` rows
- * whose assignee is a `MJ_BizApps_Common: People` record. Two queries; none for an empty list.
- */
-export async function LoadTaskAssignees(runner: TaskScopeQueryRunner, peopleEntityId: string, taskIDs: readonly string[]): Promise<TaskAssigneeMap> {
-    const map: TaskAssigneeMap = new UUIDMap<TaskAssignee[]>();
-    if (taskIDs.length === 0) {
-        return map;
-    }
-    const assignments = await runner.RunView<{ TaskID: string; AssigneeRecordID: string }>({
-        EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
-        ExtraFilter: `AssigneeEntityID = '${EscapeSQLString(peopleEntityId)}' AND TaskID IN (${quoteIDList(taskIDs)})`,
-        Fields: ['TaskID', 'AssigneeRecordID'],
-        ResultType: 'simple',
-    });
-    if (!assignments.Success) {
-        throw new Error(assignments.ErrorMessage ?? 'Failed to load task assignees.');
-    }
-    const personIDs = distinctUUIDs(assignments.Results.map((a) => a.AssigneeRecordID));
-    if (personIDs.length === 0) {
-        return map;
-    }
-    const people = await runner.RunView<{ ID: string; FirstName: string | null; LastName: string | null }>({
-        EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
-        ExtraFilter: `ID IN (${quoteIDList(personIDs)})`,
-        Fields: ['ID', 'FirstName', 'LastName'],
-        ResultType: 'simple',
-    });
-    if (!people.Success) {
-        throw new Error(people.ErrorMessage ?? 'Failed to load assignee names.');
-    }
-    const nameByPerson = new UUIDMap<string>();
-    for (const person of people.Results) {
-        nameByPerson.Set(person.ID, [person.FirstName, person.LastName].filter((n) => !!n).join(' ').trim() || person.ID);
-    }
-    for (const a of assignments.Results) {
-        if (!a.TaskID || !a.AssigneeRecordID) {
-            continue;
-        }
-        const list = map.Get(a.TaskID) ?? [];
-        list.push({ PersonID: a.AssigneeRecordID, Name: nameByPerson.Get(a.AssigneeRecordID) ?? a.AssigneeRecordID });
-        map.Set(a.TaskID, list);
-    }
-    return map;
-}
-
-/** The distinct, non-empty IDs of `ids`, first spelling kept, compared case-insensitively. */
-function distinctUUIDs(ids: readonly (string | null | undefined)[]): string[] {
-    const seen = new UUIDSet();
-    const out: string[] = [];
-    for (const id of ids) {
-        if (id && !seen.Has(id)) {
-            seen.Add(id);
-            out.push(id);
-        }
-    }
-    return out;
-}
-
-function buildCreatedOrAssignedClause(personID: string, assignedTaskIDs: readonly string[]): string {
-    const createdClause = `CreatedByPersonID = '${EscapeSQLString(personID)}'`;
-    if (assignedTaskIDs.length === 0) {
-        return createdClause;
-    }
-    return `${createdClause} OR ID IN (${quoteIDList(assignedTaskIDs)})`;
-}
-
-function quoteIDList(ids: readonly string[]): string {
-    return ids.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
-}
-
-/**
- * ExtraFilter for `MJ_BizApps_Tasks: Tasks` limiting rows to work the given person created or is assigned to,
- * plus every task under a root objective they own (`RootParentID` is the view's computed root, which for a
- * root task is its own ID). `assignedTaskIDs` come from `MJ_BizApps_Tasks: Task Assignments` for the same
- * person; `ownedRootIDs` from {@link BuildOwnedRootTasksFilter}.
- */
-export function BuildPersonScopedTaskFilter(
-    personID: string,
-    assignedTaskIDs: readonly string[],
-    ownedRootIDs: readonly string[] = [],
-): string {
-    const createdOrAssigned = buildCreatedOrAssignedClause(personID, assignedTaskIDs);
-    if (ownedRootIDs.length === 0) {
-        return createdOrAssigned;
-    }
-    return `${createdOrAssigned} OR RootParentID IN (${quoteIDList(ownedRootIDs)})`;
-}
-
-export function FormatTaskMetricProgress(task: BizAppsTaskRecordLike): string | null {
-    if (task.TargetValue == null && task.CurrentValue == null) {
-        return null;
-    }
-    const unit = task.UnitOfMeasure ? ` ${task.UnitOfMeasure}` : '';
-    const current = task.CurrentValue ?? task.BaselineValue ?? 0;
-    if (task.TargetValue != null) {
-        return `${current}${unit} / ${task.TargetValue}${unit}`;
-    }
-    return `${current}${unit}`;
-}
-
+/** The cockpit's core counts: pending approvals and active wakes. */
 export function CalculateChiefOfStaffMetrics(
-    tasks: readonly BizAppsTaskRecordLike[],
     routines: readonly RoutineSummaryItem[],
     requests: readonly RequestSummaryItem[],
-    now: Date = new Date(),
-    options: ChiefOfStaffMetricsOptions = {},
 ): ChiefOfStaffMetrics {
-    const assigneesOf = (taskID: string): TaskAssignee[] => options.Assignees?.Get(taskID) ?? [];
-    const heldByMe = (assignees: readonly TaskAssignee[]): boolean =>
-        !!options.CurrentPersonID && assignees.some((a) => UUIDsEqual(a.PersonID, options.CurrentPersonID));
-    /** The person who created a task, named from the view's denormalized column, or null when it carries no creator. */
-    const creatorOf = (task: BizAppsTaskRecordLike): TaskAssignee | null =>
-        task.CreatedByPersonID
-            ? { PersonID: task.CreatedByPersonID, Name: task.CreatedByPerson?.trim() || task.CreatedByPersonID }
-            : null;
-    const subtasksByParent = GroupByUUID(
-        tasks.filter((t) => !!t.ParentID),
-        (t) => t.ParentID,
-    );
-    const priorityTasks: BizAppsTaskRecordLike[] = [];
-
-    for (const task of tasks) {
-        const hasChildren = subtasksByParent.Has(task.ID);
-        if (!task.ParentID && (IsTaskPriorityObjective(task) || hasChildren)) {
-            priorityTasks.push(task);
-        }
-    }
-
-    // Only qualifying objectives are shown; an empty list renders the tab's empty state rather than unrelated root tasks.
-    const rootsToDisplay = priorityTasks;
-
-    let onTrackCount = 0;
-    let atRiskCount = 0;
-    let offTrackCount = 0;
-    let completedPriorityCount = 0;
-    let confidenceSum = 0;
-    let confidenceCount = 0;
-    let progressSum = 0;
-
-    const priorityCards: PriorityObjectiveCardViewModel[] = rootsToDisplay.map((root) => {
-        const children = subtasksByParent.Get(root.ID) ?? [];
-        const completedChildren = children.filter(
-            (c) => c.Status === 'Completed' || c.Status === 'Done' || (c.PercentComplete ?? 0) >= 100,
-        ).length;
-
-        const metricPercent = ComputeTaskMetricPercent(root);
-        const rawPercent =
-            metricPercent !== null
-                ? metricPercent
-                : typeof root.PercentComplete === 'number' && root.PercentComplete > 0
-                ? root.PercentComplete
-                : children.length > 0
-                  ? Math.round((completedChildren / children.length) * 100)
-                  : root.Status === 'Completed' || root.Status === 'Done'
-                    ? 100
-                    : 0;
-        const effectivePercent = Math.max(0, Math.min(100, rawPercent));
-        const effectiveHealth = NormalizeTaskHealth(root);
-
-        if (effectiveHealth === 'OnTrack') onTrackCount++;
-        else if (effectiveHealth === 'AtRisk') atRiskCount++;
-        else if (effectiveHealth === 'OffTrack') offTrackCount++;
-        else if (effectiveHealth === 'Completed') completedPriorityCount++;
-
-        if (typeof root.ConfidenceScore === 'number' && Number.isFinite(root.ConfidenceScore)) {
-            confidenceSum += root.ConfidenceScore;
-            confidenceCount++;
-        }
-        progressSum += effectivePercent;
-
-        const dueDate = ParseOptionalDate(root.DueAt);
-        const isOverdue =
-            dueDate !== null &&
-            dueDate.getTime() < now.getTime() &&
-            effectiveHealth !== 'Completed';
-
-        const rootAssignees = assigneesOf(root.ID);
-        const assignedToMe = heldByMe(rootAssignees);
-        const owner = creatorOf(root);
-        const ownedByMe = !!owner && !!options.CurrentPersonID && UUIDsEqual(owner.PersonID, options.CurrentPersonID);
-        const isOwner = assignedToMe || ownedByMe;
-        const milestoneRows: MilestoneRowViewModel[] = children.map((child) => {
-            const assignees = assigneesOf(child.ID);
-            const creator = creatorOf(child);
-            const implicitHolder = creator ?? owner;
-            const holders = assignees.length > 0 ? assignees : implicitHolder ? [implicitHolder] : [];
-            return {
-                Task: child,
-                Assignees: assignees,
-                AssignedToMe: heldByMe(assignees),
-                Holders: holders,
-                IsImplicitlyHeld: assignees.length === 0 && holders.length > 0,
-                HeldByMe: heldByMe(holders),
-            };
-        });
-        // The objective is shared context; the milestone list is the person's own unless they own the objective.
-        // With no current person (no People record resolved) nothing is hidden.
-        const milestones = isOwner || !options.CurrentPersonID ? milestoneRows : milestoneRows.filter((m) => m.HeldByMe);
-        return {
-            Task: root,
-            Subtasks: children,
-            Milestones: milestones,
-            Assignees: rootAssignees,
-            AssignedToMe: assignedToMe,
-            IsOwner: isOwner,
-            Owner: owner,
-            OwnedByMe: ownedByMe,
-            CompletedSubtaskCount: completedChildren,
-            EffectivePercentComplete: effectivePercent,
-            EffectiveHealth: effectiveHealth,
-            MetricProgressLabel: FormatTaskMetricProgress(root),
-            IsOverdue: isOverdue,
-        };
-    });
-
     const pendingRequests = requests.filter(
         (r) => r.Status === 'Requested' && IsApprovalRequest(r),
     );
@@ -882,52 +290,24 @@ export function CalculateChiefOfStaffMetrics(
         }
     }
 
-    const totalSubtasks = tasks.filter((t) => !!t.ParentID).length;
-    const todoItems = BuildTodoItems(tasks, now);
-
     return {
-        TotalTaskCount: tasks.length,
-        PriorityObjectiveCount: priorityCards.length,
-        SubtaskCount: totalSubtasks,
-        OnTrackCount: onTrackCount,
-        AtRiskCount: atRiskCount,
-        OffTrackCount: offTrackCount,
-        CompletedPriorityCount: completedPriorityCount,
-        AverageConfidenceScore:
-            confidenceCount > 0 ? Math.round((confidenceSum / confidenceCount) * 10) / 10 : null,
-        AveragePriorityProgress:
-            priorityCards.length > 0 ? Math.round(progressSum / priorityCards.length) : 0,
         PendingApprovalCount: pendingRequests.length,
         HighPriorityPendingCount: highPriorityPending.length,
         ActiveWakeRoutineCount: activeWakeRoutines.length,
         NextScheduledWakeAt: nextScheduledWakeAt,
-        PriorityCards: priorityCards,
-        TodoItems: todoItems,
-        OpenTodoCount: todoItems.length,
     };
 }
 
 export function BuildChiefOfStaffAgentContext(
     input: ChiefOfStaffAgentContextInput,
 ): AgentContextRecord {
-    const priorityNames = input.Metrics.PriorityCards.map((c) => c.Task.Name).filter((n) => !!n);
-    const boundedPriorityNames = BoundNameList(priorityNames, AGENT_CONTEXT_NAME_LIST_CAP);
-
     const routineNames = input.Routines.map((r) => `${r.Name} (${r.Status})`).filter((n) => !!n);
     const boundedRoutineNames = BoundNameList(routineNames, AGENT_CONTEXT_NAME_LIST_CAP);
 
-    const context: AgentContextRecord = {
+    const core: AgentContextRecord = {
         Surface: 'ChiefOfStaffDashboard',
         ActiveTab: input.ActiveTab,
         SearchText: input.SearchText,
-        HealthFilter: input.HealthFilter,
-        PriorityObjectiveCount: input.Metrics.PriorityObjectiveCount,
-        SubtaskCount: input.Metrics.SubtaskCount,
-        OnTrackCount: input.Metrics.OnTrackCount,
-        AtRiskCount: input.Metrics.AtRiskCount,
-        OffTrackCount: input.Metrics.OffTrackCount,
-        CompletedPriorityCount: input.Metrics.CompletedPriorityCount,
-        AveragePriorityProgressPercent: input.Metrics.AveragePriorityProgress,
         PendingApprovalCount: input.Metrics.PendingApprovalCount,
         HighPriorityPendingCount: input.Metrics.HighPriorityPendingCount,
         ActiveWakeRoutineCount: input.Metrics.ActiveWakeRoutineCount,
@@ -951,80 +331,22 @@ export function BuildChiefOfStaffAgentContext(
                 input.Governance.RequireApprovalForDestructiveActions,
             AutoApproveAmountThreshold: input.Governance.AutoApproveAmountThreshold,
         },
-        VisiblePriorityObjectiveNames: boundedPriorityNames,
         VisibleWakeRoutineNames: boundedRoutineNames,
     };
-
-    if (priorityNames.length > boundedPriorityNames.length) {
-        context['VisiblePriorityObjectiveNamesTruncated'] = true;
-        context['VisiblePriorityObjectiveNamesTotal'] = priorityNames.length;
-    }
-
-    return context;
+    // Extensions add their own fields; a core field is never overwritten by one.
+    return { ...(input.ExtensionContext ?? {}), ...core };
 }
 
+/** Validates a tab parameter against the tabs the cockpit currently offers (core plus extension tabs). */
 export function ValidateChiefOfStaffTabParam(
     raw: string | number | boolean | null | undefined,
+    validTabs: readonly string[] = CORE_CHIEF_OF_STAFF_TABS,
 ): { ok: true; value: ChiefOfStaffTab } | { ok: false; result: AgentToolResult } {
-    return ValidateEnumParam(raw, VALID_CHIEF_OF_STAFF_TABS, 'tab');
-}
-
-export function ValidateHealthFilterParam(
-    raw: string | number | boolean | null | undefined,
-): { ok: true; value: HealthFilter } | { ok: false; result: AgentToolResult } {
-    return ValidateEnumParam(raw, VALID_HEALTH_FILTERS, 'health');
+    return ValidateEnumParam(raw, validTabs, 'tab');
 }
 
 export function ValidateSearchQueryParam(
     raw: string | number | boolean | null | undefined,
 ): { ok: true; value: string } | { ok: false; result: AgentToolResult } {
     return ValidateStringParam(raw, 'query');
-}
-
-export function ResolvePriorityObjectiveByIDOrName(
-    cards: readonly PriorityObjectiveCardViewModel[],
-    rawRef: string | number | boolean | null | undefined,
-): { ok: true; value: PriorityObjectiveCardViewModel } | { ok: false; error: string } {
-    if (typeof rawRef !== 'string' || rawRef.trim().length === 0) {
-        return {
-            ok: false,
-            error: `Provide a priority objective ID or name. ${availableObjectiveNames(cards)}`,
-        };
-    }
-    const ref = rawRef.trim();
-    const byId = cards.find((c) => UUIDsEqual(c.Task.ID, ref));
-    if (byId) {
-        return { ok: true, value: byId };
-    }
-    const byName = cards.find((c) => c.Task.Name.trim().toLowerCase() === ref.toLowerCase());
-    if (byName) {
-        return { ok: true, value: byName };
-    }
-    const partial = cards.filter((c) => c.Task.Name.toLowerCase().includes(ref.toLowerCase()));
-    if (partial.length === 1) {
-        return { ok: true, value: partial[0] };
-    }
-    if (partial.length > 1) {
-        const names = partial
-            .slice(0, AGENT_CONTEXT_NAME_LIST_CAP)
-            .map((c) => c.Task.Name)
-            .join(', ');
-        return {
-            ok: false,
-            error: `'${ref}' matches multiple priority objectives: ${names}. Be more specific.`,
-        };
-    }
-    return {
-        ok: false,
-        error: `No priority objective matches '${ref}'. ${availableObjectiveNames(cards)}`,
-    };
-}
-
-function availableObjectiveNames(cards: readonly PriorityObjectiveCardViewModel[]): string {
-    if (cards.length === 0) {
-        return 'There are no priority objectives loaded.';
-    }
-    const names = cards.slice(0, AGENT_CONTEXT_NAME_LIST_CAP).map((c) => c.Task.Name);
-    const suffix = cards.length > AGENT_CONTEXT_NAME_LIST_CAP ? ', …' : '';
-    return `Available priority objectives: ${names.join(', ')}${suffix}`;
 }

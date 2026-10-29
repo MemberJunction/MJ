@@ -262,3 +262,5 @@ export {
     LoadChiefOfStaffDashboard,
 } from './ChiefOfStaff/chief-of-staff-dashboard.component';
 export * from './ChiefOfStaff/chief-of-staff-agent-context';
+export * from './ChiefOfStaff/chief-of-staff-panel';
+export * from './ChiefOfStaff/chief-of-staff-live-refresh';
