@@ -115,6 +115,28 @@ describe('SmartFieldIdentification guardrails', () => {
          expect(mm.eligibleForNameField({ ...isa, Name: 'Count', Type: 'int' })).toBe(false);
          expect(mm.eligibleForNameField({ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: true, AllowUpdateAPI: true })).toBe(false);
       });
+
+      it('rejects foreign-key columns (RelatedEntityID) and polymorphic RecordID columns', () => {
+         expect(mm.eligibleForNameField({
+            Name: 'CustomerID', Type: 'nvarchar', Length: 100, IsPrimaryKey: false, RelatedEntityID: 'ent-cust-1',
+         })).toBe(false);
+         expect(mm.eligibleForNameField({
+            Name: 'CustomRef', Type: 'nvarchar', Length: 450, IsPrimaryKey: false, EntityIDFieldName: 'EntityID',
+         })).toBe(false);
+         expect(mm.eligibleForNameField({
+            Name: 'RecordID', Type: 'nvarchar', Length: 450, IsPrimaryKey: false,
+         })).toBe(false);
+         expect(mm.eligibleForNameField({
+            Name: 'SourceRecordID', Type: 'nvarchar', Length: 450, IsPrimaryKey: false,
+         })).toBe(false);
+         expect(mm.eligibleForNameField({
+            Name: 'LinkedRecordPrimaryKey', Type: 'nvarchar', Length: 450, IsPrimaryKey: false,
+         })).toBe(false);
+         // Normal text fields that happen to start with Record (e.g. RecordName, RecordLabel) remain eligible
+         expect(mm.eligibleForNameField({
+            Name: 'RecordName', Type: 'nvarchar', Length: 200, IsPrimaryKey: false,
+         })).toBe(true);
+      });
    });
 
    describe('isInheritedISAField', () => {
@@ -288,6 +310,25 @@ describe('SmartFieldIdentification guardrails', () => {
          expect(sql).toHaveLength(1);
          expect(sql[0]).toContain("'f-dn'");
          expect(sql[0]).toContain('IsNameField = 0');
+      });
+
+      it('rejects polymorphic RecordID when proposed by the LLM and replaces an existing RecordID flag when a real text candidate exists', () => {
+         const freshFields = [
+            { ID: 'f-rec', Name: 'RecordID', Type: 'nvarchar', Length: 450, IsPrimaryKey: false, EntityIDFieldName: 'EntityID', IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         expect(mm.runNameFieldUpdates(freshFields, emptyResult({ nameFields: ['RecordID'] }))).toHaveLength(0);
+
+         const replaceableFields = [
+            { ID: 'f-rec', Name: 'RecordID', Type: 'nvarchar', Length: 450, IsPrimaryKey: false, EntityIDFieldName: 'EntityID', IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-status', Name: 'Status', Type: 'nvarchar', Length: 50, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         const sql = mm.runNameFieldUpdates(replaceableFields, emptyResult({ nameFields: ['RecordID', 'Status'] }));
+         expect(sql).toHaveLength(2);
+         const joined = sql.join('\n');
+         expect(joined).toContain("'f-status'");
+         expect(joined).toContain('IsNameField = 1');
+         expect(joined).toContain("'f-rec'");
+         expect(joined).toContain('IsNameField = 0');
       });
    });
 

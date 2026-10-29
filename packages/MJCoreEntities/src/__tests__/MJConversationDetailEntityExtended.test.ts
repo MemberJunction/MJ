@@ -124,6 +124,8 @@ type Harness = {
     LatestResult: MockResultEntry | null;
     Save: () => Promise<boolean>;
     Delete: () => Promise<boolean>;
+    MarkServerAuthoredReply: () => void;
+    IsServerAuthoredReply: boolean;
 };
 
 async function makeEntity(): Promise<Harness> {
@@ -495,13 +497,6 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         expect(await entity.Delete()).toBe(false);
     });
 
-    it("keeps today's rules for agent replies until the chat stops writing them from the browser", async () => {
-        const entity = await messageAs(GRANTEE);
-        entity.Role = 'AI';
-        entity.UserID = OTHER;
-
-        expect(await entity.Save()).toBe(true);
-    });
 
     it('refuses a person who cannot read a conversation that exists (hidden by a row filter)', async () => {
         mocks.conversationVisible.mockImplementation((userID: string | undefined) => userID === 'system-account');
@@ -560,9 +555,9 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         );
     });
 
-    it('holds the system user to the variable rule for the row, conversation and rating, not for authorship', async () => {
+    it('holds the system user to the variable rule for the row, conversation, role and rating, not for authorship', async () => {
         mocks.isSystemUser.mockReturnValue(true);
-        for (const field of ['ID', 'ConversationID', 'UserRating']) {
+        for (const field of ['ID', 'ConversationID', 'Role', 'UserRating']) {
             const entity = await messageWithVariable(field);
             entity.ContextCurrentUser = { ID: 'system-account' };
             expect(await entity.Save()).toBe(false);
@@ -622,5 +617,233 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
 
         expect(await entity.Save()).toBe(false);
         expect(entity.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+    });
+});
+
+describe('MJConversationDetailEntityExtended: only the server writes an agent reply (A19)', () => {
+    const OWNER = 'anon-1';
+    const GRANTEE = 'grantee-1';
+    const REPLY_REFUSAL = "Only the server writes an agent's reply.";
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mocks.superSave.mockResolvedValue(true);
+        mocks.superDelete.mockResolvedValue(true);
+        mocks.engineConfig.mockResolvedValue(undefined);
+        mocks.getUserAvailableResources.mockReturnValue([{ ResourceRecordID: 'conv-1', PermissionLevel: 'Edit' }]);
+        mocks.isSystemUser.mockReturnValue(false);
+        mocks.getSystemUser.mockResolvedValue({ ID: 'system-account' });
+        mocks.conversationVisible.mockReturnValue(true);
+    });
+
+    /** A new reply written as `userID`. */
+    async function newReplyAs(userID: string, role = 'AI'): Promise<Harness> {
+        const entity = await makeEntity();
+        entity.ContextCurrentUser = { ID: userID };
+        entity.Role = role;
+        return entity;
+    }
+
+    /** A stored reply that `userID` saves with the named fields changed. */
+    async function savedReplyAs(userID: string, dirty: string[], storedRole = 'AI'): Promise<Harness> {
+        const entity = await newReplyAs(userID, storedRole);
+        entity.IsSaved = true;
+        entity.Fields = [
+            { Name: 'Role', Dirty: dirty.includes('Role'), OldValue: storedRole },
+            ...dirty.filter((name) => name !== 'Role').map((name) => ({ Name: name, Dirty: true })),
+        ];
+        return entity;
+    }
+
+    /** A transaction variable sets its field at submit, after the gate: an unmarked one may not reach a reply field. */
+    it('refuses a transaction variable on a reply field unless server code marked the write, the system user included', async () => {
+        mocks.isSystemUser.mockReturnValue(true);
+        const withVariable = async (field: string): Promise<Harness> => {
+            const entity = await savedReplyAs('system-account', []);
+            entity.Fields.push({ Name: field, Dirty: false });
+            entity.TransactionGroup = { Variables: [{ EntityObject: entity, FieldName: field, Type: 'Use' }] };
+            return entity;
+        };
+        for (const field of ['Message', 'Status', 'AgentID']) {
+            expect(await (await withVariable(field)).Save()).toBe(false);
+        }
+        const marked = await withVariable('Message');
+        marked.MarkServerAuthoredReply();
+        expect(await marked.Save()).toBe(true);
+    });
+
+    describe("a person's save of a reply", () => {
+        it("refuses a grantee's reply, and the owner's, in any spelling of the role", async () => {
+            for (const [user, role] of [[GRANTEE, 'AI'], [OWNER, 'AI'], [GRANTEE, 'Error'], [GRANTEE, 'ai '], [OWNER, 'ERROR']]) {
+                const entity = await newReplyAs(user, role);
+
+                expect(await entity.Save()).toBe(false);
+                expect(entity.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
+                expect(entity.LatestResult?.Type).toBe('create');
+            }
+            expect(mocks.superSave).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            'UserID',
+            'Role',
+            'Message',
+            'ArtifactID',
+            'ArtifactVersionID',
+            'MediaType',
+            'ParentID',
+            'ConversationID',
+            'BranchID',
+            'AgentID',
+            'Status',
+            'Error',
+            'ResponseForm',
+            'ActionableCommands',
+            'AutomaticCommands',
+            'SuggestedResponses',
+            'ReflectionInsights',
+            'CompletionTime',
+            'ExternalID',
+        ])("refuses a person changing reply field %s, the owner's own conversation included", async (field) => {
+            const entity = await savedReplyAs(OWNER, [field]);
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
+            expect(entity.LatestResult?.Type).toBe('update');
+        });
+
+        it("lets the owner rate a reply, and keeps the rating the owner's alone", async () => {
+            expect(await (await savedReplyAs(OWNER, ['UserRating', 'UserFeedback'])).Save()).toBe(true);
+
+            const grantee = await savedReplyAs(GRANTEE, ['UserRating']);
+            expect(await grantee.Save()).toBe(false);
+            expect(grantee.LatestResult?.CompleteMessage).toBe(
+                'Only the conversation owner can set or change the rating and feedback on this message.'
+            );
+        });
+
+        it('keeps pinning, hiding and other bookkeeping on the conversation-level rules', async () => {
+            expect(await (await savedReplyAs(GRANTEE, ['IsPinned'])).Save()).toBe(true);
+            expect(await (await savedReplyAs(OWNER, ['HiddenToUser'])).Save()).toBe(true);
+            expect(await (await savedReplyAs(GRANTEE, ['SummaryOfEarlierConversation'])).Save()).toBe(true);
+        });
+
+        it('keeps deleting a reply on the conversation-level rules', async () => {
+            expect(await (await newReplyAs(GRANTEE)).Delete()).toBe(true);
+            expect(await (await newReplyAs(OWNER)).Delete()).toBe(true);
+        });
+    });
+
+    describe('a marked server write', () => {
+        it('creates and updates a reply in a conversation the context user owns or holds a grant on', async () => {
+            for (const user of [OWNER, GRANTEE]) {
+                const created = await newReplyAs(user);
+                created.MarkServerAuthoredReply();
+                expect(await created.Save()).toBe(true);
+
+                const updated = await savedReplyAs(user, ['Message', 'Status']);
+                updated.MarkServerAuthoredReply();
+                expect(await updated.Save()).toBe(true);
+            }
+        });
+
+        it("is still refused in a conversation the context user can't write to", async () => {
+            mocks.getUserAvailableResources.mockReturnValue([]);
+            const noGrant = await newReplyAs(GRANTEE);
+            noGrant.MarkServerAuthoredReply();
+            expect(await noGrant.Save()).toBe(false);
+            expect(noGrant.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+
+            mocks.getUserAvailableResources.mockReturnValue([{ ResourceRecordID: 'conv-1', PermissionLevel: 'View' }]);
+            const viewOnly = await newReplyAs(GRANTEE);
+            viewOnly.MarkServerAuthoredReply();
+            expect(await viewOnly.Save()).toBe(false);
+            expect(viewOnly.LatestResult?.CompleteMessage).toBe('You have view-only access to this conversation.');
+        });
+
+        it('is refused in a conversation that exists but is hidden from the context user', async () => {
+            mocks.conversationVisible.mockImplementation((userID: string | undefined) => userID === 'system-account');
+            const entity = await newReplyAs(GRANTEE);
+            entity.MarkServerAuthoredReply();
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+        });
+
+        it("does not let a person post as someone else: the marker is for replies only", async () => {
+            const entity = await newReplyAs(GRANTEE, 'User');
+            entity.UserID = OWNER;
+            entity.MarkServerAuthoredReply();
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('You can post a message only as yourself.');
+        });
+
+        it('stays on the instance for later saves', async () => {
+            const entity = await newReplyAs(GRANTEE);
+            expect(entity.IsServerAuthoredReply).toBe(false);
+            entity.MarkServerAuthoredReply();
+            expect(await entity.Save()).toBe(true);
+            entity.IsSaved = true;
+            entity.Fields = [{ Name: 'Role', Dirty: false, OldValue: 'AI' }, { Name: 'Message', Dirty: true }];
+
+            expect(await entity.Save()).toBe(true);
+            expect(entity.IsServerAuthoredReply).toBe(true);
+        });
+    });
+
+    describe('the system user', () => {
+        beforeEach(() => mocks.isSystemUser.mockReturnValue(true));
+
+        it("is refused an unmarked reply in someone else's conversation (the scoped-anon-elevation SA6 shape)", async () => {
+            mocks.getUserAvailableResources.mockReturnValue([]);
+            const entity = await newReplyAs('system-account');
+
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+        });
+
+        it('is refused an unmarked reply even where it holds a grant: being the system user grants nothing new', async () => {
+            const created = await newReplyAs('system-account');
+            expect(await created.Save()).toBe(false);
+            expect(created.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
+
+            const turned = await savedReplyAs('system-account', ['Role'], 'User');
+            turned.Role = 'AI';
+            expect(await turned.Save()).toBe(false);
+            expect(turned.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
+        });
+
+        it('writes a marked reply where it holds a grant (a host-driven turn)', async () => {
+            const entity = await newReplyAs('system-account');
+            entity.MarkServerAuthoredReply();
+
+            expect(await entity.Save()).toBe(true);
+        });
+    });
+
+    it("lets a reply the record-cloning engine copies through, as before", async () => {
+        const entity = await newReplyAs(GRANTEE);
+        entity.CloneContext = { CloneLogID: 'log-1', SourceRecordID: 'source-detail', RootEntityName: 'MJ: Users' };
+
+        expect(await entity.Save()).toBe(true);
+    });
+
+    it("refuses a person's reply even when no one can find the conversation", async () => {
+        mocks.conversationVisible.mockReturnValue(false);
+        const entity = await newReplyAs(GRANTEE);
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
+    });
+
+    it("leaves a person's own conversation working as before: their messages, edits, pins and deletes", async () => {
+        const post = await makeEntity();
+        post.ContextCurrentUser = { ID: OWNER };
+        expect(await post.Save()).toBe(true);
+
+        const pin = await savedReplyAs(OWNER, ['IsPinned']);
+        expect(await pin.Save()).toBe(true);
+        expect(await (await newReplyAs(OWNER)).Delete()).toBe(true);
     });
 });

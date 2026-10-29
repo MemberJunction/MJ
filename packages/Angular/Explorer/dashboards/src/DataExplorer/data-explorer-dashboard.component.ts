@@ -280,6 +280,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Currently selected view entity (for view data loading)
   public SelectedViewEntity: MJUserViewEntityExtended | null = null;
 
+  /**
+   * Optional semantic name of an alternate base view selected via deep link (`?abv=<Name>`)
+   * when no saved view is active.
+   */
+  public SelectedAlternateBaseView: string | null = null;
+
   /** @deprecated Use {@link SelectedViewEntity}. */
   public get selectedViewEntity(): MJUserViewEntityExtended | null {
     return this.SelectedViewEntity;
@@ -1826,6 +1832,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.SelectedEntity = null;
     this.SelectedRecord = null;
     this.DetailPanelEntity = null;
+    this.SelectedAlternateBaseView = null;
     this.StateService.selectEntity(null);
     this.StateService.closeDetailPanel();
     this.cdr.detectChanges();
@@ -2049,6 +2056,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups).
     // The workspace resets its own view/grid state when its [Entity] input changes.
     this.SelectedViewEntity = null;
+    this.SelectedAlternateBaseView = null;
     this.SelectedEntity = entity;
     this.reconcileViewModeForEntity(entity);
     this.StateService.selectEntity(entity.Name);
@@ -2111,6 +2119,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public OnWorkspaceViewSelected(view: MJUserViewEntityExtended | null): void {
     this.SelectedViewEntity = view;
+    if (view) {
+      this.SelectedAlternateBaseView = null;
+    }
     this.StateService.selectView(view?.ID ?? null);
 
     if (view && view.SmartFilterEnabled && view.SmartFilterPrompt) {
@@ -2127,6 +2138,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link OnWorkspaceViewSelected}. */
   public onWorkspaceViewSelected(view: MJUserViewEntityExtended | null): void {
     return this.OnWorkspaceViewSelected(view);
+  }
+
+  /**
+   * Handle an Alternate Base View selection emitted by the workspace's view selector.
+   */
+  public OnWorkspaceAlternateBaseViewChanged(abv: string | null): void {
+    this.SelectedAlternateBaseView = abv;
+    this.pushCurrentStateToUrl();
+    this.cdr.detectChanges();
   }
 
   /**
@@ -2695,6 +2715,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // Reset counts before setting entity to prevent stale data display
         this.resetRecordCounts();
         this.SelectedEntity = entity;
+        this.SelectedAlternateBaseView = deepLink.abv || null;
         this.StateService.selectEntity(entity.Name);
 
         // Apply filter if specified (to smart filter state, not user search)
@@ -2852,8 +2873,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const record = params['record'] || null;
     const filterParam = params['filter'] || null;
     const viewId = params['viewId'] || null;
+    const abv = params['abv'] || null;
 
-    if (!entity && !record && !filterParam && !viewId) {
+    if (!entity && !record && !filterParam && !viewId && !abv) {
       return null;
     }
 
@@ -2863,7 +2885,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       entity: entity || undefined,
       record: record || undefined,
       filter: filterParam || undefined,
-      viewId: viewId || undefined
+      viewId: viewId || undefined,
+      abv: abv || undefined
     };
   }
 
@@ -2915,7 +2938,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       entity: this.State.selectedEntityName || null,
       record: (this.State.selectedRecordId && hasEntity) ? this.State.selectedRecordId : null,
       filter: null, // Never in URL — filters live in saved views (DB), not query strings
-      viewId: hasViewId ? this.State.selectedViewId : null
+      viewId: hasViewId ? this.State.selectedViewId : null,
+      abv: (!hasViewId && hasEntity && this.SelectedAlternateBaseView) ? this.SelectedAlternateBaseView : null
     };
 
 
@@ -2937,6 +2961,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       if (entity) {
         const entityChanged = this.SelectedEntity?.Name !== entity.Name;
+        const previousAbv = this.SelectedAlternateBaseView;
+        this.SelectedAlternateBaseView = urlState.viewId ? null : (urlState.abv || null);
 
         if (entityChanged) {
           // Entity changed - reset counts and select new entity
@@ -2961,6 +2987,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
             this.SelectedViewEntity = null;
             this.StateService.selectView(null);
           }
+        }
+
+        if (!entityChanged && previousAbv !== this.SelectedAlternateBaseView) {
+          this.pushCurrentStateToUrl();
         }
 
         // Filters live in saved views (DB), never in URL query strings.

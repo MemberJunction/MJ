@@ -367,7 +367,7 @@ export class IntegrationProgressEmitter {
      * `resumedFromSeq` is the sequence the pre-restart process reached; a client can use it to tell
      * "these events are the continuation" from "these are a fresh run".
      */
-    public runResumed(message?: string, data?: Record<string, unknown>): void {
+    public RunResumed(message?: string, data?: Record<string, unknown>): void {
         this.Emit('run.resumed', {
             message,
             level: 'info',

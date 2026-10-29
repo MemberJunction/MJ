@@ -20,7 +20,8 @@ vi.mock('@elevenlabs/elevenlabs-js', () => {
   };
 });
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/global')>()),
   RegisterClass: () => (_target: unknown) => {},
 }));
 
@@ -82,6 +83,15 @@ vi.mock('@memberjunction/ai', () => {
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
   };
 });
+
+// The package index also re-exports the Eleven Realtime driver, which extends the OpenAI
+// provider's realtime classes at module-load time; stand-ins keep this suite off that package.
+vi.mock('@memberjunction/ai-openai', () => ({
+  OpenAIRealtime: class MockOpenAIRealtime {},
+  OpenAIRealtimeSession: class MockOpenAIRealtimeSession {},
+  MapNormalizedTurnDetection: vi.fn(),
+  MapEffortLevelToOpenAIRealtime: vi.fn(),
+}));
 
 import { ElevenLabsAudioGenerator } from '../index';
 

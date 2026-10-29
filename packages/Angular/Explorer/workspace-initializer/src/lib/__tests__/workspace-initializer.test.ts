@@ -10,12 +10,23 @@ vi.mock('@angular/core', () => ({
   Injectable: () => (target: Function) => target,
 }));
 
+type RunViewStubResult = { Success: boolean; Results: unknown[]; ErrorMessage?: string };
+
+const { runViewImpl } = vi.hoisted(() => ({
+  runViewImpl: vi.fn(async (_params: unknown): Promise<RunViewStubResult> => ({ Success: true, Results: [] })),
+}));
+
 vi.mock('@memberjunction/core', () => ({
   LogError: vi.fn(),
   LogStatus: vi.fn(),
   LogStatusEx: vi.fn(),
   Metadata: class {
     CurrentUser = { ID: 'user-1' };
+  },
+  RunView: class {
+    RunView(params: unknown) {
+      return runViewImpl(params);
+    }
   },
 }));
 
@@ -170,5 +181,84 @@ describe('WorkspaceInitializerService.handleAuthRetry', () => {
       '/dashboard'
     );
     expect(result).toBe(false);
+  });
+});
+
+// ======================= Org brand bootstrap =======================
+/**
+ * `applyDefaultBrandTheme` is the only place that can END a brand overlay restored from
+ * localStorage before bootstrap (ThemeService.RestorePersistedBrandOverlay). Without the clear,
+ * a retired brand keeps painting forever on every browser that ever loaded it. The clear is
+ * gated on the query succeeding, so a transient read failure never wipes a good cached brand.
+ */
+describe('WorkspaceInitializerService.applyDefaultBrandTheme', () => {
+  type ThemeStub = {
+    GetSelectedBrandThemeId: ReturnType<typeof vi.fn>;
+    ClearBrandOverlay: ReturnType<typeof vi.fn>;
+    RegisterBrandTheme: ReturnType<typeof vi.fn>;
+    ApplyBrandOverlay: ReturnType<typeof vi.fn>;
+  };
+  let themeService: ThemeStub;
+  let run: () => Promise<void>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    themeService = {
+      GetSelectedBrandThemeId: vi.fn(() => null),
+      ClearBrandOverlay: vi.fn(),
+      RegisterBrandTheme: vi.fn(),
+      ApplyBrandOverlay: vi.fn(async () => undefined),
+    };
+    const mod = await import('../services/workspace-initializer.service');
+    const service = new mod.WorkspaceInitializerService({} as never, {} as never, themeService as never);
+    run = () => (service as unknown as { applyDefaultBrandTheme(): Promise<void> }).applyDefaultBrandTheme();
+  });
+
+  it('clears a restored overlay when the query succeeds and the org has no active brand', async () => {
+    runViewImpl.mockResolvedValue({ Success: true, Results: [] });
+    await run();
+    expect(themeService.ClearBrandOverlay).toHaveBeenCalledTimes(1);
+    expect(themeService.ApplyBrandOverlay).not.toHaveBeenCalled();
+  });
+
+  it('leaves a restored overlay alone when the query FAILS (a transient error must not wipe the cached brand)', async () => {
+    runViewImpl.mockResolvedValue({ Success: false, Results: [], ErrorMessage: 'offline' });
+    await run();
+    expect(themeService.ClearBrandOverlay).not.toHaveBeenCalled();
+  });
+
+  it('leaves a restored overlay alone when the query THROWS', async () => {
+    runViewImpl.mockRejectedValue(new Error('boom'));
+    await run();
+    expect(themeService.ClearBrandOverlay).not.toHaveBeenCalled();
+  });
+
+  it('falls back from a vanished user selection to the org default, and clears only if that final query succeeds empty', async () => {
+    themeService.GetSelectedBrandThemeId.mockReturnValue('gone');
+    runViewImpl
+      .mockResolvedValueOnce({ Success: true, Results: [] })   // the user's selection: gone
+      .mockResolvedValueOnce({ Success: true, Results: [] });  // the org default: none
+    await run();
+    expect(runViewImpl).toHaveBeenCalledTimes(2);
+    expect(themeService.ClearBrandOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('a FAILED selection query followed by an empty org-default query leaves the cached brand alone (the selection was never disproved)', async () => {
+    themeService.GetSelectedBrandThemeId.mockReturnValue('mine');
+    runViewImpl
+      .mockResolvedValueOnce({ Success: false, Results: [], ErrorMessage: 'offline' })   // the user's selection: unknown
+      .mockResolvedValueOnce({ Success: true, Results: [] });                            // the org default: none
+    await run();
+    expect(runViewImpl).toHaveBeenCalledTimes(2);
+    expect(themeService.ClearBrandOverlay).not.toHaveBeenCalled();
+    expect(themeService.ApplyBrandOverlay).not.toHaveBeenCalled();
+  });
+
+  it('applies the brand it finds and never clears', async () => {
+    runViewImpl.mockResolvedValue({ Success: true, Results: [{ ID: 't1', Name: 'Acme', Seeds: '{}', Description: null, Overrides: null, CustomCSS: null, LightMarkURL: null, DarkMarkURL: null, WordmarkURL: null, MonochromeURL: null }] });
+    await run();
+    expect(themeService.RegisterBrandTheme).toHaveBeenCalledTimes(1);
+    expect(themeService.ApplyBrandOverlay).toHaveBeenCalledWith('t1');
+    expect(themeService.ClearBrandOverlay).not.toHaveBeenCalled();
   });
 });

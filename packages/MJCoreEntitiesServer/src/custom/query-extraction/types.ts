@@ -83,6 +83,10 @@ export interface EntityMetadataEntry {
     SchemaName: string;
     BaseView: string;
     Fields: Array<{ name: string; type: string; isPrimaryKey: boolean }>;
+    /** Populated when the SQL references a registered EntityAlternateBaseView instead of the canonical BaseView/BaseTable. */
+    AlternateBaseViewID?: string | null;
+    /** Logical Name of the matched EntityAlternateBaseView, when applicable. */
+    AlternateBaseViewName?: string | null;
 }
 
 /**

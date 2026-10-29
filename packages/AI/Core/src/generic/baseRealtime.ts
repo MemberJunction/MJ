@@ -755,6 +755,24 @@ export interface IRealtimeSession {
     RequestSpokenUpdate?(instructions: string): boolean | void;
 
     /**
+     * **Optional capability** — asks the model to speak ONE turn that is part of the conversation:
+     * captioned, transcribed and PERSISTED like any turn the model takes on its own.
+     *
+     * The contrast with {@link RequestSpokenUpdate} beside it is the whole point. A spoken UPDATE is
+     * disposable by contract — interim delegation chatter a driver may skip and a container may throw
+     * away. A spoken TURN is the conversation: an interviewer greeting a candidate, a guide opening a
+     * task. Routing one through the other loses it from the record (MJ#4591).
+     *
+     * Same wire mechanics and collision rule as the driver's spoken update, minus the narration
+     * stamp. Optional for the same reason as its sibling; callers feature-detect.
+     *
+     * @param instructions What to say, in the host's words; the model speaks in its own persona.
+     * @returns `true` when a response was triggered, `false` when it was skipped; `void` from a legacy
+     *   driver is treated as triggered.
+     */
+    RequestSpokenTurn?(instructions: string): boolean | void;
+
+    /**
      * Mid-session instruction update (e.g. OpenAI `session.instructions.append`).
      *
      * @param instructions New or appended instructions for the ongoing session.

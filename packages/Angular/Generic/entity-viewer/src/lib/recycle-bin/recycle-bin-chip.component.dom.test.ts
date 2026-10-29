@@ -18,6 +18,7 @@ import type { AfterRecycleBinOpenEventArgs, AfterRestoreCommitEventArgs, BeforeR
 
 @Component({ standalone: true, selector: 'mj-recycle-bin', template: '' })
 class RecycleBinStub {
+  @Input() Provider: unknown;
   @Input() Visible = false;
   @Input() EntityName: string | null = null;
   @Input() ContextUser: unknown;

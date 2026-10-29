@@ -48,7 +48,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
-import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { AuthorizeAnonymousRoomSessions, AuthorizeLoadedSession } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
@@ -75,11 +75,11 @@ import {
   SetHandoffOfferPublishHook,
   ParseReplicatedHandoffOfferUpdate,
 } from './resolvers/HumanHandoffResolver.js';
-import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
+import { RoomAuthorizationService, RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 // Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
 // fan-out below stays in this file — see the note at its call site.
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
@@ -439,6 +439,9 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
   SetHostInstancePort(graphqlPort);
   // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
   BindBridgeEngineHostInstance();
+  // An anonymous visitor may join only the LiveKit agent-session room it owns by scope; the room gate cannot import
+  // this package's session-access decision, so it is handed in here, before any resolver runs (MJ#6044).
+  RoomAuthorizationService.Instance.SetAnonymousSessionOwnerCheck(AuthorizeAnonymousRoomSessions);
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -643,7 +646,7 @@ const setupComplete$ = new ReplaySubject(1);
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized (PostgreSQL).');
 
           // Inject CodeGen output paths for targeted git staging
-          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const { initializeConfig, ResolveAdditionalSchemaInfoPath } = await import('@memberjunction/codegen-lib');
           const cgConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (cgConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
@@ -652,9 +655,12 @@ const setupComplete$ = new ReplaySubject(1);
           // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
           // `additionalSchemaInfo`), or RSU writes soft PKs to its own default path while
           // CodeGen reads a different one and skips integration tables with "No primary key found".
-          if (cgConfig.additionalSchemaInfo) {
-            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(cgConfig.additionalSchemaInfo);
-            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
+          // Inject the ABSOLUTE path CodeGen resolves (env override, else relative to the mj.config
+          // file's directory) so RSU, the resolvers and CodeGen agree whatever their cwd (#5858).
+          const resolvedSchemaInfoPath = ResolveAdditionalSchemaInfoPath();
+          if (resolvedSchemaInfoPath) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(resolvedSchemaInfoPath);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${resolvedSchemaInfoPath}`);
           } else if (RuntimeSchemaManager.Instance.IsEnabled) {
             // U5 — boot-time assert: RSU is enabled but CodeGen has NO additionalSchemaInfo path
             // configured, so RSU's soft-PK/FK writes land in a file CodeGen never reads. Every
@@ -662,7 +668,7 @@ const setupComplete$ = new ReplaySubject(1);
             // named, and actionable — grep for RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE.
             console.error(
               `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
-              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `'additionalSchemaInfo' setting (and RSU_ADDITIONAL_SCHEMA_INFO_PATH is unset) — RSU writes soft PK/FK definitions to '${RuntimeSchemaManager.Instance.AdditionalSchemaInfoPath}' ` +
               `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
               `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
             );
@@ -788,7 +794,7 @@ const setupComplete$ = new ReplaySubject(1);
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized.');
 
           // Inject CodeGen output paths for targeted git staging
-          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const { initializeConfig, ResolveAdditionalSchemaInfoPath } = await import('@memberjunction/codegen-lib');
           const codegenConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
@@ -798,14 +804,17 @@ const setupComplete$ = new ReplaySubject(1);
           // `additionalSchemaInfo`). Without this, RSU writes soft PKs to its own default
           // path while CodeGen reads a different one and skips every integration table
           // with "No primary key found".
-          if (codegenConfig.additionalSchemaInfo) {
-            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(codegenConfig.additionalSchemaInfo);
-            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
+          // Inject the ABSOLUTE path CodeGen resolves (env override, else relative to the mj.config
+          // file's directory) so RSU, the resolvers and CodeGen agree whatever their cwd (#5858).
+          const resolvedSchemaInfoPath = ResolveAdditionalSchemaInfoPath();
+          if (resolvedSchemaInfoPath) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(resolvedSchemaInfoPath);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${resolvedSchemaInfoPath}`);
           } else if (RuntimeSchemaManager.Instance.IsEnabled) {
             // U5 — boot-time assert: write path ≠ read path (see the PostgreSQL branch for detail).
             console.error(
               `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
-              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `'additionalSchemaInfo' setting (and RSU_ADDITIONAL_SCHEMA_INFO_PATH is unset) — RSU writes soft PK/FK definitions to '${RuntimeSchemaManager.Instance.AdditionalSchemaInfoPath}' ` +
               `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
               `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
             );
@@ -1064,7 +1073,8 @@ const setupComplete$ = new ReplaySubject(1);
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
           recordData:
-            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName, beEvent.baseEntity.EntityInfo)
+              // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
         });
@@ -1585,6 +1595,27 @@ const setupComplete$ = new ReplaySubject(1);
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
 
+  // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only before the first new
+  // run: artifacts are process-local, so anything still in flight as THIS process starts belongs
+  // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
+  // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
+  // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
+  //
+  // One exception: an RSU run killed inside its own RestartMJAPI step is not dead — THIS process is
+  // its continuation, and processRSUPendingWork below re-attaches to it. Those are left in flight
+  // (and named in `Skipped`); whichever of them nothing re-attaches to is closed out afterwards by
+  // RSUPostRestartProgressSession.SweepUnattached. On a replica that runs no background workers
+  // nothing would ever resume them, so there they are swept like any other.
+  const bootSweep = await SweepInterruptedRuns(
+    undefined,
+    msg => console.warn(msg),
+    runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
+  );
+
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
   if (runBackgroundWorkers && configInfo.scheduledJobs?.enabled) {
@@ -1643,7 +1674,12 @@ const setupComplete$ = new ReplaySubject(1);
 
   if (runBackgroundWorkers) {
     // Process pending RSU work from pre-restart (entity maps, field maps, sync)
-    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
+    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`))
+      .finally(() =>
+        RSUPostRestartProgressSession.SweepUnattached(bootSweep.Skipped, undefined, msg => console.warn(msg)).catch(err =>
+          console.warn(`RSU leftover run sweep failed: ${err}`)
+        )
+      );
 
     // Resume any integration syncs that were orphaned by the previous process restart
     if (resumeUser) {
@@ -2334,7 +2370,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
-    LoadConversationExternalID: LoadSessionConversationExternalID,
+    AuthorizeSession: AuthorizeLoadedSession,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,

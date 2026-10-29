@@ -1,234 +1,816 @@
-<!-- Backdrop -->
-@if (IsOpen) {
-  <div class="panel-backdrop" (click)="OnClose()"></div>
-}
-
-<!-- Sliding Panel -->
-<div class="config-panel"
+<!-- Full-Screen Unified View Studio -->
+<div class="config-panel full-takeover"
      [class.open]="IsOpen"
-     [class.resizing]="IsResizing"
-     [style.width.px]="PanelWidth">
-  <!-- Resize Handle -->
-  <div class="resize-handle"
-       (mousedown)="OnResizeStart($event)"
-       title="Drag to resize">
-    <div class="resize-grip"></div>
-  </div>
+     [class.advanced-mode]="IsAdvancedMode">
 
-  <!-- Panel Header -->
-  <div class="panel-header">
-    <div class="header-title">
-      <i class="fa-solid fa-sliders-h"></i>
-      <span>{{ ViewEntity ? 'Edit View' : 'Configure View' }}</span>
-    </div>
-    <button class="close-btn" (click)="OnClose()" title="Close" aria-label="Close panel">
-      <i class="fa-solid fa-times"></i>
-    </button>
-  </div>
-
-  <!-- Tab Navigation -->
-  <div class="tab-nav" [class.icon-only]="IsIconOnlyMode">
-    <button
-      class="tab-btn"
-      [class.active]="ActiveTab === 'columns'"
-      (click)="SetActiveTab('columns')"
-      [title]="IsIconOnlyMode ? 'Columns' : ''">
-      <i class="fa-solid fa-columns"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Columns</span>
-      }
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="ActiveTab === 'sorting'"
-      (click)="SetActiveTab('sorting')"
-      [title]="IsIconOnlyMode ? 'Sorting' + (SortItems.length > 0 ? ' (' + SortItems.length + ')' : '') : ''">
-      <i class="fa-solid fa-arrow-up-wide-short"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Sorting</span>
-      }
-      @if (SortItems.length > 0) {
-        <span class="tab-badge">{{ SortItems.length }}</span>
-      }
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="ActiveTab === 'filters'"
-      (click)="SetActiveTab('filters')"
-      [title]="IsIconOnlyMode ? 'Filters' : ''">
-      <i class="fa-solid fa-filter"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Filters</span>
-      }
-    </button>
-    <button
-      class="tab-btn"
-      [class.active]="ActiveTab === 'aggregates'"
-      (click)="SetActiveTab('aggregates')"
-      [title]="IsIconOnlyMode ? 'Aggregates' + (EnabledAggregatesCount > 0 ? ' (' + EnabledAggregatesCount + ')' : '') : ''">
-      <i class="fa-solid fa-chart-simple"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Aggregates</span>
-      }
-      @if (EnabledAggregatesCount > 0) {
-        <span class="tab-badge">{{ EnabledAggregatesCount }}</span>
-      }
-    </button>
-    @if (ViewEntity || DefaultSaveAsNew) {
-      <button
-        class="tab-btn"
-        [class.active]="ActiveTab === 'settings'"
-        (click)="SetActiveTab('settings')"
-        [title]="IsIconOnlyMode ? 'Settings' : ''">
-        <i class="fa-solid fa-cog"></i>
-        @if (!IsIconOnlyMode) {
-          <span>Settings</span>
+  <!-- ============================================================ -->
+  <!-- PINNED STUDIO HEADER (Intent Switcher / Identity / Actions)  -->
+  <!-- ============================================================ -->
+  <div class="studio-header">
+    <!-- Top Row: Mode Switcher / Context Badge + Entity Tag + Horizontal Studio Actions -->
+    <div class="studio-top-bar">
+      <div class="studio-badges">
+        @if (!ViewEntity || IsSaveAsNewFlow) {
+          <!-- Segmented Intent Switcher when opened from (Default) or Creating New View -->
+          <div class="intent-segmented" role="tablist" aria-label="View configuration mode">
+            <button
+              type="button"
+              role="tab"
+              class="intent-seg-btn"
+              [class.active]="!IsCreatingNamedView"
+              [attr.aria-selected]="!IsCreatingNamedView"
+              (click)="RequestSwitchToDefaultLayoutMode()"
+              title="Customize your personal default columns, sort, and summaries for this entity">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Personal Default Layout</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="intent-seg-btn"
+              [class.active]="IsCreatingNamedView"
+              [class.new-view-intent]="IsCreatingNamedView"
+              [attr.aria-selected]="IsCreatingNamedView"
+              (click)="PromoteToNewView()"
+              title="Create a new named view with filters, base view, and sharing options">
+              <i class="fa-solid fa-plus"></i>
+              <span>Save as New Named View</span>
+            </button>
+          </div>
+        } @else if (ViewEntity && CanEdit) {
+          <span class="studio-context-badge editing">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Editing Saved View</span>
+          </span>
+        } @else {
+          <span class="studio-context-badge readonly">
+            <i class="fa-solid fa-lock"></i>
+            <span>Shared View (Read-Only)</span>
+          </span>
         }
-      </button>
-    }
-  </div>
 
-  <!-- Panel Content -->
-  <div class="panel-content">
-    <!-- Columns Tab -->
-    @if (ActiveTab === 'columns' && !FormatEditingColumn) {
-      <div class="tab-content">
-        <!-- Visible Columns -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-eye"></i>
-            <span>Visible Columns</span>
-            <span class="column-count">{{ VisibleColumns.length }}</span>
+        @if (Entity) {
+          <span class="studio-entity-badge">
+            <i class="fa-solid fa-table"></i>
+            <span>{{ Entity.DisplayNameOrName }}</span>
+          </span>
+        }
+      </div>
+
+      <!-- Horizontal Action Buttons (Never stacked vertically!) -->
+      <div class="studio-header-actions">
+        <button
+          type="button"
+          class="studio-action-btn advanced-mode-toggle"
+          [class.active]="IsAdvancedMode"
+          (click)="ToggleAdvancedMode()"
+          [attr.aria-pressed]="IsAdvancedMode"
+          title="Toggle Advanced Mode to reveal canonical base views, SQL WHERE clause editor, conditional formatting rules, and technical field metadata">
+          <i class="fa-solid fa-code"></i>
+          <span>Advanced Mode</span>
+          <span class="advanced-state-pill">{{ IsAdvancedMode ? 'ON' : 'OFF' }}</span>
+        </button>
+        @if (ViewEntity && !IsSaveAsNewFlow) {
+          <button
+            type="button"
+            class="studio-action-btn"
+            (click)="OnDuplicate()"
+            title="Duplicate this view">
+            <i class="fa-regular fa-copy"></i>
+            <span>Duplicate</span>
+          </button>
+        }
+        @if (ViewEntity && !IsSaveAsNewFlow && CanDelete) {
+          <button
+            type="button"
+            class="studio-action-btn danger"
+            (click)="OnDelete()"
+            title="Delete this view">
+            <i class="fa-regular fa-trash-can"></i>
+            <span>Delete</span>
+          </button>
+        }
+        <button
+          type="button"
+          class="studio-action-btn icon-only"
+          (click)="OnClose()"
+          title="Close Studio"
+          aria-label="Close panel">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- STATE A: PERSONAL DEFAULT LAYOUT BANNER (NO NAME INPUT!)     -->
+    <!-- ============================================================ -->
+    @if ((!ViewEntity || IsSaveAsNewFlow) && !IsCreatingNamedView) {
+      <div class="default-layout-explainer">
+        <div class="default-explainer-left">
+          <div class="default-explainer-icon">
+            <i class="fa-solid fa-table-columns"></i>
           </div>
-          <div class="column-list visible-columns">
-            @for (column of VisibleColumns; track column.fieldId; let i = $index) {
-              <!-- Drop indicator before -->
-              @if (IsDropBefore(column)) {
-                <div class="drop-indicator"></div>
-              }
-              <div
-                class="column-item"
-                [class.dragging]="DraggedColumn === column"
-                [class.drop-target]="DropTargetColumn === column"
-                draggable="true"
-                (dragstart)="OnDragStart($event, column)"
-                (dragover)="OnDragOver($event, column)"
-                (dragleave)="OnDragLeave($event)"
-                (drop)="OnDrop($event, column)"
-                (dragend)="OnDragEnd($event)">
-                <div class="drag-handle">
-                  <i class="fa-solid fa-grip-vertical"></i>
-                </div>
-                <span class="column-name">
-                  {{ column.userDisplayName || column.displayName }}
-                  @if (column.userDisplayName) {
-                    <i class="fa-solid fa-pen-nib alias-indicator" title="Custom name: {{ column.userDisplayName }}"></i>
-                  }
-                  @if (HasCustomFormat(column)) {
-                    <i class="fa-solid fa-paintbrush format-indicator" title="Custom formatting applied"></i>
-                  }
-                </span>
-                <div class="column-actions">
-                  <button
-                    class="action-btn format-btn"
-                    (click)="OpenFormatEditor(column)"
-                    title="Format column">
-                    <i class="fa-solid fa-paintbrush"></i>
-                  </button>
-                  <button
-                    class="action-btn"
-                    [disabled]="i === 0"
-                    (click)="MoveColumnUp(column)"
-                    title="Move up">
-                    <i class="fa-solid fa-chevron-up"></i>
-                  </button>
-                  <button
-                    class="action-btn"
-                    [disabled]="i === VisibleColumns.length - 1"
-                    (click)="MoveColumnDown(column)"
-                    title="Move down">
-                    <i class="fa-solid fa-chevron-down"></i>
-                  </button>
-                  <button
-                    class="action-btn hide-btn"
-                    (click)="ToggleColumnVisibility(column)"
-                    title="Hide column">
-                    <i class="fa-solid fa-eye-slash"></i>
-                  </button>
-                </div>
-              </div>
-              <!-- Drop indicator after (only for last item) -->
-              @if (IsDropAfter(column) && i === VisibleColumns.length - 1) {
-                <div class="drop-indicator"></div>
-              }
-            }
-            @if (VisibleColumns.length === 0) {
-              <mj-empty-state
-                Size="compact"
-                Variant="warning"
-                Title="No columns visible. Add columns from below." />
-            }
+          <div class="default-explainer-text">
+            <h3>Personal Default Layout for {{ Entity?.DisplayNameOrName || 'Entity' }}</h3>
+            <p>
+              Changes to columns, sorting, and summaries here apply automatically whenever you open
+              <strong>{{ Entity?.DisplayNameOrName || 'Entity' }} (Default)</strong> — no saved view name needed.
+            </p>
           </div>
         </div>
-
-        <!-- Hidden Columns -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-eye-slash"></i>
-            <span>Hidden Columns</span>
-            <span class="column-count">{{ HiddenColumns.length }}</span>
-          </div>
-          @if (HiddenColumns.length > 5) {
-            <div class="column-search">
-              <i class="fa-solid fa-search"></i>
-              <input
-                type="text"
-                placeholder="Search columns..."
-                [(ngModel)]="ColumnSearchText"
-              />
-            </div>
-          }
-          <div class="column-list hidden-columns">
-            @for (column of FilteredHiddenColumns; track column.fieldId) {
-              <div class="column-item hidden">
-                <span class="column-name">{{ column.displayName }}</span>
-                <button
-                  class="action-btn show-btn"
-                  (click)="ToggleColumnVisibility(column)"
-                  title="Show column">
-                  <i class="fa-solid fa-plus"></i>
-                </button>
-              </div>
-            }
-            @if (HiddenColumns.length === 0) {
-              <mj-empty-state
-                Size="compact"
-                Variant="success"
-                Title="All columns are visible" />
-            }
-          </div>
-        </div>
+        <button
+          type="button"
+          class="convert-to-named-btn"
+          (click)="PromoteToNewView()"
+          title="Create a named, shareable view with filters and base view options">
+          <i class="fa-solid fa-bookmark"></i>
+          <span>Want filters or sharing? Save as Named View &rarr;</span>
+        </button>
       </div>
     }
 
-    <!-- Column Format Editor Sub-Panel -->
-    @if (ActiveTab === 'columns' && FormatEditingColumn) {
-      <div class="format-editor">
-        <!-- Format Editor Header -->
-        <div class="format-editor-header">
-          <button class="back-btn" (click)="CloseFormatEditor()">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-          <div class="format-editor-title">
-            <span>Format: {{ FormatEditingColumn.userDisplayName || FormatEditingColumn.displayName }}</span>
+    <!-- ============================================================ -->
+    <!-- STATE B: NAMED VIEW IDENTITY ROW (CREATE NEW OR EDIT SAVED)  -->
+    <!-- ============================================================ -->
+    @if ((ViewEntity && !IsSaveAsNewFlow) || IsCreatingNamedView) {
+      <div class="studio-identity-body">
+        @if (WasAutoPromotedToNamedView) {
+          <div class="auto-promoted-banner">
+            <div class="auto-promoted-text">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>
+                <strong>Creating a Named View:</strong> Since filters or alternate base views narrow which records appear,
+                this will be saved as a new named view so your <em>(Default)</em> view stays unfiltered.
+              </span>
+            </div>
+            <button
+              type="button"
+              class="auto-promoted-undo-btn"
+              (click)="RequestSwitchToDefaultLayoutMode()">
+              Clear filter &amp; use Default Layout
+            </button>
+          </div>
+        }
+
+        <div class="named-identity-grid">
+          <div class="identity-input-wrap">
+            <i class="fa-solid fa-bookmark"></i>
+            <input
+              id="ViewName"
+              type="text"
+              class="studio-name-input"
+              [class.invalid]="ViewEntity && !IsSaveAsNewFlow && (!ViewName || !ViewName.trim())"
+              placeholder="Enter a name for this view (e.g., Active Records)..."
+              [(ngModel)]="ViewName"
+              [disabled]="!CanEdit"
+            />
+          </div>
+
+          <input
+            id="ViewDescription"
+            type="text"
+            class="studio-desc-input"
+            placeholder="Optional description (what this view shows)..."
+            [(ngModel)]="ViewDescription"
+            [disabled]="!CanEdit"
+          />
+
+          <div class="studio-meta-pills">
+            <button
+              type="button"
+              class="meta-pill-btn"
+              [class.active-shared]="IsShared"
+              (click)="ToggleShared()"
+              [disabled]="!CanEdit"
+              [title]="IsShared ? 'Shared with other users — click to make Private' : 'Private to you — click to share with team'">
+              <i [class]="IsShared ? 'fa-solid fa-globe' : 'fa-solid fa-lock'"></i>
+              <span>{{ IsShared ? 'Shared with Team' : 'Private' }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="meta-pill-btn"
+              [class.active-default]="IsDefault"
+              (click)="ToggleDefaultView()"
+              [disabled]="!CanEdit"
+              title="Use this view by default when opening this entity">
+              <i [class]="IsDefault ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+              <span>{{ IsDefault ? 'Default View' : 'Set as Default' }}</span>
+            </button>
           </div>
         </div>
 
-        <!-- Column Alias Section -->
+        @if (ViewEntity && (!ViewName || !ViewName.trim())) {
+          <span class="validation-error">View name is required</span>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STUDIO BODY: LEFT NAVIGATION RAIL + WIDE 2-COLUMN WORKBENCH  -->
+  <!-- ============================================================ -->
+  <div class="studio-body">
+    <!-- Left Navigation Rail -->
+    <div class="studio-rail">
+      <div class="rail-nav-list" role="tablist" aria-label="View studio sections">
+        <button
+          type="button"
+          role="tab"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'columns'"
+          [attr.aria-selected]="ActiveTab === 'columns'"
+          (click)="SetActiveTab('columns')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-table-columns"></i>
+            <span>{{ IsAdvancedMode ? 'Columns & Format' : 'Columns' }}</span>
+          </span>
+          <span class="rail-badge">{{ VisibleColumns.length }}</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'filters'"
+          [attr.aria-selected]="ActiveTab === 'filters'"
+          (click)="SetActiveTab('filters')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-filter"></i>
+            <span>{{ IsAdvancedMode ? 'Filters & Source' : 'Filters' }}</span>
+          </span>
+          @if (HasActiveFilterChip || AlternateBaseView) {
+            <span class="rail-badge active-dot">•</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'sorting'"
+          [attr.aria-selected]="ActiveTab === 'sorting'"
+          (click)="SetActiveTab('sorting')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-arrow-up-wide-short"></i>
+            <span>Sorting</span>
+          </span>
+          @if (SortItems.length > 0) {
+            <span class="rail-badge">{{ SortItems.length }}</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'aggregates'"
+          [attr.aria-selected]="ActiveTab === 'aggregates'"
+          (click)="SetActiveTab('aggregates')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-chart-simple"></i>
+            <span>Aggregates</span>
+          </span>
+          @if (EnabledAggregatesCount > 0) {
+            <span class="rail-badge">{{ EnabledAggregatesCount }}</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'display'"
+          [attr.aria-selected]="ActiveTab === 'display'"
+          (click)="SetActiveTab('display')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-display"></i>
+            <span>{{ IsAdvancedMode ? 'Display & Modes' : 'Display' }}</span>
+          </span>
+        </button>
+
+        @if (ViewEntity || DefaultSaveAsNew || IsCreatingNamedView) {
+          <button
+            type="button"
+            role="tab"
+            class="rail-nav-btn"
+            [class.active]="ActiveTab === 'properties'"
+            [attr.aria-selected]="ActiveTab === 'properties'"
+            (click)="SetActiveTab('properties')">
+            <span class="rail-btn-left">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Properties</span>
+            </span>
+            @if (Properties.length > 0) {
+              <span class="rail-badge">{{ Properties.length }}</span>
+            }
+          </button>
+        }
+      </div>
+
+      <!-- Active View Recipe Box in Bottom of Left Rail (Advanced Mode only) -->
+      @if (IsAdvancedMode) {
+        <div class="rail-recipe-box">
+          <div class="rail-recipe-title">Active View Recipe</div>
+          @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable || AlternateBaseView) {
+            <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
+              <i class="fa-solid fa-database"></i>
+              <span>{{ SelectedBaseViewLabel }}</span>
+            </button>
+          }
+          <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
+            <i class="fa-solid fa-filter"></i>
+            <span>{{ FilterChipLabel }}</span>
+          </button>
+          <button type="button" class="rail-recipe-item" (click)="SetActiveTab('columns')">
+            <i class="fa-solid fa-table-columns"></i>
+            <span>{{ VisibleColumns.length }} Visible{{ PinnedColumnsCount > 0 ? ' (' + PinnedColumnsCount + ' Pinned)' : '' }}</span>
+          </button>
+          <button type="button" class="rail-recipe-item" (click)="SetActiveTab('sorting')">
+            <i class="fa-solid fa-arrow-up-wide-short"></i>
+            <span>{{ SortSummaryLabel }}</span>
+          </button>
+        </div>
+      }
+    </div>
+
+    <!-- Right Wide Workbench Content -->
+    <div class="panel-content">
+    <!-- ========================================================== -->
+    <!-- TAB 1: FILTERS & SOURCE                                    -->
+    <!-- ========================================================== -->
+    @if (ActiveTab === 'filters') {
+      <div class="tab-content">
+        <!-- Canonical Base View Selector (Advanced Mode or when already active) -->
+        @if ((IsAdvancedMode || !!AlternateBaseView || IsCurrentAlternateBaseViewUnavailable) && (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable)) {
+          <div class="config-section">
+            <div class="section-header">
+              <i class="fa-solid fa-database"></i>
+              <span>Data Source (Canonical Base View)</span>
+              <span class="section-optional-tag">Advanced</span>
+            </div>
+            <div class="form-group">
+              <ng-container [ngTemplateOutlet]="baseViewSelector"></ng-container>
+            </div>
+          </div>
+        }
+
+        <!-- Filter Mode Segmented Selector -->
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-filter"></i>
+            <span>Record Filtering</span>
+          </div>
+
+          <div class="filter-mode-segmented"
+               [class.three-col]="IsAdvancedMode || CustomWhereClause || FilterMode === 'sql'">
+            <button
+              type="button"
+              class="seg-mode-btn"
+              [class.active]="FilterMode === 'smart'"
+              (click)="SetFilterMode('smart')"
+              [disabled]="!CanEdit">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Smart Filter (AI)</span>
+            </button>
+            <button
+              type="button"
+              class="seg-mode-btn"
+              [class.active]="FilterMode === 'traditional'"
+              (click)="SetFilterMode('traditional')"
+              [disabled]="!CanEdit">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Rule Builder</span>
+              @if (GetFilterCount() > 0) {
+                <span class="seg-badge">{{ GetFilterCount() }}</span>
+              }
+            </button>
+            @if (IsAdvancedMode || CustomWhereClause || FilterMode === 'sql') {
+              <button
+                type="button"
+                class="seg-mode-btn"
+                [class.active]="FilterMode === 'sql'"
+                (click)="SetFilterMode('sql')"
+                [disabled]="!CanEdit">
+                <i class="fa-solid fa-terminal"></i>
+                <span>SQL WHERE Clause</span>
+                @if (CustomWhereClause) {
+                  <span class="seg-badge sql-override-badge">Override</span>
+                }
+              </button>
+            }
+          </div>
+
+          <!-- Smart Filter Section -->
+          @if (FilterMode === 'smart') {
+            <div class="smart-filter-section">
+              <div class="smart-filter-input-container">
+                <div class="smart-filter-icon">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+                <textarea
+                  id="SmartFilterPrompt"
+                  class="smart-filter-textarea"
+                  placeholder="Describe the records you want in plain English (e.g., 'Active jobs modified in the last 30 days')..."
+                  [ngModel]="SmartFilterPrompt"
+                  (ngModelChange)="OnSmartFilterPromptChange($event)"
+                  [disabled]="!CanEdit"
+                  rows="3"
+                ></textarea>
+              </div>
+
+              @if (SmartFilterExplanation) {
+                <mj-alert Variant="info" Size="sm" Icon="fa-solid fa-robot" class="view-config-alert-pos-mb">{{ SmartFilterExplanation }}</mj-alert>
+              }
+
+              <!-- Progressive Disclosure: View AI-Generated SQL WHERE Clause -->
+              @if (ViewEntity?.SmartFilterWhereClause) {
+                <div class="smart-sql-disclosure">
+                  <button
+                    type="button"
+                    class="sql-disclosure-toggle"
+                    (click)="ShowGeneratedSmartSql = !ShowGeneratedSmartSql">
+                    <i class="fa-solid fa-code"></i>
+                    <span>{{ ShowGeneratedSmartSql ? 'Hide AI-Generated SQL Filter' : 'View AI-Generated SQL Filter' }}</span>
+                    <i class="fa-solid fa-chevron-down" [class.rotated]="ShowGeneratedSmartSql"></i>
+                  </button>
+                  @if (ShowGeneratedSmartSql) {
+                    <div class="sql-compiled-preview">
+                      <code>{{ ViewEntity?.SmartFilterWhereClause }}</code>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Example Prompts -->
+              <div class="smart-filter-examples">
+                <div class="examples-header">
+                  <i class="fa-solid fa-lightbulb"></i>
+                  <span>Quick prompt ideas:</span>
+                </div>
+                <div class="example-chips">
+                  <button
+                    type="button"
+                    class="example-chip"
+                    (click)="ApplySmartFilterExample('Show records created in the last 30 days')"
+                    [disabled]="!CanEdit">
+                    <i class="fa-regular fa-calendar"></i>
+                    Last 30 days
+                  </button>
+                  <button
+                    type="button"
+                    class="example-chip"
+                    (click)="ApplySmartFilterExample('Active records only')"
+                    [disabled]="!CanEdit">
+                    <i class="fa-solid fa-circle-check"></i>
+                    Active only
+                  </button>
+                  <button
+                    type="button"
+                    class="example-chip"
+                    (click)="ApplySmartFilterExample('Records with high priority')"
+                    [disabled]="!CanEdit">
+                    <i class="fa-solid fa-star"></i>
+                    High priority
+                  </button>
+                  <button
+                    type="button"
+                    class="example-chip"
+                    (click)="ApplySmartFilterExample('Records modified this week')"
+                    [disabled]="!CanEdit">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    Modified this week
+                  </button>
+                </div>
+              </div>
+
+              <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">AI translates your prompt into a SQL filter when you save the view.</mj-alert>
+            </div>
+          }
+
+          <!-- Inline Rule Builder Section -->
+          @if (FilterMode === 'traditional') {
+            <div class="traditional-filter-section">
+              <div class="inline-filter-toolbar">
+                <div class="summary-info">
+                  @if (GetFilterCount() > 0) {
+                    <span class="filter-badge">{{ GetFilterCount() }}</span>
+                    <span class="summary-text">{{ GetFilterSummary() }}</span>
+                  } @else {
+                    <span class="summary-text no-filters">Build AND/OR filter rules below</span>
+                  }
+                </div>
+                <div class="summary-actions">
+                  @if (GetFilterCount() > 0 && CanEdit) {
+                    <button
+                      type="button"
+                      class="summary-btn clear-btn"
+                      (click)="ClearFilters()"
+                      title="Clear all filter rules">
+                      <i class="fa-solid fa-eraser"></i>
+                      Clear
+                    </button>
+                  }
+                  @if (IsAdvancedMode) {
+                    <button
+                      type="button"
+                      class="summary-btn"
+                      (click)="OpenFilterDialog()"
+                      [disabled]="!CanEdit && GetFilterCount() === 0"
+                      title="Open in standalone modal editor">
+                      <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+                      Pop Out
+                    </button>
+                  }
+                </div>
+              </div>
+
+              <!-- Embedded Inline Filter Builder -->
+              <div class="inline-filter-builder-wrap">
+                <mj-filter-builder
+                  [fields]="FilterFields"
+                  [filter]="FilterState"
+                  [disabled]="!CanEdit"
+                  [showSummary]="true"
+                  (filterChange)="OnFilterChange($event)">
+                </mj-filter-builder>
+              </div>
+            </div>
+          }
+
+          <!-- Mutually Exclusive Mode 3: SQL WHERE Clause Workbench -->
+          @if (FilterMode === 'sql') {
+            <div class="sql-where-workbench">
+              <div class="sql-override-banner" [class.override-active]="CustomWhereClause">
+                <label class="sql-override-checkbox-label">
+                  <input
+                    type="checkbox"
+                    [ngModel]="CustomWhereClause"
+                    (ngModelChange)="OnToggleCustomWhereOverride($event)"
+                    [disabled]="!CanEdit"
+                  />
+                  <div class="sql-override-copy">
+                    <div class="sql-override-title-row">
+                      <strong>Override with Custom SQL WHERE Clause (One-Way)</strong>
+                      <span class="sql-source-pill" [class.editable]="CustomWhereClause">
+                        <i [class]="CustomWhereClause ? 'fa-solid fa-pen-to-square' : 'fa-solid fa-lock'"></i>
+                        {{ SqlWhereSourceLabel }}
+                      </span>
+                    </div>
+                    <p>
+                      @if (CustomWhereClause) {
+                        Custom SQL override is active. RunView will execute the SQL expression below directly instead of Smart Filter or Rule Builder. (One-way: edits here cannot be converted back into visual rules.)
+                      } @else {
+                        Inspecting the read-only SQL <code>WHERE</code> clause compiled from your Smart Filter or Rule Builder. Check the box above to unlock the editor and override it with custom SQL (one-way).
+                      }
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="sql-code-editor-card" [class.readonly]="!CustomWhereClause || !CanEdit">
+                <div class="sql-editor-topbar">
+                  <span class="sql-editor-topbar-left">
+                    <i class="fa-solid fa-database"></i>
+                    <span>SQL WHERE Expression</span>
+                    <code>WHERE</code>
+                  </span>
+                  <span class="sql-editor-topbar-right">
+                    @if (CustomWhereClause && CanEdit) {
+                      <i class="fa-solid fa-unlock"></i>
+                      <span>Editable SQL</span>
+                    } @else {
+                      <i class="fa-solid fa-lock"></i>
+                      <span>Read-Only — Check box above to edit</span>
+                    }
+                  </span>
+                </div>
+                <div class="sql-code-editor-body">
+                  <mj-code-editor
+                    [Value]="DisplayedSqlWhereClause"
+                    Language="sql"
+                    [readonly]="!CustomWhereClause || !CanEdit"
+                    Placeholder="e.g., [Status] = 'Active' AND [__mj_CreatedAt] >= DATEADD(day, -30, GETUTCDATE())"
+                    (Change)="OnCustomSqlWhereChange($event)">
+                  </mj-code-editor>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (!IsAdvancedMode && !CustomWhereClause && !AlternateBaseView) {
+          <div class="advanced-mode-hint-bar">
+            <div class="advanced-hint-text">
+              <i class="fa-solid fa-code"></i>
+              <span>Want to inspect or override the raw SQL <code>WHERE</code> clause or select an alternate canonical base view?</span>
+            </div>
+            <button type="button" class="advanced-hint-btn" (click)="ToggleAdvancedMode()">
+              Enable Advanced Mode
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ========================================================== -->
+    <!-- TAB 2: COLUMNS & FORMAT (FOCUSED + ON-DEMAND DRAWERS)      -->
+    <!-- ========================================================== -->
+    @if (ActiveTab === 'columns') {
+      <div class="tab-content columns-workbench-grid" [class.has-drawer]="ShowAddColumnsDrawer || !!FormatEditingColumn">
+        <!-- PRIMARY PANEL: Visible Columns (Clean Default View) -->
+        <div class="wb-col">
+          <div class="display-mode-card columns-main-card">
+            <div class="display-card-header columns-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-table-columns"></i>
+              </div>
+              <div class="display-card-title-group">
+                <div class="columns-title-row">
+                  <h4>Visible Columns</h4>
+                  <span class="column-count">{{ VisibleColumns.length }}</span>
+                </div>
+                <p>Drag rows to reorder columns in your view. Select any column to rename or format it.</p>
+              </div>
+              @if (CanEdit) {
+                <div class="columns-header-actions">
+                  <button
+                    type="button"
+                    class="section-link-btn"
+                    (click)="ResetColumnsToDefault()"
+                    title="Reset visible columns to entity defaults">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Reset Defaults</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="add-columns-cta-btn"
+                    [class.active]="ShowAddColumnsDrawer"
+                    (click)="ToggleAddColumnsDrawer()"
+                    title="Browse and add available fields to this view">
+                    <i [class]="ShowAddColumnsDrawer ? 'fa-solid fa-check' : 'fa-solid fa-plus'"></i>
+                    <span>{{ ShowAddColumnsDrawer ? 'Done Adding' : 'Add Columns (' + HiddenColumns.length + ')' }}</span>
+                  </button>
+                </div>
+              }
+            </div>
+
+            <div class="display-card-body columns-card-body">
+              <div class="column-list visible-columns">
+                @for (column of VisibleColumns; track column.fieldId; let i = $index) {
+                  <!-- Drop indicator before -->
+                  @if (IsDropBefore(column)) {
+                    <div class="drop-indicator"></div>
+                  }
+                  <div
+                    class="column-item"
+                    [class.dragging]="DraggedColumn === column"
+                    [class.drop-target]="DropTargetColumn === column"
+                    [class.is-pinned]="!!column.pinned"
+                    [class.is-selected]="FormatEditingColumn === column"
+                    draggable="true"
+                    (dragstart)="OnDragStart($event, column)"
+                    (dragover)="OnDragOver($event, column)"
+                    (dragleave)="OnDragLeave($event)"
+                    (drop)="OnDrop($event, column)"
+                    (dragend)="OnDragEnd($event)">
+                    <div class="drag-handle" title="Drag to reorder">
+                      <i class="fa-solid fa-grip-vertical"></i>
+                    </div>
+                    <span class="column-order-badge">{{ i + 1 }}</span>
+
+                    <div class="column-main-info" (click)="OpenFormatEditor(column)">
+                      <div class="column-name-row">
+                        <span class="column-name-text">{{ column.userDisplayName || column.displayName }}</span>
+                        @if (column.userDisplayName) {
+                          <span class="column-badge-pill alias" title="Original field: {{ column.displayName }}">
+                            <i class="fa-solid fa-pen-nib"></i>
+                            Renamed
+                          </span>
+                        }
+                        @if (HasCustomFormat(column)) {
+                          <span class="column-badge-pill formatted" title="Custom formatting applied">
+                            <i class="fa-solid fa-paintbrush"></i>
+                            Formatted
+                          </span>
+                        }
+                        @if (column.pinned) {
+                          <span class="pin-badge" title="Pinned {{ column.pinned }}">
+                            <i class="fa-solid fa-thumbtack"></i>
+                            {{ column.pinned === 'left' ? 'Pinned Left' : 'Pinned Right' }}
+                          </span>
+                        }
+                      </div>
+                      @if (!ShowAddColumnsDrawer && !FormatEditingColumn && column.field.Description) {
+                        <span class="column-desc-sub">{{ column.field.Description }}</span>
+                      }
+                    </div>
+
+                    @if (IsAdvancedMode && column.field.Type) {
+                      <span class="column-type-pill" (click)="OpenFormatEditor(column)">{{ column.field.Type }}</span>
+                    }
+                    @if (IsAdvancedMode || column.width) {
+                      <span class="column-meta-tag" (click)="OpenFormatEditor(column)">
+                        {{ column.width ? column.width + 'px' : 'auto' }}
+                      </span>
+                    }
+
+                    <div class="column-actions visible-row-actions">
+                      @if (IsAdvancedMode || column.pinned) {
+                        <button
+                          type="button"
+                          class="action-btn pin-btn"
+                          [class.active]="!!column.pinned"
+                          (click)="ToggleColumnPin(column, $event)"
+                          [disabled]="!CanEdit"
+                          [title]="column.pinned ? 'Pinned ' + column.pinned + ' — click to cycle' : 'Pin column left/right'">
+                          <i class="fa-solid fa-thumbtack"></i>
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="column-customize-btn"
+                        [class.active]="FormatEditingColumn === column"
+                        (click)="OpenFormatEditor(column)"
+                        title="Rename or format this column">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>{{ FormatEditingColumn === column ? 'Inspecting' : 'Customize' }}</span>
+                      </button>
+                      @if (IsAdvancedMode) {
+                        <button
+                          type="button"
+                          class="action-btn"
+                          [disabled]="i === 0"
+                          (click)="MoveColumnUp(column)"
+                          title="Move up">
+                          <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="action-btn"
+                          [disabled]="i === VisibleColumns.length - 1"
+                          (click)="MoveColumnDown(column)"
+                          title="Move down">
+                          <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="action-btn hide-btn"
+                        (click)="ToggleColumnVisibility(column)"
+                        title="Remove column from view">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Drop indicator after (only for last item) -->
+                  @if (IsDropAfter(column) && i === VisibleColumns.length - 1) {
+                    <div class="drop-indicator"></div>
+                  }
+                }
+                @if (VisibleColumns.length === 0) {
+                  <mj-empty-state
+                    Size="compact"
+                    Variant="warning"
+                    Title='No columns visible. Click "+ Add Columns" to choose fields.' />
+                }
+              </div>
+
+              @if (!ShowAddColumnsDrawer && HiddenColumns.length > 0 && CanEdit) {
+                <button
+                  type="button"
+                  class="add-more-columns-bar"
+                  (click)="OpenAddColumnsDrawer()">
+                  <i class="fa-solid fa-circle-plus"></i>
+                  <span>Add more columns to this view ({{ HiddenColumns.length }} available fields)</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- ON-DEMAND RIGHT DRAWER: either Column Inspector OR Add Columns Picker -->
+        @if (FormatEditingColumn || ShowAddColumnsDrawer) {
+          <div class="wb-col columns-side-drawer">
+            @if (FormatEditingColumn) {
+              <div class="format-editor wb-card">
+                <!-- Format Editor Header -->
+                <div class="format-editor-header">
+                  <div class="format-editor-title">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Column Inspector: {{ FormatEditingColumn.userDisplayName || FormatEditingColumn.displayName }}</span>
+                  </div>
+                  <button type="button" class="drawer-done-btn" (click)="CloseFormatEditor()" title="Close column inspector">
+                    <span>Done</span>
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+
+        <!-- Column Alias & Layout Section -->
         <div class="format-section">
           <div class="format-section-header">
             <i class="fa-solid fa-pen-nib"></i>
-            <span>Column Name</span>
+            <span>{{ IsAdvancedMode ? 'Column Name, Width & Pinning' : 'Column Header Name' }}</span>
           </div>
           <div class="format-row">
             <label>Display As</label>
@@ -240,9 +822,49 @@
           @if (FormatEditingColumn.userDisplayName) {
             <div class="format-row alias-info">
               <small class="muted-text">Original: {{ FormatEditingColumn.displayName }}</small>
-              <button class="clear-alias-btn" (click)="FormatEditingColumn.userDisplayName = undefined" title="Clear alias" aria-label="Clear alias">
+              <button type="button" class="clear-alias-btn" (click)="FormatEditingColumn.userDisplayName = undefined" title="Clear alias" aria-label="Clear alias">
                 <i class="fa-solid fa-times"></i>
               </button>
+            </div>
+          }
+          @if (IsAdvancedMode || FormatEditingColumn.pinned) {
+            <div class="format-row">
+              <label>Pin Column</label>
+              <div class="alignment-toggle">
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="!FormatEditingColumn.pinned"
+                  (click)="SetColumnPin(FormatEditingColumn, null)">
+                  None
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="FormatEditingColumn.pinned === 'left'"
+                  (click)="SetColumnPin(FormatEditingColumn, 'left')">
+                  <i class="fa-solid fa-thumbtack"></i> Left
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="FormatEditingColumn.pinned === 'right'"
+                  (click)="SetColumnPin(FormatEditingColumn, 'right')">
+                  <i class="fa-solid fa-thumbtack"></i> Right
+                </button>
+              </div>
+            </div>
+          }
+          @if (IsAdvancedMode || FormatEditingColumn.width) {
+            <div class="format-row">
+              <label>Width (px)</label>
+              <input
+                type="number"
+                class="format-input small"
+                min="50"
+                max="1000"
+                placeholder="Auto"
+                [(ngModel)]="FormatEditingColumn.width" />
             </div>
           }
         </div>
@@ -378,15 +1000,15 @@
             <span>Alignment</span>
           </div>
           <div class="alignment-toggle">
-            <button class="align-btn" [class.active]="FormatEditingColumn.format?.align === 'left' || !FormatEditingColumn.format?.align"
+            <button type="button" class="align-btn" [class.active]="FormatEditingColumn.format?.align === 'left' || !FormatEditingColumn.format?.align"
                     (click)="FormatEditingColumn.format!.align = 'left'" title="Left">
               <i class="fa-solid fa-align-left"></i>
             </button>
-            <button class="align-btn" [class.active]="FormatEditingColumn.format?.align === 'center'"
+            <button type="button" class="align-btn" [class.active]="FormatEditingColumn.format?.align === 'center'"
                     (click)="FormatEditingColumn.format!.align = 'center'" title="Center">
               <i class="fa-solid fa-align-center"></i>
             </button>
-            <button class="align-btn" [class.active]="FormatEditingColumn.format?.align === 'right'"
+            <button type="button" class="align-btn" [class.active]="FormatEditingColumn.format?.align === 'right'"
                     (click)="FormatEditingColumn.format!.align = 'right'" title="Right">
               <i class="fa-solid fa-align-right"></i>
             </button>
@@ -400,34 +1022,36 @@
             <span>Header Style</span>
           </div>
           <div class="style-buttons">
-            <button class="style-btn" [class.active]="FormatEditingColumn.format?.headerStyle?.bold"
+            <button type="button" class="style-btn" [class.active]="FormatEditingColumn.format?.headerStyle?.bold"
                     (click)="ToggleHeaderStyle('bold')"
                     title="Bold">
               <i class="fa-solid fa-bold"></i>
             </button>
-            <button class="style-btn" [class.active]="FormatEditingColumn.format?.headerStyle?.italic"
+            <button type="button" class="style-btn" [class.active]="FormatEditingColumn.format?.headerStyle?.italic"
                     (click)="ToggleHeaderStyle('italic')"
                     title="Italic">
               <i class="fa-solid fa-italic"></i>
             </button>
-            <button class="style-btn" [class.active]="FormatEditingColumn.format?.headerStyle?.underline"
+            <button type="button" class="style-btn" [class.active]="FormatEditingColumn.format?.headerStyle?.underline"
                     (click)="ToggleHeaderStyle('underline')"
                     title="Underline">
               <i class="fa-solid fa-underline"></i>
             </button>
           </div>
-          <div class="format-row">
-            <label>Text Color</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.headerStyle?.color || '#000000'"
-                   (input)="UpdateHeaderColor('color', $any($event.target).value)" />
-          </div>
-          <div class="format-row">
-            <label>Background</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
-                   (input)="UpdateHeaderColor('backgroundColor', $any($event.target).value)" />
-          </div>
+          @if (IsAdvancedMode || FormatEditingColumn.format?.headerStyle?.color || FormatEditingColumn.format?.headerStyle?.backgroundColor) {
+            <div class="format-row">
+              <label>Text Color</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.headerStyle?.color || '#000000'"
+                     (input)="UpdateHeaderColor('color', $any($event.target).value)" />
+            </div>
+            <div class="format-row">
+              <label>Background</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
+                     (input)="UpdateHeaderColor('backgroundColor', $any($event.target).value)" />
+            </div>
+          }
         </div>
 
         <!-- Cell Style -->
@@ -437,47 +1061,226 @@
             <span>Cell Style</span>
           </div>
           <div class="style-buttons">
-            <button class="style-btn" [class.active]="FormatEditingColumn.format?.cellStyle?.bold"
+            <button type="button" class="style-btn" [class.active]="FormatEditingColumn.format?.cellStyle?.bold"
                     (click)="ToggleCellStyle('bold')"
                     title="Bold">
               <i class="fa-solid fa-bold"></i>
             </button>
-            <button class="style-btn" [class.active]="FormatEditingColumn.format?.cellStyle?.italic"
+            <button type="button" class="style-btn" [class.active]="FormatEditingColumn.format?.cellStyle?.italic"
                     (click)="ToggleCellStyle('italic')"
                     title="Italic">
               <i class="fa-solid fa-italic"></i>
             </button>
-            <button class="style-btn" [class.active]="FormatEditingColumn.format?.cellStyle?.underline"
+            <button type="button" class="style-btn" [class.active]="FormatEditingColumn.format?.cellStyle?.underline"
                     (click)="ToggleCellStyle('underline')"
                     title="Underline">
               <i class="fa-solid fa-underline"></i>
             </button>
           </div>
-          <div class="format-row">
-            <label>Text Color</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.cellStyle?.color || '#000000'"
-                   (input)="UpdateCellColor('color', $any($event.target).value)" />
-          </div>
-          <div class="format-row">
-            <label>Background</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
-                   (input)="UpdateCellColor('backgroundColor', $any($event.target).value)" />
-          </div>
+          @if (IsAdvancedMode || FormatEditingColumn.format?.cellStyle?.color || FormatEditingColumn.format?.cellStyle?.backgroundColor) {
+            <div class="format-row">
+              <label>Text Color</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.cellStyle?.color || '#000000'"
+                     (input)="UpdateCellColor('color', $any($event.target).value)" />
+            </div>
+            <div class="format-row">
+              <label>Background</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
+                     (input)="UpdateCellColor('backgroundColor', $any($event.target).value)" />
+            </div>
+          }
         </div>
 
-        <!-- Clear Format Button -->
-        <div class="format-actions">
-          <button class="clear-format-btn" (click)="ClearColumnFormat(FormatEditingColumn); CloseFormatEditor()">
-            <i class="fa-solid fa-eraser"></i>
-            Clear Formatting
-          </button>
-        </div>
+        <!-- Progressive Disclosure: Conditional Formatting Rules (Advanced Mode or when rules exist) -->
+        @if (IsAdvancedMode || FormatEditingColumn.format?.conditionalRules?.length) {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-wand-sparkles"></i>
+              <span>Conditional Formatting Rules</span>
+              <button
+                type="button"
+                class="section-link-btn"
+                (click)="AddConditionalRule()"
+                [disabled]="!CanEdit">
+                <i class="fa-solid fa-plus"></i>
+                Add Rule
+              </button>
+            </div>
+
+            @if (FormatEditingColumn.format?.conditionalRules?.length) {
+              <div class="conditional-rules-list">
+                @for (rule of FormatEditingColumn.format?.conditionalRules || []; track $index; let rIdx = $index) {
+                  <div class="conditional-rule-card">
+                    <div class="cond-rule-top">
+                      <select class="format-select" [(ngModel)]="rule.condition">
+                        <option value="equals">Equals (=)</option>
+                        <option value="notEquals">Not Equals (≠)</option>
+                        <option value="contains">Contains</option>
+                        <option value="notContains">Does Not Contain</option>
+                        <option value="startsWith">Starts With</option>
+                        <option value="endsWith">Ends With</option>
+                        <option value="greaterThan">Greater Than (&gt;)</option>
+                        <option value="lessThan">Less Than (&lt;)</option>
+                        <option value="greaterThanOrEqual">Greater or Equal (≥)</option>
+                        <option value="lessThanOrEqual">Less or Equal (≤)</option>
+                        <option value="between">Between</option>
+                        <option value="isEmpty">Is Empty</option>
+                        <option value="isNotEmpty">Is Not Empty</option>
+                      </select>
+                      <button
+                        type="button"
+                        class="sort-remove-btn"
+                        (click)="RemoveConditionalRule(rIdx)"
+                        title="Remove rule">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </div>
+
+                    @if (rule.condition !== 'isEmpty' && rule.condition !== 'isNotEmpty') {
+                      <div class="cond-rule-values">
+                        <input
+                          type="text"
+                          class="format-input"
+                          placeholder="Value..."
+                          [(ngModel)]="rule.value" />
+                        @if (rule.condition === 'between') {
+                          <span class="muted-text">and</span>
+                          <input
+                            type="text"
+                            class="format-input"
+                            placeholder="End value..."
+                            [(ngModel)]="rule.value2" />
+                        }
+                      </div>
+                    }
+
+                    <div class="cond-rule-presets">
+                      <button type="button" class="preset-chip success" (click)="ApplyConditionalPreset(rule, 'success')">Green</button>
+                      <button type="button" class="preset-chip warning" (click)="ApplyConditionalPreset(rule, 'warning')">Amber</button>
+                      <button type="button" class="preset-chip danger" (click)="ApplyConditionalPreset(rule, 'danger')">Red</button>
+                      <button type="button" class="preset-chip info" (click)="ApplyConditionalPreset(rule, 'info')">Blue</button>
+                      <span class="cond-rule-preview"
+                            [style.color]="rule.style.color"
+                            [style.background-color]="rule.style.backgroundColor"
+                            [style.font-weight]="rule.style.bold ? '700' : '400'">
+                        Sample
+                      </span>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <p class="muted-text">Highlight cells automatically when their value matches a condition.</p>
+            }
+          </div>
+        } @else {
+          <div class="format-section advanced-inspector-cta">
+            <button type="button" class="advanced-hint-btn" (click)="ToggleAdvancedMode()">
+              <i class="fa-solid fa-wand-sparkles"></i>
+              <span>Enable Advanced Mode for Custom Colors &amp; Conditional Rules</span>
+            </button>
+          </div>
+        }
+
+            <!-- Clear Format Button -->
+            <div class="format-actions">
+              <button type="button" class="clear-format-btn" (click)="ClearColumnFormat(FormatEditingColumn); CloseFormatEditor()">
+                <i class="fa-solid fa-eraser"></i>
+                Clear Formatting
+              </button>
+            </div>
+          </div>
+          } @else if (ShowAddColumnsDrawer) {
+            <!-- On-Demand Add Columns Slide-In Drawer -->
+            <div class="display-mode-card add-columns-drawer-card">
+              <div class="display-card-header columns-card-header">
+                <div class="display-card-icon">
+                  <i class="fa-solid fa-circle-plus"></i>
+                </div>
+                <div class="display-card-title-group">
+                  <div class="columns-title-row">
+                    <h4>Add Columns</h4>
+                    <span class="column-count">{{ HiddenColumns.length }} available</span>
+                  </div>
+                  <p>Click any field below to add it to your visible columns.</p>
+                </div>
+                <div class="columns-header-actions">
+                  @if (HiddenColumns.length > 0 && CanEdit) {
+                    <button
+                      type="button"
+                      class="section-link-btn"
+                      (click)="ShowAllColumns()"
+                      title="Make all available columns visible">
+                      <i class="fa-solid fa-plus"></i>
+                      <span>Add All</span>
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="drawer-done-btn"
+                    (click)="CloseAddColumnsDrawer()"
+                    title="Close Add Columns panel">
+                    <span>Done</span>
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="display-card-body columns-card-body">
+                @if (HiddenColumns.length > 0) {
+                  <div class="column-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input
+                      type="text"
+                      placeholder="Search available fields by name or description..."
+                      [(ngModel)]="ColumnSearchText"
+                    />
+                  </div>
+                }
+                <div class="column-list hidden-columns">
+                  @for (column of FilteredHiddenColumns; track column.fieldId) {
+                    <div
+                      class="column-item hidden available-field-row"
+                      (click)="ToggleColumnVisibility(column)"
+                      title="Click to add {{ column.displayName }} to visible columns">
+                      <span class="column-add-icon"><i class="fa-solid fa-plus"></i></span>
+                      <div class="column-main-info">
+                        <div class="column-name-row">
+                          <span class="column-name-text">{{ column.displayName }}</span>
+                          @if (IsAdvancedMode && column.field.Type) {
+                            <span class="column-type-pill">{{ column.field.Type }}</span>
+                          }
+                        </div>
+                        @if (column.field.Description) {
+                          <span class="column-desc-sub">{{ column.field.Description }}</span>
+                        }
+                      </div>
+                      <span class="add-field-pill">Add</span>
+                    </div>
+                  }
+                  @if (HiddenColumns.length > 0 && FilteredHiddenColumns.length === 0) {
+                    <div class="sort-field-empty">No available fields match "{{ ColumnSearchText }}"</div>
+                  }
+                  @if (HiddenColumns.length === 0) {
+                    <mj-empty-state
+                      Size="compact"
+                      Variant="success"
+                      Title="All available fields are already visible in this view!" />
+                  }
+                </div>
+              </div>
+            </div>
+          }
+          </div>
+        }
       </div>
     }
 
-    <!-- Sorting Tab -->
+    <!-- ========================================================== -->
+    <!-- TAB 3: SORTING                                             -->
+    <!-- ========================================================== -->
     @if (ActiveTab === 'sorting') {
       <div class="tab-content">
         <div class="config-section sorting-section">
@@ -489,6 +1292,7 @@
 
           <!-- Add Sort Button -->
           <button
+            type="button"
             class="add-sort-btn"
             (click)="AddSortLevel()"
             [disabled]="!CanEdit || SortItems.length >= SortableFields.length"
@@ -509,6 +1313,7 @@
                   class="sort-item"
                   [class.dragging]="DraggedSortItem === sortItem"
                   [class.drop-target]="DropTargetSortItem === sortItem"
+                  [class.dropdown-open]="OpenSortFieldDropdownIndex === i"
                   draggable="true"
                   (dragstart)="OnSortDragStart($event, sortItem)"
                   (dragover)="OnSortDragOver($event, sortItem)"
@@ -521,19 +1326,74 @@
                   <div class="sort-drag-handle" title="Drag to reorder">
                     <i class="fa-solid fa-grip-vertical"></i>
                   </div>
-                  <!-- Field Dropdown -->
-                  <select
-                    class="sort-field-dropdown"
-                    [(ngModel)]="sortItem.field"
-                    (ngModelChange)="OnSortFieldChange(sortItem, $event)"
-                    [disabled]="!CanEdit">
-                    @for (field of SortableFields; track field.ID) {
-                      <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+                  <!-- Custom Searchable Field Dropdown -->
+                  <div class="sort-field-custom-select" [class.open]="OpenSortFieldDropdownIndex === i">
+                    <button
+                      type="button"
+                      class="sort-field-trigger"
+                      [class.open]="OpenSortFieldDropdownIndex === i"
+                      [disabled]="!CanEdit"
+                      [attr.aria-expanded]="OpenSortFieldDropdownIndex === i"
+                      (click)="ToggleSortFieldDropdown(i, $event)"
+                      (keydown)="OnSortTriggerKeydown($event, sortItem, i)">
+                      <span class="sort-field-trigger-main">
+                        <span class="sort-field-trigger-name">{{ GetFieldDisplayName(sortItem.field) }}</span>
+                        @if (IsAdvancedMode && GetSortFieldInfo(sortItem.field)?.Type) {
+                          <span class="sort-field-type-badge">{{ GetSortFieldInfo(sortItem.field)?.Type }}</span>
+                        }
+                      </span>
+                      <i class="fa-solid fa-chevron-down sort-field-chevron" [class.rotated]="OpenSortFieldDropdownIndex === i"></i>
+                    </button>
+
+                    @if (OpenSortFieldDropdownIndex === i) {
+                      <div
+                        class="sort-field-dropdown-menu"
+                        [class.drop-up]="SortDropdownDropUp"
+                        (click)="$event.stopPropagation()">
+                        <div class="sort-field-search-box">
+                          <i class="fa-solid fa-magnifying-glass"></i>
+                          <input
+                            type="text"
+                            class="sort-field-search-input"
+                            placeholder="Search fields by name or description..."
+                            [(ngModel)]="SortFieldSearchText"
+                            (ngModelChange)="SortHighlightIndex = 0"
+                            (keydown)="OnSortSearchKeydown($event, sortItem)"
+                          />
+                        </div>
+                        <div class="sort-field-options-list" role="listbox">
+                          @for (field of GetFilteredSortableFields(sortItem); track field.ID; let optIdx = $index) {
+                            <button
+                              type="button"
+                              class="sort-field-option"
+                              role="option"
+                              [class.selected]="sortItem.field === field.Name"
+                              [class.highlighted]="optIdx === SortHighlightIndex"
+                              [attr.aria-selected]="sortItem.field === field.Name"
+                              (mouseenter)="SortHighlightIndex = optIdx"
+                              (click)="SelectSortField(sortItem, field.Name, $event)">
+                              <div class="sort-field-option-header">
+                                <span class="sort-field-option-name">{{ field.DisplayNameOrName }}</span>
+                                @if (IsAdvancedMode && field.Type) {
+                                  <span class="sort-field-type-badge">{{ field.Type }}</span>
+                                }
+                              </div>
+                              @if (field.Description) {
+                                <div class="sort-field-option-desc">{{ field.Description }}</div>
+                              }
+                            </button>
+                          }
+                          @if (GetFilteredSortableFields(sortItem).length === 0) {
+                            <div class="sort-field-empty">No matching fields found</div>
+                          }
+                        </div>
+                      </div>
                     }
-                  </select>
+                  </div>
                   <!-- Direction Toggle -->
                   <div class="sort-direction-toggle">
                     <button
+                      type="button"
                       class="direction-btn"
                       [class.active]="sortItem.direction === 'asc'"
                       (click)="OnSortDirectionChange(sortItem, 'asc')"
@@ -542,6 +1402,7 @@
                       <i class="fa-solid fa-arrow-up"></i>
                     </button>
                     <button
+                      type="button"
                       class="direction-btn"
                       [class.active]="sortItem.direction === 'desc'"
                       (click)="OnSortDirectionChange(sortItem, 'desc')"
@@ -552,6 +1413,7 @@
                   </div>
                   <!-- Remove Button -->
                   <button
+                    type="button"
                     class="sort-remove-btn"
                     (click)="RemoveSortLevel(sortItem)"
                     [disabled]="!CanEdit"
@@ -580,334 +1442,663 @@
       </div>
     }
 
-    <!-- Filters Tab -->
-    @if (ActiveTab === 'filters') {
-      <div class="tab-content">
-        <!-- Filter Mode Selection -->
-        <div class="filter-mode-selector">
-          <button
-            class="filter-mode-btn"
-            [class.active]="FilterMode === 'smart'"
-            (click)="SetFilterMode('smart')"
-            [disabled]="!CanEdit">
-            <div class="mode-icon">
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-            </div>
-            <div class="mode-content">
-              <span class="mode-title">Smart Filter</span>
-              <span class="mode-subtitle">Use AI to filter with natural language</span>
-            </div>
-            @if (FilterMode === 'smart') {
-              <i class="fa-solid fa-check mode-check"></i>
-            }
-          </button>
-          <button
-            class="filter-mode-btn"
-            [class.active]="FilterMode === 'traditional'"
-            (click)="SetFilterMode('traditional')"
-            [disabled]="!CanEdit">
-            <div class="mode-icon">
-              <i class="fa-solid fa-sliders"></i>
-            </div>
-            <div class="mode-content">
-              <span class="mode-title">Traditional Filter</span>
-              <span class="mode-subtitle">Build filters with field/operator/value</span>
-            </div>
-            @if (FilterMode === 'traditional') {
-              <i class="fa-solid fa-check mode-check"></i>
-            }
-          </button>
-        </div>
-
-        <!-- Smart Filter Section -->
-        @if (FilterMode === 'smart') {
-          <div class="config-section smart-filter-section">
-            <div class="smart-filter-input-container">
-              <div class="smart-filter-icon">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-              </div>
-              <textarea
-                id="SmartFilterPrompt"
-                class="smart-filter-textarea"
-                placeholder="Describe what you're looking for..."
-                [(ngModel)]="SmartFilterPrompt"
-                [disabled]="!CanEdit"
-                rows="3"
-              ></textarea>
-            </div>
-
-            @if (SmartFilterExplanation) {
-              <mj-alert Variant="info" Size="sm" Icon="fa-solid fa-robot" class="view-config-alert-pos-mb">{{ SmartFilterExplanation }}</mj-alert>
-            }
-
-            <!-- Example Prompts -->
-            <div class="smart-filter-examples">
-              <div class="examples-header">
-                <i class="fa-solid fa-lightbulb"></i>
-                <span>Try these examples:</span>
-              </div>
-              <div class="example-chips">
-                <button
-                  class="example-chip"
-                  (click)="ApplySmartFilterExample('Show records created in the last 30 days')"
-                  [disabled]="!CanEdit">
-                  <i class="fa-regular fa-calendar"></i>
-                  Last 30 days
-                </button>
-                <button
-                  class="example-chip"
-                  (click)="ApplySmartFilterExample('Active records only')"
-                  [disabled]="!CanEdit">
-                  <i class="fa-solid fa-circle-check"></i>
-                  Active only
-                </button>
-                <button
-                  class="example-chip"
-                  (click)="ApplySmartFilterExample('Records with high priority')"
-                  [disabled]="!CanEdit">
-                  <i class="fa-solid fa-star"></i>
-                  High priority
-                </button>
-                <button
-                  class="example-chip"
-                  (click)="ApplySmartFilterExample('Records modified this week')"
-                  [disabled]="!CanEdit">
-                  <i class="fa-solid fa-clock-rotate-left"></i>
-                  Modified this week
-                </button>
-              </div>
-            </div>
-
-            <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">The AI will interpret your description and create the appropriate filter when you save the view.</mj-alert>
-          </div>
-        }
-
-        <!-- Traditional Filter Section -->
-        @if (FilterMode === 'traditional') {
-          <div class="config-section traditional-filter-section">
-            <div class="filter-summary-container">
-              <div class="filter-summary">
-                <div class="summary-info">
-                  @if (GetFilterCount() > 0) {
-                    <span class="filter-badge">{{ GetFilterCount() }}</span>
-                    <span class="summary-text">{{ GetFilterSummary() }}</span>
-                  } @else {
-                    <span class="summary-text no-filters">No filters configured</span>
-                  }
-                </div>
-                <div class="summary-actions">
-                  @if (GetFilterCount() > 0 && CanEdit) {
-                    <button
-                      class="summary-btn clear-btn"
-                      (click)="ClearFilters()"
-                      title="Clear all filters">
-                      <i class="fa-solid fa-times"></i>
-                      Clear
-                    </button>
-                  }
-                  <button
-                    class="summary-btn edit-btn primary"
-                    (click)="OpenFilterDialog()"
-                    [disabled]="!CanEdit && GetFilterCount() === 0"
-                    title="Edit filters">
-                    <i class="fa-solid fa-pen"></i>
-                    {{ GetFilterCount() > 0 ? 'Edit Filters' : 'Add Filters' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Build precise filters by selecting fields, operators, and values. Use groups for complex AND/OR logic.</mj-alert>
-          </div>
-        }
-      </div>
-    }
-
-    <!-- Aggregates Tab -->
+    <!-- ========================================================== -->
+    <!-- TAB 4: AGGREGATES (WORLD-CLASS SUMMARY & KPI WORKBENCH)    -->
+    <!-- ========================================================== -->
     @if (ActiveTab === 'aggregates') {
-      <div class="tab-content">
-        <div class="config-section aggregates-section">
-          <div class="aggregates-header">
-            <p class="aggregates-description">
-              Add summary calculations like totals, averages, and counts. Display them in cards or as column footers.
-            </p>
-          </div>
-
-          <!-- Add Aggregate Button -->
-          <button
-            class="add-aggregate-btn"
-            (click)="OpenAddAggregateDialog()"
-            [disabled]="!CanEdit"
-            title="Add a new aggregate">
-            <i class="fa-solid fa-plus"></i>
-            <span>Add Aggregate</span>
-          </button>
-
-          <!-- Aggregates List -->
-          @if (Aggregates.length > 0) {
-            <div class="aggregates-list">
-              @for (agg of Aggregates; track agg.id; let i = $index) {
-                <div class="aggregate-item" [class.disabled]="agg.enabled === false">
-                  <!-- Icon -->
-                  <div class="agg-icon">
-                    <i [class]="agg.icon || 'fa-solid fa-chart-simple'"></i>
-                  </div>
-
-                  <!-- Content -->
-                  <div class="agg-content">
-                    <div class="agg-label">{{ agg.label }}</div>
-                    <div class="agg-details">
-                      <span class="agg-type">
-                        <i [class]="agg.displayType === 'card' ? 'fa-solid fa-id-card' : 'fa-solid fa-table-columns'"></i>
-                        {{ agg.displayType === 'card' ? 'Card' : 'Column Footer' }}
-                      </span>
-                      @if (agg.smartPrompt) {
-                        <span class="agg-smart-badge" title="AI-generated">
-                          <i class="fa-solid fa-wand-magic-sparkles"></i>
-                        </span>
-                      }
-                    </div>
-                  </div>
-
-                  <!-- Actions -->
-                  <div class="agg-actions">
-                    <button
-                      class="agg-action-btn"
-                      [disabled]="i === 0 || !CanEdit"
-                      (click)="MoveAggregateUp(agg)"
-                      title="Move up">
-                      <i class="fa-solid fa-chevron-up"></i>
-                    </button>
-                    <button
-                      class="agg-action-btn"
-                      [disabled]="i === Aggregates.length - 1 || !CanEdit"
-                      (click)="MoveAggregateDown(agg)"
-                      title="Move down">
-                      <i class="fa-solid fa-chevron-down"></i>
-                    </button>
-                    <button
-                      class="agg-action-btn toggle-btn"
-                      [class.enabled]="agg.enabled !== false"
-                      (click)="ToggleAggregateEnabled(agg, $event)"
-                      [disabled]="!CanEdit"
-                      [title]="agg.enabled !== false ? 'Disable' : 'Enable'">
-                      <i [class]="agg.enabled !== false ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i>
-                    </button>
-                    <button
-                      class="agg-action-btn edit-btn"
-                      (click)="EditAggregate(agg)"
-                      [disabled]="!CanEdit"
-                      title="Edit">
-                      <i class="fa-solid fa-pen"></i>
-                    </button>
-                    <button
-                      class="agg-action-btn remove-btn"
-                      (click)="RemoveAggregate(agg)"
-                      [disabled]="!CanEdit"
-                      title="Remove">
-                      <i class="fa-solid fa-trash"></i>
-                    </button>
-                  </div>
+      <div class="tab-content display-workbench-container">
+        <div class="display-workbench-grid">
+          <!-- CARD 1: SUMMARY CALCULATIONS & KPIS -->
+          <div class="display-mode-card">
+            <div class="display-card-header columns-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-calculator"></i>
+              </div>
+              <div class="display-card-title-group">
+                <div class="columns-title-row">
+                  <h4>Summary Calculations &amp; KPIs</h4>
+                  <span class="column-count">{{ Aggregates.length }}</span>
                 </div>
+                <p>Calculate live server-side totals, averages, and counts across all matching records.</p>
+              </div>
+              @if (CanEdit) {
+                <button
+                  type="button"
+                  class="add-columns-cta-btn"
+                  (click)="OpenAddAggregateDialog()"
+                  title="Open slide-in drawer to add a summary calculation">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>Add Calculation</span>
+                </button>
               }
             </div>
 
-            <!-- Summary -->
-            <div class="aggregates-summary">
-              <div class="summary-item">
-                <i class="fa-solid fa-id-card"></i>
-                <span>{{ CardAggregates.length }} card{{ CardAggregates.length !== 1 ? 's' : '' }}</span>
-              </div>
-              <div class="summary-item">
-                <i class="fa-solid fa-table-columns"></i>
-                <span>{{ ColumnAggregates.length }} column footer{{ ColumnAggregates.length !== 1 ? 's' : '' }}</span>
+            <div class="display-card-body">
+              @if (Aggregates.length > 0) {
+                <div class="aggregates-list">
+                  @for (agg of Aggregates; track agg.id; let i = $index) {
+                    <div class="aggregate-item" [class.disabled]="agg.enabled === false">
+                      <!-- Icon -->
+                      <div class="agg-icon">
+                        <i [class]="agg.icon || 'fa-solid fa-chart-simple'"></i>
+                      </div>
+
+                      <!-- Content -->
+                      <div class="agg-content" (click)="EditAggregate(agg)">
+                        <div class="agg-label-row">
+                          <span class="agg-label">{{ agg.label }}</span>
+                          @if (agg.smartPrompt) {
+                            <span class="agg-smart-badge" title="AI-generated">
+                              <i class="fa-solid fa-wand-magic-sparkles"></i>
+                              AI
+                            </span>
+                          }
+                        </div>
+                        <div class="agg-details">
+                          <span class="agg-type">
+                            <i [class]="agg.displayType === 'card' ? 'fa-solid fa-id-card' : 'fa-solid fa-table-columns'"></i>
+                            {{ agg.displayType === 'card' ? 'Summary Card' : 'Column Footer' }}
+                          </span>
+                          @if (IsAdvancedMode && agg.expression) {
+                            <code class="column-type-pill">{{ agg.expression }}</code>
+                          }
+                        </div>
+                      </div>
+
+                      <!-- Actions -->
+                      <div class="agg-actions">
+                        @if (IsAdvancedMode && Aggregates.length > 1) {
+                          <button
+                            type="button"
+                            class="agg-action-btn"
+                            [disabled]="i === 0 || !CanEdit"
+                            (click)="MoveAggregateUp(agg)"
+                            title="Move up">
+                            <i class="fa-solid fa-chevron-up"></i>
+                          </button>
+                          <button
+                            type="button"
+                            class="agg-action-btn"
+                            [disabled]="i === Aggregates.length - 1 || !CanEdit"
+                            (click)="MoveAggregateDown(agg)"
+                            title="Move down">
+                            <i class="fa-solid fa-chevron-down"></i>
+                          </button>
+                        }
+                        <button
+                          type="button"
+                          class="agg-action-btn toggle-btn"
+                          [class.enabled]="agg.enabled !== false"
+                          (click)="ToggleAggregateEnabled(agg, $event)"
+                          [disabled]="!CanEdit"
+                          [title]="agg.enabled !== false ? 'Visible — click to pause' : 'Paused — click to enable'">
+                          <i [class]="agg.enabled !== false ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="agg-action-btn edit-btn"
+                          (click)="EditAggregate(agg)"
+                          [disabled]="!CanEdit"
+                          title="Edit calculation">
+                          <i class="fa-solid fa-sliders"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="agg-action-btn remove-btn"
+                          (click)="RemoveAggregate(agg)"
+                          [disabled]="!CanEdit"
+                          title="Remove calculation">
+                          <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+
+                <!-- Summary Pills -->
+                <div class="aggregates-summary">
+                  <div class="summary-item">
+                    <i class="fa-solid fa-id-card"></i>
+                    <span>{{ CardAggregates.length }} KPI Card{{ CardAggregates.length !== 1 ? 's' : '' }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <i class="fa-solid fa-table-columns"></i>
+                    <span>{{ ColumnAggregates.length }} Column Footer{{ ColumnAggregates.length !== 1 ? 's' : '' }}</span>
+                  </div>
+                </div>
+              } @else {
+                <div class="agg-empty-card">
+                  <div class="agg-empty-icon">
+                    <i class="fa-solid fa-chart-pie"></i>
+                  </div>
+                  <h5>No summary calculations yet</h5>
+                  <p>Add KPI summary cards (like Record Count, Total Revenue, or Average Score) or pinned column footers calculated server-side across all matching records.</p>
+                  @if (CanEdit) {
+                    <button
+                      type="button"
+                      class="add-columns-cta-btn"
+                      (click)="OpenAddAggregateDialog()">
+                      <i class="fa-solid fa-plus"></i>
+                      <span>Create First Calculation</span>
+                    </button>
+                  }
+                </div>
+              }
+
+              <div class="display-card-summary-banner">
+                <i class="fa-solid fa-bolt"></i>
+                <span>
+                  Calculations run server-side across the full filtered dataset — not just the current page of rows.
+                </span>
               </div>
             </div>
-          } @else {
-            <mj-empty-state
-              Size="compact"
-              Icon="fa-solid fa-chart-simple"
-              Title="No aggregates configured"
-              Message='Click "Add Aggregate" to create summary calculations' />
+          </div>
+
+          <!-- CARD 2: SUMMARY LAYOUT & PLACEMENT -->
+          <div class="display-mode-card">
+            <div class="display-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-layer-group"></i>
+              </div>
+              <div class="display-card-title-group">
+                <h4>Summary Layout &amp; Placement</h4>
+                <p>Choose where KPI summary cards and column total rows are docked in the grid workspace.</p>
+              </div>
+            </div>
+
+            <div class="display-card-body">
+              <!-- Summary Cards Dock Position -->
+              <div class="display-field-group">
+                <span class="display-field-label">KPI Summary Cards Dock</span>
+                <div class="visual-choice-grid two-cols" role="radiogroup" aria-label="Summary Cards Position">
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    [class.active]="AggregateDisplay.cardPosition === 'right'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.cardPosition = 'right'">
+                    <div class="visual-choice-illustration dock-illus right-dock">
+                      <span class="dock-grid-pane"></span>
+                      <span class="dock-kpi-pane"></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Right Sidebar Dock</span>
+                      <span class="visual-choice-meta">Docked beside the data grid</span>
+                    </div>
+                    @if (AggregateDisplay.cardPosition === 'right') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    [class.active]="AggregateDisplay.cardPosition === 'bottom'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.cardPosition = 'bottom'">
+                    <div class="visual-choice-illustration dock-illus bottom-dock">
+                      <span class="dock-grid-pane"></span>
+                      <span class="dock-kpi-pane"></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Bottom KPI Ribbon</span>
+                      <span class="visual-choice-meta">Horizontal bar below grid</span>
+                    </div>
+                    @if (AggregateDisplay.cardPosition === 'bottom') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <!-- Card Arrangement -->
+              <div class="display-field-group">
+                <span class="display-field-label">KPI Card Arrangement</span>
+                <div class="timeline-grouping-pills three-pills" role="radiogroup" aria-label="KPI Card Layout">
+                  <button
+                    type="button"
+                    class="timeline-group-pill"
+                    [class.active]="AggregateDisplay.cardLayout === 'vertical'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.cardLayout = 'vertical'">
+                    Vertical Stack
+                  </button>
+                  <button
+                    type="button"
+                    class="timeline-group-pill"
+                    [class.active]="AggregateDisplay.cardLayout === 'horizontal'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.cardLayout = 'horizontal'">
+                    Horizontal Row
+                  </button>
+                  <button
+                    type="button"
+                    class="timeline-group-pill"
+                    [class.active]="AggregateDisplay.cardLayout === 'grid'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.cardLayout = 'grid'">
+                    2-Column Grid
+                  </button>
+                </div>
+              </div>
+
+              <!-- Column Summary Row Position -->
+              <div class="display-field-group">
+                <span class="display-field-label">Column Total Row Position</span>
+                <div class="timeline-orientation-grid" role="radiogroup" aria-label="Column Summary Row Position">
+                  <button
+                    type="button"
+                    class="timeline-orient-btn"
+                    [class.active]="AggregateDisplay.columnPosition === 'bottom'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.columnPosition = 'bottom'">
+                    <i class="fa-solid fa-arrow-down-short-wide"></i>
+                    <span>Bottom Footer Row</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="timeline-orient-btn"
+                    [class.active]="AggregateDisplay.columnPosition === 'top'"
+                    [disabled]="!CanEdit"
+                    (click)="AggregateDisplay.columnPosition = 'top'">
+                    <i class="fa-solid fa-arrow-up-short-wide"></i>
+                    <span>Top Summary Row</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Optional Panel Title in Advanced Mode -->
+              @if (IsAdvancedMode) {
+                <div class="display-field-group">
+                  <span class="display-field-label">Summary Dock Header Title</span>
+                  <input
+                    type="text"
+                    class="format-input"
+                    [(ngModel)]="AggregateDisplay.cardPanelTitle"
+                    placeholder="Summary" />
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ========================================================== -->
+    <!-- TAB 5: DISPLAY & VIEW MODE OPTIONS                         -->
+    <!-- ========================================================== -->
+    @if (ActiveTab === 'display') {
+      <div class="tab-content display-workbench-container">
+        <div class="display-workbench-grid">
+          <!-- CARD 1: GRID VIEW APPEARANCE -->
+          <div class="display-mode-card">
+            <div class="display-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-table-cells"></i>
+              </div>
+              <div class="display-card-title-group">
+                <h4>Grid View Appearance</h4>
+                <p>Control row density and multi-line cell text behavior in the data grid.</p>
+              </div>
+            </div>
+
+            <div class="display-card-body">
+              <div class="display-field-group">
+                <span class="display-field-label">Row Density</span>
+                <div class="visual-choice-grid three-cols" role="radiogroup" aria-label="Grid Row Density">
+                  <!-- Compact -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="GridRowHeight === 'compact'"
+                    [attr.aria-checked]="GridRowHeight === 'compact'"
+                    [disabled]="!CanEdit"
+                    (click)="SetGridRowHeight('compact')">
+                    <div class="visual-choice-illustration density-illus compact">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Compact</span>
+                      <span class="visual-choice-meta">32px · High density</span>
+                    </div>
+                    @if (GridRowHeight === 'compact') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Normal -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="GridRowHeight === 'normal'"
+                    [attr.aria-checked]="GridRowHeight === 'normal'"
+                    [disabled]="!CanEdit"
+                    (click)="SetGridRowHeight('normal')">
+                    <div class="visual-choice-illustration density-illus normal">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Normal</span>
+                      <span class="visual-choice-meta">40px · Balanced</span>
+                    </div>
+                    @if (GridRowHeight === 'normal') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Comfortable -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="GridRowHeight === 'comfortable'"
+                    [attr.aria-checked]="GridRowHeight === 'comfortable'"
+                    [disabled]="!CanEdit"
+                    (click)="SetGridRowHeight('comfortable')">
+                    <div class="visual-choice-illustration density-illus comfortable">
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Comfortable</span>
+                      <span class="visual-choice-meta">52px · Spacious</span>
+                    </div>
+                    @if (GridRowHeight === 'comfortable') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <!-- Wrap Long Cell Text Toggle Card -->
+              <button
+                type="button"
+                class="display-toggle-card"
+                [class.active]="GridWrapText"
+                [disabled]="!CanEdit"
+                [attr.aria-pressed]="GridWrapText"
+                (click)="ToggleGridWrapText()">
+                <div class="display-toggle-left">
+                  <div class="display-toggle-icon">
+                    <i class="fa-solid fa-align-left"></i>
+                  </div>
+                  <div class="display-toggle-copy">
+                    <span class="display-toggle-title">Wrap Long Cell Text</span>
+                    <span class="display-toggle-desc">
+                      Expand row height automatically to show multi-line text instead of truncating with an ellipsis.
+                    </span>
+                  </div>
+                </div>
+                <span class="studio-switch" [class.checked]="GridWrapText" aria-hidden="true">
+                  <span class="studio-switch-thumb"></span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- CARD 2: CARD VIEW APPEARANCE -->
+          <div class="display-mode-card">
+            <div class="display-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-grip"></i>
+              </div>
+              <div class="display-card-title-group">
+                <h4>Card View Appearance</h4>
+                <p>Choose how much detail each record card displays when browsing in Card mode.</p>
+              </div>
+            </div>
+
+            <div class="display-card-body">
+              <div class="display-field-group">
+                <span class="display-field-label">Card Size &amp; Density</span>
+                <div class="visual-choice-grid three-cols" role="radiogroup" aria-label="Card View Size">
+                  <!-- Small -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="CardSize === 'small'"
+                    [attr.aria-checked]="CardSize === 'small'"
+                    [disabled]="!CanEdit"
+                    (click)="SetCardSize('small')">
+                    <div class="visual-choice-illustration cards-illus small">
+                      <span></span><span></span><span></span>
+                      <span></span><span></span><span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Small</span>
+                      <span class="visual-choice-meta">Compact · More per row</span>
+                    </div>
+                    @if (CardSize === 'small') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Medium -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="CardSize === 'medium'"
+                    [attr.aria-checked]="CardSize === 'medium'"
+                    [disabled]="!CanEdit"
+                    (click)="SetCardSize('medium')">
+                    <div class="visual-choice-illustration cards-illus medium">
+                      <span></span><span></span>
+                      <span></span><span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Medium</span>
+                      <span class="visual-choice-meta">Balanced · Key fields</span>
+                    </div>
+                    @if (CardSize === 'medium') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Large -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="CardSize === 'large'"
+                    [attr.aria-checked]="CardSize === 'large'"
+                    [disabled]="!CanEdit"
+                    (click)="SetCardSize('large')">
+                    <div class="visual-choice-illustration cards-illus large">
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Large</span>
+                      <span class="visual-choice-meta">Detailed · Rich preview</span>
+                    </div>
+                    @if (CardSize === 'large') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <div class="display-card-summary-banner">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>
+                  Card View automatically highlights the record title, status badge, and the top visible columns configured in the <strong>Columns</strong> tab.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD 3: TIMELINE MODE DEFAULTS (Full-Width Bottom Card when entity has date fields) -->
+          @if (AvailableDateFields.length > 0) {
+            <div class="display-mode-card full-span">
+              <div class="display-card-header">
+                <div class="display-card-icon">
+                  <i class="fa-solid fa-timeline"></i>
+                </div>
+                <div class="display-card-title-group">
+                  <h4>Timeline View Defaults</h4>
+                  <p>Configure the default date axis field, time-bucket grouping, and stream orientation when switching to Timeline mode.</p>
+                </div>
+              </div>
+
+              <div class="display-card-body timeline-controls-grid">
+                <!-- Control 1: Custom Styled Date Axis Field Selector -->
+                <div class="timeline-control-col">
+                  <span class="display-field-label">Date Axis Field</span>
+                  <span class="display-field-sublabel">Which timestamp field anchors records on the timeline</span>
+                  <div class="timeline-date-custom-select" [class.open]="IsTimelineDateDropdownOpen">
+                    <button
+                      type="button"
+                      class="timeline-date-trigger"
+                      [class.open]="IsTimelineDateDropdownOpen"
+                      [disabled]="!CanEdit"
+                      [attr.aria-expanded]="IsTimelineDateDropdownOpen"
+                      (click)="ToggleTimelineDateDropdown($event)"
+                      (keydown)="OnTimelineDateTriggerKeydown($event)">
+                      <span class="timeline-date-trigger-left">
+                        <i class="fa-regular fa-calendar"></i>
+                        <span class="timeline-date-trigger-name">{{ SelectedTimelineDateFieldLabel }}</span>
+                        @if (IsAdvancedMode && SelectedTimelineDateFieldInfo?.Type) {
+                          <span class="sort-field-type-badge">{{ SelectedTimelineDateFieldInfo?.Type }}</span>
+                        }
+                      </span>
+                      <i class="fa-solid fa-chevron-down sort-field-chevron" [class.rotated]="IsTimelineDateDropdownOpen"></i>
+                    </button>
+
+                    @if (IsTimelineDateDropdownOpen) {
+                      <div class="timeline-date-dropdown-menu" role="listbox" (click)="$event.stopPropagation()">
+                        @for (df of AvailableDateFields; track df.ID) {
+                          <button
+                            type="button"
+                            class="sort-field-option"
+                            role="option"
+                            [class.selected]="TimelineDateField === df.Name"
+                            [attr.aria-selected]="TimelineDateField === df.Name"
+                            (click)="SelectTimelineDateField(df.Name, $event)">
+                            <div class="sort-field-option-header">
+                              <span class="sort-field-option-name">{{ df.DisplayNameOrName }}</span>
+                              @if (IsAdvancedMode && df.Type) {
+                                <span class="sort-field-type-badge">{{ df.Type }}</span>
+                              }
+                            </div>
+                            @if (df.Description) {
+                              <div class="sort-field-option-desc">{{ df.Description }}</div>
+                            }
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Control 2: Segment Grouping Pill Bar -->
+                <div class="timeline-control-col">
+                  <span class="display-field-label">Segment Grouping</span>
+                  <span class="display-field-sublabel">How records are bucketed along the timeline</span>
+                  <div class="timeline-grouping-pills" role="radiogroup" aria-label="Timeline Segment Grouping">
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'none'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('none')">
+                      None
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'day'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('day')">
+                      Day
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'week'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('week')">
+                      Week
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'month'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('month')">
+                      Month
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'quarter'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('quarter')">
+                      Quarter
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'year'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('year')">
+                      Year
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Control 3: Timeline Orientation Cards -->
+                <div class="timeline-control-col">
+                  <span class="display-field-label">Layout Orientation</span>
+                  <span class="display-field-sublabel">Direction of the chronological stream</span>
+                  <div class="timeline-orientation-grid" role="radiogroup" aria-label="Timeline Orientation">
+                    <button
+                      type="button"
+                      class="timeline-orient-btn"
+                      [class.active]="TimelineOrientation === 'vertical'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineOrientation('vertical')">
+                      <i class="fa-solid fa-arrows-up-down"></i>
+                      <span>Vertical Feed</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-orient-btn"
+                      [class.active]="TimelineOrientation === 'horizontal'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineOrientation('horizontal')">
+                      <i class="fa-solid fa-arrows-left-right"></i>
+                      <span>Horizontal Track</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           }
-
-          <!-- Info Tip -->
-          <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Aggregates are calculated server-side for accuracy with filtered/paginated data.</mj-alert>
         </div>
       </div>
     }
-
-    <!-- Settings Tab -->
-    @if (ActiveTab === 'settings') {
-      <div class="tab-content">
-        <!-- View Name & Description -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-info-circle"></i>
-            <span>View Details</span>
-          </div>
-          <div class="form-group">
-            <label for="ViewName">Name</label>
-            <input
-              id="ViewName"
-              type="text"
-              class="form-input"
-              [class.invalid]="!ViewName || !ViewName.trim()"
-              placeholder="Enter view name..."
-              [(ngModel)]="ViewName"
-              [disabled]="!CanEdit"
-            />
-            @if (!ViewName || !ViewName.trim()) {
-              <span class="validation-error">View name is required</span>
-            }
-          </div>
-          <div class="form-group">
-            <label for="ViewDescription">Description</label>
-            <textarea
-              id="ViewDescription"
-              class="form-input form-textarea"
-              placeholder="Describe this view..."
-              [(ngModel)]="ViewDescription"
-              [disabled]="!CanEdit"
-              rows="3"
-            ></textarea>
-          </div>
-        </div>
-
-        <!-- Sharing -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-share-alt"></i>
-            <span>Sharing</span>
-          </div>
-          <label class="checkbox-label">
-            <input
-              type="checkbox"
-              [(ngModel)]="IsShared"
-              [disabled]="!CanEdit"
-            />
-            <span class="checkbox-text">
-              <strong>Share with others</strong>
-              <small>Allow other users to use this view</small>
-            </span>
-          </label>
-        </div>
-
-        <!-- Danger Zone -->
-        @if (ViewEntity && CanDelete) {
-          <div class="config-section danger-zone">
+      <!-- Properties Tab -->
+      @if (ActiveTab === 'properties') {
+        <div class="tab-content">
+          <div class="config-section">
             <div class="section-header">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>Danger Zone</span>
+              <i class="fa-solid fa-sliders"></i>
+              <span>Properties</span>
             </div>
-            <button class="delete-btn" (click)="OnDelete()">
-              <i class="fa-solid fa-trash"></i>
-              <span>Delete View</span>
-            </button>
+            <mj-view-properties-editor [Entity]="Entity" [(Properties)]="Properties" [Disabled]="!CanEdit"></mj-view-properties-editor>
           </div>
-        }
-      </div>
-    }
+        </div>
+      }
+    </div>
   </div>
 
   <!-- Validation Errors Banner -->
@@ -915,27 +2106,53 @@
     <mj-alert Variant="error" Size="sm" class="view-config-validation-pos">At least one column must be visible</mj-alert>
   }
 
-  <!-- Panel Footer -->
+  <!-- ============================================================ -->
+  <!-- PANEL FOOTER                                                 -->
+  <!-- ============================================================ -->
   <div class="panel-footer">
     <!-- Action buttons on LEFT -->
     <div class="footer-left">
-      @if (ViewEntity && CanEdit) {
+      @if (ViewEntity && !IsSaveAsNewFlow && CanEdit) {
         <!-- Editing an existing saved view -->
         <button
+          type="button"
           class="footer-btn save-btn primary"
           (click)="OnSave()"
           [disabled]="IsSaving || !IsValid">
           @if (IsSaving) {
             <i class="fa-solid fa-spinner fa-spin"></i>
           } @else {
-            <i class="fa-solid fa-save"></i>
+            <i class="fa-solid fa-check"></i>
           }
-          {{ IsSaving ? 'Saving...' : 'Save' }}
+          {{ IsSaving ? 'Saving...' : 'Save Changes' }}
         </button>
-      }
-      @if (!ViewEntity && DefaultSaveAsNew) {
-        <!-- Creating a new view (from quick Save dialog) -->
         <button
+          type="button"
+          class="footer-btn"
+          (click)="OnSaveAsCopy()"
+          [disabled]="IsSaving || !IsValidForSaveAsNew"
+          title="Save as a brand-new copy without modifying the current view">
+          <i class="fa-regular fa-copy"></i>
+          Save as Copy
+        </button>
+      } @else if (ViewEntity && !IsSaveAsNewFlow && !CanEdit) {
+        <!-- Read-only shared view — allow saving as personal copy -->
+        <button
+          type="button"
+          class="footer-btn save-btn primary"
+          (click)="OnSaveAsCopy()"
+          [disabled]="IsSaving || !IsValidForSaveAsNew">
+          @if (IsSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-regular fa-copy"></i>
+          }
+          {{ IsSaving ? 'Saving...' : 'Save as My Copy' }}
+        </button>
+      } @else if (IsCreatingNamedView) {
+        <!-- Creating a new named view -->
+        <button
+          type="button"
           class="footer-btn save-btn primary"
           (click)="OnSaveAsNew()"
           [disabled]="IsSaving || !IsValidForSaveAsNew">
@@ -946,34 +2163,36 @@
           }
           {{ IsSaving ? 'Saving...' : 'Create View' }}
         </button>
-      }
-      @if (!ViewEntity && !DefaultSaveAsNew) {
-        <!-- Default/Dynamic view - Save to user settings -->
+      } @else {
+        <!-- Personal Default Layout mode -->
         <button
+          type="button"
           class="footer-btn save-btn primary"
           (click)="OnSaveDefaults()"
           [disabled]="IsSaving">
           @if (IsSaving) {
             <i class="fa-solid fa-spinner fa-spin"></i>
           } @else {
-            <i class="fa-solid fa-save"></i>
+            <i class="fa-solid fa-check"></i>
           }
-          {{ IsSaving ? 'Saving...' : 'Save' }}
+          {{ IsSaving ? 'Saving...' : 'Save Default Layout' }}
         </button>
       }
     </div>
+
     <!-- Cancel button on RIGHT -->
-    <button class="footer-btn cancel-btn" (click)="OnClose()">
+    <button type="button" class="footer-btn cancel-btn" (click)="OnClose()">
       Cancel
     </button>
   </div>
 </div>
 
-<!-- Aggregate Setup Dialog -->
+<!-- Aggregate Setup Slide-In Drawer -->
 <mj-aggregate-setup-dialog
   [Entity]="Entity"
   [Aggregate]="EditingAggregate"
   [IsOpen]="ShowAggregateDialog"
+  [IsAdvancedMode]="IsAdvancedMode"
   (Close)="CloseAggregateDialog()"
   (Save)="OnAggregateSave($event)">
 </mj-aggregate-setup-dialog>
@@ -995,7 +2214,7 @@
 <mj-ev-confirm-dialog
   [IsOpen]="ShowFilterModeSwitchConfirm"
   Title="Switch Filter Mode"
-  [Message]="FilterMode === 'smart' ? 'Switching to Traditional mode will clear your smart filter prompt.' : 'Switching to Smart mode will clear your traditional filter rules.'"
+  [Message]="FilterMode === 'smart' ? 'Switching to Rule Builder mode will clear your smart filter prompt.' : 'Switching to Smart Filter mode will clear your filter rules.'"
   DetailMessage="You can switch back later, but the current filter data will be lost."
   ConfirmText="Switch"
   ConfirmStyle="primary"
@@ -1003,3 +2222,148 @@
   (Confirmed)="OnFilterModeSwitchConfirmed()"
   (Cancelled)="OnFilterModeSwitchCancelled()">
 </mj-ev-confirm-dialog>
+
+<!-- Default Layout Mode Switch Confirmation Dialog -->
+<mj-ev-confirm-dialog
+  [IsOpen]="ShowDefaultLayoutSwitchConfirm"
+  Title="Switch to Personal Default Layout"
+  Message="Switching to Personal Default Layout will clear your active filter, custom SQL WHERE clause, and alternate base view selection."
+  DetailMessage="Personal default layouts store columns, sorting, and summaries for your (Default) view without record filtering."
+  ConfirmText="Clear & Use Default Layout"
+  ConfirmStyle="primary"
+  Icon="fa-solid fa-sliders"
+  (Confirmed)="OnDefaultLayoutSwitchConfirmed()"
+  (Cancelled)="OnDefaultLayoutSwitchCancelled()">
+</mj-ev-confirm-dialog>
+
+<!-- Reusable Custom Alternate Base View Dropdown -->
+<ng-template #baseViewSelector>
+  <div class="abv-custom-select" [class.open]="IsBaseViewDropdownOpen" [class.disabled]="!CanEdit">
+    <button
+      type="button"
+      class="abv-select-trigger"
+      [class.open]="IsBaseViewDropdownOpen"
+      [class.has-abv]="!!AlternateBaseView"
+      [class.is-warning]="IsCurrentAlternateBaseViewUnavailable"
+      [disabled]="!CanEdit"
+      [attr.aria-expanded]="IsBaseViewDropdownOpen"
+      aria-haspopup="listbox"
+      (click)="ToggleBaseViewDropdown($event)"
+      (keydown)="OnBaseViewTriggerKeydown($event)">
+      <div class="abv-trigger-main">
+        <div class="abv-trigger-icon" [class.active]="!!AlternateBaseView && !IsCurrentAlternateBaseViewUnavailable" [class.warning]="IsCurrentAlternateBaseViewUnavailable">
+          @if (IsCurrentAlternateBaseViewUnavailable) {
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          } @else if (AlternateBaseView) {
+            <i class="fa-solid fa-layer-group"></i>
+          } @else {
+            <i class="fa-solid fa-database"></i>
+          }
+        </div>
+        <div class="abv-trigger-content">
+          <div class="abv-trigger-header">
+            <span class="abv-trigger-title">{{ SelectedBaseViewLabel }}</span>
+            @if (SelectedBaseViewSqlName) {
+              <code class="abv-sql-badge">{{ SelectedBaseViewSqlName }}</code>
+            }
+            @if (IsCurrentAlternateBaseViewUnavailable) {
+              <span class="abv-status-badge error">Unavailable</span>
+            } @else if (SelectedAlternateBaseViewInfo?.IsDeprecated) {
+              <span class="abv-status-badge warning">Deprecated</span>
+            }
+          </div>
+          @if (SelectedBaseViewDescription) {
+            <div class="abv-trigger-desc">{{ SelectedBaseViewDescription }}</div>
+          }
+        </div>
+      </div>
+      <i class="fa-solid fa-chevron-down abv-trigger-chevron" [class.rotated]="IsBaseViewDropdownOpen"></i>
+    </button>
+
+    @if (IsBaseViewDropdownOpen) {
+      <div class="abv-dropdown-menu" role="listbox">
+        <!-- Default Base View Option -->
+        <button
+          type="button"
+          class="abv-option"
+          role="option"
+          [class.selected]="IsAlternateBaseViewSelected(null)"
+          [attr.aria-selected]="IsAlternateBaseViewSelected(null)"
+          (click)="SelectBaseView(null, $event)">
+          <div class="abv-option-icon">
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <div class="abv-option-body">
+            <div class="abv-option-header">
+              <span class="abv-option-title">Default Base View</span>
+              @if (Entity?.BaseView) {
+                <code class="abv-sql-badge">{{ Entity?.BaseView }}</code>
+              }
+            </div>
+            <div class="abv-option-desc">
+              Includes all records from the entity's canonical base view without pre-filtering.
+            </div>
+          </div>
+          @if (IsAlternateBaseViewSelected(null)) {
+            <i class="fa-solid fa-check abv-option-check"></i>
+          }
+        </button>
+
+        <!-- Unavailable Currently Pinned Option -->
+        @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
+          <button
+            type="button"
+            class="abv-option unavailable"
+            role="option"
+            [class.selected]="true"
+            aria-selected="true"
+            (click)="SelectBaseView(AlternateBaseView, $event)">
+            <div class="abv-option-icon warning">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="abv-option-body">
+              <div class="abv-option-header">
+                <span class="abv-option-title">{{ AlternateBaseView }}</span>
+                <span class="abv-status-badge error">Unavailable</span>
+              </div>
+              <div class="abv-option-desc">
+                This alternate base view is disabled or no longer registered on this entity. Select Default or another view.
+              </div>
+            </div>
+            <i class="fa-solid fa-check abv-option-check"></i>
+          </button>
+        }
+
+        <!-- Available Alternate Base Views -->
+        @for (abv of AvailableAlternateBaseViews; track abv.ID) {
+          <button
+            type="button"
+            class="abv-option"
+            role="option"
+            [class.selected]="IsAlternateBaseViewSelected(abv.Name)"
+            [attr.aria-selected]="IsAlternateBaseViewSelected(abv.Name)"
+            (click)="SelectBaseView(abv.Name, $event)">
+            <div class="abv-option-icon abv">
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div class="abv-option-body">
+              <div class="abv-option-header">
+                <span class="abv-option-title">{{ abv.EffectiveDisplayName }}</span>
+                <code class="abv-sql-badge">{{ abv.ViewName }}</code>
+                @if (abv.IsDeprecated) {
+                  <span class="abv-status-badge warning">Deprecated</span>
+                }
+              </div>
+              @if (abv.Description) {
+                <div class="abv-option-desc">{{ abv.Description }}</div>
+              }
+            </div>
+            @if (IsAlternateBaseViewSelected(abv.Name)) {
+              <i class="fa-solid fa-check abv-option-check"></i>
+            }
+          </button>
+        }
+      </div>
+    }
+  </div>
+</ng-template>

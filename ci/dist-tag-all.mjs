@@ -19,7 +19,8 @@
 // The scratch-scope drill from the doc: point --registry at a scratch registry
 // (or --scope at a scratch org) and run with --dry-run off. Include a
 // renamed-package case in the drill to see both failure shapes.
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
@@ -28,6 +29,10 @@ import { pathToFileURL } from 'node:url';
 const execFileP = promisify(execFile);
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 2000;
+// Verify polls the registry: a just-moved tag can take a few seconds to show, and npm's cache can
+// serve the pre-move packument, so each poll uses a fresh cache directory (as publish.yml does).
+const VERIFY_ATTEMPTS = 10;
+const VERIFY_DELAY_MS = 3000;
 const RX_VERSION = /^\d+\.\d+\.\d+(-edge\.\d+)?$/;
 const RX_TAG = /^[a-z][a-z0-9.-]*$/;
 
@@ -146,15 +151,30 @@ async function moveOne(item, tag, registry) {
   }
 }
 
-async function verifyOne(item, tag, version, registry) {
+async function readTagFreshCache(name, registry, exec) {
+  const cacheDir = mkdtempSync(join(tmpdir(), 'dist-tag-verify-'));
   try {
-    const { stdout } = await withRetry(() => execFileP('npm', npmArgs(['dist-tag', 'ls', item.name], registry)));
-    const actual = parseDistTagLs(stdout)[tag];
-    if (actual === version) return { name: item.name, ok: true };
-    return { name: item.name, ok: false, error: `expected ${tag} → ${version}, found ${actual ?? '(unset)'}` };
-  } catch (err) {
-    return { name: item.name, ok: false, error: err.stderr?.trim() || err.message };
+    const { stdout } = await exec('npm', npmArgs(['dist-tag', 'ls', name, '--cache', cacheDir], registry));
+    return stdout;
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
   }
+}
+
+export async function verifyOne(item, tag, version, registry, opts = {}) {
+  const { exec = execFileP, sleep = defaultSleep, attempts = VERIFY_ATTEMPTS, delayMs = VERIFY_DELAY_MS } = opts;
+  let failure = '';
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const actual = parseDistTagLs(await readTagFreshCache(item.name, registry, exec))[tag];
+      if (actual === version) return { name: item.name, ok: true };
+      failure = `expected ${tag} → ${version}, found ${actual ?? '(unset)'}`;
+    } catch (err) {
+      failure = err.stderr?.trim() || err.message;
+    }
+    if (attempt < attempts) await sleep(delayMs);
+  }
+  return { name: item.name, ok: false, error: failure };
 }
 
 function report(stage, results) {

@@ -13,9 +13,9 @@
  * @module @memberjunction/server
  */
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -68,7 +68,12 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             }
 
             const provider = await this.providerFactory.CreateProvider();
-            const origin = await this.resolveOrigin(params.ConversationDetailID, provider);
+            // Written as the person who submitted the graph, marked as the server's: the conversation detail gate lets
+            // only a marked server write create or update an agent's reply, and only in a conversation its user owns or
+            // holds an Edit grant on. Not as the conversation's owner: `TaskGraph.Submit` takes any conversation detail
+            // ID, so writing as the owner would let anyone who can submit a graph post into a conversation they can't reach.
+            const writer = this.resolveSubmitter(params.SubmittedByUserID);
+            const origin = await this.resolveOrigin(params.ConversationDetailID, provider, writer.ID);
             if (!origin) {
                 LogError(
                     `[TaskGraphContinuationDeliverer] Conversation detail ${params.ConversationDetailID} could not be loaded — ` +
@@ -77,7 +82,6 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
-            const actingUser = this.resolveActingUser(origin.OwnerUserID);
             const enrichedParams = await this.enrichTasksWithOutputs(params, provider);
             const renderedOutcome = this.renderMessage(enrichedParams);
 
@@ -105,8 +109,9 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
-            const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
+            const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', writer);
             detail.NewRecord();
+            detail.MarkServerAuthoredReply();
             detail.ConversationID = origin.ConversationID;
             detail.BranchID = origin.BranchID;
             detail.ParentID = params.ConversationDetailID;
@@ -191,7 +196,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
 
             // Run on the fork of the message that started the graph, as PostMessage posts into it:
             // RunAgent derives the conversation from the detail, but not the fork.
-            const runUserId = targetRun.UserID || priorRun.UserID;
+            const runUserId = targetRun.UserID || priorRun.UserID || params.SubmittedByUserID;
             const origin = params.ConversationDetailID
                 ? await this.resolveOrigin(params.ConversationDetailID, provider, runUserId)
                 : null;
@@ -205,15 +210,16 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             // - When intervening messages were sent while the workflow ran (origin.IsLatest === false),
             //   create a bottom continuation message linked via ParentID = params.ConversationDetailID
             //   and update the originating message's stale "I'll follow up..." copy.
-            let replyDetail: MJConversationDetailEntity | null = null;
+            let replyDetail: MJConversationDetailEntityExtended | null = null;
             let replySaved = false;
             if (origin?.ConversationID) {
                 if (origin.IsLatest) {
                     replyDetail = origin.OriginDetail;
                     replySaved = true;
                 } else {
-                    replyDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
+                    replyDetail = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', actingUser);
                     replyDetail.NewRecord();
+                    replyDetail.MarkServerAuthoredReply();
                     replyDetail.ConversationID = origin.ConversationID;
                     replyDetail.BranchID = origin.BranchID;
                     replyDetail.ParentID = params.ConversationDetailID;
@@ -272,7 +278,12 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 if (result?.automaticCommands && result.automaticCommands.length > 0) {
                     replyDetail.AutomaticCommands = JSON.stringify(result.automaticCommands);
                 }
-                await replyDetail.Save();
+                if (!(await replyDetail.Save())) {
+                    LogError(
+                        `[TaskGraphContinuationDeliverer] Could not save synthesized reply for "${params.WorkflowName}": ` +
+                        `${replyDetail.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    );
+                }
 
                 if (!origin?.IsLatest && origin?.OriginDetail) {
                     await this.markOriginDetailCompleted(origin.OriginDetail, params.WorkflowName);
@@ -333,6 +344,18 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 LogError(`[TaskGraphContinuationDeliverer] The fallback post for "${params.WorkflowName}" also failed`, undefined, fallbackError);
             }
         }
+    }
+
+    /**
+     * The person who submitted the graph; the deliverer's own user when the graph records no submitter or they are not
+     * in the user cache (the gate then decides, and refuses a conversation that user cannot write to).
+     */
+    private resolveSubmitter(submittedByUserID: string | null): UserInfo {
+        if (!submittedByUserID) {
+            return this.contextUser;
+        }
+        const users = UserCache.Instance?.Users ?? UserCache.Users ?? [];
+        return users.find((u) => UUIDsEqual(u.ID, submittedByUserID)) ?? this.contextUser;
     }
 
     /**
@@ -405,11 +428,11 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         ConversationID: string;
         BranchID: string | null;
         OwnerUserID: string;
-        OriginDetail: MJConversationDetailEntity;
+        OriginDetail: MJConversationDetailEntityExtended;
         IsLatest: boolean;
     } | null> {
         const initialUser = this.resolveActingUser(fallbackOwnerUserId);
-        let detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', initialUser);
+        let detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', initialUser);
         if (!(await detail.Load(conversationDetailID))) {
             return null;
         }
@@ -418,15 +441,19 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             ownerUserId = await this.lookupConversationOwnerId(detail.ConversationID, provider);
         }
         const resolvedOwnerUserId = ownerUserId || this.contextUser.ID;
-        const actingUser = this.resolveActingUser(resolvedOwnerUserId);
-        // `MJConversationDetailEntityExtended.Save()` refuses writes when the entity's context user
-        // is not the conversation owner (`this.contextUser` is the server system user). Re-bind
-        // `OriginDetail` to `actingUser` whenever `ownerUserId` was discovered after loading `detail`.
-        if (!UUIDsEqual(actingUser.ID, initialUser.ID)) {
-            const writableDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
-            if (await writableDetail.Load(conversationDetailID)) {
-                detail = writableDetail;
+        if (!fallbackOwnerUserId && !UUIDsEqual(resolvedOwnerUserId, initialUser.ID)) {
+            const ownerUser = this.resolveActingUser(resolvedOwnerUserId);
+            if (!UUIDsEqual(ownerUser.ID, initialUser.ID)) {
+                const reloaded = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ownerUser);
+                if (await reloaded.Load(conversationDetailID)) {
+                    detail = reloaded;
+                }
             }
+        }
+        // Mark the originating detail as server-authored when it is the workflow status or planning AI/error reply.
+        const role = detail.Role?.trim().toLowerCase();
+        if (!role || role === 'ai' || role === 'error') {
+            detail.MarkServerAuthoredReply();
         }
         const branchId = detail.BranchID ?? null;
         const isLatest = detail.ConversationID
@@ -497,7 +524,12 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                     ? `${cleaned}\n\n${completionNote}`
                     : completionNote;
                 originDetail.Status = 'Complete';
-                await originDetail.Save();
+                if (!(await originDetail.Save())) {
+                    LogError(
+                        `[TaskGraphContinuationDeliverer] Could not update originating detail for "${workflowName}": ` +
+                        `${originDetail.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    );
+                }
             }
         } catch {
             // Non-fatal if origin detail note update fails.

@@ -1,5 +1,7 @@
 # @memberjunction/ng-pagination
 
+## 6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ## 6.2.0-edge.4
