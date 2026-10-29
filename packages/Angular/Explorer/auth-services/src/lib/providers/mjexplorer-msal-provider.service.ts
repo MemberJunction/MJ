@@ -114,6 +114,25 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     return overlay;
   }
 
+  /**
+   * Picks the cached account a session may resume as.
+   *
+   * MSAL keeps every account that signed in on this browser profile until it is logged out, so on a
+   * shared machine the cache can hold another person's account next to the current one. The active
+   * account is the one the last sign-in set, so it wins; a single cached account is unambiguous.
+   * With several accounts and none active there is no way to tell whose session this is, so the
+   * method returns null and the user signs in again rather than resuming as the first account listed.
+   */
+  static SelectSessionAccount(accounts: AccountInfo[], active: AccountInfo | null): AccountInfo | null {
+    if (active) {
+      const match = accounts.find((a) => a.homeAccountId === active.homeAccountId);
+      if (match) {
+        return match;
+      }
+    }
+    return accounts.length === 1 ? accounts[0] : null;
+  }
+
   constructor(public Auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
     const config: AngularAuthProviderConfig = {
       name: MJMSALProvider.PROVIDER_TYPE,
@@ -166,21 +185,24 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       this._initializationCompleted$.next(true);
       console.debug('[MSAL] Initialization completed (redirect login)');
     } else {
-      // Set active account if we have one from cache
+      // Restore the session only from an account we can attribute to the last sign-in
       const accounts = this.Auth.instance.getAllAccounts();
       console.debug('[MSAL] Cached accounts found:', accounts.length);
+      const account = MJMSALProvider.SelectSessionAccount(accounts, this.Auth.instance.getActiveAccount());
 
-      if (accounts.length > 0) {
-        console.debug('[MSAL] Restoring session from cached account:', accounts[0].username);
-        this.Auth.instance.setActiveAccount(accounts[0]);
+      if (account) {
+        console.debug('[MSAL] Restoring session from cached account:', account.username);
+        this.Auth.instance.setActiveAccount(account);
         this.updateAuthState(true);
 
         // Update user info from cached account
-        const userInfo = this.mapMSALAccountToStandard(accounts[0]);
+        const userInfo = this.mapMSALAccountToStandard(account);
         this.updateUserInfo(userInfo);
 
         this._initializationCompleted$.next(true);
         console.debug('[MSAL] Initialization completed (cached session restored)');
+      } else if (accounts.length > 1) {
+        console.warn('[MSAL] Several cached accounts and none marked active; not restoring a session, user needs to log in');
       } else {
         console.debug('[MSAL] No cached accounts, user needs to log in');
       }
@@ -193,14 +215,18 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         takeUntil(this._destroying$)
       )
       .subscribe(() => {
-        const accounts = this.Auth.instance.getAllAccounts();
-        const isAuth = accounts.length > 0;
+        // Keep the account the redirect just signed in (it is the active one); never fall back
+        // to whichever cached account happens to be listed first
+        const account = MJMSALProvider.SelectSessionAccount(
+          this.Auth.instance.getAllAccounts(),
+          this.Auth.instance.getActiveAccount()
+        );
 
-        this.updateAuthState(isAuth);
+        this.updateAuthState(account !== null);
 
-        if (isAuth) {
-          this.Auth.instance.setActiveAccount(accounts[0]);
-          const userInfo = this.mapMSALAccountToStandard(accounts[0]);
+        if (account) {
+          this.Auth.instance.setActiveAccount(account);
+          const userInfo = this.mapMSALAccountToStandard(account);
           this.updateUserInfo(userInfo);
         } else {
           this.updateUserInfo(null);
@@ -233,6 +259,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
 
   protected async logoutInternal(): Promise<void> {
     await this.ensureInitialized();
+    // No account on purpose: MSAL then clears every cached account, not just the active one, so the
+    // next person on this browser cannot resume a session left behind by an earlier sign-in
     this.Auth.logoutRedirect().subscribe(() => {
       // Logout will trigger a redirect
     });
