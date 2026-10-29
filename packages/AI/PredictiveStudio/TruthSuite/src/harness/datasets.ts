@@ -82,8 +82,8 @@ export class HarnessDatasets {
     }
     const out = new UUIDMap<string>();
     for (const row of parsed.Rows) {
-      const id = (row[idIdx] ?? '').trim();
-      if (id.length > 0) out.Set(id, (row[colIdx] ?? '').trim());
+      const id = (row[idIdx] || '').trim();
+      if (id.length > 0) out.Set(id, (row[colIdx] || '').trim());
     }
     return out;
   }
