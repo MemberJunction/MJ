@@ -96,16 +96,21 @@ def test_noise_share_counts_positive_importance_only() -> None:
     assert IM.noise_share([IM.ColumnImportance("a", -0.1, -0.2, 0.0)], ["a"]) == 0.0
 
 
+def _importance_run(server: FileServer, df: pd.DataFrame, hold: list[str], resamples: int) -> TrainerCompleted:
+    m, n = snapshot_files(df, FEATS, hold, label_map={0: "no", 1: "yes"})
+    proto = protocol("binary", intervals={"level": 0.95, "method": "bootstrap", "resamples": resamples,
+                                          "pairedTest": "paired-bootstrap"})
+    req = request(server, m, n, TASK, proto, candidates("binary", [("glm_candidate", "logistic_regression", {})]),
+                  tag=f"snap{resamples}")
+    resp = client.post("/trainer", json=req)
+    assert resp.status_code == 200, resp.text
+    return TrainerCompleted.model_validate(resp.json())
+
+
 def test_trainer_reports_held_out_importance_per_source(server: FileServer) -> None:
     df = binary_frame()
     hold = [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
-    m, n = snapshot_files(df, FEATS, hold, label_map={0: "no", 1: "yes"})
-    proto = protocol("binary", intervals={"level": 0.95, "method": "bootstrap", "resamples": 200,
-                                          "pairedTest": "paired-bootstrap"})
-    req = request(server, m, n, TASK, proto, candidates("binary", [("glm_candidate", "logistic_regression", {})]))
-    resp = client.post("/trainer", json=req)
-    assert resp.status_code == 200, resp.text
-    r = TrainerCompleted.model_validate(resp.json())
+    r = _importance_run(server, df, hold, 200)
     assert [i.sourceColumn for i in r.importance][0] == "x1"
     assert {i.sourceColumn for i in r.importance} == {"x1", "x2", "city"}
     for i in r.importance:
@@ -114,3 +119,15 @@ def test_trainer_reports_held_out_importance_per_source(server: FileServer) -> N
         assert pi.interval.lower <= pi.value <= pi.interval.upper
     drops = [i.permutationImportance.value for i in r.importance]
     assert drops == sorted(drops, reverse=True)
+
+
+def test_importance_interval_follows_the_protocol_resample_count(server: FileServer) -> None:
+    """Same data, same finalist, same permutations: only the protocol's resample count differs, so every drop is equal
+    and the intervals are not (the draw count is read from the protocol, not fixed)."""
+    df = binary_frame()
+    hold = [str(i) for i, t in zip(df["ID"], df["T"]) if str(t).startswith("2024")]
+    a = {i.sourceColumn: i.permutationImportance for i in _importance_run(server, df, hold, 150).importance}
+    b = {i.sourceColumn: i.permutationImportance for i in _importance_run(server, df, hold, 400).importance}
+    assert set(a) == set(b) == {"x1", "x2", "city"}
+    assert all(a[s].value == b[s].value for s in a)
+    assert any((a[s].interval.lower, a[s].interval.upper) != (b[s].interval.lower, b[s].interval.upper) for s in a)

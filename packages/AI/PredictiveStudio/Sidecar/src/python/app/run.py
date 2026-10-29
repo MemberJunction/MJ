@@ -3,15 +3,16 @@ RequestRefused (HTTP 400, nothing fitted); every failure after that returns `fai
 spent, never partial metrics. One run clock measures the whole run and enforces the timeout and the compute budget.
 
 The run, in order: load and verify the snapshot; audit the development rows for leakage (audit.py) and remove every
-flagged source column from every candidate and baseline; select the finalist on the remaining columns; when the
-snapshot carries a planted reference score (test fixtures only), apply the implausible-gain rule; then the holdout
-stage (evaluation.py), which reports the audit's flags.
+flagged source column from every candidate and baseline (failing at `inner-cv` when no feature column remains);
+select the finalist on the remaining columns; for a binary task whose snapshot carries a planted reference score
+(test fixtures only), apply the implausible-gain rule, which compares AUCs by paired DeLong and so is skipped for
+every other task kind; then the holdout stage (evaluation.py), which reports the audit's flags.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from threadpoolctl import threadpool_limits
@@ -99,15 +100,33 @@ def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
 def _audited_columns(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
                      periods: IntArr) -> Tuple[List[encoding.ColumnSpec], List[LeakageFlag]]:
     """The snapshot's feature columns without the source columns the leakage audit flags on the development rows,
-    and the audit's flags. The development rows have time when they span more than one decision period."""
+    and the audit's flags. The development rows have time when they span more than one decision period.
+
+    Raises:
+        TrainerFailure: Stage `inner-cv` when the audit leaves no feature column.
+    """
     p = req.protocol
     dev_periods = periods[dev]
     audit = AU.run_audit(
         snap.frame.iloc[dev].reset_index(drop=True), snap.columns, np.asarray(enc.y)[dev],
         [snap.entity_keys[int(i)] for i in dev], dev_periods, len(set(dev_periods.tolist())) > 1, enc.family,
         p.leakageAudit.singleFeatureHeldOutAucMax, p.seed, len(enc.class_order or []))
-    excluded = set(audit.excluded_sources)
-    return [c for c in snap.columns if c.source_column not in excluded], list(audit.flags)
+    return _without_sources(snap.columns, audit.excluded_sources, "the leakage audit"), list(audit.flags)
+
+
+def _without_sources(columns: Sequence[encoding.ColumnSpec], excluded: Sequence[str],
+                     by: str) -> List[encoding.ColumnSpec]:
+    """`columns` without the excluded source columns.
+
+    Raises:
+        TrainerFailure: Stage `inner-cv`, naming the excluded sources, when no feature column (identifiers aside)
+            remains, since nothing would be left to fit.
+    """
+    gone = set(excluded)
+    kept = [c for c in columns if c.source_column not in gone]
+    if not encoding.source_map(kept):
+        raise TrainerFailure("inner-cv", f"{by} excluded every feature source column: {sorted(gone)}")
+    return kept
 
 
 def _most_implausible(y_dev: FArr, ref_dev: FArr, out: TR.SelectionOutcome,
@@ -164,7 +183,7 @@ def _reference_rule(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel
         raise TrainerFailure("inner-cv", f"candidate '{spec.name}' beats the reference score by an implausible margin "
                                          f"(paired DeLong p < {AU.REFERENCE_P}) and no single source column explains it")
     gone = sorted(f.sourceColumn for f in explaining)
-    columns = [c for c in columns if c.source_column not in gone]
+    columns = _without_sources(columns, gone, "the implausible-gain rule")
     out = TR.select_finalist(req.protocol, snap, columns, enc, dev, req.candidates, req.threads, clock, periods)
     still = _most_implausible(y_dev, ref_dev, out, list(req.candidates))
     if still is not None:

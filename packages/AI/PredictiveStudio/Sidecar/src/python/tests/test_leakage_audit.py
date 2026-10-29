@@ -4,14 +4,16 @@ unit level and through POST /trainer."""
 
 from __future__ import annotations
 
+import base64
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from app import audit as AU, encoding as E
+from app import artifacts, audit as AU, encoding as E
 from app.algorithms import TabularFamily
 from app.main import app
 from app.trainer_schemas import (
@@ -65,6 +67,21 @@ def test_audit_flags_proxy_future_and_id_but_keeps_lag() -> None:
     by_col = {a.feature_column: a for a in res.evidence}
     assert by_col["proxy"].best_shift == 0 and by_col["future"].best_shift == 1 and by_col["lag"].best_shift == -1
     assert set(by_col["x"].score_by_shift) == {-1, 0, 1} and not by_col["x"].flagged
+
+
+def test_a_label_copy_tied_on_every_shift_is_a_same_period_proxy() -> None:
+    """A label that never changes within an entity scores the same on every shift for a copy of it; the tie resolves
+    to the same period (then the next, then the previous), so the copy is flagged, never kept as a past outcome."""
+    rng = np.random.default_rng(12)
+    stable = (rng.random(300) < 0.4).astype(int)
+    entity = [f"e{e}" for e in range(300) for _ in range(4)]
+    t = np.array([k for _ in range(300) for k in range(4)])
+    y = np.repeat(stable, 4)
+    res = _run(pd.DataFrame({"stable": y.astype(float)}), [_num("stable")], y, entity, t, True)
+    audit = res.evidence[0]
+    assert audit.score_by_shift == {-1: 1.0, 0: 1.0, 1: 1.0}
+    assert audit.best_shift == 0 and audit.flagged
+    assert res.excluded_sources == ["stable"] and res.past_outcome_sources == []
 
 
 def test_a_source_is_flagged_when_any_of_its_feature_columns_is() -> None:
@@ -155,6 +172,17 @@ def test_beats_reference() -> None:
     assert AU.beats_reference(np.ones(n), truth, truth) == (False, 1.0)       # one class: no AUC to compare
 
 
+@pytest.mark.parametrize("positives", [1, 1999])
+def test_beats_reference_with_one_row_of_a_class_is_undefined_and_quiet(positives: int) -> None:
+    """One row of either class leaves the paired test without a variance: never a leak, and no numpy warning."""
+    rng = np.random.default_rng(13)
+    y = np.zeros(2000)
+    y[:positives] = 1.0
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert AU.beats_reference(y, y + 0.01 * rng.normal(size=2000), rng.random(2000)) == (False, 1.0)
+
+
 # ------------------------------------------------------------------------------------------------ POST /trainer ------
 
 LOGISTIC_ONLY: list[tuple[str, str, JsonObject]] = [("glm_candidate", "logistic_regression", {})]
@@ -165,11 +193,11 @@ def _holdout_2024(df: pd.DataFrame) -> list[str]:
 
 
 def _post(server: FileServer, df: pd.DataFrame, feats: dict[str, JsonObject], reference: bool = False,
-          ceiling: float = 0.9) -> JsonObject:
+          ceiling: float = 0.9, drivers: list[tuple[str, str, JsonObject]] = LOGISTIC_ONLY) -> JsonObject:
     m, n = snapshot_files(df, feats, _holdout_2024(df), label_map=LABELS, reference_col="Truth" if reference else None)
     audit: JsonObject = {"singleFeatureHeldOutAucMax": ceiling, "timeShiftedLabelTest": True, "dropColumnTest": True,
                          "importanceAggregation": "per-source-column", "highCardinalityIdCheck": True}
-    req = request(server, m, n, TASK, protocol("binary", leakageAudit=audit), candidates("binary", LOGISTIC_ONLY))
+    req = request(server, m, n, TASK, protocol("binary", leakageAudit=audit), candidates("binary", drivers))
     resp = client.post("/trainer", json=req)
     assert resp.status_code == 200, resp.text
     body: JsonValue = resp.json()
@@ -189,6 +217,17 @@ def test_trainer_excludes_audited_sources_before_selection(server: FileServer) -
     r = TrainerCompleted.model_validate(_post(server, df, {**FEATS, "echo": NUMERIC}))
     assert [f.sourceColumn for f in r.leakageFlags if isinstance(f, SingleFeatureAucFlag)] == ["echo"]
     assert {i.sourceColumn for i in r.importance} == {"x1", "x2", "city"}
+    # Every shippable predictor, the simple baselines included, was fitted without the flagged source.
+    assert {a.candidate for a in r.artifacts} == {"glm_candidate", "oneFeature", "glm"}
+    for a in r.artifacts:
+        _, envelope = artifacts.load_v2_envelope(base64.b64decode(a.bytesBase64))
+        assert "echo" not in {c.sourceColumn for c in envelope.featureColumns}, a.candidate
+
+
+def test_an_audit_that_excludes_every_source_fails_inner_cv_naming_them(server: FileServer) -> None:
+    df = binary_frame().assign(echo=lambda d: d["Target"].astype(float))
+    r = TrainerFailed.model_validate(_post(server, df, {"echo": NUMERIC}))
+    assert r.stage == "inner-cv" and "excluded every feature source column" in r.message and "echo" in r.message
 
 
 def test_reference_rule_drops_the_column_that_explains_an_implausible_gain(server: FileServer) -> None:
@@ -208,6 +247,28 @@ def test_reference_rule_without_a_single_explaining_column_fails_inner_cv(server
     body = _post(server, df, {**FEATS, "echo": NUMERIC, "echo2": NUMERIC}, reference=True, ceiling=1.0)
     r = TrainerFailed.model_validate(body)
     assert r.stage == "inner-cv" and "reference" in r.message
+
+
+def test_reference_rule_fails_when_another_candidate_still_beats_the_reference(server: FileServer) -> None:
+    """The label is an interaction (u > 0 XOR v > 0) that a linear model cannot use and a boosted tree can. With the
+    copy `echo` present the trials run on the logistic candidate (the most implausible, request order breaking a tie),
+    and dropping `echo` alone makes it plausible; after reselecting without `echo` the tree still beats the reference.
+    Had the tree been chosen, no single column would explain its gain and the run would fail at the earlier check,
+    whose message this test rejects."""
+    rng = np.random.default_rng(21)
+    n = 1200
+    u, v = rng.normal(size=n), rng.normal(size=n)
+    target = (((u > 0) != (v > 0)) ^ (rng.random(n) < 0.05)).astype(int)
+    df = binary_frame(n).assign(u=u, v=v, Target=target, echo=target.astype(float), Truth=0.5 + 0.01 * rng.normal(size=n))
+    drivers: list[tuple[str, str, JsonObject]] = [
+        ("glm_candidate", "logistic_regression", {}),
+        ("lgbm", "lightgbm", {"n_estimators": 100, "learning_rate": 0.1, "num_leaves": 7, "min_child_samples": 20}),
+    ]
+    body = _post(server, df, {"u": NUMERIC, "v": NUMERIC, "echo": NUMERIC}, reference=True, ceiling=1.0,
+                 drivers=drivers)
+    r = TrainerFailed.model_validate(body)
+    assert r.stage == "inner-cv"
+    assert "'lgbm' still beats the reference score" in r.message and "['echo']" in r.message
 
 
 def test_reference_rule_keeps_a_plausible_model(server: FileServer) -> None:

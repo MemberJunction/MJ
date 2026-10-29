@@ -27,8 +27,15 @@ columns are removed from every candidate and baseline before selection.
 
 A shift whose audit folds cannot be built (fewer than 20 shifted rows, fewer than 5 entities to group, or no fold
 with rows on both sides) scores NaN and never wins; a column with no scored shift is not flagged by the single-feature
-rule. The audit raises nothing. (The reference scores a shift with fewer than 5 entities on the folds that are not
-empty; here such a shift is unscored.)
+rule. The audit raises nothing. Two differences from the reference follow from this: the reference scores a shift
+with fewer than 5 entities on the folds that are not empty, where here that shift is unscored; and the reference takes
+the metric, and so the ceiling, from the LAST shift (+1), so when +1 is unscored it compares against no ceiling and
+flags nothing, where here the column is judged on the shifts that score (a same-period copy is flagged even when the
+next period cannot be scored). Per-shift scores agree either way.
+
+A tie between shifts resolves in the reference's order: same period, then next period, then previous period. A label
+that never changes within an entity gives a copy of it the same score on every shift, and that copy is a same-period
+proxy, not a lag.
 """
 
 from __future__ import annotations
@@ -58,6 +65,12 @@ MIN_SHIFTED_ROWS = 20
 NUMERIC_BINS = 20
 # A candidate beating the reference score with a one-sided paired DeLong p below this is treated as a leak.
 REFERENCE_P = 0.001
+# Tie-break order of equal shift scores: the reference sorts its shift keys as text ("+0" < "+1" < "-1") and keeps the
+# first maximum, so an exact tie goes to the same period, then the next, then the previous. Breaking ties towards -1
+# would keep a copy of a per-entity-stable label as a "past outcome".
+_SHIFT_TIE_ORDER: Dict[int, int] = {0: 0, 1: 1, -1: 2}
+# Fewest rows of each class the paired comparison needs to estimate a variance.
+_MIN_ROWS_PER_CLASS = 2
 
 
 @dataclass(frozen=True)
@@ -194,7 +207,7 @@ def _audit_column(rows: _AuditRows, spec: encoding.ColumnSpec, x: npt.NDArray[np
         if m != "n/a":
             metric = m
     valid = {k: v for k, v in by_shift.items() if not math.isnan(v)}
-    best = max(sorted(valid), key=lambda k: valid[k]) if valid else 0
+    best = min(valid, key=lambda k: (-valid[k], _SHIFT_TIE_ORDER[k])) if valid else 0
     flagged = best >= 0 and valid.get(best, float("nan")) > ceiling
     return ColumnAudit(spec.source_column, spec.name, metric, by_shift, best, flagged)
 
@@ -279,10 +292,11 @@ def beats_reference(y: FArr, candidate: FArr, reference: FArr) -> Tuple[bool, fl
     probability a test world wrote) by an implausible margin: paired DeLong on the same rows, one-sided p below
     `REFERENCE_P`. Returns the decision and that p. Only test fixtures carry a reference score; product snapshots
     do not, so in production this rule does not run and the single-feature audit is the leak guard. Undefined
-    comparisons are never a leak: rows with one class give (False, 1.0), and a zero-variance difference gives a NaN
-    p, which is not below the threshold."""
+    comparisons are never a leak: rows with fewer than 2 rows of either class give (False, 1.0), and a zero-variance
+    difference gives a NaN p, which is not below the threshold."""
     yy = np.asarray(y, dtype=np.float64)
-    if len(np.unique(yy)) < 2:
+    positives = int(np.sum(yy == 1))
+    if min(positives, len(yy) - positives) < _MIN_ROWS_PER_CLASS:
         return False, 1.0
     p = delong_paired(yy, candidate, reference).p_a_greater
     return bool(p < REFERENCE_P), p
