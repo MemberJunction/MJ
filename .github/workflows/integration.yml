@@ -154,11 +154,13 @@ jobs:
   # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
   # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
   #
-  # Named like lockfile-guard.yml's job on purpose: both run the same
-  # `pnpm install --frozen-lockfile --lockfile-only`, so they are one check, and one name is what
-  # lets a ruleset require it whichever workflow a PR happens to trigger.
+  # Deliberately NOT named like lockfile-guard.yml's `Lockfile matches package.json`, although both
+  # run the same `pnpm install --frozen-lockfile --lockfile-only`. That name is the required check in
+  # next-protect, and a ruleset matches checks by name only: two jobs reporting under it would make
+  # the verdict depend on which one reported last, and this one does not run on every PR. The
+  # required check is lockfile-guard.yml's; this job only exists so the jobs below can skip.
   preflight:
-    name: Lockfile matches package.json
+    name: Lockfile resolves (integration preflight)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
