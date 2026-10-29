@@ -37,7 +37,7 @@ jobs:
 
       - name: Create backport pull requests
         id: backport
-        uses: korthout/backport-action@d07416681cab29bf2661702f925f020aaa962997 # v3 (SHA-pinned)
+        uses: korthout/backport-action@8560fb503c275d433c56f05a2f64850093baa9f7 # v4.7.0
         with:
           # Matches ONLY lts-line labels of the form `backport lts/<line>`, e.g. `backport lts/5`.
           # Deliberately narrower than `backport <any-branch>`: this workflow holds contents:write,
