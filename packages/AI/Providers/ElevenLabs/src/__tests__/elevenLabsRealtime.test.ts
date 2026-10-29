@@ -592,6 +592,39 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.UpdateCalls).toEqual([]);
     });
 
+    /* ------------- #6182: native max duration is the clamped session cap ------------- */
+
+    it('MaxSessionSeconds 900 lands on conversationConfig.conversation.maxDurationSeconds', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
+    });
+
+    it('clamps MaxSessionSeconds to the 7200s provider ceiling', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 9000 }));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(7200);
+    });
+
+    it('absent MaxSessionSeconds leaves conversation unset', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation).toBeUndefined();
+    });
+
+    it('maxDurationSeconds joins the drift check (an agent re-PATCHes when the cap changes)', async () => {
+        const stored = makeAgentDetail({ agentId: 'agent_cap', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        stored.conversationConfig!.conversation = { maxDurationSeconds: 600 };
+        driver.Agents = [stored];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(driver.UpdateCalls).toHaveLength(1);
+        expect(driver.UpdateCalls[0].body.conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
+
+        // And a matching stored cap is left alone; so is a hand-tuned cap when the host sets none.
+        stored.conversationConfig!.conversation = { maxDurationSeconds: 900 };
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.UpdateCalls).toHaveLength(1);
+    });
+
     it('an eagerness change inside ONE process is not served from the ensure cache', async () => {
         driver.Agents = [makeAgentDetail({ agentId: 'agent_c', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] })];
 

@@ -19,6 +19,7 @@ import {
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
     type RealtimeDriverFacts,
+    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import { BaseSingleton, RegisterClass } from '@memberjunction/global';
 import { ElevenLabsPremadeVoices } from './elevenLabsVoices';
@@ -652,15 +653,16 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         // Without them, a config-bag llm/temperature change inside one process lifetime would be
         // served from cache and never reach the drift check — the same never-re-PATCHed defect,
         // one layer earlier.
+        const maxSessionSeconds = this.resolveNativeMaxDuration(params);
         const fingerprint = ElevenLabsRealtime.ToolSetFingerprint(tools)
-            + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config);
+            + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config, maxSessionSeconds);
         const cached = this.agentCache.get(model);
         if (cached && cached.fingerprint === fingerprint && Date.now() - cached.cachedAt < ENSURE_CACHE_TTL_MS) {
             return cached.agentId;
         }
         // Publish the in-flight ensure BEFORE awaiting it, so a second caller arriving mid-flight
         // joins this one rather than starting a rival find-create and forking a duplicate agent.
-        const pending = this.findCreateOrUpdateAgent(model, tools, params.Config);
+        const pending = this.findCreateOrUpdateAgent(model, tools, params.Config, maxSessionSeconds);
         this.agentCache.set(model, { agentId: pending, fingerprint, cachedAt: Date.now() });
         try {
             return await pending;
@@ -681,16 +683,17 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * Drift is THREE independent comparisons, each against what the remote can actually witness:
      * the tool fingerprint (plain — computed HERE from `tools`, never the composite cache key,
      * whose `|settings` suffix the remote could never equal), the override enablement, and the
-     * agent-body model settings (#3859).
+     * agent-body model settings (#3859), which include the native max duration.
      */
     private async findCreateOrUpdateAgent(
         name: string,
         tools: RealtimeToolDefinition[],
-        config?: JSONObject
+        config?: JSONObject,
+        maxSessionSeconds?: number
     ): Promise<string> {
         const existing = await this.findAgentByName(name);
         if (!existing) {
-            return this.createAgent(this.buildAgentBody(name, tools, config));
+            return this.createAgent(this.buildAgentBody(name, tools, config, maxSessionSeconds));
         }
         const detail = await this.getAgent(existing.agentId);
         const remoteFingerprint = ElevenLabsRealtime.ToolSetFingerprint(
@@ -698,10 +701,26 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         );
         if (remoteFingerprint !== ElevenLabsRealtime.ToolSetFingerprint(tools)
             || !ElevenLabsRealtime.OverridesSatisfied(detail)
-            || !ElevenLabsRealtime.ModelSettingsSatisfied(detail, config)) {
-            await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config));
+            || !ElevenLabsRealtime.ModelSettingsSatisfied(detail, config, maxSessionSeconds)) {
+            await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config, maxSessionSeconds));
         }
         return existing.agentId;
+    }
+
+    /**
+     * The value for the agent's native `conversation.max_duration_seconds`: the host's
+     * `MaxSessionSeconds` clamped to the provider ceiling by the one clamp in the base class.
+     *
+     * **Sent only when the host set a cap.** The clamp alone would return the provider ceiling
+     * even for a host that set nothing, which would stamp 7200 onto every managed agent and fight
+     * a hand-tuned value; with no host cap the field stays unset and ElevenLabs enforces its own
+     * ceiling.
+     */
+    private resolveNativeMaxDuration(params: RealtimeSessionParams): number | undefined {
+        if (this.ClampSessionSeconds(params.MaxSessionSeconds) === undefined) {
+            return undefined;
+        }
+        return this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
     }
 
     /**
@@ -774,6 +793,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * delegate to long-running agents), and the platform-settings enablement of every
      * per-session override the driver sends ({@link buildRequiredOverrideEnablement}).
      *
+     * `maxSessionSeconds` (already clamped by {@link resolveNativeMaxDuration}; omitted = unset)
+     * becomes `conversation.max_duration_seconds`, the agent's native session cap.
+     *
      * `params.Config.llm` (when a string) selects the agent's underlying LLM; all other
      * provider-level agent settings are deployment concerns (use a verbatim agent id for full
      * control).
@@ -781,7 +803,8 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     protected buildAgentBody(
         name: string,
         tools: RealtimeToolDefinition[],
-        config?: JSONObject
+        config?: JSONObject,
+        maxSessionSeconds?: number
     ): ElevenLabs.conversationalAi.BodyCreateAgentV1ConvaiAgentsCreatePost {
         const prompt: ElevenLabs.PromptAgentApiModelOutput = {
             prompt: MANAGED_AGENT_BASE_PROMPT,
@@ -806,6 +829,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const conversationConfig: ElevenLabs.ConversationalConfig = { agent: { prompt } };
         if (turnEagerness !== undefined) {
             conversationConfig.turn = { turnEagerness };
+        }
+        // Agent-BODY state like eagerness: no per-session override exists, so it joins the drift check.
+        if (maxSessionSeconds !== undefined) {
+            conversationConfig.conversation = { maxDurationSeconds: maxSessionSeconds };
         }
         return {
             name,
@@ -908,7 +935,11 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * deployment may tune it, and a config bag that says nothing must not stampede a PATCH war
      * against a hand-tuned value.
      */
-    public static ModelSettingsSatisfied(agent: ElevenLabs.GetAgentResponseModel, config?: JSONObject): boolean {
+    public static ModelSettingsSatisfied(
+        agent: ElevenLabs.GetAgentResponseModel,
+        config?: JSONObject,
+        maxSessionSeconds?: number
+    ): boolean {
         const prompt = agent.conversationConfig?.agent?.prompt;
         const wantedLlm = resolveTrimmedConfigString(config, 'llm');
         if (wantedLlm !== undefined && prompt?.llm !== wantedLlm) {
@@ -924,6 +955,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             && agent.conversationConfig?.turn?.turnEagerness !== wantedEagerness) {
             return false;
         }
+        if (maxSessionSeconds !== undefined
+            && agent.conversationConfig?.conversation?.maxDurationSeconds !== maxSessionSeconds) {
+            return false;
+        }
         return true;
     }
 
@@ -932,7 +967,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * and `temperature` in one stable string. Unconfigured values serialize as absent, so a bag
      * that says nothing produces the same fingerprint forever.
      */
-    public static ModelSettingsFingerprint(config?: JSONObject): string {
+    public static ModelSettingsFingerprint(config?: JSONObject, maxSessionSeconds?: number): string {
         const llm = resolveTrimmedConfigString(config, 'llm');
         const temperature = config?.['temperature'];
         const turnEagerness = resolveTurnEagerness(config);
@@ -940,6 +975,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             ...(llm === undefined ? {} : { llm }),
             ...(typeof temperature === 'number' && Number.isFinite(temperature) ? { temperature } : {}),
             ...(turnEagerness === undefined ? {} : { turnEagerness }),
+            ...(maxSessionSeconds === undefined ? {} : { maxSessionSeconds }),
         });
     }
 
