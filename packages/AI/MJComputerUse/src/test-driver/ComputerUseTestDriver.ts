@@ -91,7 +91,7 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
 import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
-import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
+import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders, UnescapeLiteralBraces } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -263,11 +263,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             //  "http://byo-app:3000" for a remote-target profile pointing at the BYO app).
             // Values come from the variable resolver (schema-validated) PLUS env vars
             // prefixed with MJ_TEST_VAR_ as an ad-hoc fallback when no schema is defined.
+            // Escaped `\{{…}}` stays escaped until the guard below has run, so it is
+            // never mistaken for a missing variable.
             const variableValues = BuildVariableValuesFromContext(context);
             if (Object.keys(variableValues).length > 0) {
-                config = SubstituteVariables(config, variableValues);
-                input = SubstituteVariables(input, variableValues);
-                expected = SubstituteVariables(expected, variableValues);
+                config = SubstituteVariables(config, variableValues, { KeepEscapes: true });
+                input = SubstituteVariables(input, variableValues, { KeepEscapes: true });
+                expected = SubstituteVariables(expected, variableValues, { KeepEscapes: true });
             }
 
             // fail fast on unresolved {{vars}} in the fields that would
@@ -286,6 +288,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                     `Define them in the suite/test variables (or MJ_TEST_VAR_* env) before running.`
                 );
             }
+            // The guard passed: escaped `\{{…}}` is literal text from here on.
+            config = UnescapeLiteralBraces(config);
+            input = UnescapeLiteralBraces(input);
+            expected = UnescapeLiteralBraces(expected);
 
             // 1c. Resolve application context (suite-level + per-test). Suite context
             // comes from TestSuite.Configuration.applicationContext; the test can
@@ -562,7 +568,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         const suiteLevel = typeof context.suiteContext?.applicationContext === 'string'
             ? context.suiteContext.applicationContext
             : undefined;
-        return ComposeApplicationContext(suiteLevel, input.applicationContext, variableValues);
+        // The per-test notes came in with `input`, which is already substituted and unescaped.
+        return ComposeApplicationContext(suiteLevel, input.applicationContext, variableValues, { PerTestResolved: true });
     }
 
     /** Map a test's JSON checkpoint (lowercase) to an engine {@link RunCheckpoint}. */
