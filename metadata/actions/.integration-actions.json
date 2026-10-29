@@ -1084,6 +1084,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "STAGING_NOT_ALLOWED",
+            "Description": "The source database may not be read: a system database, the server's own database, or a name without the MJ_Staging_ prefix lacking AllowAnyName and a satisfied CreatedAfter",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "E677DA8A-F554-4DE0-A152-51B67BB0CCE8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "DROP_REFUSED",
             "Description": "DropStagingDbOnComplete was refused: a system database, the server's own database, or a name outside 'MJ_Staging_' without AllowAnyName",
             "IsSuccess": false
