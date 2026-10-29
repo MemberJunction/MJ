@@ -8,6 +8,8 @@ import {
   type TrainerFailed,
 } from '@memberjunction/predictive-studio-core';
 import { TrainerRequestFixture } from './fixtures/trainer-request.fixture';
+// `vi.mock` below is hoisted above every import, so this module binds the mocked `node:http`.
+import { MLSidecar, SidecarError, TrainerResultMalformedError } from '../ml-sidecar.js';
 
 /**
  * Unit tests for {@link MLSidecar}. `node:http` is mocked so no live sidecar (and
@@ -65,8 +67,6 @@ vi.mock('node:http', () => ({
   },
 }));
 
-// Import AFTER the mock is registered.
-const { MLSidecar, SidecarError, TrainerResultMalformedError } = await import('../ml-sidecar.js');
 
 const URL_BASE = 'http://localhost:8000';
 
