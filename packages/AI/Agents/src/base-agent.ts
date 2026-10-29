@@ -5133,6 +5133,12 @@ export class BaseAgent {
                     }
                 }
             }
+
+            // Also convert rawContent in metadata when speaker attribution is active
+            const agentMessage = message as AgentChatMessage;
+            if (typeof agentMessage.metadata?.rawContent === 'string') {
+                agentMessage.metadata.rawContent = ConversationUtility.ToPlainText(agentMessage.metadata.rawContent);
+            }
         }
     }
 
