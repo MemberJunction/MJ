@@ -244,12 +244,16 @@ export function ResolveDataCapMaxRows(
  * paging, making it the denominator for "capped at N of M". Providers that omit it, or
  * leave it equal to `RowCount`, yield `capped: false` rather than a guess.
  *
+ * A result with `Success: false` is a failed call, not an empty one: its `ErrorMessage` is
+ * recorded as `error`. Providers return a client-database timeout this way rather than
+ * throwing, and recording it as a 0-row success reads as "no data" downstream.
+ *
  * Pure (no I/O) so it can be unit-tested without launching a browser.
  */
 export function BuildDataAccessRecord(
   kind: DataAccessRecord['kind'],
   resolved: { target: string; identity: DataAccessIdentity },
-  result: { Results?: any[]; TotalRowCount?: number } | undefined,
+  result: { Success?: boolean; ErrorMessage?: string; Results?: any[]; TotalRowCount?: number } | undefined,
   maxRows: { applied: number; requested?: number },
   durationMs: number
 ): DataAccessRecord {
@@ -265,7 +269,66 @@ export function BuildDataAccessRecord(
     appliedMaxRows: maxRows.applied,
     requestedMaxRows: maxRows.requested,
     durationMs,
+    ...(result?.Success === false && { error: result.ErrorMessage || 'the call failed with no error message' }),
   };
+}
+
+/** Start time of each data call that has not returned yet. */
+const pendingDataCalls = new WeakMap<DataAccessRecord, number>();
+/** Records that are final: returned, or reported as still running when the test ended. */
+const settledDataCalls = new WeakSet<DataAccessRecord>();
+
+/**
+ * Adds a record for a data call as it starts, so a call still running when the test ends is
+ * reported instead of missing. {@link SettleDataAccessRecord} fills it in when the call returns;
+ * {@link FinalizePendingDataAccess} marks it if it has not by the time the result is built.
+ */
+export function StartDataAccessRecord(
+  dataAccess: DataAccessRecord[],
+  kind: DataAccessRecord['kind'],
+  resolved: { target: string; identity: DataAccessIdentity },
+  maxRows: { applied: number; requested?: number },
+  now: number = Date.now()
+): DataAccessRecord {
+  const record: DataAccessRecord = {
+    kind,
+    target: resolved.target,
+    identity: resolved.identity,
+    rowsReturned: 0,
+    capped: false,
+    appliedMaxRows: maxRows.applied,
+    requestedMaxRows: maxRows.requested,
+    durationMs: 0,
+  };
+  pendingDataCalls.set(record, now);
+  dataAccess.push(record);
+  return record;
+}
+
+/**
+ * Completes a started record with the call's outcome. A record already reported as still running
+ * is left as it was: the result the caller received said so, and must not change afterwards.
+ */
+export function SettleDataAccessRecord(placeholder: DataAccessRecord, outcome: DataAccessRecord): void {
+  if (settledDataCalls.has(placeholder)) return;
+  pendingDataCalls.delete(placeholder);
+  settledDataCalls.add(placeholder);
+  Object.assign(placeholder, outcome);
+}
+
+/**
+ * Marks every call still running when the test finishes as failed, with how long it had run.
+ * Without this, a slow query reads as "the component made no data calls".
+ */
+export function FinalizePendingDataAccess(dataAccess: DataAccessRecord[], now: number = Date.now()): void {
+  for (const record of dataAccess) {
+    const startedAt = pendingDataCalls.get(record);
+    if (startedAt === undefined) continue;
+    pendingDataCalls.delete(record);
+    settledDataCalls.add(record);
+    record.durationMs = now - startedAt;
+    record.error = `still running after ${(record.durationMs / 1000).toFixed(1)}s when the test finished`;
+  }
 }
 
 /** Debug-log suffix naming the cap, e.g. ` (capped at 1000 of 205802)`. Empty when uncapped. */
@@ -1756,6 +1819,8 @@ export class ComponentRunner {
       );
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
 
+      FinalizePendingDataAccess(dataAccess);
+
       // Surface capped data calls as their own warnings, so a downstream evaluator does not
       // read a deliberately truncated render as a defect.
       const capWarnings: Violation[] = dataAccess
@@ -1856,6 +1921,7 @@ export class ComponentRunner {
         (e.severity === 'critical' || e.severity === 'high') && e.rule !== 'browser-crash'
       );
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
+      FinalizePendingDataAccess(dataAccess);
 
       const result: ComponentExecutionResult = {
         success: false,
@@ -2887,15 +2953,18 @@ export class ComponentRunner {
       const viewTarget = ResolveViewTarget(params);
       const maxRows = ResolveDataCapMaxRows(params.MaxRows, viewCeiling);
       const startedAt = Date.now();
+      const placeholder = StartDataAccessRecord(dataAccess, 'RunView', viewTarget, maxRows, startedAt);
       try {
         const result = await util.rv.RunView({ ...params, MaxRows: maxRows.applied }, options.contextUser);
 
         const record = BuildDataAccessRecord('RunView', viewTarget, result, maxRows, Date.now() - startedAt);
-        dataAccess.push(record);
+        SettleDataAccessRecord(placeholder, record);
 
-        // Debug logging for successful calls
+        // Debug logging for completed calls
         if (debug) {
-          console.log(`💾 RunView SUCCESS: View="${viewTarget.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
+          console.log(record.error
+            ? `❌ RunView FAILED: View="${viewTarget.target}" — ${record.error}`
+            : `💾 RunView SUCCESS: View="${viewTarget.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
           if (params.ExtraFilter) {
             console.log(`   Filter: ${params.ExtraFilter}`);
           }
@@ -2905,7 +2974,7 @@ export class ComponentRunner {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
-        dataAccess.push({
+        SettleDataAccessRecord(placeholder, {
           kind: 'RunView', target: viewTarget.target, identity: viewTarget.identity, rowsReturned: 0, capped: false,
           appliedMaxRows: maxRows.applied, requestedMaxRows: maxRows.requested,
           durationMs: Date.now() - startedAt, error: errorMessage,
@@ -2930,6 +2999,9 @@ export class ComponentRunner {
     await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
       const perCallMaxRows = params.map(p => ResolveDataCapMaxRows(p.MaxRows, viewCeiling));
       const startedAt = Date.now();
+      const placeholders = params.map((p, i) =>
+        StartDataAccessRecord(dataAccess, 'RunViews', ResolveViewTarget(p), perCallMaxRows[i], startedAt)
+      );
       try {
         const results = await util.rv.RunViews(
           params.map((p, i) => ({ ...p, MaxRows: perCallMaxRows[i].applied })),
@@ -2942,13 +3014,15 @@ export class ComponentRunner {
         const records = params.map((p, i) => BuildDataAccessRecord(
           'RunViews', ResolveViewTarget(p), results[i], perCallMaxRows[i], elapsed
         ));
-        records.forEach(r => dataAccess.push(r));
+        records.forEach((r, i) => SettleDataAccessRecord(placeholders[i], r));
 
-        // Debug logging for successful calls
+        // Debug logging for completed calls
         if (debug) {
-          console.log(`💾 RunViews SUCCESS: ${params.length} queries executed`);
+          console.log(`💾 RunViews completed: ${params.length} queries executed`);
           records.forEach((r, i) => {
-            console.log(`   [${i+1}] Entity="${r.target}" Rows=${r.rowsReturned}${DescribeDataCap(r)}`);
+            console.log(r.error
+              ? `   [${i+1}] Entity="${r.target}" FAILED — ${r.error}`
+              : `   [${i+1}] Entity="${r.target}" Rows=${r.rowsReturned}${DescribeDataCap(r)}`);
           });
         }
 
@@ -2958,7 +3032,7 @@ export class ComponentRunner {
         const entities = params.map(p => DescribeViewTarget(p)).join(', ');
 
         // RunViews fails as a batch, so every view in it failed.
-        params.forEach((p, i) => dataAccess.push({
+        params.forEach((p, i) => SettleDataAccessRecord(placeholders[i], {
           kind: 'RunViews', ...ResolveViewTarget(p), rowsReturned: 0, capped: false,
           appliedMaxRows: perCallMaxRows[i].applied, requestedMaxRows: perCallMaxRows[i].requested,
           durationMs: Date.now() - startedAt, error: errorMessage,
@@ -2984,15 +3058,18 @@ export class ComponentRunner {
       const queryIdentifier = ResolveQueryTarget(params);
       const maxRows = ResolveDataCapMaxRows(params.MaxRows, queryCeiling);
       const startedAt = Date.now();
+      const placeholder = StartDataAccessRecord(dataAccess, 'RunQuery', queryIdentifier, maxRows, startedAt);
       try {
         const result = await util.rq.RunQuery({ ...params, MaxRows: maxRows.applied }, options.contextUser);
 
         const record = BuildDataAccessRecord('RunQuery', queryIdentifier, result, maxRows, Date.now() - startedAt);
-        dataAccess.push(record);
+        SettleDataAccessRecord(placeholder, record);
 
-        // Debug logging for successful calls
+        // Debug logging for completed calls
         if (debug) {
-          console.log(`💾 RunQuery SUCCESS: Query="${queryIdentifier.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
+          console.log(record.error
+            ? `❌ RunQuery FAILED: Query="${queryIdentifier.target}" — ${record.error}`
+            : `💾 RunQuery SUCCESS: Query="${queryIdentifier.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
           if (params.Parameters && Object.keys(params.Parameters).length > 0) {
             console.log(`   Parameters:`, params.Parameters);
           }
@@ -3002,7 +3079,7 @@ export class ComponentRunner {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
-        dataAccess.push({
+        SettleDataAccessRecord(placeholder, {
           kind: 'RunQuery', target: queryIdentifier.target, identity: queryIdentifier.identity, rowsReturned: 0, capped: false,
           appliedMaxRows: maxRows.applied, requestedMaxRows: maxRows.requested,
           durationMs: Date.now() - startedAt, error: errorMessage,
