@@ -278,7 +278,9 @@ export function MapNormalizedTurnDetection(
  * A raw `audio` key in the Config bag merges into the built audio block (see `MergeAudioOverride`),
  * so these native keys are reachable: `audio.input.turn_detection.{ prefix_padding_ms,
  * idle_timeout_ms, interrupt_response, create_response }`. `create_response` only takes effect
- * outside meeting mode (`disableAutoResponse`), where the floor `create_response: false` always wins.
+ * outside meeting mode (`disableAutoResponse`), where the floor `create_response: false` always wins,
+ * and a live `Reconfigure` sets it from its own `DisableAutoResponse`. An explicit `null` is sent as
+ * `null`: `turn_detection: null` turns VAD off (the client triggers responses).
  */
 export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'openai',
@@ -567,12 +569,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 /** Bag keys that would let untrusted JSON poison object prototypes; skipped by {@link mergeDeep}. */
 const UNSAFE_MERGE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
 
-/** Turn-detection block used for a meeting when none was built and the bag removed or broke it. */
-const MEETING_DEFAULT_TURN_DETECTION = { type: 'server_vad', create_response: false, interrupt_response: true } as const;
-
 /**
  * Recursively merges `override` onto `base` without mutating either. Two plain objects merge key
- * by key; a `null` override leaf deletes the key; any other override value replaces the base value.
+ * by key; any other override value, `null` included, replaces the base value. `null` is kept
+ * because on the OpenAI wire it means "off" (`turn_detection: null` turns VAD off), while an
+ * omitted key already means "keep the built value".
  */
 function mergeDeep(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
     const merged: Record<string, unknown> = { ...base };
@@ -581,10 +582,7 @@ function mergeDeep(base: Record<string, unknown>, override: Record<string, unkno
             continue; // the bag is untrusted JSON; never let it reach Object.prototype
         }
         const current = merged[key];
-        if (value === null) {
-            delete merged[key];
-        }
-        else if (isPlainObject(value) && isPlainObject(current)) {
+        if (isPlainObject(value) && isPlainObject(current)) {
             merged[key] = mergeDeep(current, value);
         }
         else if (isPlainObject(value)) {
@@ -607,19 +605,44 @@ function readTurnDetection(audio: Record<string, unknown>): Record<string, unkno
 }
 
 /**
+ * Applies the meeting-mode floor to a merged audio block, in place on `merged` (a fresh object the
+ * caller owns). The surviving `turn_detection` object gets `create_response: false`. When the bag
+ * nulled or broke `input` or `turn_detection`, the built `turn_detection` is restored (with the
+ * floor) on the built input, since a missing block makes OpenAI fall back to auto-responding VAD.
+ * When the profile built no `turn_detection` (e.g. HuggingFace), nothing is invented.
+ */
+function applyMeetingFloor(merged: Record<string, unknown>, base: Record<string, unknown>): void {
+    const mergedInput = isPlainObject(merged.input) ? merged.input : undefined;
+    const mergedDetection = mergedInput && isPlainObject(mergedInput.turn_detection) ? mergedInput.turn_detection : undefined;
+    if (mergedInput && mergedDetection) {
+        merged.input = { ...mergedInput, turn_detection: { ...mergedDetection, create_response: false } };
+        return;
+    }
+    const builtDetection = readTurnDetection(base);
+    if (!builtDetection) {
+        return; // the profile built none; leave whatever the bag sent
+    }
+    const input = mergedInput ?? (isPlainObject(base.input) ? base.input : {});
+    merged.input = { ...input, turn_detection: { ...builtDetection, create_response: false } };
+}
+
+/**
  * Merges a raw `audio` override from the Config bag into the audio block the driver built, so a
  * bag that tunes one leaf (say `turn_detection.idle_timeout_ms`) no longer discards the built
  * transcription model, voice, and VAD settings.
  *
  * Rules:
  * - Plain objects merge key by key; the bag's leaves win over the built values.
- * - A `null` leaf in the bag deletes that key from the result.
+ * - An explicit `null` leaf in the bag is kept and sent as `null` (OpenAI's "off": `turn_detection:
+ *   null` turns VAD off, `transcription: null` turns transcription off). Omitting a key keeps the
+ *   built value. Null leaves inside an object the bag writes onto a non-object or nothing are kept too.
  * - A non-object override (string, null, array, ...) is ignored; `built` is returned unchanged.
  * - A `turn_detection.type` that differs from the built one replaces the whole `turn_detection`
  *   object, because fields of one detector kind (e.g. `silence_duration_ms`) are invalid on another.
- * - After the merge, in meeting mode the result always carries a `turn_detection` object with
- *   `create_response: false` (restored from the built block, else a default server_vad, if the bag
- *   deleted or broke it), so the bag cannot make the model answer unprompted in a meeting.
+ * - In meeting mode, after the merge: a surviving `turn_detection` object gets `create_response:
+ *   false`. If the bag nulled or broke `input` or `turn_detection` and the built block had a
+ *   `turn_detection`, that block is restored with the floor (on the built input when `input` was
+ *   clobbered). If the profile built none, nothing is invented and the bag's value stands.
  *
  * Neither argument is mutated.
  *
@@ -647,15 +670,33 @@ export function MergeAudioOverride(
     }
 
     if (meetingMode) {
-        // The floor must survive any bag: a null/non-object `input` or `turn_detection` would otherwise
-        // make OpenAI fall back to its default VAD, which auto-responds. Restore from the built block.
-        const builtInput = isPlainObject(base.input) ? base.input : {};
-        const input = isPlainObject(merged.input) ? merged.input : builtInput;
-        const detection = readTurnDetection({ input }) ?? readTurnDetection(base) ?? MEETING_DEFAULT_TURN_DETECTION;
-        merged.input = { ...input, turn_detection: { ...detection, create_response: false } };
+        applyMeetingFloor(merged, base);
     }
     // The bag's shape is unvalidated JSON, passed through for the provider to validate.
     return merged as RealtimeSessionCreateRequest['audio'];
+}
+
+/**
+ * Returns a copy of `audio` without `output.voice`, for a profile that has no voice output. The
+ * other output keys (`format`, `speed`, ...) are kept; `output` is dropped only if it ends empty.
+ * Copies rather than deletes in place, so the merge result's nested objects are never mutated.
+ */
+function withoutOutputVoice(
+    audio: RealtimeSessionCreateRequest['audio'] | undefined,
+): RealtimeSessionCreateRequest['audio'] | undefined {
+    if (!audio || !isPlainObject(audio.output)) {
+        return audio;
+    }
+    const output = { ...audio.output };
+    delete output.voice;
+    const copy = { ...audio };
+    if (Object.keys(output).length > 0) {
+        copy.output = output;
+    }
+    else {
+        delete copy.output;
+    }
+    return copy;
 }
 
 /**
@@ -680,10 +721,8 @@ export function BuildSessionPayload(
     const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
     const { audio: audioOverride, ...rest } = features.rest;
     const merged = MergeAudioOverride(BuildAudioBlock(profile, features, turnDetection), audioOverride, features.disableAutoResponse);
-    if (merged && !profile.supportsVoiceOutput) {
-        delete merged.output;
-    }
-    const audio = merged && Object.keys(merged).length > 0 ? merged : undefined;
+    const voiced = profile.supportsVoiceOutput ? merged : withoutOutputVoice(merged);
+    const audio = voiced && Object.keys(voiced).length > 0 ? voiced : undefined;
     return {
         type: 'realtime',
         ...(instructions !== undefined ? { instructions } : {}),
@@ -1298,6 +1337,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * the merged `audio.input` block (transcription, turn detection and any raw bag `audio.input` override)
      * so the partial update can't drop them. It never sends `audio.output`: OpenAI rejects a voice change on
      * a live session once audio has played.
+     *
+     * The frame always carries `audio.input.turn_detection`, because flipping `create_response` is the
+     * whole point. The explicit live `DisableAutoResponse` wins over any bag `create_response`: the
+     * caller asked for this mode now. The one exception is a bag `turn_detection: null` outside meeting
+     * mode, which is re-sent as `null` so VAD stays off, as it was at start.
      */
     public Reconfigure(params: RealtimeReconfigureParams): void {
         if (!this.profile.supportsLiveReconfigure) {
@@ -1307,26 +1351,51 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return;
         }
         const disable = params.DisableAutoResponse === true;
-        // Preserve the session's resolved turn-detection MODE across the live flip: rebuild from
-        // the remembered normalized request (semantic/native sessions stay semantic/native) and
-        // only fall back to explicit server_vad when no request produced a block — the partial
-        // update must ALWAYS carry create_response, since flipping it is the whole point here.
-        const turnDetection: RealtimeAudioInputTurnDetection =
-            this.profile.buildTurnDetection(disable, this.lastFeatures?.turnDetection)
-            ?? { type: 'server_vad', create_response: !disable, interrupt_response: true };
         // Before any start there are no remembered features: fall back to the profile's transcription
         // model only (a partial update must not fabricate `transcription: { model: undefined }` for
         // natively-transcribing providers — BuildAudioBlock omits it when no model is set).
         const features = this.lastFeatures ?? ExtractRealtimeFeatures({});
+        // Preserve the session's resolved turn-detection MODE across the live flip: rebuild from
+        // the remembered normalized request (semantic/native sessions stay semantic/native) and
+        // only fall back to explicit server_vad when no request produced a block.
+        const turnDetection: RealtimeAudioInputTurnDetection = {
+            ...(this.profile.buildTurnDetection(disable, features.turnDetection) ?? { type: 'server_vad', interrupt_response: true }),
+            create_response: !disable,
+        };
         const built = BuildAudioBlock(this.profile, features, turnDetection);
         const merged = MergeAudioOverride(built, features.rest.audio, disable);
         this.connection.send({
             type: 'session.update',
             session: {
                 type: 'realtime',
-                audio: { input: merged?.input },
+                audio: { input: this.buildReconfigureInput(merged, turnDetection, disable) },
             },
         });
+    }
+
+    /**
+     * The `audio.input` for a {@link Reconfigure} frame: the merged input with a `turn_detection`
+     * that always carries `create_response: !disable`. A merged `input` that is not an object (the
+     * bag nulled it) contributes nothing, so the frame does not re-add what the bag removed.
+     */
+    private buildReconfigureInput(
+        merged: RealtimeSessionCreateRequest['audio'] | undefined,
+        turnDetection: RealtimeAudioInputTurnDetection,
+        disable: boolean,
+    ): NonNullable<RealtimeSessionCreateRequest['audio']>['input'] {
+        const input: Record<string, unknown> = isPlainObject(merged?.input) ? { ...merged.input } : {};
+        const mergedDetection = input.turn_detection;
+        if (isPlainObject(mergedDetection)) {
+            input.turn_detection = { ...mergedDetection, create_response: !disable };
+        }
+        else if (mergedDetection === null && !disable) {
+            input.turn_detection = null; // the bag turned VAD off at start; keep it off
+        }
+        else {
+            input.turn_detection = turnDetection;
+        }
+        // The bag's shape is unvalidated JSON, passed through for the provider to validate.
+        return input as NonNullable<RealtimeSessionCreateRequest['audio']>['input'];
     }
 
     // ---- IRealtimeSession handler registration ----
@@ -1625,8 +1694,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // while KEEPING detection so input transcription and barge-in still work. A 1:1 call (flag absent)
         // keeps the provider's default auto-response.
         const features = ExtractRealtimeFeatures(config);
-        // Remember the normalized request so a LIVE Reconfigure (meeting-mode flip) rebuilds the
-        // SAME mode instead of silently downgrading a semantic/native session to server_vad.
+        // Remember all extracted features (normalized turn request, transcription model, the bag
+        // `audio` fragment) so a LIVE Reconfigure (meeting-mode flip) rebuilds the same audio block:
+        // the same turn mode (no silent downgrade of a semantic/native session to server_vad), the
+        // same transcription model and the same bag override.
         this.lastFeatures = features;
         // Opts into USER input transcription (as CreateClientSession does) so user-role transcripts flow
         // server-bridged too; see BuildSessionPayload for how the audio block and raw override merge.

@@ -66,10 +66,15 @@ describe('MergeAudioOverride', () => {
     expect(MergeAudioOverride(built, null, false)).toEqual(built);
     expect(MergeAudioOverride(built, [], false)).toEqual(built);
   });
-  it('a null leaf removes the built key', () => {
+  it('a null leaf is sent as null (the wire value for "off") and the rest is kept', () => {
     const out = MergeAudioOverride(built, { input: { transcription: null } }, false);
-    expect(out?.input?.transcription).toBeUndefined();
+    expect(out?.input?.transcription).toBeNull();
     expect(out?.input?.turn_detection).toEqual(built.input.turn_detection);
+    expect(out?.output).toEqual({ voice: 'alloy' });
+  });
+  it('keeps null leaves inside an object written onto nothing', () => {
+    const out = MergeAudioOverride({ output: { voice: 'alloy' } }, { input: { transcription: null } }, false);
+    expect(out?.input).toEqual({ transcription: null });
   });
   it('returns the override alone when nothing was built', () => {
     expect(MergeAudioOverride(undefined, { input: { turn_detection: { type: 'server_vad' } } }, false))
@@ -91,13 +96,25 @@ describe('MergeAudioOverride', () => {
         expect(out?.input?.turn_detection).toEqual(meetingBuilt.input.turn_detection);
       });
     }
-    it('uses a default server_vad block when nothing was built', () => {
-      const out = MergeAudioOverride(undefined, { input: { turn_detection: null } }, true);
-      expect(out?.input?.turn_detection).toEqual({ type: 'server_vad', create_response: false, interrupt_response: true });
+    it('invents no turn_detection when the profile built none (HuggingFace shape)', () => {
+      const hfBuilt = { input: { transcription: { model: 'm' } } } as const;
+      const out = MergeAudioOverride(hfBuilt, { output: { speed: 1.1 } }, true);
+      expect(out?.input).toEqual({ transcription: { model: 'm' } });
+      expect(out?.input).not.toHaveProperty('turn_detection');
+      expect(out?.output).toEqual({ speed: 1.1 });
     });
-    it('does not restore outside meeting mode', () => {
+    it('leaves a bag null as sent when nothing was built', () => {
+      const out = MergeAudioOverride(undefined, { input: { turn_detection: null } }, true);
+      expect(out?.input?.turn_detection).toBeNull();
+    });
+    it('rebuilds a clobbered input from the built input, transcription included', () => {
+      const out = MergeAudioOverride(meetingBuilt, { input: null }, true);
+      expect(out?.input).toEqual(meetingBuilt.input);
+    });
+    it('does not restore outside meeting mode: turn_detection null is sent (VAD off)', () => {
       const out = MergeAudioOverride(built, { input: { turn_detection: null } }, false);
-      expect(out?.input?.turn_detection).toBeUndefined();
+      expect(out?.input?.turn_detection).toBeNull();
+      expect(out?.input?.transcription).toEqual({ model: 'gpt-4o-mini-transcribe' });
     });
     it('applies the floor after a cross-type replace', () => {
       const out = MergeAudioOverride(meetingBuilt, { input: { turn_detection: { type: 'semantic_vad', create_response: true } } }, true);
@@ -120,7 +137,6 @@ describe('MergeAudioOverride', () => {
     expect(Object.prototype.hasOwnProperty.call(out?.input, 'constructor')).toBe(false);
   });
 });
-
 
 /** Minimal fake connection: records outbound frames and can fire server events (no network). */
 class RecordingConnection implements IOpenAIRealtimeConnection {
@@ -203,10 +219,26 @@ describe('session payload', () => {
     expect(audio.input?.turn_detection).toMatchObject({ type: 'server_vad', silence_duration_ms: 700, idle_timeout_ms: 8000 });
   });
 
-  it('does not add output on a profile without voice output', () => {
+  it('drops output when voice was its only key on a profile without voice output', () => {
     const profile = { ...OPENAI_REALTIME_PROFILE, supportsVoiceOutput: false };
     const session = BuildSessionPayload(profile, ExtractRealtimeFeatures({ audio: { output: { voice: 'alloy' } } }), 'hi');
-    expect(session.audio?.output).toBeUndefined();
+    expect(session.audio).not.toHaveProperty('output');
+  });
+
+  it('keeps the other output keys on a profile without voice output', () => {
+    const profile = { ...OPENAI_REALTIME_PROFILE, supportsVoiceOutput: false };
+    const session = BuildSessionPayload(profile, ExtractRealtimeFeatures({ audio: { output: { voice: 'alloy', speed: 1.1 } } }), 'hi');
+    expect(session.audio?.output).toEqual({ speed: 1.1 });
+  });
+
+  it('meeting mode keeps create_response:false over a bag create_response:true on both paths', async () => {
+    const meeting = { disableAutoResponse: true, audio: { input: { turn_detection: { create_response: true } } } };
+    const driver = new PayloadCapture('k');
+    await driver.CreateClientSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: meeting });
+    await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: meeting });
+    for (const session of [driver.MintedSession(), driver.SentSession()]) {
+      expect((session.audio as AudioShape).input?.turn_detection?.create_response).toBe(false);
+    }
   });
 
   it('omits instructions when undefined and keeps type realtime', () => {
@@ -269,5 +301,44 @@ describe('Reconfigure', () => {
     expect((driver.SentSession().audio as AudioShape).output).toBeDefined();
     session.Reconfigure?.({ DisableAutoResponse: true });
     expect(lastSession(driver).audio).not.toHaveProperty('output');
+  });
+
+  it('flips a meeting back to auto-response', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: { disableAutoResponse: true } });
+    session.Reconfigure?.({ DisableAutoResponse: false });
+    expect((lastSession(driver).audio as AudioShape).input?.turn_detection?.create_response).toBe(true);
+  });
+
+  it('carries create_response even when the bag nulled audio.input', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: { audio: { input: null } } });
+    session.Reconfigure?.({ DisableAutoResponse: true });
+    expect((lastSession(driver).audio as AudioShape).input?.turn_detection?.create_response).toBe(false);
+    // The flip back is the case that used to send `audio: {}` and lose the change.
+    session.Reconfigure?.({ DisableAutoResponse: false });
+    expect((lastSession(driver).audio as AudioShape).input?.turn_detection?.create_response).toBe(true);
+  });
+
+  it('keeps VAD off when the bag sent turn_detection:null outside meeting mode', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({
+      Model: 'gpt-realtime', SystemPrompt: 'hi', Config: { audio: { input: { turn_detection: null } } },
+    });
+    session.Reconfigure?.({ DisableAutoResponse: false });
+    const input = (lastSession(driver).audio as AudioShape).input;
+    expect(input).toHaveProperty('turn_detection', null);
+  });
+
+  it('re-sends a bag type swap (semantic_vad) without server_vad-only fields', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({
+      Model: 'gpt-realtime', SystemPrompt: 'hi',
+      Config: { audio: { input: { turn_detection: { type: 'semantic_vad' } } }, turnDetection: { Mode: 'serverVad', SilenceDurationMs: 700 } },
+    });
+    session.Reconfigure?.({ DisableAutoResponse: true });
+    const turnDetection = (lastSession(driver).audio as AudioShape).input?.turn_detection;
+    expect(turnDetection).toMatchObject({ type: 'semantic_vad', create_response: false });
+    expect(turnDetection).not.toHaveProperty('silence_duration_ms');
   });
 });
