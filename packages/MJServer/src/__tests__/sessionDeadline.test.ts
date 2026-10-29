@@ -3,7 +3,7 @@ import { ExpiryCloseReason, ParseSessionDeadlineMs } from '../agentSessions/sess
 
 const T = Date.parse('2026-10-29T12:00:00Z');
 const MIN = 60_000;
-const row = (lastActive: number | null, deadline?: number) => ({
+const row = (lastActive: number | null, deadline?: number): { LastActiveAt: Date | string | null; Config_: string } => ({
   LastActiveAt: lastActive === null ? null : new Date(lastActive),
   Config_: deadline === undefined ? '{}' : JSON.stringify({ maxSessionDeadlineIso: new Date(deadline).toISOString() }),
 });
@@ -19,6 +19,16 @@ describe('ExpiryCloseReason', () => {
     expect(ExpiryCloseReason(row(null), T, 15 * MIN)).toBeNull();
     expect(ExpiryCloseReason(row(null, T - MIN), T, 15 * MIN)).toBe('TimeLimit');
   });
+  it('nowMs exactly at the deadline → TimeLimit', () => expect(ExpiryCloseReason(row(T - MIN, T), T, 15 * MIN)).toBe('TimeLimit'));
+  it('a string LastActiveAt past the threshold → Idle', () => {
+    const r = { ...row(null), LastActiveAt: new Date(T - 16 * MIN).toISOString() };
+    expect(ExpiryCloseReason(r, T, 15 * MIN)).toBe('Idle');
+  });
+  it('an invalid LastActiveAt string is never Idle, TimeLimit still works', () => {
+    expect(ExpiryCloseReason({ ...row(null), LastActiveAt: 'garbage' }, T, 15 * MIN)).toBeNull();
+    expect(ExpiryCloseReason({ ...row(null, T - MIN), LastActiveAt: 'garbage' }, T, 15 * MIN)).toBe('TimeLimit');
+  });
+  it('a non-finite closeThresholdMs is never Idle', () => expect(ExpiryCloseReason(row(T - 99 * MIN), T, Number.NaN)).toBeNull());
 });
 
 describe('ParseSessionDeadlineMs', () => {

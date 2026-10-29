@@ -1,6 +1,4 @@
-import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
-
-// Task 3 makes SessionCloseReason include these; until then it is declared here.
+/** Local until SessionCloseReason gains these values (they need the CloseReason CHECK migration). */
 export type ExpiryReason = 'Idle' | 'TimeLimit';
 
 /**
@@ -31,14 +29,18 @@ export function ParseSessionDeadlineMs(configJson: string | null | undefined): n
  * Two moments can expire a session: its idle moment (`LastActiveAt + closeThresholdMs`) and its authored
  * hard deadline (`Config_.maxSessionDeadlineIso`). Only a moment that has already passed (`<= nowMs`)
  * counts, and the EARLIER of the passed moments wins. A tie at the same instant yields `TimeLimit`:
- * the authored rule beats the safety net. A row without `LastActiveAt` is never `Idle`.
+ * the authored rule beats the safety net. A row without a usable `LastActiveAt` (null, or a value that
+ * does not parse to a date) is never `Idle`, and neither is any row when `closeThresholdMs` is non-finite.
+ * `LastActiveAt` is typed `Date` but may arrive as an ISO string from a provider, so both are accepted.
  */
 export function ExpiryCloseReason(
-    session: Pick<MJAIAgentSessionEntity, 'LastActiveAt' | 'Config_'>,
+    session: { LastActiveAt: Date | string | null | undefined; Config_: string | null | undefined },
     nowMs: number,
     closeThresholdMs: number,
 ): ExpiryReason | null {
-    const idleAt = session.LastActiveAt ? session.LastActiveAt.getTime() + closeThresholdMs : null;
+    const lastActiveMs = session.LastActiveAt ? new Date(session.LastActiveAt).getTime() : Number.NaN;
+    const idleMs = lastActiveMs + closeThresholdMs;
+    const idleAt = Number.isFinite(idleMs) ? idleMs : null;
     const deadlineAt = ParseSessionDeadlineMs(session.Config_);
     const idlePassed = idleAt !== null && idleAt <= nowMs;
     const deadlinePassed = deadlineAt !== null && deadlineAt <= nowMs;
