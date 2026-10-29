@@ -211,7 +211,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       # Poll until SQL Server actually answers a query, rather than a blind sleep. A cold
       # container that merely started (but is still doing recovery/tempdb setup) will accept
@@ -604,7 +630,33 @@ jobs:
 
       - name: Create SQL Server container
         if: steps.prereq.outputs.READY == 'true'
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         if: steps.prereq.outputs.READY == 'true'
@@ -742,7 +794,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
@@ -896,7 +974,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
@@ -1044,7 +1148,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
