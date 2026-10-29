@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 4c6a28b: Weekly AI model research refresh (2026-10-26). Adds three models released in the research window to `metadata/ai-models/.ai-models.json`:
+  - **Kimi K3.1 Pro** (Moonshot AI, `kimi-k3.1-pro`, 2026-10-23) — $2/$10 per 1M tokens with $0.20 cached input, a one-third cut from Kimi K3; 1M-token context, flat pricing. Chained to Kimi K3 via `PriorVersionID`.
+  - **Kimi K3.1 Pro Highspeed** (Moonshot AI, `kimi-k3.1-pro-highspeed`, 2026-10-23) — the 2x-speed serving tier at $4/$20, modelled as its own record because it is a distinct API id, matching the existing Kimi K3 Fast convention.
+  - **MiniMax-M3.1-Flash** (MiniMax, `MiniMax-M3.1-Flash`, 2026-10-19) — $0.15/$0.60 with $0.015 cached input, 1M-token context with no long-context step-up.
+
+  No pricing changes, deprecations or new vendors this week. A first-party sweep of all 14 Anthropic cost rows against `platform.claude.com` found zero drift. Full findings, including items flagged for human review, are in `reports/ai-model-research/2026-10-26-weekly-report.md`.
+
+### Patch Changes
+
+- 142d524: Record CRUD actions accept every primary-key shape and fail fast on unknown fields; agent request types are cached on the AI engine.
+  - `Get Record`, `Update Record` and `Delete Record` now accept the `PrimaryKey` parameter as a plain key-column map, the `CompositeKey` `{ KeyValuePairs }` shape, a JSON string of either, or (single-column keys only) the bare key value, which is mapped onto the entity's key column whatever it is called. A bare value for a composite key is rejected with the required columns listed, and a partial key reports every missing column at once.
+  - `Create Record` and `Update Record` return `INVALID_FIELD_NAMES` (with the valid updatable field names) when `Fields` names a field the entity does not have, instead of dropping it and reporting success. Field names resolve case-insensitively against entity metadata, which also covers dynamic entities without a generated class.
+  - `AIEngineBase` caches `MJ: AI Agent Request Types` and exposes `AgentRequestTypes`, `GetAgentRequestTypeByName` and the async `ResolveAgentRequestTypeID(name, contextUser)` (ensures the engine is loaded, returns the ID or `null`); `AIEngine` delegates to them and `BaseAgent` resolves a request's type through `ResolveAgentRequestTypeID` instead of a private per-run query.
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [cc41d33]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [142d524]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/actions-base@6.2.0-edge.6
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-engine-base@6.2.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.6
+  - @memberjunction/storage@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Minor Changes

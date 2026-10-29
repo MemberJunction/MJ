@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [0581392]
+- Updated dependencies [db4e210]
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

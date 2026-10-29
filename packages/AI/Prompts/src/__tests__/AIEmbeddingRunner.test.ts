@@ -80,6 +80,15 @@ const h = vi.hoisted(() => {
     return map;
   };
 
+  const byPromptID = <T extends { PromptID: string }>(rows: T[]): Map<string, T[]> => {
+    const map = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = norm(row.PromptID);
+      map.set(key, [...(map.get(key) ?? []), row]);
+    }
+    return map;
+  };
+
   const engine = {
     Config: vi.fn().mockResolvedValue(undefined),
     get VendorTypeDefinitions() { return state.vendorTypeDefinitions; },
@@ -98,6 +107,7 @@ const h = vi.hoisted(() => {
     get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
     get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
     get ModelVendorsByModelID() { return byModelID(state.modelVendors); },
+    get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
     GetConfigurationChain() { return []; },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
