@@ -295,7 +295,7 @@ jobs:
           cp -R docs/. docs-site/dist/api/
 
       - name: Upload version artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: site-${{ matrix.id }}
           path: docs-site/dist

@@ -86,7 +86,7 @@ jobs:
       # naming cleanup burns down, so it has to outlive the job.
       - name: Upload the full finding list
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: standards-findings
           path: standards-findings.json
