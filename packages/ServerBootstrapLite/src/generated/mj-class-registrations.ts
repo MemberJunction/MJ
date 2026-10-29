@@ -1230,7 +1230,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (165 classes)
+// @memberjunction/core-actions (166 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -2488,11 +2488,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     Get_AI_Model_Cost_Action,
     GoogleCustomSearchAction,
     GraphQLQueryAction,
+    HTTPRequestAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
-    HTTPRequestAction,
     IPGeolocationAction,
     IntegrationActionExecutor,
     InviteToListAction,

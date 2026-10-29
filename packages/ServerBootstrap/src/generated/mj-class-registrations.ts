@@ -1545,7 +1545,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (165 classes)
+// @memberjunction/core-actions (166 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -2988,11 +2988,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
-    ValidateEmailUniqueAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ValidateEmailUniqueAction,
     VectorizeEntityAction,
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
