@@ -1385,7 +1385,7 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (11 classes)
+// @memberjunction/scheduling-engine (10 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1396,11 +1396,10 @@ import {
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
-    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (66 classes)
+// @memberjunction/core-entities-server (65 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1409,7 +1408,6 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
-    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -1526,7 +1524,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (164 classes)
+// @memberjunction/core-actions (165 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1645,6 +1643,7 @@ import {
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2694,7 +2693,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
-    RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2703,7 +2701,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
-    MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2763,12 +2760,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     EntityDataGridRelatedEntityGenerator,
+    JoinGridRelatedEntityGenerator,
+    PostgreSQLCodeGenProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
-    JoinGridRelatedEntityGenerator,
-    PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
     CreateScheduledJobAction,
@@ -2911,6 +2908,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2967,11 +2965,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
+    WorkQueueGetBacklogServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
-    WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
@@ -3003,7 +3001,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1215;
+export const CLASS_REGISTRATIONS_COUNT = 1214;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

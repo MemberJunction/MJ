@@ -74,6 +74,16 @@ export type WhiteboardFontFamily = 'sans' | 'serif' | 'mono';
 /** Font weights for text labels / stickies (regular or bold). */
 export type WhiteboardFontWeight = 400 | 700;
 
+/** True when `value` is one of the {@link WhiteboardFontWeight} literals. */
+export function IsWhiteboardFontWeight(value: unknown): value is WhiteboardFontWeight {
+  return value === 400 || value === 700;
+}
+
+/** True when `value` is one of the {@link WhiteboardFontFamily} keys. */
+export function IsWhiteboardFontFamily(value: unknown): value is WhiteboardFontFamily {
+  return value === 'sans' || value === 'serif' || value === 'mono';
+}
+
 /** A point in board (content) coordinates. */
 export interface WhiteboardPoint {
   X: number;
@@ -1958,7 +1968,7 @@ export class WhiteboardState {
           name,
           // additive authorship field — tolerated absent (pre-garnish payloads → 'user')
           author: p['author'] === 'agent' ? 'agent' : 'user',
-          items: Array.isArray(p['items']) ? (p['items'] as WhiteboardItem[]) : []
+          items: Array.isArray(p['items']) ? WhiteboardState.normalizePersistedItems(p['items'] as unknown[]) : []
         });
       }
       if (pages.length === 0) {
@@ -1984,10 +1994,35 @@ export class WhiteboardState {
         zCounter: num(raw['zCounter'], 0),
         pageCounter: 1,
         activePageId: 'page-1',
-        pages: [{ id: 'page-1', name: 'Page 1', items: raw['items'] as WhiteboardItem[] }]
+        pages: [{ id: 'page-1', name: 'Page 1', items: WhiteboardState.normalizePersistedItems(raw['items'] as unknown[]) }]
       };
     }
     return null;
+  }
+
+  /**
+   * Coerce the closed-set item fields of persisted items so hostile values from a shared
+   * board never enter state: `Author` becomes `'agent'` or `'user'`, and a `FontWeight` /
+   * `FontFamily` outside its literal set is dropped (the item falls back to the CSS
+   * default). Non-object entries are dropped (restore would skip them anyway).
+   */
+  private static normalizePersistedItems(entries: unknown[]): WhiteboardItem[] {
+    const items: WhiteboardItem[] = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        continue;
+      }
+      const item = { ...(entry as Record<string, unknown>) };
+      item['Author'] = item['Author'] === 'agent' ? 'agent' : 'user';
+      if ('FontWeight' in item && !IsWhiteboardFontWeight(item['FontWeight'])) {
+        delete item['FontWeight'];
+      }
+      if ('FontFamily' in item && !IsWhiteboardFontFamily(item['FontFamily'])) {
+        delete item['FontFamily'];
+      }
+      items.push(item as unknown as WhiteboardItem);
+    }
+    return items;
   }
 
   /**

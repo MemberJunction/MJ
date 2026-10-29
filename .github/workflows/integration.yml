@@ -211,7 +211,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       # Poll until SQL Server actually answers a query, rather than a blind sleep. A cold
       # container that merely started (but is still doing recovery/tempdb setup) will accept
@@ -311,22 +337,33 @@ jobs:
         run: |
           if [ ! -f /tmp/mjdb/test.bak ]; then
             echo 'No snapshot available — provisioning cold.'
+            echo 'DB provisioning: **cold** — no snapshot in the cache for this key' >> "$GITHUB_STEP_SUMMARY"
             echo 'warm=0' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           ls -lh /tmp/mjdb/test.bak
           # -b so sqlcmd exits non-zero on a SQL error; without it a failed RESTORE still
           # returns 0 and the fallback below would never fire.
+          #
+          # The chmod is load-bearing. `docker cp` does NOT preserve ownership: it writes the
+          # file into the container as the HOST uid with group root and mode 0640. SQL Server
+          # runs as uid 10001 (mssql), which is neither the owner nor able to read via group,
+          # so RESTORE fails with "Operating system error 5(Access is denied.)" — which is
+          # exactly what the first two runs of this cache did, silently falling back to cold
+          # provisioning. 0644 is enough; the file is a throwaway on an ephemeral runner.
           if docker cp /tmp/mjdb/test.bak sql:/var/opt/mssql/test.bak && \
+             docker exec -u 0 sql chmod 0644 /var/opt/mssql/test.bak && \
              docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
                /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
                -Q "RESTORE DATABASE [test] FROM DISK='/var/opt/mssql/test.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_log.ldf';"; then
             echo "warm=1" >> "$GITHUB_OUTPUT"
             echo "Snapshot restored from key: ${MATCHED}"
+            echo "DB provisioning: **warm** — restored from \`${MATCHED}\`" >> "$GITHUB_STEP_SUMMARY"
           else
             # A half-finished RESTORE leaves [test] in RESTORING and every later step would
             # fail against it, so drop and recreate before handing back to the cold path.
             echo "::warning::Snapshot restore failed — dropping the database and provisioning cold. This costs the usual ~6 minutes; it does not affect correctness."
+            echo "DB provisioning: **cold (restore FAILED)** — the snapshot cache is not working; see the \`Load the snapshot\` step" >> "$GITHUB_STEP_SUMMARY"
             docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
               /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' \
               -Q "IF DB_ID('test') IS NOT NULL BEGIN ALTER DATABASE [test] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [test]; END; CREATE DATABASE [test];"
@@ -341,17 +378,48 @@ jobs:
       # Unconditional by design: on a warm restore Flyway finds its history table already
       # populated and this is a seconds-long no-op, and on a prefix restore it applies exactly
       # the migrations the snapshot predates.
+      # A warm restore can make this step fail where a cold build would have passed, and the
+      # snapshot must never turn a passing PR red. The case is out-of-order migrations: the
+      # restored DB already records migrations ABOVE a version this PR adds, and `mj migrate`
+      # runs with Flyway's outOfOrder=false (the default; mj.config.cjs does not override it),
+      # so a pending migration below the ceiling is refused. Against a cold, empty DB the same
+      # migration simply sorts into place and applies. So: on failure, if the DB came from a
+      # snapshot, rebuild it cold and migrate once more.
+      #
+      # The retry is gated on `warm`. A cold build that cannot migrate has a genuinely broken
+      # migration — retrying it cold would fail identically and only burn another five minutes,
+      # so that case fails immediately and says so.
       - name: Migrate — apply committed migrations to the fresh DB
+        id: migrate
         env:
           # Headroom over mssql's 15s default for the first heavy workload on a cold server.
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
-        run: node packages/MJCLI/bin/run.js migrate
+          WARM: ${{ steps.dbload.outputs.warm }}
+        run: |
+          if node packages/MJCLI/bin/run.js migrate; then
+            echo "retried=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$WARM" != "1" ]; then
+            echo "::error::migrate failed against a cold database — this is a real migration failure, not a snapshot-cache artifact."
+            exit 1
+          fi
+          echo "::warning::migrate failed against the restored snapshot — rebuilding the database cold and retrying once. The usual cause is a migration numbered below the snapshot's ceiling (out-of-order)."
+          echo 'DB provisioning: **cold (retried)** — migrate failed against the snapshot, rebuilt from scratch' >> "$GITHUB_STEP_SUMMARY"
+          echo "retried=1" >> "$GITHUB_OUTPUT"
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' \
+            -Q "IF DB_ID('test') IS NOT NULL BEGIN ALTER DATABASE [test] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [test]; END; CREATE DATABASE [test];"
+          node packages/MJCLI/bin/run.js migrate
 
       - name: Sync push — reconcile committed metadata (mj sync push --ci)
         # Skipped only when the snapshot was an EXACT key hit AND actually loaded, i.e. when
         # metadata/ and metadata-optional/ are provably the trees the snapshot was built from.
         # A prefix hit, a miss, or a failed restore all run the full reconcile.
-        if: steps.dbcache.outputs.cache-hit != 'true' || steps.dbload.outputs.warm != '1'
+        # `retried` is the third term and it is load-bearing: when migrate rebuilt the database
+        # cold, the snapshot's metadata went with it, so skipping here would hand the tier a
+        # schema with no metadata in it.
+        if: steps.dbcache.outputs.cache-hit != 'true' || steps.dbload.outputs.warm != '1' || steps.migrate.outputs.retried == '1'
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
@@ -365,9 +433,9 @@ jobs:
       # roles → entity-permissions → users) resolves every @lookup ref in order. Without this the
       # RLS8/9/10 checks skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
       - name: Sync push — seed the optional integration metadata + RLS fixtures
-        # Same exact-hit gate as the main push above; the snapshot already holds these records.
+        # Same gate as the main push above, including the cold-retry term.
         # The fixture assertion below runs either way and is what proves that claim.
-        if: steps.dbcache.outputs.cache-hit != 'true' || steps.dbload.outputs.warm != '1'
+        if: steps.dbcache.outputs.cache-hit != 'true' || steps.dbload.outputs.warm != '1' || steps.migrate.outputs.retried == '1'
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'   # same cold-runner headroom as the main push above
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
@@ -562,7 +630,33 @@ jobs:
 
       - name: Create SQL Server container
         if: steps.prereq.outputs.READY == 'true'
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         if: steps.prereq.outputs.READY == 'true'
@@ -700,7 +794,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
@@ -854,7 +974,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
@@ -1002,7 +1148,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
