@@ -8,7 +8,7 @@ export {
   type InviteEvaluationInput,
 } from './magicLinkCore.js';
 export { MagicLinkKeyManager } from './MagicLinkKeys.js';
-export { MagicLinkService } from './MagicLinkService.js';
+export { MagicLinkService, IsMagicLinkRedirectUrlAllowed } from './MagicLinkService.js';
 export {
   CreateMagicLinkHandler, createMagicLinkHandler,
   CreateMagicLinkJwksRouter, createMagicLinkJwksRouter,

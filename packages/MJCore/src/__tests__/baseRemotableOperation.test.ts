@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { BaseRemotableOperation, RemoteOpServerContext } from '../generic/baseRemotableOperation';
+import { RegisterClass } from '@memberjunction/global';
+import {
+    BaseRemotableOperation,
+    ComputeRemoteOperationContractFingerprint,
+    RemoteOperationError,
+    RemoteOpServerContext,
+} from '../generic/baseRemotableOperation';
 import { IMetadataProvider, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
 import { UserInfo } from '../generic/securityInfo';
@@ -137,6 +143,128 @@ describe('BaseRemotableOperation', () => {
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('EXECUTION_ERROR');
             expect(result.ErrorMessage).toContain('Test.NoImpl');
+        });
+
+        it('passes RemoteOpServerContext as 3rd argument to Authorize', async () => {
+            class OriginGuardedOperation extends GreetOperation {
+                public readonly OperationKey = 'Test.OriginGuarded';
+                protected override async Authorize(
+                    _input: GreetInput,
+                    _user: UserInfo,
+                    context?: RemoteOpServerContext,
+                ): Promise<boolean> {
+                    return context?.requestOrigin === 'https://trusted.example.com';
+                }
+            }
+
+            const denied = await new OriginGuardedOperation().ExecuteServer(
+                { name: 'Ada' },
+                { ...serverContext(), requestOrigin: 'https://untrusted.example.com' },
+            );
+            expect(denied.Success).toBe(false);
+            expect(denied.ResultCode).toBe('FORBIDDEN');
+
+            const allowed = await new OriginGuardedOperation().ExecuteServer(
+                { name: 'Ada' },
+                { ...serverContext(), requestOrigin: 'https://trusted.example.com' },
+            );
+            expect(allowed.Success).toBe(true);
+            expect(allowed.Output).toEqual({ message: 'Hello, Ada' });
+        });
+
+        it('maps RemoteOperationError to its structured ResultCode without wrapping as EXECUTION_ERROR', async () => {
+            class DomainRuleOperation extends BaseRemotableOperation<GreetInput, GreetOutput> {
+                public readonly OperationKey = 'Test.DomainRule';
+                protected override async InternalExecute(): Promise<GreetOutput> {
+                    throw new RemoteOperationError('QUOTA_EXCEEDED', 'Daily greeting quota reached');
+                }
+            }
+
+            const result = await new DomainRuleOperation().ExecuteServer({ name: 'Ada' }, serverContext());
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('QUOTA_EXCEEDED');
+            expect(result.ErrorMessage).toBe('Daily greeting quota reached');
+        });
+    });
+
+    describe('ContractFingerprint & Tool Exposure', () => {
+        it('ComputeRemoteOperationContractFingerprint normalizes whitespace and changes on contract edits', () => {
+            const fpLf = ComputeRemoteOperationContractFingerprint({
+                OperationKey: 'Orders.Place',
+                ExecutionMode: 'Sync',
+                InputTypeName: 'PlaceInput',
+                InputTypeDefinition: 'export interface PlaceInput {\n  id: string;\n}',
+                OutputTypeName: 'PlaceOutput',
+                OutputTypeDefinition: 'export interface PlaceOutput {\n  ok: boolean;\n}',
+            });
+            const fpCrlf = ComputeRemoteOperationContractFingerprint({
+                OperationKey: 'Orders.Place',
+                ExecutionMode: 'Sync',
+                InputTypeName: 'PlaceInput',
+                InputTypeDefinition: 'export interface PlaceInput {\r\n    id: string;\r\n}',
+                OutputTypeName: 'PlaceOutput',
+                OutputTypeDefinition: 'export interface PlaceOutput {\r\n    ok: boolean;\r\n}',
+            });
+            const fpDrifted = ComputeRemoteOperationContractFingerprint({
+                OperationKey: 'Orders.Place',
+                ExecutionMode: 'Sync',
+                InputTypeName: 'PlaceInput',
+                InputTypeDefinition: 'export interface PlaceInput {\n  id: string;\n  qty: number;\n}',
+                OutputTypeName: 'PlaceOutput',
+                OutputTypeDefinition: 'export interface PlaceOutput {\n  ok: boolean;\n}',
+            });
+
+            expect(fpLf).toMatch(/^ro_fp_[0-9a-f]{16}$/);
+            expect(fpLf).toBe(fpCrlf);
+            expect(fpDrifted).not.toBe(fpLf);
+        });
+
+        it('auto-forwards declared ContractFingerprint on Execute unless caller overrides options.contractFingerprint', async () => {
+            class FingerprintedOperation extends GreetOperation {
+                public readonly OperationKey = 'Test.Fingerprinted';
+                public override readonly ContractFingerprint = 'ro_fp_1234567890abcdef';
+            }
+
+            const mock = new MockRouteProvider();
+            await new FingerprintedOperation().Execute({ name: 'Ada' }, { provider: asProvider(mock) });
+            expect(mock.calls[0].options?.contractFingerprint).toBe('ro_fp_1234567890abcdef');
+
+            await new FingerprintedOperation().Execute(
+                { name: 'Ada' },
+                { provider: asProvider(mock), contractFingerprint: 'ro_fp_customoverride00' },
+            );
+            expect(mock.calls[1].options?.contractFingerprint).toBe('ro_fp_customoverride00');
+        });
+
+        it('discovers operations opting into ExposeAsAgentTool and ExposeAsMCPTool', () => {
+            @RegisterClass(BaseRemotableOperation, 'Test.ExposedBothTool')
+            class BothToolOp extends GreetOperation {
+                public readonly OperationKey = 'Test.ExposedBothTool';
+                public override readonly ExposeAsAgentTool = true;
+                public override readonly ExposeAsMCPTool = true;
+                public override readonly ToolDescription = 'Greets a person by name';
+                public override readonly ToolInputSchema = {
+                    type: 'object',
+                    properties: { name: { type: 'string' } },
+                    required: ['name'],
+                };
+            }
+            void BothToolOp;
+
+            @RegisterClass(BaseRemotableOperation, 'Test.ExposedAgentOnlyTool')
+            class AgentOnlyToolOp extends GreetOperation {
+                public readonly OperationKey = 'Test.ExposedAgentOnlyTool';
+                public override readonly ExposeAsAgentTool = true;
+            }
+            void AgentOnlyToolOp;
+
+            const allExposed = BaseRemotableOperation.GetExposedToolOperations();
+            expect(allExposed.some((d) => d.OperationKey === 'Test.ExposedBothTool')).toBe(true);
+            expect(allExposed.some((d) => d.OperationKey === 'Test.ExposedAgentOnlyTool')).toBe(true);
+
+            const mcpOnly = BaseRemotableOperation.GetExposedToolOperations({ mcpOnly: true });
+            expect(mcpOnly.some((d) => d.OperationKey === 'Test.ExposedBothTool')).toBe(true);
+            expect(mcpOnly.some((d) => d.OperationKey === 'Test.ExposedAgentOnlyTool')).toBe(false);
         });
     });
 

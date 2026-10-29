@@ -113,9 +113,88 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
    * Signs a set of magic-link (or local-dev) claims and returns the compact JWT.
    * `iat`/`exp` are expected to already be set on the claims.
    */
-  public Sign(claims: MagicLinkJWTClaims | Record<string, unknown>): string {
+  public Sign<T extends object>(claims: T): string {
     this.ensureInitialized();
     return jwt.sign(claims, this.privateKeyPem, { algorithm: 'RS256', keyid: this._kid });
+  }
+
+  /**
+   * Verifies a magic-link session JWT signed by this key manager (`RS256`, `mj_magic_link === true`).
+   * Returns `null` if invalid, expired, or forged.
+   */
+  public VerifySessionToken(
+    token: string,
+    options?: { issuer?: string; audience?: string },
+  ): MagicLinkJWTClaims | null {
+    this.ensureInitialized();
+    try {
+      const publicPem = this.publicKey!.export({ type: 'spki', format: 'pem' }) as string;
+      const verifyOptions: jwt.VerifyOptions = { algorithms: ['RS256'] };
+      if (options?.issuer) {
+        verifyOptions.issuer = options.issuer;
+      }
+      if (options?.audience) {
+        verifyOptions.audience = options.audience;
+      }
+      const decoded = jwt.verify(token, publicPem, verifyOptions);
+      if (!decoded || typeof decoded !== 'object') {
+        return null;
+      }
+      const claims = decoded as MagicLinkJWTClaims;
+      if (claims.mj_magic_link !== true || typeof claims.sub !== 'string') {
+        return null;
+      }
+      return claims;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Signs a short-lived redirect binding JWT (`mj_purpose = 'magic-link-redirect'`) that
+   * cryptographically binds a validated `redirectUrl` to a specific invite's `tokenHash` and expiry.
+   */
+  public SignRedirectBinding(tokenHash: string, redirectUrl: string, expiresAtEpochSeconds: number): string {
+    this.ensureInitialized();
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return jwt.sign(
+      {
+        mj_purpose: 'magic-link-redirect',
+        mj_th: tokenHash,
+        mj_redirect: redirectUrl,
+        iat: nowSeconds,
+        exp: Math.max(expiresAtEpochSeconds, nowSeconds + 60),
+      },
+      this.privateKeyPem,
+      { algorithm: 'RS256', keyid: this._kid },
+    );
+  }
+
+  /**
+   * Verifies a redirect binding JWT produced by {@link SignRedirectBinding} and ensures it matches
+   * `expectedTokenHash` (preventing cross-invite substitution). Returns the bound URL or `null`.
+   */
+  public VerifyRedirectBinding(bindingToken: string, expectedTokenHash: string): string | null {
+    this.ensureInitialized();
+    try {
+      const publicPem = this.publicKey!.export({ type: 'spki', format: 'pem' }) as string;
+      const decoded = jwt.verify(bindingToken, publicPem, { algorithms: ['RS256'] });
+      if (!decoded || typeof decoded !== 'object') {
+        return null;
+      }
+      const record = decoded as { mj_purpose?: string; mj_th?: string; mj_redirect?: string };
+      if (
+        record.mj_purpose !== 'magic-link-redirect' ||
+        record.mj_th !== expectedTokenHash ||
+        typeof record.mj_redirect !== 'string' ||
+        !record.mj_redirect
+      ) {
+        return null;
+      }
+      return record.mj_redirect;
+    } catch {
+      return null;
+    }
   }
 
   /**

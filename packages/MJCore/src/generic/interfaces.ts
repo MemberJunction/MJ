@@ -1910,6 +1910,30 @@ export interface RemoteOpInvokeOptions {
      * client loudly instead of mis-deserializing. Usually derived from the operation definition.
      */
     contractFingerprint?: string;
+    /**
+     * Optional opaque handle for an existing backing run (e.g. a `ProcessRunID`) forwarded into
+     * {@link RemoteOpServerContext.handle} during server-side dispatch.
+     */
+    handle?: string;
+    /**
+     * Normalized HTTP `Origin` header from the inbound request (e.g. `https://app.example.com`),
+     * populated by the server transport when invoked over HTTP/GraphQL. Undefined for in-process
+     * server calls or requests without an `Origin` header.
+     */
+    requestOrigin?: string;
+    /**
+     * Caller's network IP address as resolved by the HTTP host (`req.ip`), populated by the server
+     * transport for rate-limiting and forensic audit trails. Never use as an identity assertion.
+     */
+    clientIp?: string;
+    /**
+     * Caller's authenticated session identifier, populated by the server transport when available.
+     */
+    sessionId?: string;
+    /**
+     * SHA-256 hash of the caller's MJ API key when authenticated via `mj_sk_*` API key / MCP.
+     */
+    apiKeyHash?: string;
 }
 
 /**

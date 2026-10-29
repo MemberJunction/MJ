@@ -32,6 +32,7 @@ export const MAGIC_LINK_JWKS_PATH = `${MAGIC_LINK_MOUNT_PATH}/jwks.json`;
 export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfig): {
   publicRouter: Router;
   authenticatedRouter: Router;
+  service: MagicLinkService;
 } {
   // Initialize the signing keypair once.
   MagicLinkKeyManager.Instance.Initialize(config.rsaPrivateKey);
@@ -64,10 +65,27 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     res.status(200).json(MagicLinkKeyManager.Instance.GetJWKS());
   });
 
-  // Sends a completed redemption result: browser flow → 302 into Explorer with
+  // Sends a completed redemption result: browser flow → 302 into a verified per-invite
+  // RedirectUrl (when cryptographically bound + origin-allowed) or Explorer with
   // the session token in the URL fragment (never sent to a server, so it stays
   // out of access/proxy logs); API flow → JSON with an appropriate status.
-  const sendRedeemResult = (res: Response, result: RedeemMagicLinkResult, wantsJson: boolean): void => {
+  const sendRedeemResult = (
+    res: Response,
+    result: RedeemMagicLinkResult,
+    wantsJson: boolean,
+    verifiedRedirectUrl?: string,
+  ): void => {
+    if (verifiedRedirectUrl && !wantsJson) {
+      const baseWithoutHash = verifiedRedirectUrl.split('#')[0];
+      if (result.success && result.token) {
+        res.redirect(302, `${baseWithoutHash}#token=${encodeURIComponent(result.token)}`);
+      } else {
+        const sep = baseWithoutHash.includes('?') ? '&' : '?';
+        res.redirect(302, `${baseWithoutHash}${sep}mlError=${encodeURIComponent(result.errorCode ?? 'invalid')}`);
+      }
+      return;
+    }
+
     const explorerUrl = config.explorerUrl?.replace(/\/$/, '');
     if (explorerUrl && !wantsJson) {
       if (result.success && result.token) {
@@ -102,6 +120,7 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
   // the actual redemption happens only on POST (below), gated by a user click.
   publicRouter.get('/redeem', redeemLimiter, (req: Request, res: Response) => {
     const token = typeof req.query.token === 'string' ? req.query.token : '';
+    const rt = typeof req.query.rt === 'string' ? req.query.rt : undefined;
     if (!token) {
       res.status(400).json({ success: false, error: 'Missing token.' });
       return;
@@ -114,22 +133,27 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     res
       .status(200)
       .type('html')
-      .send(BuildRedeemLandingHtml(token, ApiRoute(`${MAGIC_LINK_MOUNT_PATH}/redeem`)));
+      .send(BuildRedeemLandingHtml(token, ApiRoute(`${MAGIC_LINK_MOUNT_PATH}/redeem`), rt));
   });
 
   // POST /redeem performs the actual (side-effectful) redemption. Token arrives
   // from the interstitial form body, an API client's JSON body, or the query.
   publicRouter.post('/redeem', redeemLimiter, urlencoded({ extended: false }), json(), async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { token?: string };
+    const body = (req.body ?? {}) as { token?: string; rt?: string };
     const token =
       (typeof body.token === 'string' && body.token) ||
       (typeof req.query.token === 'string' ? req.query.token : '');
+    const rt =
+      (typeof body.rt === 'string' && body.rt) ||
+      (typeof req.query.rt === 'string' ? req.query.rt : undefined);
     const wantsJson = req.query.format === 'json' || req.is('application/json') === 'application/json';
 
     if (!token) {
       res.status(400).json({ success: false, error: 'Missing token.' });
       return;
     }
+
+    const verifiedRedirectUrl = service.ResolveVerifiedRedirectUrl(token, rt);
 
     // Forensic context for the redemption audit trail. `req.ip` honors the app's
     // trust-proxy setting; headers are best-effort and may be absent for API clients.
@@ -138,7 +162,7 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
       userAgent: req.get('user-agent') ?? undefined,
       origin: req.get('origin') ?? undefined,
     });
-    sendRedeemResult(res, result, wantsJson);
+    sendRedeemResult(res, result, wantsJson, verifiedRedirectUrl);
   });
 
   // ── Authenticated (invite creation) ───────────────────────────────────────
@@ -166,6 +190,8 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
         MaxUses: body.MaxUses,
         firstName: body.firstName,
         lastName: body.lastName,
+        RedirectUrl: body.RedirectUrl,
+        SendEmail: body.SendEmail,
       },
       creatingUser,
     );
@@ -175,13 +201,14 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     res.status(status).json(result);
   });
 
-  return { publicRouter, authenticatedRouter };
+  return { publicRouter, authenticatedRouter, service };
 }
 
 /** @deprecated Use {@link CreateMagicLinkHandler}. */
 export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfig): {
   publicRouter: Router;
   authenticatedRouter: Router;
+  service: MagicLinkService;
 } {
   return CreateMagicLinkHandler(publicUrl, config);
 }

@@ -37,9 +37,12 @@ import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { CreateIsolatedProvider } from '../../isolatedProvider.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
 import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, BuildConsumeInvitePostgresSQL, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import type { IServerExtensionMagicLinkService } from '@memberjunction/server-extensions-core';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
+  ManageMagicLinkInviteResult,
+  MagicLinkJWTClaims,
   RedeemMagicLinkResult,
   RedeemAuditContext,
 } from './types.js';
@@ -76,10 +79,53 @@ interface ProvisionResult {
 }
 
 /**
- * Magic-link service. One instance per server, constructed with the resolved
- * public URL and the validated config.
+ * Validates that a candidate `redirectUrl` is a well-formed `http:` or `https:` URL whose
+ * origin matches at least one normalized entry in `allowedOrigins` (or `'...'` contains `'*'`).
  */
-export class MagicLinkService {
+export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigins: readonly string[]): boolean {
+  const trimmed = redirectUrl.trim();
+  if (!trimmed) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+  const normalizedTargetOrigin = parsed.origin.toLowerCase();
+  for (const rawAllowed of allowedOrigins) {
+    const candidate = (rawAllowed ?? '').trim();
+    if (!candidate) {
+      continue;
+    }
+    if (candidate === '*') {
+      return true;
+    }
+    try {
+      const allowedUrl = new URL(candidate);
+      if (allowedUrl.origin.toLowerCase() === normalizedTargetOrigin) {
+        return true;
+      }
+    } catch {
+      if (candidate.replace(/\/$/, '').toLowerCase() === normalizedTargetOrigin) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Magic-link service. One instance per server, constructed with the resolved
+ * public URL and the validated config. Implements {@link IServerExtensionMagicLinkService}
+ * so `BaseServerExtension` implementations can mint, revoke, extend, and verify invites
+ * via `context.services.GetMagicLinkService?.()`.
+ */
+export class MagicLinkService implements IServerExtensionMagicLinkService {
   constructor(
     private readonly publicUrl: string,
     private readonly config: MagicLinkConfig,
@@ -87,7 +133,7 @@ export class MagicLinkService {
 
   /**
    * Creates a single-use, app-scoped invite, persists its hashed token, and
-   * (when a communication provider is configured) emails the link.
+   * (when a communication provider is configured and `params.SendEmail !== false`) emails the link.
    *
    * @param params  invite parameters
    * @param creatingUser  the authenticated internal user issuing the invite
@@ -108,6 +154,15 @@ export class MagicLinkService {
       const callerRoleNames = (creatingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
       if (!CanIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
         return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
+      }
+
+      const validatedRedirectUrl = params.RedirectUrl?.trim() ? params.RedirectUrl.trim() : undefined;
+      if (validatedRedirectUrl && !IsMagicLinkRedirectUrlAllowed(validatedRedirectUrl, this.allowedRedirectOrigins())) {
+        return {
+          success: false,
+          errorCode: 'invalid_redirect_url',
+          error: `RedirectUrl '${validatedRedirectUrl}' is not permitted by the server's allowed frontend origins.`,
+        };
       }
 
       const roleId = params.RoleId ?? this.resolveRestrictedRoleId(md);
@@ -136,12 +191,13 @@ export class MagicLinkService {
       }
 
       const rawToken = GenerateRawToken();
+      const tokenHash = HashToken(rawToken);
       const expiresInHours = params.ExpiresInHours ?? this.config.defaultExpiresInHours;
       const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000);
 
       const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, creatingUser);
       invite.NewRecord();
-      invite.TokenHash = HashToken(rawToken);
+      invite.TokenHash = tokenHash;
       invite.Email = params.email;
       invite.ApplicationID = params.ApplicationId;
       invite.RoleID = roleId;
@@ -161,10 +217,22 @@ export class MagicLinkService {
       // multi-scope reads. Best-effort so a child-row hiccup never fails issuance.
       await this.writeInviteScopeChildRows(invite.ID, params.ApplicationId, roleId, creatingUser, md);
 
-      const redemptionUrl = this.buildRedemptionUrl(rawToken);
+      let redirectBindingToken: string | undefined;
+      if (validatedRedirectUrl) {
+        if (!MagicLinkKeyManager.Instance.IsInitialized) {
+          MagicLinkKeyManager.Instance.Initialize(this.config.rsaPrivateKey);
+        }
+        redirectBindingToken = MagicLinkKeyManager.Instance.SignRedirectBinding(
+          tokenHash,
+          validatedRedirectUrl,
+          Math.floor(expiresAt.getTime() / 1000),
+        );
+      }
+
+      const redemptionUrl = this.buildRedemptionUrl(rawToken, redirectBindingToken);
 
       let emailSent = false;
-      if (this.config.communicationProvider) {
+      if (params.SendEmail !== false && this.config.communicationProvider) {
         emailSent = await this.sendInviteEmail(params.email, redemptionUrl, app.Name, creatingUser);
       }
 
@@ -172,7 +240,7 @@ export class MagicLinkService {
         success: true,
         inviteId: invite.ID,
         redemptionUrl,
-        // Surface the raw token only when we couldn't deliver it ourselves.
+        // Surface the raw token only when we couldn't (or were asked not to) deliver it ourselves.
         rawToken: emailSent ? undefined : rawToken,
         emailSent,
         expiresAt: expiresAt.toISOString(),
@@ -181,6 +249,155 @@ export class MagicLinkService {
       LogError(e);
       return { success: false, error: e instanceof Error ? e.message : String(e) };
     }
+  }
+
+  /**
+   * Revokes an existing invite so subsequent redemptions fail with `'revoked'`.
+   * Requires the acting user to hold invite-issuance authority (`CanIssueInvites`).
+   */
+  public async RevokeInvite(
+    inviteId: string,
+    actingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ManageMagicLinkInviteResult> {
+    try {
+      const callerRoleNames = (actingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+      if (!CanIssueInvites(actingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+        return { success: false, errorCode: 'forbidden', error: 'Not authorized to revoke magic-link invites.' };
+      }
+      if (!inviteId?.trim()) {
+        return { success: false, errorCode: 'not_found', error: 'Invite ID is required.' };
+      }
+
+      const md = provider ?? Metadata.Provider;
+      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, actingUser);
+      const loaded = await invite.Load(inviteId.trim());
+      if (!loaded) {
+        return { success: false, errorCode: 'not_found', error: `Invite '${inviteId}' not found.` };
+      }
+
+      if (invite.Status === 'Revoked') {
+        return {
+          success: true,
+          inviteId: invite.ID,
+          status: invite.Status,
+          expiresAt: invite.ExpiresAt.toISOString(),
+        };
+      }
+
+      invite.Status = 'Revoked';
+      if (!(await invite.Save())) {
+        return {
+          success: false,
+          errorCode: 'server_error',
+          error: `Failed to revoke invite: ${invite.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        };
+      }
+
+      return {
+        success: true,
+        inviteId: invite.ID,
+        status: invite.Status,
+        expiresAt: invite.ExpiresAt.toISOString(),
+      };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Updates the expiration timestamp of an existing non-revoked, non-consumed invite.
+   * Requires the acting user to hold invite-issuance authority (`CanIssueInvites`).
+   */
+  public async UpdateInviteExpiry(
+    inviteId: string,
+    expiresAt: Date,
+    actingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ManageMagicLinkInviteResult> {
+    try {
+      const callerRoleNames = (actingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+      if (!CanIssueInvites(actingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+        return { success: false, errorCode: 'forbidden', error: 'Not authorized to update magic-link invites.' };
+      }
+      if (!(expiresAt instanceof Date) || Number.isNaN(expiresAt.getTime())) {
+        return { success: false, errorCode: 'invalid_expiry', error: 'expiresAt must be a valid Date.' };
+      }
+      if (!inviteId?.trim()) {
+        return { success: false, errorCode: 'not_found', error: 'Invite ID is required.' };
+      }
+
+      const md = provider ?? Metadata.Provider;
+      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, actingUser);
+      const loaded = await invite.Load(inviteId.trim());
+      if (!loaded) {
+        return { success: false, errorCode: 'not_found', error: `Invite '${inviteId}' not found.` };
+      }
+
+      if (invite.Status === 'Revoked' || invite.Status === 'Consumed') {
+        return {
+          success: false,
+          errorCode: 'invalid_state',
+          error: `Cannot update expiry on invite '${invite.ID}' because its status is '${invite.Status}'.`,
+        };
+      }
+
+      invite.ExpiresAt = expiresAt;
+      if (invite.Status === 'Expired' && expiresAt.getTime() > Date.now()) {
+        invite.Status = 'Active';
+      }
+
+      if (!(await invite.Save())) {
+        return {
+          success: false,
+          errorCode: 'server_error',
+          error: `Failed to update invite expiry: ${invite.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        };
+      }
+
+      return {
+        success: true,
+        inviteId: invite.ID,
+        status: invite.Status,
+        expiresAt: invite.ExpiresAt.toISOString(),
+      };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Verifies a magic-link session JWT against this service's configured issuer and audience.
+   */
+  public VerifySessionToken(token: string): MagicLinkJWTClaims | null {
+    if (!token || !MagicLinkKeyManager.Instance.IsInitialized) {
+      return null;
+    }
+    return MagicLinkKeyManager.Instance.VerifySessionToken(token, {
+      issuer: this.publicUrl,
+      audience: this.config.audience,
+    });
+  }
+
+  /**
+   * Verifies a signed redirect binding (`rt`) against the raw invite token's hash AND the host's
+   * allowed frontend origins. Returns the verified redirect URL, or `undefined` if absent/invalid.
+   */
+  public ResolveVerifiedRedirectUrl(rawToken: string, redirectBindingToken: string | undefined): string | undefined {
+    if (!rawToken || !redirectBindingToken || !MagicLinkKeyManager.Instance.IsInitialized) {
+      return undefined;
+    }
+    const tokenHash = HashToken(rawToken);
+    const boundUrl = MagicLinkKeyManager.Instance.VerifyRedirectBinding(redirectBindingToken, tokenHash);
+    if (!boundUrl) {
+      return undefined;
+    }
+    if (!IsMagicLinkRedirectUrlAllowed(boundUrl, this.allowedRedirectOrigins())) {
+      return undefined;
+    }
+    return boundUrl;
   }
 
   /**
@@ -420,10 +637,26 @@ export class MagicLinkService {
     return role?.ID;
   }
 
-  /** Builds the shareable redemption URL. */
-  private buildRedemptionUrl(rawToken: string): string {
+  /** Builds the shareable redemption URL (including `&rt=...` when a per-invite RedirectUrl was signed). */
+  private buildRedemptionUrl(rawToken: string, redirectBindingToken?: string): string {
     const base = this.publicUrl.replace(/\/$/, '');
-    return `${base}/magic-link/redeem?token=${encodeURIComponent(rawToken)}`;
+    const rtParam = redirectBindingToken ? `&rt=${encodeURIComponent(redirectBindingToken)}` : '';
+    return `${base}/magic-link/redeem?token=${encodeURIComponent(rawToken)}${rtParam}`;
+  }
+
+  /** Collects the origins a caller-supplied per-invite `RedirectUrl` is permitted to target. */
+  private allowedRedirectOrigins(): string[] {
+    const origins: string[] = [];
+    if (this.config.explorerUrl?.trim()) {
+      origins.push(this.config.explorerUrl.trim());
+    }
+    const corsOrigins = configInfo.cors?.allowedOrigins ?? [];
+    for (const o of corsOrigins) {
+      if (o?.trim()) {
+        origins.push(o.trim());
+      }
+    }
+    return origins;
   }
 
   /**

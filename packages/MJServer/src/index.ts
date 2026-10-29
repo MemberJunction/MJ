@@ -97,7 +97,20 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import {
+  ServerExtensionLoader,
+  ServerExtensionConfig,
+  SERVER_EXTENSION_CORE_SERVICE_KEYS,
+  type IServerExtensionHostRuntimeService,
+  mergeServerExtensionConfigs,
+  prepareServerExtensionConfigs,
+  describeServerExtensionMount,
+  InstallMediaUpgradeDispatcher,
+  IsGraphQLWsPath,
+  GetCorsOwningServerExtensionRoots,
+} from '@memberjunction/server-extensions-core';
+import { CreateIsolatedProvider } from './isolatedProvider.js';
+import { ResolveConfiguredPrincipal } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -1345,6 +1358,19 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
   _currentExtensionLoader = extensionLoader;
+
+  const hostRuntimeService: IServerExtensionHostRuntimeService = {
+    CreateIsolatedProvider,
+    GetSystemUser: () => getSystemUser(),
+    ResolvePrincipal: (configuredEmailOrId, subsystemLabel) => ResolveConfiguredPrincipal(configuredEmailOrId, subsystemLabel),
+  };
+  extensionLoader.Services.RegisterService(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime, hostRuntimeService);
+  if (coreAuthenticatedRouters.MagicLinkService) {
+    extensionLoader.Services.RegisterService(
+      SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink,
+      coreAuthenticatedRouters.MagicLinkService,
+    );
+  }
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony

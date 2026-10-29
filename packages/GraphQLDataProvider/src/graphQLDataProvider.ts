@@ -2134,8 +2134,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * key validation still runs in `ProviderBase.RouteOperation` before this is called.
      */
     protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
-        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String) {
-            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId }) {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String, $contractFingerprint: String) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId, contractFingerprint: $contractFingerprint }) {
                 success
                 resultCode
                 outputJSON
@@ -2177,6 +2177,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 inputJSON: JSON.stringify(input ?? null),
                 invokeMode: options.mode ?? 'attached',
                 progressChannelId: progressChannelId ?? null,
+                contractFingerprint: options.contractFingerprint ?? null,
             });
             const r = data?.ExecuteRemoteOperation;
             if (!r) {

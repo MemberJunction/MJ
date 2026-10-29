@@ -32,9 +32,12 @@ export function escapeHtml(s: string): string {
  * @param token       the raw magic-link token (embedded in a hidden field)
  * @param actionPath  the same-origin path the form POSTs to (e.g. `/magic-link/redeem`)
  */
-export function BuildRedeemLandingHtml(token: string, actionPath: string): string {
+export function BuildRedeemLandingHtml(token: string, actionPath: string, redirectBindingToken?: string): string {
   const t = EscapeHtml(token);
   const action = EscapeHtml(actionPath);
+  const rtInput = redirectBindingToken
+    ? `\n      <input type="hidden" name="rt" value="${EscapeHtml(redirectBindingToken)}">`
+    : '';
   // Hardcoded colors are intentional here — this is a standalone server-rendered
   // HTML response, not Angular component CSS, so the design-token rule doesn't apply.
   return `<!doctype html>
@@ -58,7 +61,7 @@ export function BuildRedeemLandingHtml(token: string, actionPath: string): strin
     <h1>Sign in to continue</h1>
     <p>Click below to securely sign in with your invitation link.</p>
     <form method="POST" action="${action}">
-      <input type="hidden" name="token" value="${t}">
+      <input type="hidden" name="token" value="${t}">${rtInput}
       <button type="submit">Continue to sign in</button>
     </form>
   </div>
@@ -67,6 +70,6 @@ export function BuildRedeemLandingHtml(token: string, actionPath: string): strin
 }
 
 /** @deprecated Use {@link BuildRedeemLandingHtml}. */
-export function buildRedeemLandingHtml(token: string, actionPath: string): string {
-  return BuildRedeemLandingHtml(token, actionPath);
+export function buildRedeemLandingHtml(token: string, actionPath: string, redirectBindingToken?: string): string {
+  return BuildRedeemLandingHtml(token, actionPath, redirectBindingToken);
 }

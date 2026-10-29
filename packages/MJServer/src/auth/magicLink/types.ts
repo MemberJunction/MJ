@@ -2,6 +2,7 @@
  * @fileoverview Types for the MemberJunction magic-link feature.
  * @module @memberjunction/server/auth/magicLink
  */
+import type { MJMagicLinkInviteEntity } from '@memberjunction/core-entities';
 
 /**
  * One unit of scope a magic-link session holds. The union of these across all links
@@ -113,6 +114,18 @@ export interface CreateMagicLinkInviteParams {
   /** Optional given/family name to seed the provisioned user. */
   firstName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   lastName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  /**
+   * Optional per-invite post-redemption redirect URL. Must match an allowed frontend origin
+   * (`magicLink.explorerUrl` origin or `cors.allowedOrigins`). Cryptographically bound to the
+   * invite's token hash via RS256 so it cannot be tampered with or swapped across invites.
+   */
+  RedirectUrl?: string;
+  /**
+   * When `false`, skips MJServer's default invite email delivery and returns `rawToken` +
+   * `redemptionUrl` so the caller (e.g. a `BaseServerExtension`) can send its own branded message.
+   * Defaults to `true` when a communication provider is configured.
+   */
+  SendEmail?: boolean;
 }
 
 /** Result of creating an invite. */
@@ -133,11 +146,22 @@ export interface CreateMagicLinkInviteResult {
   expiresAt?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
-   * Set when the request was rejected for authorization reasons:
+   * Set when the request was rejected for authorization or validation reasons:
    * `forbidden` — caller may not issue invites; `invalid_role` — the requested
-   * role is not grantable via magic-link. Drives the HTTP status in the router.
+   * role is not grantable via magic-link; `invalid_redirect_url` — `RedirectUrl`
+   * failed HTTP(S) or origin allowlist validation. Drives the HTTP status in the router.
    */
-  errorCode?: 'forbidden' | 'invalid_role';  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  errorCode?: 'forbidden' | 'invalid_role' | 'invalid_redirect_url';  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+}
+
+/** Result of revoking or updating expiry on an existing invite. */
+export interface ManageMagicLinkInviteResult {
+  success: boolean;  // case-violation-ok-legacy-back-compat: matches MagicLink result wire conventions
+  inviteId?: string;  // case-violation-ok-legacy-back-compat: matches MagicLink result wire conventions
+  status?: MJMagicLinkInviteEntity['Status'];  // case-violation-ok-legacy-back-compat: matches MagicLink result wire conventions
+  expiresAt?: string;  // case-violation-ok-legacy-back-compat: matches MagicLink result wire conventions
+  error?: string;  // case-violation-ok-legacy-back-compat: matches MagicLink result wire conventions
+  errorCode?: 'forbidden' | 'not_found' | 'invalid_state' | 'invalid_expiry' | 'server_error';  // case-violation-ok-legacy-back-compat: matches MagicLink result wire conventions
 }
 
 /** Why a redemption failed. */

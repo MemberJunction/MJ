@@ -57,7 +57,11 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         provider,
         user,
         emitProgress: (progress) => options.onProgress?.(progress),
-        handle: undefined,
+        handle: options.handle,
+        requestOrigin: options.requestOrigin,
+        clientIp: options.clientIp,
+        sessionId: options.sessionId,
+        apiKeyHash: options.apiKeyHash,
     };
     return op.ExecuteServer(input, context);
 }

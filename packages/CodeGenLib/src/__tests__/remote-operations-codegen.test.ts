@@ -127,7 +127,8 @@ describe('RemoteOperationGeneratorBase', () => {
                 makeOp({ OperationKey: 'My.Op', GenerationType: 'AI', CodeApprovalStatus: 'Approved', Code: body }),
             ]);
             expect(out).toContain('@RegisterClass(BaseRemotableOperation, "My.Op")');
-            expect(out).toContain('protected async InternalExecute(input: TestInput, provider: IMetadataProvider, user: UserInfo): Promise<TestOutput>');
+            expect(out).toContain('protected async InternalExecute(input: TestInput, provider: IMetadataProvider, user: UserInfo, context: RemoteOpServerContext): Promise<TestOutput>');
+            expect(out).toContain('public readonly ContractFingerprint = "ro_fp_');
             expect(out).toContain('return { ok: true };');
         });
         it('emits a shell (no body) when AI code is NOT approved', async () => {
@@ -198,7 +199,7 @@ describe('RemoteOperationGeneratorBase', () => {
                 makeOp({ GenerationType: 'AI', CodeApprovalStatus: 'Approved', Code: 'return { ok: true };' }),
             ]);
             const coreImport = out.split('\n').find((l) => l.includes('from "@memberjunction/core"')) ?? '';
-            for (const item of ['BaseRemotableOperation', 'IMetadataProvider', 'UserInfo', ...DEFAULT_REMOTE_OP_LIBRARY_ITEMS]) {
+            for (const item of ['BaseRemotableOperation', 'IMetadataProvider', 'RemoteOpServerContext', 'UserInfo', ...DEFAULT_REMOTE_OP_LIBRARY_ITEMS]) {
                 expect(coreImport).toContain(item);
             }
             expect(out).toContain('import { RegisterClass } from "@memberjunction/global";');

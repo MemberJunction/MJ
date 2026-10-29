@@ -16,6 +16,7 @@ import {
     ServerExtensionPhase,
     ExtensionInitResult,
     ExtensionHealthResult,
+    SERVER_EXTENSION_CORE_SERVICE_KEYS,
 } from '../types.js';
 
 // ─── Test doubles ────────────────────────────────────────────────────────────
@@ -498,6 +499,21 @@ describe('ServerExtensionLoader', () => {
             expect(all.size).toBe(2);
             expect(all.get('S1')).toEqual({ s1: true });
             expect(all.get('S2')).toEqual({ s2: true });
+        });
+
+        it('exposes typed GetMagicLinkService and GetHostRuntimeService convenience accessors', () => {
+            const registry = new DefaultServerExtensionServiceRegistry();
+            expect(registry.GetMagicLinkService()).toBeUndefined();
+            expect(registry.GetHostRuntimeService()).toBeUndefined();
+
+            const fakeMagicLink = {
+                CreateInvite: async () => ({ success: true, inviteId: 'inv-1' }),
+                RevokeInvite: async () => ({ success: true, inviteId: 'inv-1', status: 'Revoked' }),
+                UpdateInviteExpiry: async () => ({ success: true, inviteId: 'inv-1', status: 'Active' }),
+                VerifySessionToken: () => null,
+            };
+            registry.RegisterService(SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink, fakeMagicLink);
+            expect(registry.GetMagicLinkService()).toBe(fakeMagicLink);
         });
     });
 
