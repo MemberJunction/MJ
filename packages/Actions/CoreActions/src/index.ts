@@ -33,6 +33,7 @@ export * from './custom/demo/unit-converter.action';
 
 // Utility Actions
 export * from './custom/utilities/vectorize-entity.action';
+export * from './custom/utilities/reembed-local-vectors.action';
 export * from './custom/utilities/business-days-calculator.action';
 export * from './custom/utilities/ip-geolocation.action';
 export * from './custom/utilities/census-data-lookup.action';
