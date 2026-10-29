@@ -115,7 +115,50 @@ export function RealtimeDiagLog(message: string): void {
     }
 }
 
+/**
+ * Static, instance-free facts about a realtime driver, read before any session exists.
+ * Open on purpose: later facts (e.g. supported turn settings) are added here.
+ */
+export interface RealtimeDriverFacts {
+    /**
+     * The longest one session can run, in seconds, as MJ runs it — after the driver's own
+     * mitigations (reconnect, token refresh). `undefined` means unknown; never put a guess here.
+     * Positive integers only.
+     */
+    ProviderMaxSessionSeconds?: number;
+}
+
+/**
+ * The ONE place a driver instance's static {@link BaseRealtimeModel.DriverFacts} is read.
+ * Runtime reads go through here so a subclass's own static wins over the base default.
+ */
+export function RealtimeDriverFactsOf(driver: BaseRealtimeModel): RealtimeDriverFacts {
+    return (driver.constructor as typeof BaseRealtimeModel).DriverFacts;
+}
+
 export abstract class BaseRealtimeModel extends BaseModel {
+    /**
+     * Static facts about this driver, readable before a session instance exists.
+     * Default `{}` (everything unknown). Subclasses declare `public static override readonly DriverFacts = { ... }`.
+     * Read at runtime via {@link RealtimeDriverFactsOf}, not directly, so subclass statics win.
+     */
+    public static readonly DriverFacts: RealtimeDriverFacts = {};
+
+    /**
+     * Returns the smallest candidate that is a finite number greater than zero; ignores `undefined`,
+     * `0`, negatives, `NaN`, `Infinity` and non-numbers. `undefined` when none qualifies.
+     * The rule "the caller's bag wins only if smaller" is written once, here: pass the provider
+     * cap and the bag cap together.
+     */
+    protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+        let smallest: number | undefined;
+        for (const c of candidates) {
+            if (typeof c !== 'number' || !Number.isFinite(c) || c <= 0) continue;
+            if (smallest === undefined || c < smallest) smallest = c;
+        }
+        return smallest;
+    }
+
     /**
      * Whether this driver subclass supports dynamic, multi-tool sets projected into the realtime
      * session (e.g. direct action invocation on realtime co-agents).
@@ -345,6 +388,12 @@ export function ParseRealtimeClientTransport(value: unknown): RealtimeClientTran
  */
 export interface ClientRealtimeSessionConfig {
     /**
+     * The effective, clamped session cap in seconds for this minted session. Read-only
+     * information: changing it in the browser changes nothing on the wire. `undefined` when unknown.
+     */
+    MaxSessionSeconds?: number;
+
+    /**
      * The provider that minted the credential (e.g. `'openai'`). Lets the browser select the
      * correct provider-direct client implementation.
      */
@@ -406,6 +455,9 @@ export interface ClientRealtimeSessionConfig {
  * flag defaults to "unsupported" for any driver that hasn't declared it, so the container stays safe.
  */
 export interface RealtimeSessionCapabilities {
+    /** Mirrors {@link RealtimeDriverFacts.ProviderMaxSessionSeconds} for this session's driver; `undefined` = unknown. */
+    ProviderMaxSessionSeconds?: number;
+
     /**
      * Whether the session can change its turn-taking / auto-response mode on a **live** socket (no
      * reconnect) via {@link IRealtimeSession.Reconfigure}. `true` for providers with a runtime-mutable
@@ -905,7 +957,8 @@ export interface RealtimeSessionParams {
      * Set for abuse-sensitive deployments (e.g. a public web-widget guest's `VoiceMaxSessionMinutes`).
      * Drivers that support a provider-side session-duration / token-expiry bound SHOULD apply
      * `min(providerDefault, MaxSessionSeconds)` so the provider drops the connection at the cap;
-     * drivers that don't simply ignore it. Independently, the server stamps the absolute deadline on
+     * drivers that don't simply ignore it. Honoured today by: the Vertex relay (ElevenRealtime and
+     * ElevenLabsRealtime follow in a later task on this branch). Independently, the server stamps the absolute deadline on
      * the session and the session janitor hard-closes (finalizing runs) at the cap regardless of
      * driver support, so this is enforced server-side even when the provider can't be told.
      *
