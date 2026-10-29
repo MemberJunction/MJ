@@ -22,7 +22,7 @@ import {
     type RealtimeDriverFacts,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, NormalizeTurnDetectionSettings, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 // NOTE: the bare 'openai/realtime' directory subpath is not exported by the SDK's package
@@ -421,7 +421,7 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     // Normalized turn-detection request — validated structurally (only recognized, correctly-typed
     // knobs survive) and ALWAYS scrubbed: the normalized shape is MJ vocabulary, not a wire field.
     const turnDetectionBag = rest as JSONObject & { turnDetection?: unknown };
-    const turnDetection = normalizeTurnDetectionRequest(turnDetectionBag.turnDetection);
+    const turnDetection = NormalizeTurnDetectionSettings(turnDetectionBag.turnDetection);
     delete turnDetectionBag.turnDetection;
 
     // PROTECTED WIRE FIELDS — never overridable through the open bag. `type` is the GA session
@@ -466,34 +466,6 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
     return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
-}
-
-/**
- * Structurally validates the `turnDetection` bag value into a {@link RealtimeTurnDetectionSettings}
- * — only recognized, correctly-typed knobs survive (the bag came through JSON layers of unknown
- * provenance). Returns `undefined` when nothing valid is present, so an absent/garbage value
- * contributes nothing (tolerant, like every other cascade input).
- */
-function normalizeTurnDetectionRequest(raw: unknown): RealtimeTurnDetectionSettings | undefined {
-    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
-    }
-    const source = raw as { Mode?: unknown; Eagerness?: unknown; Threshold?: unknown; SilenceDurationMs?: unknown };
-    const result: RealtimeTurnDetectionSettings = {};
-    const modes: ReadonlyArray<RealtimeTurnDetectionMode> = ['default', 'serverVad', 'semanticVad', 'native'];
-    if (typeof source.Mode === 'string' && (modes as readonly string[]).includes(source.Mode)) {
-        result.Mode = source.Mode as RealtimeTurnDetectionMode;
-    }
-    if (source.Eagerness === 'low' || source.Eagerness === 'auto' || source.Eagerness === 'high') {
-        result.Eagerness = source.Eagerness;
-    }
-    if (typeof source.Threshold === 'number' && Number.isFinite(source.Threshold)) {
-        result.Threshold = source.Threshold;
-    }
-    if (typeof source.SilenceDurationMs === 'number' && Number.isFinite(source.SilenceDurationMs)) {
-        result.SilenceDurationMs = source.SilenceDurationMs;
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /**

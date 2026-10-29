@@ -69,12 +69,14 @@ vi.mock('@memberjunction/ai', async () => {
     // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
     // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+    // NormalizeTurnDetectionSettings is the single shared normalizer (PURE; only its import of the mocked global is unused here) — run the real one so tests cannot drift from it.
+    const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/modelConfiguration');
     // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
     // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
     // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
     const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
