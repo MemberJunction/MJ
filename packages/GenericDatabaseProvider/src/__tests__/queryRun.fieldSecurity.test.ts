@@ -256,14 +256,32 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
             // nothing whatsoever.
             const result = await runAs('SELECT ID, Name FROM vwPeople', staff, { PermissionRoles: ['Some Other Role'] });
             expect(result.Success).toBe(false);
-            expect(refusalLine()).toMatch(/by the query's own role list/);
+            expect(refusalLine()).toMatch(/by the query's own role list \(MJ: Query Permissions: \[Role-Some Other Role\]\)/);
         });
 
-        it('records how many roles were loaded, so an empty role set is distinguishable', async () => {
+        it('records how many roles were loaded and their names, so an empty or mismatched role set is distinguishable', async () => {
             // The signature worth catching: UserRoles empty or undefined denies EVERY
             // permission-bearing query at once, which reads identically to a genuine denial.
             await runAs('SELECT ID, Name FROM vwPeople', staff, { PermissionRoles: ['Some Other Role'] });
-            expect(refusalLine()).toMatch(/Roles loaded for this user: \d+|Roles loaded for this user: undefined/);
+            expect(refusalLine()).toMatch(/Roles loaded for this user: 1 \(\[Role-R0000000-0000-0000-0000-0000000000A2\]\)/);
+        });
+
+        it('logs when a cache-checked batch refuses on the render-free UserCanRun path (no CacheValidationSQL / first fetch)', async () => {
+            provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT ID, Name FROM vwPeople', PermissionRoles: ['Some Other Role'] })]);
+            const item: RunQueryWithCacheCheckParams = { params: { QueryID: 'q-1' } };
+            const response = await provider.RunQueriesWithCacheCheck([item], staff);
+            expect(response.results[0].status).toBe('error');
+            expect(refusalLine()).toMatch(/by the query's own role list \(MJ: Query Permissions: \[Role-Some Other Role\]\)/);
+        });
+
+        it('does not double-log on the pre-cache authorization probe before execution', async () => {
+            provider.SeedQueries([makeQuery({ ID: 'q-1', SQL: 'SELECT ID, Salary FROM vwPeople' })]);
+            expect(provider.CacheAuthorization({ QueryID: 'q-1' }, staff).authorized).toBe(false);
+            expect(refusalLine()).toBe('');
+            const result = await provider.Run({ QueryID: 'q-1' }, staff);
+            expect(result.Success).toBe(false);
+            const refusalLogs = logged.filter(l => l.includes('refused for user'));
+            expect(refusalLogs).toHaveLength(1);
         });
 
         it('says nothing when the run is allowed', async () => {

@@ -5133,7 +5133,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const mayAnswerWithoutRunning = !!item.cacheStatus
             && !this.clientSlotDefinitionDiffers(item.cacheStatus, definition)
             && !!query.CacheValidationSQL;
-        return mayAnswerWithoutRunning ? this.authorizeQueryRun(query, item.params.Parameters, user) : query.UserCanRun(user);
+        if (mayAnswerWithoutRunning) {
+            return this.authorizeQueryRun(query, item.params.Parameters, user);
+        }
+        const result = query.UserCanRun(user);
+        if (!result.canRun) {
+            // RunQueriesWithCacheCheck short-circuits on !canRun before reaching
+            // runFullQueryAndReturnForQuery, so this refusal would otherwise never log.
+            this.logQueryRunRefusal(query, user, result);
+        }
+        return result;
     }
 
     /**
@@ -5164,7 +5173,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
             return {
                 resolvable: true,
-                authorized: !user || this.authorizeQueryRun(query, params.Parameters, user).canRun,
+                // Pre-cache probe: a denial here falls through to execution (which logs at its own
+                // gate), so suppress logging here to avoid duplicate refusal lines on CacheLocal runs.
+                authorized: !user || this.authorizeQueryRun(query, params.Parameters, user, false).canRun,
                 categoryPath: query.CategoryPath,
                 queryName: query.Name,
                 contextTokens: this.queryContextTokens(query),
@@ -5381,14 +5392,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation },
     ): void {
         const v = result.fieldSecurityViolation;
+        const queryRoles = (query.QueryPermissions ?? []).map(p => p.Role).join(', ');
         const reason = v
             ? `field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''})`
             : result.deniedEntities.length > 0
                 ? `unreadable entities (${result.deniedEntities.join(', ')})`
-                : `the query's own role list (MJ: Query Permissions)`;
+                : `the query's own role list (MJ: Query Permissions: [${queryRoles}])`;
+        const userRoles = user.UserRoles
+            ? `${user.UserRoles.length} ([${user.UserRoles.map(r => r.Role).join(', ')}])`
+            : 'undefined';
         LogStatus(
             `RunQuery: query '${query.Name}' (${query.ID}) refused for user '${user.Email}' by ${reason}. ` +
-            `Roles loaded for this user: ${user.UserRoles ? user.UserRoles.length : 'undefined'}.`
+            `Roles loaded for this user: ${userRoles}.`
         );
     }
 
@@ -5399,9 +5414,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /** The run-time checks of `query` for `user` on this provider's entities and dialect; logs a field-security refusal. */
-    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo): { canRun: boolean; deniedEntities: string[] } {
+    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo, logRefusal = true): { canRun: boolean; deniedEntities: string[] } {
         const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey);
-        if (!result.canRun) {
+        if (!result.canRun && logRefusal) {
             this.logQueryRunRefusal(query, user, result);
         }
         return result;
@@ -5416,12 +5431,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         query: MJQueryEntityExtended,
         parameters: Record<string, string> | undefined,
         user: UserInfo,
+        logRefusal = true,
     ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
         const base = query.UserCanRun(user);
         if (!base.canRun || GenericDatabaseProvider.roleListGrants(query)) {
             // A role list authorizes on its own, whatever the SQL reads, and UserCanRun has
             // already confirmed the user holds one of its roles: nothing to render.
-            if (!base.canRun) {
+            if (!base.canRun && logRefusal) {
                 // The batch/cache-checked path returns rather than throws, so this refusal would
                 // otherwise never reach a log at all.
                 this.logQueryRunRefusal(query, user, base);
@@ -5434,7 +5450,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         } catch (e) {
             return { canRun: false, deniedEntities: [], renderError: e instanceof Error ? e.message : String(e) };
         }
-        return this.checkRenderedQuery(query, renderedSQL, user);
+        return this.checkRenderedQuery(query, renderedSQL, user, logRefusal);
     }
 
     /** True when the query carries a role list (`MJ: Query Permissions` rows), which authorizes a run by itself. */
