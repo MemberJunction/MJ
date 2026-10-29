@@ -334,6 +334,12 @@ describe('labels, ancestors, shadow roots, credentials, fill read-back and links
         expect((await session.ExecuteAction({ Kind: 'click', Selector: '#icon' })).Detail).toContain('Refusing to activate "Delete item"');
     });
 
+    it('an icon-only button named only by its aria-label is judged by it', async () => {
+        render(`<button id="pay" type="button" aria-label="Pay now" data-visible><i class="fa-card"></i></button>`);
+        expect((await session.ExecuteAction({ Kind: 'click', Selector: '#pay' })).Detail).toContain('Refusing to activate "Pay now"');
+        expect(adapter.ExecutedActions).toEqual([]);
+    });
+
     it('a label is judged as the control it clicks, by selector, text or point', async () => {
         render(`<label id="l1" for="payBtn" data-visible>Finish</label><button id="payBtn" type="button" data-visible>Pay now</button>`);
         document.elementFromPoint = () => document.getElementById('l1');
