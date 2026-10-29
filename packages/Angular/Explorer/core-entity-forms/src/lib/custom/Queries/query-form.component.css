@@ -481,7 +481,7 @@
 
 .item-badge.sequence {
     background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: color-mix(in srgb, var(--mj-brand-primary) 80%, purple);
+    color: color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-text-violet));
 }
 
 .item-card-body {
