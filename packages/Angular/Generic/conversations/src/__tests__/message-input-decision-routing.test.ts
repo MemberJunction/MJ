@@ -23,6 +23,7 @@ import {
     DECISION_ROUTING_TIMEOUT_MS,
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
+    ROUTING_NO_AGENT,
     type ExecuteAgentResult,
     type RoutingAgent
 } from '@memberjunction/ai-core-plus';
@@ -504,13 +505,111 @@ describe('MessageInputComponent — decision routing', () => {
             expect(h.before.map(e => e.Route)).toEqual(['ConversationManager']);
         });
 
-        it('makes no call under MentionOnly', async () => {
-            h.set({ AgentReplyMode: 'MentionOnly' });
+        describe('multi-party and MentionOnly routing', () => {
+            it('makes no call under MentionOnly before any agent has answered (cold start requires @Agent)', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly', ConversationHistory: [] });
 
-            await h.route(userMessage());
+                await h.route(userMessage());
 
-            expect(h.runDecision).not.toHaveBeenCalled();
-            expect(h.before).toHaveLength(0);
+                expect(h.runDecision).not.toHaveBeenCalled();
+                expect(h.before).toHaveLength(0);
+            });
+
+            it('asks Jev with a no_agent option under MentionOnly once an agent has answered, and stays silent on no_agent', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                h.runDecision.mockResolvedValue(answered({ route: choice(ROUTING_NO_AGENT, 0.92), continues: likelihood(0.1) }));
+
+                await h.route(userMessage('Hey Marcus, can you check slide 4?'));
+
+                expect(h.runDecision).toHaveBeenCalledOnce();
+                expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([WRITER.ID, RESEARCH.ID, ROUTING_NO_AGENT]);
+                expect(h.before).toHaveLength(0);
+            });
+
+            it('continues with the active agent under MentionOnly when Jev confidently selects it', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                h.runDecision.mockResolvedValue(answered({ route: choice(WRITER.ID, 0.92), continues: likelihood(0.95) }));
+
+                await h.route(userMessage('Make the second paragraph shorter'));
+
+                expect(h.runDecision).toHaveBeenCalledOnce();
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['DecisionRouted', WRITER.ID]]);
+            });
+
+            it('switches to another active agent under MentionOnly when Jev confidently selects it', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                h.runDecision.mockResolvedValue(leavesTo(RESEARCH));
+
+                await h.route(userMessage('Pull two more sources on renewals'));
+
+                expect(h.runDecision).toHaveBeenCalledOnce();
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['DecisionRouted', RESEARCH.ID]]);
+            });
+
+            it('stays silent under MentionOnly when Jev is unsure or times out', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                h.runDecision.mockResolvedValue(answered({ route: choice(WRITER.ID, 0.5), continues: likelihood(0.95) }));
+
+                await h.route(userMessage('Wait what do we think?'));
+
+                expect(h.before).toHaveLength(0);
+            });
+
+            it('offers a restricted agent when the host explicitly allows it in AllowedAgentIDs', async () => {
+                h.set({
+                    AgentReplyMode: 'MentionOnly',
+                    AllowedAgentIDs: [INTERNAL.ID],
+                    ConversationHistory: [
+                        detail('u1', 'User', '@Scheduler check status'),
+                        reply(INTERNAL, 'a1', 'All jobs green.'),
+                    ],
+                });
+                h.runDecision.mockResolvedValue(answered({ route: choice(INTERNAL.ID, 0.92), continues: likelihood(0.95) }));
+
+                await h.route(userMessage('What about the nightly export?'));
+
+                expect(h.runDecision).toHaveBeenCalledOnce();
+                expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([INTERNAL.ID, ROUTING_NO_AGENT]);
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['DecisionRouted', INTERNAL.ID]]);
+            });
+
+            it('makes no call and starts no turn when a person is @-mentioned without an @Agent', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                const personMention: MentionParseResult = {
+                    mentions: [{ type: 'user', id: 'user-2', name: 'Marcus Chen' }],
+                    agentMention: null,
+                    userMentions: [{ type: 'user', id: 'user-2', name: 'Marcus Chen' }],
+                    entityMentions: [],
+                    skillMentions: [],
+                };
+
+                await h.route(userMessage('@Marcus Chen what do you think?'), personMention);
+
+                expect(h.runDecision).not.toHaveBeenCalled();
+                expect(h.before).toHaveLength(0);
+            });
+
+            it('makes no call and routes directly to the parent agent when replying to an AI message thread', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                const msg = userMessage('Can you expand on source #2?');
+                msg.ParentID = 'a1'; // 'a1' is RESEARCH's reply in TWO_AGENTS()
+
+                await h.route(msg);
+
+                expect(h.runDecision).not.toHaveBeenCalled();
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['ThreadReply', RESEARCH.ID]]);
+            });
+
+            it('makes no call and starts no turn when replying to a human message thread without an @Agent', async () => {
+                h.set({ AgentReplyMode: 'MentionOnly' });
+                const msg = userMessage('Good catch!');
+                msg.ParentID = 'u1'; // 'u1' is a User row in TWO_AGENTS()
+
+                await h.route(msg);
+
+                expect(h.runDecision).not.toHaveBeenCalled();
+                expect(h.before).toHaveLength(0);
+            });
         });
 
         it('rebuilds the options from the conversation\'s agents for every message', async () => {

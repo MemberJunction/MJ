@@ -26,10 +26,12 @@ import {
     IsAgentAllowed,
     IsRoutableAgent,
     KeptContinuityOutcome,
+    NoAgentOutcome,
     MAX_ROUTING_ARTIFACT_VERSIONS,
     ROUTING_ARTIFACT_QUESTION,
     ROUTING_CONTINUES_CALIBRATION,
     ROUTING_CONTINUES_QUESTION,
+    ROUTING_NO_AGENT,
     ROUTING_NO_ARTIFACT,
     ROUTING_ROUTE_QUESTION,
     type RoutingAgent,
@@ -296,11 +298,25 @@ describe('conversation routing decision', () => {
             expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup).map(p => p.Agent.ID)).toEqual([ANALYST.ID]);
         });
 
-        it('IsRoutableAgent needs an active, unrestricted agent', () => {
+        it('IsRoutableAgent needs an active, unrestricted agent unless explicitly allowed by the host', () => {
             expect(IsRoutableAgent({ Status: 'Active', IsRestricted: false })).toBe(true);
             expect(IsRoutableAgent({ Status: 'Pending', IsRestricted: false })).toBe(false);
             expect(IsRoutableAgent({ Status: 'Disabled', IsRestricted: false })).toBe(false);
             expect(IsRoutableAgent({ Status: 'Active', IsRestricted: true })).toBe(false);
+            expect(IsRoutableAgent({ ID: WRITER.ID, Status: 'Active', IsRestricted: true }, null)).toBe(false);
+            expect(IsRoutableAgent({ ID: WRITER.ID, Status: 'Active', IsRestricted: true }, [WRITER.ID])).toBe(true);
+            expect(IsRoutableAgent({ ID: WRITER.ID, Status: 'Disabled', IsRestricted: true }, [WRITER.ID])).toBe(false);
+        });
+
+        it('includes a restricted agent when the host explicitly lists it in AllowedAgentIDs', () => {
+            const restrictedSpaceAgent: RoutingCatalogAgent = { ...WRITER, IsRestricted: true };
+            const lookup = (id: string): RoutingCatalogAgent | undefined =>
+                id.toUpperCase() === restrictedSpaceAgent.ID.toUpperCase() ? restrictedSpaceAgent : undefined;
+            const rows = [agentRow('a1', restrictedSpaceAgent, 'Space reply')];
+
+            expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup)).toEqual([]);
+            expect(CollectRoutingParticipants(rows, MANAGER.ID, [restrictedSpaceAgent.ID], lookup))
+                .toEqual([participant(restrictedSpaceAgent, 'Space reply')]);
         });
 
         it('truncates a long reply', () => {
@@ -324,6 +340,28 @@ describe('conversation routing decision', () => {
             const tagged = ConversationUtility.CreateMention('user', 'user-2', 'Dana');
             expect(BuildRecentTurns([userRow('u1', `${tagged} can you check this?`)], findAgent))
                 .toEqual(['User: @Dana can you check this?']);
+        });
+
+        it('uses person names when multiple users participate or findPersonName is supplied', () => {
+            const multiUserRows: RoutingHistoryRow[] = [
+                { ...userRow('u1', 'Can we check renewals?'), UserID: 'user-1', User: 'Alice Chen' },
+                agentRow('a1', RESEARCH, 'Here are the Q3 renewals.'),
+                { ...userRow('u2', 'Thanks Alice, I will review.'), UserID: 'user-2', User: 'Bob Rivera' },
+            ];
+            expect(BuildRecentTurns(multiUserRows, findAgent)).toEqual([
+                'Alice Chen: Can we check renewals?',
+                'Research: Here are the Q3 renewals.',
+                'Bob Rivera: Thanks Alice, I will review.',
+            ]);
+
+            const singleUserRow: RoutingHistoryRow[] = [
+                { ...userRow('u1', 'Check this'), UserID: 'user-1', User: 'Alice Chen' },
+            ];
+            // Single user without findPersonName stays "User" to preserve single-user calibration layout
+            expect(BuildRecentTurns(singleUserRow, findAgent)).toEqual(['User: Check this']);
+            // With findPersonName supplied by a multi-person host, resolves the speaker name
+            expect(BuildRecentTurns(singleUserRow, findAgent, id => id === 'user-1' ? 'Alice Chen (Team)' : undefined))
+                .toEqual(['Alice Chen (Team): Check this']);
         });
     });
 
@@ -518,6 +556,87 @@ describe('conversation routing decision', () => {
             expect(CanAskRoutingDecision(input({ Participants: [participant(WRITER, 'x')] }))).toBe(false);
             expect(CanAskRoutingDecision(input({ Participants: [participant(RESEARCH, 'x')], ConversationManager: null }))).toBe(false);
             expect(CanAskRoutingDecision(input({ Participants: [participant(RESEARCH, 'x')] }))).toBe(true);
+            expect(CanAskRoutingDecision(input({
+                Participants: [participant(RESEARCH, 'x')],
+                ConversationManager: null,
+                AllowNoAgentOption: true,
+            }))).toBe(true);
+        });
+    });
+
+    describe('multi-person routing with AllowNoAgentOption', () => {
+        const multiPartyInput = (overrides: Partial<RoutingDecisionInput> = {}): RoutingDecisionInput =>
+            input({
+                AllowNoAgentOption: true,
+                ConversationManager: null,
+                AllowedAgentIDs: [RESEARCH.ID, WRITER.ID],
+                ...overrides,
+            });
+
+        it('offers ROUTING_NO_AGENT as an option and instructs the model when to pick it', () => {
+            const questions = BuildRoutingQuestions(multiPartyInput({ Participants: [participant(RESEARCH, 'Here are five sources.')] }));
+            const route = routeQuestion({ State: '', Questions: questions });
+            expect(route.Options.map(o => o.Value)).toEqual([RESEARCH.ID, ROUTING_NO_AGENT]);
+            expect(route.Instructions).toContain('Choose no agent when the message is addressed to another person');
+        });
+
+        it('returns NoAgent when Jev chooses ROUTING_NO_AGENT', () => {
+            const outcome = InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(ROUTING_NO_AGENT, 0.92), continues: likelihood(0.05) })
+            );
+            expect(outcome).toMatchObject({ Verdict: 'NoAgent', RoutedAgentId: null });
+        });
+
+        it('routes to the continuity agent when Jev confidently confirms continuing', () => {
+            const outcome = InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.95) })
+            );
+            expect(outcome).toMatchObject({ Verdict: 'Routed', RoutedAgentId: RESEARCH.ID });
+        });
+
+        it('routes to another active agent when Jev confidently switches', () => {
+            const outcome = InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.1) })
+            );
+            expect(outcome).toMatchObject({ Verdict: 'Routed', RoutedAgentId: WRITER.ID });
+        });
+
+        it('biases toward silence (NoAgent) on low confidence, contradicting likelihood, uncalibrated model, or failure', () => {
+            expect(InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(RESEARCH.ID, 0.55), continues: likelihood(0.95) })
+            ).Verdict).toBe('NoAgent');
+
+            expect(InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.1) })
+            ).Verdict).toBe('NoAgent');
+
+            expect(InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) })
+            ).Verdict).toBe('NoAgent');
+
+            expect(InterpretRoutingAnswers(
+                multiPartyInput(),
+                answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.1) }, { ModelName: 'Jev', ResolvedModel: 'uncalibrated' })
+            ).Verdict).toBe('NoAgent');
+
+            expect(InterpretRoutingAnswers(
+                multiPartyInput(),
+                { Success: false, ErrorMessage: 'timeout', Answers: {}, PromptRunID: PROMPT_RUN }
+            )).toMatchObject({ Verdict: 'NoAgent', RoutedAgentId: null, PromptRunID: PROMPT_RUN });
+
+            expect(NoAgentOutcome('timed out')).toEqual({
+                Verdict: 'NoAgent',
+                RoutedAgentId: null,
+                TargetArtifact: null,
+                Reason: 'timed out',
+                PromptRunID: null,
+            });
         });
     });
 

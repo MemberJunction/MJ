@@ -2283,7 +2283,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Read the candidates before any await. This composer stays cached while the person opens
     // another conversation, and the chat area then rebinds its history and pinned agent, so a
     // read after the routing decision could see another conversation's state (or none).
-    const candidates = this.agentTurnCandidates(this.agentMentionIds(mentionResult));
+    const candidates = this.agentTurnCandidates(
+      this.agentMentionIds(mentionResult),
+      this.userMentionIds(mentionResult),
+      messageDetail.ParentID ?? this.ParentMessageId ?? null
+    );
     const routing = await this.decideAgentRouting(messageDetail, candidates, branchId);
     const target = this.resolveAgentTurnTarget(candidates, routing);
     if (!target) {
@@ -2316,6 +2320,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       Enabled: this.EnableDecisionRouting,
       ReplyMode: this.AgentReplyMode,
       MentionedAgentIds: candidates.MentionedAgentIds,
+      MentionedUserIds: candidates.MentionedUserIds,
+      ReplyParentAgentId: candidates.ReplyParentAgentId,
+      ReplyParentIsHuman: candidates.ReplyParentIsHuman,
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId
     });
@@ -2346,28 +2353,49 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * have answered within the history floor, the last few turns, and the conversation manager.
    * Artifact versions are added after, once the input is known to be worth asking about.
    *
-   * Participants come only from the '@' list's agents (`GetAvailableAgents`): active, top-level,
-   * unrestricted agents this person has run permission for. An agent that answered here but that
-   * the person can't run (a shared conversation, a revoked permission) is never offered, so routing
-   * can't send the turn to an agent the server would refuse. Before that list has loaded there are
-   * no participants, so no call is made and the message keeps today's routing. Speaker names in
-   * the recent turns still come from the full catalog, since any agent may have spoken.
+   * Participants come only from the '@' list's agents (`GetAvailableAgents`) or restricted agents
+   * the host explicitly granted in `AllowedAgentIDs`. An agent that answered here but that the
+   * person can't run (a shared conversation, a revoked permission) is never offered, so routing
+   * can't send the turn to an agent the server would refuse.
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
     const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
     const runnable = this.mentionAutocomplete.GetAvailableAgents();
-    const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => runnable.find(a => UUIDsEqual(a.ID, agentId));
+    const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => this.findRoutingRunnableAgent(agentId, runnable, findAgent);
+    const allowNoAgentOption = this.AgentReplyMode === 'MentionOnly' || (this.MentionPeople?.length ?? 0) > 0;
+    const findPersonName = allowNoAgentOption
+      ? (userId: string): string | undefined => this.MentionPeople?.find(p => UUIDsEqual(p.ID, userId))?.Name
+      : undefined;
     const manager = this.ConverationManagerAgent;
     return {
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId,
       Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findRunnable),
-      ConversationManager: manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
-      RecentTurns: BuildRecentTurns(history, findAgent),
+      ConversationManager: this.AgentReplyMode === 'Always' && manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
+      RecentTurns: BuildRecentTurns(history, findAgent, findPersonName),
       ArtifactVersions: [],
-      AllowedAgentIDs: this.AllowedAgentIDs
+      AllowedAgentIDs: this.AllowedAgentIDs,
+      AllowNoAgentOption: allowNoAgentOption
     };
+  }
+
+  private findRoutingRunnableAgent(
+    agentId: string,
+    runnable: readonly MJAIAgentEntityExtended[],
+    findAgent: (id: string) => RoutingCatalogAgent | undefined
+  ): RoutingCatalogAgent | undefined {
+    const fromAutocomplete = runnable.find(a => UUIDsEqual(a.ID, agentId));
+    if (fromAutocomplete) {
+      return fromAutocomplete;
+    }
+    if (this.AllowedAgentIDs != null && IsAgentAllowed(agentId, this.AllowedAgentIDs)) {
+      const candidate = findAgent(agentId);
+      if (candidate?.IsRestricted) {
+        return candidate;
+      }
+    }
+    return undefined;
   }
 
   /** Every participant's artifact versions on the path of `branchId` in this conversation, for the artifact question. */
@@ -2389,9 +2417,19 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /** The agent each route would use for this conversation, before the host's rules apply. */
-  private agentTurnCandidates(mentionedAgentIds: readonly string[]): AgentTurnCandidates {
+  private agentTurnCandidates(
+    mentionedAgentIds: string[],
+    mentionedUserIds: string[] = [],
+    parentId: string | null = null
+  ): AgentTurnCandidates {
+    const parentRow = parentId
+      ? this.ConversationHistory.find(row => this.isWithinHistoryFloor(row) && UUIDsEqual(row.ID, parentId))
+      : undefined;
     return {
       MentionedAgentIds: mentionedAgentIds,
+      MentionedUserIds: mentionedUserIds,
+      ReplyParentAgentId: parentRow?.Role === 'AI' ? (parentRow.AgentID ?? null) : null,
+      ReplyParentIsHuman: parentRow?.Role === 'User',
       ContinuityAgentId: this.findLastNonSageAgentId(),
       ConversationDefaultAgentId: this.ConversationDefaultAgentId,
       HostDefaultAgentId: this.DefaultAgentId,
@@ -2417,6 +2455,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** The agents a message tags, in the order they appear. */
   private agentMentionIds(mentionResult: MentionParseResult): string[] {
     return mentionResult.mentions.filter(m => m.type === 'agent').map(m => m.id);
+  }
+
+  /** The people a message tags (`@Person`), in the order they appear. */
+  private userMentionIds(mentionResult: MentionParseResult): string[] {
+    const fromMentions = mentionResult.mentions.filter(m => m.type === 'user').map(m => m.id);
+    return fromMentions.length > 0 ? fromMentions : (mentionResult.userMentions ?? []).map(m => m.id);
   }
 
   /**

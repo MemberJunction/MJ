@@ -13,13 +13,22 @@ import type { AgentReplyMode, AgentTurnRoute, AgentTurnTarget } from '../models/
 export interface AgentTurnCandidates {
     /** Agents the message tags, in the order they appear. */
     MentionedAgentIds: readonly string[];
+    /** People the message tags (`@Person`). Addressing a person with no agent tag starts no agent turn. */
+    MentionedUserIds?: readonly string[];
+    /** The agent of the message this one replies to (`ParentID` -> `Role === 'AI'`), when set. */
+    ReplyParentAgentId?: string | null;
+    /** True when this message replies (`ParentID`) to another person's message (`Role === 'User'`). */
+    ReplyParentIsHuman?: boolean;
     /** The last agent that answered in the conversation, other than the conversation manager. */
     ContinuityAgentId: string | null;
     /**
      * True when a routing decision put `ContinuityAgentId` there in place of the last agent that
-     * answered. The turn is then labelled `DecisionRouted` instead of `Continuity`.
+     * answered (or confirmed it in a multi-person chat). The turn is then labelled `DecisionRouted`
+     * instead of `Continuity`.
      */
     ContinuityDecisionRouted?: boolean;
+    /** True when a routing decision in a multi-person chat concluded the message is addressed to a person. */
+    DecisionAddressedToHuman?: boolean;
     /** The agent pinned on the conversation. */
     ConversationDefaultAgentId: string | null;
     /** The host's `DefaultAgentId` input. */
@@ -60,6 +69,24 @@ export function ResolveAgentTurn(
     const mentioned = candidates.MentionedAgentIds.find(id => IsAgentAllowed(id, rules.AllowedAgentIDs));
     if (mentioned) {
         return { AgentId: mentioned, Route: 'Mention' };
+    }
+    if ((candidates.MentionedUserIds?.length ?? 0) > 0 || candidates.ReplyParentIsHuman) {
+        return null;
+    }
+    const replyAgent = candidates.ReplyParentAgentId;
+    if (replyAgent && IsAgentAllowed(replyAgent, rules.AllowedAgentIDs) && isKnownAgent(replyAgent)) {
+        return { AgentId: replyAgent, Route: 'ThreadReply' };
+    }
+    if (candidates.DecisionAddressedToHuman) {
+        return null;
+    }
+    if (
+        candidates.ContinuityDecisionRouted
+        && candidates.ContinuityAgentId
+        && IsAgentAllowed(candidates.ContinuityAgentId, rules.AllowedAgentIDs)
+        && isKnownAgent(candidates.ContinuityAgentId)
+    ) {
+        return { AgentId: candidates.ContinuityAgentId, Route: 'DecisionRouted' };
     }
     if (rules.ReplyMode === 'MentionOnly') {
         return null;

@@ -25,10 +25,11 @@ export type AgentReplyMode = 'Always' | 'MentionOnly';
  * applies; under `MentionOnly`, only `Mention` applies.
  *
  * - `Mention`: the message tags the agent.
+ * - `ThreadReply`: the message replies (`ParentID`) directly to an earlier message from the agent.
  * - `Continuity`: the last agent that answered in the conversation, other than the
  *   conversation manager.
- * - `DecisionRouted`: another agent in the conversation, which a confident routing decision chose
- *   in continuity's place. Only with the chat's `EnableDecisionRouting` on.
+ * - `DecisionRouted`: an agent in the conversation that a confident routing decision chose for an
+ *   unmentioned follow-up message. Only with the chat's `EnableDecisionRouting` on.
  * - `ConversationDefault`: the agent pinned on the conversation (`Conversation.DefaultAgentID`).
  * - `HostDefault`: the host's `DefaultAgentId` input.
  * - `ConversationManager`: MJ's conversation manager agent (Sage unless configured otherwise),
@@ -37,6 +38,7 @@ export type AgentReplyMode = 'Always' | 'MentionOnly';
  */
 export type AgentTurnRoute =
     | 'Mention'
+    | 'ThreadReply'
     | 'Continuity'
     | 'DecisionRouted'
     | 'ConversationDefault'
