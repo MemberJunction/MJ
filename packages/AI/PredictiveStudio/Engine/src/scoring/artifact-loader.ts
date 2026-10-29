@@ -52,11 +52,6 @@ export class InMemoryArtifactLoader implements IArtifactLoader {
     this.store.set(fileId, bytes);
   }
 
-  /** @deprecated Use {@link Set}. */
-  public set(fileId: string, bytes: Uint8Array): void {
-    return this.Set(fileId, bytes);
-  }
-
   /** @inheritdoc */
   public async load(fileId: string, _contextUser?: UserInfo): Promise<Uint8Array | null> {
     return this.store.get(fileId) ?? null;

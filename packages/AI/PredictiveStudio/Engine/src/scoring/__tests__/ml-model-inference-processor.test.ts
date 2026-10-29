@@ -139,7 +139,7 @@ function buildDeps(model: FakeMLModel | null = new FakeMLModel()): {
   const loader = new FakeModelLoader(model);
   const sidecar = new FakeSidecar();
   const artifacts = new InMemoryArtifactLoader();
-  artifacts.set('file-1', new TextEncoder().encode('fake-model-bytes'));
+  artifacts.Set('file-1', new TextEncoder().encode('fake-model-bytes'));
   // The members pipeline has no Prediction Unit: these models are legacy models.
   const noUnits = { PredictionUnitIDOf: async () => null };
   return { deps: { modelLoader: loader, artifactLoader: artifacts, sidecar, pipelineUnits: noUnits }, loader, sidecar, artifacts };

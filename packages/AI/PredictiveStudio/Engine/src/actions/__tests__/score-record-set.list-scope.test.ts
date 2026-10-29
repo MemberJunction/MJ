@@ -229,7 +229,7 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const entity = fakeEntity('Individuals', ['individual_id']);
     const provider = new ListProvider(entity, ['42', '43'], (id) => ({ individual_id: id, tenure: Number(id) - 40, events: 7 }));
     const artifacts = new InMemoryArtifactLoader();
-    artifacts.set('file-1', new TextEncoder().encode('bytes'));
+    artifacts.Set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
     const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS } });
 
@@ -255,7 +255,7 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const ids = Array.from({ length: 1500 }, (_v, i) => String(1000 + i));
     const provider = new ListProvider(entity, ids, (id) => ({ individual_id: id, tenure: 1, events: 2 }));
     const artifacts = new InMemoryArtifactLoader();
-    artifacts.set('file-1', new TextEncoder().encode('bytes'));
+    artifacts.Set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
     const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS } });
 

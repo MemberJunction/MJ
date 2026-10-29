@@ -479,7 +479,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     trained.Status = 'Validated';
     trained.ArtifactFileID = 'file-1';
     const artifacts = new InMemoryArtifactLoader();
-    artifacts.set('file-1', new TextEncoder().encode('model-bytes'));
+    artifacts.Set('file-1', new TextEncoder().encode('model-bytes'));
     const scoringDeps: MLInferenceDeps = {
       // The model row training wrote (it carries the pipeline ID), read back as scoring loads it: one deliberate
       // test-double cast at the seam, as this file's entity factory does (a field-bag fake is not a BaseEntity).
