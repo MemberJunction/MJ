@@ -3497,7 +3497,7 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Closed At
         * * SQL Data Type: datetimeoffset
         * * Description: When the session was closed (terminal). NULL while the session is Active or Idle.`),
-    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Janitor'), z.literal('Shutdown')]).nullable().describe(`
+    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Idle'), z.literal('Janitor'), z.literal('Shutdown'), z.literal('TimeLimit')]).nullable().describe(`
         * * Field Name: CloseReason
         * * Display Name: Close Reason
         * * SQL Data Type: nvarchar(20)
@@ -3505,9 +3505,11 @@ export const MJAIAgentSessionSchema = z.object({
     * * Possible Values 
     *   * Error
     *   * Explicit
+    *   * Idle
     *   * Janitor
     *   * Shutdown
-        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.`),
+    *   * TimeLimit
+        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while the session is Active/Idle.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -49875,14 +49877,16 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     * * Possible Values 
     *   * Error
     *   * Explicit
+    *   * Idle
     *   * Janitor
     *   * Shutdown
-    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.
+    *   * TimeLimit
+    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while the session is Active/Idle.
     */
-    get CloseReason(): 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null {
+    get CloseReason(): 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null {
         return this.Get('CloseReason');
     }
-    set CloseReason(value: 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null) {
+    set CloseReason(value: 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null) {
         this.Set('CloseReason', value);
     }
 
