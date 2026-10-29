@@ -17,6 +17,7 @@ import {
 import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix } from '../feature-assembly/as-of/as-of-assembler';
 import type { UnitRow } from '../prediction-unit/unit-row-reader';
+import type { SourceRow } from '../feature-assembly/data-access';
 import { UtcDay } from '../prediction-unit/utc-day';
 import type { IEntityFactory } from '../training/types';
 import type { UnitRowsRead } from '../training/training-engine';
@@ -245,6 +246,15 @@ export class TrainingSnapshotBuilder {
     return { Names: columns.map((c) => c.Name), Cells: (i) => columns.map((c) => c.Cell(i)) };
   }
 
+  /**
+   * Whether a protocol's slice field can be written: it names an assembled feature column, or a field every given unit
+   * row carries. Training checks it before the as-of assembly (over every unit row) and the builder again when it
+   * writes the column (over the assembled rows), with this one rule.
+   */
+  public static SliceFieldResolves(field: string, columnNames: ReadonlySet<string>, unitRowSources: readonly SourceRow[]): boolean {
+    return columnNames.has(field) || unitRowSources.every((source) => field in source);
+  }
+
   /** `__ps_incumbent_score`: the unit's rule evaluated per row; a unit without a rule, or a rule naming an unassembled column, is refused. */
   private incumbentColumn(input: SnapshotBuildInput, position: ReadonlyMap<string, number>): ExtraColumn {
     const rule = input.Unit.incumbent;
@@ -269,9 +279,8 @@ export class TrainingSnapshotBuilder {
    */
   private sliceColumn(input: SnapshotBuildInput, position: ReadonlyMap<string, number>, unitRows: ReadonlyMap<string, UnitRow>, field: string): ExtraColumn {
     const k = position.get(field);
-    if (k === undefined && input.Assembled.Rows.some((a) => !(field in (unitRows.get(a.RowId)?.Source || {})))) {
-      TrainingSnapshotBuilder.refuseColumn(input, field);
-    }
+    const rows = input.Assembled.Rows.map((a) => unitRows.get(a.RowId)?.Source || {});
+    if (!TrainingSnapshotBuilder.SliceFieldResolves(field, new Set(position.keys()), rows)) TrainingSnapshotBuilder.refuseColumn(input, field);
     return {
       Name: `${SLICE_COLUMN_PREFIX}${field}`,
       Cell: (i) => {

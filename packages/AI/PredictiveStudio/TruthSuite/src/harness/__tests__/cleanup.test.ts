@@ -214,6 +214,24 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(store.Deleted.indexOf('MJ: ML Training Runs:RUN-1')).toBeLessThan(store.Deleted.indexOf(`MJ: Files:${TF_GLM}`));
   });
 
+  it('reports a run whose results envelope does not parse, naming the run, and still deletes the rest', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const unreadable = JSON.stringify({ ...JSON.parse(trainerResults()), trainer: { finalist: 'xgb', artifacts: [{ fileId: TF_GLM }] } });
+    const store = new FakeStore(new Set(), { RunValidationResults: unreadable });
+    const failures = await HarnessCleanup.DeleteRecorded(store, records);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatch(/^MJ: ML Training Runs RUN-1: its results envelope does not parse, so the artifact files it names cannot be found: .*trainer\./);
+    expect(store.Deleted).toContain(`MJ: ML Training Pipelines:${P1}`);
+  });
+
+  it('reads no artifact files from a run whose results are not a results envelope (a legacy run)', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const store = new FakeStore(new Set(), { RunValidationResults: JSON.stringify({ metrics: { auc: 0.7 } }) });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+  });
+
   it('deletes recorded Evaluation Protocols after the pipelines and before the Prediction Units', async () => {
     const records = new RunRecords();
     records.RecordPipeline(P1);

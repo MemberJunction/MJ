@@ -5,7 +5,7 @@ import type {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
-import { TrainingRunResultsParser } from '@memberjunction/predictive-studio-core';
+import { JsonParse, TRAINING_RUN_RESULTS_SCHEMA, TrainingRunResultsParser } from '@memberjunction/predictive-studio-core';
 import { HarnessAgent } from './agent';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
@@ -181,11 +181,13 @@ export class HarnessCleanup {
     const snapshotIds = new UUIDSet(runs.flatMap((r) => (r.TrainingSnapshotID ? [r.TrainingSnapshotID] : [])));
     const snapshotFilter = HarnessCleanup.anyIn([['ID', snapshotIds], ['PipelineID', pipelineIds]]);
     const snapshots = snapshotFilter ? await store.TrainingSnapshots(snapshotFilter) : [];
-    const fileFilter = HarnessCleanup.anyIn([['ID', new UUIDSet([...modelFileIds, ...runs.flatMap((r) => HarnessCleanup.trainerArtifactFileIds(r))])]]);
+    const trainerFiles = runs.map((r) => HarnessCleanup.trainerArtifactFileIds(r));
+    const fileFilter = HarnessCleanup.anyIn([['ID', new UUIDSet([...modelFileIds, ...trainerFiles.flatMap((t) => t.FileIDs)])]]);
     const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
     const protocolFilter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs]]);
     const failures = [
+      ...trainerFiles.flatMap((t) => (t.Failure === null ? [] : [t.Failure])),
       ...(await HarnessCleanup.deleteAll('MJ: ML Model Scoring Bindings', bindings)),
       ...(await HarnessCleanup.deleteAll('MJ: Process Run Details', details)),
       ...(await HarnessCleanup.deleteAll('MJ: Process Runs', processRuns)),
@@ -251,12 +253,21 @@ export class HarnessCleanup {
 
   /**
    * The `MJ: Files` rows a run's stored trainer result names (one per returned artifact; the finalist's is also its
-   * model's). A run whose results are not a completed trainer envelope (a legacy run, a refusal) names none.
+   * model's). A run whose results are not a results envelope (a legacy run, no results) or not a completed trainer run
+   * names none. A results envelope that does not parse is reported as a failure line: the files it names cannot be
+   * found, so they would be left behind.
    */
-  private static trainerArtifactFileIds(run: CleanupTrainingRunRow): string[] {
+  private static trainerArtifactFileIds(run: CleanupTrainingRunRow): { readonly FileIDs: readonly string[]; readonly Failure: string | null } {
+    const id = run.ID;
+    const json = JsonParse.ParseJsonText(run.ValidationResults, 'ValidationResults');
+    const isEnvelope = json.Ok && JsonParse.IsJsonObject(json.Value) && JsonParse.JsonString(json.Value, 'schema') === TRAINING_RUN_RESULTS_SCHEMA;
+    if (!isEnvelope) return { FileIDs: [], Failure: null };
     const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
-    if (parsed.Ok === false || parsed.Value.status !== 'completed' || !parsed.Value.trainer) return [];
-    return parsed.Value.trainer.artifacts.map((a) => a.fileId);
+    if (parsed.Ok === false) {
+      return { FileIDs: [], Failure: `MJ: ML Training Runs ${id}: its results envelope does not parse, so the artifact files it names cannot be found: ${parsed.Errors.join('; ')}` };
+    }
+    if (parsed.Value.status !== 'completed' || !parsed.Value.trainer) return { FileIDs: [], Failure: null };
+    return { FileIDs: parsed.Value.trainer.artifacts.map((a) => a.fileId), Failure: null };
   }
 
   /**

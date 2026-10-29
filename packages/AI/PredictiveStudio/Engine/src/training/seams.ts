@@ -135,8 +135,12 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
   /**
    * @param sidecar an `MLSidecar` instance (managed or remote); defaults to the
    *   shared, process-lifetime instance from {@link MLSidecarProvider}
+   * @param clockMs the clock (milliseconds) a protocol training's wall seconds are measured with; tests pin it
    */
-  constructor(private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar()) {}
+  constructor(
+    private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar(),
+    private readonly clockMs: () => number = () => performance.now(),
+  ) {}
 
   /** @inheritdoc */
   public async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
@@ -160,7 +164,8 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
    * a managed child that died, so a crash mid-training is recovered by the next attempt (a failed respawn counts as
    * that attempt failing). A 4xx refusal and a malformed answer are not retried (the same request gets the same
    * answer) and are rethrown. When every attempt fails the result is `failed` at stage `timeout` naming the last
-   * error, never partial metrics.
+   * error, never partial metrics, with the wall seconds the attempts took as its `computeSeconds` (the sidecar may have
+   * computed for all of them, so the run records that time rather than none).
    *
    * A retried transport failure can repeat a training that is still running: a socket reset on a remote sidecar
    * that kept computing makes attempt 2 train and score the holdout again, concurrently. The sidecar is stateless
@@ -169,6 +174,7 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
    */
   public async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
     let lastError = '';
+    const startedMs = this.clockMs();
     for (let attempt = 0; attempt <= req.maxRetries; attempt++) {
       try {
         await this.sidecar.Start();
@@ -183,7 +189,7 @@ export class MJSidecarTrainer implements ISidecarTrainer, ITrainerEvaluator {
       trainingRunId: req.trainingRunId,
       stage: 'timeout',
       message: `sidecar gave no result after ${req.maxRetries + 1} attempt(s): ${lastError}`,
-      computeSeconds: 0,
+      computeSeconds: (this.clockMs() - startedMs) / 1000,
     };
   }
 

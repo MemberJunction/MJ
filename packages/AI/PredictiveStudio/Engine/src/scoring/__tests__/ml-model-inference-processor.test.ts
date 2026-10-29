@@ -368,7 +368,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
       entityFactory: { getEntityObject: unused },
       recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1 },
       sidecar: { train: unused },
-      artifactStore: { save: unused },
+      artifactStore: { save: unused, Delete: unused },
       contextUser: user,
       provider,
       predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()),

@@ -1,7 +1,8 @@
 /**
  * Typed trainer results the Engine tests share: a completed binary run and a failed one.
  */
-import type { BaselineResult, EvaluationProtocolSpec, MetricWithInterval, TrainerCompleted, TrainerResult } from '@memberjunction/predictive-studio-core';
+import { createHash } from 'node:crypto';
+import type { BaselineResult, EvaluationProtocolSpec, MetricWithInterval, ReturnedArtifact, TrainerCompleted, TrainerResult } from '@memberjunction/predictive-studio-core';
 
 /** Typed trainer-result fixtures (static members on one owner). */
 export class TrainerResultFixtures {
@@ -10,13 +11,20 @@ export class TrainerResultFixtures {
     return { metric, value, interval: { level: 0.95, lower, upper }, n };
   }
 
-  /** A base64 ps-predictor/v2 envelope naming `candidate` (no predictor inside: the engine only stores the bytes). */
-  private static envelope(candidate: string): string {
-    return Buffer.from(JSON.stringify({ format: 'ps-predictor/v2', version: 2, candidate }), 'utf8').toString('base64');
+  /**
+   * A returned artifact: a ps-predictor/v2 envelope naming `candidate` (no predictor inside: the engine only stores the
+   * bytes), its real SHA-256 and the given feature-schema hash.
+   */
+  public static Artifact(candidate: string, featureSchemaHash: string): ReturnedArtifact {
+    const bytes = Buffer.from(JSON.stringify({ format: 'ps-predictor/v2', version: 2, candidate }), 'utf8');
+    return { candidate, bytesBase64: bytes.toString('base64'), sha256: createHash('sha256').update(bytes).digest('hex'), featureSchemaHash, classOrder: ['0', '1'] };
   }
 
-  /** A completed binary run: finalist `xgb`, members `oneFeature` and `glm`, sidecar gate keep-simple-baseline/glm. */
-  public static CannedCompleted(trainingRunId: string, protocol: Pick<EvaluationProtocolSpec, 'budgets'>): TrainerCompleted {
+  /**
+   * A completed binary run: finalist `xgb`, members `oneFeature` and `glm`, sidecar gate keep-simple-baseline/glm. Its
+   * artifacts carry `featureSchemaHash` (pass the request's `snapshot.featureSchemaHash` for an answer the engine accepts).
+   */
+  public static CannedCompleted(trainingRunId: string, protocol: Pick<EvaluationProtocolSpec, 'budgets'>, featureSchemaHash: string = 'f'.repeat(64)): TrainerCompleted {
     const baselines: BaselineResult[] = [
       { baseline: { kind: 'dummy', name: 'base-rate' }, role: 'dummy', holdout: TrainerResultFixtures.Mwi('log-loss', 0.52, 0.5, 0.54, 1205) },
       { baseline: { kind: 'one-feature', selection: 'best-single-feature-inner-cv' }, role: 'simple', holdout: TrainerResultFixtures.Mwi('log-loss', 0.47, 0.45, 0.49, 1205) },
@@ -40,11 +48,7 @@ export class TrainerResultFixtures {
         'modelVs:oneFeature': { value: 0.018, ci: [0.006, 0.03], beats: true },
       },
       gate: { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null },
-      artifacts: [
-        { candidate: 'xgb', bytesBase64: TrainerResultFixtures.envelope('xgb'), sha256: 'a'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: ['0', '1'] },
-        { candidate: 'oneFeature', bytesBase64: TrainerResultFixtures.envelope('oneFeature'), sha256: 'b'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: ['0', '1'] },
-        { candidate: 'glm', bytesBase64: TrainerResultFixtures.envelope('glm'), sha256: 'c'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: ['0', '1'] },
-      ],
+      artifacts: ['xgb', 'oneFeature', 'glm'].map((c) => TrainerResultFixtures.Artifact(c, featureSchemaHash)),
       incumbentDiff: null,
       calibration: { method: 'auto', intercept: 0.01, slope: 0.97, reliability: [] },
       slices: [],

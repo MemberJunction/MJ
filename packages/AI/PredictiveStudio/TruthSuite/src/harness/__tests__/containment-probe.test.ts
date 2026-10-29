@@ -37,7 +37,7 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   HoldoutRowCount: 2,
   Metrics: {},
   HoldoutMetrics: {},
-  Trust: TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.5 }), ProblemType: 'classification' }),
+  Trust: TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.5 }), ProblemType: 'classification', Lineage: null }),
   TrainingRunStatus: 'Completed',
   TrainingRunNotes: null,
   LineageJSON: null,
@@ -71,7 +71,7 @@ describe('containment probe — predicates', () => {
   });
   it('flags a verdict above Poor or one cleared to act', () => {
     expect(ContainmentProbe.GradedAbovePoorOrActionable(model({}))).toBe(false); // AUC 0.5 → Poor, not actionable
-    const good = TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.8 }), ProblemType: 'classification' });
+    const good = TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.8 }), ProblemType: 'classification', Lineage: null });
     expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: good }))).toBe(true);
     expect(ContainmentProbe.GradedAbovePoorOrActionable(model({ Trust: { ...model({}).Trust, canAct: true } }))).toBe(true);
   });

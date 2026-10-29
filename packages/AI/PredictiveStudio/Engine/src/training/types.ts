@@ -162,6 +162,16 @@ export interface IArtifactStore {
    * @returns the file id to store in `MLModel.ArtifactFileID`
    */
   save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * Remove an artifact this store saved: its file record and its bytes. Used to roll back the artifacts of a run that
+   * could not store all of them, so none is left unreferenced.
+   *
+   * @param fileId the id `save` returned
+   * @param contextUser request user — required on the server for isolation/audit
+   * @throws Error when the artifact cannot be removed
+   */
+  Delete(fileId: string, contextUser?: UserInfo): Promise<void>;
 }
 
 /**

@@ -57,6 +57,7 @@
  */
 
 import { LogError, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   type TrainResponse,
@@ -109,6 +110,7 @@ import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import type { SnapshotContent } from '../snapshot/snapshot-serialization';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import { SnapshotRetrainer } from '../snapshot/snapshot-retrainer';
+import { SnapshotHash } from '../snapshot/snapshot-hash';
 import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
 import { TrainRequestBuilder } from './train-request';
 import { TrainerRequestBuilder } from './trainer-request';
@@ -144,6 +146,11 @@ export interface UnitAssemblyInputs {
   readonly UnitRead: UnitRowsRead;
   readonly DataAccess: ICountingDataAccess;
   readonly Metadata: IAssemblyMetadata;
+  /**
+   * The bound protocol's slice fields. Each must be a resolved feature column or a field of every unit row; one that
+   * is neither is refused (`unresolved-column`) before the as-of assembly reads anything.
+   */
+  readonly SliceFields?: readonly string[];
 }
 
 /**
@@ -294,12 +301,17 @@ export class TrainingEngine {
       const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
       const training = await this.protocolTrainingOf(resolved, deps);
       const unit = await this.loadUnitSpec(unitId, deps);
+      // A protocol that does not fit the unit is refused before any row is read or assembled.
+      if (training) TrainerRequestBuilder.RefuseGroupKeyMismatch(training.Protocol, unit);
       const seams = this.unitSeams(deps);
       const unitRead = await this.readUnitRows(unit, seams, deps);
       const validation = UnitTargetValidator.ValidateUnitTargets(unitRead.Rows, unit.label.outcome, unitRead.Counts);
       if (validation.status === 'refused') throw new TrainingRefusedError({ stage: 'unit', reason: validation.reason });
 
-      const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, { Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata });
+      const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, {
+        Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata,
+        SliceFields: training ? training.Protocol.slices.subgroups : [],
+      });
       if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
       const snapshot = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, training ? training.Protocol : null, deps);
       run.TrainingSnapshotID = snapshot.Entity.ID;
@@ -460,6 +472,7 @@ export class TrainingEngine {
       Candidates: [candidate],
     });
     const result = TrainingEngine.recordTrainerResult(run, await training.Trainer.RunTrainer(request), x.UsdPerSecond);
+    TrainingEngine.checkAnswerBelongsToRun(run, snapshot, result);
     const fileIds = await this.storeTrainerArtifacts(run, result, deps);
     const finalistFile = fileIds.get(result.finalist);
     if (finalistFile === undefined) throw new Error(`TrainingEngine: the trainer returned no artifact for its finalist '${result.finalist}'`);
@@ -495,13 +508,44 @@ export class TrainingEngine {
     return result;
   }
 
-  /** Store every returned artifact's decoded bytes as an `MJ: Files` row; the file IDs by candidate. */
+  /**
+   * Refuse to store an answer that does not belong to this run: it names another training run (IDs compared as UUIDs),
+   * an artifact's bytes do not hash to the SHA-256 it states (that hash is what later checks of the artifact trust), or
+   * an artifact was built for another feature schema than the snapshot's. Runs before anything is stored.
+   *
+   * @throws Error naming the mismatch
+   */
+  private static checkAnswerBelongsToRun(run: MJMLTrainingRunEntity, snapshot: BuiltSnapshot, result: TrainerCompleted): void {
+    if (!UUIDsEqual(result.trainingRunId, run.ID)) {
+      throw new Error(`TrainingEngine: the trainer answered for training run ${result.trainingRunId}, not ${run.ID}`);
+    }
+    for (const a of result.artifacts) {
+      const actual = SnapshotHash.Sha256Hex(decodeArtifact(a.bytesBase64));
+      if (actual !== a.sha256) throw new Error(`TrainingEngine: artifact '${a.candidate}': its bytes hash to ${actual}, not the stated ${a.sha256}`);
+      if (a.featureSchemaHash !== snapshot.Entity.FeatureSchemaHash) {
+        throw new Error(`TrainingEngine: artifact '${a.candidate}' was built for feature schema ${a.featureSchemaHash}, not the snapshot's ${snapshot.Entity.FeatureSchemaHash}`);
+      }
+    }
+  }
+
+  /**
+   * Store every returned artifact's decoded bytes as an `MJ: Files` row; the file IDs by candidate. When any save
+   * fails, the artifacts already saved are deleted through the same store before the error is rethrown, so a failed run
+   * leaves no artifact nothing references.
+   */
   private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, string>> {
-    const saved = await Promise.all(result.artifacts.map(async (a): Promise<[string, string]> => {
+    const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[string, string]> => {
       const fileId = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`, deps.contextUser);
       return [a.candidate, fileId];
     }));
-    return new Map(saved);
+    const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
+    const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
+    if (failure === undefined) return new Map(saved);
+    const rollback = await Promise.allSettled(saved.map(([, fileId]) => deps.artifactStore.Delete(fileId, deps.contextUser)));
+    rollback.forEach((r, k) => {
+      if (r.status === 'rejected') LogError(`TrainingEngine: could not delete artifact file ${saved[k][1]} of failed run ${run.ID}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+    });
+    throw failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason));
   }
 
   /**
@@ -569,6 +613,12 @@ export class TrainingEngine {
     const exclusions = { denyFields: resolved.leakageGuard.DenyFields || [], denySources: resolved.leakageGuard.DenySources || [] };
     const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions);
     if (resolution.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: resolution };
+    const featureNames = new Set(resolution.Columns.map((c) => c.name));
+    const sources = unitRead.Rows.map((r) => r.Source);
+    const unresolvedSlice = (inputs.SliceFields || []).find((field) => !TrainingSnapshotBuilder.SliceFieldResolves(field, featureNames, sources));
+    if (unresolvedSlice !== undefined) {
+      return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: unit.name, field: unresolvedSlice } } };
+    }
     const assembled = await new AsOfFeatureAssembler().Assemble({
       Context: 'train',
       Unit: unit,

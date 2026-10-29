@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
-import { MJSidecarTrainer, type ISidecarTrainer } from '@memberjunction/predictive-studio';
+import { MJSidecarTrainer, type ISidecarTrainer, type ITrainerEvaluator } from '@memberjunction/predictive-studio';
 import { TruthSuite } from '../truth-suite';
 
 /** The environment variable `MLSidecar` reads its remote URL from when it is constructed. */
@@ -52,8 +52,8 @@ export class HarnessSidecar {
     return url;
   }
 
-  /** A trainer on the sidecar at `url` (remote mode: no child process is started). */
-  public static SuiteTrainer(url: string): ISidecarTrainer {
+  /** A trainer on the sidecar at `url` for both the legacy and the protocol seam (remote mode: no child process is started). */
+  public static SuiteTrainer(url: string): ISidecarTrainer & ITrainerEvaluator {
     return new MJSidecarTrainer(new MLSidecar({ url }));
   }
 }

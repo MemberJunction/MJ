@@ -171,11 +171,11 @@ describe('LocalArtifactLoader — missing files return null', () => {
 });
 
 describe('local artifact path + base dir resolution', () => {
-  it('localArtifactPath builds <baseDir>/<fileId>.bin', () => {
+  it('LocalArtifactPath builds <baseDir>/<fileId>.bin', () => {
     expect(LocalArtifactPath('/base', 'abc-123')).toBe(join('/base', 'abc-123.bin'));
   });
 
-  it('resolveLocalArtifactBaseDir honors PS_ARTIFACT_DIR, else os tmpdir', () => {
+  it('ResolveLocalArtifactBaseDir honors PS_ARTIFACT_DIR, else os tmpdir', () => {
     const prev = process.env.PS_ARTIFACT_DIR;
     try {
       process.env.PS_ARTIFACT_DIR = '/custom/ps/artifacts';

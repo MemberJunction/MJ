@@ -60,7 +60,7 @@ export class TrainerRequestBuilder {
    * @throws TrainingRefusedError when the protocol's group key is not the unit's
    */
   public static async BuildTrainerRequest(i: TrainerRequestInput): Promise<TrainerRequest> {
-    TrainerRequestBuilder.refuseGroupKeyMismatch(i.Protocol, i.Unit);
+    TrainerRequestBuilder.RefuseGroupKeyMismatch(i.Protocol, i.Unit);
     const [matrix, rowManifest] = await Promise.all([
       i.Files.CreatePreAuthDownload(i.Snapshot.MatrixFileID, i.Snapshot.MatrixSha256, i.Now),
       i.Files.CreatePreAuthDownload(i.Snapshot.RowManifestFileID, i.Snapshot.RowManifestSha256, i.Now),
@@ -107,8 +107,14 @@ export class TrainerRequestBuilder {
     return value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
   }
 
-  /** Field names compare case-insensitively, as the database resolves them. */
-  private static refuseGroupKeyMismatch(protocol: EvaluationProtocolSpec, unit: Pick<PredictionUnitSpec, 'id' | 'groupKey'>): void {
+  /**
+   * Refuses (`unit-invalid`) a protocol whose inner validation groups rows by a key other than the unit's group key.
+   * Field names compare case-insensitively, as the database resolves them. Training calls it as soon as the protocol
+   * and unit are loaded; the request builder checks again.
+   *
+   * @throws TrainingRefusedError when the keys differ
+   */
+  public static RefuseGroupKeyMismatch(protocol: EvaluationProtocolSpec, unit: Pick<PredictionUnitSpec, 'id' | 'groupKey'>): void {
     const inner = protocol.innerValidation;
     const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
     if (protocolKey === null) return;

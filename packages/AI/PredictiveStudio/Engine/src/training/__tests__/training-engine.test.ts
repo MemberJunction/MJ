@@ -7,6 +7,8 @@ import {
   TrainingRunResultsParser,
   TrustVerdicts,
   type EvaluationProtocolSpec,
+  type TrainerCompleted,
+  type TrainerRequest,
   type TrainingRunResults,
   type TrainResponse,
   type MatrixData,
@@ -24,6 +26,7 @@ import { ProtocolRowFixture } from './fixtures/protocol-row';
 import { TrainerResultFixtures } from './fixtures/trainer-result';
 import { DEFAULT_SPLIT_SEED } from '../locked-holdout';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
+import { AsOfFeatureAssembler } from '../../feature-assembly/as-of/as-of-assembler';
 import type {
   IFeatureDataAccess,
   FetchRowsParams,
@@ -530,7 +533,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   });
 
   it("copies the pipeline's EvaluationProtocolID onto the run and trains it through the trainer", async () => {
-    const { engine, deps, sidecar, pipeline, runs } = protocolHarness((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec()));
+    const { engine, deps, sidecar, pipeline, runs } = protocolHarness(cannedFor);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     expect(runs[0].EvaluationProtocolID).toBe(ProtocolRowFixture.ID);
     expect(sidecar.CallCount).toBe(0);
@@ -604,13 +607,35 @@ function protocolSpec(): EvaluationProtocolSpec {
   return parsed.Value;
 }
 
+/** The completed answer the engine accepts for this request: its run, its snapshot's feature-schema hash, real artifact hashes. */
+function cannedFor(r: TrainerRequest): TrainerCompleted {
+  return TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec(), r.snapshot.featureSchemaHash);
+}
+
+/** An artifact store whose save of one file name fails; it records the files it deleted. */
+class FailingArtifactStore extends InMemoryArtifactStore {
+  public readonly DeletedIDs: string[] = [];
+  constructor(private readonly failingName: string) { super(); }
+  public override async save(bytes: Uint8Array, name: string): Promise<string> {
+    if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
+    return super.save(bytes, name);
+  }
+  public override async Delete(fileId: string): Promise<void> {
+    this.DeletedIDs.push(fileId);
+    await super.Delete(fileId);
+  }
+}
+
 /** The unit harness with its pipeline bound to the protocol row, the protocol store serving it and a fake trainer. */
-function protocolHarness(answer: ConstructorParameters<typeof FakeTrainer>[0]): ReturnType<typeof unitHarness> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
+function protocolHarness(
+  answer: ConstructorParameters<typeof FakeTrainer>[0],
+  protocolRow = ProtocolRowFixture.Row(),
+  artifacts: InMemoryArtifactStore = new InMemoryArtifactStore(),
+): ReturnType<typeof unitHarness> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
   const harness = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), undefined, TRAINER_RUN_ID);
   harness.pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
   const trainer = new FakeTrainer(answer);
-  const artifacts = new InMemoryArtifactStore();
-  harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row()]);
+  harness.deps.protocols = new FakeEvaluationProtocolStore([protocolRow]);
   harness.deps.trainer = trainer;
   harness.deps.artifactStore = artifacts;
   return { ...harness, trainer, artifacts };
@@ -625,8 +650,12 @@ function storedResults(validationResults: string | null): TrainingRunResults {
 
 describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol trains through the trainer', () => {
   it('trains a protocol-bound unit pipeline through /trainer', async () => {
-    const { engine, deps, sidecar, pipeline, trainer, artifacts } = protocolHarness((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec()));
+    const { engine, deps, sidecar, pipeline, trainer, artifacts, files, snapshots } = protocolHarness(cannedFor);
     const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    // The protocol reached the snapshot: its subgroup field is a slice column of the frozen matrix.
+    const content = await storedContent(files, snapshots[0]);
+    expect(content.Header.sliceColumns).toEqual({ Region: '__ps_slice:Region' });
+    expect(content.Header.columns).toContain('__ps_slice:Region');
     expect(trainer.Requests).toHaveLength(1);
     const request = trainer.Requests[0];
     expect(request.snapshot.id).toBe(run.TrainingSnapshotID);
@@ -647,6 +676,82 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
     expect(sidecar.CallCount).toBe(0);
   });
 
+  it('freezes no slice or incumbent-score column for a pipeline without a protocol', async () => {
+    const { engine, deps, pipeline, files, snapshots } = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const content = await storedContent(files, snapshots[0]);
+    expect([content.Header.sliceColumns, content.Header.incumbentScoreColumn]).toEqual([{}, null]);
+    expect(content.Header.columns.some((c) => c.startsWith('__ps_slice:'))).toBe(false);
+  });
+
+  it('prices the trainer seconds at the rate read before training, even when the rate changes while the trainer runs', async () => {
+    vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '0.5');
+    const { engine, deps, pipeline } = protocolHarness((r) => {
+      vi.stubEnv('PS_COMPUTE_USD_PER_SECOND', '9');
+      return cannedFor(r);
+    });
+    const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect([run.ComputeSeconds, run.ComputeCost]).toEqual([12.5, 12.5 * 0.5]);
+  });
+
+  it.each([
+    ['an artifact whose bytes do not match its SHA-256', (r: TrainerRequest): TrainerCompleted => {
+      const c = cannedFor(r);
+      return { ...c, artifacts: c.artifacts.map((a) => (a.candidate === 'glm' ? { ...a, sha256: 'd'.repeat(64) } : a)) };
+    }, /artifact 'glm': its bytes hash to [0-9a-f]{64}, not the stated dddd/],
+    ['an artifact built for another feature schema', (r: TrainerRequest): TrainerCompleted => {
+      const c = cannedFor(r);
+      return { ...c, artifacts: c.artifacts.map((a) => (a.candidate === 'oneFeature' ? { ...a, featureSchemaHash: 'e'.repeat(64) } : a)) };
+    }, /artifact 'oneFeature' was built for feature schema eeee.*, not the snapshot's/],
+    ['an answer for another training run', (r: TrainerRequest): TrainerCompleted => ({ ...cannedFor(r), trainingRunId: '00000000-0000-0000-0000-0000000000ff' }),
+      /answered for training run 00000000-0000-0000-0000-0000000000ff, not/],
+  ])('fails the run and stores nothing for %s', async (_what, answer, message) => {
+    const { engine, deps, pipeline, runs, models, artifacts } = protocolHarness(answer);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(message);
+    expect(runs[0].Status).toBe('Failed');
+    expect(runs[0].Notes).toMatch(message);
+    expect(runs[0].ComputeSeconds).toBe(12.5);
+    expect(artifacts.Saved.size).toBe(0);
+    expect(models).toHaveLength(0);
+  });
+
+  it('accepts an answer whose run ID differs from the run only in letter case', async () => {
+    const { engine, deps, pipeline } = protocolHarness((r) => ({ ...cannedFor(r), trainingRunId: r.trainingRunId.toUpperCase() }));
+    const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(run.Status).toBe('Completed');
+  });
+
+  it('deletes the artifacts already saved when one save fails, then fails the run', async () => {
+    const store = new FailingArtifactStore('-glm.');
+    const { engine, deps, pipeline, runs, models } = protocolHarness(cannedFor, ProtocolRowFixture.Row(), store);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/disk full writing trainer-.*-glm\.json/);
+    expect(store.DeletedIDs).toHaveLength(2);
+    expect(store.Saved.size).toBe(0);
+    expect(runs[0].Status).toBe('Failed');
+    expect(models).toHaveLength(0);
+  });
+
+  it("refuses a protocol grouping by a key other than the unit's before any assembly or snapshot write", async () => {
+    const assemble = vi.spyOn(AsOfFeatureAssembler.prototype, 'Assemble');
+    const row = ProtocolRowFixture.Row({ InnerValidation: JSON.stringify({ kind: 'grouped-kfold', folds: 5, repeats: 1, groupKey: 'PersonID' }) });
+    const { engine, deps, pipeline, trainer, snapshots, files, runs } = protocolHarness(cannedFor, row);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'unit-invalid', unitId: UnitYearsWorld.UnitID } } });
+    expect(assemble).not.toHaveBeenCalled();
+    expect([snapshots.length, files.Saved.size, trainer.Requests.length]).toEqual([0, 0, 0]);
+    expect(runs[0].Status).toBe('Failed');
+    assemble.mockRestore();
+  });
+
+  it('refuses a slice field that is neither a feature column nor a unit-row field before any assembly or snapshot write', async () => {
+    const assemble = vi.spyOn(AsOfFeatureAssembler.prototype, 'Assemble');
+    const row = ProtocolRowFixture.Row({ Slices: JSON.stringify({ outOfTime: true, subgroups: ['Planet'] }) });
+    const { engine, deps, pipeline, trainer, snapshots, files } = protocolHarness(cannedFor, row);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'unresolved-column', field: 'Planet' } } });
+    expect(assemble).not.toHaveBeenCalled();
+    expect([snapshots.length, files.Saved.size, trainer.Requests.length]).toEqual([0, 0, 0]);
+    assemble.mockRestore();
+  });
+
   it('stores a failed trainer result as a trainer refusal', async () => {
     const { engine, deps, pipeline, runs, models } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
     const training = engine.trainModel({ pipelineId: pipeline.ID }, deps);
@@ -661,7 +766,7 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
   });
 
   it('retrains a trainer run from its snapshot and reproduces the holdout metrics', async () => {
-    const { engine, deps, pipeline, trainer } = protocolHarness((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec()));
+    const { engine, deps, pipeline, trainer } = protocolHarness(cannedFor);
     const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const retrained = await new SnapshotRetrainer().Retrain(run.ID, deps);
     expect(retrained).toMatchObject({ FilesVerified: true, ContentHashVerified: true, MaxAbsDiff: 0, Reproduced: true });

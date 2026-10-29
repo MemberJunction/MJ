@@ -19,14 +19,14 @@
  * Therefore the store ALWAYS creates the File row (stamped with the active storage
  * `ProviderID`) and returns `file.ID`. For this dev / on-prem mode the bytes are
  * persisted to **local disk** keyed by that same id (`<baseDir>/<file.ID>.bin`,
- * {@link resolveLocalArtifactBaseDir}); the scoring loader reads them back by id.
+ * {@link ResolveLocalArtifactBaseDir}); the scoring loader reads them back by id.
  *
  * **Production follow-up**: replace the local `writeFile` with a real storage
  * `PutObject` against the provider (and the loader with a `GetObject`); the File
  * row + id contract is unchanged, so only the byte transport moves to the cloud.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -47,11 +47,6 @@ export function ResolveLocalArtifactBaseDir(): string {
   return join(tmpdir(), 'mj-ps-artifacts');
 }
 
-/** @deprecated Use {@link ResolveLocalArtifactBaseDir}. */
-export function resolveLocalArtifactBaseDir(): string {
-  return ResolveLocalArtifactBaseDir();
-}
-
 /**
  * Build the absolute path an artifact with the given File-row fileId lives at:
  * `<baseDir>/<fileId>.bin`. Shared by the store (write) and the loader (read) so
@@ -62,11 +57,6 @@ export function resolveLocalArtifactBaseDir(): string {
  */
 export function LocalArtifactPath(baseDir: string, fileId: string): string {
   return join(baseDir, `${fileId}.bin`);
-}
-
-/** @deprecated Use {@link LocalArtifactPath}. */
-export function localArtifactPath(baseDir: string, fileId: string): string {
-  return LocalArtifactPath(baseDir, fileId);
 }
 
 /**
@@ -84,6 +74,11 @@ export class InMemoryArtifactStore implements IArtifactStore {
     this.Saved.set(id, { Name: name, Bytes: bytes });
     return id;
   }
+
+  /** @inheritdoc */
+  public async Delete(fileId: string): Promise<void> {
+    if (!this.Saved.delete(fileId)) throw new Error(`InMemoryArtifactStore: no artifact ${fileId}`);
+  }
 }
 
 /**
@@ -92,7 +87,7 @@ export class InMemoryArtifactStore implements IArtifactStore {
 export interface MJFilesArtifactStoreOptions {
   /**
    * Storage-provider id to stamp on the `MJ: Files` row (`ProviderID`). Required in
-   * practice — the column is NOT NULL — and supplied by {@link buildArtifactStore}
+   * practice — the column is NOT NULL — and supplied by {@link BuildArtifactStore}
    * from the active `MJ: File Storage Providers` row.
    */
   providerId?: string;
@@ -100,7 +95,7 @@ export interface MJFilesArtifactStoreOptions {
   contentType?: string;
   /**
    * Base directory the serialized bytes are written to. Defaults to
-   * {@link resolveLocalArtifactBaseDir} (env `PS_ARTIFACT_DIR`, else
+   * {@link ResolveLocalArtifactBaseDir} (env `PS_ARTIFACT_DIR`, else
    * `<os.tmpdir()>/mj-ps-artifacts`). Injectable so tests target a scratch dir.
    */
   baseDir?: string;
@@ -160,6 +155,16 @@ export class MJFilesArtifactStore implements IArtifactStore {
 
     return file.ID;
   }
+
+  /** @inheritdoc Deletes the `MJ: Files` row, then the bytes this store wrote for it. */
+  public async Delete(fileId: string, contextUser?: UserInfo): Promise<void> {
+    const file = await this.entityFactory.getEntityObject<MJFileEntity>('MJ: Files', contextUser);
+    if (!(await file.Load(fileId))) throw new Error(`MJFilesArtifactStore: artifact file ${fileId} not found`);
+    if (!(await file.Delete())) {
+      throw new Error(`MJFilesArtifactStore: deleting artifact file ${fileId} failed: ${file.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+    await rm(LocalArtifactPath(this.baseDir, fileId), { force: true });
+  }
 }
 
 // ----- Store wiring (shared by every training wiring site) ---------------------
@@ -198,14 +203,6 @@ export async function ResolveActiveFileStorageProviderId(
   return result.Results[0].ID ?? null;
 }
 
-/** @deprecated Use {@link ResolveActiveFileStorageProviderId}. */
-export async function resolveActiveFileStorageProviderId(
-  contextUser: UserInfo,
-  provider: IMetadataProvider,
-): Promise<string | null> {
-  return ResolveActiveFileStorageProviderId(contextUser, provider);
-}
-
 /**
  * Build the training-side {@link IArtifactStore}, stamping the resolved active
  * storage `providerId` on every File row. The store creates a real `MJ: Files` row
@@ -219,9 +216,4 @@ export async function resolveActiveFileStorageProviderId(
  */
 export function BuildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
   return new MJFilesArtifactStore(entityFactory, { providerId: providerId ?? undefined });
-}
-
-/** @deprecated Use {@link BuildArtifactStore}. */
-export function buildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
-  return BuildArtifactStore(providerId, entityFactory);
 }

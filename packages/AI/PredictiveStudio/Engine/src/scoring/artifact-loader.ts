@@ -81,7 +81,7 @@ export class LocalArtifactLoader implements IArtifactLoader {
 
   /**
    * @param baseDir optional base-directory override (defaults to
-   *   {@link resolveLocalArtifactBaseDir}); must match the store's base dir
+   *   {@link ResolveLocalArtifactBaseDir}); must match the store's base dir
    */
   constructor(baseDir: string = ResolveLocalArtifactBaseDir()) {
     this.baseDir = baseDir;
