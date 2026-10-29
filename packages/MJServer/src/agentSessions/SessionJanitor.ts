@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/ai-agents';
 import { GetCurrentHostInstance, GetHostInstanceID, HostInstanceIdentity } from './HostInstance.js';
 import { SessionManager, SessionCloseReason } from './SessionManager.js';
+import { ParseSessionDeadlineMs } from './sessionDeadline.js';
 
 /** Entity name for session rows (kept in sync with {@link SessionManager}). */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -430,7 +431,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         // the far-more-common uncapped sessions) while the JS check below enforces the exact deadline.
         const filter = `Status IN ('Active','Idle') AND Config LIKE '%maxSessionDeadlineIso%'`;
         const isExpired = (session: MJAIAgentSessionEntity): boolean => {
-            const deadlineMs = this.parseSessionDeadlineMs(session.Config_);
+            const deadlineMs = ParseSessionDeadlineMs(session.Config_);
             return deadlineMs != null && deadlineMs <= nowMs;
         };
         const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor', isExpired);
@@ -702,23 +703,6 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                 `[SessionJanitor] Recording shard purge (sessions closed before ${lookbackCutoff.toISOString()}) failed: ` +
                 `${err instanceof Error ? err.message : String(err)}`,
             );
-        }
-    }
-
-    /** Parses the absolute deadline (ms) from a session's `Config_` JSON, or null when absent/malformed. */
-    private parseSessionDeadlineMs(configJson: string | null | undefined): number | null {
-        if (!configJson) {
-            return null;
-        }
-        try {
-            const parsed = JSON.parse(configJson) as { maxSessionDeadlineIso?: string };
-            if (typeof parsed.maxSessionDeadlineIso !== 'string') {
-                return null;
-            }
-            const ms = Date.parse(parsed.maxSessionDeadlineIso);
-            return Number.isNaN(ms) ? null : ms;
-        } catch {
-            return null;
         }
     }
 
