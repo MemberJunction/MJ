@@ -42,6 +42,8 @@ import { CreatedRecordKeyFields, IsKeyReference, KeyFieldValue } from '../lib/cr
 import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 import { DEFAULT_RECORD_FILE_PATTERN, RECORD_FILE_GLOB_OPTIONS } from '../lib/record-file-glob';
+import { FileMayHaveDeletions, RecordsHaveDeletions, TextHasInclude } from '../lib/deletion-prescan';
+import { ResolveSqlLogFilter } from '../lib/sql-log-filters';
 import { resolveCollectionRelationship } from '@memberjunction/record-graph';
 import { CollectionPromotionResolver } from '../lib/collection-promotion';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
@@ -640,6 +642,7 @@ export class PushService {
         this.envSqlLog = new EnvSqlLog(this.syncEngine);
         this.lookupSqlLog = new LookupSqlLog(this.syncEngine);
         const schemaPlaceholders = ResolveSchemaPlaceholders(this.syncConfig, configManager.GetMJConfig());
+        const logFilter = ResolveSqlLogFilter(this.syncConfig?.sqlLogging);
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
           // Env values are left out first, then lookup IDs become subqueries; the logger's schema
           // placeholder rewrite runs after both, so the subqueries' schema names become placeholders.
@@ -653,8 +656,8 @@ export class PushService {
           prettyPrint: true,
           // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
           // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
-          filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
-          filterType: this.syncConfig?.sqlLogging?.filterType,
+          filterPatterns: logFilter.Patterns,
+          filterType: logFilter.FilterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
           variableBatchThreshold: this.syncConfig?.sqlLogging?.variableBatchThreshold ?? 200,
         });
@@ -2740,21 +2743,14 @@ export class PushService {
         ignore: ['**/node_modules/**', '**/.mj-*.json']
       });
 
-      // Quick scan for delete directives without full processing
+      // Quick scan for delete markers at any depth. A file that uses @include falls through to
+      // the full audit, which expands includes before looking.
       for (const filePath of files) {
         try {
           const content = await fs.readFile(filePath, 'utf-8');
-          // Fast string check for delete directives
-          if (content.includes('"delete"') && content.includes('true')) {
-            // More precise check - parse JSON to confirm
-            const data = JSON.parse(content);
-            const records = Array.isArray(data) ? data : [data];
-
-            const hasDelete = records.some((r: RecordData) => r.deleteRecord?.delete === true);
-            if (hasDelete) {
-              hasAnyDeletions = true;
-              break;
-            }
+          if (FileMayHaveDeletions(content)) {
+            hasAnyDeletions = true;
+            break;
           }
         } catch (error) {
           // Ignore errors in quick scan
@@ -2806,10 +2802,7 @@ export class PushService {
 
           // Handle @include directives if present
           let fileData = rawFileData;
-          const jsonString = JSON.stringify(rawFileData);
-          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
-          if (hasIncludes) {
+          if (TextHasInclude(JSON.stringify(rawFileData))) {
             const jsonPreprocessor = new JsonPreprocessor();
             fileData = await jsonPreprocessor.processFile(filePath);
           }
@@ -2970,25 +2963,7 @@ export class PushService {
    * Recursively check if any records in an array (including nested relatedEntities) have deletions
    */
   private hasAnyDeletions(records: RecordData[]): boolean {
-    for (const record of records) {
-      // Check this record
-      if (record.deleteRecord?.delete === true) {
-        return true;
-      }
-
-      // Check nested related entities recursively
-      if (record.relatedEntities) {
-        for (const relatedRecords of Object.values(record.relatedEntities)) {
-          if (Array.isArray(relatedRecords)) {
-            if (this.hasAnyDeletions(relatedRecords)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-
-    return false;
+    return RecordsHaveDeletions(records);
   }
 
   /**

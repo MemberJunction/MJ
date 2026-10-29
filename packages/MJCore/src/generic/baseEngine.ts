@@ -40,6 +40,16 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     DatasetName?: string;
     /**
+     * Optional list of constituent entity names for a `Type: 'dataset'` config (for example,
+     * the entities returned by `Template_Metadata` or `ResourceTypes`).
+     *
+     * When supplied, `BaseEngine.CheckPermissionsOrSkipAll` pre-checks `CanRead` on each
+     * constituent entity before firing the dataset request, and `LoadSingleDatasetConfig`
+     * can classify a failed dataset load as a permanent permission denial rather than a
+     * transient error.
+     */
+    Entities?: string[];
+    /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
      */
     Filter?: string;
@@ -1988,18 +1998,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
-        // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
-        const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
         this.WarnAboutFieldSecuredEntities(entityConfigs);
 
-        // All-or-nothing permission check: if the user lacks read access on ANY
-        // entity config, skip ALL entity configs for this engine. Returns the
-        // original array unchanged when permissions pass, or an empty array when
-        // any entity is denied (marking the engine as permission-constrained).
-        const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
+        // All-or-nothing permission check across all configs (both entity configs and
+        // dataset configs that declare their constituent Entities). If the user lacks
+        // read access on ANY configured entity, skip ALL configs for this engine.
+        const configsToLoad = this.CheckPermissionsOrSkipAll(this._metadataConfigs, contextUser);
+        const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
+        const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
                            this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
@@ -2058,17 +2067,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const missingEntities = this.findMissingEntities(configs);
         if (missingEntities.length > 0) {
             LogStatusEx({
-                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                message: `${this.constructor.name}: Skipping ${configs.length} config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
                 verboseOnly: true,
                 category: 'Cache',
             });
 
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                 });
@@ -2085,18 +2092,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const deniedEntities = this.findUnreadableEntities(configs, user);
 
         if (deniedEntities.length > 0) {
-            LogWarning(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
+            LogWarning(`${this.constructor.name}: Skipping ${configs.length} config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
 
-            // Mark all entity configs as successfully loaded with empty data.
+            // Mark all configs as successfully loaded with empty data.
             // This is not a failure — it's expected behavior for limited-permission users.
             // Marking as successful allows the engine to set _loaded = true and avoid
             // endless retry loops from EnsureLoaded().
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                     permissionDenied: true,
@@ -2106,10 +2111,45 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._isPermissionConstrained = true;
             this._deniedEntityNames = deniedEntities;
 
-            return []; // Return empty — don't attempt any RunView calls
+            return []; // Return empty — don't attempt any RunView or dataset calls
         }
 
         return configs;
+    }
+
+    /**
+     * Initializes the target property on `this` when a config is skipped before loading.
+     * Entity configs receive `[]`; `single_property` dataset configs receive `{}` only when
+     * the subclass has not already initialized the property to a default container.
+     */
+    private initializeSkippedConfigProperty(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject === false) {
+            return;
+        }
+        if (config.Type === 'dataset') {
+            if (
+                config.DatasetResultHandling === 'single_property' &&
+                (this as Record<string, unknown>)[config.PropertyName] == null
+            ) {
+                (this as Record<string, unknown>)[config.PropertyName] = {};
+            }
+        } else {
+            (this as Record<string, unknown>)[config.PropertyName] = [];
+        }
+    }
+
+    /**
+     * Returns the entity name(s) governed by `config`: `Entities` (or `EntityName`) for
+     * dataset configs, and `EntityName` for entity configs.
+     */
+    private configEntityNames(config: BaseEnginePropertyConfig): string[] {
+        if (config.Type === 'dataset') {
+            if (config.Entities && config.Entities.length > 0) {
+                return config.Entities;
+            }
+            return config.EntityName ? [config.EntityName] : [];
+        }
+        return config.EntityName ? [config.EntityName] : [];
     }
 
     /**
@@ -2124,9 +2164,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
         const missing: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            if (!md.EntityByName(config.EntityName)) {
-                missing.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                if (!md.EntityByName(entityName) && !missing.includes(entityName)) {
+                    missing.push(entityName);
+                }
             }
         }
         return missing;
@@ -2137,12 +2178,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const md = this.ProviderToUse;
         const denied: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            const entityInfo = md.EntityByName(config.EntityName);
-            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
-            const perms = entityInfo.GetUserPermisions(user);
-            if (!perms || !perms.CanRead) {
-                denied.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                const entityInfo = md.EntityByName(entityName);
+                if (!entityInfo) continue; // Entity not in metadata — let RunView/dataset handle it
+                const perms = entityInfo.GetUserPermisions(user);
+                if ((!perms || !perms.CanRead) && !denied.includes(entityName)) {
+                    denied.push(entityName);
+                }
             }
         }
         return denied;
@@ -2349,6 +2391,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Returns true when a failed dataset load was caused by the current user lacking Read
+     * permission on one of the dataset's constituent entities — either per local metadata
+     * (`config.Entities` / `config.EntityName`) or per the server's dataset status message
+     * (`does not have read permissions on ...`).
+     */
+    protected IsDatasetReadDenied(
+        config: BaseEnginePropertyConfig,
+        result: DatasetResultType,
+        contextUser: UserInfo | undefined
+    ): boolean {
+        for (const entityName of this.configEntityNames(config)) {
+            if (!this.ContextUserCanReadConfigEntity(entityName, contextUser)) {
+                return true;
+            }
+        }
+        return typeof result.Status === 'string' && /does not have read permissions? on/i.test(result.Status);
+    }
+
+    /**
+     * Records a dataset config as successfully loaded in an empty state after a permanent
+     * permission denial, so `BaseEngine.Load` marks the engine loaded and does not loop on
+     * `EnsureLoaded()` / `Config()`.
+     */
+    protected MarkDatasetConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        this.initializeSkippedConfigProperty(config);
+        this._dataMap.set(config.PropertyName, {
+            datasetName: config.DatasetName,
+            data: [],
+            loadedSuccessfully: true,
+            readDenied: true,
+        });
+        this.NotifyDataChange(config, []);
+    }
+
+    /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
@@ -2459,7 +2536,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         let result: DatasetResultType;
         if (bypassCache) {
             result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
-            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            if (result?.Success) {
+                await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            }
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser);
         }
@@ -2475,6 +2554,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
         if (!result.Success) {
+            if (this.IsDatasetReadDenied(config, result, contextUser)) {
+                this.MarkDatasetConfigEmptyLoaded(config);
+                LogWarning(
+                    `BaseEngine: Dataset ${config.DatasetName} not readable by current role — loaded empty (restricted-role degradation).`,
+                    'Cache'
+                );
+                return;
+            }
             const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
             LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
             this._dataMap.set(config.PropertyName, {
