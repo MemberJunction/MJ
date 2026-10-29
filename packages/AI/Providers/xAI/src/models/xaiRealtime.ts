@@ -31,8 +31,9 @@ const XAI_BASE_URL = 'https://api.x.ai/v1';
 const XAI_INPUT_TRANSCRIPTION_MODEL = 'whisper-1';
 
 /**
- * xAI has no eagerness knob, so MJ maps the normalized patient/normal/eager levels onto end-of-turn
- * silence instead (values from the approved design for Caliber's Grok voice).
+ * xAI has no eagerness knob, so MJ maps Eagerness onto end-of-turn silence instead: low = most patient
+ * (longest silence before the turn ends), high = eager (shortest). Values are from the approved design
+ * for Caliber's Grok voice.
  */
 export const XAI_EAGERNESS_SILENCE_MS: Readonly<Record<NonNullable<RealtimeTurnDetectionSettings['Eagerness']>, number>> = {
     low: 1200,
@@ -41,15 +42,22 @@ export const XAI_EAGERNESS_SILENCE_MS: Readonly<Record<NonNullable<RealtimeTurnD
 };
 
 /**
- * Turns a requested Eagerness into a silence duration unless the merged request already carries an
- * explicit SilenceDurationMs (any cascade layer), which always wins. serverVad is xAI's only mode, so
- * an Eagerness with no Mode is read as serverVad; without that the mapping would drop the ladder.
+ * Prepares a normalized request for the shared server-VAD mapping. serverVad is xAI's only mode, so a
+ * request that sets any tuning field without a Mode is read as serverVad; without that the mapping
+ * returns nothing and the field is silently dropped. An explicit Mode is kept as written ('default'
+ * means the profile default, so no ladder; 'semanticVad' is unsupported and falls back). Eagerness
+ * fills SilenceDurationMs from the ladder only when no layer set an explicit one.
  */
-function deriveSilenceFromEagerness(requested: RealtimeTurnDetectionSettings | undefined): RealtimeTurnDetectionSettings | undefined {
-    if (!requested?.Eagerness || requested.SilenceDurationMs !== undefined) {
+function prepareXaiTurnRequest(requested: RealtimeTurnDetectionSettings | undefined): RealtimeTurnDetectionSettings | undefined {
+    if (!requested) {
         return requested;
     }
-    return { ...requested, Mode: requested.Mode ?? 'serverVad', SilenceDurationMs: XAI_EAGERNESS_SILENCE_MS[requested.Eagerness] };
+    const hasTuning = requested.Eagerness !== undefined || requested.Threshold !== undefined || requested.SilenceDurationMs !== undefined;
+    if (!hasTuning) {
+        return requested;
+    }
+    const silence = requested.SilenceDurationMs ?? (requested.Eagerness ? XAI_EAGERNESS_SILENCE_MS[requested.Eagerness] : undefined);
+    return { ...requested, Mode: requested.Mode ?? 'serverVad', ...(silence !== undefined ? { SilenceDurationMs: silence } : {}) };
 }
 
 /**
@@ -88,7 +96,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     // detection but hands the speak decision to the bridge. A normalized request maps first
     // (serverVad tuning knobs apply); the required explicit block is the unconditional fallback.
     buildTurnDetection: (disableAutoResponse, requested) =>
-        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, deriveSilenceFromEagerness(requested))
+        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, prepareXaiTurnRequest(requested))
         ?? {
             type: 'server_vad',
             create_response: !disableAutoResponse,

@@ -891,6 +891,38 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
             expect(await startTurnDetection({ Mode: 'serverVad', Threshold: 0.6 })).not.toHaveProperty('silence_duration_ms');
         });
 
+        it('explicit SilenceDurationMs 900 with Eagerness and no Mode -> 900', async () => {
+            expect(await startTurnDetection({ Eagerness: 'low', SilenceDurationMs: 900 })).toMatchObject({ type: 'server_vad', silence_duration_ms: 900 });
+        });
+
+        it('SilenceDurationMs 900 alone, no Mode -> 900', async () => {
+            expect(await startTurnDetection({ SilenceDurationMs: 900 })).toMatchObject({ type: 'server_vad', silence_duration_ms: 900 });
+        });
+
+        it('a request with no tuning field is unchanged: plain floor block', async () => {
+            const td = await startTurnDetection({});
+            expect(td).toEqual({ type: 'server_vad', create_response: true, interrupt_response: true });
+        });
+
+        it("Mode 'semanticVad' + Eagerness -> today's fallback block, no ladder value", async () => {
+            const td = await startTurnDetection({ Mode: 'semanticVad', Eagerness: 'low' });
+            expect(td).toEqual({ type: 'server_vad', create_response: true, interrupt_response: true });
+        });
+
+        it("Reconfigure after a start with Eagerness 'high' carries silence_duration_ms 400", async () => {
+            const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { turnDetection: { Eagerness: 'high' } } })) as xAIRealtimeSession;
+            const before = driver.Fake.Sent.length;
+            session.Reconfigure({ DisableAutoResponse: true });
+            const frame = driver.Fake.Sent.slice(before)[0];
+            if (frame.type === 'session.update' && frame.session.type === 'realtime') {
+                const td = (frame.session.audio as { input?: { turn_detection?: Record<string, unknown> } }).input?.turn_detection;
+                expect(td).toMatchObject({ create_response: false, silence_duration_ms: 400 });
+                expect(td).not.toHaveProperty('eagerness');
+            } else {
+                throw new Error('expected realtime session.update from Reconfigure');
+            }
+        });
+
         it('the ladder keeps the meeting floor', async () => {
             const td = await startTurnDetection({ Mode: 'serverVad', Eagerness: 'high' }, { disableAutoResponse: true });
             expect(td).toMatchObject({ create_response: false, interrupt_response: true, silence_duration_ms: 400 });
