@@ -2,11 +2,11 @@
  * Default discovery, apply, action and store collaborators of the archive-seed job.
  * Interfaces live in `ArchiveSeedDeps.ts`.
  */
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
 import type { ActionParam, ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
-import { ConnectorFactory, IntegrationSchemaSync, type BaseIntegrationConnector, type SourceSchemaInfo } from '@memberjunction/integration-engine';
+import { ConnectorFactory, IntegrationSchemaSync, type BaseIntegrationConnector, type PersistSchemaResult, type SourceSchemaInfo } from '@memberjunction/integration-engine';
 import { RuntimeSchemaManager, type ArchiveSeedDiscoveredTable, type ArchiveSeedWork, type RSUPendingWork } from '@memberjunction/schema-engine';
 import { SelectArchiveSchemas } from './ArchiveSeedState.js';
 import { IntegrationDiscoveryResolver, type ApplyAllBatchInput } from '../../resolvers/IntegrationDiscoveryResolver.js';
@@ -57,14 +57,25 @@ export class DefaultArchiveSeedDiscovery implements ArchiveSeedDiscovery {
     const connector = ConnectorFactory.Resolve(integration);
     const schemas = await this.archiveSchemas(connector, companyIntegration, user);
     const schema = await connector.IntrospectSchema(companyIntegration, user, schemas.length > 0 ? { Schemas: schemas } : undefined);
-    await IntegrationSchemaSync.PersistDiscoveredSchema({
+    const persisted = await IntegrationSchemaSync.PersistDiscoveredSchema({
       IntegrationID: companyIntegration.IntegrationID,
       CatalogSource: 'Shared',
       SourceSchema: schema,
       ContextUser: user,
       Provider: provider,
     });
+    LogStatus(this.describeDiscovery(schemas, schema, persisted));
     return MapSourceSchemaToTables(schema);
+  }
+
+  /** One line of what discovery found and persisted; the keyed count is what the apply will accept. */
+  private describeDiscovery(schemas: string[], schema: SourceSchemaInfo, persisted: PersistSchemaResult): string {
+    const keyed = schema.Objects.filter(o => o.PrimaryKeyFields.length > 0);
+    const keyedFlags = schema.Objects.reduce((n, o) => n + o.Fields.filter(f => f.IsPrimaryKey === true).length, 0);
+    const sample = keyed.slice(0, 3).map(o => `${o.ExternalName}[${o.PrimaryKeyFields.join(',')}]`).join(' ');
+    return `Archive seed discovery: schemas [${schemas.join(', ')}], ${schema.Objects.length} object(s), ${keyed.length} with a primary key `
+      + `(${keyedFlags} key column flag(s)) e.g. ${sample || 'none'}; persisted ${persisted.ObjectsCreated}+${persisted.ObjectsUpdated} objects, `
+      + `${persisted.FieldsCreated}+${persisted.FieldsUpdated} fields`;
   }
 
   /**

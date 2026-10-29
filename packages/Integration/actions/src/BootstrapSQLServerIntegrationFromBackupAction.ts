@@ -142,7 +142,8 @@ interface TableLoadBatchSpec {
     SourceTable: string;
     TargetSchema: string;
     TargetTable: string;
-    TargetPkCol: string;
+    /** The target entity's primary-key columns, in metadata order; the record map stores them `|`-joined. */
+    TargetPkCols: string[];
     Mappings: ColumnMapping[];
     ExternalIdExpr: string;
     RestoreTimestampIso: string;
@@ -418,7 +419,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 throw new Error(`Target entity '${entityInfo.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL ETL is prohibited.`);
             }
 
-            const targetPkCol = this.resolveTargetPrimaryKey(entityInfo);
+            const targetPkCols = this.resolveTargetPrimaryKeys(entityInfo);
 
             const loadStage = `Load ${entityInfo.Name}`;
             progress.StageStart(loadStage, `Loading ${map.ExternalObjectName} into ${entityInfo.SchemaName}.${entityInfo.BaseTable}`);
@@ -431,7 +432,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 map.ExternalObjectName,
                 entityInfo.SchemaName,
                 entityInfo.BaseTable,
-                targetPkCol,
+                targetPkCols,
                 options.BatchSize,
                 backupStartDate,
                 options.TruncateTargetBeforeLoad,
@@ -537,14 +538,17 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     }
 
     /**
-     * The target entity's single primary-key column. The load writes one generated key per row and the
-     * record-map seed stores one key value per row, so a composite-key target cannot be bootstrapped here.
+     * The target entity's primary-key columns in metadata order. A synced shadow table carries the
+     * source's own key columns as a soft (unenforced, nullable) primary key, single or composite; the load
+     * copies them from the source row and the record map stores them `|`-joined, exactly as the sync
+     * engine composes an entity record ID. A target whose key column has no source counterpart (a
+     * surrogate key) gets a generated value instead; see {@link buildColumnMappings}.
      */
-    protected resolveTargetPrimaryKey(entityInfo: EntityInfo): string {
-        if (entityInfo.PrimaryKeys.length !== 1) {
-            throw new Error(`Target entity '${entityInfo.Name}' has a composite primary key (${entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ')}); bootstrap requires a single-column key.`);
+    protected resolveTargetPrimaryKeys(entityInfo: EntityInfo): string[] {
+        if (entityInfo.PrimaryKeys.length === 0) {
+            throw new Error(`Target entity '${entityInfo.Name}' has no primary key in metadata; the load cannot seed its record maps.`);
         }
-        return entityInfo.FirstPrimaryKey.Name; // first-pk-ok: single-column key enforced on the line above
+        return entityInfo.PrimaryKeys.map(pk => pk.Name);
     }
 
     /**
@@ -834,7 +838,7 @@ SELECT DB_NAME() AS CurrentDatabase,
         externalObjectName: string,
         targetSchema: string,
         targetTable: string,
-        targetPkCol: string,
+        targetPkCols: string[],
         batchSize: number,
         restoreTimestamp: Date,
         truncateTargetBeforeLoad: boolean,
@@ -847,7 +851,7 @@ SELECT DB_NAME() AS CurrentDatabase,
         ValidateIdentifier(sourceTable, 'table');
         ValidateIdentifier(targetSchema, 'schema');
         ValidateIdentifier(targetTable, 'table');
-        ValidateIdentifier(targetPkCol, 'column');
+        targetPkCols.forEach(c => ValidateIdentifier(c, 'column'));
 
         const sourceColumns = await this.queryTableColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         if (sourceColumns.length === 0) {
@@ -875,7 +879,7 @@ SELECT DB_NAME() AS CurrentDatabase,
         }
 
         const watermarkSourceCol = await this.resolveWatermarkColumn(companyIntegrationID, externalObjectName, sourceColSet, contextUser);
-        const mappings = this.buildColumnMappings(sourceColumns, targetColMap, targetPkCol, watermarkSourceCol);
+        const mappings = this.buildColumnMappings(sourceColumns, targetColMap, targetPkCols, watermarkSourceCol);
         const totalRows = await this.queryTableRowCount(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         const chunkPkCol = this.resolveChunkColumn(pkColumns, sourceColumns, totalRows, batchSize);
 
@@ -885,7 +889,7 @@ SELECT DB_NAME() AS CurrentDatabase,
             SourceTable: sourceTable,
             TargetSchema: targetSchema,
             TargetTable: targetTable,
-            TargetPkCol: targetPkCol,
+            TargetPkCols: targetPkCols,
             Mappings: mappings,
             ExternalIdExpr: this.buildExternalIdExpression(pkColumns, sourceColSet),
             RestoreTimestampIso: restoreTimestamp.toISOString(),
@@ -909,22 +913,35 @@ SELECT DB_NAME() AS CurrentDatabase,
     }
 
     /**
-     * The columns the load writes: a generated target key, the engine's integration bookkeeping columns,
-     * and every domain column present on both sides. Source columns that collide with the target key or the
-     * bookkeeping columns are skipped — the key is generated and the bookkeeping is set here.
+     * The columns the load writes: the target key, the engine's integration bookkeeping columns, and
+     * every domain column present on both sides. A target key column with a same-named source column is
+     * the source's own key (the soft primary key of a synced shadow table) and is copied; one without a
+     * source counterpart is a surrogate and gets a generated value. Source columns that collide with the
+     * bookkeeping columns are skipped — the bookkeeping is set here.
      */
     protected buildColumnMappings(
         sourceColumns: SqlColumnInfo[],
         targetColMap: Map<string, string>,
-        targetPkCol: string,
+        targetPkCols: string[],
         watermarkSourceCol: string | undefined
     ): ColumnMapping[] {
         const mappings: ColumnMapping[] = [];
-        const targetPkLower = targetPkCol.toLowerCase();
+        const sourceByLower = new Map(sourceColumns.map(c => [c.COLUMN_NAME.toLowerCase(), c.COLUMN_NAME]));
+        const targetPkLowers = new Set(targetPkCols.map(c => c.toLowerCase()));
 
-        // Target primary key: NEWID() — NEWSEQUENTIALID() is only valid in a DEFAULT constraint (Msg 302).
-        if (targetColMap.has(targetPkLower)) {
-            mappings.push({ Target: targetColMap.get(targetPkLower)!, Expr: 'NEWID()' });
+        for (const pkLower of targetPkLowers) {
+            const targetName = targetColMap.get(pkLower);
+            if (!targetName) {
+                continue;
+            }
+            const sourceName = sourceByLower.get(pkLower);
+            if (sourceName) {
+                ValidateIdentifier(sourceName, 'column');
+                mappings.push({ Target: targetName, Expr: `s.[${sourceName}]` });
+            } else {
+                // Surrogate key: NEWID() — NEWSEQUENTIALID() is only valid in a DEFAULT constraint (Msg 302).
+                mappings.push({ Target: targetName, Expr: 'NEWID()' });
+            }
         }
         if (targetColMap.has('__mj_integration_syncstatus')) {
             mappings.push({ Target: targetColMap.get('__mj_integration_syncstatus')!, Expr: `N'Active'` });
@@ -936,7 +953,7 @@ SELECT DB_NAME() AS CurrentDatabase,
             mappings.push({ Target: targetColMap.get('__mj_integration_lastseenmodifiedvalue')!, Expr: `CAST(s.[${watermarkSourceCol}] AS NVARCHAR(255))` });
         }
 
-        const reserved = new Set([targetPkLower, 'sourcerecordid', 'sourceobject', 'syncedat',
+        const reserved = new Set([...targetPkLowers, 'sourcerecordid', 'sourceobject', 'syncedat',
             '__mj_integration_syncstatus', '__mj_integration_lastsyncedat', '__mj_integration_lastseenmodifiedvalue']);
         for (const sCol of sourceColumns) {
             const sNameLower = sCol.COLUMN_NAME.toLowerCase();
@@ -961,6 +978,18 @@ SELECT DB_NAME() AS CurrentDatabase,
             return pkColumns.map(c => `ISNULL(CAST(s.[${c}] AS NVARCHAR(450)), N'')`).join(" + N'|' + ");
         }
         return sourceColSet.has('id') ? `CAST(s.[id] AS NVARCHAR(450))` : `CAST(NEWID() AS NVARCHAR(450))`;
+    }
+
+    /**
+     * The inserted row's entity record ID for the record map: the target key value, or for a composite
+     * key the values `|`-joined in metadata order with NULL as '' — the same composition the sync engine
+     * uses (`composeEntityRecordID`), so later deltas match the bootstrapped rows.
+     */
+    protected buildEntityRecordIDExpression(targetPkCols: string[]): string {
+        if (targetPkCols.length === 1) {
+            return `CAST(inserted.[${targetPkCols[0]}] AS NVARCHAR(750))`;
+        }
+        return targetPkCols.map(c => `ISNULL(CAST(inserted.[${c}] AS NVARCHAR(750)), N'')`).join(" + N'|' + ");
     }
 
     /** The key column to chunk a large load by, or undefined: only a single-column integer key qualifies. */
@@ -1049,7 +1078,7 @@ DROP TABLE #MJRecordMap;`;
     WHEN NOT MATCHED THEN
         INSERT (${insertCols})
         VALUES (${insertVals})
-    OUTPUT CAST(inserted.[${spec.TargetPkCol}] AS NVARCHAR(750)), src.[__MJExternalID]
+    OUTPUT ${this.buildEntityRecordIDExpression(spec.TargetPkCols)}, src.[__MJExternalID]
     INTO #MJRecordMap ([EntityRecordID], [ExternalSystemRecordID]);
 `;
     }

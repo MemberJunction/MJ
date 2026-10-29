@@ -56,8 +56,11 @@ const INTERRUPTED_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedSta
   'CleaningUp',
 ]);
 
-/** States in which the job waits for the caller and may be cancelled. */
-const CANCELLABLE_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedState>(['AwaitingSelection', 'AwaitingCleanupDecision']);
+/**
+ * States in which the job waits (for the caller, or for the entity maps the post-restart step writes)
+ * and may be cancelled; no action runs in any of them.
+ */
+const CANCELLABLE_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedState>(['AwaitingSelection', 'Mapping', 'AwaitingCleanupDecision']);
 
 /** States whose progress is reported on run B (the load run) rather than run A. */
 const PHASE_B_STATES: ReadonlySet<ArchiveSeedState> = new Set<ArchiveSeedState>([
@@ -252,7 +255,7 @@ export class ArchiveSeedJob {
   public async Cancel(jobID: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
     const ctx = await this.loadContext(jobID, user, provider);
     if (!CANCELLABLE_STATES.has(ctx.Work.State)) {
-      throw new Error(`Archive seed job "${jobID}" is ${ctx.Work.State}; only a job awaiting a selection or a cleanup decision can be cancelled`);
+      throw new Error(`Archive seed job "${jobID}" is ${ctx.Work.State}; only a job awaiting a selection, its entity maps or a cleanup decision can be cancelled`);
     }
     this.disarmCleanupTimer(jobID);
     ctx.StagingRestored = true;

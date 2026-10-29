@@ -9,6 +9,7 @@ import type {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { IntegrationDiscoveryResolver } from '../../resolvers/IntegrationDiscoveryResolver.js';
 import type {
   ArchiveSeedCompanyIntegrationRef,
   ArchiveSeedCompanyIntegrationValues,
@@ -74,13 +75,16 @@ export class DefaultArchiveSeedRecords implements ArchiveSeedRecords {
     });
   }
 
+  /**
+   * Deletes through the same cascade as the Integrations page's delete (runs, entity maps with their
+   * field maps, watermarks and record maps, the connection, its unshared credential): a seed that failed
+   * after its tables were applied already owns entity maps, which a bare entity delete cannot remove.
+   * The connection's own entity Delete still removes its archive-seed job rows and data source.
+   */
   public async DeleteCompanyIntegration(id: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
-    const ci = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
-    if (!(await ci.Load(id))) {
-      throw new Error(`CompanyIntegration "${id}" not found`);
-    }
-    if (!(await ci.Delete())) {
-      throw new Error(`Failed to delete Company Integration '${ci.Name}': ${ci.LatestResult?.CompleteMessage ?? 'delete failed'}`);
+    const result = await new IntegrationDiscoveryResolver().DeleteConnectionCore(id, false, provider, user);
+    if (!result.Success) {
+      throw new Error(`Failed to delete Company Integration '${id}': ${result.Message}`);
     }
   }
 

@@ -65,8 +65,9 @@ export interface ArchiveSeedRecords {
   /** Every company integration of this integration (ID, name and seeding job), so a refusal can name the existing one. */
   FindCompanyIntegrations(integrationID: string, user: UserInfo, provider: IMetadataProvider): Promise<ArchiveSeedCompanyIntegrationRef[]>;
   /**
-   * Deletes a company integration through its entity, which for a seeded one also removes its archive-seed
-   * job rows and data source. Throws when it does not exist or the delete is refused.
+   * Deletes a company integration with everything it owns (runs, entity maps and their field maps,
+   * watermarks and record maps, credential); for a seeded one the entity delete also removes its
+   * archive-seed job rows and data source. Throws when it does not exist or the delete is refused.
    */
   DeleteCompanyIntegration(id: string, user: UserInfo, provider: IMetadataProvider): Promise<void>;
   /** Throws when no External Data Source Type has that driver class. */

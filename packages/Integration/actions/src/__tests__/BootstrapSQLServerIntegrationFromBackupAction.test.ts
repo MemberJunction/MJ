@@ -207,7 +207,10 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
             if (options.compositePk) {
                 columns.push({ COLUMN_NAME: 'TenantID', DATA_TYPE: 'int', IS_NULLABLE: 'NO' });
             }
-            return Promise.resolve(columns);
+            // The staging (source) table has no `ID`: that column is the target's surrogate key, so the
+            // load generates it. Every other column exists on both sides.
+            const isSourceQuery = sql.includes('].INFORMATION_SCHEMA.COLUMNS');
+            return Promise.resolve(isSourceQuery ? columns.filter(c => c.COLUMN_NAME !== 'ID') : columns);
         }
 
         if (sql.includes('INFORMATION_SCHEMA.TABLE_CONSTRAINTS')) {
@@ -575,7 +578,34 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(findLoadBatch()).toContain("ISNULL(CAST(s.[CustomerID] AS NVARCHAR(450)), N'') + N'|' + ISNULL(CAST(s.[TenantID] AS NVARCHAR(450)), N'') AS [__MJExternalID]");
         });
 
-        it('fails clearly when the target entity has a composite primary key', async () => {
+        it('copies a soft (source-named) target key from the source instead of generating it', async () => {
+            mockEntityByIDFn = vi.fn().mockReturnValue({
+                ID: 'entity-cust-001',
+                Name: 'Customer',
+                SchemaName: 'raw_erp',
+                BaseTable: 'Customer',
+                AllowDirectSQLInsert: true,
+                FirstPrimaryKey: { Name: 'CustomerID' },
+                PrimaryKeys: [{ Name: 'CustomerID' }],
+            });
+
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            }));
+
+            expect(result.Success).toBe(true);
+            const batch = findLoadBatch();
+            expect(batch).toContain('s.[CustomerID] AS [CustomerID]');
+            // No generated target column (the record map's own row ID is still NEWID()).
+            expect(batch).not.toContain('NEWID() AS [');
+            expect(batch).toContain('OUTPUT CAST(inserted.[CustomerID] AS NVARCHAR(750)), src.[__MJExternalID]');
+        });
+
+        it('loads a composite-key target, copying each key column and joining the record ID with | in metadata order', async () => {
+            mockSql = createMockSqlExecutor({ compositePk: true });
+            action.CustomDatabaseProvider = mockSql.executor;
             mockEntityByIDFn = vi.fn().mockReturnValue({
                 ID: 'entity-cust-001',
                 Name: 'Customer',
@@ -586,16 +616,37 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
                 PrimaryKeys: [{ Name: 'TenantID' }, { Name: 'CustomerID' }],
             });
 
-            const params = makeParams({
+            const result = await action['InternalRunAction'](makeParams({
                 CompanyIntegrationID: 'ci-001',
                 BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
                 SasToken: 'token123',
+            }));
+
+            expect(result.Success).toBe(true);
+            const batch = findLoadBatch();
+            expect(batch).toContain('s.[TenantID] AS [TenantID]');
+            expect(batch).toContain('s.[CustomerID] AS [CustomerID]');
+            expect(batch).toContain("OUTPUT ISNULL(CAST(inserted.[TenantID] AS NVARCHAR(750)), N'') + N'|' + ISNULL(CAST(inserted.[CustomerID] AS NVARCHAR(750)), N''), src.[__MJExternalID]");
+        });
+
+        it('fails clearly when the target entity has no primary key in metadata', async () => {
+            mockEntityByIDFn = vi.fn().mockReturnValue({
+                ID: 'entity-cust-001',
+                Name: 'Customer',
+                SchemaName: 'raw_erp',
+                BaseTable: 'Customer',
+                AllowDirectSQLInsert: true,
+                PrimaryKeys: [],
             });
 
-            const result = await action['InternalRunAction'](params);
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            }));
 
             expect(result.Success).toBe(false);
-            expect(result.Message).toContain('composite primary key');
+            expect(result.Message).toContain('has no primary key in metadata');
         });
 
         it('fails clearly when record maps do not sanction direct SQL insert', async () => {

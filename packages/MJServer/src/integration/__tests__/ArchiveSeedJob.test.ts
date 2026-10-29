@@ -400,7 +400,7 @@ describe('ArchiveSeedJob', () => {
   it.each(['Restoring', 'Building', 'Loading'] as const)('Cancel refuses a job that is %s', async state => {
     const work: ArchiveSeedWork = { ...NewArchiveSeedWork(INPUT, USER.ID, 'int-sql', clock), State: state };
     store.Jobs.set('job-busy', { ID: 'job-busy', Work: work, Status: 'Pending', CompanyIntegrationID: 'ci-busy' });
-    await expect(job.Cancel('job-busy', USER, PROVIDER)).rejects.toThrow(`Archive seed job "job-busy" is ${state}; only a job awaiting a selection or a cleanup decision can be cancelled`);
+    await expect(job.Cancel('job-busy', USER, PROVIDER)).rejects.toThrow(`Archive seed job "job-busy" is ${state}; only a job awaiting a selection, its entity maps or a cleanup decision can be cancelled`);
     expect(store.Jobs.get('job-busy')?.Work.State).toBe(state);
   });
 

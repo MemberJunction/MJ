@@ -210,7 +210,7 @@ export class ApplyAllBatchOutput {
 // ─── Delete Connection Output ────────────────────────────────────────────────
 
 @ObjectType()
-class DeleteConnectionOutput {
+export class DeleteConnectionOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field({ nullable: true }) EntityMapsDeleted?: number;
@@ -5856,6 +5856,26 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             this.getAuthenticatedUser(ctx); // verify caller is authenticated
             const sysUser = this.getSystemUser(); // use system user for cascade delete
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            return await this.DeleteConnectionCore(companyIntegrationID, deleteData, md, sysUser);
+        } catch (e) {
+            LogError(`IntegrationDeleteConnection error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * The cascade behind {@link IntegrationDeleteConnection}, for server-side callers (the archive seed
+     * replaces a failed seed's connection with it): deletes the connection's runs, scheduled jobs, entity
+     * maps with their field maps, watermarks and record maps, employee links, the connection itself and
+     * its unshared credential, in one transaction group as `sysUser`. Throws on an unexpected error;
+     * returns `Success: false` when the connection is missing or the transaction fails.
+     */
+    public async DeleteConnectionCore(
+        companyIntegrationID: string,
+        deleteData: boolean,
+        md: IMetadataProvider,
+        sysUser: UserInfo
+    ): Promise<DeleteConnectionOutput> {
             const rv = new RunView();
 
             // Step 1: Load CompanyIntegration
@@ -6041,10 +6061,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SchedulesDeleted: schedulesDeleted,
                 CredentialDeleted: credentialDeleted,
             };
-        } catch (e) {
-            LogError(`IntegrationDeleteConnection error: ${e}`);
-            return { Success: false, Message: this.formatError(e) };
-        }
     }
 
     // ── SCHEMA EVOLUTION ────────────────────────────────────────────────
