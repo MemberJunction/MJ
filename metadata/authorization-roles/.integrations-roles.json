@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "6D5C616A-76B1-43BD-AF28-CE599AA0EEF7"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "D326BAB4-7CAD-423C-B074-A63050EB5A61"
+    }
+  }
+]

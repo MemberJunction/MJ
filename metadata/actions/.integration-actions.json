@@ -559,6 +559,18 @@
             "ID": "2D6C0C62-9DDC-478C-8F40-3575B9E83984"
           }
         }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+            "Comments": "Holders of Integrations: Bootstrap From Backup (or Integrations) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "96FFAA4A-9C11-4945-A539-D301B16E99D3"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -777,6 +789,18 @@
           },
           "primaryKey": {
             "ID": "80777FA7-2C9B-4FAE-B349-56B6EC7653BD"
+          }
+        }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+            "Comments": "Holders of Integrations: Bootstrap From Backup (or Integrations) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "91FA8472-9391-4CBD-8DFB-B75F8706FE3D"
           }
         }
       ]
@@ -1065,6 +1089,18 @@
             "ID": "F4E89378-AACE-448E-B8E3-7B3462161C21"
           }
         }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+            "Comments": "Holders of Integrations: Bootstrap From Backup (or Integrations) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "734D2D04-24F8-40CF-B911-160AD948CA94"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -1253,6 +1289,18 @@
             "ID": "CC42BEE6-7454-4543-B507-A09EFB1B3CDA"
           }
         }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+            "Comments": "Holders of Integrations: Bootstrap From Backup (or Integrations) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "CD36C2AB-E779-4178-9B12-0CE42A94205A"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -1401,6 +1449,18 @@
           },
           "primaryKey": {
             "ID": "BF049A36-35F0-427B-A7A1-8E5D7CE0AC69"
+          }
+        }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+            "Comments": "Holders of Integrations: Bootstrap From Backup (or Integrations) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "2DEF4B36-4A57-4896-A51B-538BBB1CEA62"
           }
         }
       ]
@@ -1593,6 +1653,18 @@
           },
           "primaryKey": {
             "ID": "8145028A-8251-4C58-875F-BAAED55EFB2B"
+          }
+        }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Integrations: Bootstrap From Backup",
+            "Comments": "Holders of Integrations: Bootstrap From Backup (or Integrations) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "0CD9CC34-82E0-491C-AE66-E3B420DDFD7C"
           }
         }
       ]

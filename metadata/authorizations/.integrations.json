@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "Integrations",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for integration operations that run server actions on behalf of a user. Users or roles must hold a descendant authorization to run those actions through the Integrations dashboard or the Run Action mutation."
+    },
+    "primaryKey": {
+      "ID": "C0796368-9CD3-4E4B-84AC-3DD71A2AF0EE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integrations: Bootstrap From Backup",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Integrations",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to seed a SQL Server integration from a backup: inspect and list backups, restore one into a staging database on the API's SQL Server, create and load the entities, and drop the staging database. Gates the Bootstrap SQL Server Integration From Backup action and the archive seed GraphQL operations, which run as the caller. Evaluated with ancestors."
+    },
+    "primaryKey": {
+      "ID": "DEC3C22C-A71A-4554-80BA-7C013360620F"
+    }
+  }
+]

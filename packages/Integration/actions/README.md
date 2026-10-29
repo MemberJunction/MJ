@@ -201,6 +201,7 @@ These are decisions of the current release, recorded so they can be revisited.
 
 - **A. One SQL Server connection per workspace.** The archive seed refuses to start when another SQL Server company integration exists. Per-connection catalog and schema scoping is a follow-up.
 - **B. Seeded entities carry no record-change history.** Seeded entities keep `AllowDirectSQLInsert = true`, with `TrackRecordChanges` and `TrustServerCacheCompletely` off permanently, so they have no record-change history and the Bootstrap re-seed keeps working.
+- **C. Who may run the backup actions.** The server refuses every action to a non-Owner unless an `MJ: Action Authorizations` row links it to an authorization one of the user's roles holds. The six backup actions (Bootstrap, Restore, Load, Drop, List Azure Backup Blobs, Inspect) link to `Integrations: Bootstrap From Backup`, granted to the Developer and Integration roles (`metadata/authorizations/.integrations.json`, `metadata/authorization-roles/.integrations-roles.json`). The archive seed GraphQL operations apply the Bootstrap action's gate. A user holding neither role sees "Not authorized to run action …" from the wizard; grant the authorization to another role in metadata rather than making the user an Owner.
 
 ### Operator walkthrough (Explorer)
 
