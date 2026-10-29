@@ -7,6 +7,7 @@ also carry `seeds400`; they belong to the statistical suite."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import urllib.error
@@ -18,9 +19,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
+from app import artifacts
+from app.artifacts_v2 import PredictorEnvelope
 from app.main import app
 from app.run import run_trainer
-from app.trainer_schemas import TrainerCompleted, TrainerRequest, TrainerResult
+from app.trainer import TrainedPredictor
+from app.trainer_schemas import ReturnedArtifact, TrainerCompleted, TrainerRequest, TrainerResult
 from tests.tools.trainer_fixture import NUMERIC, FileServer, JsonObject, JsonValue, world_dir
 
 _CLIENT = TestClient(app)
@@ -85,6 +89,25 @@ def completed(payload: JsonObject) -> TrainerCompleted:
         res = _RESULT.validate_python(body)
     assert isinstance(res, TrainerCompleted), f"the trainer did not complete: {res}"
     return res
+
+
+def load_artifact(art: ReturnedArtifact) -> tuple[TrainedPredictor, PredictorEnvelope]:
+    """A returned artifact decoded the way the engine loads it: (predictor, envelope)."""
+    return artifacts.load_v2_envelope(base64.b64decode(art.bytesBase64))
+
+
+def shipped_artifact(r: TrainerCompleted) -> ReturnedArtifact:
+    """The artifact of what the gate ships (the finalist, or the simple baseline it keeps); fails when the gate ships
+    nothing or the run returns no artifact for it."""
+    assert r.gate.shipped is not None, "the gate ships nothing"
+    found = [a for a in r.artifacts if a.candidate == r.gate.shipped]
+    assert len(found) == 1, f"{len(found)} artifacts for the shipped '{r.gate.shipped}'"
+    return found[0]
+
+
+def artifact_sources(r: TrainerCompleted) -> dict[str, set[str]]:
+    """The source columns of every artifact the run returns (the finalist and the baselines), by candidate name."""
+    return {a.candidate: {c.sourceColumn for c in load_artifact(a)[1].featureColumns} for a in r.artifacts}
 
 
 @pytest.fixture(scope="module")

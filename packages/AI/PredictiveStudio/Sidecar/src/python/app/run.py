@@ -100,18 +100,25 @@ def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
 def _audited_columns(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
                      periods: IntArr) -> Tuple[List[encoding.ColumnSpec], List[LeakageFlag]]:
     """The snapshot's feature columns without the source columns the leakage audit flags on the development rows,
-    and the audit's flags. The development rows have time when they span more than one decision period.
+    and the audit's flags (see `_dev_audit`).
 
     Raises:
         TrainerFailure: Stage `inner-cv` when the audit leaves no feature column.
     """
+    audit = _dev_audit(req, snap, enc, dev, periods)
+    return _without_sources(snap.columns, audit.excluded_sources, "the leakage audit"), list(audit.flags)
+
+
+def _dev_audit(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
+               periods: IntArr) -> AU.AuditResult:
+    """The leakage audit of the snapshot's development rows under the request's protocol (its single-feature ceiling
+    and seed). The development rows have time when they span more than one decision period."""
     p = req.protocol
     dev_periods = periods[dev]
-    audit = AU.run_audit(
+    return AU.run_audit(
         snap.frame.iloc[dev].reset_index(drop=True), snap.columns, np.asarray(enc.y)[dev],
         [snap.entity_keys[int(i)] for i in dev], dev_periods, len(set(dev_periods.tolist())) > 1, enc.family,
         p.leakageAudit.singleFeatureHeldOutAucMax, p.seed, len(enc.class_order or []))
-    return _without_sources(snap.columns, audit.excluded_sources, "the leakage audit"), list(audit.flags)
 
 
 def _without_sources(columns: Sequence[encoding.ColumnSpec], excluded: Sequence[str],

@@ -4,7 +4,6 @@ the operating point at a declared capacity, and the class vector a multiclass pr
 
 from __future__ import annotations
 
-import base64
 import math
 
 import numpy as np
@@ -12,9 +11,10 @@ import numpy.typing as npt
 import pandas as pd
 import pytest
 
-from app import artifacts, calibration as CAL, intervals as IV, scores
+from app import calibration as CAL, intervals as IV, scores
 from app.trainer_schemas import MetricWithInterval, OutOfTimeSlice, TrainerCompleted
-from tests.gates.conftest import W_BINARY_FEATURES, completed, last_cycle_ids, post, world, world_frame, world_truth
+from tests.gates.conftest import (W_BINARY_FEATURES, completed, last_cycle_ids, load_artifact, post, shipped_artifact,
+                                  world, world_frame, world_truth)
 from tests.tools.trainer_fixture import (BINARY_LABELS as LM, BINARY_TASK as BIN, NUMERIC, FileServer, JsonObject,
                                          JsonValue, as_list, as_number, as_object, as_str, candidates, person_years,
                                          protocol, refpipe, request, scenario, snapshot_files)
@@ -86,16 +86,14 @@ def shipped_holdout(r: TrainerCompleted) -> MetricWithInterval:
 
 def shipped_predictions(r: TrainerCompleted, frame: pd.DataFrame) -> FArr:
     """The shipped artifact's predictions for `frame`, loaded the way the engine loads it."""
-    art = next(a for a in r.artifacts if a.candidate == r.gate.shipped)
-    predictor, env = artifacts.load_v2_envelope(base64.b64decode(art.bytesBase64))
+    predictor, env = load_artifact(shipped_artifact(r))
     return np.asarray(predictor.predict(frame[[c.name for c in env.featureColumns]]), dtype=np.float64)
 
 
 def predict_class_vectors(r: TrainerCompleted, rows: list[JsonObject]) -> tuple[list[str], list[list[float]]]:
     """POST /predict with the shipped artifact: (the response's classOrder, each row's probability vector)."""
-    art = next(a for a in r.artifacts if a.candidate == r.gate.shipped)
-    status, body = post("/predict", {"artifact_b64": art.bytesBase64, "fitted_preprocessing": {}, "feature_schema": [],
-                                     "rows": list(rows)})
+    status, body = post("/predict", {"artifact_b64": shipped_artifact(r).bytesBase64, "fitted_preprocessing": {},
+                                     "feature_schema": [], "rows": list(rows)})
     assert status == 200, f"/predict answered {status}: {body}"
     resp = as_object(body, "/predict response")
     order = _strs(resp["classOrder"], "classOrder")
