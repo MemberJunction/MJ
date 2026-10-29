@@ -3,6 +3,7 @@
 "@memberjunction/ng-conversations": patch
 "@memberjunction/ng-explorer-core": patch
 "@memberjunction/scheduling-engine": patch
+"@memberjunction/core-entities-server": patch
 "@memberjunction/ai-agents": minor
 ---
 
@@ -25,3 +26,5 @@ Chief of Staff cockpit: reloads itself when something it shows changes. MJAPI br
 Chief of Staff cockpit: a person assigned to a milestone now sees the objective it belongs to. The task scope adds the root above every assigned milestone (read off `RootParentID`), so the assignee's Priorities tab shows the objective card. The objective is shared context, the milestone list is not: the objective's owner (its creator, or a person assigned to the objective itself) sees every milestone, while anyone else sees only the milestones assigned to them, with a "Yours: n of m" note; progress always counts all milestones. Each objective card names its owner (the creator, from the Tasks view's `CreatedByPerson`) beside the people assigned to it. Objective cards and milestone rows show who is assigned, from `MJ_BizApps_Tasks: Task Assignments`, with the signed-in person's own rows highlighted.
 
 Chief of Staff: to-dos and reminders. The prompt turns a request like "remind me to call Mom on Wednesday" into a General task with a due date (no objective fields) plus a one-shot wake at that time whose reply is the reminder itself. The cockpit Overview gets a "To-dos & Reminders" panel listing open root tasks of to-do types (General, Action Item, Follow-up, Reminder) soonest due first, with overdue and due-today marking and a tick control that marks the task Completed through the `Update Record` action.
+
+Chief of Staff for regular users: a user with only the `UI` role could not complete onboarding because that role was read-only on `MJ: AI Agent User Policies`, so Configure Agent User Policy failed and the agent claimed to have kept the preferences "in durable memory", which nothing did. The same role could not create `MJ: AI Agent Requests`, so no approval could be raised for such a user. New metadata grants the UI role Create + Update on both entities (`metadata/entity-permissions/.chief-of-staff-permissions.json`). Two server-side entity subclasses keep the rows private: `MJAIAgentUserPolicyEntityServer` (new, in core-entities-server) lets a non-Owner user save only their own policy and defaults `UserID` to the context user on first save; `MJAIAgentRequestEntityServer` now lets a non-Owner user create requests only for themselves and update only requests that were already theirs, judged by the pre-save `RequestForUserID`. Owner-type users and the scheduler's system user are exempt. The prompt tells the agent to report a failed policy save plainly and never to claim the preferences were stored elsewhere.
