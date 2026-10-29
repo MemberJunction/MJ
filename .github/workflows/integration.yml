@@ -169,7 +169,7 @@ jobs:
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -243,7 +243,7 @@ jobs:
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -634,7 +634,7 @@ jobs:
 
       - name: Set up node
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -768,7 +768,7 @@ jobs:
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -922,7 +922,7 @@ jobs:
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1074,7 +1074,7 @@ jobs:
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'

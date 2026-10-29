@@ -80,7 +80,7 @@ jobs:
       - name: Set up node
         # Unconditional, unlike the migration-specific steps below: the CodeGen-tail check
         # runs on every PR (see that step for why) and it needs node.
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           # No dependency cache here on purpose: this job never runs `pnpm install`
