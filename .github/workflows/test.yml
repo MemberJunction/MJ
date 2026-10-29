@@ -177,6 +177,8 @@ jobs:
             # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
             # remote-cache configuration"), and its own suite lives in __tests__ above.
             .github/scripts/check-turbo-cache-env.mjs
+            # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
+            .github/scripts/check-turbo-root-inputs.mjs
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
             # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
             # Its suite lives in __tests__ above, but without these entries a PR editing only one of
@@ -323,6 +325,15 @@ jobs:
       - name: AI model rank-lineage guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-ai-model-ranks.mjs
+
+      # Turbo caches a package's `test` result on that package's own files, so a test reading
+      # repo-root data (migrations/, metadata/, metadata-optional/) replays its cached pass after
+      # that data changes. Each such package declares the data in its own turbo.json
+      # (`$TURBO_ROOT$/<dir>/**`); this fails a PR that adds a root read without the declaration.
+      # Static scan of test sources only: no build, no turbo run.
+      - name: Turbo root-data test inputs guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-turbo-root-inputs.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here

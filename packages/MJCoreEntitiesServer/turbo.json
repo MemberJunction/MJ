@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "test": {
+      "inputs": [
+        "$TURBO_EXTENDS$",
+        "$TURBO_ROOT$/guides/RUBRICS_GUIDE.md",
+        "$TURBO_ROOT$/metadata/**",
+        "$TURBO_ROOT$/migrations/**"
+      ]
+    }
+  }
+}
