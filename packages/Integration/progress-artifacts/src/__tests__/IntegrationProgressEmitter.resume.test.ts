@@ -71,7 +71,7 @@ describe('IntegrationProgressEmitter.Resume', () => {
         expect(cursor).toBeGreaterThan(0);
 
         const resumed = await IntegrationProgressEmitter.Resume(RUN_ID, { rootDir });
-        resumed.runResumed('back after the restart');
+        resumed.RunResumed('back after the restart');
         resumed.stageStart('CreateEntityMaps', 'step 9 of 10');
         resumed.stageComplete('CreateEntityMaps', { processed: 3, succeeded: 3, failed: 0 });
         await resumed.flush();
@@ -91,7 +91,7 @@ describe('IntegrationProgressEmitter.Resume', () => {
     it('uses the already-declared resumed/restart vocabulary rather than a new event type', async () => {
         await writeKilledRun();
         const resumed = await IntegrationProgressEmitter.Resume(RUN_ID, { rootDir });
-        resumed.runResumed('back');
+        resumed.RunResumed('back');
         await resumed.flush();
 
         const ev = readEvents().find(e => e.eventType === 'run.resumed');

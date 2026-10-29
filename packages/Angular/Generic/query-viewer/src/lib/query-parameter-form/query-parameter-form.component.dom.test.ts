@@ -16,7 +16,7 @@ import { QueryParameterFormComponent } from './query-parameter-form.component';
  */
 
 // The component reads only scalar properties off each parameter; build narrow typed mocks.
-type ParamShape = Pick<MJQueryParameterEntity, 'Name' | 'Type' | 'IsRequired' | 'Description' | 'DefaultValue' | 'SampleValue'>;
+type ParamShape = Pick<MJQueryParameterEntity, 'Name' | 'Type' | 'IsRequired' | 'Description' | 'DefaultValue' | 'SampleValue'> & Partial<Pick<MJQueryParameterEntity, 'IsServerSet'>>;
 function param(p: ParamShape): MJQueryParameterEntity {
   return p as MJQueryParameterEntity;
 }
@@ -178,5 +178,39 @@ describe('QueryParameterFormComponent (DOM, data-bound)', () => {
       QueryInfo: queryInfo('Q', [param({ Name: 'id', Type: 'string', IsRequired: false, Description: null, DefaultValue: null, SampleValue: '12345' })]),
     });
     expect(text(f, '.field-sample')).toContain('12345');
+  });
+});
+
+describe('QueryParameterFormComponent read-only parameters (DOM)', () => {
+  const chapter = param({ Name: 'chapter_id', Type: 'string', IsRequired: true, Description: null, DefaultValue: null, SampleValue: null });
+  const status = param({ Name: 'status', Type: 'string', IsRequired: false, Description: null, DefaultValue: null, SampleValue: null });
+  const org = param({ Name: 'org_id', Type: 'string', IsRequired: true, Description: null, DefaultValue: null, SampleValue: null, IsServerSet: true });
+
+  it('shows a mapped parameter with its value, disabled, with a lock', () => {
+    const f = render({ IsOpen: true, QueryInfo: queryInfo('Q', [chapter, status]), InitialValues: { chapter_id: 'mapped' }, ReadOnlyParameters: ['chapter_id'] });
+    const input = query(f, 'input#param-chapter_id') as HTMLInputElement;
+    expect(input.disabled).toBe(true);
+    expect(input.value).toBe('mapped');
+    expect(text(f, '.field-locked')).toContain('Set for this view');
+    expect((query(f, 'input#param-status') as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('shows a server-set parameter as set by server, never requires it, and never submits it', () => {
+    const f = render({ IsOpen: true, QueryInfo: queryInfo('Q', [chapter, org]) });
+    const submitted = capture(f.componentInstance.ParametersSubmit);
+    expect((query(f, 'input#param-org_id') as HTMLInputElement).disabled).toBe(true);
+    expect(text(f, '.field-locked')).toContain('Set by server');
+
+    typeInto(f, 'input#param-chapter_id', 'c1');
+    f.detectChanges();
+    click(f, '.panel-footer .btn-primary');
+
+    expect(submitted).toEqual([{ chapter_id: 'c1' }]);
+  });
+
+  it('locks nothing without read-only or server-set parameters', () => {
+    const f = render({ IsOpen: true, QueryInfo: queryInfo('Q', [chapter, status]) });
+    expect(query(f, '.field-locked')).toBeNull();
+    expect((query(f, 'input#param-chapter_id') as HTMLInputElement).disabled).toBe(false);
   });
 });

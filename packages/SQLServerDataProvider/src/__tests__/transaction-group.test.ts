@@ -24,7 +24,7 @@ import {
   IMetadataProvider,
 } from '@memberjunction/core';
 import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup';
-import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
+import { mssqlState, MockConnectionPool, MockTransaction } from './helpers/mock-mssql';
 import { TEST_USER, makeWidgetEntityInfo, makeSavedWidgetEntity } from './helpers/entity-fixtures';
 
 /**
@@ -208,7 +208,9 @@ describe('SQLServerTransactionGroup.Submit', () => {
     // Because a variable was set, the consumer's instruction was REGENERATED via the provider
     expect(providerStub.GetCreateUpdateSPName).toHaveBeenCalledWith(consumer, true);
     expect(providerStub.GetSaveSQL).toHaveBeenCalledTimes(1);
-    expect(providerStub.GetSaveSQL).toHaveBeenCalledWith(consumer, true, 'spCreateWidget', TEST_USER);
+    // ...on the group's own open transaction, so a Record Change snapshot read joins it rather
+    // than waiting on the locks the group's earlier items hold.
+    expect(providerStub.GetSaveSQL).toHaveBeenCalledWith(consumer, true, 'spCreateWidget', TEST_USER, expect.any(MockTransaction));
     expect(mssqlState.Queries.map((q) => q.sql)).toEqual([
       'EXEC [dbo].spCreateWidget -- definer',
       '-- REGENERATED -- EXEC [dbo].spCreateWidget',

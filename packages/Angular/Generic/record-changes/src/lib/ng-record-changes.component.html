@@ -44,6 +44,18 @@
         </div>
 
         <div class="rc-header-actions">
+          @if (GetPreviewableChanges().length > 0) {
+            <button
+              type="button"
+              class="rc-compare-toggle-btn"
+              [class.active]="CompareMode"
+              (click)="ToggleCompareMode()"
+              [attr.aria-pressed]="CompareMode"
+              aria-label="Compare any two versions">
+              <i class="fa-solid fa-code-compare" aria-hidden="true"></i>
+              <span>Compare</span>
+            </button>
+          }
           @if (RecordLabels.length > 0) {
             <button
               type="button"
@@ -66,6 +78,136 @@
           </button>
         </div>
       </div>
+
+      <!-- Cross-Version Diff Comparison Workbench (vA <-> vB) -->
+      @if (CompareMode) {
+        <div class="rc-compare-panel" role="region" aria-label="Cross-version diff comparison">
+          <div class="rc-compare-toolbar">
+            <div class="rc-compare-slot">
+              <span class="rc-compare-badge rc-compare-badge--base">vA · Base</span>
+              <select
+                class="rc-compare-select"
+                aria-label="Base version vA"
+                [value]="CompareBaseChangeID ?? ''"
+                (change)="OnComparisonSelectChange('base', $event)">
+                <option value="__CURRENT__" [selected]="CompareBaseChangeID === '__CURRENT__'">Current Live Record</option>
+                @for (ver of GetPreviewableChanges(); track ver.ID) {
+                  <option [value]="ver.ID" [selected]="IsChangeSelectedAsCompareBase(ver)">
+                    {{ formatFullDateTime(ver.ChangedAt) }} — {{ getUserDisplayName(ver.User) }}
+                  </option>
+                }
+              </select>
+              @if (CompareBaseChange; as baseChange) {
+                <button
+                  type="button"
+                  class="rc-compare-action-btn"
+                  [class.active]="IsChangePreviewedInForm(baseChange)"
+                  (click)="OnToggleFormPreview(baseChange, $event)"
+                  aria-label="Preview base version in form">
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+                @if (AllowRestore) {
+                  <button
+                    type="button"
+                    class="rc-compare-action-btn"
+                    (click)="OnRestoreVersion(baseChange, $event)"
+                    aria-label="Restore base version">
+                    <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+            </div>
+
+            <button
+              type="button"
+              class="rc-compare-swap-btn"
+              (click)="SwapComparisonVersions()"
+              aria-label="Swap comparison versions">
+              <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+            </button>
+
+            <div class="rc-compare-slot">
+              <span class="rc-compare-badge rc-compare-badge--target">vB · Target</span>
+              <select
+                class="rc-compare-select"
+                aria-label="Target version vB"
+                [value]="CompareTargetChangeID ?? ''"
+                (change)="OnComparisonSelectChange('target', $event)">
+                <option value="__CURRENT__" [selected]="CompareTargetChangeID === '__CURRENT__'">Current Live Record</option>
+                @for (ver of GetPreviewableChanges(); track ver.ID) {
+                  <option [value]="ver.ID" [selected]="IsChangeSelectedAsCompareTarget(ver)">
+                    {{ formatFullDateTime(ver.ChangedAt) }} — {{ getUserDisplayName(ver.User) }}
+                  </option>
+                }
+              </select>
+              @if (CompareTargetChange; as targetChange) {
+                <button
+                  type="button"
+                  class="rc-compare-action-btn"
+                  [class.active]="IsChangePreviewedInForm(targetChange)"
+                  (click)="OnToggleFormPreview(targetChange, $event)"
+                  aria-label="Preview target version in form">
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+                @if (AllowRestore) {
+                  <button
+                    type="button"
+                    class="rc-compare-action-btn"
+                    (click)="OnRestoreVersion(targetChange, $event)"
+                    aria-label="Restore target version">
+                    <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+            </div>
+          </div>
+
+          @if (GetComparisonDiffs(); as compDiffs) {
+            @if (compDiffs.length === 0) {
+              <div class="rc-compare-empty">
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                <span>No field differences between {{ GetComparisonSlotLabel('base') }} and {{ GetComparisonSlotLabel('target') }}.</span>
+              </div>
+            } @else {
+              <div class="rc-compare-summary">
+                <span>{{ compDiffs.length }} field{{ compDiffs.length !== 1 ? 's' : '' }} differ between <strong>vA</strong> and <strong>vB</strong></span>
+              </div>
+              <div class="rc-compare-diff-list">
+                @for (fc of compDiffs; track fc.field) {
+                  <div class="rc-field-row">
+                    <div class="rc-field-label">{{ fc.displayName }}</div>
+                    <div class="rc-field-values">
+                      @if (fc.fieldType === 'boolean') {
+                        <div class="rc-bool-change">
+                          <span class="rc-bool-dot" [class.on]="fc.oldValue === 'true' || fc.oldValue === '1'" [class.off]="fc.oldValue !== 'true' && fc.oldValue !== '1'"></span>
+                          <span class="rc-bool-label old">{{ fc.oldValue === 'true' || fc.oldValue === '1' ? 'Yes' : 'No' }}</span>
+                          <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                          <span class="rc-bool-dot" [class.on]="fc.newValue === 'true' || fc.newValue === '1'" [class.off]="fc.newValue !== 'true' && fc.newValue !== '1'"></span>
+                          <span class="rc-bool-label new" [class.active]="fc.newValue === 'true' || fc.newValue === '1'" [class.inactive]="fc.newValue !== 'true' && fc.newValue !== '1'">{{ fc.newValue === 'true' || fc.newValue === '1' ? 'Yes' : 'No' }}</span>
+                        </div>
+                      } @else if (fc.fieldType === 'date' || fc.fieldType === 'number') {
+                        <div class="rc-atomic-change">
+                          <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                          <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                          <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                        </div>
+                      } @else if (fc.diffHtml) {
+                        <div class="rc-text-diff" [innerHTML]="fc.diffHtml"></div>
+                      } @else {
+                        <div class="rc-atomic-change">
+                          <span class="rc-val-old">{{ fc.oldValue || '(empty)' }}</span>
+                          <i class="fa-solid fa-arrow-right rc-val-arrow" aria-hidden="true"></i>
+                          <span class="rc-val-new">{{ fc.newValue || '(empty)' }}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
 
       <!-- Collapsible Version Labels Tray (only takes vertical space when user opens it and labels exist) -->
       @if (ShowLabelsTray && RecordLabels.length > 0) {
@@ -98,66 +240,25 @@
           </div>
         </mj-empty-state>
       } @else {
-        <!-- Activity Over Time Mini-Chart -->
-        @if (ActivityBuckets.length > 0) {
-          <div class="rc-activity-chart" role="region" aria-label="Change activity over time">
-            <div class="rc-activity-chart-header">
-              <span class="rc-activity-chart-title">
-                <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
-                {{ ActivityChartGranularityLabel }}
-              </span>
-              <div class="rc-activity-chart-meta">
-                @if (SelectedBucketLabel; as activeBucketLabel) {
-                  <button
-                    type="button"
-                    class="rc-activity-bucket-pill"
-                    (click)="ClearBucketFilter()"
-                    title="Clear time bucket filter">
-                    <span>{{ activeBucketLabel }}</span>
-                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-                  </button>
-                }
-                <div class="rc-activity-legend">
-                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--update"></span>Update</span>
-                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--create"></span>Create</span>
-                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--restore"></span>Restore</span>
-                </div>
-              </div>
-            </div>
-            <div class="rc-activity-bars">
-              @for (bucket of ActivityBuckets; track bucket.Key; let idx = $index; let first = $first; let last = $last) {
-                <button
-                  type="button"
-                  class="rc-activity-bar-col"
-                  [class.rc-activity-bar-col--empty]="bucket.TotalCount === 0"
-                  [class.rc-activity-bar-col--selected]="SelectedBucketKey === bucket.Key"
-                  [disabled]="bucket.TotalCount === 0"
-                  [attr.aria-label]="bucket.Tooltip"
-                  [title]="bucket.Tooltip"
-                  (click)="ToggleBucketFilter(bucket.Key)">
-                  <div class="rc-activity-bar-track">
-                    <div class="rc-activity-bar-fill" [style.height.%]="bucket.HeightPercent">
-                      @if (bucket.RestoreSharePercent > 0) {
-                        <span class="rc-bar-seg rc-bar-seg--restore" [style.height.%]="bucket.RestoreSharePercent"></span>
-                      }
-                      @if (bucket.UpdateSharePercent > 0) {
-                        <span class="rc-bar-seg rc-bar-seg--update" [style.height.%]="bucket.UpdateSharePercent"></span>
-                      }
-                      @if (bucket.CreateSharePercent > 0) {
-                        <span class="rc-bar-seg rc-bar-seg--create" [style.height.%]="bucket.CreateSharePercent"></span>
-                      }
-                    </div>
-                  </div>
-                  <span class="rc-activity-bar-label">
-                    @if (first || last || idx === 4 || idx === 8) {
-                      {{ bucket.Label }}
-                    }
-                  </span>
-                </button>
-              }
-            </div>
-          </div>
-        }
+        <!-- Activity Over Time Burst-Aware Cluster Strip (Powered by @memberjunction/ng-ui-components) -->
+        <mj-burst-cluster-strip
+          Title="Editing sessions"
+          TitleIcon="fa-solid fa-wave-square"
+          AriaLabel="Change activity bursts over time"
+          ItemSingularNoun="change"
+          ItemPluralNoun="changes"
+          [Items]="BurstClusterItems"
+          [Categories]="BurstClusterCategories"
+          [Resolution]="BurstResolution"
+          [CoalesceStrategy]="BurstCoalesceStrategy"
+          [SessionGapHours]="BurstSessionGapHours"
+          [MaxClusters]="BurstMaxClusters"
+          [EraZoomThreshold]="BurstEraZoomThreshold"
+          [AllowZoom]="AllowBurstZoom"
+          [(SelectedClusterKey)]="SelectedBucketKey"
+          (AfterClustersRebuild)="OnBurstClustersRebuilt($event)"
+          (FilterChanged)="OnBurstFilterChanged($event)">
+        </mj-burst-cluster-strip>
 
         <!-- Filter Bar — chips render only for change types/sources actually present in loaded data.
              When more than 2 conditional chips would render, they collapse into a "More filters" popover. -->
@@ -309,6 +410,26 @@
                         }
                       </div>
                       <div class="rc-card-meta">
+                        @if (CompareMode && change.FullRecordJSON && change.Type !== 'Delete') {
+                          <div class="rc-card-compare-pills">
+                            <button
+                              type="button"
+                              class="rc-card-compare-pill"
+                              [class.active]="IsChangeSelectedAsCompareBase(change)"
+                              (click)="SelectForComparison('base', change.ID, $event)"
+                              aria-label="Set as Base Version A">
+                              A
+                            </button>
+                            <button
+                              type="button"
+                              class="rc-card-compare-pill rc-card-compare-pill--target"
+                              [class.active]="IsChangeSelectedAsCompareTarget(change)"
+                              (click)="SelectForComparison('target', change.ID, $event)"
+                              aria-label="Set as Target Version B">
+                              B
+                            </button>
+                          </div>
+                        }
                         <div class="rc-card-user">
                           <div class="rc-avatar">{{ getUserInitials(change.User) }}</div>
                           {{ getUserDisplayName(change.User) }}

@@ -25,7 +25,9 @@ import type { RSUPipelineInput, RSUPipelineStep } from '../RuntimeSchemaManager.
 interface ManagerInternals {
     compileTypeScript(): Promise<boolean>;
     defaultCompileCommand(): string;
+    runCommandInOwnProcessGroup(command: string, opts: { timeoutMs: number; maxBuffer?: number; env?: NodeJS.ProcessEnv }): Promise<{ stdout: string; stderr: string }>;
     runCodeGen(): Promise<boolean>;
+    verifyEntitiesExist(affectedTables: string[]): Promise<void>;
     writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<number>;
     gitCommitAndPRForCycle(files: string[], tables: string[], description: string): Promise<string>;
     restartMJAPI(): Promise<boolean>;
@@ -146,18 +148,35 @@ describe('a compile that exceeds its timeout', () => {
     });
 });
 
+describe('the compile runs under the per-child heap ceiling', () => {
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    // The killable runner must not drop the NODE_OPTIONS ceiling buildChildEnv() sets for build children:
+    // without it each tsc inherits the API's own heap setting, which is what starved small boxes.
+    it('passes buildChildEnv() through the killable runner', async () => {
+        const mgr = internals();
+        const run = vi.spyOn(mgr, 'runCommandInOwnProcessGroup').mockResolvedValue({ stdout: '', stderr: '' });
+        vi.spyOn(mgr, 'rsuLog').mockImplementation(() => undefined);
+        await mgr.compileTypeScript();
+        expect(run).toHaveBeenCalledTimes(1);
+        expect(run.mock.calls[0][1].env?.NODE_OPTIONS ?? '').toMatch(/--max-old-space-size=\d+/);
+    });
+});
+
 describe('a failed compile stops the pipeline before it can do damage', () => {
     const originalEnv = { ...process.env };
 
     beforeEach(() => { process.env.ALLOW_RUNTIME_SCHEMA_UPDATE = '1'; });
     afterEach(() => { vi.restoreAllMocks(); process.env = { ...originalEnv }; });
 
-    it('does not commit, does not restart, and does not queue post-restart work', async () => {
+    it('does not commit, does not restart, and leaves the work registered before the compile Pending', async () => {
         const mgr = internals();
         const item = { Input: input({ CompanyIntegrationID: 'CI-A' }), FilePath: '/tmp/V1__x.sql', Success: true, Steps: [] as RSUPipelineStep[] };
         vi.spyOn(mgr, 'writeAdditionalSchemaInfo').mockResolvedValue(0);
         vi.spyOn(mgr, 'runCodeGen').mockResolvedValue(true);
-        vi.spyOn(mgr, 'compileTypeScript').mockRejectedValue(new Error('Command exceeded its 300000ms timeout'));
+        // RunCodeGen also verifies each affected table got an entity (#5858); that needs a live provider.
+        vi.spyOn(mgr, 'verifyEntitiesExist').mockResolvedValue(undefined);
+        const compile = vi.spyOn(mgr, 'compileTypeScript').mockRejectedValue(new Error('Command exceeded its 300000ms timeout'));
         const git = vi.spyOn(mgr, 'gitCommitAndPRForCycle').mockResolvedValue('rsu/branch');
         const restart = vi.spyOn(mgr, 'restartMJAPI').mockResolvedValue(true);
         const postRestartFiles = vi.spyOn(mgr, 'writePostRestartFiles').mockResolvedValue(undefined);
@@ -170,7 +189,11 @@ describe('a failed compile stops the pipeline before it can do damage', () => {
         expect(git).not.toHaveBeenCalled();          // no PR for code that never built
         expect(restart).not.toHaveBeenCalled();      // and above all: no restart onto an uncompiled tree
         expect(postRestartFiles).not.toHaveBeenCalled();
-        expect(pending).not.toHaveBeenCalled();      // nothing would consume it — no restart is coming
+        // The work is owed from the moment the migration succeeds, so it is registered BEFORE CodeGen and the
+        // compile (#4469) and stays Pending — visible and resumable — when the compile fails. Registered once,
+        // and before the compile ran: a failed compile must not add work, only stop the restart that would consume it.
+        expect(pending).toHaveBeenCalledTimes(1);
+        expect(pending.mock.invocationCallOrder[0]).toBeLessThan(compile.mock.invocationCallOrder[0]);
         expect(result.ApiRestarted).toBe(false);
         expect(result.GitCommitSuccess).toBe(false);
     });
@@ -181,6 +204,8 @@ describe('a failed compile stops the pipeline before it can do damage', () => {
         const item = { Input: input(), FilePath: '/tmp/V1__x.sql', Success: true, Steps: [] as RSUPipelineStep[] };
         vi.spyOn(mgr, 'writeAdditionalSchemaInfo').mockResolvedValue(0);
         vi.spyOn(mgr, 'runCodeGen').mockResolvedValue(true);
+        // RunCodeGen also verifies each affected table got an entity (#5858); that needs a live provider.
+        vi.spyOn(mgr, 'verifyEntitiesExist').mockResolvedValue(undefined);
         vi.spyOn(mgr, 'compileTypeScript').mockResolvedValue(true);
         const git = vi.spyOn(mgr, 'gitCommitAndPRForCycle').mockResolvedValue('rsu/branch');
         const restart = vi.spyOn(mgr, 'restartMJAPI').mockResolvedValue(true);

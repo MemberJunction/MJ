@@ -27,7 +27,7 @@ import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign,
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
-import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
+import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -403,8 +403,13 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private environmentInjector: EnvironmentInjector,
     private viewContainerRef: ViewContainerRef,
     @Optional() @Inject(MJ_AUTH_PROVIDER_RESOLUTION) private authResolution: AuthProviderResolution | null,
+    private themeService: ThemeService,
   ) {
     super();
+    // Before anything renders: put the persisted org brand overlay back so the sign-in page and
+    // the shell's loading screen paint branded on a cold load, instead of waiting for workspace
+    // bootstrap to re-emit the overlay (which is a session Blob and does not survive a reload).
+    this.themeService.RestorePersistedBrandOverlay();
     this.registerClientTools();
   }
 
@@ -559,7 +564,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Navigate to the initial route. A deep link is replayed through the router;
         // a bare '/' is left to the router's default route (the Home app).
         if (this.initialPath !== '/') {
-          this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
+          this.router.navigateByUrl(this.initialPath, { replaceUrl: true })?.catch(() => {
+            void this.router.navigateByUrl('/', { replaceUrl: true });
+          });
         }
       } else if (result.error) {
         // Handle errors based on type

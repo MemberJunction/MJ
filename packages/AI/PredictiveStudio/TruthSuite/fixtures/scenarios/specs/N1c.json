@@ -1,0 +1,37 @@
+{
+  "id": "N1c",
+  "namespace": "65a676b1-18a5-4462-be1b-5162cba28032",
+  "seed": 2212,
+  "description": "Pure-noise binary twin: all betas 0, constant true probability.",
+  "kind": "binary",
+  "nEntities": 6000,
+  "features": {
+    "A": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "B": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "C": {
+      "dist": "bernoulli",
+      "p": 0.5
+    },
+    "D": {
+      "dist": "int",
+      "lo": 0,
+      "hi": 9
+    }
+  },
+  "betas": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.0,
+    "D": 0.0
+  },
+  "intercept": -0.4,
+  "sizingNote": "6,000 rows (Ruling Q9: >= 5,000). With no signal, the AUC of any model on a 20% holdout has SE about 0.017 (Hanley-McNeil at AUC 0.5), so an honest pipeline's holdout AUC stays near 0.5 and 'no model' is the clearly correct outcome."
+}

@@ -70,7 +70,13 @@ import {
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
 import type { SourceRow } from '../feature-assembly';
-import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage, ModelArtifactMissingMessage, ModelNeedsTrainingError } from './model-readiness';
+import {
+  ModelHasTrainedArtifact,
+  ModelNeedsTrainingMessage,
+  ModelArtifactMissingMessage,
+  ModelNeedsTrainingError,
+  ModelNotScorableError,
+} from './model-readiness';
 import type {
   IModelAutoTrainer,
   MLAutoTrainConfig,
@@ -126,6 +132,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * the error-rate circuit breaker. The loaded model is the same warm cache every
    * record then reuses, so this costs no extra load.
    *
+   * A dry run (`context.DryRun`) never auto-trains: training creates and publishes a model, repoints the
+   * Record Process and archives the old model, none of which a compute-only run may do. It reports the
+   * {@link ModelNeedsTrainingError} instead.
+   *
    * @param context the run-level execution context (user + provider)
    * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
    */
@@ -136,7 +146,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
-      if (!(err instanceof ModelNeedsTrainingError) || !this.autoTrain || !this.autoTrainer) {
+      if (!(err instanceof ModelNeedsTrainingError) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
         throw err;
       }
     }
@@ -252,14 +262,40 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
-    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
-      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
-    }
+    this.assertStatusCanScore(model);
     const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
     if (!bytes) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
     }
     return this.buildLoadedModel(model, bytes, context);
+  }
+
+  /**
+   * Refuse a model whose lifecycle status or missing artifact forbids scoring, in this order: a Draft with no artifact
+   * needs training (the opt-in auto-train path reacts to that, D2-C3) and a trained Draft is not scorable; Validated and
+   * Published score once they have an artifact; any other status (Archived, or a value CodeGen adds later) is refused
+   * before the artifact is looked at.
+   */
+  private assertStatusCanScore(model: MJMLModelEntity): void {
+    const status: MJMLModelEntity['Status'] = model.Status;
+    switch (status) {
+      case 'Draft':
+        this.assertHasArtifact(model);
+        throw new ModelNotScorableError(this.modelId, status);
+      case 'Validated':
+      case 'Published':
+        this.assertHasArtifact(model);
+        return;
+      default:
+        throw new ModelNotScorableError(this.modelId, status);
+    }
+  }
+
+  /** Throw "needs training" when the model has no trained artifact reference. */
+  private assertHasArtifact(model: MJMLModelEntity): void {
+    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
+    }
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
@@ -294,7 +330,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     context: RecordProcessorContext,
   ): Promise<ResolvedScoringPipeline> {
     try {
-      const rv = context.Provider ? RunView.FromMetadataProvider(context.Provider) : new RunView();
+      const rv = RunView.FromMetadataProvider(context.Provider);
       interface PipelineViewRow {
         TargetEntityID?: string;
         TargetEntity?: string;
@@ -316,7 +352,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
         const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
         const targetEntity =
           row.TargetEntity ||
-          (row.TargetEntityID && context.Provider ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          (row.TargetEntityID ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
           existing.targetEntityName;
 
         return {

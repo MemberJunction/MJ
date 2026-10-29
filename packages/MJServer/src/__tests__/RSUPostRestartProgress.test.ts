@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { IntegrationProgressEmitter, IntegrationProgressReader } from '@memberjunction/integration-progress-artifacts';
+import { IntegrationProgressEmitter, IntegrationProgressReader, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import type { IntegrationProgressEvent, IntegrationRunManifest, IntegrationRunResult } from '@memberjunction/integration-progress-artifacts';
 import { RSUPostRestartProgressSession } from '../integration/RSUPostRestartProgress.js';
 
@@ -72,6 +72,58 @@ describe('RSUPostRestartProgress', () => {
     function result(runID: string): IntegrationRunResult {
         return JSON.parse(readFileSync(join(rootDir, runID, 'result.json'), 'utf-8')) as IntegrationRunResult;
     }
+
+    it('the startup sweep leaves a restart-killed run in flight when told it is a continuation, so For() re-attaches', async () => {
+        // #4469's SweepInterruptedRuns runs at boot, BEFORE processRSUPendingWork. Without an
+        // exemption it closes the very run this process is meant to continue.
+        await killedRunAt('rsu-s1', ['CI-S1']);
+
+        const sweep = await SweepInterruptedRuns(rootDir, undefined, RSUPostRestartProgressSession.WasKilledAtRestart);
+
+        expect(sweep.Skipped).toEqual(['rsu-s1']);
+        expect(sweep.Swept).toEqual([]);
+        expect(existsSync(join(rootDir, 'rsu-s1', 'result.json'))).toBe(false);
+        const session = new RSUPostRestartProgressSession({ rootDir });
+        expect(await session.For('CI-S1')).not.toBeNull();
+        await session.FinishAll();
+        expect(existsSync(join(rootDir, 'rsu-s1', 'result.json'))).toBe(true);
+    });
+
+    it('without that exemption the sweep closes the run first and For() finds nothing', async () => {
+        await killedRunAt('rsu-s2', ['CI-S2']);
+
+        await SweepInterruptedRuns(rootDir);
+
+        expect(result('rsu-s2').exitReason).toBe('killed');
+        expect(await new RSUPostRestartProgressSession({ rootDir }).For('CI-S2')).toBeNull();
+    });
+
+    it('after the resuming pass, a restart-killed run nothing re-attached to is swept as killed; an attached one is left to its session', async () => {
+        await killedRunAt('rsu-a', ['CI-A']);
+        await killedRunAt('rsu-b', ['CI-B']);
+        const boot = await SweepInterruptedRuns(rootDir, undefined, RSUPostRestartProgressSession.WasKilledAtRestart);
+        expect([...boot.Skipped].sort()).toEqual(['rsu-a', 'rsu-b']);
+        const session = new RSUPostRestartProgressSession({ rootDir });
+        expect(await session.For('CI-A')).not.toBeNull(); // only A has pending work to resume it
+
+        const after = await RSUPostRestartProgressSession.SweepUnattached(boot.Skipped, rootDir);
+
+        expect(after.Swept).toEqual(['rsu-b']);
+        expect(result('rsu-b').exitReason).toBe('killed');
+        expect(existsSync(join(rootDir, 'rsu-a', 'result.json'))).toBe(false);
+        await session.FinishAll();
+        expect(existsSync(join(rootDir, 'rsu-a', 'result.json'))).toBe(true);
+    });
+
+    it('SweepUnattached judges only the runs the startup sweep left in flight — never a run this process started', async () => {
+        await killedRunAt('rsu-c', ['CI-C']);
+
+        const after = await RSUPostRestartProgressSession.SweepUnattached(['some-other-run'], rootDir);
+
+        expect(after.Swept).toEqual([]);
+        expect(existsSync(join(rootDir, 'rsu-c', 'result.json'))).toBe(false);
+        expect(await RSUPostRestartProgressSession.SweepUnattached([], rootDir)).toEqual({ Swept: [], Failed: [], Skipped: [] });
+    });
 
     it('emits both missing steps into the original run, visible to a client tailing past the restart', async () => {
         const cursor = await killedRunAt('rsu-1', ['CI-1']);

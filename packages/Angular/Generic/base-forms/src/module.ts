@@ -35,6 +35,8 @@ import { PlacementPreviewPanelComponent } from './lib/panel-slot/placement-previ
 import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
 import { MjRecordLinksComponent } from './lib/links/record-links.component';
 import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.component';
+import { MjRecordLinkDirective } from './lib/links/record-link.directive';
+import { MjRecordLinkComponent } from './lib/links/record-link.component';
 import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
 
 /**
@@ -80,6 +82,8 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     PlacementPreviewPanelComponent,
     MjRecordLinksComponent,
     MjRecordLinksDrawerComponent,
+    MjRecordLinkDirective,
+    MjRecordLinkComponent,
     MjRecordPreviewPopoverComponent
   ],
   imports: [
@@ -125,6 +129,8 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     PlacementPreviewPanelComponent,
     MjRecordLinksComponent,
     MjRecordLinksDrawerComponent,
+    MjRecordLinkDirective,
+    MjRecordLinkComponent,
     MjRecordPreviewPopoverComponent
   ]
 })

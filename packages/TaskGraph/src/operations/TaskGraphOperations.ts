@@ -19,8 +19,11 @@
  * @module @memberjunction/task-graph
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { BaseRemotableOperation, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { AgentRunner } from '@memberjunction/ai-agents';
 import {
+    MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJTaskEntity,
     TaskGraphSubmitOperation,
     TaskGraphCancelOperation,
@@ -99,36 +102,115 @@ export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
         // documented `data.*`/`context.*` conditions (R3-3) are dead on arrival without it.
         // `AgentRunID` stays deliberately absent — whether a remote caller's graph should BIND to
         // an agent run is the D1 execution-identity design question, not a dropped field.
-        input: TaskGraphSubmitInput & {
-            reinvokeDepth?: number;
-            invocation?: { data?: unknown; context?: unknown };
-        },
+        // `postStatusMessage` asks for the workflow's status bubble (see postWorkflowStatus).
+        input: TaskGraphSubmitServerInput,
         provider: IMetadataProvider,
         user: UserInfo,
-    ): Promise<TaskGraphSubmitOutput> {
+    ): Promise<TaskGraphSubmitServerOutput> {
         if (!input?.spec) throw new Error('spec is required');
         if (!input?.environmentID) throw new Error('environmentID is required');
 
         const spec: TaskGraphSpec = input.spec;
+        const taskCount = Array.isArray(spec.tasks) ? spec.tasks.length : 0;
         const invocation: TaskGraphInvocationEnvelope | undefined =
             input.invocation && (input.invocation.data !== undefined || input.invocation.context !== undefined)
                 ? { Data: input.invocation.data, Context: input.invocation.context }
                 : undefined;
-        const result = await new TaskGraphService().Submit(
-            spec,
-            {
-                ...submitContext(provider, user, input.environmentID, input.conversationDetailID),
-                // CLAMPED, not merely finite — see ClampReinvokeDepth: a negative caller-supplied
-                // seed would buy hops against the runaway-loop cap.
-                ReinvokeDepth: ClampReinvokeDepth(input.reinvokeDepth),
-                Invocation: invocation,
-            },
-        );
+        // The bubble is the graph's conversation detail when there is one, as the chat's own status row was.
+        const status = input.postStatusMessage && input.conversationDetailID
+            ? await postWorkflowStatus(provider, user, input.conversationDetailID, taskCount)
+            : null;
+        let result: Awaited<ReturnType<TaskGraphService['Submit']>>;
+        try {
+            result = await new TaskGraphService().Submit(
+                spec,
+                {
+                    ...submitContext(provider, user, input.environmentID, status?.ID ?? input.conversationDetailID),
+                    // CLAMPED, not merely finite — see ClampReinvokeDepth: a negative caller-supplied
+                    // seed would buy hops against the runaway-loop cap.
+                    ReinvokeDepth: ClampReinvokeDepth(input.reinvokeDepth),
+                    Invocation: invocation,
+                },
+            );
+        } catch (e) {
+            if (status) await settleWorkflowStatus(status, WORKFLOW_STATUS.Failed, 'Error');
+            throw e;
+        }
+        if (status) {
+            await settleWorkflowStatus(status, result.Success ? WORKFLOW_STATUS.Started(taskCount) : WORKFLOW_STATUS.Rejected, result.Success ? 'In-Progress' : 'Error');
+        }
         return {
             success: result.Success,
             parentTaskID: result.ParentTaskID,
             errorMessage: result.ErrorMessage,
+            ...(status ? { statusConversationDetailID: status.ID } : {}),
         };
+    }
+}
+
+/** What `TaskGraph.Submit` reads beyond its generated input (see the operation). */
+type TaskGraphSubmitServerInput = TaskGraphSubmitInput & {
+    reinvokeDepth?: number;
+    invocation?: { data?: unknown; context?: unknown };
+    /**
+     * Post the workflow's status bubble under `conversationDetailID` (the reply that planned it) and bind the graph to
+     * the bubble, so its progress and outcome land there. MJ's chat asks for it.
+     */
+    postStatusMessage?: boolean;
+};
+
+/** What `TaskGraph.Submit` returns beyond its generated output: the status bubble's ID, when it posted one. */
+type TaskGraphSubmitServerOutput = TaskGraphSubmitOutput & { statusConversationDetailID?: string };
+
+/**
+ * The workflow status bubble's text. Only facts the server knows itself: how many tasks, and whether the submission
+ * was accepted. Never the spec's workflow name or reasoning, which the caller supplies: written into an agent reply,
+ * they would let any caller who can submit a workflow put agent-looking text into a shared conversation.
+ */
+const WORKFLOW_STATUS = {
+    Submitting: (taskCount: number): string => `⏳ Submitting a workflow of ${taskCount} task(s)…`,
+    Started: (taskCount: number): string => `▶️ Workflow started — ${taskCount} task(s) running.`,
+    Rejected: '❌ The workflow was rejected.',
+    Failed: '❌ The workflow could not be submitted.',
+};
+
+/**
+ * Posts the workflow's status bubble, as the chat's own status row used to look, but written by the server: a reply
+ * under `anchorID` (a message `user` can read), marked as server-authored and written as `user`, who must own the
+ * conversation or hold a grant on it.
+ */
+async function postWorkflowStatus(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    anchorID: string,
+    taskCount: number,
+): Promise<MJConversationDetailEntityExtended> {
+    const anchor = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+    if (!(await anchor.Load(anchorID))) {
+        throw new Error(`Conversation detail ${anchorID} not found`);
+    }
+    return new AgentRunner(provider).CreateAgentReplyDetail({
+        conversationId: anchor.ConversationID,
+        branchId: anchor.BranchID ?? null, // on the anchor's fork, as the chat's own status row was
+        agentId: null,
+        contextUser: user,
+        parentId: anchor.ID,
+        message: WORKFLOW_STATUS.Submitting(taskCount),
+        status: 'In-Progress',
+        provider,
+    });
+}
+
+/** Moves the status bubble on once the submission is decided. A refused save is logged; the submission stands. */
+async function settleWorkflowStatus(
+    status: MJConversationDetailEntityExtended,
+    message: string,
+    state: MJConversationDetailEntity['Status'],
+): Promise<void> {
+    status.Message = message;
+    status.Status = state;
+    if (!(await status.Save())) {
+        LogError(`TaskGraph.Submit: could not update workflow status ${status.ID}: ${status.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 }
 

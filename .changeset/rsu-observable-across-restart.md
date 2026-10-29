@@ -1,7 +1,7 @@
 ---
-"@memberjunction/integration-progress-artifacts": minor
-"@memberjunction/schema-engine": minor
-"@memberjunction/server": minor
+"@memberjunction/integration-progress-artifacts": patch
+"@memberjunction/schema-engine": patch
+"@memberjunction/server": patch
 ---
 
 The runtime schema update is observable across its own restart: the progress emitter can resume a run (manifest preserved, sequence continues), RSU run artifacts carry the connection id so they are readable over the API, and the post-restart half emits `CreateEntityMaps` and `StartSync` steps before closing the run.

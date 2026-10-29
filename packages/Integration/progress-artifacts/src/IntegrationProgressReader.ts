@@ -49,6 +49,11 @@ interface JournalDigest {
 export class IntegrationProgressReader {
     constructor(private readonly rootDir: string = DefaultRunArtifactRoot()) {}
 
+    /** Directory these artifacts live in, so callers can address a run's files directly. */
+    public get RootDir(): string {
+        return this.rootDir;
+    }
+
     /**
      * List runs, newest-STARTED first.
      *

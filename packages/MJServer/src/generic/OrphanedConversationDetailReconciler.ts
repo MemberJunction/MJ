@@ -2,7 +2,7 @@ import { LogError, LogStatus, RunView } from '@memberjunction/core';
 import { IndexByUUID } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 
 /**
  * Grace period after a run reaches a terminal state before its conversation detail is considered
@@ -110,7 +110,9 @@ export async function ReconcileOrphanedConversationDetails(
                 LogError(`[OrphanDetailReconciler] No owner resolved for conversation ${detail.ConversationID}; leaving detail ${detail.ID}`);
                 continue;
             }
-            const writable = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', owner);
+            const writable = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', owner);
+            // Closing an agent's reply is the server's write: unmarked, the gate refuses any change to what a reply says.
+            writable.MarkServerAuthoredReply();
             if (!(await writable.Load(detail.ID))) {
                 LogError(`[OrphanDetailReconciler] Could not load detail ${detail.ID} for write`);
                 continue;

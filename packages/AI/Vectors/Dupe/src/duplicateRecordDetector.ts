@@ -152,6 +152,8 @@ interface RecordQueryResult {
     SourceKey: CompositeKey;
     TemplateText: string;
     Duplicates: PotentialDuplicateResult;
+    /** Matches the vector DB returned before any filtering; undefined when the query failed. */
+    RawMatchCount?: number;
 }
 
 /**
@@ -931,6 +933,7 @@ export class DuplicateRecordDetector extends VectorBase {
             allQueryResults.push(...subQueryResults);
             subBatchOffset += subRecords.length;
         }
+        this.AssertDocumentVectorsFound(allQueryResults);
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
         //       entity (stale "ghost" vectors left behind when records are deleted or
@@ -1361,7 +1364,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
         const entityInfo = records[0].EntityInfo;
         const rows = await this.LoadTemplateRows(records, entityInfo);
-        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser);
+        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser, this.Provider);
         // Only saved records have related rows: a new record's key, even a client-generated one, has none yet.
         const savedRows = rows.filter((_, index) => records[index].IsSaved);
         const relatedData = await dataBuilder.LoadRelatedData(entityInfo, savedRows, template);
@@ -1378,7 +1381,7 @@ export class DuplicateRecordDetector extends VectorBase {
             // Skip validation and suppress its warnings, as sync does: records commonly have null
             // fields, and the templates handle them with {% if %} conditionals.
             const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true, true
+                template, templateContent, data, true, true, { ContextUser: contextUser ?? this.CurrentUser }
             );
 
             if (result.Success) {
@@ -1489,7 +1492,9 @@ export class DuplicateRecordDetector extends VectorBase {
                 return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: emptyResult };
             }
 
+            const rawMatchCount = Array.isArray(queryResponse.data?.matches) ? queryResponse.data.matches.length : 0;
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
+            this.ProjectCandidateMetadata(dupeResult.Duplicates, record.EntityInfo);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
             const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
             dupeResult.Duplicates = dupeResult.Duplicates.filter(
@@ -1498,7 +1503,7 @@ export class DuplicateRecordDetector extends VectorBase {
             dupeResult.EntityID = entityDocument.EntityID;
             dupeResult.RecordCompositeKey = compositeKey;
 
-            return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult };
+            return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult, RawMatchCount: rawMatchCount };
         });
 
         return RunWithConcurrency(tasks, concurrency);
@@ -1517,6 +1522,7 @@ export class DuplicateRecordDetector extends VectorBase {
         // SimpleVectorServiceProvider) need the EntityDocumentID as the query id; external/
         // colocated providers key by the logical index name. See VectorDBBase.QueryKeyIsEntityDocumentID.
         const queryId = this.vectorDB.QueryKeyIsEntityDocumentID ? this.entityDocumentID : this.indexName;
+        const filter = this.BuildDocumentScopeFilter();
 
         if (this.vectorDB.SupportsHybridSearch && templateText) {
             return this.vectorDB.HybridQuery({
@@ -1527,6 +1533,7 @@ export class DuplicateRecordDetector extends VectorBase {
                 FusionMethod: options.FusionMethod ?? 'rrf',
                 includeMetadata: true,
                 includeValues: false,
+                ...(filter ? { filter } : {}),
             }, this.CurrentUser);
         }
 
@@ -1536,7 +1543,48 @@ export class DuplicateRecordDetector extends VectorBase {
             topK,
             includeMetadata: true,
             includeValues: false,
+            ...(filter ? { filter } : {}),
         }, this.CurrentUser);
+    }
+
+    /**
+     * The metadata filter that scopes a vector query to this run's entity document, in the
+     * provider's native syntax — or undefined when the provider already scopes by document
+     * ({@link VectorDBBase.QueryKeyIsEntityDocumentID}). Without it, an index shared by several
+     * documents returns the other documents' vectors, which point at other entities' records, as
+     * candidates and lets them take TopK slots.
+     */
+    protected BuildDocumentScopeFilter(): object | undefined {
+        if (!this.ScopesQueriesByMetadataFilter) {
+            return undefined;
+        }
+        return this.vectorDB.BuildMetadataFilter({ EntityDocumentIDs: [this.entityDocumentID] });
+    }
+
+    /** True when queries reach this document's vectors through a metadata filter, not the query key. */
+    protected get ScopesQueriesByMetadataFilter(): boolean {
+        return !this.vectorDB.QueryKeyIsEntityDocumentID;
+    }
+
+    /**
+     * Fails a run when every document-scoped query in a batch came back empty. Every synced record
+     * is its own nearest neighbour, so an all-empty batch means the index holds no vectors tagged
+     * with this document: in practice, vectors synced before sync stored `EntityDocumentID`, which
+     * the scope filter cannot see. A clear error beats a run that silently finds no duplicates.
+     */
+    protected AssertDocumentVectorsFound(queryResults: RecordQueryResult[]): void {
+        if (!this.ScopesQueriesByMetadataFilter) {
+            return;
+        }
+        const answered = queryResults.filter(qr => qr.RawMatchCount !== undefined);
+        if (answered.length === 0 || answered.some(qr => (qr.RawMatchCount ?? 0) > 0)) {
+            return;
+        }
+        throw new Error(
+            `No vectors in index "${this.indexName}" are tagged with entity document ${this.entityDocumentID}. ` +
+            `Vectors synced before the document ID was stored with each vector cannot be matched to it: ` +
+            `re-sync this document's vectors, then run detection again.`
+        );
     }
 
     /**
@@ -1572,6 +1620,23 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         return result;
+    }
+
+    /**
+     * Remove from each candidate's `VectorMetadata` the fields of `entityInfo` the current user may not
+     * read. The metadata was written by the sync under another identity and is returned to this user for
+     * display, so it is projected here the same way their own reads are. Mutates the candidates.
+     */
+    protected ProjectCandidateMetadata(candidates: PotentialDuplicate[], entityInfo: EntityInfo | undefined): void {
+        if (!entityInfo || !this.CurrentUser) return;
+        const denied = entityInfo.GetDeniedReadFields(this.CurrentUser);
+        if (denied.size === 0) return;
+        for (const candidate of candidates) {
+            if (!candidate.VectorMetadata) continue;
+            candidate.VectorMetadata = Object.fromEntries(
+                Object.entries(candidate.VectorMetadata).filter(([key]) => !denied.has(key.toLowerCase()))
+            );
+        }
     }
 
     /**
@@ -1621,11 +1686,14 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
+        // Fields the user may not read are left out: the records were loaded for this user, and the
+        // map is shown to them. Reading them as absent also keeps Get() from refusing them.
+        const readable = (fieldName: string) => entityInfo.IsFieldReadableByUser(fieldName, this.CurrentUser);
         for (const record of records) {
             // Keyed by the same compact segment the batch ids use, so CreateRunDetailRecords can
             // look the metadata up by record id for single-column and composite keys alike.
             const id = record.PrimaryKey.ToCompactURLSegment();
-            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => record.Get(fieldName), entityInfo)));
+            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => (readable(fieldName) ? record.Get(fieldName) : undefined), entityInfo)));
         }
         return metadataMap;
     }
