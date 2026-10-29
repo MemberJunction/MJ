@@ -983,6 +983,7 @@ export class RealtimeClientSessionService {
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
+        this.logMissingCoAgentObservability(coAgent, promptID, obs, input.AgentSessionID, 'PrepareClientSession');
 
         return {
             Success: true,
@@ -1088,6 +1089,7 @@ export class RealtimeClientSessionService {
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
+        this.logMissingCoAgentObservability(coAgent, promptID, obs, input.AgentSessionID, 'WireBridgeRealtimeSession');
         const usage = this.wireBridgeUsage(session, obs?.PromptRunID, contextUser, provider);
         const finalize = this.createBridgeFinalizer(obs, usage, contextUser, provider);
 
@@ -1671,6 +1673,41 @@ export class RealtimeClientSessionService {
         const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, vendorID, coAgentRunID, contextUser, provider);
         const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider);
         return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined, CoAgentRunStepID: runStepID ?? undefined };
+    }
+
+    /**
+     * Logs once, when a session is prepared, why it has no co-agent prompt run: without one, the session's usage
+     * and cost are not recorded. Two causes: the co-agent has no Active `MJ: AI Agent Prompts` row (so no prompt run
+     * is created), or a run save failed (its own error was logged just before this line). Silent when both ids exist.
+     *
+     * @param coAgent The resolved co-agent.
+     * @param promptID The co-agent's system prompt id, or `null` when it has none.
+     * @param obs The observability ids, or `null` when the co-agent run save failed.
+     * @param agentSessionID The session the ids belong to.
+     * @param caller The prepare path, for the log prefix.
+     */
+    private logMissingCoAgentObservability(
+        coAgent: MJAIAgentEntityExtended,
+        promptID: string | null,
+        obs: { CoAgentRunID: string; PromptRunID?: string } | null,
+        agentSessionID: string,
+        caller: 'PrepareClientSession' | 'WireBridgeRealtimeSession',
+    ): void {
+        if (obs?.PromptRunID) {
+            return;
+        }
+        const agent = `co-agent '${coAgent.Name}' (${coAgent.ID})`;
+        const consequence = `session ${agentSessionID || '(none)'} has no co-agent prompt run, so its usage and cost are not recorded`;
+        if (!obs) {
+            LogError(`${caller}: the co-agent run for ${agent} could not be saved (see the error above) — ${consequence}.`);
+        } else if (!promptID) {
+            LogError(
+                `${caller}: ${agent} has no Active 'MJ: AI Agent Prompts' row, so no prompt run was created — ${consequence}. ` +
+                    'Give the co-agent an active system prompt to record usage.',
+            );
+        } else {
+            LogError(`${caller}: the prompt run for ${agent} (prompt ${promptID}) could not be saved (see the error above) — ${consequence}.`);
+        }
     }
 
     /**
