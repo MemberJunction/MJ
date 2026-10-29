@@ -1518,7 +1518,8 @@ export class AIPromptRunner extends BaseModelRunner {
       }
 
       // Check if fallback was used (not the first candidate)
-      const fallbackUsed = candidates.indexOf(selected) > 0;
+      // A fallback: the top-ranked candidate had no credentials (not the row vendor serving the model it picked).
+      const fallbackUsed = credentialAvailability.get(this.CandidateKey(candidates[0])) === false;
 
       // Get selected vendor entity
       let selectedVendor: MJAIVendorEntity | undefined;
@@ -1629,19 +1630,6 @@ export class AIPromptRunner extends BaseModelRunner {
      */
     credentialAvailability: Map<string, boolean>;
   }> {
-    // Cache for credential availability checks
-    // Key format: "driverClass:modelId:vendorId" to properly cache credential hierarchy
-    const credentialCache = new Map<string, boolean>();
-    const consideredModels: Array<{
-      model: MJAIModelEntityExtended;
-      vendor?: MJAIVendorEntity;
-      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
-      driverClass?: string;
-      priority: number;
-      available: boolean;
-      unavailableReason?: string;
-    }> = [];
-
     // DECISION (performance): candidates are ordered by priority, and we only need the
     // highest-priority candidate that has working credentials. So once we find that first
     // hit, we STOP credential-probing the remaining candidates and record them as
@@ -1653,66 +1641,24 @@ export class AIPromptRunner extends BaseModelRunner {
     // is skipped. Callers that need a complete availability report (e.g. an admin diagnostic)
     // can set `AIPromptParams.forceFullModelEvaluation = true` to probe every candidate.
     const forceFullEval = params?.forceFullModelEvaluation === true;
-    let selected: typeof consideredModels[number] | undefined;
-
-    for (const candidate of candidates) {
-      const vendorEntity = candidate.vendorId
-        ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(candidate.vendorId))
-        : undefined;
-
-      // Short-circuit: a usable candidate is already selected and full evaluation wasn't requested.
-      if (selected && !forceFullEval) {
-        consideredModels.push({
-          model: candidate.model,
-          vendor: vendorEntity,
-          driverClass: candidate.driverClass,
-          priority: candidate.priority,
-          available: false,
-          unavailableReason: AIPromptRunner.NOT_EVALUATED_REASON
-        });
-        continue;
-      }
-
-      // Build cache key including model and vendor for proper credential resolution
-      const cacheKey = `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-
-      // Check cache first
-      let hasCredentials: boolean;
-      if (credentialCache.has(cacheKey)) {
-        hasCredentials = credentialCache.get(cacheKey)!;
-      } else {
-        // Check for credentials using hierarchical resolution
-        hasCredentials = this.HasCredentialsAvailable(
-          candidate.driverClass,
-          promptId,
-          candidate.model.ID,
-          candidate.vendorId,
-          params
-        );
-        credentialCache.set(cacheKey, hasCredentials);
-      }
-
-      // Track this model as considered with availability status
-      const considered = {
+    const { Candidate: selectedCandidate, CredentialAvailability: credentialCache } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, promptId, c.model.ID, c.vendorId, params),
+      forceFullEval
+    );
+    const consideredModels = candidates.map(candidate => {
+      const available = credentialCache.get(this.CandidateKey(candidate));
+      return {
         model: candidate.model,
-        vendor: vendorEntity,
+        vendor: candidate.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(candidate.vendorId)) : undefined,
         driverClass: candidate.driverClass,
         priority: candidate.priority,
-        available: hasCredentials,
-        unavailableReason: hasCredentials ? undefined : `No credentials configured for driver ${candidate.driverClass}`
+        available: available === true,
+        unavailableReason: available === undefined
+          ? AIPromptRunner.NOT_EVALUATED_REASON
+          : available ? undefined : `No credentials configured for driver ${candidate.driverClass}`
       };
-      consideredModels.push(considered);
-
-      // Record the first available candidate as the selection (highest priority with credentials)
-      if (hasCredentials && !selected) {
-        selected = considered;
-      }
-    }
-
-    const selectedCandidate = selected ? candidates.find(c =>
-      UUIDsEqual(c.model.ID, selected!.model.ID) &&
-      UUIDsEqual(c.vendorId, selected!.vendor?.ID)
-    ) : null;
+    });
 
     if (selectedCandidate) {
       const validCount = consideredModels.filter(m => m.available).length;
