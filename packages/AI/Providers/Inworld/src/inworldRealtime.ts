@@ -25,7 +25,11 @@ import {
     BaseRealtimeModel,
     REALTIME_SHARED_CONFIG_KEYS,
     RealtimeDroppedInputReporter,
+    ReadRealtimeTurnDetection,
+    DescribeUnappliedTurnDetection,
     type IRealtimeSession,
+    type RealtimeTurnDetectionSettings,
+    type RealtimeTurnDetectionSettingKey,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
     type RealtimeTranscript,
@@ -54,6 +58,83 @@ export const INWORLD_DEFAULT_MODEL_ID = 'anthropic/claude-sonnet-4-6';
  * premature turn-ends. Overridable via `Config.turn_detection.eagerness` (or the whole block).
  */
 export const INWORLD_DEFAULT_VAD_EAGERNESS = 'medium';
+
+/**
+ * Maps MJ's normalized `Eagerness` onto Inworld's semantic-VAD `eagerness`. Inworld documents `low` / `medium` /
+ * `high`; MJ's `auto` is the provider's middle setting, as OpenAI documents `auto` to equal `medium`.
+ */
+export function MapInworldEagerness(eagerness: RealtimeTurnDetectionSettings['Eagerness']): 'low' | 'medium' | 'high' | undefined {
+    switch (eagerness) {
+        case 'low': return 'low';
+        case 'auto': return 'medium';
+        case 'high': return 'high';
+        default: return undefined;
+    }
+}
+
+/** The result of {@link BuildInworldTurnDetection}: the wire block, and the launch warning for anything left out. */
+export interface InworldTurnDetectionResult {
+    /** The wire `turn_detection` block. */
+    Block: JSONObject;
+    /** One line naming the requested settings the block does not carry, or `undefined` when it carries them all. */
+    Warning?: string;
+}
+
+/**
+ * Builds Inworld's `turn_detection` block from the config bag, in this order of precedence:
+ *
+ * 1. A raw `turn_detection` object is sent as given — it is Inworld's own vocabulary, so it wins outright.
+ * 2. Otherwise the normalized `turnDetection` request maps onto the two modes Inworld documents:
+ *    - `Mode: 'serverVad'` → `{ type: 'server_vad' }` with `threshold` and `silence_duration_ms` from `Threshold` and
+ *      `SilenceDurationMs`;
+ *    - any other mode (or none) → `{ type: 'semantic_vad' }` with `eagerness` from the flat `eagerness` shorthand, then
+ *      the normalized `Eagerness`, then {@link INWORLD_DEFAULT_VAD_EAGERNESS}.
+ *
+ * Settings the chosen mode has no field for — `Eagerness` under server VAD, `Threshold` / `SilenceDurationMs` under
+ * semantic VAD, `Mode: 'native'`, and `Coverage` — are named in the returned warning rather than dropped silently.
+ *
+ * @param config The session's config bag.
+ * @returns The block and the warning, if any.
+ * @remarks Wire-format binding point — the `server_vad` / `semantic_vad` field names follow Inworld's published
+ * turn-detection reference; verify against a live endpoint.
+ */
+export function BuildInworldTurnDetection(config: JSONObject): InworldTurnDetectionResult {
+    const requested = ReadRealtimeTurnDetection(config['turnDetection']);
+    const supplied = config['turn_detection'];
+    if (supplied !== null && typeof supplied === 'object' && !Array.isArray(supplied)) {
+        const warning = requested
+            ? DescribeUnappliedTurnDetection('InworldRealtime', requested, ['Mode', 'Eagerness', 'Threshold', 'SilenceDurationMs', 'Coverage'],
+                'the config bag supplies a raw `turn_detection` block, which is sent as given')
+            : undefined;
+        return { Block: supplied, Warning: warning };
+    }
+    const unapplied: RealtimeTurnDetectionSettingKey[] = ['Coverage'];
+    if (requested?.Mode === 'serverVad') {
+        const block: JSONObject = { type: 'server_vad' };
+        if (requested.Threshold !== undefined) {
+            block['threshold'] = requested.Threshold;
+        }
+        if (requested.SilenceDurationMs !== undefined) {
+            block['silence_duration_ms'] = requested.SilenceDurationMs;
+        }
+        unapplied.push('Eagerness');
+        return { Block: block, Warning: describeInworldUnapplied(requested, unapplied) };
+    }
+    const eagerness = typeof config['eagerness'] === 'string'
+        ? config['eagerness']
+        : MapInworldEagerness(requested?.Eagerness) ?? INWORLD_DEFAULT_VAD_EAGERNESS;
+    unapplied.push('Threshold', 'SilenceDurationMs');
+    if (requested?.Mode === 'native') {
+        unapplied.push('Mode');
+    }
+    return { Block: { type: 'semantic_vad', eagerness }, Warning: requested ? describeInworldUnapplied(requested, unapplied) : undefined };
+}
+
+/** The launch warning for {@link BuildInworldTurnDetection}'s unapplied settings. */
+function describeInworldUnapplied(requested: RealtimeTurnDetectionSettings, unapplied: ReadonlyArray<RealtimeTurnDetectionSettingKey>): string | undefined {
+    return DescribeUnappliedTurnDetection('InworldRealtime', requested, unapplied,
+        'Inworld has no field for them in the turn-detection mode this session uses (Threshold and SilenceDurationMs apply only with Mode \'serverVad\', Eagerness only without it; Coverage and Mode \'native\' have no Inworld equivalent)');
+}
 
 /**
  * A parsed inbound Inworld Realtime WebSocket frame.
@@ -754,22 +835,18 @@ export class InworldRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Builds the semantic-VAD turn-detection block. If the caller supplies a full `turn_detection`
-     * object it is used verbatim; otherwise an `eagerness` shorthand (or the default) is applied.
+     * Builds the turn-detection block ({@link BuildInworldTurnDetection}) and logs, once per `session.update` built
+     * from the config bag, the requested settings it could not carry.
      *
      * @param config The caller's config bag.
      * @returns The wire `turn_detection` object.
-     * @remarks Wire-format binding point — `turn_detection.type = 'semantic_vad'` and the `eagerness`
-     * field are mapped to the documented "semantic VAD with adjustable eagerness"; verify exact key
-     * names / allowed values against a live endpoint.
      */
     private buildTurnDetection(config: JSONObject): JSONObject {
-        const supplied = config['turn_detection'];
-        if (supplied !== null && typeof supplied === 'object' && !Array.isArray(supplied)) {
-            return supplied;
+        const result = BuildInworldTurnDetection(config);
+        if (result.Warning) {
+            console.warn(result.Warning);
         }
-        const eagerness = typeof config['eagerness'] === 'string' ? config['eagerness'] : INWORLD_DEFAULT_VAD_EAGERNESS;
-        return { type: 'semantic_vad', eagerness };
+        return result.Block;
     }
 
     /**

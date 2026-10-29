@@ -22,6 +22,8 @@ import {
     type ActivityEnd,
     TurnCoverage,
     ThinkingLevel,
+    EndSensitivity,
+    type AutomaticActivityDetection,
 } from '@google/genai';
 
 // MemberJunction AI core contract
@@ -29,6 +31,9 @@ import {
     BaseRealtimeModel,
     RealtimeDiagLog,
     RealtimeDroppedInputReporter,
+    ReadRealtimeTurnDetection,
+    DescribeUnappliedTurnDetection,
+    type RealtimeTurnDetectionSettings,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -91,7 +96,7 @@ type GeminiSharedKeyShape = 'object' | 'named effort';
 /**
  * The keys in `REALTIME_SHARED_CONFIG_KEYS` that this driver applies after the config-bag merge, reading them from the
  * original bag in `applyModelLegality`, with the value each must hold: `turnDetection` (its `Coverage` sets the turn
- * coverage), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
+ * coverage; `SilenceDurationMs` and `Eagerness` tune automatic activity detection), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
  * thinking level). The scrub in `BuildConnectConfig` keeps them out of the merge without calling them non-Gemini
  * (#5334). The other shared keys the driver applies (`voice`, `disableAutoResponse`, `tooling`, `toolBehavior`) are
  * consumed before the scrub.
@@ -1034,6 +1039,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         }
 
         GeminiRealtime.applyTurnCoverage(config, coverageSetting, profile, params.Model);
+        GeminiRealtime.applyTurnDetection(config, ReadRealtimeTurnDetection(bag['turnDetection']));
 
         // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
         // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
@@ -1101,6 +1107,74 @@ export class GeminiRealtime extends BaseRealtimeModel {
             );
         }
         config.realtimeInputConfig = { ...(config.realtimeInputConfig ?? {}), turnCoverage: wire };
+    }
+
+    /**
+     * Maps the normalized turn-detection request onto Gemini's automatic activity detection
+     * (`realtimeInputConfig.automaticActivityDetection`), and logs one line naming what it could not apply:
+     *
+     * - `SilenceDurationMs` → `silenceDurationMs`, the same quantity (non-speech required before end of speech);
+     * - `Eagerness` → `endOfSpeechSensitivity`: `low` (waits longer) → `END_SENSITIVITY_LOW`, `high` →
+     *   `END_SENSITIVITY_HIGH`, `auto` → nothing sent, so the endpoint's own default applies;
+     * - `Threshold` is not applied: it is a 0–1 level and `startOfSpeechSensitivity` is a two-value enum, so any cut
+     *   point would be invented;
+     * - `Mode` is not applied: Gemini has one automatic detector, not a choice of server or semantic VAD.
+     *
+     * Fields the config bag sets on `automaticActivityDetection` itself win, since they are Gemini's own vocabulary. In
+     * meeting mode the detector is disabled and the bridge drives turns, so nothing is mapped and every requested
+     * setting is named.
+     *
+     * @param config The connect config being built.
+     * @param requested The bag's normalized `turnDetection`, if any.
+     */
+    private static applyTurnDetection(config: LiveConnectConfig, requested: RealtimeTurnDetectionSettings | undefined): void {
+        if (!requested) {
+            return;
+        }
+        const existing = config.realtimeInputConfig?.automaticActivityDetection;
+        if (existing?.disabled === true) {
+            const warning = DescribeUnappliedTurnDetection('GeminiRealtime', requested, ['Mode', 'Eagerness', 'Threshold', 'SilenceDurationMs'],
+                'automatic activity detection is disabled for this session (meeting mode), so the bridge decides when turns end');
+            if (warning) {
+                console.warn(warning);
+            }
+            return;
+        }
+        const mapped: AutomaticActivityDetection = {};
+        if (requested.SilenceDurationMs !== undefined) {
+            mapped.silenceDurationMs = requested.SilenceDurationMs;
+        }
+        const endSensitivity = GeminiRealtime.MapEagernessToEndSensitivity(requested.Eagerness);
+        if (endSensitivity) {
+            mapped.endOfSpeechSensitivity = endSensitivity;
+        }
+        if (Object.keys(mapped).length > 0) {
+            config.realtimeInputConfig = {
+                ...(config.realtimeInputConfig ?? {}),
+                automaticActivityDetection: { ...mapped, ...(existing ?? {}) },
+            };
+        }
+        const warning = DescribeUnappliedTurnDetection('GeminiRealtime', requested, ['Mode', 'Threshold'],
+            'Gemini Live has one automatic activity detector, and its start-of-speech sensitivity is two-valued rather than a 0–1 threshold');
+        if (warning) {
+            console.warn(warning);
+        }
+    }
+
+    /**
+     * Maps MJ's normalized `Eagerness` onto Gemini's end-of-speech sensitivity. `auto` (and absent) returns `undefined`
+     * so the endpoint default applies — the SDK documents that default as different on Gemini Live and Gemini
+     * Enterprise.
+     */
+    public static MapEagernessToEndSensitivity(eagerness: RealtimeTurnDetectionSettings['Eagerness']): EndSensitivity | undefined {
+        switch (eagerness) {
+            case 'low':
+                return EndSensitivity.END_SENSITIVITY_LOW;
+            case 'high':
+                return EndSensitivity.END_SENSITIVITY_HIGH;
+            default:
+                return undefined;
+        }
     }
 
     /** Maps MJ's turn coverage onto the SDK's {@link TurnCoverage} wire value. */

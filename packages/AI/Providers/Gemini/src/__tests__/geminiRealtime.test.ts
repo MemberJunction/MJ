@@ -2049,3 +2049,70 @@ describe("live avatars: the mint says whether the avatar shows, and why not", ()
         expect(developer.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
     });
 });
+
+describe('normalized turn detection → automatic activity detection', () => {
+    const activityDetectionOf = (config: Record<string, unknown>): Record<string, unknown> | undefined =>
+        (config['realtimeInputConfig'] as Record<string, unknown> | undefined)?.['automaticActivityDetection'] as Record<string, unknown> | undefined;
+    const turnLines = (warnings: string[]): string[] => warnings.filter((line) => line.includes('Turn-detection setting(s) not applied'));
+
+    it('maps SilenceDurationMs and Eagerness, bridged and minted, with no warning', async () => {
+        const params = makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { SilenceDurationMs: 800, Eagerness: 'low' } } });
+        const bridged = await startWithWarnings(new TestGeminiRealtime('k'), params);
+        const minted = await mintWithWarnings(new ClientDirectTestable('k'), params);
+        for (const [path, run] of [['bridged', bridged], ['minted', minted]] as const) {
+            expect(activityDetectionOf(run.config), path).toEqual({ silenceDurationMs: 800, endOfSpeechSensitivity: 'END_SENSITIVITY_LOW' });
+            expect(turnLines(run.warnings), path).toEqual([]);
+        }
+    });
+
+    it("maps Eagerness 'high' to END_SENSITIVITY_HIGH and sends nothing for 'auto'", () => {
+        expect(GeminiRealtime.MapEagernessToEndSensitivity('high')).toBe('END_SENSITIVITY_HIGH');
+        expect(GeminiRealtime.MapEagernessToEndSensitivity('low')).toBe('END_SENSITIVITY_LOW');
+        expect(GeminiRealtime.MapEagernessToEndSensitivity('auto')).toBeUndefined();
+        expect(GeminiRealtime.MapEagernessToEndSensitivity(undefined)).toBeUndefined();
+    });
+
+    it('warns at launch for Threshold and Mode, which it cannot express, and still applies the rest', async () => {
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live',
+            Config: { turnDetection: { Mode: 'serverVad', Threshold: 0.6, SilenceDurationMs: 700, Coverage: 'audioActivityOnly' } },
+        }));
+        expect(activityDetectionOf(config)).toEqual({ silenceDurationMs: 700 });
+        const lines = turnLines(warnings);
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain('[GeminiRealtime]');
+        expect(lines[0]).toContain('Mode="serverVad"');
+        expect(lines[0]).toContain('Threshold=0.6');
+        expect(lines[0]).not.toContain('SilenceDurationMs');
+        expect(lines[0]).not.toContain('Coverage');
+    });
+
+    it('lets automaticActivityDetection fields from the config bag win over the mapped ones', async () => {
+        const { config } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live',
+            Config: {
+                turnDetection: { SilenceDurationMs: 800, Eagerness: 'high' },
+                realtimeInputConfig: { automaticActivityDetection: { silenceDurationMs: 1200 } },
+            },
+        }));
+        expect(activityDetectionOf(config)).toEqual({ silenceDurationMs: 1200, endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' });
+    });
+
+    it('maps nothing in meeting mode, where detection is disabled, and names every requested setting', async () => {
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live',
+            Config: { disableAutoResponse: true, turnDetection: { SilenceDurationMs: 800, Eagerness: 'low' } },
+        }));
+        expect(activityDetectionOf(config)).toEqual({ disabled: true });
+        const lines = turnLines(warnings);
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain('meeting mode');
+        expect(lines[0]).toContain('SilenceDurationMs=800');
+        expect(lines[0]).toContain('Eagerness="low"');
+    });
+
+    it('applies the same mapping on Gemini Enterprise, which inherits the connect config', async () => {
+        const { config } = await startWithWarnings(new EnterpriseBridged('k'), makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { SilenceDurationMs: 900 } } }));
+        expect(activityDetectionOf(config)).toEqual({ silenceDurationMs: 900 });
+    });
+});

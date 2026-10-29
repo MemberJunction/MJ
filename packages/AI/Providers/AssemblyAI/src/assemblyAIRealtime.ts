@@ -4,6 +4,8 @@
 import {
     BaseRealtimeModel,
     RealtimeDroppedInputReporter,
+    ReadRealtimeTurnDetection,
+    DescribeUnappliedTurnDetection,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -18,6 +20,49 @@ import {
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+
+/** The result of {@link BuildAssemblyAITurnDetection}: the wire block, and the launch warning for anything left out. */
+export interface AssemblyAITurnDetectionResult {
+    /** The `input.turn_detection` block, or `undefined` when there is nothing to send. */
+    Block?: JSONObject;
+    /** One line naming the requested settings the block does not carry, or `undefined` when it carries them all. */
+    Warning?: string;
+}
+
+/**
+ * Builds the Voice Agent API's `input.turn_detection` block from the config bag.
+ *
+ * AssemblyAI documents five fields there: `vad_threshold` (speech-detection sensitivity, 0–1, lower is more
+ * sensitive), `min_silence` (silence before a confident end of turn), `max_silence` (silence that forces an end of
+ * turn), `interrupt_response` and `interruption_delay`. Of MJ's normalized settings only `Threshold` has a field with
+ * the same meaning, so it maps onto `vad_threshold`.
+ *
+ * The rest are named in the returned warning:
+ * - `SilenceDurationMs` is one fixed trailing-silence window; AssemblyAI splits that job between `min_silence` and
+ *   `max_silence` around its own end-of-turn model, and either choice would change what the author asked for.
+ * - `Eagerness` and `Mode` have no field: AssemblyAI owns its turn model.
+ * - `Coverage` has no field: the session is audio only.
+ *
+ * A raw `turn_detection` object in the bag is AssemblyAI's own vocabulary, so its fields win over the mapped ones.
+ *
+ * @param config The session's config bag.
+ * @returns The block and the warning, if any.
+ */
+export function BuildAssemblyAITurnDetection(config: JSONObject): AssemblyAITurnDetectionResult {
+    const requested = ReadRealtimeTurnDetection(config['turnDetection']);
+    const mapped: JSONObject = {};
+    if (requested?.Threshold !== undefined) {
+        mapped['vad_threshold'] = requested.Threshold;
+    }
+    const raw = config['turn_detection'];
+    const supplied = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? raw : undefined;
+    const block: JSONObject = { ...mapped, ...(supplied ?? {}) };
+    const warning = requested
+        ? DescribeUnappliedTurnDetection('AssemblyAIRealtime', requested, ['Mode', 'Eagerness', 'SilenceDurationMs', 'Coverage'],
+            'AssemblyAI owns its turn model and has no field with the same meaning (set `min_silence` / `max_silence` in a raw `turn_detection` block to tune its silence windows)')
+        : undefined;
+    return { Block: Object.keys(block).length > 0 ? block : undefined, Warning: warning };
+}
 
 /**
  * A config-bag entry as a usable string, or `undefined` when it is absent, blank, or not a string.
@@ -246,8 +291,8 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
      * - `tools`: the Core tool set mapped to the provider's `{ type: 'function', … }` schema.
      * - Recognized `params.Config` keys pass through to their wire slots: `voice` →
      *   `output.voice`, `firstMessage` (or the legacy `greeting`) → `greeting` (spoken on connect;
-     *   omitted = no auto-greeting), `turn_detection` → `input.turn_detection`, `keyterms` →
-     *   `input.keyterms`.
+     *   omitted = no auto-greeting), `turn_detection` and the normalized `turnDetection`
+     *   ({@link BuildAssemblyAITurnDetection}) → `input.turn_detection`, `keyterms` → `input.keyterms`.
      */
     public static BuildSessionObject(params: RealtimeSessionParams): JSONObject {
         const session: JSONObject = {
@@ -266,8 +311,12 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
             session['output'] = { voice: config['voice'] };
         }
         const input: JSONObject = {};
-        if (config['turn_detection'] !== null && typeof config['turn_detection'] === 'object' && !Array.isArray(config['turn_detection'])) {
-            input['turn_detection'] = config['turn_detection'];
+        const turnDetection = BuildAssemblyAITurnDetection(config);
+        if (turnDetection.Warning) {
+            console.warn(turnDetection.Warning);
+        }
+        if (turnDetection.Block) {
+            input['turn_detection'] = turnDetection.Block;
         }
         if (Array.isArray(config['keyterms'])) {
             input['keyterms'] = config['keyterms'];
