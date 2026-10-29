@@ -27,9 +27,7 @@ import {
 } from '@memberjunction/global';
 import {
   MJAIPromptModelEntity,
-  MJAIModelVendorEntity,
-  MJAICredentialBindingEntity,
-  MJCredentialEntity
+  MJAIModelVendorEntity
 } from '@memberjunction/core-entities';
 import {
   MJAIModelEntityExtended,
@@ -55,6 +53,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+import { ResolvePlatformAICredential, FindVendorDefaultCredential } from './PlatformCredentialResolver';
 
 /**
  * The composed bound applied to a single model call: the caller's cancellation token (if any) merged
@@ -375,7 +374,8 @@ export abstract class BaseModelRunner {
   /**
    * Priorities 2-5 of {@link ResolveCredentialForExecution}: the platform's MJ Credentials —
    * `AICredentialBinding`s on the prompt-model, the model-vendor and the vendor, then the vendor's
-   * default credential. `undefined` when none resolves.
+   * default credential. `undefined` when none resolves. The walk itself is
+   * {@link ResolvePlatformAICredential}, which realtime voice sessions share.
    */
   private async resolvePlatformCredential(
     promptId: string | undefined,
@@ -384,166 +384,26 @@ export abstract class BaseModelRunner {
     params: AIPromptParams,
     verbose: boolean
   ): Promise<string | undefined> {
-    // Ensure CredentialEngine is configured for binding lookups
-    await CredentialEngine.Instance.Config(false, params.contextUser);
-
-    // Priority 2: PromptModel bindings (most specific) - with failover
-    if (promptId && modelId) {
-      const promptModel = this.getPromptModelsForPromptId(promptId).find(
-        pm => UUIDsEqual(pm.ModelID, modelId)
-      );
-      if (promptModel) {
-        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
-        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(PromptModel)', params, verbose);
-        if (result) return result;
-      }
-    }
-
-    // Priority 3: ModelVendor bindings - with failover
-    if (modelId && vendorId) {
-      for (const modelVendor of this.activeModelVendorRows(modelId, vendorId)) {
-        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
-        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(ModelVendor)', params, verbose);
-        if (result) return result;
-      }
-    }
-
-    // Priority 4: Vendor bindings - with failover
-    if (vendorId) {
-      const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('Vendor', vendorId);
-      const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(Vendor)', params, verbose);
-      if (result) return result;
-    }
-
-    // Priority 5: Type-based default credential
-    // If the vendor declares a CredentialTypeID, try to find a default credential of that type
-    if (vendorId) {
-      const vendor = AIEngine.Instance.VendorsByID.get(NormalizeUUID(vendorId));
-      if (vendor?.CredentialTypeID) {
-        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
-        if (defaultCredential) {
-          const result = await this.tryResolveCredential(defaultCredential, 'type-based default', params, verbose);
-          if (result) return result;
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Attempts to resolve credentials from bindings with priority-based failover.
-   * Tries each binding in priority order until one succeeds.
-   */
-  private async tryCredentialBindingsWithFailover(
-    bindings: MJAICredentialBindingEntity[],
-    source: string,
-    params: AIPromptParams,
-    verbose: boolean
-  ): Promise<string | null> {
-    if (bindings.length === 0) return null;
-
-    for (let i = 0; i < bindings.length; i++) {
-      const binding = bindings[i];
-      const credential = CredentialEngine.Instance.getCredentialById(binding.CredentialID);
-
-      if (!credential) {
-        if (verbose) {
-          this.logStatus(`   ⚠️ Credential ${binding.CredentialID} not found (priority ${binding.Priority}), trying next...`, true, params);
-        }
-        continue;
-      }
-
-      const result = await this.tryResolveCredential(
-        credential,
-        `${source} priority ${binding.Priority}`,
-        params,
-        verbose,
-        i < bindings.length - 1  // hasMoreBindings
-      );
-
-      if (result) return result;
-    }
-
-    return null;
-  }
-
-  /**
-   * Attempts to resolve a single credential, returning null on failure for failover support.
-   */
-  private async tryResolveCredential(
-    credential: MJCredentialEntity,
-    source: string,
-    params: AIPromptParams,
-    verbose: boolean,
-    hasMoreBindings: boolean = false
-  ): Promise<string | null> {
-    try {
-      // Check if credential is active and not expired
-      if (!credential.IsActive) {
-        if (verbose) {
-          this.logStatus(`   ⚠️ Credential "${credential.Name}" is inactive, trying next...`, true, params);
-        }
-        return null;
-      }
-
-      // Expiry is evaluated by the engine rather than compared here, so this
-      // failover path honors the same policy — including any grace period —
-      // that getCredential() would apply a few lines below.
-      const expiration = CredentialEngine.Instance.GetExpirationStatus(credential);
-      if (!expiration.usable) {
-        if (verbose) {
-          this.logStatus(
-            `   ⚠️ Credential "${credential.Name}" expired on ${expiration.expiresAt?.toISOString()}, trying next...`,
-            true,
-            params
-          );
-        }
-        return null;
-      }
-      if (expiration.status === 'expiring-soon' && verbose) {
-        this.logStatus(
-          `   ⏳ Credential "${credential.Name}" expires in ${expiration.daysUntilExpiration} day(s)`,
-          true,
-          params
-        );
-      }
-
-      // Resolve the credential values
-      const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
-        credentialId: credential.ID,
-        contextUser: params.contextUser,
-        subsystem: 'AIPromptRunner'
-      });
-
-      if (verbose) {
-        this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
-      }
-
-      return JSON.stringify(resolved.values);
-
-    } catch (error) {
-      if (hasMoreBindings) {
-        // More bindings to try - log warning and continue
-        if (verbose) {
-          this.logStatus(`   ⚠️ Failed to resolve credential "${credential.Name}" from ${source}: ${error instanceof Error ? error.message : String(error)}, trying next...`, true, params);
-        }
-        return null;
-      } else {
-        // No more bindings - log error but still return null for legacy fallback
-        this.logError(error instanceof Error ? error : new Error(String(error)), {
+    const promptModel = promptId && modelId
+      ? this.getPromptModelsForPromptId(promptId).find(pm => UUIDsEqual(pm.ModelID, modelId))
+      : undefined;
+    return ResolvePlatformAICredential({
+      PromptModelID: promptModel?.ID,
+      ModelVendorIDs: modelId && vendorId ? this.activeModelVendorRows(modelId, vendorId).map(mv => mv.ID) : [],
+      VendorID: vendorId,
+      ContextUser: params.contextUser,
+      Subsystem: 'AIPromptRunner',
+      Verbose: verbose,
+      Logger: {
+        Status: (message) => this.logStatus(message, true, params),
+        Failure: (error, metadata) => this.logError(error, {
           category: 'CredentialResolution',
           severity: 'warning',
-          metadata: {
-            credentialId: credential.ID,
-            credentialName: credential.Name,
-            source
-          },
+          metadata,
           maxErrorLength: params.maxErrorLength
-        });
-        return null;
+        })
       }
-    }
+    });
   }
 
   /**
@@ -574,19 +434,6 @@ export abstract class BaseModelRunner {
     }
 
     return JSON.stringify(resolved.values);
-  }
-
-  /**
-   * Finds a default credential matching a specific credential type.
-   */
-  private findDefaultCredentialByType(credentialTypeId: string): MJCredentialEntity | null {
-    const credentials = CredentialEngine.Instance.Credentials;
-    return credentials.find(c =>
-      UUIDsEqual(c.CredentialTypeID, credentialTypeId) &&
-      c.IsDefault === true &&
-      c.IsActive === true &&
-      CredentialEngine.Instance.GetExpirationStatus(c).usable
-    ) || null;
   }
 
   /**
@@ -664,17 +511,7 @@ export abstract class BaseModelRunner {
     }
 
     // Priority 5: Type-based default credential
-    if (vendorId) {
-      const vendor = AIEngine.Instance.VendorsByID.get(NormalizeUUID(vendorId));
-      if (vendor?.CredentialTypeID) {
-        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
-        if (defaultCredential) {
-          return true;
-        }
-      }
-    }
-
-    return false;
+    return !!vendorId && FindVendorDefaultCredential(vendorId) !== null;
   }
 
   /**

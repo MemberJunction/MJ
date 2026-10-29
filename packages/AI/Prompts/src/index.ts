@@ -4,6 +4,9 @@ export { BaseModelRunner } from './BaseModelRunner';
 export type { ModelVendorCandidate, FailoverAttempt, PromptRunUsageFields } from './BaseModelRunner';
 export * from './AIPromptRunner';
 export * from './AIPromptTimeoutError';
+// The platform-credential tiers (AICredentialBindings, then the vendor's default credential), shared
+// with realtime voice sessions so a session mints on the credential a prompt would use.
+export * from './PlatformCredentialResolver';
 // The native tool-calling gate. Exported because the agent loop needs to reason
 // about the same decision before it decides whether to build tools at all, and because the mode
 // helpers are how a caller reads back which path a run took.

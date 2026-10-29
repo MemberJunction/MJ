@@ -56,7 +56,8 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { ListRealtimeVendorsForModel, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, RealtimeKeyFixHint, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { RealtimePlatformCredentials, ResolveRealtimePlatformCredentials } from './realtime/realtime-platform-credentials';
 import { ChooseRealtimeVendorForAvatar, RealtimeModelShowsAvatar } from './realtime/realtime-video-output-gate';
 import { RealtimeSessionCanShowAvatar } from './realtime/realtime-avatar-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
@@ -3249,9 +3250,8 @@ export class BaseAgent {
         if (!modelResolution) {
             const message =
                 `Agent '${params.agent.Name}' is session-driven (Realtime) but no usable Realtime model could be ` +
-                `resolved. Configure a model of AIModelType 'Realtime' with an active vendor DriverClass and a ` +
-                `valid API key (e.g. AI_VENDOR_API_KEY__<driver>). This is expected until the realtime drivers ` +
-                `and model metadata are provisioned.`;
+                `resolved: no active vendor of an active model of AIModelType 'Realtime' has a usable key and ` +
+                `driver. ${RealtimeKeyFixHint(params.CredentialScope)}`;
             this.logError(message, { agent: params.agent, category: 'RealtimeSession' });
             return await this.createFailureResult(message, params.contextUser) as ExecuteAgentResult<R>;
         }
@@ -3380,9 +3380,9 @@ export class BaseAgent {
             HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
             PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
             ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
-            // The run's runtime API keys, so the bridged voice session mints on the caller's key when
-            // the run carries one for the realtime driver (the same run-key → platform order as
-            // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
+            // The run's runtime API keys. The session service resolves each vendor's key in a prompt's
+            // order: the platform's MJ Credential for the vendor, then these keys, then the environment
+            // ('RuntimeOnly' scope: these keys alone). Absent ⇒ platform credentials, then the environment.
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
@@ -3434,21 +3434,25 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
-        // The run's runtime API keys, in GetAIAPIKey's order: the run's key for a driver class, else
-        // the platform's. That is the legacy tier of prompt key resolution — a prompt consults MJ
-        // Credentials / AICredentialBindings first, and realtime does not consult them at all.
+        // Keys resolve per vendor in the order a prompt's do: the platform's MJ Credential for the vendor
+        // (AICredentialBindings on the model-vendor row, then the vendor, then the vendor's default
+        // credential), then the run's key for the driver class, then the environment. A run whose
+        // CredentialScope is 'RuntimeOnly' skips the platform credential and the environment.
         //
         // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
-        // candidates by priority and takes the first whose key resolves, so an organization that
-        // brings its own credential for a vendor we hold no platform key for now reaches that
-        // vendor — which is the point of bringing your own key, not a side effect of it.
-        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
+        // candidates by priority and takes the first whose key resolves, so a vendor reachable only
+        // through a bound credential or the run's own key is still reached.
+        const runThenEnvironment = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
         // The vendor follows whether the run will show an avatar, by the co-agent session prep's rule: a vendor that
         // renders avatars (Vertex AI for Gemini 3.8 Live) only when it will, or when it is the only keyed vendor.
         const showsAvatar = this.realtimeRunShowsAvatar(params);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
+        // Credential resolution is async and vendor selection is not, so every candidate's credentials
+        // are resolved first; selection and the mint then read the same answer.
+        const platform = await this.resolveRealtimePlatformCredentials(candidates.map(m => m.ID), params);
         for (const model of candidates) {
-            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+            const resolveAPIKey = platform.ResolverFor(model.ID, runThenEnvironment);
+            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey, params.CredentialScope);
             const first = vendor ? this.instantiateRealtimeRunVendor(model.ID, vendor, resolveAPIKey) : null;
             if (!vendor || !first) {
                 continue;
@@ -3478,6 +3482,18 @@ export class BaseAgent {
             AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
             PhoneCall: params.data?.realtimePhoneCall === true,
         });
+    }
+
+    /**
+     * The platform MJ Credentials of the candidate realtime models' vendors, read as the run's user.
+     * **Overridable seam** so tests can supply credentials without a credential store. Under a
+     * `'RuntimeOnly'` scope it resolves none.
+     *
+     * @param modelIDs The candidate `MJ: AI Models` row ids.
+     * @param params The execution parameters (context user and credential scope).
+     */
+    protected async resolveRealtimePlatformCredentials(modelIDs: string[], params: ExecuteAgentParams): Promise<RealtimePlatformCredentials> {
+        return ResolveRealtimePlatformCredentials(modelIDs, params.contextUser, params.CredentialScope);
     }
 
     /**
