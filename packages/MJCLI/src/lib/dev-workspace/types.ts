@@ -1,9 +1,9 @@
 /**
  * Shared types for the `mj dev workspace` generator.
  *
- * The generator creates the four ephemeral files that join sibling repo checkouts
+ * The generator creates the three ephemeral files that join sibling repo checkouts
  * into a single pnpm workspace at their common parent directory:
- * `pnpm-workspace.yaml`, `.npmrc`, `package.json`, `turbo.json`.
+ * `pnpm-workspace.yaml`, `.npmrc`, `package.json`.
  *
  * The generated contents reproduce the manual setup this command replaces: every
  * value was proven by joining these repos by hand before it was automated.
@@ -209,6 +209,8 @@ export interface ResolvedLockEntry {
    * workspace-linked, so they are not pin authority.
    */
   Dependents?: string[];
+  /** For DIRECT entries only: the importer that declares it, repo-relative (`.` = the repo root). */
+  Importer?: string;
 }
 
 /** A lockfile entry the pin derivation dropped — always carried to output, never silent. */
@@ -282,8 +284,6 @@ export interface CandidateRepo {
   AppGlobs?: string[];
   /** The member's committed lockfile data, an unsupported-format marker, or null when the repo commits none. */
   Lockfile: MemberLockfile | UnsupportedLockfile | null;
-  /** Raw contents of the repo's root `turbo.json`, or null when absent. */
-  TurboJson: string | null;
   /**
    * Why the member's `mj-app.json` could not be parsed, or null when it parsed (or is absent).
    *
@@ -409,13 +409,6 @@ export interface RootPackageJsonResult {
   Pin: string;
   /** Every absorption decision the assembly made. */
   Report: ParentManifestReport;
-}
-
-/** Result of picking the parent `turbo.json`. */
-export interface TurboJsonResult {
-  Content: string;
-  /** Member repo the file was copied from, or 'generator fallback'. */
-  Source: string;
 }
 
 /** One generated file, by name relative to the parent directory. */
