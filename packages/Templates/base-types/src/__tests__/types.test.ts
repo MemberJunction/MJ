@@ -82,5 +82,40 @@ describe('Templates/base-types exports', () => {
       expect(templates[1].Content.map(c => c.Name)).toEqual(['c2']);
       expect(templates[1].Params.map(p => p.Name)).toEqual(['p1']);
     });
+
+    it('returns empty arrays and completes AdditionalLoading cleanly when _metadata is not populated (permission-constrained user, MJ#6106)', async () => {
+      const engine = new TemplateEngineBase();
+      const rebuild = () => (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
+
+      await expect(rebuild()).resolves.toBeUndefined();
+      expect(engine.Templates).toEqual([]);
+      expect(engine.TemplateContentTypes).toEqual([]);
+      expect(engine.TemplateCategories).toEqual([]);
+      expect(engine.TemplateContents).toEqual([]);
+      expect(engine.TemplateParams).toEqual([]);
+      expect(engine.FindTemplateByID('any-id')).toBeUndefined();
+      expect(engine.FindTemplate('any-name')).toBeUndefined();
+    });
+
+    it('declares constituent template entities on its dataset config so BaseEngine.CheckPermissionsOrSkipAll can pre-check them (MJ#6106)', async () => {
+      const engine = new TemplateEngineBase();
+      let capturedConfigs: Array<{ Type?: string; DatasetName?: string; Entities?: string[] }> = [];
+      (engine as unknown as { Load: (configs: typeof capturedConfigs) => Promise<void> }).Load = async (configs) => {
+        capturedConfigs = configs;
+      };
+
+      await engine.Config(false);
+
+      expect(capturedConfigs).toHaveLength(1);
+      expect(capturedConfigs[0].Type).toBe('dataset');
+      expect(capturedConfigs[0].DatasetName).toBe('Template_Metadata');
+      expect(capturedConfigs[0].Entities).toEqual([
+        'MJ: Template Content Types',
+        'MJ: Template Categories',
+        'MJ: Templates',
+        'MJ: Template Contents',
+        'MJ: Template Params',
+      ]);
+    });
   });
 });
