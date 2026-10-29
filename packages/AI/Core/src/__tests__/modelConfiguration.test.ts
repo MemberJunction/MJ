@@ -13,6 +13,7 @@ import ts from 'typescript';
 import { describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
+    ApplyEmbeddingInputPrefix,
     IsPrefixPromptCache,
     IsZeroDataRetention,
     ParseModelConfiguration,
@@ -353,6 +354,32 @@ describe('ResolveIsModelFullDuplex — metadata wins over driver fallback', () =
     });
 });
 
+describe('ApplyEmbeddingInputPrefix — catalog-driven query/document prefixes', () => {
+    const gemma: AIModelConfiguration = {
+        Embedding: { QueryPrefix: 'task: search result | query: ', DocumentPrefix: 'title: none | text: ' },
+    };
+
+    it('prepends the query prefix for a query', () => {
+        expect(ApplyEmbeddingInputPrefix('red planet?', 'query', gemma)).toBe('task: search result | query: red planet?');
+    });
+
+    it('prepends the document prefix for a document, and when inputType is omitted', () => {
+        expect(ApplyEmbeddingInputPrefix('Mars', 'document', gemma)).toBe('title: none | text: Mars');
+        expect(ApplyEmbeddingInputPrefix('Mars', undefined, gemma)).toBe('title: none | text: Mars');
+    });
+
+    it('returns the text unchanged when the model declares no prefix', () => {
+        expect(ApplyEmbeddingInputPrefix('Mars', 'query', null)).toBe('Mars');
+        expect(ApplyEmbeddingInputPrefix('Mars', 'query', { Embedding: { DocumentPrefix: 'doc: ' } })).toBe('Mars');
+    });
+
+    it('takes the prefix from the most specific catalog layer', () => {
+        const merged = ResolveEffectiveModelConfiguration(gemma, { Embedding: { QueryPrefix: 'task: code retrieval | query: ' } });
+        expect(ApplyEmbeddingInputPrefix('sort a list', 'query', merged)).toBe('task: code retrieval | query: sort a list');
+        expect(ApplyEmbeddingInputPrefix('Mars', 'document', merged)).toBe('title: none | text: Mars');
+    });
+});
+
 describe('Realtime.Pricing — prices for output the token cost rows do not cover', () => {
     const avatarVideo: RealtimeUnitPrice = { Price: 0.37152, Unit: 'Per Minute', Currency: 'USD' };
 
@@ -388,6 +415,9 @@ interface SeedFields {
     Name?: string;
     VendorID?: string;
     TypeID?: string;
+    AIModelTypeID?: string;
+    DriverClass?: string;
+    Status?: string;
     ModelConfiguration?: AIModelConfiguration;
 }
 
@@ -402,7 +432,7 @@ interface SeedRecord {
  * MetadataSync stores each object as its JSON text, which `ParseModelConfiguration` reads back.
  */
 function seededLayers(modelName: string, vendorName: string): { Model: AIModelConfiguration | null; Row: AIModelConfiguration | null } {
-    const records: SeedRecord[] = JSON.parse(readFileSync(resolve(HERE, '../../../../../metadata/ai-models/.ai-models.json'), 'utf8'));
+    const records = seededModels();
     const model = records.find((r) => r.fields.Name === modelName);
     const row = model?.relatedEntities?.['MJ: AI Model Vendors']?.find((r) =>
         r.fields.VendorID === `@lookup:MJ: AI Vendors.Name=${vendorName}` && r.fields.TypeID?.endsWith('.Name=Inference Provider') === true
@@ -438,6 +468,44 @@ describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', 
         expect(vertexTurns?.Coverage, 'Vertex AI refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup').toBe('audioActivityOnly');
         expect(vertexKnobs).toEqual(googleKnobs);
         expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
+    });
+});
+
+/** Every `metadata/ai-models` record, as MetadataSync holds them. */
+function seededModels(): SeedRecord[] {
+    return JSON.parse(readFileSync(resolve(HERE, '../../../../../metadata/ai-models/.ai-models.json'), 'utf8'));
+}
+
+/**
+ * LLM drivers whose `SupportsTools` is false — they ignore `ChatParams.tools` — plus vendor driver
+ * names with no LLM driver at all. Kept in step with the provider packages by hand: Core cannot
+ * import them. When a driver gains the tool mapping, remove it here.
+ */
+const DRIVERS_WITHOUT_TOOLS: ReadonlySet<string> = new Set([
+    'AzureLLM', 'BedrockLLM', 'BettyBotLLM', 'BettyLLM', 'CohereLLM', 'FireworksLLM',
+    'InceptionLLM', 'LMStudioLLM', 'MistralLLM', 'OllamaLLM'
+]);
+
+describe('LLM.SupportsNativeToolCalling as seeded (metadata/ai-models)', () => {
+    const llms = seededModels().filter((r) => r.fields.AIModelTypeID === '@lookup:MJ: AI Model Types.Name=LLM');
+
+    it('every LLM states it explicitly, so a missing value always means someone forgot', () => {
+        // The gate treats an absent value as false, and degrades to the envelope path with only a
+        // console warning — a model that replaces a supported one loses native tool calling unnoticed.
+        const missing = llms
+            .filter((r) => typeof r.fields.ModelConfiguration?.LLM?.SupportsNativeToolCalling !== 'boolean')
+            .map((r) => r.fields.Name);
+
+        expect(missing).toEqual([]);
+    });
+
+    it('no active vendor row resolves true on a driver that ignores tools', () => {
+        const contradictions = llms.flatMap((r) => (r.relatedEntities?.['MJ: AI Model Vendors'] ?? [])
+            .filter((row) => row.fields.Status === 'Active' && DRIVERS_WITHOUT_TOOLS.has(row.fields.DriverClass ?? ''))
+            .filter((row) => ResolveEffectiveModelConfiguration(r.fields.ModelConfiguration, row.fields.ModelConfiguration)?.LLM?.SupportsNativeToolCalling === true)
+            .map((row) => `${r.fields.Name} on ${row.fields.DriverClass}`));
+
+        expect(contradictions).toEqual([]);
     });
 });
 

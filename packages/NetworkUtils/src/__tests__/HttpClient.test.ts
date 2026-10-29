@@ -433,3 +433,21 @@ describe('HttpRequest stream response + error handling', () => {
         expect(cancel).not.toHaveBeenCalled();
     });
 });
+
+describe('HttpRequest StripHeadersOnCrossOriginRedirect', () => {
+    it('forwards StripHeadersOnCrossOriginRedirect to SafeFetch when ValidateUrl is true', async () => {
+        StubFetch([
+            { status: 302, headers: { location: 'https://93.184.216.35/dest' } },
+            { status: 200, body: '{"ok":true}' },
+        ]);
+        await HttpGet('https://93.184.216.34/start', {
+            ValidateUrl: true,
+            StripHeadersOnCrossOriginRedirect: true,
+            Headers: { 'X-Api-Key': 'secret' },
+        });
+        expect(calls).toHaveLength(2);
+        expect(calls[0].init.headers).toEqual({ 'X-Api-Key': 'secret' });
+        expect(calls[1].init.headers).toBeUndefined();
+    });
+});
+

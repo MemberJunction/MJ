@@ -6,6 +6,7 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
+import { getEventListeners } from 'node:events';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import type { RealtimeAvatarResolution } from '../realtime/realtime-avatar-resolution';
 import {
@@ -680,6 +681,21 @@ describe('RealtimeClientSessionService.CancelInFlightDelegations', () => {
         expect(result.Success).toBe(false);
         expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'cancelled' });
     });
+
+    it('leaves no abort listener on a reused caller AbortSignal once ExecuteRelayedTool finishes', async () => {
+        const svc = new TestableService();
+        const callerController = new AbortController();
+
+        for (let i = 0; i < 5; i++) {
+            await svc.ExecuteRelayedTool(
+                makeToolInput(`c-${i}`, { AbortSignal: callerController.signal }),
+                contextUser,
+                provider
+            );
+        }
+
+        expect(getEventListeners(callerController.signal, 'abort')).toHaveLength(0);
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -860,6 +876,114 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(store.TokensPrompt).toBe(800);
         expect(store.TokensCompletion).toBe(200);
         expect(store.TokensUsed).toBe(1000);
+    });
+
+    it('does not overwrite Status/CompletedAt/Success when another host or janitor instance finalizes the run before a late usage flush', async () => {
+        const store = {
+            Status: 'Running',
+            CompletedAt: undefined as Date | undefined,
+            Success: undefined as boolean | undefined,
+            Messages: null as string | null,
+            TokensPrompt: 0,
+            TokensCompletion: 0,
+            TokensUsed: 0,
+        };
+        const crossHostProvider: IMetadataProvider = {
+            GetEntityObject: vi.fn(async () => {
+                const entity: Record<string, unknown> = {
+                    Load: async () => {
+                        entity.Status = store.Status;
+                        entity.CompletedAt = store.CompletedAt;
+                        entity.Success = store.Success;
+                        entity.Messages = store.Messages;
+                        entity.TokensPrompt = store.TokensPrompt;
+                        entity.TokensCompletion = store.TokensCompletion;
+                        entity.TokensUsed = store.TokensUsed;
+                        return true;
+                    },
+                    Save: async () => {
+                        store.Status = entity.Status as string;
+                        store.CompletedAt = entity.CompletedAt as Date | undefined;
+                        store.Success = entity.Success as boolean | undefined;
+                        store.Messages = entity.Messages as string | null;
+                        store.TokensPrompt = entity.TokensPrompt as number;
+                        store.TokensCompletion = entity.TokensCompletion as number;
+                        store.TokensUsed = entity.TokensUsed as number;
+                        return true;
+                    },
+                    LatestResult: { CompleteMessage: '' },
+                };
+                return entity;
+            }),
+        } as unknown as IMetadataProvider;
+
+        const hostA = new RealtimeClientSessionService();
+        const hostB = new RealtimeClientSessionService();
+
+        await hostA.AppendPromptRunMessage('pr-cross-host', 'user', 'hello', false, contextUser, crossHostProvider);
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 30, 15, contextUser, crossHostProvider);
+
+        // Host B (or SessionJanitor) reaps/finalizes the prompt run.
+        await hostB.FinalizeCoAgentRun(null, 'pr-cross-host', contextUser, crossHostProvider, true);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+
+        // A post-close usage flush arrives on Host A; it must accumulate tokens without reverting Status to 'Running'.
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 20, 10, contextUser, crossHostProvider);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+        expect(store.TokensPrompt).toBe(50);
+        expect(store.TokensCompletion).toBe(25);
+        expect(store.TokensUsed).toBe(75);
+    });
+
+    it('calls assembleMemoryContext once per PrepareRealtimeSessionParams and puts it in the system prompt', async () => {
+        class CountingPrepService extends TestableService {
+            public MemoryCalls = 0;
+            protected override async assembleMemoryContext(): Promise<string> {
+                this.MemoryCalls++;
+                return 'MEMORY_BLOCK';
+            }
+        }
+        const svc = new CountingPrepService();
+        const prep = await svc.PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(svc.MemoryCalls).toBe(1);
+        expect(prep.SessionParams?.InitialContext).toBe('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+    });
+
+    it('keeps an override written against the original signature working (bizapps-caliber appends a persona this way)', async () => {
+        // The shape of bizapps-caliber's CaliberPersonaClientSessionService override: the original five
+        // parameters, forwarded to super. A protected seam is published API, so this must keep compiling and
+        // receive the caller and provider under their own names.
+        const received: Array<{ ContextUser: unknown; Provider: unknown; EffectiveConfig: unknown }> = [];
+        class OriginalSignatureOverride extends TestableService {
+            protected override async assembleMemoryContext(): Promise<string> {
+                return 'MEMORY_BLOCK';
+            }
+            protected override async buildCompanionSystemPrompt(
+                input: PrepareClientSessionInput,
+                coAgent: MJAIAgentEntityExtended,
+                user: UserInfo,
+                prov: IMetadataProvider,
+                effectiveConfig?: RealtimeCoAgentConfig,
+            ): Promise<string> {
+                received.push({ ContextUser: user, Provider: prov, EffectiveConfig: effectiveConfig });
+                const base = await super.buildCompanionSystemPrompt(input, coAgent, user, prov, effectiveConfig);
+                return `${base}\n\nPERSONA_BLOCK`;
+            }
+        }
+        const prep = await new OriginalSignatureOverride().PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(received).toHaveLength(1);
+        expect(received[0].ContextUser).toBe(contextUser);
+        expect(received[0].Provider).toBe(provider);
+        expect(typeof received[0].EffectiveConfig).toBe('object');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('PERSONA_BLOCK');
     });
 });
 
@@ -1656,21 +1780,26 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(runAgentMock.mock.calls[0][0].cancellationToken).toBe(brokerSignal);
     });
 
-    it('combines the caller barge-in signal with the broker signal — either aborts the run', async () => {
-        let token: AbortSignal | undefined;
+    it('combines the caller barge-in signal with the broker signal — either aborts the run and detaches on completion', async () => {
+        const caller = new AbortController();
+        let tokenDuringRun: AbortSignal | undefined;
+        let abortedBeforeSignal = true;
+        let abortedAfterSignal = false;
         runAgentMock.mockImplementation(async (params: { cancellationToken?: AbortSignal }) => {
-            token = params.cancellationToken;
+            tokenDuringRun = params.cancellationToken;
+            abortedBeforeSignal = tokenDuringRun?.aborted ?? true;
+            caller.abort(); // caller-side barge-in flips the combined token while the run is in flight
+            abortedAfterSignal = tokenDuringRun?.aborted ?? false;
             return { success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } };
         });
-        const caller = new AbortController();
         const svc = new DelegateTestService();
 
         await svc.CallDelegate(makeDelegateInput({ AbortSignal: caller.signal }), makeDelegateRequest());
 
-        expect(token).toBeInstanceOf(AbortSignal);
-        expect(token!.aborted).toBe(false);
-        caller.abort(); // caller-side barge-in flips the combined token
-        expect(token!.aborted).toBe(true);
+        expect(tokenDuringRun).toBeInstanceOf(AbortSignal);
+        expect(abortedBeforeSignal).toBe(false);
+        expect(abortedAfterSignal).toBe(true);
+        expect(getEventListeners(caller.signal, 'abort')).toHaveLength(0);
     });
 
     it('hands RunAgent an already-aborted token when the caller signal was pre-aborted', async () => {

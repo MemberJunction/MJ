@@ -11,6 +11,7 @@ import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
 import { KeyRowFilterChecks } from '../checks/keyrowfilter.checks'; // must be imported AFTER rls-isolation.checks: registry order = RLS* then KF*
+import { RoleRowFilterChecks } from '../checks/rolerowfilter.checks'; // after keyrowfilter.checks: registry order = RLS*, KF*, then RF*
 import { RecordProcessChecks } from '../checks/record-process.checks';
 import { RecordProcessFacadeChecks } from '../checks/record-process-facade.checks';
 import { ScheduledJobsChecks } from '../checks/scheduled-jobs.checks';
@@ -21,12 +22,17 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
+import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
+import { NativeToolLoopChecks } from '../checks/native-tool-loop.checks';
+import { NativeToolLoopLiveChecks } from '../checks/native-tool-loop-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
+import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -42,13 +48,15 @@ import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks'
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentNoteCacheTypeChecks } from '../checks/agent-note-cache-types.checks';
 import { CacheArchitectureChecks } from '../checks/cache-architecture.checks';
-import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
+import { AgentRagSearchChecks, AgentRagGateChecks } from '../checks/agent-rag-search.checks';
+import { AgentRunAudienceChecks } from '../checks/agent-run-audience.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
 import { PerplexityDeciderChecks } from '../checks/perplexity-decider.checks';
+import { SubQMercuryDecisionsChecks } from '../checks/subq-mercury-decisions.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -60,6 +68,9 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
+import { ViewPropertiesClientChecks } from '../checks/view-properties-client.checks';
+import { CalendarEventLinksChecks } from '../checks/calendar-event-links.checks';
+import { ConversationAuthorshipClientChecks } from '../checks/conversation-authorship-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -67,8 +78,15 @@ import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
 import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
+import { FlsCloseoutChecks } from '../checks/fls-closeout.checks';
+import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks';
+import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
+import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
+import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
+import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
+import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -121,9 +139,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['server-cache', ServerCacheChecks, 32],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 14],
-        ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
-        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
+        ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
+        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 19],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -135,6 +154,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
+        ['ai-vendor-effort', AiVendorEffortChecks, 2],
+        ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
+        ['native-tool-loop', NativeToolLoopChecks, 13],
+        ['native-tool-loop-live', NativeToolLoopLiveChecks, 3],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -142,9 +165,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
-        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
+        ['agent-prompt-cancellation', AgentPromptCancellationChecks, 2], // APC1-APC2 a run cancelled mid-call stops there and is recorded cancelled (IT122)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -157,12 +181,15 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
         ['cache-architecture', CacheArchitectureChecks, 11], // CA1-CA11 engine/cache architecture pins (IT107)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
+        ['agent-rag-gate', AgentRagGateChecks, 2], // RG1-RG2 pre-execution RAG permission gate, run directly with no model (IT117)
+        ['agent-run-audience', AgentRunAudienceChecks, 9], // AU1-AU6, AU8 a run's audience; AU7, AU9 its tenant binds the search actions (IT119)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT108)
         ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT109)
         ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT110)
+        ['subq-mercury-decisions', SubQMercuryDecisionsChecks, 8], // SM1-SM8 SubQ Snap and Mercury Decide metadata, SubQDecision and InceptionDecision registration, runner calls through guarded SubQ, Inception and OpenRouter stand-ins: request and answer mapping per route, bound credentials, 422 and 402 failing over, Default Decision's order with the new models last (IT121, provisional)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -185,10 +212,20 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['fls-closeout', FlsCloseoutChecks, 19], // CO1-CO19 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID and full-width snapshots of restricted saves, config guards (CO14-CO16 mutation-gated), agent data sources, search projection (IT133)
+        ['fls-closeout-client', FlsCloseoutClientChecks, 9], // CW1-CW9 FLS close-out over the wire: client-input rejection (GraphQL, transaction groups, REST), transport projection, wire filter gate (IT134)
+        ['fls-closeout-pending', FlsCloseoutPendingChecks, 7], // PC1-PC3 cache segmentation + PQ1-PQ4 RunQuery FLS (IT135)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
+        ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 14], // PB1-PB14 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2 regression guards (IT128)
+        ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
+        ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
+        ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -243,13 +280,15 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 11,
-        'prompt-eval-harness': 7,
+        'agent-loop-standin': 14,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
         'agent-plan-mode': 6,
+        'agent-prompt-cancellation': 2,
+        'agent-rag-gate': 2,
         'agent-rag-search': 7,
+        'agent-run-audience': 9,
         'agent-runner': 1,
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
@@ -259,6 +298,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ai-permissions': 6,
         'ai-providers': 3,
         'ai-skills': 21,
+        'ai-vendor-effort': 2,
+        'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
         'app-wiring': 10,
@@ -267,29 +308,41 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
+        'calendar-event-links': 2,
         'class-resolution': 5,
         'client-cache': 14,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
+        'content-pipeline': 15,
         'content-vectorization': 10,
-        'conversation-compaction': 18,
-        'trailing-runtime-state': 6,
+        'conversation-authorship-client': 12,
+        'conversation-compaction': 23,
         'dataset-cache': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
-        'jsontype-live-sync': 9,
-        'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
-        'entity-writes': 9,
+        'entity-writes': 13,
+        'feature-pipeline-core': 9,
+        'feature-value-only': 5,
         'field-rules-bulk-update': 3,
+        'fls-closeout-client': 9,
+        'fls-closeout-pending': 7,
+        'fls-closeout': 19,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
         'form-contributions': 17,
+        'fp-gate-c2-1': 6,
+        'fp-gate-c2-2': 3,
+        'fp-gate-c2-3': 3,
+        'fp-gate-c2-5': 3,
+        'fp-live-jobtitle': 1,
+        'jsontype-live-sync': 9,
+        'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
         'lists': 3,
         'livekit-room': 1,
@@ -298,14 +351,33 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-consistency': 7,
         'metadata-sync': 9,
         'metadata-sync-push': 10,
+        'native-tool-calling-live': 4,
+        'native-tool-loop': 13,
+        'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
+        'performance-benchmark': 14,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-studio': 5,
+        'prompt-eval-harness': 7,
         'prompt-runner': 1,
+        'ps-gate-t4-s6-5': 1,
+        'ps-gate-w1-s5-4': 1,
+        'ps-gate-w1-s7-3': 1,
+        'ps-gate-w1-s7-5': 1,
+        'ps-gate-w1-s9-3': 1,
+        'ps-gate-w1-s9-4': 1,
+        'ps-gate-w1-s9-5': 1,
+        'ps-gate-w2-c1-1': 1,
+        'ps-gate-w2-s5-3': 1,
+        'ps-gate-w3-c1-1': 1,
+        'ps-gate-w4-s2-1': 1,
+        'ps-gate-w7-s4-2': 1,
+        'ps-truth-datasets': 68,
+        'query-approvals': 5,
         'queue': 7,
-        'realtime-deterministic': 18,
+        'realtime-deterministic': 20,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,
@@ -314,38 +386,44 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 16,
+        'rls-isolation': 19,
         'rls-isolation-client': 1,
-        'runquery-cache': 12,
+        'role-elevation': 6,
+        'rubrics': 15,
+        'runquery-cache': 21,
         'runquery-catalog': 6,
         'runquery-features': 16,
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,
         'runview-features': 6,
-        'role-elevation': 6,
-        'rubrics': 15,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
         'scoped-anon-elevation': 6,
-        'search': 7,
+        'search': 8,
+        'search-origin-gate': 4,
+        'search-provider-trust': 2,
+        'search-scope-bound': 3,
         'self-avatar-client': 6,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
-        'storage': 6,
+        'storage': 9,
+        'subq-mercury-decisions': 8,
         'subscription-isolation': 2,
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'templates': 8,
+        'trailing-runtime-state': 6,
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
         'user-elevation': 4,
         'user-routines': 16,
         'view-execution': 12,
+        'view-properties-client': 5,
         'view-security': 4,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
@@ -372,7 +450,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(113);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(154);
     });
 });
 
@@ -434,6 +512,21 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-immutability.F12',
         'client-cache.C10',
         'client-cache.C14',
+        'content-pipeline.CP1',
+        'content-pipeline.CP10',
+        'content-pipeline.CP11',
+        'content-pipeline.CP12',
+        'content-pipeline.CP13',
+        'content-pipeline.CP14',
+        'content-pipeline.CP15',
+        'content-pipeline.CP2',
+        'content-pipeline.CP3',
+        'content-pipeline.CP4',
+        'content-pipeline.CP5',
+        'content-pipeline.CP6',
+        'content-pipeline.CP7',
+        'content-pipeline.CP8',
+        'content-pipeline.CP9',
         'content-vectorization.CV1',
         'content-vectorization.CV10',
         'content-vectorization.CV2',
@@ -444,6 +537,18 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV7',
         'content-vectorization.CV8',
         'content-vectorization.CV9',
+        'conversation-authorship-client.CA1',
+        'conversation-authorship-client.CA10',
+        'conversation-authorship-client.CA11',
+        'conversation-authorship-client.CA12',
+        'conversation-authorship-client.CA2',
+        'conversation-authorship-client.CA3',
+        'conversation-authorship-client.CA4',
+        'conversation-authorship-client.CA5',
+        'conversation-authorship-client.CA6',
+        'conversation-authorship-client.CA7',
+        'conversation-authorship-client.CA8',
+        'conversation-authorship-client.CA9',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -478,12 +583,33 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
         'entity-writes.EW1',
+        'entity-writes.EW10',
+        'entity-writes.EW11',
+        'entity-writes.EW12',
+        'entity-writes.EW13',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',
         'entity-writes.EW6',
         'entity-writes.EW7',
         'entity-writes.EW9',
+        'feature-pipeline-core.FP1',
+        'feature-pipeline-core.FP2',
+        'feature-pipeline-core.FP3',
+        'feature-pipeline-core.FP4',
+        'feature-pipeline-core.FP5',
+        'feature-pipeline-core.FP6',
+        'feature-pipeline-core.FP7',
+        'feature-pipeline-core.FP8',
+        'feature-pipeline-core.FP9',
+        'feature-value-only.FV1',
+        'feature-value-only.FV2',
+        'feature-value-only.FV3',
+        'feature-value-only.FV4',
+        'feature-value-only.FV5',
+        'fls-closeout.CO14',
+        'fls-closeout.CO15',
+        'fls-closeout.CO16',
         'fls-lifecycle.LC1',
         'fls-lifecycle.LC2',
         'fls-lifecycle.LC3',
@@ -493,6 +619,21 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'fp-gate-c2-1.G1',
+        'fp-gate-c2-1.G2',
+        'fp-gate-c2-1.G3',
+        'fp-gate-c2-1.G4',
+        'fp-gate-c2-1.G5',
+        'fp-gate-c2-1.G6',
+        'fp-gate-c2-2.C2.2.d',
+        'fp-gate-c2-2.G1',
+        'fp-gate-c2-2.G2',
+        'fp-gate-c2-3.G1',
+        'fp-gate-c2-3.G2',
+        'fp-gate-c2-3.G3',
+        'fp-gate-c2-5.G1',
+        'fp-gate-c2-5.G2',
+        'fp-gate-c2-5.G3',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',
@@ -536,6 +677,86 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'ps-gate-t4-s6-5.G0.11',
+        'ps-gate-w1-s5-4.G0.10',
+        'ps-gate-w1-s7-3.G0.7',
+        'ps-gate-w1-s7-5.G0.1',
+        'ps-gate-w1-s9-3.G0.6',
+        'ps-gate-w1-s9-4.G0.4',
+        'ps-gate-w1-s9-5.G0.5',
+        'ps-gate-w2-c1-1.G0.2',
+        'ps-gate-w2-s5-3.G0.9',
+        'ps-gate-w3-c1-1.G0.3',
+        'ps-gate-w4-s2-1.G0.8',
+        'ps-gate-w7-s4-2.G0.12',
+        'ps-truth-datasets.C2-s2201',
+        'ps-truth-datasets.C4-s2202',
+        'ps-truth-datasets.D1c-s2210',
+        'ps-truth-datasets.D1r-s2211',
+        'ps-truth-datasets.D2-s2214',
+        'ps-truth-datasets.N1c-s2212',
+        'ps-truth-datasets.N1r-s2213',
+        'ps-truth-datasets.R1-s2203',
+        'ps-truth-datasets.R2p-s2204',
+        'ps-truth-datasets.R3-s2205',
+        'ps-truth-datasets.T1p-s2206',
+        'ps-truth-datasets.T2p-s2207',
+        'ps-truth-datasets.T3-lag-s2208',
+        'ps-truth-datasets.T3-s2208',
+        'ps-truth-datasets.T4-s2209',
+        'ps-truth-datasets.W1-signal-s42',
+        'ps-truth-datasets.W1-signal-s43',
+        'ps-truth-datasets.W1-signal-s44',
+        'ps-truth-datasets.W1-signal-s9042',
+        'ps-truth-datasets.W2-noise-s100',
+        'ps-truth-datasets.W2-noise-s101',
+        'ps-truth-datasets.W2-noise-s102',
+        'ps-truth-datasets.W2-noise-s103',
+        'ps-truth-datasets.W2-noise-s104',
+        'ps-truth-datasets.W2-noise-s105',
+        'ps-truth-datasets.W2-noise-s106',
+        'ps-truth-datasets.W2-noise-s107',
+        'ps-truth-datasets.W2-noise-s108',
+        'ps-truth-datasets.W2-noise-s109',
+        'ps-truth-datasets.W2-noise-s110',
+        'ps-truth-datasets.W2-noise-s111',
+        'ps-truth-datasets.W2-noise-s112',
+        'ps-truth-datasets.W2-noise-s113',
+        'ps-truth-datasets.W2-noise-s114',
+        'ps-truth-datasets.W2-noise-s115',
+        'ps-truth-datasets.W2-noise-s116',
+        'ps-truth-datasets.W2-noise-s117',
+        'ps-truth-datasets.W2-noise-s118',
+        'ps-truth-datasets.W2-noise-s119',
+        'ps-truth-datasets.W2-noise-s9100',
+        'ps-truth-datasets.W3-leak-row-s42',
+        'ps-truth-datasets.W3-leak-row-s43',
+        'ps-truth-datasets.W3-leak-row-s44',
+        'ps-truth-datasets.W3-leak-row-s9042',
+        'ps-truth-datasets.W4-pit-s42',
+        'ps-truth-datasets.W4-pit-s43',
+        'ps-truth-datasets.W4-pit-s44',
+        'ps-truth-datasets.W4-pit-s9042',
+        'ps-truth-datasets.W5-censor-s42',
+        'ps-truth-datasets.W5-censor-s43',
+        'ps-truth-datasets.W5-censor-s44',
+        'ps-truth-datasets.W5-censor-s9042',
+        'ps-truth-datasets.W6-drift-s42',
+        'ps-truth-datasets.W6-drift-s43',
+        'ps-truth-datasets.W6-drift-s44',
+        'ps-truth-datasets.W6-drift-s9042',
+        'ps-truth-datasets.W7-small-imbalanced-s42',
+        'ps-truth-datasets.W7-small-imbalanced-s43',
+        'ps-truth-datasets.W7-small-imbalanced-s44',
+        'ps-truth-datasets.W7-small-imbalanced-s9042',
+        'ps-truth-datasets.W8-highcard-s42',
+        'ps-truth-datasets.W8-highcard-s43',
+        'ps-truth-datasets.W8-highcard-s44',
+        'ps-truth-datasets.W8-highcard-s9042',
+        'ps-truth-datasets.W9-multiclass-s42',
+        'ps-truth-datasets.W9-multiclass-s43',
+        'ps-truth-datasets.W9-multiclass-s44',
+        'ps-truth-datasets.W9-multiclass-s9042',
         'realtime-session-guard.RSG1',
         'realtime-session-guard.RSG2',
         'realtime-session-verification.RSV1',
@@ -552,6 +773,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'record-cloning.RC7',
         'record-cloning.RC8',
         'record-cloning.RC9',
+        'rls-isolation.RF1',
+        'rls-isolation.RF2',
+        'rls-isolation.RF3',
         'role-elevation.RE6',
         'rubrics.R13',
         'rubrics.R14',
@@ -676,6 +900,18 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'fp-live-jobtitle.L1',
+        'native-tool-calling-live.NTC1',
+        'native-tool-calling-live.NTC2',
+        'native-tool-calling-live.NTC3',
+        'native-tool-calling-live.NTC4',
+        'native-tool-loop-live.NTLL1',
+        'native-tool-loop-live.NTLL2',
+        'native-tool-loop-live.NTLL3',
+        'performance-benchmark.PB10',
+        'performance-benchmark.PB11',
+        'performance-benchmark.PB12',
+        'ps-gate-w1-s9-3.G0.6',
         'shipped-agents-live.SA1',
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',

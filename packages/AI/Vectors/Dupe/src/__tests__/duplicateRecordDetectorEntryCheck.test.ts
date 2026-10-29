@@ -62,6 +62,7 @@ const { mocks, state } = vi.hoisted(() => ({
         RenderTemplate: vi.fn<(template: object, content: object, data: Record<string, unknown>) => Promise<{ Success: boolean; Output: string }>>(),
         RunEmbedding: vi.fn<(params: { Texts: string[]; ModelID?: string; ContextUser?: object; Description?: string }) => Promise<{ Success: boolean; Vectors?: number[][]; ErrorMessage?: string }>>(),
         QueryIndex: vi.fn<(params: { id: string; vector: number[]; topK: number }) => Promise<{ success: boolean; data: { matches: VectorMatchFixture[] } }>>(),
+        BuildMetadataFilter: vi.fn((options: { EntityDocumentIDs?: string[] }) => ({ EntityDocumentID: { $in: options.EntityDocumentIDs } })),
         ExecuteDecision: vi.fn<(params: AIDecisionParams) => Promise<AIDecisionRunResult>>(),
         ExecutePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult>>(),
     },
@@ -98,6 +99,7 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
         RequiresAPIKey = false;
         QueryKeyIsEntityDocumentID = false;
         QueryIndex = mocks.QueryIndex;
+        BuildMetadataFilter = mocks.BuildMetadataFilter;
     },
     BaseResponse: class {},
 }));

@@ -1,5 +1,257 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- cc36de5: Add Alternate Base Views (MJ Canon Layer 1): allow entities to register governed SQL views (`MJ: Entity Alternate Base Views`) that maintain 100% column parity with the canonical `BaseView` while returning curated row subsets (such as `Active` members or `Open` orders), with full support across `RunView`, `RunViews`, `BaseEngine`, `LocalCacheManager`, `CodeGen` column-parity validation, `QueryEntity.AlternateBaseViewID` lineage extraction, `QueryGen`, `Lists`, `DataContext`, `GetEntityDetails`, and `MJExplorer` Data Explorer / Entity Viewer.
+- 0581392: Adds a Calendar view type to the entity viewer. It places a view's records on a day, week or month layout by a start date field and an optional end date field, both named in the view's config (`{ startFieldName, endFieldName, mode }`). A record with an end spans its days; one without sits on its start. SQL `date` fields stay on their stored day in every time zone. Weeks start on Monday. It is available for any entity with a date field and appears once the `Calendar` row in `MJ: View Types` is pushed.
+
+  `BuildCalendarWeeks` takes an optional `weekStartsOn` (0 = Sunday, the default and the datepicker's behaviour; 1 = Monday).
+
+- 7d9b179: Add 5 record form, grid, version history, and AI overlay capabilities plus human-friendly record tab/browser titles:
+  1. **Bidirectional `<mj-record-links>` & Universal `<mj-record-preview-popover>` (`@memberjunction/ng-base-forms`)**:
+     - Extend `<mj-record-links>` to surface both **Outgoing ("On This Record")** links from populated hard FK and polymorphic FK fields (`EntityField.EntityIDFieldName`) on the open record and **Incoming ("Linked To This")** dependent records from `GetRecordDependencies`, with direction filter tabs (`All` / `On This Record` / `Linked To This`), search, and expandable entity cards.
+     - Add `<mj-record-preview-popover>` hover preview card for FK and polymorphic FK links in `<mj-form-field>` and link items in `<mj-record-links>`, displaying the target record's entity badge, display name, copyable abbreviated primary key pill, top summary fields, last-updated timestamp, and quick navigation.
+  2. **Pluggable Form Toolbar Button Registry & Pre-Warmed Link Count Badge (`@memberjunction/ng-base-forms`)**:
+     - Introduce `BaseFormToolbarButton` and `FormToolbarButtonRegistry` (`@RegisterClass(BaseFormToolbarButton, buttonKey)`) supporting entity-scoped, pattern-scoped, and global custom toolbar buttons with `Prewarm` / `RefreshState` / `Execute` lifecycles and priority-aware subclass overrides.
+     - Pre-warm `LinkCount` and `LinksSummary` when the Links button is pinned for the current user, backed by a 30s TTL dependency cache shared with `<mj-record-links>`.
+  3. **World-Class `<mj-record-changes>` Drawer & In-Form "Time Travel" Historical Version Preview (`@memberjunction/ng-record-changes` & `@memberjunction/ng-base-forms`)**:
+     - Redesign `<mj-record-changes>` header to show `EntityInfo.DisplayNameOrName`, a compact copyable ID pill, a collapsible Version Labels accordion, and an interactive SVG **Activity Over Time** sparkline bar chart.
+     - Add `"Preview in Form"` toggle on version cards in `<mj-record-changes>`, closing the drawer so the form is unobstructed, rehydrating all stored snapshot fields from `FullRecordJSON` onto the entity record (so calculated and dependent fields update live), and rendering a floating glassmorphic **Time-Travel Dock** in `<mj-record-form-container>`.
+  4. **Live `<mj-entity-data-grid>` Row Patching & Non-Disruptive Update Pill (`@memberjunction/ng-entity-viewer`)**:
+     - Subscribe `<mj-entity-data-grid>` to `MJGlobal` `BaseEntity.BaseEventCode` (`save`, `delete`, `remote-invalidate`) events matching the grid's entity.
+     - Patch updated visible rows in place via `gridApi.applyTransaction({ update })` without resetting scroll, sort, or selection, and surface a non-disruptive floating pill when records are created or deleted.
+  5. **Active-Record + Links Context in `<mj-chat-agents-overlay>` (`@memberjunction/ng-conversations`, `@memberjunction/ng-base-forms`, `@memberjunction/ng-explorer-core`)**:
+     - Enrich `FormCompositionSnapshot` / `FormAgentContext` with `RecordState` (edit mode, dirty fields, conflict state, active time-travel preview) and `Links` (total, outgoing, incoming, top entity groups).
+     - Add an `"Ask AI"` button in `<mj-form-toolbar>` that expands the `<mj-chat-agents-overlay>` workspace via `ConversationsRuntime.Instance.Bridge.RequestExpandOverlay()` and displays an **Active Record Context** pill bar in the chat overlay.
+  6. **Entity Display Name + Abbreviated UUID for Record Tab Headers & Browser Titles (`@memberjunction/ng-shared`, `@memberjunction/ng-explorer-core`, `@memberjunction/ng-base-forms`)**:
+     - Add `FormatEntityRecordDisplayTitle` and `ResolveRecordTabDisplayTitle` so records without a human-readable `NameField` (or whose `NameField` resolves to a raw UUID, such as `MJ: Process Run Details`) display `<Entity Display Name> · <Abbreviated UUID>` (e.g., `Process Run Details · 9FAF60…C577`) across workspace tabs, browser window titles, origin breadcrumbs, and record link/preview cards.
+
+### Patch Changes
+
+- f2248d5: Context tokens, the caller's time zone, and provider threading for dashboard parts.
+  - `@memberjunction/core` adds the context-token module: the closed `ContextToken` list, `PropertyDefault`, `UserViewProperty`, `ResolvePropertyDefault` / `ResolveContextToken` (user tokens; date tokens worked out in an IANA zone with Monday or Sunday week starts and day to year offsets), `ValidatePropertyDefault`, `IsValidTimeZone` and `GetLocalTimeZone`. `RunViewParams` and `RunQueryParams` gain a server-only `TimeZone`. Nothing reads them yet.
+  - `GraphQLDataProvider` sends the runtime's IANA zone as `x-mj-timezone` on every HTTP request; MJServer validates it into `UserPayload.TimeZone`, and the view and query resolvers pass it on as `TimeZone`. An absent or invalid header leaves it unset (UTC).
+  - The dashboard viewer hands its `Provider` to the parts it creates, the View, Query and Artifact parts pass it to their viewers, and the query viewer, its grid and info panel, and the entity viewer's recycle bin read through it. With no `Provider` set, behaviour is unchanged.
+  - `SERVER_ONLY_RUN_VIEW_PARAMS` / `StripServerOnlyRunViewParams` name the run fields only server code sets. The REST view routes strip them from the request body, and the route's entity name now wins over an `EntityName` in the body (before, the body could replace it and skip the entity allowlist check).
+  - **Deployments:** browser requests now carry an `x-mj-timezone` header. MJAPI's CORS setup reflects requested headers, so it needs nothing, but a proxy or gateway that pins `Access-Control-Allow-Headers` must add `x-mj-timezone`, or browser preflights will fail.
+
+- 6c92b0d: Fix a test fixture type error (`EntityIDFieldName: null`) that broke `test:types` on `next` after #5953.
+- dae1d31: Omnibus Core, AI/MCP/Agent & Angular Performance & Resource Optimization (Waves 1–3):
+  - **Wave 1 (Core Data Access, Server Resolvers & Caching)**:
+    - `MJ-CORE-6`: Collapse multi-query `RunView` execution (`viewSQL`, `countSQL`, `aggregateSQL`) into a single `ExecuteSQLBatch` call in `GenericDatabaseProvider`.
+    - `MJ-CORE-9`: Resolve `UserView` metadata through `UserViewEngine.Instance` in `ResolverBase` / `RunViewResolver`, pass pre-resolved `ViewEntity` into `RunViewParams`, and reuse a single `Metadata` instance across `ArrayFilterEncryptedFieldsForAPI`.
+    - `MJ-CORE-5`: Parallelize `BaseEngine` dataset item entity hydration (`Promise.all`), maintain `_datasetItemMappings` for in-place `AutoRefresh` on dataset-loaded configs, enable `AutoRefresh: true` on `TemplateEngineBase`, and validate Nunjucks compiled template cache against `sourceText`.
+  - **Wave 2 (AI, Agents, Prompts, Vectors, MCP & A2A)**:
+    - `MJ-AI-5` / `MJ-AI-6`: Replace dynamic `await import('stream')` with static `Readable` import in `MCPServer`, cache compiled `ToolConfig` entries and Zod schemas across sessions (`GetOrBuildCompiledToolConfigs` / `ClearCompiledToolCache`), and route tool handlers through the active request's `SessionContext`.
+    - `MJ-AI-7`: Default `EntityVectorSyncer` `delayTimeMS` to `0`, parallelize `saveEntityRecordDocument` with bounded concurrency (`10`), and use `SaveReturnMode: 'datestamps_only'`.
+    - `MJ-AI-8`: Thread `provider?: IMetadataProvider` through `RerankObservabilityOptions` and save observability PromptRuns with `SaveReturnMode: 'datestamps_only'`.
+    - `MJ-AI-9`: Support single-INSERT pre-completed `AIPromptRun` steps (`completed` option on `createStepEntity`) and coalesce streaming progress chunks at 35ms intervals.
+    - `MJ-AI-10` / `MJ-AI-11`: Parallelize `AgentPreExecutionRAG` scope searches (`Promise.all`), isolate `AgentRunWatchdog` sweeps per run (`{ provider, contextUser }`), and pause the watchdog interval when zero runs are active.
+    - `MJ-AI-12` / `MJ-AI-13`: Replace 500ms SSE polling in `A2AServer` with event-driven `TaskStore.Subscribe` / `Notify`, cache the discovery `AgentCard`, and wire `TaskStore.CancelTask` (`AbortController`) to `AgentOperations.executeAgent()`.
+    - `MJ-AI-14`: Short-circuit `ActionEngineServer.SnapshotInputParams` in $O(1)$ when execution logging is disabled and reuse a single `ClassFactory` action instance per `RunAction` lifecycle.
+  - **Wave 3 (Angular Change Detection, Leaks & Algorithmic Hotspots)**:
+    - `MJ-NG-4`: Add `ChangeDetectionStrategy.OnPush` and explicit `ChangeDetectorRef.markForCheck()` across `JoinGridComponent`, `SearchSuggestComponent`, `ArtifactTypePluginViewerComponent`, `ActionFormComponent`, `AIPromptFormComponent`, and Explorer AI/Communication dashboards (`AutotaggingPipelineResourceComponent`, `ExecutionMonitoringComponent`, `ModelPromptPriorityMatrixComponent`, `TagsResourceComponent`, `CommunicationMonitorResourceComponent`, `CommunicationLogsResourceComponent`, `CommunicationRunsResourceComponent`).
+    - `MJ-NG-5`: Fix timer/listener/subject leaks across `MJNotificationsService`, `MessageListComponent`, `UserNotificationsComponent`, `ActionFormComponent`, `AIPromptFormComponent`, `AutotaggingPipelineResourceComponent`, and `ExecutionMonitoringComponent`.
+    - `MJ-NG-6`: Pre-index and memoize hot template/filter/render paths in `ConversationChatAreaComponent`, `WhiteboardBoardComponent`, `EntityDataGridComponent`, `DataExplorerDashboardComponent`, and `MCPDashboardComponent`.
+
+- 718b01c: - Suppress auto-appended related entity sections on custom-layout forms (`MJAIAgentFormComponentExtended`, `MJAIAgentSessionFormComponentExtended`, `MJAIPromptFormComponentExtended`, `MJAIPromptRunFormComponentExtended`, `MJActionFormComponentExtended`, `MJEntityActionFormComponentExtended`, `MJQueryFormComponentExtended`, and `MJTemplateFormComponentExtended`) by overriding `OwnsEntireFormBody` to return `true`.
+  - Fix `NG0100: ExpressionChangedAfterItHasBeenCheckedError` on `MJAIAgentRunFormComponentExtended` (`OnPush`) by marking the view for check when `loadRunTree`, `loadAgent`, and `loadCostMetrics` mutate bound component state.
+  - Exclude untouched non-Active (`Deprecated`/`Disabled`) fields from `GraphQLDataProvider.Save()` on `Create` so `entity.Get` is not called on untouched deprecated fields (such as `ArtifactID`, `ArtifactVersionID`, and `SuggestedResponses` on `MJ: Conversation Details`).
+  - Move diagnostic browser console logs across metadata cache pre-validation, dataset status coalescing, fire-and-forget mutations, workspace bootstrap, agent client sessions, conversation agent routing, conversation streaming, and message input into `LogStatusEx({ ..., verboseOnly: true })`, while keeping the startup GraphQL setup summary log always visible.
+  - Add polymorphic foreign key (`EntityField.EntityIDFieldName`) smart link rendering across `<mj-form-field>` (read-mode clickable entity icon + resolved record name + raw ID badge, edit-mode FK autocomplete picker scoped to the sibling `EntityID` field's target entity, and automatic coercion of generated `Type="textarea"` polymorphic `RecordID` fields to `'textbox'`) and `<mj-entity-data-grid>`, `<mj-entity-cards>`, and `<mj-entity-record-detail-panel>` (batch-resolved target record names via `GetEntityRecordNames` and clickable record navigation links, strictly gated on `EntityField.EntityIDFieldName` metadata with no heuristic fallback).
+  - Populate `EntityField.EntityIDFieldName` metadata across 45 polymorphic FK fields on 41 core entities (`metadata/entities/.polymorphic-fk-entity-fields.json`).
+  - Add cross-tab and cross-session live form auto-refresh in `MjRecordFormContainerComponent` & `GraphQLDataProvider`: generate a unique per-tab runtime `sessionId` so multi-tab edits broadcast across tabs, automatically reload open read-mode forms when a record is saved remotely, pulse-highlight changed `<mj-form-field>` elements for 2.5s, and display a non-intrusive slide-in update pill (with a manual "Reload" action if the user is actively editing).
+- 374b1a4: Properties on user views (#4789, A14): a view can declare named, typed inputs, each of which adds one predicate on a field when a run gives it a value or it has a default. A property whose `AllowOverride` is false can be set only by server code. A view without properties runs, saves and caches exactly as before.
+  - `@memberjunction/core`: `RunViewParams.Properties` (values a client may set) and `RunViewParams.ServerProperties` (server only; added to `SERVER_ONLY_RUN_VIEW_PARAMS`, so the REST view routes strip it). New `viewProperties` module: `ValidateUserViewProperties` (save-time checks), `ResolveViewPropertyValues` (value from server values, then client values, then the default; refuses unknown names, a client value for a locked property, a wrong type, and a required property with no value, each naming the property) and `BuildViewPropertyFilter` (typed literals through the platform dialect; `IN` takes a list). Both properties maps are part of the result-cache fingerprint and of `RunViewParams.Equals`. In the browser a run carrying properties is never merged with other callers' runs, never cached locally, and never sent through the cache-check transport (which carries dynamic runs only). `IsPropertyValueOfType` is exported from the context-token module.
+  - `@memberjunction/core-entities`: `MJUserViewEntityExtended.Validate()` checks the view's `Properties`.
+  - `@memberjunction/generic-database-provider`: a stored view's property predicates are ANDed after the view's own clause and `ExtraFilter`, screened, and field-security checked; row-level security applies on top unchanged. Before the cache lookup the provider works out the values (token defaults with the context user and the run's `TimeZone`, UTC when none), so the server cache keys on what the run uses; a run it would refuse skips the cache and is refused with its message.
+  - `@memberjunction/server`: `RunViewByIDInput`, `RunViewByNameInput` and `RunViewGenericInput` accept `Properties` (JSON). No input accepts `ServerProperties`. `RunViewByID` / `RunViewByName` now return the provider's `ErrorMessage`.
+  - `@memberjunction/graphql-dataprovider`: sends `Properties` on stored-view runs; throws for `Properties` on a dynamic run or any `ServerProperties`.
+  - `@memberjunction/ng-entity-viewer`: a view with properties is run by its ID with the new `Properties` input, for every view type, paging, the count and the export; a read-only chip row lists each property (a locked one reads "set by server") and shows a refusal. The view config panel gets a Properties tab (add, edit and remove properties: name, type, description, default as a fixed value or a token with an offset, required, allow override, target field and operator), and the workspace saves them onto the view.
+  - `@memberjunction/integration-test-suite`: IT136, `view-properties-client` (VP1–VP5, client transport).
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b5955fb]
+- Updated dependencies [d538c14]
+- Updated dependencies [f7a43b2]
+- Updated dependencies [0581392]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [7d9b179]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [291485d]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/actions-base@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-shared-generic@6.2.0-edge.6
+  - @memberjunction/communication-types@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ng-notifications@6.2.0-edge.6
+  - @memberjunction/ng-record-changes@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+  - @memberjunction/ng-code-editor@6.2.0-edge.6
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.6
+  - @memberjunction/ng-list-management@6.2.0-edge.6
+  - @memberjunction/ng-map-view@6.2.0-edge.6
+  - @memberjunction/ng-record-merge@6.2.0-edge.6
+  - @memberjunction/ng-filter-builder@6.2.0-edge.6
+  - @memberjunction/ng-timeline@6.2.0-edge.6
+  - @memberjunction/ng-export-service@6.2.0-edge.6
+  - @memberjunction/ng-pagination@6.2.0-edge.6
+  - @memberjunction/export-engine@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- c7418dc: Deleting a record in Explorer no longer leaves its form open on a blank record.
+  - **The record's tab closes and you go back to where you opened it from**: the view (with its filters and position), the parent record, or the page you came from. A record loaded straight from a URL, with nowhere to go back to, lands on the Home dashboard (or the app's landing page when there is no Home app).
+  - **The Data Explorer's preview panel closes and its grid reloads.** The deleted row drops out without losing your page or sort, and returning from the deleted record's tab can't reopen the preview on it.
+  - **The Recycle Bin count updates** on any grid showing that entity, whether the record was deleted in this session or by someone else.
+  - **Every other tab showing the record closes too**, however it was deleted: its form, a custom form, a grid row, or any other `BaseEntity.Delete()` in the session.
+  - **Browser Back doesn't reopen it.** The deleted record's history entry is replaced.
+  - **No crumb leads back to it.** A record opened from inside the deleted one now returns to where the deleted record itself came from.
+  - **Deleted by someone else**: the tab stays open with a banner saying so, and a Close button, rather than vanishing while you read it.
+
+  New exports: `NavigationService.OpenHomeDashboard()`; `ViewWorkspaceComponent.RefreshInPlace()`; `TabService.MarkRecordUrlForReplacement` / `ConsumeRecordUrlReplacement`; and `GetDeletedRecordFromEvent`, `RecordTabShowsRecord`, `RecordIdentityMatches`, `NormalizeRecordIdForMatch`, `RemoveDeletedRecordFromOrigin`, `OriginHasReturnTarget` and `OriginToTabConfiguration` from `@memberjunction/ng-shared`.
+
+- 0c634ba: Fix Explorer console errors: grant UI role create/update permissions on MJ: User Record Logs and guard RecentAccessService.LogAccess, emit Conversations$ synchronously on optimistic SaveConversation updates and run change detection on conversation rename/creation callbacks to prevent NG0100, fall back to user-settings persistence in EntityViewerComponent when UserCanEdit is false on a loaded UserView, and hide/omit Deprecated and Disabled entity fields in MjFormFieldComponent and AngularClientGeneratorBase.
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-shared-generic@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-notifications@6.2.0-edge.5
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-list-management@6.2.0-edge.5
+  - @memberjunction/ng-map-view@6.2.0-edge.5
+  - @memberjunction/ng-record-changes@6.2.0-edge.5
+  - @memberjunction/ng-record-merge@6.2.0-edge.5
+  - @memberjunction/ng-filter-builder@6.2.0-edge.5
+  - @memberjunction/ng-timeline@6.2.0-edge.5
+  - @memberjunction/ng-export-service@6.2.0-edge.5
+  - @memberjunction/ng-pagination@6.2.0-edge.5
+  - @memberjunction/export-engine@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- fc24fc4: Stop `mj-entity-data-grid` computing a saved view's AGGREGATES against an entity they do not belong to. `buildAgColumnDefs()` already refuses a column state matching no field of the current entity (MemberJunction/MJ#4244), but nothing refused that same state's aggregates — and because they are raw SQL expressions carrying their own labels, the symptom is not a blank grid but a plausible number under someone else's label: `COUNT(*)` evaluates against any entity, so a card reading "Open Orders" rendered a real count of whatever the grid was actually showing. `buildCurrentGridState()` then carried the foreign config forward, so one column resize persisted the wrong aggregates into the new entity's own saved view. A single `gridStateDescribesCurrentEntity()` check now gates the aggregates fallback, the adoption in `onGridStateChanged()`, and the captured state, reusing the column-list evidence `buildAgColumnDefs()` already computes rather than parsing the SQL. A state with no `columnSettings` is no evidence either way and is still trusted, and an explicit `[AggregatesConfig]` still always wins. A refusal also no longer erases the loaded view's own aggregates on capture: when a grid bound directly with a saved-view `[Params]` refuses a foreign state, the captured state keeps the view record's aggregates instead of writing none, while any state that was not refused captures exactly as before.
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5e1e343]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-shared-generic@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/ng-base-types@6.2.0-edge.4
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.4
+  - @memberjunction/ng-list-management@6.2.0-edge.4
+  - @memberjunction/ng-map-view@6.2.0-edge.4
+  - @memberjunction/ng-notifications@6.2.0-edge.4
+  - @memberjunction/ng-record-changes@6.2.0-edge.4
+  - @memberjunction/ng-record-merge@6.2.0-edge.4
+  - @memberjunction/communication-types@6.2.0-edge.4
+  - @memberjunction/ng-filter-builder@6.2.0-edge.4
+  - @memberjunction/ng-timeline@6.2.0-edge.4
+  - @memberjunction/ng-export-service@6.2.0-edge.4
+  - @memberjunction/ng-pagination@6.2.0-edge.4
+  - @memberjunction/export-engine@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

@@ -8,7 +8,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { MJListDetailEntity, MJListEntity, MJUserViewEntity } from '@memberjunction/core-entities';
+import { MJListDetailEntity, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 
 import {
   ComputeSourceSignature,
@@ -35,6 +35,18 @@ import type {
  *  Server-internal — not exposed on the public type surface because no
  *  consumer outside this package needs to compose it. */
 export type DeltaTarget = ListSource | 'new';
+
+/**
+ * A provider that screens client SQL clauses (GenericDatabaseProvider does, as
+ * `ClientClauseScreeningProvider` in `@memberjunction/generic-database-provider`).
+ */
+interface ClauseScreeningProvider {
+  ScreenClientClause(clause: string, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
+}
+
+function canScreenClauses(provider: IMetadataProvider | undefined): provider is IMetadataProvider & ClauseScreeningProvider {
+  return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
+}
 
 /**
  * Core list-operations engine. Pure-ish TypeScript: takes a `UserInfo` +
@@ -70,7 +82,7 @@ export class ListOperations {
       case 'view':
         return this.resolveViewSource(source.viewId, source.runtimeParams);
       case 'adhoc':
-        return this.resolveAdhocSource(source.entityName, source.extraFilter);
+        return this.resolveAdhocSource(source.entityName, source.extraFilter, source.alternateBaseView);
       default: {
         // Exhaustiveness check — if a new kind is added to ListSource the
         // compiler will reject this branch.
@@ -449,12 +461,17 @@ export class ListOperations {
     };
   }
 
-  private async resolveAdhocSource(entityName: string, extraFilter: string): Promise<ResolvedRecordSet> {
+  private async resolveAdhocSource(
+    entityName: string,
+    extraFilter: string,
+    alternateBaseView?: string,
+  ): Promise<ResolvedRecordSet> {
     const entityInfo = this.metadata().EntityByName(entityName);
     if (!entityInfo) {
       throw new Error(`Entity '${entityName}' not found in metadata`);
     }
     const pkFields = entityInfo.PrimaryKeys.map((pk) => pk.Name);
+    this.screenAdhocFilter(extraFilter, entityInfo);
 
     const rv = this.runView();
     const result = await rv.RunView({
@@ -462,6 +479,7 @@ export class ListOperations {
       ExtraFilter: extraFilter,
       Fields: pkFields,
       ResultType: 'simple',
+      ...(alternateBaseView ? { AlternateBaseView: alternateBaseView } : {}),
     }, this.contextUser);
 
     if (!result.Success) {
@@ -473,6 +491,22 @@ export class ListOperations {
       RecordIds: (result.Results ?? []).map((row) => this.serializeRecordId(entityInfo, row as Record<string, unknown>)),
       TotalCount: result.RowCount,
     };
+  }
+
+  /**
+   * SECURITY — refuses an ad-hoc filter the provider's client-clause screen refuses, with the
+   * acting user, before it runs. The text comes from a client (`ListSourceInput{Kind:'adhoc'}`, and
+   * the Compose Lists, Refresh List From Source, Resolve Audience and Send To Audience actions) or
+   * from a list's stored `SourceFilterSnapshot`, which the list owner can edit. Fails closed when
+   * the provider cannot screen.
+   */
+  private screenAdhocFilter(extraFilter: string, entityInfo: EntityInfo): void {
+    if (!extraFilter.trim()) return;
+    const provider = this.provider ?? Metadata.Provider;
+    if (!canScreenClauses(provider)) {
+      throw new Error(`Ad-hoc filter on '${entityInfo.Name}' refused: the data provider cannot screen client SQL`);
+    }
+    provider.ScreenClientClause(extraFilter, 'ExtraFilter', this.contextUser, entityInfo);
   }
 
   /**
@@ -836,6 +870,7 @@ export class ListOperations {
       whereClause?: string | null;
       customWhereClause?: string | null;
       smartFilterWhereClause?: string | null;
+      alternateBaseView?: string | null;
     };
     try {
       parsed = JSON.parse(list.SourceFilterSnapshot) as typeof parsed;
@@ -846,9 +881,15 @@ export class ListOperations {
 
     const extraFilter =
       parsed.customWhereClause ?? parsed.whereClause ?? parsed.smartFilterWhereClause ?? null;
-    if (!extraFilter || extraFilter.trim().length === 0) return null;
+    const altBaseView = parsed.alternateBaseView?.trim() || undefined;
+    if ((!extraFilter || extraFilter.trim().length === 0) && !altBaseView) return null;
 
-    return { kind: 'adhoc', entityName: entity.Name, extraFilter };
+    return {
+      kind: 'adhoc',
+      entityName: entity.Name,
+      extraFilter: extraFilter ?? '',
+      ...(altBaseView ? { alternateBaseView: altBaseView } : {}),
+    };
   }
 
   /**
@@ -889,7 +930,7 @@ export class ListOperations {
    */
   private async captureViewFilterSnapshot(viewId: string): Promise<string | null> {
     const md = this.metadata();
-    const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', this.contextUser);
+    const view = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', this.contextUser);
     const loaded = await view.Load(viewId);
     if (!loaded) {
       LogError(`captureViewFilterSnapshot: view ${viewId} not found`);
@@ -900,6 +941,7 @@ export class ListOperations {
       capturedAt: new Date().toISOString(),
       sourceViewId: viewId,
       entityId: view.EntityID,
+      alternateBaseView: view.AlternateBaseView ?? null,
       whereClause: view.WhereClause ?? null,
       customWhereClause: view.CustomWhereClause ?? null,
       filterState: view.FilterState ?? null,

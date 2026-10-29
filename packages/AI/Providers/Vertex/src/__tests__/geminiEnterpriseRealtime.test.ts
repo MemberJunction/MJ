@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GoogleAuth, JWT, type GoogleAuthOptions } from 'google-auth-library';
@@ -134,6 +134,8 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
     public readonly Session = new FakeLiveSession();
     /** When set, the next Vertex client creation fails once. */
     public FailNextClient = false;
+    /** When set, the socket closes before Google confirms the setup, and the connect never settles (what the SDK does). */
+    public CloseBeforeSetup = false;
 
     protected override CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
         this.AuthOptions.push(options);
@@ -150,6 +152,10 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
             live: {
                 connect: async (params: LiveConnectParameters): Promise<GeminiLiveSession> => {
                     this.Connects.push(params);
+                    if (this.CloseBeforeSetup) {
+                        params.callbacks.onclose?.({ code: 1008, reason: 'model not found' } as CloseEvent);
+                        return new Promise<GeminiLiveSession>(() => undefined);
+                    }
                     // Google confirms the setup; the session puts a connection to use only after that.
                     params.callbacks.onmessage(Object.assign(new LiveServerMessage(), { setupComplete: {} }));
                     return this.Session;
@@ -350,6 +356,50 @@ describe('GeminiEnterpriseRealtime', () => {
 
         it('mints no Gemini Developer API token', async () => {
             await expect(new TestEnterprise(serviceAccountKey()).MintDeveloperToken()).rejects.toThrow('mints no Gemini Developer API tokens');
+        });
+
+        it('reuses the GoogleAuth token cache across GeminiEnterpriseRealtime instances created with the same key', async () => {
+            const getHeadersSpy = vi
+                .spyOn(GoogleAuth.prototype, 'getRequestHeaders')
+                .mockResolvedValue(new Headers({ Authorization: `Bearer ${ACCESS_TOKEN}` }));
+            const sharedKey = serviceAccountKey({ project_id: 'shared-cache-project' });
+            const distinctKey = serviceAccountKey({ project_id: 'distinct-cache-project' });
+            const driver1 = new GeminiEnterpriseRealtime(sharedKey);
+            const driver2 = new GeminiEnterpriseRealtime(sharedKey);
+            const driver3 = new GeminiEnterpriseRealtime(distinctKey);
+
+            const grant1 = openFresh(await driver1.CreateClientSession(makeParams()));
+            const grant2 = openFresh(await driver2.CreateClientSession(makeParams()));
+            const grant3 = openFresh(await driver3.CreateClientSession(makeParams()));
+            await grant1.Policy.UpstreamHeaders();
+            await grant2.Policy.UpstreamHeaders();
+            await grant3.Policy.UpstreamHeaders();
+
+            expect(getHeadersSpy).toHaveBeenCalledTimes(3);
+            expect(getHeadersSpy.mock.instances[0]).toBe(getHeadersSpy.mock.instances[1]);
+            expect(getHeadersSpy.mock.instances[2]).not.toBe(getHeadersSpy.mock.instances[0]);
+        });
+
+        it('gives a session the key file as it is now, not the key a cached GoogleAuth read from that path earlier', async () => {
+            const getHeadersSpy = vi
+                .spyOn(GoogleAuth.prototype, 'getRequestHeaders')
+                .mockResolvedValue(new Headers({ Authorization: `Bearer ${ACCESS_TOKEN}` }));
+            const rotatedEmail = 'rotated-sa@stand-in-project.iam.gserviceaccount.com';
+            const original = readFileSync(keyFilePath, 'utf8');
+            try {
+                const before = openFresh(await new GeminiEnterpriseRealtime(environmentKey).CreateClientSession(makeParams()));
+                await before.Policy.UpstreamHeaders();
+
+                // The operator rotates the key: same path, new service account.
+                writeFileSync(keyFilePath, JSON.stringify({ type: 'service_account', project_id: PROJECT, private_key: STAND_IN_KEY, client_email: rotatedEmail }));
+                const after = openFresh(await new GeminiEnterpriseRealtime(environmentKey).CreateClientSession(makeParams()));
+                await after.Policy.UpstreamHeaders();
+
+                const client = await (getHeadersSpy.mock.instances[1] as GoogleAuth).getClient();
+                expect((client as JWT).email).toBe(rotatedEmail);
+            } finally {
+                writeFileSync(keyFilePath, original);
+            }
         });
     });
 
@@ -701,6 +751,12 @@ describe('GeminiEnterpriseRealtime', () => {
             await driver.StartSession(makeParams());
             expect(driver.ClientOptions).toHaveLength(2);
             expect(driver.Connects).toHaveLength(2);
+        });
+
+        it('fails the start when the socket closes before Google confirms the setup, instead of hanging', async () => {
+            const driver = new TestEnterprise(serviceAccountKey());
+            driver.CloseBeforeSetup = true;
+            await expect(driver.StartSession(makeParams())).rejects.toThrow('closed during setup (code 1008: model not found)');
         });
 
         it('warns about an undocumented location for bridged sessions too', async () => {

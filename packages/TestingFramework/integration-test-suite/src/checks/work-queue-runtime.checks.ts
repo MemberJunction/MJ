@@ -425,7 +425,7 @@ async function withRestServer<T>(payload: WorkQueueRequestPayload, work: (baseUr
     });
     app.use('/work-queue', CreateWorkQueuePublishRouter(restDependencies()));
     const server = await new Promise<Server>(resolve => {
-        const listening = app.listen(0, () => resolve(listening));
+        const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
     });
     try {
         return await work(`http://127.0.0.1:${(server.address() as AddressInfo).port}/work-queue`);

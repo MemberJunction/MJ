@@ -47,7 +47,9 @@ import {
   GetAIAPIKey,
   CredentialScopeAllows,
   AIPromptConfiguration,
-  ModelUsage
+  ModelUsage,
+  CreateCancellationError,
+  IsCancellationErrorInfo
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -91,6 +93,11 @@ export interface ModelVendorCandidate {
    */
   promptModelConfiguration?: AIPromptConfiguration | null;
   isPreferredVendor: boolean;
+  /**
+   * True when this candidate's vendor is the one its `AIPromptModel` row names. Selection runs it in
+   * place of the first credentialed candidate of the same model; see `PromptModelVendorIndex`.
+   */
+  isPromptModelVendor?: boolean;
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
 }
@@ -299,8 +306,19 @@ export abstract class BaseModelRunner {
    * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
    * stay in this runner's structured log stream via the queue's `onError` hook.
    */
+  /** Failover fields waiting to be re-applied after a prompt run's INSERT lands; see {@link recordFailoverFields}. */
+  private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
+
+  /**
+   * Tracks `MJAIPromptRunEntityExtended` instances created on this runner by normalized UUID so a child
+   * prompt run (`params.parentPromptRunId`) whose parent's INSERT is still in flight can chain its INSERT
+   * via `_promptRunQueue.InsertAfter(childRun, parentRun)` and never violate `FK_AIPromptRun_ParentID`.
+   */
+  private readonly _trackedPromptRunsById = new Map<string, MJAIPromptRunEntityExtended>();
+
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
+    saveReturnMode: 'datestamps_only',
   });
 
   /**
@@ -376,8 +394,8 @@ export abstract class BaseModelRunner {
 
     // Priority 2: PromptModel bindings (most specific) - with failover
     if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
+      const promptModel = this.getPromptModelsForPromptId(promptId).find(
+        pm => UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
@@ -474,11 +492,26 @@ export abstract class BaseModelRunner {
         return null;
       }
 
-      if (credential.ExpiresAt && new Date(credential.ExpiresAt) < new Date()) {
+      // Expiry is evaluated by the engine rather than compared here, so this
+      // failover path honors the same policy — including any grace period —
+      // that getCredential() would apply a few lines below.
+      const expiration = CredentialEngine.Instance.GetExpirationStatus(credential);
+      if (!expiration.usable) {
         if (verbose) {
-          this.logStatus(`   ⚠️ Credential "${credential.Name}" has expired, trying next...`, true, params);
+          this.logStatus(
+            `   ⚠️ Credential "${credential.Name}" expired on ${expiration.expiresAt?.toISOString()}, trying next...`,
+            true,
+            params
+          );
         }
         return null;
+      }
+      if (expiration.status === 'expiring-soon' && verbose) {
+        this.logStatus(
+          `   ⏳ Credential "${credential.Name}" expires in ${expiration.daysUntilExpiration} day(s)`,
+          true,
+          params
+        );
       }
 
       // Resolve the credential values
@@ -557,7 +590,7 @@ export abstract class BaseModelRunner {
       UUIDsEqual(c.CredentialTypeID, credentialTypeId) &&
       c.IsDefault === true &&
       c.IsActive === true &&
-      (!c.ExpiresAt || new Date(c.ExpiresAt) > new Date())
+      CredentialEngine.Instance.GetExpirationStatus(c).usable
     ) || null;
   }
 
@@ -613,8 +646,8 @@ export abstract class BaseModelRunner {
   private hasPlatformCredential(promptId: string | undefined, modelId: string | undefined, vendorId: string | undefined): boolean {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
+      const promptModel = this.getPromptModelsForPromptId(promptId).find(
+        pm => UUIDsEqual(pm.ModelID, modelId)
       );
       if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
         return true;
@@ -775,8 +808,8 @@ export abstract class BaseModelRunner {
     verbose?: boolean
   ): ModelVendorCandidate[] {
     // Get all active AIPromptModel records for this prompt
-    const allPromptModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview')
+    const allPromptModels = this.getPromptModelsForPromptId(prompt.ID).filter(
+      pm => pm.Status === 'Active' || pm.Status === 'Preview'
     );
 
     // Filter by configuration matching rules
@@ -1136,12 +1169,19 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * Returns all AIPromptModel rows for a prompt via AIEngine's O(1) PromptModelsByPromptID index.
+   */
+  protected getPromptModelsForPromptId(promptId: string): MJAIPromptModelEntity[] {
+    return AIEngine.Instance.PromptModelsByPromptID.get(NormalizeUUID(promptId)) ?? [];
+  }
+
+  /**
    * Helper: true if this prompt has any AIPromptModel bindings at all, regardless of Status or
    * ConfigurationID. Distinguishes "no bindings were ever configured" (general selection strategy
    * should apply) from "bindings exist but are all Inactive" (no model should be selected).
    */
   private hasAnyPromptModelBindings(prompt: MJAIPromptEntityExtended): boolean {
-    return AIEngine.Instance.PromptModels.some(pm => UUIDsEqual(pm.PromptID, prompt.ID));
+    return this.getPromptModelsForPromptId(prompt.ID).length > 0;
   }
 
   /**
@@ -1153,15 +1193,15 @@ export abstract class BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     configurationId?: string
   ): MJAIPromptModelEntity[] {
+    const forPrompt = this.getPromptModelsForPromptId(prompt.ID);
     if (configurationId) {
       // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
       const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
 
       // Walk the chain looking for prompt models
       for (const config of chain) {
-        const promptModels = AIEngine.Instance.PromptModels.filter(
-          pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-                (pm.Status === 'Active' || pm.Status === 'Preview') &&
+        const promptModels = forPrompt.filter(
+          pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
                 UUIDsEqual(pm.ConfigurationID, config.ID)
         );
 
@@ -1175,9 +1215,8 @@ export abstract class BaseModelRunner {
     }
 
     // Return null-config (universal) models
-    return AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+    return forPrompt.filter(
+      pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
   }
@@ -1207,7 +1246,7 @@ export abstract class BaseModelRunner {
           5000,
           'prompt-model',
           preferredVendorId,
-          pm.Priority
+          pm
         );
         candidates.push(...modelCandidates);
       }
@@ -1227,13 +1266,13 @@ export abstract class BaseModelRunner {
   ): void {
     const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
     const requiredTypeId = this.RequiredModelTypeID();
+    const forPrompt = this.getPromptModelsForPromptId(prompt.ID);
 
     // Add models from parent configs (skip index 0 which is the direct config, already handled)
     for (let i = 1; i < chain.length; i++) {
       const parentConfig = chain[i];
-      const parentModels = AIEngine.Instance.PromptModels.filter(
-        pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
+      const parentModels = forPrompt.filter(
+        pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
               UUIDsEqual(pm.ConfigurationID, parentConfig.ID)
       );
 
@@ -1258,7 +1297,7 @@ export abstract class BaseModelRunner {
             basePriority,
             'prompt-model',
             preferredVendorId,
-            pm.Priority
+            pm
           );
           candidates.push(...modelCandidates);
         }
@@ -1266,9 +1305,8 @@ export abstract class BaseModelRunner {
     }
 
     // Finally add NULL config models (universal fallback) with lowest priority
-    const nullConfigModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+    const nullConfigModels = forPrompt.filter(
+      pm => (pm.Status === 'Active' || pm.Status === 'Preview') &&
             !pm.ConfigurationID
     );
 
@@ -1291,7 +1329,7 @@ export abstract class BaseModelRunner {
           1000, // Lowest priority tier
           'prompt-model',
           preferredVendorId,
-          pm.Priority
+          pm
         );
         candidates.push(...modelCandidates);
       }
@@ -1381,15 +1419,30 @@ export abstract class BaseModelRunner {
 
   /**
    * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
+   * `preferredVendorId` is the caller's runtime vendor override and is boosted above its own model's
+   * other vendors. A prompt-model row's `VendorID` changes no priority: that vendor's candidate is
+   * flagged `isPromptModelVendor`, and selection runs it in place of the first credentialed candidate
+   * of its model (see {@link PromptModelVendorIndex}), so the row picks the vendor but never which
+   * model runs. The row's effort level and configuration go only to the candidates the row
+   * describes: its own vendor, or every vendor of the model when it names none.
    */
   private createCandidatesForModel(
     model: MJAIModelEntityExtended,
     basePriority: number,
     source: ModelVendorCandidate['source'],
     preferredVendorId?: string,
-    promptModelPriority?: number
+    promptModel?: MJAIPromptModelEntity
   ): ModelVendorCandidate[] {
     const modelCandidates: ModelVendorCandidate[] = [];
+    const rowFields = (vendorId?: string) => {
+      const isRowVendor = !!promptModel?.VendorID && UUIDsEqual(vendorId, promptModel.VendorID);
+      const applies = !!promptModel && (!promptModel.VendorID || isRowVendor);
+      return {
+        effortLevel: applies ? promptModel?.EffortLevel ?? undefined : undefined,
+        promptModelConfiguration: applies ? promptModel?.PromptConfigurationObject : undefined,
+        isPromptModelVendor: isRowVendor
+      };
+    };
 
     // Get all vendors for this model - filter for inference providers only.
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
@@ -1411,7 +1464,8 @@ export abstract class BaseModelRunner {
           supportsEffortLevel: preferredVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: true,
           priority: basePriority + 1000, // Boost priority for preferred vendor
-          source
+          source,
+          ...rowFields(preferredVendor.VendorID)
         });
       }
     }
@@ -1428,7 +1482,8 @@ export abstract class BaseModelRunner {
           supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: false,
           priority: basePriority + (vendor.Priority || 0),
-          source
+          source,
+          ...rowFields(vendor.VendorID)
         });
       }
     }
@@ -1442,16 +1497,101 @@ export abstract class BaseModelRunner {
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
         priority: basePriority,
-        source
+        source,
+        ...rowFields(undefined)
       });
     }
 
     // Apply prompt model priority if provided (legacy blended approach)
-    if (promptModelPriority !== undefined) {
-      modelCandidates.forEach(c => c.priority += promptModelPriority * 10);
+    if (promptModel) {
+      modelCandidates.forEach(c => c.priority += promptModel.Priority * 10);
     }
 
     return modelCandidates;
+  }
+
+  /**
+   * Where a candidate list runs the prompt-model row's vendor in place of `candidates[index]`.
+   *
+   * Call it when `candidates[index]` is the first credentialed candidate a walk reaches. If that
+   * candidate is neither the caller's runtime override nor a row vendor, and a later candidate of the
+   * same model is its prompt-model row's vendor with credentials, returns that candidate's index;
+   * otherwise -1. The caller moves it into `index`. So the ranked order still decides which model
+   * runs, credentials included, and the row only decides which of that model's vendors serves it.
+   */
+  protected PromptModelVendorIndex(
+    candidates: ModelVendorCandidate[],
+    index: number,
+    hasCredentials: (candidate: ModelVendorCandidate) => boolean
+  ): number {
+    const current = candidates[index];
+    if (!current || current.isPreferredVendor || current.isPromptModelVendor) {
+      return -1;
+    }
+    for (let j = index + 1; j < candidates.length; j++) {
+      const candidate = candidates[j];
+      if (candidate.isPromptModelVendor && UUIDsEqual(candidate.model.ID, current.model.ID) && hasCredentials(candidate)) {
+        return j;
+      }
+    }
+    return -1;
+  }
+
+  /** The key credential probes are cached under: driver, model and vendor. */
+  protected CandidateKey(candidate: ModelVendorCandidate): string {
+    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
+  }
+
+  /**
+   * Picks the candidate a run uses: the first with credentials, or that model's prompt-model-row vendor
+   * when it has credentials too (see {@link PromptModelVendorIndex}). Every runner selects here, so the
+   * vendor is the same whether or not failover runs. Probing stops at the pick unless `probeAll` asks
+   * for every candidate (a selection report). Returns the probes made, keyed by {@link CandidateKey},
+   * for failover to reuse.
+   *
+   * Failover walks the same rule, so a model with two prompt-model rows naming two vendors has two
+   * row-vendor candidates and the whole call budget can land on that one model: better for a vendor
+   * outage, worse for a model-level failure (retired APIName, refusal, bad ModelConfiguration). Calls
+   * that span several driver classes also skip the last-resort cross-provider attempt.
+   */
+  protected SelectCandidate(
+    candidates: ModelVendorCandidate[],
+    hasCredentials: (candidate: ModelVendorCandidate) => boolean,
+    probeAll = false
+  ): { Candidate: ModelVendorCandidate | null; CredentialAvailability: Map<string, boolean> } {
+    const availability = new Map<string, boolean>();
+    const probe = (candidate: ModelVendorCandidate): boolean => {
+      const key = this.CandidateKey(candidate);
+      let available = availability.get(key);
+      if (available === undefined) {
+        available = hasCredentials(candidate);
+        availability.set(key, available);
+      }
+      return available;
+    };
+    const first = candidates.findIndex(probe);
+    const rowVendor = first < 0 ? -1 : this.PromptModelVendorIndex(candidates, first, probe);
+    if (probeAll) {
+      candidates.forEach(probe);
+    }
+    return {
+      Candidate: first < 0 ? null : candidates[rowVendor >= 0 ? rowVendor : first],
+      CredentialAvailability: availability
+    };
+  }
+
+  /**
+   * Awaits all in-flight `MJAIPromptRunEntityExtended` INSERT and UPDATE operations queued on this
+   * runner's internal {@link BaseEntitySaveQueue} (`_promptRunQueue`) and clears the in-flight parent
+   * lookup table.
+   *
+   * Normal intra-step prompt execution is non-blocking (fire-and-forget); callers that own the outer
+   * lifecycle (such as `BaseAgent` at run completion, failure, cancellation, or compaction) call
+   * `FlushPendingSaves()` to guarantee every `AIPromptRun` row is durably settled before returning.
+   */
+  public async FlushPendingSaves(): Promise<void> {
+    await this._promptRunQueue.Flush();
+    this._trackedPromptRunsById.clear();
   }
 
   /**
@@ -1460,7 +1600,7 @@ export abstract class BaseModelRunner {
    * and for callers that need the AIPromptRun rows durably written before proceeding.
    */
   public async WaitForPendingPromptRunSaves(): Promise<void> {
-    await this._promptRunQueue.Flush();
+    await this.FlushPendingSaves();
   }
 
   /**
@@ -1524,6 +1664,7 @@ export abstract class BaseModelRunner {
             modelName: mc.model.Name,
             vendorId: mc.vendor?.ID,
             vendorName: mc.vendor?.Name || 'default',
+            driverClass: mc.driverClass,
             priority: mc.priority,
             available: mc.available,
             unavailableReason: mc.unavailableReason
@@ -1593,11 +1734,25 @@ export abstract class BaseModelRunner {
 
       applyRequestFields?.(promptRun);
 
+      if (promptRun.ID) {
+        this._trackedPromptRunsById.set(NormalizeUUID(promptRun.ID), promptRun);
+      }
+
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by
       // NewRecord() above, so callers (and the onPromptRunCreated callback) have it immediately —
       // we don't block the model call on the INSERT. The finalize UPDATE chains after this INSERT
       // via the instance-keyed save queue, so ordering is guaranteed.
-      this._promptRunQueue.Insert(promptRun);
+      // When `parentPromptRunId` references a parent run on this runner whose INSERT has not yet
+      // completed (`!parentRun.IsSaved`), chain via `InsertAfter(promptRun, parentRun)` so the
+      // parent INSERT always lands before the child INSERT (`FK_AIPromptRun_ParentID`).
+      const parentRun = params.parentPromptRunId
+        ? this._trackedPromptRunsById.get(NormalizeUUID(params.parentPromptRunId))
+        : undefined;
+      if (parentRun && !parentRun.IsSaved) {
+        this._promptRunQueue.InsertAfter(promptRun, parentRun);
+      } else {
+        this._promptRunQueue.Insert(promptRun);
+      }
 
       // Invoke callback if provided. The ID is available without awaiting the save (client-generated
       // by NewRecord()), so agent-run/step linking that depends on it works immediately.
@@ -1634,23 +1789,16 @@ export abstract class BaseModelRunner {
     currentModel: MJAIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-
-    // Update ModelID if we ended up using a different model
-    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
-      promptRun.ModelID = currentModel.ID;
-    }
-    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
-      promptRun.VendorID = currentVendorId;
-    }
+    this.recordFailoverFields(promptRun, run => {
+      this.applyFailoverAttempts(run, failoverAttempts);
+      // Update ModelID if we ended up using a different model
+      if (!UUIDsEqual(currentModel.ID, run.OriginalModelID)) {
+        run.ModelID = currentModel.ID;
+      }
+      if (currentVendorId && !UUIDsEqual(currentVendorId, run.VendorID)) {
+        run.VendorID = currentVendorId;
+      }
+    });
   }
 
   /**
@@ -1660,6 +1808,11 @@ export abstract class BaseModelRunner {
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
+    this.recordFailoverFields(promptRun, run => this.applyFailoverAttempts(run, failoverAttempts));
+  }
+
+  /** Writes the failover attempts onto a prompt run: their count, errors and durations. */
+  private applyFailoverAttempts(promptRun: MJAIPromptRunEntityExtended, failoverAttempts: FailoverAttempt[]): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
     promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
@@ -1669,6 +1822,17 @@ export abstract class BaseModelRunner {
     })));
     promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
     promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Sets a prompt run's failover fields now, and again in {@link FinalizeRunRecord}'s queued update.
+   * The run's 'Running' INSERT is queued without being awaited, and when it lands the entity reloads
+   * from what was inserted — undoing any field set while it was in flight. Writing the fields inside
+   * the finalize task, which runs after that reload, is what makes them persist.
+   */
+  private recordFailoverFields(promptRun: MJAIPromptRunEntityExtended, apply: (run: MJAIPromptRunEntityExtended) => void): void {
+    apply(promptRun);
+    this._pendingFailoverFields.set(promptRun, apply);
   }
 
   /**
@@ -1712,7 +1876,7 @@ export abstract class BaseModelRunner {
       ? new Map<string, boolean>(credentialAvailability)
       : new Map<string, boolean>();
     const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
-      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+      const key = this.CandidateKey(c);
       let has = failoverCredentialCache.get(key);
       if (has === undefined) {
         has = this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
@@ -1721,11 +1885,39 @@ export abstract class BaseModelRunner {
       return has;
     };
     let skippedForCredentials = 0;
+    // Calls actually issued to a provider during this walk. NOT the loop index: candidates skipped
+    // for missing credentials below never reach a provider and must not consume the budget, and a
+    // rate-limit retry re-runs the same index and must consume one.
+    let attemptedCalls = 0;
+    // `FailoverMaxAttempts` (defaulted to 3 by getFailoverConfiguration) bounds how many provider
+    // calls one prompt execution may make. Honouring it here is what makes the column live: the
+    // walk below is over the FULL priority-ordered candidate list — every active model of the
+    // prompt's type crossed with every active inference vendor, which is 317 entries on a stock
+    // tenant — and until now nothing consulted the configured cap, so a provider returning 5xx (or
+    // stalling, where there is no per-call deadline either) was retried against candidate after
+    // candidate. The intended semantics are the ones `shouldAttemptFailover` documents:
+    // `attemptNumber` is 1-based and `attemptNumber > maxAttempts` is refused, i.e. maxAttempts is
+    // the TOTAL number of calls including the first, not the number of retries after it.
+    // A non-positive value would stop the walk before the FIRST call and fail every prompt on the
+    // tenant, so it is treated as "not configured" rather than "no calls allowed". `|| 3` in
+    // getFailoverConfiguration already turns 0/null into 3; this covers a negative row.
+    const maxAttemptedCalls = failoverConfig.maxAttempts > 0 ? failoverConfig.maxAttempts : 3;
+
+    // Driver classes a provider call was actually ISSUED against. See the LAST RESORT note at
+    // the budget check — this set is also what bounds that escape to a single call.
+    const attemptedDriverClasses = new Set<string>();
+    /** The budget line is logged once, not once per candidate skipped during the scan below. */
+    let budgetReported = false;
 
     // Iterate through all candidates in priority order with instant failover
     for (let i = 0; i < allCandidates.length; i++) {
       const candidate = allCandidates[i];
       const attemptStartTime = Date.now();
+
+      // A caller that has cancelled wants no further model calls — not this candidate, not the next.
+      if (params.cancellationToken?.aborted) {
+        return this.stopFailoverForCancellation(prompt, this.BuildCancellationError(), failoverAttempts, createErrorResult, promptRun);
+      }
 
       // Skip candidates with no credentials configured. `allCandidates` is intentionally the
       // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
@@ -1740,11 +1932,107 @@ export abstract class BaseModelRunner {
         continue;
       }
 
+      // The model is decided; its prompt-model row's vendor serves it when that vendor has credentials.
+      // Move it into this slot (on a copy) and re-run the index, so the displaced candidate follows it.
+      const rowVendorIndex = this.PromptModelVendorIndex(allCandidates, i, candidateHasCredentials);
+      if (rowVendorIndex > i) {
+        allCandidates = [...allCandidates];
+        allCandidates.splice(i, 0, ...allCandidates.splice(rowVendorIndex, 1));
+        i--;
+        continue;
+      }
+
+      // Budget check AFTER the credential skip and BEFORE the call, so a keyless tail costs
+      // nothing and the cap counts only calls a provider actually saw. Stopping here leaves
+      // `lastError` holding the most recent real failure, which is what the caller needs to see —
+      // reporting "budget exhausted" instead would hide why the candidates failed.
+      if (attemptedCalls >= maxAttemptedCalls) {
+        if (!budgetReported) {
+          budgetReported = true;
+          LogStatusEx({
+            message:
+              `⛔ Failover budget reached for prompt "${prompt.Name}": ${attemptedCalls} of a ` +
+              `configured ${maxAttemptedCalls} attempt(s) used across ${allCandidates.length} ` +
+              `candidate(s). No further candidate is called from here, except the single ` +
+              `last-resort attempt on a different provider described below. Raise the prompt's ` +
+              `FailoverMaxAttempts to allow a deeper walk.`,
+            category: 'AI',
+            additionalArgs: [{
+              promptId: prompt.ID,
+              attemptedCalls,
+              maxAttemptedCalls,
+              candidateCount: allCandidates.length,
+              skippedForCredentials,
+              driverClassesAttempted: [...attemptedDriverClasses]
+            }]
+          });
+        }
+
+        // LAST RESORT — one call beyond the budget, and only to a DIFFERENT driver class.
+        //
+        // The budget bounds how much a prompt may SPEND. It does not say the spend must all go to
+        // one provider, and by default it does: three attempts down a priority-ordered list are
+        // usually three vendors of the SAME driver class, so one provider having a bad minute
+        // consumes the whole budget and the prompt fails without anyone else being asked.
+        //
+        // That is the common case rather than an edge one. A tenant on platform credits has a
+        // single metered provider in front of everything, so its candidate list really does read
+        // "101 candidates over 1 driver class" — and all three attempts are the same upstream
+        // having the same bad minute.
+        //
+        // So when every call so far went to ONE driver class, keep walking without spending —
+        // same-class candidates are skipped, not called — until the first credentialed candidate
+        // on a different class, and allow exactly that one.
+        //
+        // ONE is bounded by the set itself, with no separate flag: the extra call adds its own
+        // class, so `size === 1` is false at every later candidate and the walk stops there. The
+        // ceiling is maxAttempts + 1 and never more, and the scan issues no requests of its own.
+        // `lastError` semantics are untouched: the extra call either succeeds like any other
+        // candidate or records its failure like any other.
+        const soleDriverClass =
+          attemptedDriverClasses.size === 1 ? [...attemptedDriverClasses][0] : null;
+        if (soleDriverClass === null) {
+          break;
+        }
+        if (candidate.driverClass === soleDriverClass) {
+          continue;
+        }
+
+        LogStatusEx({
+          message:
+            `↪️ Failover budget for prompt "${prompt.Name}" was spent entirely on ` +
+            `${soleDriverClass}. Trying ONE more candidate on a different provider ` +
+            `(${candidate.driverClass}) before giving up.`,
+          category: 'AI',
+          additionalArgs: [{
+            promptId: prompt.ID,
+            exhaustedDriverClass: soleDriverClass,
+            lastResortDriverClass: candidate.driverClass,
+            attemptedCalls,
+            maxAttemptedCalls
+          }]
+        });
+      }
+      attemptedCalls++;
+      attemptedDriverClasses.add(candidate.driverClass);
+
       try {
         this.logCandidateAttempt(prompt, candidate, i, allCandidates.length, failoverAttempts.length, skippedForCredentials);
 
         // Execute the model with this candidate
         const result = await executeOnCandidate(candidate);
+
+        // A failure caused by the caller cancelling is the caller's decision, not the model's, so it
+        // is neither failed over nor reported as a model failure. A result that already says it is
+        // not eligible for failover (a driver's or a runner's own cancelled result) is returned as it
+        // is; one that would fail over is replaced by a cancellation.
+        if (!result.success && (params.cancellationToken?.aborted || this.IsCallerCancellation(result.errorInfo))) {
+          if (result.errorInfo?.canFailover !== true) {
+            this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+            return result;
+          }
+          return this.stopFailoverForCancellation(prompt, this.BuildCancellationError(), failoverAttempts, createErrorResult, promptRun);
+        }
 
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
         // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
@@ -1803,6 +2091,11 @@ export abstract class BaseModelRunner {
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
 
+        if (params.cancellationToken?.aborted || this.IsCallerCancellation(errorInfo)) {
+          const cancellation = this.IsCallerCancellation(errorInfo) ? lastError : this.BuildCancellationError();
+          return this.stopFailoverForCancellation(prompt, cancellation, failoverAttempts, createErrorResult, promptRun);
+        }
+
         // Use shared failover error handling logic
         const decision = await this.processFailoverError(
           lastError,
@@ -1847,6 +2140,92 @@ export abstract class BaseModelRunner {
     }
 
     return createErrorResult(lastError, failoverAttempts);
+  }
+
+  /**
+   * Whether a failure was caused by the caller cancelling the request: its classification is
+   * `Cancelled`, or the older shape drivers built before that type existed.
+   */
+  protected IsCallerCancellation(errorInfo: AIErrorInfo | undefined): boolean {
+    return IsCancellationErrorInfo(errorInfo);
+  }
+
+  /**
+   * The error for a model call the caller cancelled. It is classified `Cancelled` — Fatal and not
+   * eligible for failover — so ErrorAnalyzer, the failover loop and the validation retries all stop
+   * on it rather than treating it as an unknown model error.
+   *
+   * @param message The message to keep, when a driver already reported the cancellation.
+   */
+  protected BuildCancellationError(message?: string): Error & { errorInfo: AIErrorInfo } {
+    return CreateCancellationError({ message: message || 'Chat completion was cancelled' });
+  }
+
+  /**
+   * Waits for a model call, or rejects as soon as its bound aborts: with the bound's
+   * {@link AIPromptTimeoutError} when the timeout fired, else with a cancellation error. The call the
+   * runner stops waiting for is torn down only if its driver was handed the bound's signal.
+   *
+   * For any runner whose driver call is not already bounded by the driver itself.
+   */
+  protected async RaceWithinBound<T>(call: Promise<T>, bound: ExecutionBound, prompt: MJAIPromptEntityExtended): Promise<T> {
+    const signal = bound.Signal;
+    if (!signal) {
+      return call;
+    }
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(bound.TimedOut()
+        ? (signal.reason instanceof AIPromptTimeoutError ? signal.reason : new AIPromptTimeoutError(prompt.Name, bound.TimeoutMS ?? 0))
+        : this.BuildCancellationError(`The ${this.RequiredModelType} call was cancelled`));
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+    try {
+      return await Promise.race([call, aborted]);
+    } finally {
+      if (onAbort) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    }
+  }
+
+  /**
+   * Ends the failover loop for a caller cancellation: logs it once, at info level, records any real
+   * failures that came before it on the prompt run, and returns the error result without trying
+   * another candidate.
+   */
+  private stopFailoverForCancellation<TResult extends BaseResult>(
+    prompt: MJAIPromptEntityExtended,
+    cancellation: Error,
+    failoverAttempts: FailoverAttempt[],
+    createErrorResult: (lastError: Error | null, failoverAttempts: FailoverAttempt[]) => TResult,
+    promptRun?: MJAIPromptRunEntityExtended
+  ): TResult {
+    this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+    return createErrorResult(cancellation, failoverAttempts);
+  }
+
+  /**
+   * Logs a caller cancellation that ended the failover loop, once and at info level, and records any
+   * real failures that came before it on the prompt run.
+   */
+  private logFailoverCancellation(
+    prompt: MJAIPromptEntityExtended,
+    failoverAttempts: FailoverAttempt[],
+    promptRun?: MJAIPromptRunEntityExtended
+  ): void {
+    LogStatusEx({
+      message: `⏹️ Prompt "${prompt.Name}" was cancelled by the caller — not trying any further model candidates`,
+      category: 'AI',
+      additionalArgs: [{ promptId: prompt.ID, priorFailures: failoverAttempts.length }]
+    });
+    if (promptRun && failoverAttempts.length > 0) {
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
   }
 
   /**
@@ -2240,22 +2619,96 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Queues the finalize UPDATE for a prompt-run record. Inside the queued task it sets, in order:
-   * the completion timing (`CompletedAt`, `ExecutionTimeMS`); the outcome (`Success`, and `Status` =
-   * `'Completed'` or `'Failed'` from it); then the subclass's result fields; then the token rollups and
-   * `TotalCost`.
+   * Standard `MJAIPromptRunEntityExtended` columns that may be populated or updated during
+   * {@link FinalizeRunRecord}, failover bookkeeping, or a subclass's `applyResultFields` callback.
+   */
+  private static readonly FINALIZE_PROMPT_RUN_COLUMNS: ReadonlyArray<string> = [
+    'CompletedAt',
+    'ExecutionTimeMS',
+    'Success',
+    'Status',
+    'ModelID',
+    'VendorID',
+    'FailoverAttempts',
+    'FailoverErrors',
+    'FailoverDurations',
+    'TotalFailoverDuration',
+    'Result',
+    'ErrorMessage',
+    'ErrorDetails',
+    'Cancelled',
+    'CancellationReason',
+    'CacheHit',
+    'WasSelectedResult',
+    'TokensPrompt',
+    'TokensCompletion',
+    'TokensUsed',
+    'TokensCacheRead',
+    'TokensCacheWrite',
+    'TokensPromptRollup',
+    'TokensCompletionRollup',
+    'TokensUsedRollup',
+    'TokensCacheReadRollup',
+    'TokensCacheWriteRollup',
+    'Cost',
+    'CostCurrency',
+    'DescendantCost',
+    'TotalCost',
+    'QueueTime',
+    'PromptTime',
+    'CompletionTime',
+    'ResponseTimeMS',
+    'ModelSpecificResponseDetails',
+    'ValidationAttemptCount',
+    'SuccessfulValidationCount',
+    'FinalValidationPassed',
+    'LastAttemptAt',
+    'TotalRetryDurationMS',
+    'FinalValidationError',
+    'ValidationErrorCount',
+    'CommonValidationError',
+    'ValidationAttempts',
+    'ValidationSummary',
+    'UsageTypeID',
+    'InputUnitsUsed',
+    'OutputUnitsUsed',
+    'ToolCallingMode',
+    'Messages',
+  ];
+
+  private static readonly INTERNAL_MOCK_KEYS: ReadonlySet<string> = new Set([
+    'saveCount',
+    'savedRows',
+    'Persisted',
+    'Inserted',
+    'LatestResult',
+    'saveLog',
+    'callIndex',
+    'failOn',
+    'Fields',
+  ]);
+
+  /**
+   * Finalizes a prompt-run record in memory **immediately** AND queues a fire-and-forget UPDATE on
+   * {@link _promptRunQueue} that re-applies the finalized state after any in-flight `'Running'` INSERT
+   * and its `finalizeSave` reload complete.
    *
-   * The outcome is a parameter, not left to the callback, so every runner's row leaves `'Running'`.
-   * It is written before the callback runs, so the row reaches its final status even if the callback
-   * throws (the error is logged under `PromptRunUpdate` and the rollups are skipped).
+   * Applying the completion fields synchronously in memory ensures callers that inspect
+   * `result.promptRun` right after `ExecutePrompt` (such as `BaseAgent.calculateTokenStats()` reading
+   * `TokensPromptRollup`, `TokensCompletionRollup`, `TotalCost`, and `Status`) see the finalized values
+   * immediately without blocking on the database round-trip, while re-applying the captured snapshot
+   * inside `_promptRunQueue.Update(promptRun, ...)` guarantees an in-flight INSERT reload can never
+   * revert the persisted row back to `'Running'`.
    *
-   * For prompt-based runners, like {@link CreateRunRecord}.
+   * In order, it sets: the completion timing (`CompletedAt`, `ExecutionTimeMS`); the outcome (`Success`,
+   * and `Status` = `'Completed'` or `'Failed'` from it); any pending failover fields; the subclass's
+   * result fields (`applyResultFields`, invoked **once**); and finally the token rollups and `TotalCost`.
    *
    * @param success Whether the call succeeded, as the runner judges it (the chat runner also requires
    *   its output to pass validation).
    * @param applyResultFields Sets the runner's own result columns. It can read the timing and outcome
-   *   already set, and may refine them (for example `ErrorDetails`). **It must be synchronous**: it runs
-   *   inside the queued save task, and anything it sets after an `await` can miss the UPDATE.
+   *   already set, and may refine them (for example `ErrorDetails` or `Status = 'Cancelled'`).
+   *   **It must be synchronous.**
    */
   protected async FinalizeRunRecord(
     promptRun: MJAIPromptRunEntityExtended,
@@ -2264,31 +2717,75 @@ export abstract class BaseModelRunner {
     executionTimeMS: number,
     applyResultFields: (promptRun: MJAIPromptRunEntityExtended) => void
   ): Promise<void> {
-    // Fire-and-forget finalize UPDATE. The field mutations run INSIDE the post-INSERT task (after the
-    // 'Running' INSERT + its finalizeSave reload land), so the reload can never revert them and the
-    // chained UPDATE persists the finalized state — the "stuck at Running" race is structurally
-    // impossible. The execution flow does NOT await the save.
+    const runRecord = promptRun as unknown as Record<string, unknown>;
+    const candidateKeys = this.collectPromptRunSnapshotKeys(runRecord);
+    const beforeValues = new Map<string, unknown>();
+    for (const key of candidateKeys) {
+      beforeValues.set(key, runRecord[key]);
+    }
+
+    const pendingFailover = this._pendingFailoverFields.get(promptRun);
+    this._pendingFailoverFields.delete(promptRun);
+
+    try {
+      promptRun.CompletedAt = endTime;
+      promptRun.ExecutionTimeMS = executionTimeMS;
+      promptRun.Success = success;
+      promptRun.Status = success ? 'Completed' : 'Failed';
+
+      pendingFailover?.(promptRun);
+
+      applyResultFields(promptRun);
+
+      // With template composition, we only execute once so rollup equals regular fields
+      promptRun.TokensPromptRollup = promptRun.TokensPrompt;
+      promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
+      promptRun.TokensUsedRollup = promptRun.TokensUsed;
+      promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
+      promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
+      // TotalCost is Cost plus DescendantCost. A parallel parent carries no own Cost (its arms do), so
+      // its TotalCost is their sum; a run with no Cost of its own (NULL once its INSERT has reloaded
+      // it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+      if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost != null) {
+        promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
+      }
+    } catch (error) {
+      this.logError(error, {
+        category: 'PromptRunUpdate',
+        metadata: {
+          promptRunId: promptRun.ID
+        }
+      });
+    }
+
+    const afterKeys = this.collectPromptRunSnapshotKeys(runRecord);
+    const finalizedEntries: Array<[string, unknown]> = [];
+    for (const key of afterKeys) {
+      const afterVal = runRecord[key];
+      const beforeVal = beforeValues.get(key);
+      if (
+        !Object.is(afterVal, beforeVal) ||
+        key === 'CompletedAt' ||
+        key === 'ExecutionTimeMS' ||
+        key === 'Success' ||
+        key === 'Status'
+      ) {
+        if (afterVal !== undefined || beforeValues.has(key)) {
+          finalizedEntries.push([key, afterVal]);
+        }
+      }
+    }
+
+    // Queue the force-persisted UPDATE chained after the initial INSERT. If the INSERT was still in
+    // flight when FinalizeRunRecord ran, its finalizeSave reload will revert in-memory fields back to
+    // the inserted 'Running' snapshot; re-applying `pendingFailover` and `finalizedEntries` inside this
+    // post-INSERT task restores every finalized field right before the UPDATE save executes.
     this._promptRunQueue.Update(promptRun, () => {
       try {
-        promptRun.CompletedAt = endTime;
-        promptRun.ExecutionTimeMS = executionTimeMS;
-        promptRun.Success = success;
-        promptRun.Status = success ? 'Completed' : 'Failed';
-
-        applyResultFields(promptRun);
-
-        // Note: Failover tracking fields are now updated directly in executeModelWithFailover
-        // The promptRun entity already has the failover information set
-
-        // With template composition, we only execute once so rollup equals regular fields
-        promptRun.TokensPromptRollup = promptRun.TokensPrompt;
-        promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
-        promptRun.TokensUsedRollup = promptRun.TokensUsed;
-        promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
-        promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-        // TotalCost is Cost plus DescendantCost. A parallel parent carries no own Cost (its arms do), so
-        // its TotalCost is their sum; a run with no Cost of its own (NULL once its INSERT has reloaded
-        // it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+        pendingFailover?.(promptRun);
+        for (const [key, value] of finalizedEntries) {
+          runRecord[key] = value;
+        }
         if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost != null) {
           promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
         }
@@ -2301,6 +2798,32 @@ export abstract class BaseModelRunner {
         });
       }
     });
+  }
+
+  /**
+   * Collects the property names on `promptRun` to snapshot across {@link FinalizeRunRecord}, combining
+   * the standard `MJAIPromptRunEntityExtended` finalize columns, any `BaseEntity.Fields` entries, and
+   * any own properties set on test doubles (excluding internal test-harness bookkeeping fields).
+   */
+  private collectPromptRunSnapshotKeys(runRecord: Record<string, unknown>): Set<string> {
+    const keys = new Set<string>(BaseModelRunner.FINALIZE_PROMPT_RUN_COLUMNS);
+    const fields = runRecord['Fields'];
+    if (Array.isArray(fields)) {
+      for (const field of fields) {
+        const f = field as { Name?: unknown; NotLoaded?: boolean } | null;
+        if (f?.NotLoaded) continue;
+        const name = f?.Name;
+        if (typeof name === 'string' && !BaseModelRunner.INTERNAL_MOCK_KEYS.has(name)) {
+          keys.add(name);
+        }
+      }
+    }
+    for (const ownKey of Object.keys(runRecord)) {
+      if (!BaseModelRunner.INTERNAL_MOCK_KEYS.has(ownKey) && typeof runRecord[ownKey] !== 'function') {
+        keys.add(ownKey);
+      }
+    }
+    return keys;
   }
 
   // ==================== USAGE RECORDING ====================

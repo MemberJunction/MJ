@@ -25,6 +25,7 @@ import {
     type Content,
     type FunctionCall,
     type FunctionResponse,
+    type LiveCallbacks,
     type LiveConnectConfig,
     type LiveServerContent,
     type LiveServerMessage,
@@ -398,9 +399,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * {@link SendContextNote}; cleared by the empty-turn commit in
      * {@link sendToolResponseTurn} and on a model `turnComplete` (the generation consumed the
      * open content). Realtime-text triggers ({@link sendTriggeringUserTurn}) do NOT commit
-     * client content and leave this flag untouched.
+     * client content and leave this flag untouched. Under `interactionStatus`, true IDLE ends the
+     * interaction instead: it commits the turn only when a non-blocking tool response is waiting on
+     * it ({@link toolResponseAwaitsCommit}), and otherwise treats the open content as consumed.
      */
     private openClientTurn = false;
+    /**
+     * True when a NON_BLOCKING tool response went out while {@link openClientTurn} was open: the
+     * commit that releases its continuation was deferred to true IDLE so it would not cut off the
+     * generation in progress. Only this deferred commit is owed at IDLE; committing an open context
+     * note the finished generation already consumed would start a second, unsolicited reply.
+     */
+    private toolResponseAwaitsCommit = false;
     /**
      * The client's own view of the session state — mirrors what was last emitted, EXCEPT after
      * a tool call: the host typically shows its own busy indicator then, so the client silently
@@ -826,6 +836,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'narration', false));
     }
 
+    /** A spoken TURN: the same realtime-text trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.session) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'normal', false));
+    }
+
     /**
      * Feeds an executed tool's result back via `sendToolResponse`, supplying the function name
      * cached from the originating tool call (Gemini requires it; the contract only carries the
@@ -902,18 +920,37 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Creation seam for the Gemini Live session. Production constructs a `GoogleGenAI` client
      * with the **ephemeral token as the API key** on the `v1alpha` API version (the only
      * version that accepts `auth_tokens`), then opens `live.connect` with the server-built
-     * model + config. Unit tests override this to return an in-memory fake.
+     * model + config. Rejects if the socket errors or closes before Gemini acknowledges the setup.
+     * Unit tests override this to return an in-memory fake.
      */
     protected async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         const ai = new GoogleGenAI({ apiKey: args.EphemeralToken, httpOptions: { apiVersion: 'v1alpha' } });
-        return ai.live.connect({
-            model: args.Model,
-            config: args.Config,
-            callbacks: {
+        return this.connectUntilSetup(args, (callbacks) => ai.live.connect({ model: args.Model, config: args.Config, callbacks }));
+    }
+
+    /**
+     * Opens a Live connection with `connect`, which passes the given callbacks to `live.connect`, and rejects if the
+     * socket errors or closes before Gemini acknowledges the setup. `live.connect` (@google/genai 2.11+) resolves only on
+     * the server's setupComplete frame and never rejects when the socket errors or closes first (a rejected token, model
+     * or setup field), so without this the connect waits forever. A promise settles once, so callbacks after a successful
+     * connect only reach the handlers. Every {@link connectLiveSession} override should open through this.
+     */
+    protected connectUntilSetup(
+        args: GeminiClientConnectArgs,
+        connect: (callbacks: LiveCallbacks) => Promise<GeminiLiveClientSession>
+    ): Promise<GeminiLiveClientSession> {
+        return new Promise<GeminiLiveClientSession>((resolve, reject) => {
+            connect({
                 onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
+                onerror: (event) => {
+                    reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
+                    args.OnError(event);
+                },
+                onclose: (event) => {
+                    reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
+                    args.OnClose(event);
+                },
+            }).then(resolve, reject);
         });
     }
 
@@ -1674,12 +1711,17 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.endTurnUnlessToolCallPending();
         this.interactionInProgress = false;
         this.responseActive = false;
+        // The interaction is over, so its reply is final now, under the kind it was requested with:
+        // IDLE can arrive in the same frame as `turnComplete`, and is handled first, so resetting the
+        // kind before finalizing would turn a narration reply into a normal, persisted turn.
+        this.finalizeAssistantTranscript();
         this.activeResponseKind = 'normal';
         this.finalizeThoughtTranscript();
-        if (this.openClientTurn) {
+        if (this.openClientTurn && this.toolResponseAwaitsCommit) {
             this.session?.sendClientContent({ turnComplete: true });
-            this.openClientTurn = false;
         }
+        this.openClientTurn = false;
+        this.toolResponseAwaitsCommit = false;
         this.flushQueuedSends();
         if (this.currentState === 'speaking' && !this.IsAudioPlaying) {
             this.setState('listening');
@@ -1920,7 +1962,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             functionResponses: [functionResponse],
         });
 
-        if (!this.isNonBlocking) {
+        if (this.isNonBlocking) {
+            // The commit that releases this response's continuation waits for true IDLE (see above).
+            this.toolResponseAwaitsCommit = this.toolResponseAwaitsCommit || this.openClientTurn;
+        } else {
             if (this.openClientTurn) {
                 session.sendClientContent({ turnComplete: true });
                 this.openClientTurn = false;
@@ -1987,6 +2032,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
         this.openClientTurn = false;
+        this.toolResponseAwaitsCommit = false;
         this.queuedSends = [];
         this.pendingToolCallNames.clear();
         this.toolBatchBarrier.Clear();

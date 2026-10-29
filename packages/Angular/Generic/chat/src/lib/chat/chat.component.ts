@@ -207,6 +207,7 @@ export class ChatComponent implements AfterViewInit {
       messageElement.classList.add('chat-message-ai');
     }
     messageWrapElement.appendChild(messageElement);
+    void this.markdownService.RenderMath(messageElement);
 
     this.Messages.push(message);
     if (this.Messages.length === 1) {

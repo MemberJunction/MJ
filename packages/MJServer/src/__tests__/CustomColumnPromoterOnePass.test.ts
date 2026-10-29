@@ -14,10 +14,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const runPipelineBatchMock = vi.fn();
+/**
+ * MJ-APPLY-6 — the BARE, non-retrying entry point. Bound separately so a regression back to it is
+ * an assertion failure rather than an invisible loss of the retry. Promotion runs unattended
+ * mid-sync; a transient pipeline step failing there drops the whole promotion silently.
+ */
+const runPipelineBatchBareMock = vi.fn();
 vi.mock('@memberjunction/schema-engine', () => ({
     RuntimeSchemaManager: {
         get Instance() {
-            return { RunPipelineBatch: runPipelineBatchMock };
+            return {
+                RunPipelineBatch: runPipelineBatchBareMock,
+                RunPipelineBatchWithRetry: runPipelineBatchMock,
+            };
         },
     },
 }));
@@ -104,6 +113,7 @@ function stubPromoter(
 
 beforeEach(() => {
     runPipelineBatchMock.mockReset();
+    runPipelineBatchBareMock.mockReset();
 });
 
 describe('PromoteForSync — one batched RSU pass', () => {
@@ -122,6 +132,10 @@ describe('PromoteForSync — one batched RSU pass', () => {
         const result = await promoter.PromoteForSync('ci-1', ['A', 'B', 'C']);
 
         expect(runPipelineBatchMock).toHaveBeenCalledTimes(1);
+        // MJ-APPLY-6 — the ONE pass has to be the RETRYING one. Promotion is unattended: a
+        // transient ExecuteMigration/RunCodeGen/Compile/Restart failure with no replay drops every
+        // accepted column back into overflow and nothing reruns it.
+        expect(runPipelineBatchBareMock).not.toHaveBeenCalled();
         expect(runPipelineBatchMock.mock.calls[0][0]).toHaveLength(3);
         expect(result.Promoted).toBe(true);
         expect(result.ColumnsAdded).toEqual([

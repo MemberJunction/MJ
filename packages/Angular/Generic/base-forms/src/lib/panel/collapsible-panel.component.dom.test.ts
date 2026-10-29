@@ -130,6 +130,7 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
           IsFirstClassSectionVisible: () => true,
           Spec: { RelatedRoles: new Map() },
           Changes: new Subject<void>(),
+          NotifySectionsChanged: () => undefined,
         },
       }],
       inputs: {
@@ -299,6 +300,34 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
  * could drag a contribution panel, a new order would be written, nothing would read it,
  * and the panel would sit exactly where it was.
  */
+/**
+ * A section that draws itself only once its data has loaded mounts after the rail was
+ * worked out. It announces itself (and its leaving) through the chrome coordinator so the
+ * container can file it onto the rail — otherwise a left-nav form never shows it.
+ */
+describe('MjCollapsiblePanelComponent — a section arriving after the rail was built', () => {
+  it('tells the chrome coordinator when it mounts and when it leaves', () => {
+    const chrome = new FormChromeCoordinator();
+    const notified: string[] = [];
+    chrome.SectionsChanged.subscribe(() => notified.push('changed'));
+    const f = renderComponentFixture(MjCollapsiblePanelComponent, {
+      declarations: [MjCollapsiblePanelComponent],
+      imports: [CommonModule],
+      providers: [{ provide: FormChromeCoordinator, useValue: chrome }],
+      inputs: { SectionName: 'Feature Values', SectionKey: 'featureValues', Form: formStub(true) },
+    });
+    expect(notified).toEqual(['changed']);
+    f.destroy();
+    expect(notified).toEqual(['changed', 'changed']);
+  });
+
+  it('mounts without a coordinator, outside a form container', () => {
+    const f = render({ SectionName: 'Feature Values', SectionKey: 'featureValues', Form: formStub(true) });
+    expect(f.componentInstance.SectionKey).toBe('featureValues');
+    f.destroy();
+  });
+});
+
 describe('MjCollapsiblePanelComponent — where a panel sits', () => {
   const form = (over: Record<string, unknown> = {}) => ({
     ...formStub(true),

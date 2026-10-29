@@ -632,6 +632,7 @@ describe('C1: GetSessionTuningSettings', () => {
                     parallelToolCalls: false,
                     mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
                     inputTranscriptionModel: '  whisper-1  ',
+                    transcriptionLanguages: [' en-US ', '', 'es-US'],
                 },
             },
         });
@@ -640,6 +641,7 @@ describe('C1: GetSessionTuningSettings', () => {
             parallelToolCalls: false,
             mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
             inputTranscriptionModel: 'whisper-1',
+            transcriptionLanguages: ['en-US', 'es-US'],
         });
     });
 
@@ -654,6 +656,7 @@ describe('C1: GetSessionTuningSettings', () => {
         expect(GetSessionTuningSettings({ realtime: { session: {} } })).toBeNull();
         expect(GetSessionTuningSettings({ realtime: { session: { mcpTools: [] } } })).toBeNull();
         expect(GetSessionTuningSettings({ realtime: { session: { inputTranscriptionModel: '   ' } } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { transcriptionLanguages: ['  '] } } })).toBeNull();
     });
 });
 

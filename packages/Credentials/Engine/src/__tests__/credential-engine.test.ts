@@ -278,3 +278,24 @@ describe('CredentialEngine Value Parsing', () => {
         expect(result.scope).toBe('read write');
     });
 });
+
+describe('CredentialEngine Per-User Delegated OAuth (3LO) OwnerUserID Isolation', () => {
+    it('builds deterministic user-scoped credential names and enforces CredentialOwnerMismatchError on cross-user access', async () => {
+        const { CredentialEngine } = await import('../CredentialEngine');
+        const { CredentialOwnerMismatchError } = await import('../expiration');
+
+        const engine = CredentialEngine.Instance;
+        const aliceId = '00000000-0000-0000-0000-00000000A11C';
+        const bobId = '00000000-0000-0000-0000-00000000B0B2';
+
+        const credName = engine.BuildUserDelegatedCredentialName('Microsoft Graph', aliceId);
+        expect(credName).toBe(`UserOAuth3LO:Microsoft Graph:${aliceId.toLowerCase()}`);
+
+        const err = new CredentialOwnerMismatchError(credName, aliceId, bobId);
+        expect(err.name).toBe('CredentialOwnerMismatchError');
+        expect(err.CredentialName).toBe(credName);
+        expect(err.OwnerUserID).toBe(aliceId);
+        expect(err.RequestingUserID).toBe(bobId);
+        expect(err.message).toContain('Cross-user access to delegated OAuth credentials is forbidden');
+    });
+});

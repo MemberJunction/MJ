@@ -62,8 +62,10 @@ flowchart TD
     B -->|No| D{credentialId<br/>provided?}
     D -->|Yes| E["Lookup by ID"]
     D -->|No| F["Lookup by name"]
-    E --> G["Parse & return values<br/>source: database"]
-    F --> G
+    E --> X{Expired?}
+    F --> X
+    X -->|"Yes, policy blocks"| Y["Throw<br/>CredentialExpiredError"]
+    X -->|"No / policy allows"| G["Parse & return values<br/>source: database"]
     G --> H["Log access to Audit Log"]
     H --> I["Update LastUsedAt"]
 
@@ -71,12 +73,197 @@ flowchart TD
     style C fill:#2d8659,stroke:#1a5c3a,color:#fff
     style G fill:#2d8659,stroke:#1a5c3a,color:#fff
     style H fill:#b8762f,stroke:#8a5722,color:#fff
+    style X fill:#7c5295,stroke:#563a6b,color:#fff
+    style Y fill:#a33,stroke:#711,color:#fff
 ```
 
 Resolution priority:
 1. **Direct values** -- `directValues` in options (bypasses database, useful for testing)
 2. **By ID** -- `credentialId` in options (specific credential lookup)
 3. **By name** -- The `credentialName` parameter (most common usage)
+
+A match is then checked against its expiry before its values are decrypted -- see
+[Expiration](#expiration).
+
+## Expiration
+
+A credential may carry an `ExpiresAt` timestamp. Leaving it null means the
+credential never expires.
+
+Expiry is evaluated **at resolution time**, not when the engine loads its cache.
+The engine caches credential rows for the life of the process, so a credential
+that lapses between two calls is caught on the second call rather than staying
+live until the next refresh.
+
+### States
+
+| Status | Meaning | Usable? |
+|---|---|---|
+| `valid` | No expiry, or expiry beyond the warning window | Yes |
+| `expiring-soon` | Expires within the warning window (default 30 days) | Yes, with a warning |
+| `expired` | At or past `ExpiresAt` | Depends on policy -- see below |
+
+The 30-day default warning window matches the window the Credentials dashboard
+already uses for its "expiring soon" KPI, so the number an operator sees in the
+UI and the point at which the engine starts warning are the same.
+
+### Policy
+
+```typescript
+// Set once at application startup, before any credential is resolved.
+CredentialEngine.Instance.ExpirationConfig = {
+    policy: 'block',            // 'block' (default) | 'warn'
+    warningWindowMs: 30 * 24 * 60 * 60 * 1000,
+    graceMs: 0
+};
+```
+
+- **`'block'`** (default) -- `getCredential()` throws `CredentialExpiredError`.
+  This implements the documented contract of the `ExpiresAt` column, that an
+  expired credential is treated as inactive.
+- **`'warn'`** -- the credential is returned anyway, flagged as expired and
+  logged loudly. An escape hatch for cleaning up stale expiry dates, not a safe
+  steady state.
+- **`graceMs`** -- a window after expiry during which `'block'` still lets the
+  credential through, loudly. Use it where a hard cutoff at the expiry instant
+  is riskier than a short, noisy overrun (an overnight batch job that would
+  otherwise fail at midnight with nobody watching). Grace never changes the
+  reported status: a credential inside grace still reports `expired`, so
+  dashboards and audit logs tell the truth.
+
+### Handling expiry as a caller
+
+`getCredential()` distinguishes the two failure modes, so an operator is not
+sent hunting for a record that exists and merely needs rotating:
+
+```typescript
+import { CredentialExpiredError, CredentialNotFoundError } from '@memberjunction/credentials';
+
+try {
+    const cred = await CredentialEngine.Instance.getCredential('OpenAI', { contextUser });
+
+    // A successful resolve does not by itself imply a live credential -- under a
+    // 'warn' policy or inside grace, an expired one still comes back.
+    if (cred.expirationStatus === 'expiring-soon') {
+        notifyOps(`OpenAI credential expires in ${cred.daysUntilExpiration} day(s)`);
+    }
+} catch (e) {
+    if (e instanceof CredentialExpiredError) {
+        // Configuration problem: retrying will not help. Surface it to an operator.
+    } else if (e instanceof CredentialNotFoundError) {
+        // Nothing matched the requested name or ID.
+    }
+}
+```
+
+Callers that keep their own credential lists should ask the engine rather than
+comparing dates by hand, so they inherit the same window and grace period:
+
+```typescript
+const expiration = CredentialEngine.Instance.GetExpirationStatus(credential);
+if (!expiration.usable) {
+    // skip this one and fall back to the next candidate
+}
+```
+
+### Which lookups filter expired credentials
+
+| Method | Expired credentials |
+|---|---|
+| `getCredential()` | Blocked per policy, with `CredentialExpiredError` |
+| `getCredentialByName()` | Excluded |
+| `getDefaultCredentialForType()` | Excluded |
+| `getCredentialById()` | **Returned** -- addressing by primary key is an exact request, and rotation tooling must load an expired record in order to replace it |
+
+Administration and rotation tooling that must read an expired credential can
+also override the policy for a single call:
+
+```typescript
+await CredentialEngine.Instance.getCredential('OpenAI', {
+    contextUser,
+    expirationPolicy: 'warn'   // read the stale value in order to replace it
+});
+```
+
+Every resolution records its `expirationStatus` in the audit log, so an auditor
+can answer "was any credential used while expired?" -- which matters precisely
+where such a use succeeds rather than failing loudly.
+
+## User-delegated (3LO) credentials
+
+Most credentials are shared, application-level secrets. A user-delegated
+credential is different: it holds an OAuth 2.0 token one specific user granted
+through a three-legged (`3LO`) consent flow, and only that user may ever read it.
+The engine stores these as ordinary `MJ: Credentials` rows with two extra rules:
+a reserved naming convention and an owner binding carried inside the encrypted
+`Values`. The flow that produces the token lives in `@memberjunction/core-actions`
+(`CommunicationUserOAuthService`) and is a prototype that is off by default; this
+section covers only the storage side.
+
+### Naming and stored shape
+
+The name is built by `BuildUserDelegatedCredentialName(providerName, ownerUserId)`
+and is always `UserOAuth3LO:<provider>:<ownerUserId>` (provider trimmed, user ID
+lower-cased), so one row exists per user per provider and a rotation overwrites
+rather than accumulates.
+
+`Values` is a `UserDelegatedOAuthCredentialValues` object: `ownerUserId`,
+`principalEmail`, `providerName`, `accessToken`, `refreshToken`, `tokenType`,
+`scope`, `tenantId`, `issuedAt`. Unless `credentialTypeName` is given, the row is
+filed under the `OAuth2 Client Credentials` type; it is never `IsDefault`.
+
+### Owner binding
+
+`ownerUserId` is the binding. On store, it must equal `contextUser.ID`; on read
+or revoke, the stored value must equal `contextUser.ID`. Any mismatch -- including
+a missing `contextUser` -- throws `CredentialOwnerMismatchError` (a
+`CredentialResolutionError` carrying `CredentialName`, `OwnerUserID` and
+`RequestingUserID`). An administrator does not get a bypass: the check is on the
+user identity, not a permission.
+
+### The four methods
+
+```typescript
+import { CredentialEngine, CredentialOwnerMismatchError } from '@memberjunction/credentials';
+
+const engine = CredentialEngine.Instance;
+
+// Store or rotate -- ownerUserId must be the calling user
+await engine.StoreUserDelegatedCredential({
+    providerName: 'Microsoft Graph',
+    ownerUserId: contextUser.ID,
+    principalEmail: contextUser.Email,
+    accessToken, refreshToken, scope, tenantId,
+    expiresAt: new Date(Date.now() + expiresInSeconds * 1000)
+}, contextUser);
+
+// Read -- null when the user has no active credential for this provider
+const cred = await engine.GetUserDelegatedCredential('Microsoft Graph', contextUser);
+if (cred) {
+    callGraph(cred.values.accessToken);
+}
+
+// Revoke -- deactivates the row and replaces the token values with { ownerUserId, revokedAt }
+const revoked = await engine.RevokeUserDelegatedCredential('Microsoft Graph', contextUser);
+```
+
+Each write is audit-logged under the `UserDelegatedOAuth3LO` subsystem (`Create`,
+`Update` or `Delete`), and `GetUserDelegatedCredential` goes through
+`GetCredential`, so reads inherit expiry enforcement and `Decrypt` audit entries.
+
+### Which paths can reach a delegated credential
+
+| Method | Behavior |
+|---|---|
+| `GetUserDelegatedCredential()` | Resolves the caller's own row; owner check via `GetCredential` |
+| `GetCredential(name, { contextUser })` | Any credential whose values carry `ownerUserId` throws `CredentialOwnerMismatchError` for another user |
+| `StoreUserDelegatedCredential()` / `RevokeUserDelegatedCredential()` | Owner check on the caller **and** on the stored `ownerUserId` of an existing row before it is mutated; the whole find-then-upsert is serialized per credential name, so concurrent first-time stores produce one row |
+| `GetCredentialById()`, `GetCredentialByName()`, `GetDefaultCredentialForType()`, the `Credentials` getter | **Never return a delegated row.** Rows whose name starts with `UserOAuth3LO:` are filtered out, so shared app-level lookups cannot hand out another user's decrypted token |
+
+The rule for callers is therefore: **always resolve a delegated credential through
+`GetUserDelegatedCredential` or `GetCredential(name, { contextUser })`.** The
+shared accessors are for application and provider credentials only; a delegated
+credential looked up through them is simply not found.
 
 ## Pre-defined Credential Types
 

@@ -217,6 +217,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string; Success?: boolean };
     /** Only set on the fakes exercising `describeSaveFailure`'s "no failure detail recorded" branches. */
     ResultHistory?: unknown[];
+    /** The fork a conversation-detail fake is written on (null is Main). */
+    BranchID?: string | null;
 }
 
 /**
@@ -231,14 +233,24 @@ afterEach(() => {
     errSpy = undefined;
 });
 
+const makeTestUuid = (a: string, b: string) =>
+    [a.repeat(8), b.repeat(4), '4' + b.repeat(3), '8' + b.repeat(3), b.repeat(12)].join('-');
+const PRIOR_1 = makeTestUuid('1', '1');
+const PRIOR_2 = makeTestUuid('2', '2');
+const PRIOR_A = makeTestUuid('a', 'a');
+const PRIOR_B = makeTestUuid('b', 'b');
+const PRIOR_GONE = makeTestUuid('9', '9');
+
 function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
     return {
         ID: 'session-1',
         Status: 'Active',
         ConversationID: 'conv-1',
+        ExternalID: 'scope-res-1',
         UserID: 'user-1',
         Config_: JSON.stringify({ targetAgentID: 'target-1' }),
         NewRecord: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(),
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
         LatestResult: { CompleteMessage: '' },
@@ -370,6 +382,95 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(result.EphemeralToken).toBe('ek_abc');
         expect(result.ExpiresAt).toBe('2026-01-01T00:00:00Z');
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
+    });
+
+    describe('recording consent at start (#6010)', () => {
+        const RECORDING_SESSION_ID = 'a1a1a1a1-0000-4000-8000-000000000001';
+        const STARTED_AT = '2026-10-01T00:00:00.000Z';
+
+        /** A provider that can run the ledger's proc, recording every SQL call; `failSql` makes it throw. */
+        function makeSqlProvider(failSql = false) {
+            const sqlCalls: { Sql: string; Params: unknown[] }[] = [];
+            const provider = {
+                ...(makeProvider(() => makeSessionEntity()) as object),
+                MJCoreSchemaName: '__mj',
+                Dialect: {
+                    ProcedureCallSyntax: (schema: string, name: string, params: string[]) => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
+                    ParameterPlaceholder: (index: number) => `@p${index}`,
+                },
+                ExecuteSQL: vi.fn(async (sql: string, params: unknown[]) => {
+                    sqlCalls.push({ Sql: sql, Params: params });
+                    if (failSql) throw new Error('proc exploded');
+                    return [{ RecordingStatus: null }];
+                }),
+            };
+            return { provider, sqlCalls };
+        }
+
+        async function startWithConsent(provider: unknown) {
+            currentProvider = provider;
+            const createdSession = makeSessionEntity({ ID: RECORDING_SESSION_ID });
+            createSessionMock.mockResolvedValue(createdSession);
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            const result = await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+            return { createdSession, result };
+        }
+
+        /** The one stamp-proc call the start made, with its positional params. */
+        function onlyStamp(sqlCalls: { Sql: string; Params: unknown[] }[]): unknown[] {
+            const stamps = sqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
+            expect(stamps).toHaveLength(1);
+            return stamps[0].Params;
+        }
+
+        it('saves RecordingStartedAt through the entity and stamps RecordingMedia and t0 through the ledger proc', async () => {
+            const { provider, sqlCalls } = makeSqlProvider();
+            const { createdSession } = await startWithConsent(provider);
+
+            expect((createdSession.RecordingStartedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.Save).toHaveBeenCalled();
+            const [sessionID, fileID, media, startedAt] = onlyStamp(sqlCalls);
+            expect([sessionID, fileID, media]).toEqual([RECORDING_SESSION_ID, null, 'Audio']);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.RecordingMedia).toBeUndefined();
+        });
+
+        it('still stamps t0 through the ledger proc when the entity save fails (the janitor recovers only sessions with a t0)', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider, sqlCalls } = makeSqlProvider();
+            createSessionMock.mockReset();
+            const failing = makeSessionEntity({
+                ID: RECORDING_SESSION_ID,
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'save refused' },
+            });
+            createSessionMock.mockResolvedValue(failing);
+            currentProvider = provider;
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+
+            const [, , , startedAt] = onlyStamp(sqlCalls);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
+        });
+
+        it('does not fail the session start when the media stamp throws, and logs it with the session id', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider } = makeSqlProvider(true);
+            const { result } = await startWithConsent(provider);
+
+            expect(result.AgentSessionId).toBe(RECORDING_SESSION_ID);
+            expect(errSpy?.mock.calls.some((c) => String(c[0]).includes(RECORDING_SESSION_ID) && String(c[0]).includes('proc exploded'))).toBe(true);
+        });
     });
 
     it('threads preferredModelId to the prepare service and surfaces ModelName + narration template', async () => {
@@ -977,6 +1078,26 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
     });
 
+    it("writes the turn on the session's fork", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-t' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7', Config_: JSON.stringify({ targetAgentID: 'target-1', conversationBranchID: 'b1' }) });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBe('b1');
+    });
+
+    it('writes the turn on Main when the session has no fork', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-m' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7' });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBeNull();
+    });
+
     it("maps a non-user role to 'AI'", async () => {
         const detail = makeSessionEntity({ ID: 'detail-2' });
         const session = makeSessionEntity();
@@ -987,6 +1108,39 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
 
         await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'response', makeCtx());
         expect(detail.Role).toBe('AI');
+        // The agent's side of the transcript is the server's write: unmarked, the reply gate refuses it.
+        expect(detail.MarkServerAuthoredReply).toHaveBeenCalled();
+    });
+
+    /** A19: the agent's words come from the browser here, so they are stored only in the caller's own conversation. */
+    it("does not store the agent's side in a conversation the caller doesn't own, while still mirroring to the prompt run, heartbeating, and storing their own side", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-shared' });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
+        const session = makeSessionEntity({
+            ConversationID: 'conv-shared',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
+        });
+        const conversation = makeSessionEntity({ ID: 'conv-shared', UserID: 'the-owner' });
+        currentProvider = makeProvider(
+            (name) => {
+                if (name === 'MJ: Conversation Details') return detail;
+                if (name === 'MJ: Conversations') return conversation;
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                return session;
+            },
+            sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
+        );
+        const resolver = makeResolver();
+
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'words the agent never said', makeCtx())).toBe(false);
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'a correction', makeCtx(), true)).toBe(false);
+        expect(detail.Save).not.toHaveBeenCalled();
+        expect(conversation.Load).toHaveBeenCalledWith('conv-shared');
+        expect(promptRun.Save).toHaveBeenCalled();
+        expect(heartbeatMock).toHaveBeenCalledTimes(2);
+
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'user', 'my own words', makeCtx())).toBe(true);
+        expect(detail.Role).toBe('User');
     });
 
     it("maps role case/whitespace-insensitively (' USER ' → 'User')", async () => {
@@ -1427,12 +1581,21 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
      */
     function makeRestoreProvider(opts: {
         prior?: FakeSession;
+        externalId?: string | null;
         rows?: Array<{ Channel: string; Config: string | null }>;
         runViewResult?: { Success: boolean; ErrorMessage?: string; Results?: unknown[] };
     }): { provider: unknown; runView: ReturnType<typeof vi.fn>; prior: FakeSession } {
-        const prior = opts.prior ?? makeSessionEntity({ ID: 'prior-1', UserID: 'user-1' });
+        const prior = opts.prior ?? makeSessionEntity({ ID: PRIOR_1, UserID: 'user-1' });
+        const conversation = makeSessionEntity({ ExternalID: opts.externalId ?? prior.ExternalID ?? 'scope-res-1' });
         const runView = vi.fn(async () => opts.runViewResult ?? { Success: true, Results: opts.rows ?? [] });
-        return { provider: { GetEntityObject: vi.fn(async () => prior), RunView: runView }, runView, prior };
+        return {
+            provider: {
+                GetEntityObject: vi.fn(async (name?: string) => (name === 'MJ: Conversations' ? conversation : prior)),
+                RunView: runView,
+            },
+            runView,
+            prior,
+        };
     }
 
     function setupHappyStart(): void {
@@ -1453,7 +1616,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.PriorChannelStatesJson).toBeDefined();
         expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({
@@ -1462,7 +1625,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         });
         // lastSessionId still flows into the new durable session record.
         const createArg = createSessionMock.mock.calls[0][0] as { lastSessionID?: string };
-        expect(createArg.lastSessionID).toBe('prior-1');
+        expect(createArg.lastSessionID).toBe(PRIOR_1);
     });
 
     /** RunView calls that hit the session-channel restore query (the only RunView in the start flow). */
@@ -1485,16 +1648,53 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
     it('omits the field (no state leak, no query) when the prior session belongs to ANOTHER user', async () => {
         setupHappyStart();
         const { provider, runView } = makeRestoreProvider({
-            prior: makeSessionEntity({ ID: 'prior-1', UserID: 'someone-else' }),
+            prior: makeSessionEntity({ ID: PRIOR_1, UserID: 'someone-else' }),
             rows: [{ Channel: 'Whiteboard', Config: '{"secret":true}' }],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
         expect(restoreQueryCalls(runView)).toHaveLength(0);
+    });
+
+    it('skips restore for a second anonymous visitor (same UserID, different AnonymousVisitorID) and allows the matching anonymous visitor', async () => {
+        setupHappyStart();
+        const anonGuest = (visitorId: string): UserInfo =>
+            ({
+                ID: 'anon-1',
+                Email: 'anonymous@magic-link.local',
+                IsMagicLinkAnonymous: true,
+                // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
+                AnonymousVisitorID: visitorId,
+            }) as unknown as UserInfo;
+        const makeAnonResolver = (visitorId: string): RealtimeClientSessionResolver => {
+            const r = new RealtimeClientSessionResolver();
+            (r as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => anonGuest(visitorId);
+            return r;
+        };
+
+        const { provider: provider2, runView: runView2 } = makeRestoreProvider({
+            prior: makeSessionEntity({ ID: PRIOR_1, UserID: 'anon-1', ExternalID: 'visitor-1' }),
+            externalId: 'visitor-1',
+            rows: [{ Channel: 'Whiteboard', Config: '{"secret":true}' }],
+        });
+        currentProvider = provider2;
+        const refusedResult = await makeAnonResolver('visitor-2').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(refusedResult.PriorChannelStatesJson).toBeUndefined();
+        expect(restoreQueryCalls(runView2)).toHaveLength(0);
+
+        setupHappyStart();
+        const { provider: provider1 } = makeRestoreProvider({
+            prior: makeSessionEntity({ ID: PRIOR_1, UserID: 'anon-1', ExternalID: 'visitor-1' }),
+            externalId: 'visitor-1',
+            rows: [{ Channel: 'Whiteboard', Config: '{"items":[1]}' }],
+        });
+        currentProvider = provider1;
+        const allowedResult = await makeAnonResolver('visitor-1').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(allowedResult.PriorChannelStatesJson).toBe(JSON.stringify({ Whiteboard: '{"items":[1]}' }));
     });
 
     it('omits the field when the prior session does not exist', async () => {
@@ -1505,7 +1705,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-gone');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_GONE);
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
         expect(restoreQueryCalls(runView)).toHaveLength(0);
@@ -1517,7 +1717,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
         expect(result.PriorChannelStatesJson).toBeUndefined();
     });
 
@@ -1532,7 +1732,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({ Whiteboard: '{"items":[]}' });
     });
@@ -1548,7 +1748,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         const states = JSON.parse(result.PriorChannelStatesJson as string) as Record<string, string>;
         expect(Object.keys(states)).toEqual(['First']);
@@ -1560,7 +1760,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-restore');
         expect(result.PriorChannelStatesJson).toBeUndefined();
@@ -1576,7 +1776,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         };
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-restore');
         expect(result.PriorChannelStatesJson).toBeUndefined();
@@ -2022,6 +2222,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     interface ChainRow {
         UserID: string;
         LastSessionID?: string | null;
+        ExternalID?: string | null;
     }
 
     interface DetailQueryRow {
@@ -2050,7 +2251,16 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
             return { Success: true, Results: [] }; // session-channel restore — none
         });
         const provider = {
-            GetEntityObject: vi.fn(async () => {
+            GetEntityObject: vi.fn(async (entityName?: string) => {
+                if (entityName === 'MJ: Conversations') {
+                    const conv = makeSessionEntity();
+                    conv.Load = vi.fn(async (convId: string) => {
+                        const row = opts.chain[convId];
+                        conv.ExternalID = row?.ExternalID ?? 'scope-res-1';
+                        return true;
+                    });
+                    return conv;
+                }
                 const entity = makeSessionEntity();
                 entity.Load = vi.fn(async (id: string) => {
                     const row = opts.chain[id];
@@ -2058,6 +2268,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
                         return false;
                     }
                     entity.ID = id;
+                    entity.ConversationID = id;
                     entity.UserID = row.UserID;
                     entity.LastSessionID = row.LastSessionID ?? null;
                     return true;
@@ -2086,13 +2297,13 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('threads the prior leg\'s role-tagged transcript into PrepareClientSession.PriorTranscript', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [PRIOR_1]: { UserID: 'user-1' } },
             detailRows: [turn('User', 'hello there'), turn('AI', 'hi! how can I help?')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(prepTranscriptArg()).toBe('User: hello there\nAssistant: hi! how can I help?');
     });
@@ -2101,23 +2312,23 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         setupHappyStart();
         const { provider, runView } = makeHydrationProvider({
             chain: {
-                'prior-2': { UserID: 'user-1', LastSessionID: 'prior-1' },
-                'prior-1': { UserID: 'user-1' },
+                [PRIOR_2]: { UserID: 'user-1', LastSessionID: PRIOR_1 },
+                [PRIOR_1]: { UserID: 'user-1' },
             },
             detailRows: [turn('User', 'first leg'), turn('AI', 'second leg')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-2');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
 
         const detailCall = runView.mock.calls.find(
             (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Details',
         );
         expect(detailCall).toBeDefined();
         const filter = (detailCall![0] as { ExtraFilter: string }).ExtraFilter;
-        expect(filter).toContain("'prior-2'");
-        expect(filter).toContain("'prior-1'");
+        expect(filter).toContain(`'${PRIOR_2}'`);
+        expect(filter).toContain(`'${PRIOR_1}'`);
         expect(prepTranscriptArg()).toBe('User: first leg\nAssistant: second leg');
     });
 
@@ -2125,15 +2336,15 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         setupHappyStart();
         const { provider } = makeHydrationProvider({
             chain: {
-                'prior-a': { UserID: 'user-1', LastSessionID: 'prior-b' },
-                'prior-b': { UserID: 'user-1', LastSessionID: 'prior-a' },
+                [PRIOR_A]: { UserID: 'user-1', LastSessionID: PRIOR_B },
+                [PRIOR_B]: { UserID: 'user-1', LastSessionID: PRIOR_A },
             },
             detailRows: [turn('User', 'looped once')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-a');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_A);
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBe('User: looped once');
@@ -2142,11 +2353,11 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('keeps only the NEWEST 30 turns (oldest dropped)', async () => {
         setupHappyStart();
         const rows = Array.from({ length: 35 }, (_, i) => turn('User', `turn ${i}`, `d-${i}`));
-        const { provider } = makeHydrationProvider({ chain: { 'prior-1': { UserID: 'user-1' } }, detailRows: rows });
+        const { provider } = makeHydrationProvider({ chain: { [PRIOR_1]: { UserID: 'user-1' } }, detailRows: rows });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         const lines = (prepTranscriptArg() ?? '').split('\n');
         expect(lines).toHaveLength(30);
@@ -2158,11 +2369,11 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         setupHappyStart();
         // 10 turns of 1000 chars each — only the newest ~7 fit the 8000-char budget.
         const rows = Array.from({ length: 10 }, (_, i) => turn('User', `${i}`.padEnd(1000, 'x'), `d-${i}`));
-        const { provider } = makeHydrationProvider({ chain: { 'prior-1': { UserID: 'user-1' } }, detailRows: rows });
+        const { provider } = makeHydrationProvider({ chain: { [PRIOR_1]: { UserID: 'user-1' } }, detailRows: rows });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         const transcript = prepTranscriptArg() ?? '';
         expect(transcript.length).toBeLessThanOrEqual(8000);
@@ -2175,7 +2386,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('skips hidden, error-role, and empty rows', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [PRIOR_1]: { UserID: 'user-1' } },
             detailRows: [
                 { ID: 'd-1', Role: 'Error', Message: 'boom', HiddenToUser: false },
                 { ID: 'd-2', Role: 'AI', Message: 'secret', HiddenToUser: true },
@@ -2187,7 +2398,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(prepTranscriptArg()).toBe('User: visible');
     });
@@ -2206,50 +2417,85 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('omits PriorTranscript (no leak) when the prior session belongs to ANOTHER user', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'someone-else' } },
+            chain: { [PRIOR_1]: { UserID: 'someone-else' } },
             detailRows: [turn('User', 'their words')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(prepTranscriptArg()).toBeUndefined();
+    });
+
+    it('skips prior legs owned by a different anonymous visitor (same UserID, different AnonymousVisitorID) and allows the matching visitor', async () => {
+        setupHappyStart();
+        const anonGuest = (visitorId: string): UserInfo =>
+            ({
+                ID: 'anon-1',
+                Email: 'anonymous@magic-link.local',
+                IsMagicLinkAnonymous: true,
+                // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
+                AnonymousVisitorID: visitorId,
+            }) as unknown as UserInfo;
+        const makeAnonResolver = (visitorId: string): RealtimeClientSessionResolver => {
+            const r = new RealtimeClientSessionResolver();
+            (r as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => anonGuest(visitorId);
+            return r;
+        };
+
+        const { provider: provider2 } = makeHydrationProvider({
+            chain: { [PRIOR_1]: { UserID: 'anon-1', ExternalID: 'visitor-1' } },
+            detailRows: [turn('User', 'visitor 1 secret')],
+        });
+        currentProvider = provider2;
+        await makeAnonResolver('visitor-2').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(prepTranscriptArg()).toBeUndefined();
+
+        prepareClientSessionMock.mockClear();
+        setupHappyStart();
+        const { provider: provider1 } = makeHydrationProvider({
+            chain: { [PRIOR_1]: { UserID: 'anon-1', ExternalID: 'visitor-1' } },
+            detailRows: [turn('User', 'visitor 1 secret')],
+        });
+        currentProvider = provider1;
+        await makeAnonResolver('visitor-1').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(prepTranscriptArg()).toBe('User: visitor 1 secret');
     });
 
     it('stops the chain walk at the first UNOWNED deeper leg but keeps the owned legs', async () => {
         setupHappyStart();
         const { provider, runView } = makeHydrationProvider({
             chain: {
-                'prior-2': { UserID: 'user-1', LastSessionID: 'prior-1' },
-                'prior-1': { UserID: 'someone-else' },
+                [PRIOR_2]: { UserID: 'user-1', LastSessionID: PRIOR_1 },
+                [PRIOR_1]: { UserID: 'someone-else' },
             },
             detailRows: [turn('User', 'owned leg only')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-2');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
 
         const detailCall = runView.mock.calls.find(
             (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Details',
         );
         const filter = (detailCall![0] as { ExtraFilter: string }).ExtraFilter;
-        expect(filter).toContain("'prior-2'");
-        expect(filter).not.toContain("'prior-1'");
+        expect(filter).toContain(`'${PRIOR_2}'`);
+        expect(filter).not.toContain(`'${PRIOR_1}'`);
         expect(prepTranscriptArg()).toBe('User: owned leg only');
     });
 
     it('tolerates a failed details query (start succeeds, no hydration)', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [PRIOR_1]: { UserID: 'user-1' } },
             detailQueryFails: true,
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBeUndefined();
@@ -2265,7 +2511,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         };
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBeUndefined();
@@ -3084,6 +3330,7 @@ describe('RealtimeClientSessionResolver — delegated runs get the browser sessi
             ID: 'anon-1',
             Email: 'anonymous@magic-link.local',
             IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'scope-res-1',
             MagicLinkScope: { ResourceID: 'scope-res-1' },
         } as UserInfo;
         /** A resolver whose caller is a scoped anonymous magic-link visitor. */
@@ -3135,6 +3382,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         ID: 'anon-1',
         Email: 'anonymous@magic-link.local',
         IsMagicLinkAnonymous: true,
+        AnonymousVisitorID: 'scope-res-1',
         MagicLinkScope: { ResourceID: 'scope-res-1' },
     };
     const SYSTEM_USER = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
@@ -3347,6 +3595,33 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
     });
 
+    it("does not write a hidden tool-turn Conversation Detail in a conversation the caller doesn't own, while still mirroring to the prompt run", async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            ConversationID: 'conv-shared',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
+        });
+        const conversation = makeSessionEntity({ ID: 'conv-shared', UserID: 'someone-else' });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
+        const detail = makeSessionEntity({ ID: 'detail-shared-tool' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                if (name === 'MJ: Conversations') return conversation;
+                if (name === 'MJ: Conversation Details') return detail;
+                return session;
+            }),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{"url":"x"}');
+
+        expect(ok).toBe(true);
+        expect(promptRun.Save).toHaveBeenCalled();
+        expect(detail.Save).not.toHaveBeenCalled();
+    });
+
     it('prepares the session with observability under the SYSTEM user while UserID stays the visitor', async () => {
         hasPermissionMock.mockResolvedValue(true);
         currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'anon-1' }));
@@ -3482,6 +3757,24 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('Service Accounts do not have storage quota');
         // The shards survive a failed consolidation — there is nothing consolidated to replace them.
+        expect(deleteSegmentsMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a file that uploaded but was not stamped on the session as a failure and keeps the shards', async () => {
+        // The store returns the uploaded file id together with the stamp failure (#6010): the session does not
+        // point at the file, so the crash-recovery shards are the only copy the janitor can still recover.
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({
+            FileID: 'file-unstamped',
+            ErrorMessage: 'file file-unstamped uploaded and linked, but not stamped on session session-1: proc missing',
+        });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.FileID).toBe('file-unstamped');
+        expect(result.ErrorMessage).toContain('not stamped on session session-1');
         expect(deleteSegmentsMock).not.toHaveBeenCalled();
     });
 
@@ -3706,6 +3999,7 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
             ID: 'anon-1',
             Email: 'anonymous@magic-link.local',
             IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'scope-res-1',
             MagicLinkScope: { ResourceID: 'scope-res-1' },
         };
         currentProvider = makeProvider(() => makeMultiTargetSession('anon-1'));
@@ -3779,18 +4073,36 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         return { ID: `h-${message ?? 'x'}`, Role: role, Message: message, HiddenToUser: false, AgentSessionID: null, ...over };
     }
 
+    /** A `MJ: Conversation Branches` row as the branch-path read selects it. */
+    interface BranchRow {
+        ID: string;
+        ConversationID: string;
+        ParentBranchID: string | null;
+        ForkFromSequence: number | null;
+        Name: string | null;
+    }
+
     /**
      * Provider that answers BOTH Conversation Details queries separately: the prior-leg transcript
-     * (filtered by `AgentSessionID IN (…)`) and the conversation history (`ConversationID=…`).
-     * Routing on the filter is what keeps the two from being confused for one another.
+     * (filtered by `AgentSessionID IN (…)`) and the conversation history (the session's path filter).
+     * Routing on the filter is what keeps the two from being confused for one another. It also
+     * serves the conversation's branch rows, which the start reads to check the named fork and
+     * to build its path.
      */
     function makeProvider(opts: {
         chain?: Record<string, { UserID: string; LastSessionID?: string | null }>;
         legRows?: Array<{ ID: string; Role: string; Message: string | null; HiddenToUser: boolean }>;
         historyRows?: HistoryRow[];
         historyFails?: boolean;
+        branchRows?: BranchRow[];
+        branchesFail?: boolean;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
         const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: Conversation Branches') {
+                return opts.branchesFail
+                    ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                    : { Success: true, Results: opts.branchRows ?? [] };
+            }
             if (params.EntityName === 'MJ: Conversation Details') {
                 if (params.ExtraFilter?.startsWith('AgentSessionID IN')) {
                     return { Success: true, Results: opts.legRows ?? [] };
@@ -3802,7 +4114,10 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
             return { Success: true, Results: [] };
         });
         const provider = {
-            GetEntityObject: vi.fn(async () => {
+            GetEntityObject: vi.fn(async (entityName: string) => {
+                if (entityName === 'MJ: Conversations') {
+                    return makeSessionEntity();
+                }
                 const entity = makeSessionEntity();
                 entity.Load = vi.fn(async (id: string) => {
                     const r = opts.chain?.[id];
@@ -3817,6 +4132,15 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
             RunView: runView,
         };
         return { provider, runView };
+    }
+
+    /** The history read: the Conversation Details query that is not the prior-leg lookup. */
+    function historyCall(runView: ReturnType<typeof vi.fn>): { ExtraFilter: string; OrderBy: string } | undefined {
+        const call = runView.mock.calls.find((c) => {
+            const params = c[0] as { EntityName: string; ExtraFilter?: string };
+            return params.EntityName === 'MJ: Conversation Details' && !params.ExtraFilter?.startsWith('AgentSessionID IN');
+        });
+        return call?.[0] as { ExtraFilter: string; OrderBy: string } | undefined;
     }
 
     function historyArg(): Array<{ role: string; content: unknown }> {
@@ -3856,17 +4180,62 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         ]);
     });
 
-    it('scopes the read to the session\'s conversation', async () => {
+    /** Starts a session on `conversationId`, optionally on a fork (the mutation's last argument). */
+    function start(conversationId: string, forkId?: string): Promise<{ AgentSessionId: string }> {
+        return makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), conversationId,
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, forkId,
+        );
+    }
+
+    it('reads Main when the start names no fork, with the apostrophe doubled once', async () => {
         const { provider, runView } = makeProvider({ historyRows: [row('User', 'hi')] });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
+        await start("conv-o'brien");
 
-        const call = runView.mock.calls.find(
-            (c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='),
-        );
-        // The apostrophe must be doubled, not passed through — this string is concatenated into SQL.
-        expect((call![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
+        expect(historyCall(runView)).toMatchObject({ ExtraFilter: "[ConversationID]='conv-o''brien' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL", OrderBy: 'Sequence ASC' });
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Branches')).toBe(false);
+        expect(historyArg()).toEqual([{ role: 'user', content: 'hi' }]);
+    });
+
+    it('reads the path of the fork the start names, and stores the fork on the session', async () => {
+        const { provider, runView } = makeProvider({
+            historyRows: [row('User', 'in the fork')],
+            branchRows: [{ ID: 'b1', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 4, Name: null }],
+        });
+        currentProvider = provider;
+
+        await start('conv-1', 'B1');
+
+        expect(historyCall(runView)).toMatchObject({
+            ExtraFilter: "[ConversationID]='conv-1' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4)) AND [ReplacedAt] IS NULL",
+            OrderBy: 'Sequence ASC',
+        });
+        const config = JSON.parse((createSessionMock.mock.calls.at(-1)![0] as { config: string }).config) as { conversationBranchID?: string };
+        expect(config.conversationBranchID).toBe('b1');
+    });
+
+    it.each([
+        ['the fork is not a fork of the conversation', { branchRows: [] }],
+        ['the fork rows cannot be read', { branchesFail: true }],
+    ])('refuses the start when %s', async (_label, opts) => {
+        const { provider } = makeProvider({ historyRows: [row('User', 'never read')], ...opts });
+        currentProvider = provider;
+        const sessionsBefore = createSessionMock.mock.calls.length;
+
+        await expect(start('conv-1', 'b1')).rejects.toThrow(/fork b1/);
+        expect(createSessionMock.mock.calls.length).toBe(sessionsBefore);
+    });
+
+    it('refuses a fork without a conversation', async () => {
+        const { provider } = makeProvider({});
+        currentProvider = provider;
+
+        await expect(makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'b1',
+        )).rejects.toThrow(/needs a conversation/);
     });
 
     it('skips hidden rows, error rows, and empty messages', async () => {
@@ -3902,17 +4271,18 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
     it('DROPS turns the resumed transcript already framed, so the prompt carries one account of them', async () => {
         // The whole reason the leg ids travel with the prior transcript. A voice turn is an ordinary
         // Conversation Detail, so without this the resumed leg arrives twice in one prompt.
+        const prior1 = '00000000-0000-0000-0000-000000000501';
         const { provider } = makeProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [prior1]: { UserID: 'user-1' } },
             legRows: [{ ID: 'l-1', Role: 'User', Message: 'said on the last call', HiddenToUser: false }],
             historyRows: [
-                row('User', 'said on the last call', { AgentSessionID: 'prior-1' }),
+                row('User', 'said on the last call', { AgentSessionID: prior1 }),
                 row('User', 'typed afterwards'),
             ],
         });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', 'prior-1');
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', prior1);
 
         expect(historyArg().map((m) => m.content)).toEqual(['typed afterwards']);
         const prior = (prepareClientSessionMock.mock.calls[0][0] as { PriorTranscript?: string }).PriorTranscript;
@@ -3922,14 +4292,16 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
     it('matches covered session ids case-insensitively', async () => {
         // SQL Server returns uppercase ids and PostgreSQL lowercase; a case-sensitive compare would
         // double-inject the resumed leg on one of the two.
+        const prior1Lower = '00000000-0000-0000-0000-000000000501';
+        const prior1Upper = prior1Lower.toUpperCase();
         const { provider } = makeProvider({
-            chain: { 'PRIOR-1': { UserID: 'user-1' } },
+            chain: { [prior1Upper]: { UserID: 'user-1' } },
             legRows: [{ ID: 'l-1', Role: 'User', Message: 'said on the last call', HiddenToUser: false }],
-            historyRows: [row('User', 'said on the last call', { AgentSessionID: 'prior-1' })],
+            historyRows: [row('User', 'said on the last call', { AgentSessionID: prior1Lower })],
         });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', 'PRIOR-1');
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', prior1Upper);
 
         expect(historyArg()).toEqual([]);
     });
@@ -3977,7 +4349,8 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
 
         expect(historyArg()).toEqual([]);
-        expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
+        expect(historyCall(runView)).toBeUndefined();
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversations')).toBe(false);
     });
 });
 

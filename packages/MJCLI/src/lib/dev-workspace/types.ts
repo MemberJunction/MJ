@@ -44,6 +44,13 @@ export interface MemberPackageJson {
   devDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   peerDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   pnpm?: MemberPnpmBlock;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Read by doctor's build-output check: a package with no `build` script has no output to check. */
+  scripts?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Entry points, read by doctor's build-output check to find where a package builds to. */
+  main?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  module?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** A string, or a conditions object whose `.` entry names the root export — any other shape is ignored. */
+  exports?: unknown;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** One package.json found under a member repo's workspace globs. */
@@ -58,10 +65,13 @@ export interface MjAppPackageEntry {
   name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /**
    * One of the manifest schema's seven roles (`bootstrap`, `actions`, `engine`, `provider`, `module`,
-   * `components`, `library`). Read for reporting only — the host's client emitter applies NO role
-   * filter, so role never decides whether a package must be linked. See `readShellImportedEntries`.
+   * `components`, `library`). Read for reporting, and as the fallback for `platform` below when a
+   * manifest leaves it unset: `role: 'actions'` defaults to `platform: 'node'`, every other role to
+   * `'both'`. See `readShellImportedEntries`.
    */
   role?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  /** See ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts. */
+  platform?: 'node' | 'browser' | 'both';  // case-violation-ok-legacy-back-compat: mirrors the `platform` key of a member's mj-app.json, read off parsed JSON; a rename compiles and silently reads undefined
   startupExport?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
@@ -87,9 +97,10 @@ export interface MjAppJson {
 /**
  * A client-side package an Open App member declares in its own `mj-app.json`.
  *
- * Collected from `packages.client[]` AND `packages.shared[]`, at every role, because that is exactly
- * the set the host emits into `dynamicPackages.client` and therefore the set an app shell imports
- * without ever declaring. `packages.server[]` is excluded: the host routes it to
+ * Collected from `packages.client[]` AND `packages.shared[]`, at every role except those whose
+ * platform excludes the browser (#4428), because that is exactly the set the host emits into
+ * `dynamicPackages.client` and therefore the set an app shell imports without ever declaring.
+ * `packages.server[]` is excluded: the host routes it to
  * `dynamicPackages.server`, a Node process that resolves importer-relative, not from the vite root.
  */
 export interface OpenAppClientPackage {
@@ -154,12 +165,33 @@ export interface ClientPackageCensus {
    * Members whose `mj-app.json` could not be parsed, so their declarations are unknown.
    *
    * Carried rather than thrown because `doctor` diagnoses where `generate` writes: aborting the
-   * whole report over one unreadable file costs the nine checks that have nothing to do with it —
+   * whole report over one unreadable file costs the ten checks that have nothing to do with it —
    * the one-copy census and standalone-install detection especially, which are the reason someone
    * runs doctor in the first place. `generate` still refuses outright, which is correct: it emits a
    * manifest and must not do so from a declaration it could not read.
    */
   Unreadable: Array<{ Repo: string; Message: string }>;
+}
+
+/**
+ * Build state of one member package, as doctor's build-output check reads it.
+ *
+ * `missing`: the package's entry file (or, with no entry declared, its `dist/`) does not exist.
+ * `stale`: a source file is newer than every file in the output folder.
+ * `fresh`: the output exists and is at least as new as the newest source file.
+ */
+export type BuildOutputState = 'missing' | 'stale' | 'fresh';
+
+/** One member package that has a `build` script and a `src/` folder, with its build state. */
+export interface BuildOutputEntry {
+  Package: string;
+  /** Member repo directory that provides it. */
+  Repo: string;
+  /** Package directory relative to the repo root, e.g. `packages/Angular`. */
+  RelPath: string;
+  /** Output folder relative to the package directory, e.g. `dist`. */
+  OutputDir: string;
+  State: BuildOutputState;
 }
 
 /** One dependency resolution read from a member's committed lockfile. */

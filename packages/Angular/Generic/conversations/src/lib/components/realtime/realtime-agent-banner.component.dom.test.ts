@@ -121,4 +121,16 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(startLive).toHaveLength(1);
     expect(closes).toHaveLength(1);
   });
+
+  it('leaves out the start-live action, but keeps Close, when ShowStartLive is off', () => {
+    const f = render({ State: 'closed', ReviewMode: true, AgentName: 'Sage', ShowStartLive: false });
+    expect(query(f, '.start-live-pill')).toBeNull();
+    expect(query(f, '.bar-actions .iconb')).not.toBeNull();
+  });
+
+  it('hides the redundant state pill when HideState is true (while the center hero orb shows the state)', () => {
+    const f = render({ State: 'speaking', AgentName: 'Sage', HideState: true });
+    expect(query(f, '.banner__state')).toBeNull();
+    expect(query(f, '.banner__for')).toBeNull();
+  });
 });
