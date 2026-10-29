@@ -652,6 +652,40 @@ export function MergeAudioOverride(
 }
 
 /**
+ * Builds the provider session payload (minus `model`, `tools` and the GA features, which the caller
+ * adds). Both topologies call this — the client-direct mint and the server-bridged `session.update` —
+ * so the payload is built once and a raw `audio` override in the Config bag merges into the built
+ * block (via {@link MergeAudioOverride}) instead of replacing it.
+ *
+ * `audio` is stripped from the residual bag before it is spread so it cannot overwrite the merged
+ * block; the other protected wire fields are already scrubbed by {@link ExtractRealtimeFeatures}.
+ *
+ * @param profile The provider profile.
+ * @param features The features extracted from the Config bag.
+ * @param instructions The system prompt; omitted from the payload when undefined.
+ * @returns The session payload.
+ */
+export function BuildSessionPayload(
+    profile: OpenAIRealtimeProfile,
+    features: ExtractedRealtimeFeatures,
+    instructions: string | undefined,
+): GARealtimeSessionCreateRequest {
+    const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
+    const { audio: audioOverride, ...rest } = features.rest;
+    const merged = MergeAudioOverride(BuildAudioBlock(profile, features, turnDetection), audioOverride, features.disableAutoResponse);
+    if (merged && !profile.supportsVoiceOutput) {
+        delete merged.output;
+    }
+    const audio = merged && Object.keys(merged).length > 0 ? merged : undefined;
+    return {
+        type: 'realtime',
+        ...(instructions !== undefined ? { instructions } : {}),
+        ...(audio ? { audio } : {}),
+        ...rest,
+    };
+}
+
+/**
  * Maps Core {@link RealtimeToolDefinition}s up to OpenAI's native function-tool schema.
  *
  * The single mapping used everywhere a tool set is sent to the Realtime API: the live
@@ -865,18 +899,8 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // The OUTPUT voice comes from the effective config's per-provider voice (`params.Config.voice`,
         // shaped by GetProviderVoiceSettings) — this is what lets a co-agent's configured voice OR a
         // per-session override actually take effect in the client-direct topology.
-        const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
-        const audio = BuildAudioBlock(profile, features, turnDetection);
-        const session: GARealtimeSessionCreateRequest = {
-            type: 'realtime',
-            model: params.Model,
-            instructions: params.SystemPrompt,
-            ...(audio ? { audio } : {}),
-            // The residual (feature-scrubbed, wire-field-protected) Config bag applies here EXACTLY
-            // as on the server-bridged session.update — same construction ORDER too, so a raw
-            // `audio` override behaves identically on both topologies.
-            ...features.rest,
-        };
+        const session = BuildSessionPayload(profile, features, params.SystemPrompt);
+        session.model = params.Model;
         if (params.Tools && params.Tools.length > 0) {
             session.tools = mapRealtimeTools(params.Tools);
         }
@@ -1594,21 +1618,9 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // Remember the normalized request so a LIVE Reconfigure (meeting-mode flip) rebuilds the
         // SAME mode instead of silently downgrading a semantic/native session to server_vad.
         this.lastTurnDetectionRequest = features.turnDetection;
-        const turnDetection = this.profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
-
-        // Opt into USER input transcription — the same opt-in CreateClientSession applies for the
-        // client-direct topology — so user-role transcripts flow server-bridged too (the contract
-        // promises BOTH roles). Providers that transcribe natively (profile model undefined, no bag
-        // override) get no transcription block; an all-empty audio block is omitted entirely. The
-        // residual config bag spreads AFTER the built block so a per-conversation raw `audio`
-        // override can still replace it wholesale.
-        const audio = BuildAudioBlock(this.profile, features, turnDetection);
-        const session: GARealtimeSessionCreateRequest = {
-            type: 'realtime',
-            instructions: systemPrompt,
-            ...(audio ? { audio } : {}),
-            ...features.rest,
-        };
+        // Opts into USER input transcription (as CreateClientSession does) so user-role transcripts flow
+        // server-bridged too; see BuildSessionPayload for how the audio block and raw override merge.
+        const session = BuildSessionPayload(this.profile, features, systemPrompt);
         if (tools && tools.length > 0) {
             session.tools = this.mapTools(tools);
         }

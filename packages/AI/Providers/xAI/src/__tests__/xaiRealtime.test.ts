@@ -303,7 +303,7 @@ describe('xAIRealtime', () => {
             }
         });
 
-        it('lets the Config bag override the default audio/input-transcription block', async () => {
+        it('merges a Config bag audio override into the default audio block (the bag leaf wins, built turn_detection survives)', async () => {
             await driver.StartSession({
                 Model: 'grok-voice',
                 SystemPrompt: 'sys',
@@ -311,7 +311,12 @@ describe('xAIRealtime', () => {
             });
             const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
             if (update?.type === 'session.update' && update.session.type === 'realtime') {
-                expect(update.session.audio).toEqual({ input: { transcription: { model: 'grok-transcribe' } } });
+                expect(update.session.audio).toEqual({
+                    input: {
+                        transcription: { model: 'grok-transcribe' },
+                        turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true },
+                    },
+                });
             } else {
                 throw new Error('expected realtime session.update');
             }
