@@ -318,6 +318,12 @@ GO
          )
       END;
 
+/* SQL text to sync EntityField.Description with updated MS_Description on AIAgent.ChatHandlingOption */
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET [Description] = N'Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent''s own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.',
+    [__mj_UpdatedAt] = GETUTCDATE()
+WHERE [ID] = 'BC671EC0-ED51-4F0B-A46C-50BE0CE53E51';
+
 /* SQL text to insert entity field value with ID 50407925-37fb-4851-a687-1f216c79611c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])

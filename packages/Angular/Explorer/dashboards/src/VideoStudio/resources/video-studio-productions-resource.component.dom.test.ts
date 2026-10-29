@@ -769,5 +769,69 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('opens the right-side ng-conversations slide-in panel pinned to Video Studio and toggles optional voiceover narration in CopilotAppContext', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+      RunViews: vi.fn().mockResolvedValue([]),
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    expect(instance.IsCopilotSlideInOpen).toBe(false);
+    expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).toBeNull();
+    expect(query(fixture, '[data-testid="productions-copilot-strip"]')).not.toBeNull();
+
+    const openBtn = query(fixture, '[data-testid="productions-open-copilot-button"]');
+    expect(openBtn).not.toBeNull();
+    openBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(instance.IsCopilotSlideInOpen).toBe(true);
+    const slideIn = query(fixture, '[data-testid="productions-copilot-slidein"]');
+    expect(slideIn).not.toBeNull();
+
+    const narrationToggle = query(fixture, '[data-testid="copilot-narration-toggle"]');
+    expect(narrationToggle).not.toBeNull();
+    expect(narrationToggle!.getAttribute('aria-checked')).toBe('true');
+    expect((instance.CopilotAppContext['VideoStudio'] as Record<string, unknown>)['NarrationEnabled']).toBe(true);
+
+    narrationToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(instance.NarrationEnabled).toBe(false);
+    expect(narrationToggle!.getAttribute('aria-checked')).toBe('false');
+    expect((instance.CopilotAppContext['VideoStudio'] as Record<string, unknown>)['NarrationEnabled']).toBe(false);
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
 

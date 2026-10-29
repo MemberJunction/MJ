@@ -981,6 +981,9 @@ export class VideoStudioAgent extends BaseAgent {
             seeded.CompanyID = companyId;
         }
 
+        // Seed optional narration & caption preferences from AppContext.VideoStudio when supplied
+        this.seedAudioPreferencesFromContext(params, seeded);
+
         // Brand Kit seeding
         this.seedBrandKit(seeded, companyId);
 
@@ -993,6 +996,61 @@ export class VideoStudioAgent extends BaseAgent {
         this.applyApprovalResume(params, seeded);
 
         return seeded;
+    }
+
+    private seedAudioPreferencesFromContext(
+        params: ExecuteAgentParams,
+        seeded: Partial<VideoGenerationSpec>,
+    ): void {
+        const dataObj = params.data as Record<string, unknown> | undefined;
+        const appCtx =
+            (dataObj?.AppContext as Record<string, unknown> | undefined) ??
+            (dataObj?.appContext as Record<string, unknown> | undefined) ??
+            dataObj;
+        const vsCtx = (appCtx?.VideoStudio as Record<string, unknown> | undefined) ?? appCtx;
+        if (!vsCtx || typeof vsCtx !== 'object') {
+            return;
+        }
+
+        const rawNarrationEnabled = vsCtx.NarrationEnabled;
+        const rawCaptionsMode = vsCtx.CaptionsMode;
+
+        if (typeof rawNarrationEnabled === 'boolean') {
+            if (!seeded.Audio) {
+                seeded.Audio = {
+                    Cues: [],
+                    Captions: rawNarrationEnabled ? 'Burned' : 'None',
+                };
+            }
+            if (!seeded.Audio.Narration) {
+                seeded.Audio.Narration = {
+                    Enabled: rawNarrationEnabled,
+                    VoiceID: '',
+                    Provider: '',
+                    Script: [],
+                };
+            } else if (seeded.Audio.Narration.Enabled === undefined) {
+                seeded.Audio.Narration.Enabled = rawNarrationEnabled;
+            }
+            if (!rawNarrationEnabled) {
+                seeded.Audio.Narration.Script = [];
+                if (rawCaptionsMode === undefined) {
+                    seeded.Audio.Captions = 'None';
+                }
+            }
+        }
+
+        if (
+            rawCaptionsMode === 'None' ||
+            rawCaptionsMode === 'Burned' ||
+            rawCaptionsMode === 'Sidecar'
+        ) {
+            if (!seeded.Audio) {
+                seeded.Audio = { Cues: [], Captions: rawCaptionsMode };
+            } else {
+                seeded.Audio.Captions = rawCaptionsMode;
+            }
+        }
     }
 
     private resolveCompanyId(
@@ -1090,7 +1148,10 @@ export class VideoStudioAgent extends BaseAgent {
             }
         }
 
-        // 3. Default VoiceID / Provider on Audio.Narration when empty
+        // 3. Default VoiceID / Provider on Audio.Narration when empty (unless narration is explicitly disabled)
+        if (seeded.Audio?.Narration?.Enabled === false) {
+            return;
+        }
         const voiceObj = kit.VoiceObject;
         if (voiceObj && typeof voiceObj === 'object') {
             const defaultVoiceId = (voiceObj.VoiceID ?? '').trim();

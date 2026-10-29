@@ -94,6 +94,8 @@ export class VideoStudioStudioResourceComponent
   public QuerySearchText = '';
   public SelectedQueries: StudioSavedQueryItem[] = [];
   public IsSearchingQueries = false;
+  public NarrationEnabled = true;
+  public CaptionsMode: 'Burned' | 'Sidecar' | 'None' = 'Burned';
 
   public ActiveConversationId: string | null = null;
   public PendingMessage: string | null = null;
@@ -433,6 +435,18 @@ export class VideoStudioStudioResourceComponent
     this.cdr.markForCheck();
   }
 
+  public ToggleNarration(): void {
+    this.NarrationEnabled = !this.NarrationEnabled;
+    this.syncAppAndAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  public SetCaptionsMode(mode: 'Burned' | 'Sidecar' | 'None'): void {
+    this.CaptionsMode = mode;
+    this.syncAppAndAgentContext();
+    this.cdr.markForCheck();
+  }
+
   /**
    * User-triggered Start production action.
    * Composes the deterministic first message, resets ConversationId to null to start
@@ -456,6 +470,7 @@ export class VideoStudioStudioResourceComponent
         Formats: this.SelectedFormats,
         BrandKitName: this.SelectedBrandKit?.Name ?? null,
         QueryNames: this.SelectedQueries.map((q) => q.Name),
+        NarrationEnabled: this.NarrationEnabled ? undefined : false,
       });
 
       this.ActiveConversationId = null;
@@ -465,6 +480,8 @@ export class VideoStudioStudioResourceComponent
         Formats: this.SelectedFormats,
         DurationSeconds: this.DurationSeconds,
         QueryIDs: this.SelectedQueries.map((q) => q.ID),
+        NarrationEnabled: this.NarrationEnabled ? undefined : false,
+        CaptionsMode: this.CaptionsMode === 'Burned' ? undefined : this.CaptionsMode,
       });
       this.PendingMessage = message;
       this.syncAppAndAgentContext();
@@ -664,6 +681,8 @@ export class VideoStudioStudioResourceComponent
       Formats: this.SelectedFormats,
       DurationSeconds: this.DurationSeconds,
       QueryIDs: this.SelectedQueries.map((q) => q.ID),
+      NarrationEnabled: this.NarrationEnabled ? undefined : false,
+      CaptionsMode: this.CaptionsMode === 'Burned' ? undefined : this.CaptionsMode,
     });
 
     this.navigationService.SetAgentContext(

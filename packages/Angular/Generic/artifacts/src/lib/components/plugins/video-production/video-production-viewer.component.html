@@ -31,6 +31,21 @@
             {{ genLine }}
           </span>
         }
+        @if (NarrationSummaryText; as narrationText) {
+          <span
+            class="vp-badge vp-badge--audio"
+            [class.vp-badge--audio-muted]="Spec.Audio.Narration?.Enabled === false"
+            data-testid="vp-badge-audio"
+          >
+            <i
+              class="fa-solid"
+              [class.fa-volume-high]="Spec.Audio.Narration?.Enabled !== false"
+              [class.fa-volume-xmark]="Spec.Audio.Narration?.Enabled === false"
+              aria-hidden="true"
+            ></i>
+            <span>{{ narrationText }}</span>
+          </span>
+        }
         <span class="vp-badge vp-badge--status" [attr.data-status]="Spec.Status">
           {{ Spec.Status }}
         </span>

@@ -17,13 +17,6 @@
           "Description": "Production gallery with archetype, status, brand kit, company, and date filters."
         },
         {
-          "Label": "Studio",
-          "Icon": "fa-solid fa-wand-magic-sparkles",
-          "ResourceType": "Custom",
-          "DriverClass": "VideoStudioStudioResource",
-          "Description": "Start new video productions and collaborate with the Video Studio copilot."
-        },
-        {
           "Label": "Brand Kits",
           "Icon": "fa-solid fa-palette",
           "ResourceType": "Custom",
@@ -37,7 +30,10 @@
           "DriverClass": "VideoStudioArchetypesResource",
           "Description": "Narrative video archetypes with beat templates and pacing profiles."
         }
-      ]
+      ],
+      "AgentSettings": {
+        "DefaultAgentID": "@lookup:MJ: AI Agents.Name=Video Studio"
+      }
     },
     "primaryKey": {
       "ID": "499C1083-C3EC-42D4-ABC4-EAE6F764BC56"

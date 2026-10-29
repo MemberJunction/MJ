@@ -62,6 +62,7 @@ export interface ProduceVideoInput {
     CompanyID?: string | null;
     PowerLevel?: string | null;
     DataRefs?: readonly ProduceVideoDataRefInput[] | string | null;
+    Narration?: boolean | string | null;
 }
 
 /**
@@ -164,6 +165,9 @@ export function BuildProduceVideoRequest(
     const dataBindingsRes = resolveDataRefs(input.DataRefs, lookups);
     if ('Error' in dataBindingsRes) return dataBindingsRes;
 
+    const narrationRes = resolveNarrationEnabled(input.Narration);
+    if ('Error' in narrationRes) return narrationRes;
+
     const payload = assemblePartialSpec({
         archetype: archetypeRes.value,
         brandKit: brandKitRes.value,
@@ -171,6 +175,7 @@ export function BuildProduceVideoRequest(
         formats: formatsRes.value,
         durationSeconds: durationRes.value,
         dataBindings: dataBindingsRes.value,
+        narrationEnabled: narrationRes.value,
     });
 
     return {
@@ -550,6 +555,28 @@ function mapDataRefFormat(
     };
 }
 
+function resolveNarrationEnabled(
+    raw: boolean | string | null | undefined,
+): ValueOrError<boolean | undefined> {
+    if (raw === undefined || raw === null) {
+        return { value: undefined };
+    }
+    if (typeof raw === 'boolean') {
+        return { value: raw };
+    }
+    if (typeof raw === 'string') {
+        const normalized = raw.trim().toLowerCase();
+        if (!normalized) return { value: undefined };
+        if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
+            return { value: true };
+        }
+        if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off' || normalized === 'none') {
+            return { value: false };
+        }
+    }
+    return fail('INVALID_PARAMS', `Narration '${String(raw)}' must be a boolean ('true' or 'false').`);
+}
+
 interface AssemblePartialSpecInput {
     archetype: ProduceVideoArchetypeLookup | undefined;
     brandKit: ProduceVideoBrandKitLookup | undefined;
@@ -557,6 +584,7 @@ interface AssemblePartialSpecInput {
     formats: VideoFormat[];
     durationSeconds: number | undefined;
     dataBindings: VideoDataBinding[] | undefined;
+    narrationEnabled?: boolean;
 }
 
 function assemblePartialSpec(parts: AssemblePartialSpecInput): Partial<VideoGenerationSpec> {
@@ -570,6 +598,19 @@ function assemblePartialSpec(parts: AssemblePartialSpecInput): Partial<VideoGene
     const interaction: Partial<VideoGenerationSpec['Interaction']> = {
         Mode: 'Autonomous',
     };
+    const audio: VideoGenerationSpec['Audio'] | undefined =
+        parts.narrationEnabled !== undefined
+            ? {
+                  Narration: {
+                      Enabled: parts.narrationEnabled,
+                      VoiceID: '',
+                      Provider: '',
+                      Script: [],
+                  },
+                  Cues: [],
+                  Captions: parts.narrationEnabled ? 'Burned' : 'None',
+              }
+            : undefined;
 
     return {
         ...(parts.archetype
@@ -580,6 +621,8 @@ function assemblePartialSpec(parts: AssemblePartialSpecInput): Partial<VideoGene
         Film: film as VideoGenerationSpec['Film'],
         Deliverables: deliverables as VideoGenerationSpec['Deliverables'],
         ...(parts.dataBindings ? { DataBindings: parts.dataBindings } : {}),
+        ...(audio ? { Audio: audio } : {}),
         Interaction: interaction as VideoGenerationSpec['Interaction'],
     };
 }
+

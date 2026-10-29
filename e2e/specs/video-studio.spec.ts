@@ -211,57 +211,57 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
   });
 });
 
-test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
+test.describe('Video Studio — Right-Side Copilot Slide-In & Iterate (VS-UX-2)', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('Studio tab picks archetype, brand kit, and topic, clicks Start production to send composed message to copilot, then verifies Productions Iterate opens conversation with artifact attached', async ({
+  test('Productions tab opens the right-side Video Studio ng-conversations slide-in, toggles optional audio narration, sends a production prompt, then verifies Productions Iterate opens conversation with artifact attached', async ({
     page,
   }) => {
-    await openVideoStudioTab(page, 'Studio');
-    await expect(
-      page.locator('mj-video-studio-studio-resource'),
-    ).toBeVisible({ timeout: 30_000 });
-
-    const startForm = page.getByTestId('studio-start-form');
-    const copilotPanel = page.getByTestId('vs-copilot-panel');
-    await expect(startForm).toBeVisible({ timeout: 30_000 });
-    await expect(copilotPanel).toBeVisible({ timeout: 30_000 });
-
-    const startBtn = page.getByTestId('studio-start-button');
-    await expect(startBtn).toBeDisabled();
-
-    // Pick first archetype card
-    const firstArchetype = page.locator('[data-testid^="studio-archetype-card-"]').first();
-    await expect(firstArchetype).toBeVisible({ timeout: 30_000 });
-    await firstArchetype.click();
-
-    // Pick first brand kit option (index 1, after 'None') via mj-dropdown
-    const brandKitSelect = page.getByTestId('studio-brand-kit-select');
-    await expect(brandKitSelect).toBeVisible();
-    await brandKitSelect.click();
-    await page.getByRole('option').nth(1).click();
-
-    // Enter topic
-    const topicInput = page.getByTestId('studio-topic-input');
-    const topicText = 'Q3 revenue highlights and customer momentum';
-    await topicInput.fill(topicText);
-
-    await expect(startBtn).toBeEnabled();
-    await startBtn.click();
-
-    // Verify copilot chat area receives the composed message and an MJ: Video Production artifact opens in the viewer pane
-    const chatArea = copilotPanel.getByTestId('vs-copilot-chat-area');
-    await expect(chatArea).toBeVisible({ timeout: 30_000 });
-    await expect(chatArea).toContainText(topicText, { timeout: 30_000 });
-    await expect(
-      copilotPanel.locator('mj-artifact-viewer-panel').first(),
-    ).toBeVisible({ timeout: 60_000 });
-
-    // Navigate to Productions and verify production + Iterate
     await openVideoStudioTab(page, 'Productions');
     await expect(
       page.locator('mj-video-studio-productions-resource'),
     ).toBeVisible({ timeout: 30_000 });
+
+    // Open the right-side Video Studio conversation slide-in
+    const openSlideInBtn = page.getByTestId('productions-open-copilot-button');
+    await expect(openSlideInBtn).toBeVisible({ timeout: 30_000 });
+    await openSlideInBtn.click();
+
+    const slideInDrawer = page.getByTestId('productions-copilot-slidein');
+    await expect(slideInDrawer).toBeVisible({ timeout: 30_000 });
+
+    // Verify optional voiceover narration toggle in the slide-in options bar
+    const narrationToggle = slideInDrawer.getByTestId('copilot-narration-toggle');
+    await expect(narrationToggle).toBeVisible();
+    await expect(narrationToggle).toHaveAttribute('aria-checked', 'true');
+    await narrationToggle.click();
+    await expect(narrationToggle).toHaveAttribute('aria-checked', 'false');
+    await narrationToggle.click();
+    await expect(narrationToggle).toHaveAttribute('aria-checked', 'true');
+
+    const copilotPanel = slideInDrawer.getByTestId('vs-copilot-panel');
+    await expect(copilotPanel).toBeVisible({ timeout: 30_000 });
+
+    const chatArea = copilotPanel.getByTestId('vs-copilot-chat-area');
+    await expect(chatArea).toBeVisible({ timeout: 30_000 });
+
+    const topicText = 'Make a KPI Briefing video about Q3 revenue highlights and customer momentum, 30 seconds, formats 16:9, 9:16.';
+    const slideInComposer = chatArea
+      .locator('mj-mention-editor [contenteditable="true"], .mention-editor, [contenteditable="true"], textarea, input[type="text"]')
+      .first();
+    await expect(slideInComposer).toBeVisible({ timeout: 30_000 });
+    await slideInComposer.click();
+    await slideInComposer.fill(topicText);
+    await slideInComposer.press('Enter');
+
+    await expect(chatArea).toContainText('Q3 revenue highlights', { timeout: 30_000 });
+    await expect(
+      copilotPanel.locator('mj-artifact-viewer-panel').first(),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Close the new-production slide-in and verify the production card + Iterate
+    await openSlideInBtn.click();
+    await expect(slideInDrawer).toBeHidden();
 
     const firstProductionCard = page.locator('[data-testid^="production-card-"]').first();
     await expect(firstProductionCard).toBeVisible({ timeout: 60_000 });

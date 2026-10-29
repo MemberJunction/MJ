@@ -65,6 +65,24 @@ export function BuildBriefMarkdown(spec: VideoGenerationSpec): string {
     lines.push('_No archetype defined._');
   }
 
+  const audio = spec?.Audio;
+  if (audio) {
+    const narrationEnabled = audio.Narration?.Enabled !== false;
+    const scriptCount = Array.isArray(audio.Narration?.Script) ? audio.Narration.Script.length : 0;
+    const voiceSummary = narrationEnabled
+      ? `${audio.Narration?.VoiceID ?? 'Default'}${audio.Narration?.Provider ? ' (' + audio.Narration.Provider + ')' : ''}`
+      : 'Disabled (Silent)';
+    lines.push('');
+    lines.push('## Audio & Narration');
+    lines.push('');
+    lines.push('| Field | Value |');
+    lines.push('| --- | --- |');
+    lines.push(`| **Voiceover Narration** | ${narrationEnabled ? 'Enabled' : 'Disabled (Silent)'} |`);
+    lines.push(`| **Voice / Provider** | ${EscapeMarkdown(voiceSummary)} |`);
+    lines.push(`| **Script Segments** | ${EscapeMarkdown(scriptCount)} |`);
+    lines.push(`| **Captions** | ${EscapeMarkdown(audio.Captions ?? 'None')} |`);
+  }
+
   return lines.join('\n');
 }
 

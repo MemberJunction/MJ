@@ -1347,11 +1347,12 @@ function validateAudioSection(
         pushEnumError(errors, 'Audio.Captions', spec.Audio?.Captions, VIDEO_CAPTION_MODES);
     }
 
+    const narration = spec.Audio?.Narration;
+    const narrationEnabled = narration?.Enabled !== false;
     const scriptLines = asArray<NonNullable<VideoGenerationSpec['Audio']['Narration']>['Script'][number]>(
-        spec.Audio?.Narration?.Script,
+        narration?.Script,
     );
-    if (requiredSections.has('NarrationScript')) {
-        const narration = spec.Audio?.Narration;
+    if (requiredSections.has('NarrationScript') && narrationEnabled) {
         if (
             !narration ||
             !narration.VoiceID?.trim() ||
@@ -1361,7 +1362,7 @@ function validateAudioSection(
             errors.push({
                 Code: 'MissingNarrationScript',
                 Path: 'Audio.Narration',
-                Message: 'Audio.Narration with VoiceID, Provider, and non-empty Script is required from Storyboarded onward.',
+                Message: 'Audio.Narration with VoiceID, Provider, and non-empty Script is required from Storyboarded onward unless Audio.Narration.Enabled is false.',
             });
         }
     }

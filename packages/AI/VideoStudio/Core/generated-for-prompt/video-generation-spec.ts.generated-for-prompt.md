@@ -263,6 +263,7 @@ interface NarrationLine {
 }
 
 interface VideoNarrationSpec {
+    Enabled?: boolean;  // Whether voiceover narration is enabled for this production (defaults to true when omitted).
     VoiceID: string;  // Provider voice identifier (from brand kit `IBrandVoice` or brief override).
     Provider: string;  // TTS provider name (e.g., 'ElevenLabs', 'OpenAI').
     Script: NarrationLine[];  // Ordered narration lines, typically one per beat.

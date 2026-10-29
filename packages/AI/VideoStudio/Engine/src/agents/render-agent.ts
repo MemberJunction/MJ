@@ -365,8 +365,9 @@ export class VideoStudioRenderAgent extends BaseAgent {
                     lastRendererVersion = renderResult.RendererVersion;
                 }
 
+                const narrationEnabled = workingSpec.Audio?.Narration?.Enabled !== false;
                 const expectsAudio =
-                    (workingSpec.Audio?.Narration?.Script?.length ?? 0) > 0 ||
+                    (narrationEnabled && (workingSpec.Audio?.Narration?.Script?.length ?? 0) > 0) ||
                     Boolean(workingSpec.Audio?.Music?.AssetKey?.trim());
 
                 if (expectsAudio && !renderResult.HasAudio) {

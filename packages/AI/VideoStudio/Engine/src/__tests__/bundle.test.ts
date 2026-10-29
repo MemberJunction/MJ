@@ -677,4 +677,44 @@ describe('bundle.ts (VS-AGT-3)', () => {
         expect(result).toBe(attack);
         expect(elapsedMs).toBeLessThan(200);
     });
+
+    it('BuildRenderBundle auto-injects HyperFrames <audio> tags for staged narration clips and skips narration when Audio.Narration.Enabled is false', async () => {
+        vi.spyOn(storageModule, 'ReadStoredFile').mockImplementation(async (fileId: string) =>
+            Buffer.from(`content:${fileId}`, 'utf8'),
+        );
+        vi.spyOn(storageModule, 'ReadStoredFileWithType').mockImplementation(
+            async (fileId: string) => ({
+                Bytes: Buffer.from(`content:${fileId}`, 'utf8'),
+            }),
+        );
+        vi.spyOn(dataSnapshotModule, 'LoadDataSnapshotValues').mockResolvedValue({
+            revenue: 12500000,
+        });
+
+        const specWithNarration = makeMinimalSpec();
+        specWithNarration.Output!.Source!['16:9']!.Files['index.html'] =
+            '<!doctype html><html><body><div id="root" data-composition-id="main" data-width="1920" data-height="1080">$12.5M</div></body></html>';
+
+        const bundleWithAudio = await BuildRenderBundle(specWithNarration, '16:9', {
+            ContextUser: mockUser,
+        });
+        const entryHtml = bundleWithAudio.Files.find((f) => f.Path === 'index.html')?.Content ?? '';
+        expect(entryHtml).toContain(
+            '<audio id="narration-line-1" src="audio/line-1.mp3" data-start="0" data-duration="3.5" data-volume="1"></audio>',
+        );
+
+        // When Audio.Narration.Enabled === false, narration clips are not staged and no <audio> tag is injected
+        const specSilent = makeMinimalSpec();
+        specSilent.Audio.Narration!.Enabled = false;
+        delete specSilent.Audio.Narration!.Script[0].AudioFileID;
+
+        expect(CheckProductionRules(specSilent, { MaxGeneratedVideoSeconds: 15 })).toEqual([]);
+        const bundleSilent = await BuildRenderBundle(specSilent, '16:9', {
+            ContextUser: mockUser,
+        });
+        expect(bundleSilent.Assets.map((a) => a.Key)).not.toContain('line-1');
+        const silentHtml = bundleSilent.Files.find((f) => f.Path === 'index.html')?.Content ?? '';
+        expect(silentHtml).not.toContain('<audio');
+    });
 });
+

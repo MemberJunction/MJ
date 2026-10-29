@@ -85,6 +85,12 @@ GO
  * Do NOT edit it by hand. If the hand-written DDL above changes, re-run CodeGen and replace this
  * entire generated section.
  * ===================================================================================== */
+/* SQL text to sync EntityField.Description with updated MS_Description on AIAgentRunStep.StepType */
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET [Description] = N'Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.',
+    [__mj_UpdatedAt] = GETUTCDATE()
+WHERE [ID] = 'B04A327B-55BF-4914-9DCF-3552A5DD0293';
+
 /* SQL text to insert entity field value with ID 8601801f-7dec-4ade-9b60-a4ece4024a18 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])

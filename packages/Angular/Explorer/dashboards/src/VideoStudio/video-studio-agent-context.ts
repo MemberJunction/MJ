@@ -835,6 +835,8 @@ export interface StudioFirstMessageInput {
     Formats: readonly string[];
     BrandKitName?: string | null;
     QueryNames?: readonly string[];
+    NarrationEnabled?: boolean;
+    CaptionsMode?: 'Burned' | 'Sidecar' | 'None';
 }
 
 /**
@@ -856,8 +858,10 @@ export function ComposeStudioFirstMessage(input: StudioFirstMessageInput): strin
         .map((q) => q.trim())
         .filter((q) => q.length > 0);
     const queriesText = queriesList.length > 0 ? queriesList.join(', ') : 'none';
+    const narrationClause =
+        input.NarrationEnabled === false ? ', without voiceover narration' : '';
 
-    return `Make a ${archetype} video, about ${topic}, ${duration} seconds, formats ${formats}, brand kit ${brandKit}, data from ${queriesText}.`;
+    return `Make a ${archetype} video, about ${topic}, ${duration} seconds, formats ${formats}, brand kit ${brandKit}, data from ${queriesText}${narrationClause}.`;
 }
 
 /**
@@ -869,10 +873,12 @@ export interface StudioAppContextPayload {
     Formats: string[];
     DurationSeconds: number;
     QueryIDs: string[];
+    NarrationEnabled?: boolean;
+    CaptionsMode?: 'Burned' | 'Sidecar' | 'None';
 }
 
 /**
- * Build the `{ VideoStudio: { ArchetypeID, BrandKitID, Formats, DurationSeconds, QueryIDs } }`
+ * Build the `{ VideoStudio: { ArchetypeID, BrandKitID, Formats, DurationSeconds, QueryIDs, ... } }`
  * app context object passed into `<vs-copilot-panel>` / `<mj-conversation-chat-area>`.
  */
 export function BuildStudioAppContext(
@@ -885,6 +891,12 @@ export function BuildStudioAppContext(
             Formats: [...(input.Formats ?? [])],
             DurationSeconds: input.DurationSeconds,
             QueryIDs: [...(input.QueryIDs ?? [])],
+            ...(input.NarrationEnabled !== undefined
+                ? { NarrationEnabled: input.NarrationEnabled }
+                : {}),
+            ...(input.CaptionsMode !== undefined
+                ? { CaptionsMode: input.CaptionsMode }
+                : {}),
         },
     };
 }

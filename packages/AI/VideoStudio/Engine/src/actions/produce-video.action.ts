@@ -111,6 +111,7 @@ export class ProduceVideoAction extends BaseAction {
             CompanyID: this.getStringParam(params, 'companyid'),
             PowerLevel: this.getStringParam(params, 'powerlevel'),
             DataRefs: this.getParamValue(params, 'datarefs') as readonly ProduceVideoDataRefInput[] | string | undefined,
+            Narration: this.getParamValue(params, 'narration') as boolean | string | undefined,
         };
     }
 

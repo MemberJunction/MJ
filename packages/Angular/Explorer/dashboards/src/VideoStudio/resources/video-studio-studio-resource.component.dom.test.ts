@@ -575,5 +575,40 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('toggles optional voiceover narration off and includes NarrationEnabled: false in StudioAppContext and first message', async () => {
+    const { navStub, customProvider } = setupStudioMocks();
+
+    const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
+      inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
+      providers: [{ provide: NavigationService, useValue: navStub }],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    const firstCard = query(fixture, '[data-testid="studio-archetype-card-arch-launch"]');
+    firstCard!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    instance.OnTopicChange('Silent social loop');
+    fixture.detectChanges();
+
+    const narrationToggle = query(fixture, '[data-testid="studio-narration-toggle"]');
+    expect(narrationToggle).not.toBeNull();
+    expect(narrationToggle!.getAttribute('aria-checked')).toBe('true');
+
+    narrationToggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(instance.NarrationEnabled).toBe(false);
+    expect(narrationToggle!.getAttribute('aria-checked')).toBe('false');
+    expect(
+      (instance.StudioAppContext['VideoStudio'] as Record<string, unknown>)['NarrationEnabled'],
+    ).toBe(false);
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
 

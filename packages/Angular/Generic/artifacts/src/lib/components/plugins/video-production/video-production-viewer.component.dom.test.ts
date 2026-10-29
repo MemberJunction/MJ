@@ -879,4 +879,39 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     expect(emptyState?.textContent).toContain('Invalid Video Production Content');
     expect(fixture.componentInstance.GetAdditionalTabs()).toEqual([]);
   });
+
+  it('renders vp-badge-audio with Voiceover segment count when narration is enabled', () => {
+    const withVoiceover = makeSpec();
+    const fixtureWith = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(withVoiceover)),
+      },
+    });
+    const audioBadgeWith = query(fixtureWith, '[data-testid="vp-badge-audio"]');
+    expect(audioBadgeWith).not.toBeNull();
+    expect(audioBadgeWith?.textContent).toContain('Voiceover (1 segment)');
+  });
+
+  it('renders vp-badge-audio with Silent (no voiceover) when Audio.Narration.Enabled is false', () => {
+    const silentSpec = makeSpec({
+      Audio: {
+        Narration: {
+          Enabled: false,
+          Script: [],
+        },
+        Captions: 'None',
+        Cues: [],
+      },
+    });
+    const fixtureSilent = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(silentSpec)),
+      },
+    });
+    const audioBadgeSilent = query(fixtureSilent, '[data-testid="vp-badge-audio"]');
+    expect(audioBadgeSilent).not.toBeNull();
+    expect(audioBadgeSilent?.textContent).toContain('Silent (no voiceover)');
+  });
 });

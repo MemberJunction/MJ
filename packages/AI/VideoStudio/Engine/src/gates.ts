@@ -601,11 +601,15 @@ function evaluateGateG6(
     if (spec.Deliverables?.Poster && !spec.Output?.PosterFileID?.trim()) {
         missing.push('Output.PosterFileID is required when Deliverables.Poster is true');
     }
-    const scriptLines = Array.isArray(spec.Audio?.Narration?.Script) ? spec.Audio.Narration.Script : [];
+    const narrationEnabled = spec.Audio?.Narration?.Enabled !== false;
+    const scriptLines =
+        narrationEnabled && Array.isArray(spec.Audio?.Narration?.Script)
+            ? spec.Audio.Narration.Script
+            : [];
     if (spec.Audio?.Captions === 'Sidecar' && scriptLines.length > 0 && !spec.Output?.CaptionsFileID?.trim()) {
         missing.push('Output.CaptionsFileID is required when Audio.Captions is "Sidecar" with narration');
     }
-    if (scriptLines.some((line) => !line?.AudioFileID?.trim())) {
+    if (narrationEnabled && scriptLines.some((line) => !line?.AudioFileID?.trim())) {
         missing.push('One or more Audio.Narration.Script lines are missing AudioFileID');
     }
     if (!spec.Output?.RenderMetadata || !spec.Output.RenderMetadata.RenderedAt?.trim()) {
@@ -714,11 +718,13 @@ export function DeriveStatus(
                 (safeSpec.DataSnapshot.FileID?.trim() || safeSpec.DataSnapshot.Inline),
         );
 
+    const narrationEnabled = safeSpec.Audio?.Narration?.Enabled !== false;
     const scriptLines = Array.isArray(safeSpec.Audio?.Narration?.Script)
         ? safeSpec.Audio.Narration.Script
         : [];
     const hasNarrationAudioIfNeeded =
-        scriptLines.length > 0 && scriptLines.every((l) => Boolean(l?.AudioFileID?.trim()));
+        !narrationEnabled ||
+        (scriptLines.length > 0 && scriptLines.every((l) => Boolean(l?.AudioFileID?.trim())));
 
     const approvedAssets = Array.isArray(safeSpec.Assets?.Approved) ? safeSpec.Assets.Approved : [];
     const hasApprovedAssetIds = approvedAssets.every((a) => Boolean(a?.FileID?.trim() || a?.ArtifactVersionID?.trim()));

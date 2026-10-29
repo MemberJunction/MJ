@@ -341,7 +341,15 @@ export async function RunNarrationPipeline(
 ): Promise<NarrationResult> {
     const specCopy = structuredClone(spec);
     const narration = specCopy.Audio?.Narration;
-    if (!narration || !Array.isArray(narration.Script) || narration.Script.length === 0) {
+    if (
+        !narration ||
+        narration.Enabled === false ||
+        !Array.isArray(narration.Script) ||
+        narration.Script.length === 0
+    ) {
+        if (narration?.Enabled === false) {
+            narration.Script = [];
+        }
         return {
             Spec: specCopy,
             Clips: [],

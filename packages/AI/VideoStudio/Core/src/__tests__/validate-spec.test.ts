@@ -1257,4 +1257,22 @@ describe('RestoreStrippedFormatKeys', () => {
             '1:1': 'Square hero header',
         });
     });
+
+    it('allows Storyboarded specs with Audio.Narration.Enabled === false and empty Script to pass validation', () => {
+        const spec = makeStoryboardedSpec();
+        delete spec.Beats[0].NarrationKey;
+        delete spec.Beats[1].NarrationKey;
+        spec.Audio.Narration = {
+            Enabled: false,
+            VoiceID: '',
+            Provider: '',
+            Script: [],
+        };
+        spec.Audio.Captions = 'None';
+
+        const result = ValidateVideoGenerationSpec(spec, 'Storyboarded');
+        expect(result.Errors).toEqual([]);
+        expect(result.Valid).toBe(true);
+    });
 });
+

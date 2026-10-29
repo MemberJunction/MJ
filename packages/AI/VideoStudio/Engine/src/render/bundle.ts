@@ -368,9 +368,20 @@ export async function BuildRenderBundle(
         });
     }
 
-    const narrationScript = Array.isArray(spec.Audio?.Narration?.Script)
-        ? spec.Audio.Narration.Script
-        : [];
+    const narrationEnabled = spec.Audio?.Narration?.Enabled !== false;
+    const narrationScript =
+        narrationEnabled && Array.isArray(spec.Audio?.Narration?.Script)
+            ? spec.Audio.Narration.Script
+            : [];
+    const autoAudioTracks: Array<{
+        Id: string;
+        Src: string;
+        StartSeconds: number;
+        DurationSeconds?: number;
+        Volume?: number;
+    }> = [];
+    const beats = Array.isArray(spec.Beats) ? spec.Beats : [];
+
     for (const line of narrationScript) {
         const audioFileId = line.AudioFileID?.trim();
         if (!audioFileId) {
@@ -385,6 +396,69 @@ export async function BuildRenderBundle(
             DataBase64: bytes.toString('base64'),
             MimeType: 'audio/mpeg',
         });
+        const matchingBeat = beats.find((b) => b.Key === line.BeatKey);
+        const startSeconds =
+            typeof line.StartSeconds === 'number' && Number.isFinite(line.StartSeconds)
+                ? line.StartSeconds
+                : matchingBeat?.StartSeconds ?? 0;
+        const durationSeconds =
+            typeof line.DurationSeconds === 'number' && line.DurationSeconds > 0
+                ? line.DurationSeconds
+                : matchingBeat && matchingBeat.EndSeconds > matchingBeat.StartSeconds
+                  ? matchingBeat.EndSeconds - matchingBeat.StartSeconds
+                  : undefined;
+        autoAudioTracks.push({
+            Id: `narration-${SanitizeStageKey(line.Key)}`,
+            Src: relativePath,
+            StartSeconds: startSeconds,
+            DurationSeconds: durationSeconds,
+            Volume: 1,
+        });
+    }
+
+    const musicAssetKey = spec.Audio?.Music?.AssetKey?.trim();
+    if (musicAssetKey) {
+        const musicAsset = approvedAssets.find((a) => a.Key === musicAssetKey);
+        const musicPath = musicAsset?.StagedPath?.trim();
+        if (musicPath) {
+            const gainDb = spec.Audio?.Music?.GainDb;
+            const linearVol =
+                typeof gainDb === 'number' && Number.isFinite(gainDb)
+                    ? Math.max(0, Math.min(1, Number(Math.pow(10, gainDb / 20).toFixed(3))))
+                    : narrationScript.length > 0
+                      ? 0.18
+                      : 0.8;
+            autoAudioTracks.push({
+                Id: `music-${SanitizeStageKey(musicAssetKey)}`,
+                Src: musicPath,
+                StartSeconds: 0,
+                DurationSeconds:
+                    typeof spec.Film?.DurationSeconds === 'number' && spec.Film.DurationSeconds > 0
+                        ? spec.Film.DurationSeconds
+                        : undefined,
+                Volume: linearVol,
+            });
+        }
+    }
+
+    const audioCues = Array.isArray(spec.Audio?.Cues) ? spec.Audio.Cues : [];
+    for (const cue of audioCues) {
+        if (cue?.Kind !== 'Sfx' || !cue.AssetKey?.trim()) {
+            continue;
+        }
+        const sfxAsset = approvedAssets.find((a) => a.Key === cue.AssetKey?.trim());
+        const sfxPath = sfxAsset?.StagedPath?.trim();
+        if (sfxPath) {
+            autoAudioTracks.push({
+                Id: `sfx-${SanitizeStageKey(cue.Key)}`,
+                Src: sfxPath,
+                StartSeconds:
+                    typeof cue.TimestampSeconds === 'number' && Number.isFinite(cue.TimestampSeconds)
+                        ? Math.max(0, cue.TimestampSeconds)
+                        : 0,
+                Volume: 0.9,
+            });
+        }
     }
 
     let dataSnapshot: Record<string, unknown> = {};
@@ -413,12 +487,70 @@ export async function BuildRenderBundle(
     });
 
     const fontsCss = buildFontsCss(spec, approvedAssets);
-    const filteredFiles = withChartKit.Files.filter((f) => f.Path !== 'mj/fonts.css');
+    const filteredFiles = withChartKit.Files.filter((f) => f.Path !== 'mj/fonts.css').map((file) => {
+        if (file.Path === entryFile && autoAudioTracks.length > 0) {
+            return {
+                Path: file.Path,
+                Content: injectMissingCompositionAudioTags(file.Content, autoAudioTracks),
+            };
+        }
+        return file;
+    });
 
     return {
         ...withChartKit,
         Files: [...filteredFiles, { Path: 'mj/fonts.css', Content: fontsCss }],
     };
+}
+
+function injectMissingCompositionAudioTags(
+    html: string,
+    tracks: ReadonlyArray<{
+        Id: string;
+        Src: string;
+        StartSeconds: number;
+        DurationSeconds?: number;
+        Volume?: number;
+    }>,
+): string {
+    const missingTags: string[] = [];
+    for (const track of tracks) {
+        const escapedSrc = track.Src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const alreadyPresent = new RegExp(`<audio\\b[^>]*\\bsrc\\s*=\\s*["']${escapedSrc}["']`, 'i').test(html);
+        if (alreadyPresent) {
+            continue;
+        }
+        const durationAttr =
+            typeof track.DurationSeconds === 'number' && track.DurationSeconds > 0
+                ? ` data-duration="${Number(track.DurationSeconds.toFixed(3))}"`
+                : '';
+        const volumeAttr =
+            typeof track.Volume === 'number' && Number.isFinite(track.Volume)
+                ? ` data-volume="${track.Volume}"`
+                : '';
+        missingTags.push(
+            `<audio id="${track.Id}" src="${track.Src}" data-start="${Number(track.StartSeconds.toFixed(3))}"${durationAttr}${volumeAttr}></audio>`,
+        );
+    }
+
+    if (missingTags.length === 0) {
+        return html;
+    }
+
+    const joined = missingTags.join('\n  ');
+    const compRootMatch = html.match(/<([a-zA-Z][a-zA-Z0-9-]*)[^>]*\bdata-composition-id\b[^>]*>/i);
+    if (compRootMatch && compRootMatch.index !== undefined) {
+        const insertPos = compRootMatch.index + compRootMatch[0].length;
+        return `${html.slice(0, insertPos)}\n  ${joined}${html.slice(insertPos)}`;
+    }
+
+    const bodyMatch = html.match(/<body\b[^>]*>/i);
+    if (bodyMatch && bodyMatch.index !== undefined) {
+        const insertPos = bodyMatch.index + bodyMatch[0].length;
+        return `${html.slice(0, insertPos)}\n  ${joined}${html.slice(insertPos)}`;
+    }
+
+    return html;
 }
 
 /**
@@ -493,9 +625,11 @@ export function CheckProductionRules(
         });
     }
 
-    const narrationScript = Array.isArray(spec.Audio?.Narration?.Script)
-        ? spec.Audio.Narration.Script
-        : [];
+    const narrationEnabled = spec.Audio?.Narration?.Enabled !== false;
+    const narrationScript =
+        narrationEnabled && Array.isArray(spec.Audio?.Narration?.Script)
+            ? spec.Audio.Narration.Script
+            : [];
     for (const line of narrationScript) {
         if (!line.AudioFileID?.trim()) {
             issues.push({

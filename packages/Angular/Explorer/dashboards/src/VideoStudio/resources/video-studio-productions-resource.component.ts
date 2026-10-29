@@ -371,6 +371,12 @@ export class VideoStudioProductionsResourceComponent
   public IteratePendingArtifactId: string | null = null;
   public IteratePendingArtifactVersionNumber: number | null = null;
 
+  public IsCopilotSlideInOpen = false;
+  public SlideInConversationId: string | null = null;
+  public NarrationEnabled = true;
+  public CaptionsMode: 'Burned' | 'Sidecar' | 'None' = 'Burned';
+  public CopilotAppContext: Record<string, unknown> = this.buildCopilotAppContext();
+
   public get CurrentUser(): UserInfo | null {
     return this.ProviderToUse?.CurrentUser ?? null;
   }
@@ -384,6 +390,59 @@ export class VideoStudioProductionsResourceComponent
 
   public get ApplicationId(): string {
     return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? '';
+  }
+
+  public OpenNewProductionCopilot(): void {
+    this.IsIterating = false;
+    this.IteratePendingArtifactId = null;
+    this.IteratePendingArtifactVersionNumber = null;
+    this.IsCopilotSlideInOpen = true;
+    this.CopilotAppContext = this.buildCopilotAppContext();
+    this.cdr.markForCheck();
+  }
+
+  public ToggleCopilotSlideIn(): void {
+    if (this.IsCopilotSlideInOpen) {
+      this.CloseCopilotSlideIn();
+    } else {
+      this.OpenNewProductionCopilot();
+    }
+  }
+
+  public CloseCopilotSlideIn(): void {
+    this.IsCopilotSlideInOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleNarrationEnabled(): void {
+    this.NarrationEnabled = !this.NarrationEnabled;
+    this.CopilotAppContext = this.buildCopilotAppContext();
+    this.cdr.markForCheck();
+  }
+
+  public SetCaptionsMode(mode: 'Burned' | 'Sidecar' | 'None'): void {
+    this.CaptionsMode = mode;
+    this.CopilotAppContext = this.buildCopilotAppContext();
+    this.cdr.markForCheck();
+  }
+
+  public OnSlideInConversationCreated(event: { conversation: { ID: string } }): void {
+    this.SlideInConversationId = event.conversation.ID;
+    this.cdr.markForCheck();
+  }
+
+  private buildCopilotAppContext(): Record<string, unknown> {
+    return {
+      VideoStudio: {
+        ArchetypeID: null,
+        BrandKitID: this.BrandKitFilter || (this.SelectedProduction?.BrandKitID ?? null),
+        Formats: ['16:9'],
+        DurationSeconds: 30,
+        QueryIDs: [],
+        NarrationEnabled: this.NarrationEnabled,
+        CaptionsMode: this.CaptionsMode,
+      },
+    };
   }
 
   public async SelectProduction(
@@ -432,6 +491,7 @@ export class VideoStudioProductionsResourceComponent
       this.SelectedProductionConversationId = convId;
     }
 
+    this.CopilotAppContext = this.buildCopilotAppContext();
     this.syncAgentContext();
     this.cdr.markForCheck();
   }
@@ -440,6 +500,7 @@ export class VideoStudioProductionsResourceComponent
     if (!this.SelectedProduction || !this.SelectedProductionConversationId) {
       return;
     }
+    this.IsCopilotSlideInOpen = false;
     this.IteratePendingArtifactId = this.SelectedProduction.ID;
     this.IteratePendingArtifactVersionNumber = this.SelectedProduction.VersionNumber;
     this.IsIterating = true;

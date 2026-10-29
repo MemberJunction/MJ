@@ -206,6 +206,67 @@
           }
         </div>
 
+        <!-- 6. Audio Narration & Captions -->
+        <div class="vs-studio-section vs-studio-row">
+          <div class="vs-studio-col">
+            <span class="vs-studio-label">6. Voiceover Narration</span>
+            <div class="vs-studio-formats">
+              <button
+                type="button"
+                class="vs-studio-checkbox-pill"
+                [class.vs-studio-checkbox-pill--checked]="NarrationEnabled"
+                data-testid="studio-narration-toggle"
+                role="switch"
+                [attr.aria-checked]="NarrationEnabled"
+                (click)="ToggleNarration()"
+              >
+                <i
+                  class="fa-solid"
+                  [class.fa-volume-high]="NarrationEnabled"
+                  [class.fa-volume-xmark]="!NarrationEnabled"
+                  aria-hidden="true"
+                ></i>
+                <span>{{ NarrationEnabled ? 'Voiceover On' : 'No Voiceover (Silent)' }}</span>
+              </button>
+            </div>
+          </div>
+
+          @if (NarrationEnabled) {
+            <div class="vs-studio-col">
+              <span class="vs-studio-label">Captions</span>
+              <div class="vs-studio-formats" data-testid="studio-captions-group" role="group" aria-label="Captions mode">
+                <button
+                  type="button"
+                  class="vs-studio-checkbox-pill"
+                  [class.vs-studio-checkbox-pill--checked]="CaptionsMode === 'Burned'"
+                  data-testid="studio-captions-burned"
+                  (click)="SetCaptionsMode('Burned')"
+                >
+                  <span>Burned</span>
+                </button>
+                <button
+                  type="button"
+                  class="vs-studio-checkbox-pill"
+                  [class.vs-studio-checkbox-pill--checked]="CaptionsMode === 'Sidecar'"
+                  data-testid="studio-captions-sidecar"
+                  (click)="SetCaptionsMode('Sidecar')"
+                >
+                  <span>Sidecar</span>
+                </button>
+                <button
+                  type="button"
+                  class="vs-studio-checkbox-pill"
+                  [class.vs-studio-checkbox-pill--checked]="CaptionsMode === 'None'"
+                  data-testid="studio-captions-none"
+                  (click)="SetCaptionsMode('None')"
+                >
+                  <span>None</span>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+
         <!-- Start Production Action -->
         @if (StartError) {
           <mj-alert Variant="warning" data-testid="studio-start-error">

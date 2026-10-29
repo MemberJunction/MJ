@@ -530,6 +530,8 @@ export interface NarrationLine {
  * Voiceover narration configuration and per-beat script.
  */
 export interface VideoNarrationSpec {
+    /** Whether voiceover narration is enabled for this production (defaults to true when omitted). */
+    Enabled?: boolean;
     /** Provider voice identifier (from brand kit `IBrandVoice` or brief override). */
     VoiceID: string;
     /** TTS provider name (e.g., 'ElevenLabs', 'OpenAI'). */

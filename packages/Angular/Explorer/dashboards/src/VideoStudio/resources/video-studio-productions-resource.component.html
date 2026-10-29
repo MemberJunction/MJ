@@ -13,6 +13,18 @@
     </div>
 
     <div actions>
+      <button
+        type="button"
+        mjButton
+        [variant]="IsCopilotSlideInOpen ? 'outline' : 'primary'"
+        data-testid="productions-open-copilot-button"
+        [attr.aria-expanded]="IsCopilotSlideInOpen"
+        title="Open the Video Studio conversation slide-in panel"
+        (click)="ToggleCopilotSlideIn()"
+      >
+        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        <span>{{ IsCopilotSlideInOpen ? 'Hide Studio AI' : 'New Production' }}</span>
+      </button>
       <mj-refresh-button
         [Loading]="IsLoading"
         (Clicked)="Refresh()"
@@ -63,183 +75,293 @@
   </mj-page-header>
 
   <mj-page-body>
-    @if (IsLoading && AllProductions.length === 0) {
-      <div class="vs-loading-state" data-testid="productions-loading">
-        <mj-loading text="Loading video productions..." size="medium" />
-      </div>
-    } @else if (LoadError) {
-      <div class="vs-empty-state" role="alert" data-testid="productions-error">
-        <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
-        <h3 class="vs-empty-title">Unable to load productions</h3>
-        <p class="vs-empty-subtitle">{{ LoadError }}</p>
-        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
-          <i class="fa-solid fa-rotate"></i>
-          <span>Try Again</span>
-        </button>
-      </div>
-    } @else if (FilteredProductions.length === 0) {
-      <div class="vs-empty-state" data-testid="productions-empty">
-        <i class="fa-solid fa-clapperboard vs-empty-icon"></i>
-        @if (AllProductions.length === 0) {
-          <h3 class="vs-empty-title">No video productions yet</h3>
-          <p class="vs-empty-subtitle">
-            Ask Sage or the Video Producer agent to generate a video storyboard and render a production.
-          </p>
-        } @else {
-          <h3 class="vs-empty-title">No productions match your filters</h3>
-          <p class="vs-empty-subtitle">
-            Try adjusting your search query or clearing active filter criteria.
-          </p>
-          <button
-            type="button"
-            mjButton
-            Variant="secondary"
-            data-testid="productions-clear-filters"
-            (click)="ClearAllFilters(); OnSearchChange('')"
-          >
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-            <span>Reset Filters</span>
-          </button>
-        }
-      </div>
-    } @else {
-      <div
-        class="vs-productions-workspace"
-        [class.vs-productions-workspace--split]="SelectedProduction !== null"
-      >
-        <div class="vs-productions-grid" data-testid="productions-grid">
-          @for (item of FilteredProductions; track item.ID) {
-            <article
-              class="vs-production-card"
-              [class.vs-production-card--selected]="SelectedProduction?.ID === item.ID"
-              [attr.data-testid]="'production-card-' + item.ID"
-              tabindex="0"
-              role="button"
-              [attr.aria-pressed]="SelectedProduction?.ID === item.ID"
-              (click)="SelectProduction(item)"
-              (keydown.enter)="SelectProduction(item)"
-            >
-              <div class="vs-production-poster">
-                @if (item.PosterUrl) {
-                  <img
-                    class="vs-production-poster-img"
-                    [src]="item.PosterUrl"
-                    [alt]="item.Name + ' poster'"
-                    loading="lazy"
-                  />
-                } @else {
-                  <div class="vs-production-poster-placeholder">
-                    <i class="fa-solid fa-film"></i>
-                  </div>
-                }
-
-                <span [class]="StatusBadgeClass(item.Status)">
-                  {{ item.Status }}
-                </span>
-
-                @if (item.DurationSeconds !== null) {
-                  <span class="vs-production-duration">
-                    <i class="fa-regular fa-clock"></i>
-                    {{ FormatDuration(item.DurationSeconds) }}
-                  </span>
-                }
-              </div>
-
-              <div class="vs-production-card-body">
-                <h3 class="vs-production-title" [title]="item.Name">
-                  {{ item.Name }}
-                </h3>
-                @if (item.Description) {
-                  <p class="vs-production-description">{{ item.Description }}</p>
-                }
-
-                <div class="vs-production-meta-row">
-                  @if (item.Archetype) {
-                    <span class="vs-meta-chip" data-testid="production-archetype-chip">
-                      <i class="fa-solid fa-layer-group"></i>
-                      <span>{{ item.Archetype }}</span>
-                    </span>
-                  }
-                  @if (item.BrandKitName || item.BrandKitID) {
-                    <button
-                      type="button"
-                      class="vs-meta-chip vs-meta-chip--interactive"
-                      title="Open Brand Kit"
-                      (click)="OpenBrandKitRecord(item.BrandKitID, $event)"
-                    >
-                      <i class="fa-solid fa-palette"></i>
-                      <span>{{ item.BrandKitName || 'Brand Kit' }}</span>
-                    </button>
-                  }
-                  @if (item.AspectRatio) {
-                    <span class="vs-meta-chip">
-                      <i class="fa-solid fa-expand"></i>
-                      <span>{{ item.AspectRatio }}</span>
-                    </span>
-                  }
-                </div>
-              </div>
-            </article>
-          }
-        </div>
-
-        @if (SelectedProduction !== null) {
-          <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
-            <div class="vs-production-detail-toolbar" data-testid="production-detail-toolbar">
-              <span class="vs-production-detail-toolbar__title">{{ SelectedProduction.Name }}</span>
+    <div class="vs-productions-shell" [class.vs-productions-shell--slidein-open]="IsCopilotSlideInOpen && !IsIterating">
+      <div class="vs-productions-main">
+        @if (IsLoading && AllProductions.length === 0) {
+          <div class="vs-loading-state" data-testid="productions-loading">
+            <mj-loading text="Loading video productions..." size="medium" />
+          </div>
+        } @else if (LoadError) {
+          <div class="vs-empty-state" role="alert" data-testid="productions-error">
+            <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
+            <h3 class="vs-empty-title">Unable to load productions</h3>
+            <p class="vs-empty-subtitle">{{ LoadError }}</p>
+            <button type="button" mjButton Variant="secondary" (click)="Refresh()">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Try Again</span>
+            </button>
+          </div>
+        } @else if (FilteredProductions.length === 0) {
+          <div class="vs-empty-state" data-testid="productions-empty">
+            <i class="fa-solid fa-clapperboard vs-empty-icon"></i>
+            @if (AllProductions.length === 0) {
+              <h3 class="vs-empty-title">No video productions yet</h3>
+              <p class="vs-empty-subtitle">
+                Open the Video Studio slide-in panel or ask Sage to generate a video storyboard and render a production.
+              </p>
               <button
-                mjButton
-                variant="outline"
-                size="sm"
                 type="button"
-                data-testid="production-iterate-button"
-                [disabled]="!SelectedProductionConversationId"
-                [attr.title]="
-                  SelectedProductionConversationId
-                    ? 'Iterate on this production in its conversation'
-                    : 'Made outside a conversation. Start a new production in Studio.'
-                "
-                (click)="StartIterate()"
+                mjButton
+                variant="primary"
+                data-testid="productions-empty-new-button"
+                (click)="OpenNewProductionCopilot()"
               >
                 <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-                <span>Iterate</span>
+                <span>Open Video Studio AI</span>
               </button>
-            </div>
-            <div class="vs-production-detail-body">
-              <div class="vs-production-detail-viewer" data-testid="production-detail-viewer">
-                <mj-artifact-viewer-panel
-                  [artifactId]="SelectedProduction.ID"
-                  [Provider]="Provider"
-                  [CurrentUser]="ProviderToUse.CurrentUser"
-                  [canShare]="CanShareSelected"
-                  [canEdit]="CanEditSelected"
-                  [ShowSaveToCollection]="false"
-                  (Closed)="CloseDetailPane()"
-                  (ShareRequested)="OpenShareModal($event)"
-                  (NavigateToLink)="OnNavigateToArtifactLink($event)"
-                />
-              </div>
-              @if (IsIterating && SelectedProductionConversationId) {
-                <div class="vs-production-detail-copilot" data-testid="production-iterate-copilot">
-                  <vs-copilot-panel
-                    [Provider]="ProviderToUse"
-                    [CurrentUser]="CurrentUser"
-                    [EnvironmentId]="EnvironmentId"
-                    [ApplicationId]="ApplicationId"
-                    [ConversationId]="SelectedProductionConversationId"
-                    [PendingArtifactId]="IteratePendingArtifactId"
-                    [PendingArtifactVersionNumber]="IteratePendingArtifactVersionNumber"
-                    [ShowCloseButton]="true"
-                    (PendingArtifactConsumed)="OnIteratePendingArtifactConsumed()"
-                    (CloseRequested)="CloseIterate()"
-                  ></vs-copilot-panel>
-                </div>
+            } @else {
+              <h3 class="vs-empty-title">No productions match your filters</h3>
+              <p class="vs-empty-subtitle">
+                Try adjusting your search query or clearing active filter criteria.
+              </p>
+              <button
+                type="button"
+                mjButton
+                Variant="secondary"
+                data-testid="productions-clear-filters"
+                (click)="ClearAllFilters(); OnSearchChange('')"
+              >
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                <span>Reset Filters</span>
+              </button>
+            }
+          </div>
+        } @else {
+          <div
+            class="vs-productions-workspace"
+            [class.vs-productions-workspace--split]="SelectedProduction !== null"
+          >
+            <div class="vs-productions-grid" data-testid="productions-grid">
+              @for (item of FilteredProductions; track item.ID) {
+                <article
+                  class="vs-production-card"
+                  [class.vs-production-card--selected]="SelectedProduction?.ID === item.ID"
+                  [attr.data-testid]="'production-card-' + item.ID"
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-pressed]="SelectedProduction?.ID === item.ID"
+                  (click)="SelectProduction(item)"
+                  (keydown.enter)="SelectProduction(item)"
+                >
+                  <div class="vs-production-poster">
+                    @if (item.PosterUrl) {
+                      <img
+                        class="vs-production-poster-img"
+                        [src]="item.PosterUrl"
+                        [alt]="item.Name + ' poster'"
+                        loading="lazy"
+                      />
+                    } @else {
+                      <div class="vs-production-poster-placeholder">
+                        <i class="fa-solid fa-film"></i>
+                      </div>
+                    }
+
+                    <span [class]="StatusBadgeClass(item.Status)">
+                      {{ item.Status }}
+                    </span>
+
+                    @if (item.DurationSeconds !== null) {
+                      <span class="vs-production-duration">
+                        <i class="fa-regular fa-clock"></i>
+                        {{ FormatDuration(item.DurationSeconds) }}
+                      </span>
+                    }
+                  </div>
+
+                  <div class="vs-production-card-body">
+                    <h3 class="vs-production-title" [title]="item.Name">
+                      {{ item.Name }}
+                    </h3>
+                    @if (item.Description) {
+                      <p class="vs-production-description">{{ item.Description }}</p>
+                    }
+
+                    <div class="vs-production-meta-row">
+                      @if (item.Archetype) {
+                        <span class="vs-meta-chip" data-testid="production-archetype-chip">
+                          <i class="fa-solid fa-layer-group"></i>
+                          <span>{{ item.Archetype }}</span>
+                        </span>
+                      }
+                      @if (item.BrandKitName || item.BrandKitID) {
+                        <button
+                          type="button"
+                          class="vs-meta-chip vs-meta-chip--interactive"
+                          title="Open Brand Kit"
+                          (click)="OpenBrandKitRecord(item.BrandKitID, $event)"
+                        >
+                          <i class="fa-solid fa-palette"></i>
+                          <span>{{ item.BrandKitName || 'Brand Kit' }}</span>
+                        </button>
+                      }
+                      @if (item.AspectRatio) {
+                        <span class="vs-meta-chip">
+                          <i class="fa-solid fa-expand"></i>
+                          <span>{{ item.AspectRatio }}</span>
+                        </span>
+                      }
+                    </div>
+                  </div>
+                </article>
               }
             </div>
-          </aside>
+
+            @if (SelectedProduction !== null) {
+              <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
+                <div class="vs-production-detail-toolbar" data-testid="production-detail-toolbar">
+                  <span class="vs-production-detail-toolbar__title">{{ SelectedProduction.Name }}</span>
+                  <button
+                    mjButton
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    data-testid="production-iterate-button"
+                    [disabled]="!SelectedProductionConversationId"
+                    [attr.title]="
+                      SelectedProductionConversationId
+                        ? 'Iterate on this production in its conversation'
+                        : 'Made outside a conversation. Start a new production in Studio.'
+                    "
+                    (click)="StartIterate()"
+                  >
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span>Iterate</span>
+                  </button>
+                </div>
+                <div class="vs-production-detail-body">
+                  <div class="vs-production-detail-viewer" data-testid="production-detail-viewer">
+                    <mj-artifact-viewer-panel
+                      [artifactId]="SelectedProduction.ID"
+                      [Provider]="Provider"
+                      [CurrentUser]="ProviderToUse.CurrentUser"
+                      [canShare]="CanShareSelected"
+                      [canEdit]="CanEditSelected"
+                      [ShowSaveToCollection]="false"
+                      (Closed)="CloseDetailPane()"
+                      (ShareRequested)="OpenShareModal($event)"
+                      (NavigateToLink)="OnNavigateToArtifactLink($event)"
+                    />
+                  </div>
+                  @if (IsIterating && SelectedProductionConversationId) {
+                    <div class="vs-production-detail-copilot" data-testid="production-iterate-copilot">
+                      <vs-copilot-panel
+                        [Provider]="ProviderToUse"
+                        [CurrentUser]="CurrentUser"
+                        [EnvironmentId]="EnvironmentId"
+                        [ApplicationId]="ApplicationId"
+                        [ConversationId]="SelectedProductionConversationId"
+                        [PendingArtifactId]="IteratePendingArtifactId"
+                        [PendingArtifactVersionNumber]="IteratePendingArtifactVersionNumber"
+                        [ShowCloseButton]="true"
+                        (PendingArtifactConsumed)="OnIteratePendingArtifactConsumed()"
+                        (CloseRequested)="CloseIterate()"
+                      ></vs-copilot-panel>
+                    </div>
+                  }
+                </div>
+              </aside>
+            }
+          </div>
         }
       </div>
-    }
+
+      @if (!IsCopilotSlideInOpen && !IsIterating) {
+        <button
+          type="button"
+          class="vs-copilot-strip"
+          data-testid="productions-copilot-strip"
+          title="Slide in Video Studio AI conversation"
+          aria-label="Open Video Studio AI slide-in"
+          (click)="OpenNewProductionCopilot()"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+          <span class="vs-copilot-strip__label">Video Studio</span>
+        </button>
+      }
+
+      @if (IsCopilotSlideInOpen && !IsIterating) {
+        <aside
+          class="vs-copilot-slidein"
+          data-testid="productions-copilot-slidein"
+          role="complementary"
+          aria-label="Video Studio AI Conversation"
+        >
+          <div class="vs-copilot-slidein__options" data-testid="copilot-audio-options">
+            <div class="vs-copilot-option-group">
+              <span class="vs-copilot-option-label">Audio Narration</span>
+              <button
+                type="button"
+                class="vs-copilot-narration-toggle"
+                [class.vs-copilot-narration-toggle--active]="NarrationEnabled"
+                data-testid="copilot-narration-toggle"
+                role="switch"
+                [attr.aria-checked]="NarrationEnabled"
+                title="Toggle optional AI voiceover narration for new video productions"
+                (click)="ToggleNarrationEnabled()"
+              >
+                <i
+                  class="fa-solid"
+                  [class.fa-volume-high]="NarrationEnabled"
+                  [class.fa-volume-xmark]="!NarrationEnabled"
+                  aria-hidden="true"
+                ></i>
+                <span>{{ NarrationEnabled ? 'Voiceover On' : 'No Voiceover' }}</span>
+              </button>
+            </div>
+            @if (NarrationEnabled) {
+              <div class="vs-copilot-option-group">
+                <span class="vs-copilot-option-label">Captions</span>
+                <div class="vs-copilot-captions-pills" role="group" aria-label="Caption mode">
+                  <button
+                    type="button"
+                    class="vs-copilot-caption-pill"
+                    [class.vs-copilot-caption-pill--active]="CaptionsMode === 'Burned'"
+                    data-testid="copilot-captions-burned"
+                    (click)="SetCaptionsMode('Burned')"
+                  >
+                    Burned
+                  </button>
+                  <button
+                    type="button"
+                    class="vs-copilot-caption-pill"
+                    [class.vs-copilot-caption-pill--active]="CaptionsMode === 'Sidecar'"
+                    data-testid="copilot-captions-sidecar"
+                    (click)="SetCaptionsMode('Sidecar')"
+                  >
+                    Sidecar
+                  </button>
+                  <button
+                    type="button"
+                    class="vs-copilot-caption-pill"
+                    [class.vs-copilot-caption-pill--active]="CaptionsMode === 'None'"
+                    data-testid="copilot-captions-none"
+                    (click)="SetCaptionsMode('None')"
+                  >
+                    Off
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="vs-copilot-slidein__body">
+            <vs-copilot-panel
+              [Provider]="ProviderToUse"
+              [CurrentUser]="CurrentUser"
+              [EnvironmentId]="EnvironmentId"
+              [ApplicationId]="ApplicationId"
+              [ConversationId]="SlideInConversationId"
+              [AppContext]="CopilotAppContext"
+              [HeaderTitle]="'Video Studio'"
+              [ShowCloseButton]="true"
+              (ConversationCreated)="OnSlideInConversationCreated($event)"
+              (CloseRequested)="CloseCopilotSlideIn()"
+            ></vs-copilot-panel>
+          </div>
+        </aside>
+      }
+    </div>
 
     @if (IsShareModalOpen && ShareTargetArtifact) {
       <mj-artifact-share-modal

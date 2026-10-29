@@ -77,6 +77,24 @@
   border-color: var(--mj-status-warning-border);
 }
 
+.vp-badge--audio {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+}
+
+.vp-badge--audio i {
+  color: var(--mj-brand-primary);
+}
+
+.vp-badge--audio-muted {
+  color: var(--mj-text-muted);
+}
+
+.vp-badge--audio-muted i {
+  color: var(--mj-text-muted);
+}
+
 .vp-badge--status[data-status='Approved'] {
   background: var(--mj-status-success-bg);
   color: var(--mj-status-success-text);

@@ -103,6 +103,21 @@ export class VideoProductionViewerComponent
     return Boolean(this.Spec?.DataBindings && this.Spec.DataBindings.length > 0);
   }
 
+  public get NarrationSummaryText(): string | null {
+    const narration = this.Spec?.Audio?.Narration;
+    if (!narration) {
+      return null;
+    }
+    if (narration.Enabled === false) {
+      return 'Silent (no voiceover)';
+    }
+    const scriptCount = Array.isArray(narration.Script) ? narration.Script.length : 0;
+    if (scriptCount > 0) {
+      return `Voiceover (${scriptCount} ${scriptCount === 1 ? 'segment' : 'segments'})`;
+    }
+    return null;
+  }
+
   public get GeneratedSummaryLine(): string | null {
     return this.Spec ? DescribeGeneratedAssets(this.Spec).SummaryLine : null;
   }
