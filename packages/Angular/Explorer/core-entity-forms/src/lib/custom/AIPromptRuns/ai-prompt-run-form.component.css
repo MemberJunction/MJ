@@ -446,7 +446,7 @@
 
 .panel-badge.error {
     background: var(--mj-status-error);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .panel-count {
@@ -695,7 +695,7 @@
 
 .execution-order {
     background: var(--mj-text-muted);
-    color: white;
+    color: var(--mj-text-inverse);
     padding: 2px 6px;
     border-radius: 10px;
     font-size: 0.75em;
@@ -903,7 +903,7 @@ mj-accordion-panel {
     margin-top: 8px;
     padding: 2px 8px;
     background: var(--mj-status-error);
-    color: white;
+    color: var(--mj-text-inverse);
     border-radius: 12px;
     font-size: 0.75em;
     font-weight: 500;
@@ -1033,7 +1033,7 @@ mj-accordion-panel {
 /* Panel badge styles */
 .panel-badge.success {
     background: var(--mj-status-success);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 /* Full-screen overlay */
