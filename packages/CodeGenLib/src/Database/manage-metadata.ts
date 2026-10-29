@@ -7897,7 +7897,6 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
             newEntityName = uniqueName;
             const suffix = uniqueSuffix;
 
-            const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix, newEntityDisplayName);
             await this.logSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
@@ -7907,51 +7906,10 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
             // add it to the new entity list
             ManageMetadataBase.newEntityList.push(newEntityName);
 
-            // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if
-            // our config option is set to create new applications from new schemas, then create a new application for this schema
-            let apps: string[] | null;
-            if (isNewSchema && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
-               // new schema and config option is to create a new application from the schema name so do that
-
-               // check to see if the app already exists
-               apps = await this.getApplicationIDForSchema(pool, newEntity.SchemaName);
-               if (!apps || apps.length === 0) {
-                  // doesn't already exist, so create it
-                  const appUUID = this.createNewUUID();
-                  const newAppID = await this.createNewApplication(pool, appUUID, newEntity.SchemaName, newEntity.SchemaName, currentUser);
-                  if (newAppID) {
-                     apps = [newAppID];
-                  }
-                  else {
-                     LogError(`   >>>> ERROR: Unable to create new application for schema ${newEntity.SchemaName}`);
-                  }
-                  await md.Refresh(); // refresh now since we've added a new application, not super efficient to do this for each new application but that won't happen super
-                                      // often so not a huge deal, would be more efficient do this in batch after all new apps are created but that would be an over optimization IMO
-               }
-            }
-            else {
-               // not a new schema, attempt to look up the application for this schema
-               apps = await this.getApplicationIDForSchema(pool, newEntity.SchemaName);
-            }
-
-            if (apps && apps.length > 0) {
-               if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
-                  // only do this if the configuration setting is set to add new entities to applications for schema names
-                  for (const appUUID of apps) {
-                     const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(MjCoreSchema(), 'ApplicationEntity')}
-                                       (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(MjCoreSchema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
-                     await this.logSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
-                  }
-               }
-               else {
-                  // this is NOT an error condition, we do have an application UUID, but the configuration setting is to NOT add new entities to applications for schema names
-               }
-            }
-            else {
-               // this is an error condition, we should have an application for this schema, if we don't, log an error, non fatal, but should be logged
-               LogError(`   >>>> ERROR: Unable to add new entity ${newEntityName} to an application because no Application has SchemaAutoAddNewEntities='${newEntity.SchemaName}'. To fix this, update an existing Application record or create a new one with SchemaAutoAddNewEntities='${newEntity.SchemaName}'.`);
-            }
+            // link it to its schema's application, creating the application when none claims the schema. This runs
+            // the lookup-and-create on every new entity (#4034): gating the create on "first entity in the schema"
+            // meant one failed create left the schema without an application for good.
+            await this.addEntityToApplicationForSchema(pool, newEntityID, newEntityName, newEntity.SchemaName, currentUser);
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
             // A per-table `Entities` entry can opt a table out of the default grants (AutoAddPermissions: false),
@@ -7996,16 +7954,6 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          // path returns above and never gets here.
          throw e instanceof Error ? e : new Error(errMsg);
       }
-   }
-
-   protected async isSchemaNew(pool: CodeGenConnection, schemaName: string): Promise<boolean> {
-      // check to see if there are any entities in the db with this schema name
-      // Quote the alias so PostgreSQL preserves PascalCase (unquoted aliases are lowercased in PG)
-      const sSQL: string = `SELECT COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE ${this.qi('SchemaName')} = '${schemaName}'`;
-      const resultResult = await this.runQuery(pool, sSQL);
-      const result = resultResult.recordset;
-      // Use Number() because PG returns COUNT(*) as bigint, which the pg driver delivers as a string
-      return result && result.length > 0 ? Number(result[0].Count) === 0 : true;
    }
 
    /**
@@ -8129,8 +8077,11 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
 
    /**
     * Adds a newly created entity to the application(s) that match its schema name.
-    * If no application exists for the schema and config allows it, creates one.
-    * Shared by both table-backed entity creation and virtual entity creation.
+    * If no application exists for the schema and config allows it, creates one. The lookup and
+    * create run on every call, so a create that failed for an earlier entity is retried (#4034).
+    * When the application is created after other entities of the schema already exist, those that
+    * are in no application are linked to it as well.
+    * Shared by table-backed, virtual and materialized-query entity creation.
     */
    protected async addEntityToApplicationForSchema(
       pool: CodeGenConnection,
@@ -8140,13 +8091,14 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       currentUser: UserInfo
    ): Promise<void> {
       let apps = await this.getApplicationIDForSchema(pool, schemaName);
+      let createdAppID: string | null = null;
 
       // If no app exists and config says to create one for new schemas, create it
       if ((!apps || apps.length === 0) && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
          const appUUID = this.createNewUUID();
-         const newAppID = await this.createNewApplication(pool, appUUID, schemaName, schemaName, currentUser);
-         if (newAppID) {
-            apps = [newAppID];
+         createdAppID = await this.createNewApplication(pool, appUUID, schemaName, schemaName, currentUser);
+         if (createdAppID) {
+            apps = [createdAppID];
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
          } else {
@@ -8162,10 +8114,41 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
                                     ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(MjCoreSchema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
                await this.logSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
             }
+            if (createdAppID) {
+               await this.linkUnassignedSchemaEntitiesToApplication(pool, createdAppID, schemaName);
+            }
          }
       } else {
-         LogError(`   >>>> WARNING: No application found for schema ${schemaName} to add entity ${entityName}`);
+         LogWarning(`   >>>> WARNING: Unable to add new entity ${entityName} to an application because no Application has SchemaAutoAddNewEntities='${schemaName}'. To fix this, update an existing Application record or create a new one with SchemaAutoAddNewEntities='${schemaName}'.`);
       }
+   }
+
+   /**
+    * Links every entity of `schemaName` that is in no application to `appID`, numbering them after
+    * the application's current last Sequence in entity-name order. Called when a schema's
+    * application is created after some of its entities, e.g. after an earlier create failed or
+    * while CreateNewApplicationWithSchemaName was off. Emits nothing when there is nothing to link.
+    */
+   protected async linkUnassignedSchemaEntitiesToApplication(pool: CodeGenConnection, appID: string, schemaName: string): Promise<void> {
+      const entityTable = this.qs(MjCoreSchema(), 'Entity');
+      const appEntityTable = this.qs(MjCoreSchema(), 'ApplicationEntity');
+      const unassigned = `FROM ${entityTable} e
+                          WHERE e.${this.qi('SchemaName')} = '${schemaName}'
+                            AND NOT EXISTS (SELECT 1 FROM ${appEntityTable} ae WHERE ae.${this.qi('EntityID')} = e.${this.qi('ID')})`;
+      const countResult = await this.runQuery(pool, `SELECT COUNT(*) AS ${this.qi('Count')} ${unassigned}`);
+      // PG returns COUNT(*) as bigint, which the pg driver delivers as a string
+      const count = Number(countResult.recordset?.[0]?.Count ?? 0);
+      if (count === 0) {
+         return;
+      }
+      const sSQL = `INSERT INTO ${appEntityTable}
+                       (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+                    SELECT ${this.uuidLit(appID)}, e.${this.qi('ID')},
+                       (SELECT COALESCE(MAX(${this.qi('Sequence')}),0) FROM ${appEntityTable} WHERE ${this.qi('ApplicationID')} = ${this.uuidLit(appID)}) + ROW_NUMBER() OVER (ORDER BY e.${this.qi('Name')}),
+                       ${this.utcNow()}, ${this.utcNow()}
+                    ${unassigned}`;
+      await this.logSQLAndExecute(pool, sSQL, `SQL generated to add the ${count} existing entities of schema ${schemaName} that are in no application to application ID: '${appID}'`);
+      logStatus(`   Linked ${count} existing ${schemaName} entities to the schema's new application`);
    }
 
    /**
