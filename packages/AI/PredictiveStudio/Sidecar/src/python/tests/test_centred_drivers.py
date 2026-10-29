@@ -16,8 +16,8 @@ from sklearn.linear_model import LogisticRegression
 from app import artifacts, artifacts_v2, encoding as E, trainer as TR
 from app.main import _row_contributions, app
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol, TrainerCompleted
-from tests.tools.trainer_fixture import NUMERIC, DriverSpec, FileServer, JsonObject, candidates, protocol, request, \
-    snapshot_files
+from tests.tools.trainer_fixture import NUMERIC, DriverSpec, FileServer, JsonObject, JsonValue, candidates, protocol, \
+    request, snapshot_files
 from tests.tools.trainer_scaffold import TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
 client = TestClient(app)
@@ -26,8 +26,8 @@ LOGISTIC = CandidateSpec(name="lr", algorithmId=NIL, driverKey="logistic_regress
 LOGISTIC_ONLY: list[DriverSpec] = [("glm_candidate", "logistic_regression", {})]
 
 
-def _x_far_from_zero(seed: int, n: int) -> tuple[pd.DataFrame, TR.EncodedLabel]:
-    """`x` centred at 5: an uncentred coef * x has the same sign for every row."""
+def _numeric_frame(seed: int, n: int) -> tuple[pd.DataFrame, TR.EncodedLabel]:
+    """`x` drives the label and `noise` does not; both are numeric, so the encoder standardises them."""
     rng = np.random.default_rng(seed)
     x = rng.normal(5.0, 1.0, n)
     y = (rng.random(n) < 1 / (1 + np.exp(-(x - 5.0)))).astype(np.int64)
@@ -38,6 +38,26 @@ def _fit(X: pd.DataFrame, enc: TR.EncodedLabel, spec: CandidateSpec = LOGISTIC) 
     cols = [E.ColumnSpec(c, c, E.NumericEncoding("numeric")) for c in X.columns]
     p = EvaluationProtocol.model_validate(protocol("binary"))
     return TR.fit_predictor(spec, cols, X, enc, np.arange(len(X), dtype=np.int64), p, 1)
+
+
+PLAN = E.ColumnSpec("plan", "plan", E.CategoricalEncoding(10, "onehot"), levels=("basic", "pro"))
+PLAN_COLUMNS = [E.ColumnSpec("noise", "noise", E.NumericEncoding("numeric")), PLAN]
+
+
+def _plan_fit(seed: int, n: int) -> TR.TrainedPredictor:
+    """`pro` (30% of rows) raises the label. One-hot encoded, `plan_pro` has a training mean of about 0.3, so a basic
+    row's `plan_pro` driver is `coef × (0 − 0.3)`: present and negative once centred, exactly zero (no driver)
+    measured from zero."""
+    rng = np.random.default_rng(seed)
+    plan = rng.choice(["basic", "pro"], size=n, p=[0.7, 0.3])
+    y = (rng.random(n) < np.where(plan == "pro", 0.8, 0.3)).astype(np.int64)
+    X = pd.DataFrame({"noise": rng.normal(0.0, 1.0, n), "plan": plan})
+    p = EvaluationProtocol.model_validate(protocol("binary"))
+    return TR.fit_predictor(LOGISTIC, PLAN_COLUMNS, X, TR.EncodedLabel(y, "binary", ["0", "1"], None),
+                            np.arange(n, dtype=np.int64), p, 1)
+
+
+ROWS = [{"noise": 0.0, "plan": "pro"}, {"noise": 0.0, "plan": "basic"}]
 
 
 def _drivers(body: JsonObject) -> list[dict[str, float]]:
@@ -57,18 +77,19 @@ def _drivers(body: JsonObject) -> list[dict[str, float]]:
 
 
 def test_drivers_change_sign_with_the_row_not_with_the_model() -> None:
-    X, enc = _x_far_from_zero(4, 2000)
-    m = _fit(X, enc)
+    """A pro row's `plan_pro` driver raises the score; a basic row's lowers it (it lacks what raises the average row's
+    score). Measured from zero the basic row would have no `plan_pro` driver at all."""
+    m = _plan_fit(4, 2000)
     assert m.driver_baseline is not None
-    d = m.contributions(pd.DataFrame({"x": [7.0, 3.0], "noise": [0.0, 0.0]}), m.driver_baseline)
-    top_hi, top_lo = dict(d[0] or []), dict(d[1] or [])
-    assert top_hi["x"] > 0 > top_lo["x"]
+    d = m.contributions(pd.DataFrame(ROWS), m.driver_baseline)
+    pro, basic = dict(d[0] or []), dict(d[1] or [])
+    assert pro["plan_pro"] > 0 > basic["plan_pro"]
     # the noise column at its training mean contributes (almost) nothing
-    assert abs(top_hi.get("noise", 0.0)) < 0.05
+    assert abs(pro.get("noise", 0.0)) < 0.05
 
 
 def test_the_baseline_is_the_mean_encoded_training_row_aligned_with_its_column_names() -> None:
-    X, enc = _x_far_from_zero(6, 500)
+    X, enc = _numeric_frame(6, 500)
     m = _fit(X, enc)
     assert m.driver_baseline is not None
     encoded = np.asarray(m.pipeline[:-1].transform(X), dtype=np.float64)
@@ -104,7 +125,7 @@ def test_each_driver_averages_to_zero_over_the_training_rows() -> None:
 
 
 def test_a_model_without_coefficients_has_no_baseline_and_no_driver() -> None:
-    X, enc = _x_far_from_zero(7, 400)
+    X, enc = _numeric_frame(7, 400)
     forest = CandidateSpec(name="rf", algorithmId=NIL, driverKey="random_forest", hyperparameters={"n_estimators": 10})
     m = _fit(X, enc, forest)
     assert m.driver_baseline is None
@@ -112,13 +133,13 @@ def test_a_model_without_coefficients_has_no_baseline_and_no_driver() -> None:
 
 
 def test_a_linear_model_given_no_baseline_returns_no_driver() -> None:
-    X, enc = _x_far_from_zero(8, 400)
+    X, enc = _numeric_frame(8, 400)
     assert _fit(X, enc).contributions(X.head(2), None) == [None, None]
 
 
 def test_the_baseline_is_not_pickled_with_the_predictor() -> None:
     """The envelope carries the mean; the payload must not hold a second copy that could disagree with it."""
-    X, enc = _x_far_from_zero(9, 400)
+    X, enc = _numeric_frame(9, 400)
     m = _fit(X, enc)
     buf = io.BytesIO()
     joblib.dump(m, buf)
@@ -127,26 +148,61 @@ def test_the_baseline_is_not_pickled_with_the_predictor() -> None:
     assert m.driver_baseline is not None
 
 
-def _v2_artifact(with_baseline: bool) -> str:
-    X, enc = _x_far_from_zero(5, 1500)
-    X = X[["x"]]
-    m = _fit(X, enc)
+def test_a_baseline_not_aligned_with_the_encoder_gives_no_driver() -> None:
+    """A mean whose column names are reordered or renamed is not this predictor's: no driver rather than a wrong one,
+    even when its length matches."""
+    m = _plan_fit(12, 600)
+    b = m.driver_baseline
+    assert b is not None and len(set(b.columns)) == len(b.columns) > 1
+    frame = pd.DataFrame(ROWS)
+    reordered = TR.DriverBaseline(b.mean, list(reversed(b.columns)))
+    renamed = TR.DriverBaseline(b.mean, [f"{c}_renamed" for c in b.columns])
+    assert m.contributions(frame, reordered) == [None, None]
+    assert m.contributions(frame, renamed) == [None, None]
+    assert m.contributions(frame, b) != [None, None]
+
+
+def _v2_artifact(with_mean: bool, with_columns: bool) -> str:
+    m = _plan_fit(5, 1500)
     b = m.driver_baseline
     assert b is not None
-    cols = [E.ColumnSpec("x", "x", E.NumericEncoding("numeric"))]
-    return artifacts_v2.build("lr", m, cols, "binary", ["0", "1"], "0" * 64, b.mean if with_baseline else None,
-                              b.columns if with_baseline else None).bytes_base64
+    return artifacts_v2.build("lr", m, PLAN_COLUMNS, "binary", ["0", "1"], "0" * 64, b.mean if with_mean else None,
+                              b.columns if with_columns else None).bytes_base64
+
+
+def _predict(artifact_b64: str) -> JsonObject:
+    resp = client.post("/predict", json={"artifact_b64": artifact_b64, "rows": ROWS})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert isinstance(body, dict)
+    return body
+
+
+def _row_contributions_of(body: JsonObject) -> list[JsonValue]:
+    """Each prediction's `contributions` value, as the route returned it."""
+    preds = body["predictions"]
+    assert isinstance(preds, list)
+    out: list[JsonValue] = []
+    for p in preds:
+        assert isinstance(p, dict)
+        out.append(p["contributions"])
+    return out
 
 
 def test_predict_returns_centred_drivers_for_a_v2_linear_model() -> None:
-    body = client.post("/predict", json={"artifact_b64": _v2_artifact(True), "rows": [{"x": 7.0}, {"x": 3.0}]}).json()
-    hi, lo = _drivers(body)
-    assert hi["x"] > 0 > lo["x"]
+    pro, basic = _drivers(_predict(_v2_artifact(True, True)))
+    assert pro["plan_pro"] > 0 > basic["plan_pro"]
 
 
 def test_predict_returns_no_driver_for_a_v2_envelope_without_a_baseline() -> None:
-    body = client.post("/predict", json={"artifact_b64": _v2_artifact(False), "rows": [{"x": 7.0}, {"x": 3.0}]}).json()
-    assert [p["contributions"] for p in body["predictions"]] == [None, None]
+    assert _row_contributions_of(_predict(_v2_artifact(False, False))) == [None, None]
+
+
+def test_predict_returns_no_driver_for_a_v2_envelope_with_half_a_baseline() -> None:
+    """The mean without its column names, or the names without the mean, cannot be aligned: no driver."""
+    for with_mean, with_columns in ((True, False), (False, True)):
+        assert _row_contributions_of(_predict(_v2_artifact(with_mean, with_columns))) == [None, None], \
+            (with_mean, with_columns)
 
 
 def test_a_legacy_linear_model_without_a_training_mean_returns_no_driver() -> None:

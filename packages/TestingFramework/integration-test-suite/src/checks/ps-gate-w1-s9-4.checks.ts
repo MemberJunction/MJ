@@ -1,7 +1,8 @@
 /**
  * Gate G0.4 "W1 → S9.4": on the W1-signal s42 scoring (NA, 2024), every row whose top per-record driver is Auto Renew
  * shows the direction its own Auto Renew value pushes the risk: "Lowers Risk" for an auto-renewing member, "Raises
- * Risk" for one who is not (717 rows, all of them). Drivers are measured from the mean training row, so a member without
+ * Risk" for one who is not (717 rows, all of them, with both kinds of member present so neither direction passes
+ * vacuously). Drivers are measured from the mean training row, so a member without
  * auto-renew is driven up by the absence of what lowers the average member's risk. The drawer's badge reads
  * `RowDriver.Up`, which is `AtRiskRules.DriverRaisesRisk`; `Up === false` is the green "Lowers Risk" badge
  * (PSRowDriversComponent's own DOM test pins that copy).
@@ -28,9 +29,10 @@ export const PsGateW1S94Checks: NamedCheck[] = [
       const offRaises = off.filter((r) => r.RaisesRisk).length;
       const following = onLowers + offRaises;
       PsGate.Assert({
-        Passed: rows.length === AUTO_RENEW_TOP_DRIVER_ROWS && following === rows.length,
+        // Both kinds of member must be among the rows, or one of the two directions would pass with nothing to check.
+        Passed: rows.length === AUTO_RENEW_TOP_DRIVER_ROWS && on.length > 0 && off.length > 0 && following === rows.length,
         Measured: { autoRenewTopDriverRows: rows.length, autoRenewOn: on.length, onLowersRisk: onLowers, autoRenewOff: off.length, offRaisesRisk: offRaises },
-        Detail: `${following} of ${rows.length} Auto Renew top-driver rows show their own Auto Renew direction (${onLowers} of ${on.length} auto-renewing rows "Lowers Risk", ${offRaises} of ${off.length} others "Raises Risk"); ${AUTO_RENEW_TOP_DRIVER_ROWS} expected`,
+        Detail: `${following} of ${rows.length} Auto Renew top-driver rows show their own Auto Renew direction (${onLowers} of ${on.length} auto-renewing rows "Lowers Risk", ${offRaises} of ${off.length} others "Raises Risk"); ${AUTO_RENEW_TOP_DRIVER_ROWS} expected, with at least one row of each Auto Renew value`,
       });
     },
   },
