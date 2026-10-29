@@ -1299,15 +1299,7 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
 
         try {
             const { agentId, policy } = await this.resolveAgentAndUserPolicy(params, contextUser);
-            const operation =
-                (this.getStringParam(params, 'Operation') as
-                    | 'ListMessages'
-                    | 'SearchMessages'
-                    | 'GetSingleMessage'
-                    | 'CreateDraft'
-                    | 'Reply'
-                    | 'Forward'
-                    | null) ?? 'ListMessages';
+            const operation = this.normalizeEmailOperation(this.getStringParam(params, 'Operation'));
 
             const opCategory: 'Read' | 'Draft' | 'Send' =
                 operation === 'ListMessages' || operation === 'SearchMessages' || operation === 'GetSingleMessage'
@@ -1322,6 +1314,36 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                     Success: false,
                     ResultCode: 'POLICY_DENIED',
                     Message: emailEval.reason,
+                    Params: params.Params,
+                };
+            }
+
+            const to = this.getStringParam(params, 'To') ?? '';
+            const subject = this.getStringParam(params, 'Subject') ?? '';
+            const body = this.getStringParam(params, 'Body') ?? '';
+            const cc = this.parseStringArrayParam(params, 'CCRecipients');
+            const messageId = this.getStringParam(params, 'MessageID') ?? '';
+
+            // Approval comes BEFORE transport. The approval is about the content and the intent; whether
+            // a provider can deliver it is a separate question answered after the user has said yes.
+            // Checking the provider first meant a blocked mailbox silently prevented the approval from
+            // ever being raised, and the agent fell back to pasting a draft into the chat.
+            if (emailEval.verdict === 'RequireApproval' && !this.getStringParam(params, 'ConfirmedApprovalRequestID')) {
+                const fromLabel = this.describeIntendedSender(policy, contextUser);
+                const reqId = await this.createApprovalRequest(
+                    contextUser,
+                    agentId,
+                    `Approve outbound email (${operation}) from ${fromLabel} to ${to}: ${subject}`,
+                    { Operation: operation, From: fromLabel, To: to, CCRecipients: cc, Subject: subject, Body: body, MessageID: messageId || null }
+                );
+                this.setOutputParam(params, 'ApprovalRequestID', reqId);
+                return {
+                    Success: true,
+                    ResultCode: 'APPROVAL_REQUIRED',
+                    Message:
+                        `Queued approval request${reqId ? ` (${reqId})` : ''} for ${operation} to ${to}. ` +
+                        `Nothing has been sent. When it is approved, call this action again with the same ` +
+                        `parameters plus ConfirmedApprovalRequestID='${reqId ?? '<request id>'}' to deliver it.`,
                     Params: params.Params,
                 };
             }
@@ -1435,12 +1457,7 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                 };
             }
 
-            // CreateDraft / Reply / Forward
-            const to = this.getStringParam(params, 'To') ?? '';
-            const subject = this.getStringParam(params, 'Subject') ?? '';
-            const body = this.getStringParam(params, 'Body') ?? '';
-            const cc = this.parseStringArrayParam(params, 'CCRecipients');
-
+            // CreateDraft / Send / Reply / Forward
             const draftMessage = {
                 From: gate.TargetMailbox,
                 To: to,
@@ -1478,29 +1495,33 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                 };
             }
 
-            if (emailEval.verdict === 'RequireApproval' && !this.getStringParam(params, 'ConfirmedApprovalRequestID')) {
-                const reqId = await this.createApprovalRequest(
-                    contextUser,
-                    agentId,
-                    `Approve outbound email (${operation}) from ${gate.TargetMailbox} to ${to}`,
-                    {
-                        Operation: operation,
-                        From: gate.TargetMailbox,
-                        To: to,
-                        Subject: subject,
-                        Body: body,
-                    }
-                );
-                this.setOutputParam(params, 'ApprovalRequestID', reqId);
+            if (operation === 'Send') {
+                if (!to) {
+                    return {
+                        Success: false,
+                        ResultCode: 'MISSING_PARAMETERS',
+                        Message: 'Send requires To.',
+                        Params: params.Params,
+                    };
+                }
+                const sendRes = await resolved.providerInstance.SendSingleMessage(draftMessage);
+                if (!sendRes.Success) {
+                    return {
+                        Success: false,
+                        ResultCode: 'PROVIDER_ERROR',
+                        Message: sendRes.Error || 'Failed to send email.',
+                        Params: params.Params,
+                    };
+                }
+                this.setOutputParam(params, 'TargetMailbox', gate.TargetMailbox);
                 return {
                     Success: true,
-                    ResultCode: 'APPROVAL_REQUIRED',
-                    Message: `Queued approval request${reqId ? ` (${reqId})` : ''} for ${operation} from ${gate.TargetMailbox}.`,
+                    ResultCode: 'SUCCESS',
+                    Message: `Sent email '${subject}' to ${to} from ${gate.TargetMailbox}.`,
                     Params: params.Params,
                 };
             }
 
-            const messageId = this.getStringParam(params, 'MessageID') ?? '';
             if (operation === 'Reply') {
                 const replyRes = await resolved.providerInstance.ReplyToMessage({
                     MessageID: messageId,
@@ -1555,4 +1576,46 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
             };
         }
     }
+
+    /**
+     * The operation names this action understands, plus the aliases earlier prompt versions used
+     * (`SendEmail`, `ReplyToMessage`, `ForwardMessage`), so a stale prompt still reaches the right branch.
+     */
+    private normalizeEmailOperation(raw: string | null | undefined): EmailOperation {
+        const value = (raw ?? '').trim().toLowerCase();
+        switch (value) {
+            case '':
+            case 'listmessages':
+                return 'ListMessages';
+            case 'searchmessages':
+                return 'SearchMessages';
+            case 'getsinglemessage':
+                return 'GetSingleMessage';
+            case 'createdraft':
+                return 'CreateDraft';
+            case 'send':
+            case 'sendemail':
+            case 'sendmessage':
+                return 'Send';
+            case 'reply':
+            case 'replytomessage':
+                return 'Reply';
+            case 'forward':
+            case 'forwardmessage':
+                return 'Forward';
+            default:
+                return 'ListMessages';
+        }
+    }
+
+    /** Who the email would go out as, for the approval text, before any provider has been consulted. */
+    private describeIntendedSender(policy: MJAIAgentUserPolicyEntity | null, contextUser: UserInfo): string {
+        if (policy?.EmailChannelMode === 'SendAsAgent') {
+            return 'the agent utility mailbox';
+        }
+        return contextUser.Email?.trim() || 'your mailbox';
+    }
 }
+
+/** Operations of `Manage My Email Inbox and Drafts` after alias normalization. */
+type EmailOperation = 'ListMessages' | 'SearchMessages' | 'GetSingleMessage' | 'CreateDraft' | 'Send' | 'Reply' | 'Forward';

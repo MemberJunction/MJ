@@ -1424,16 +1424,12 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Reply', or 'Forward'",
+            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Send' (a new outbound email), 'Reply', or 'Forward'. Sending operations under SendAsAgent/SendAsUser with RequireApprovalForExternalComms return APPROVAL_REQUIRED first; call again with ConfirmedApprovalRequestID once the request is approved.",
             "IsRequired": true,
             "DefaultValue": "ListMessages"
           },
           "primaryKey": {
             "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
-          },
-          "sync": {
-            "lastModified": "2026-10-20T23:18:47.682Z",
-            "checksum": "2fcc703eeb47bc055926d3775a6d275fbdfb3cbe6a403243e60e0e4a602a904b"
           }
         },
         {
@@ -1561,6 +1557,34 @@
             "lastModified": "2026-10-20T23:18:47.758Z",
             "checksum": "54b76aefa901b2d69d905cf887aaab5e53a3c41e2bb8ca99483c647e8b561924"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the approved MJ: AI Agent Requests row for this exact send. Pass it when acting on an approval; the action then delivers instead of queueing another approval.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8C2765D7-80F7-4D6C-A74C-AAADB385A9BE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovalRequestID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the approval request queued when the result is APPROVAL_REQUIRED",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A35539C-9CC3-4C54-BE40-A1BCD60620DA"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -1592,6 +1616,28 @@
           "sync": {
             "lastModified": "2026-10-20T23:18:47.771Z",
             "checksum": "cc73a66eadb25a08a098fa200aedcfce4ec3f67afe0e042a728ef721e562d015"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "APPROVAL_REQUIRED",
+            "IsSuccess": true,
+            "Description": "An approval request was queued for the user; nothing was sent. Call again with ConfirmedApprovalRequestID after approval."
+          },
+          "primaryKey": {
+            "ID": "C70D5FCC-AA24-44CA-BD86-7C9A496036AB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_EMAIL_PROVIDER",
+            "IsSuccess": false,
+            "Description": "No active communication provider can act for this mailbox; the email cannot be delivered"
+          },
+          "primaryKey": {
+            "ID": "F533C36E-A634-4417-99BC-DEBFC80D1035"
           }
         }
       ]
