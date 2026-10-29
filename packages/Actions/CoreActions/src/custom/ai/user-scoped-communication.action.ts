@@ -344,20 +344,39 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
             (p) => p.Status === 'Active' && (!requireCalendar || p.SupportsCalendar)
         );
 
-        const chosenEntity = requestedName
-            ? activeProviders.find((p) => p.Name.trim().toLowerCase() === requestedName.trim().toLowerCase())
-            : activeProviders.find((p) => p.Name === 'Microsoft Graph' || p.Name === 'Gmail') ?? activeProviders[0];
+        // Candidates in preference order. A provider that is Active in metadata may still have no
+        // class loaded in this server (Gmail here, say), and GetProvider throws for it; try the
+        // next one instead of giving up, so one unloaded provider cannot hide the loaded ones.
+        const byPreference = (p: MJCommunicationProviderEntity): number =>
+            p.Name === 'Microsoft Graph' ? 0 : p.Name === 'Gmail' ? 1 : 2;
+        const candidates = requestedName
+            ? activeProviders.filter((p) => p.Name.trim().toLowerCase() === requestedName.trim().toLowerCase())
+            : [...activeProviders].sort((a, b) => byPreference(a) - byPreference(b));
 
-        if (!chosenEntity) {
-            return null;
+        const unloadable: string[] = [];
+        for (const candidate of candidates) {
+            try {
+                const instance = CommunicationEngine.Instance.GetProvider(candidate.Name);
+                this.lastProviderResolutionNote = null;
+                return { providerEntity: candidate, providerInstance: instance };
+            } catch {
+                unloadable.push(candidate.Name);
+            }
         }
+        this.lastProviderResolutionNote =
+            candidates.length === 0
+                ? (requestedName ? `No active provider named '${requestedName}'.` : 'No communication provider is Active.')
+                : `Active provider(s) ${unloadable.join(', ')} have no class loaded in this server.`;
+        return null;
+    }
 
-        try {
-            const instance = CommunicationEngine.Instance.GetProvider(chosenEntity.Name);
-            return { providerEntity: chosenEntity, providerInstance: instance };
-        } catch {
-            return null;
-        }
+    /** Why the last {@link resolveActiveProvider} returned null, for the user-facing message. */
+    protected lastProviderResolutionNote: string | null = null;
+
+    /** The NO_EMAIL_PROVIDER / NO_CALENDAR_PROVIDER message, naming what was tried. */
+    protected noProviderMessage(): string {
+        const note = this.lastProviderResolutionNote ? ` ${this.lastProviderResolutionNote}` : '';
+        return `No active communication provider is configured.${note}`;
     }
 
     protected async createApprovalRequest(
@@ -1353,7 +1372,7 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                 return {
                     Success: false,
                     ResultCode: 'NO_EMAIL_PROVIDER',
-                    Message: 'No active communication provider is configured.',
+                    Message: this.noProviderMessage(),
                     Params: params.Params,
                 };
             }

@@ -646,6 +646,53 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
         });
     });
 
+    describe('ManageMyEmailInboxAction — provider choice skips providers this server cannot load', () => {
+        it('falls through to the next active provider when the preferred one has no loaded class', async () => {
+            // Gmail is Active in metadata and preferred, but its provider package is not loaded here;
+            // SendGrid is. The draft must land in SendGrid, not fail with NO_EMAIL_PROVIDER.
+            mockProvidersList.push(buildProviderEntity({ Name: 'Gmail' }), buildProviderEntity({ Name: 'SendGrid', SupportsCalendar: false }));
+            const mockCreateDraft = vi.fn().mockResolvedValue({ Success: true, DraftID: 'draft-1' });
+            mockGetProvider.mockImplementation((name: string) => {
+                if (name === 'Gmail') throw new Error('Provider Gmail not found.');
+                return {
+                    supportsOperation: () => true,
+                    VerifyMailboxAccess: vi.fn().mockResolvedValue({ Success: true, Identifier: 'alice@bluecypress.io', CanReadMail: true, CanReadCalendar: true }),
+                    CreateDraft: mockCreateDraft,
+                };
+            });
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction']({
+                ContextUser: aliceUser,
+                Params: [
+                    { Name: 'Operation', Value: 'CreateDraft', Type: 'Input' },
+                    { Name: 'To', Value: 'amith@bluecypress.io', Type: 'Input' },
+                    { Name: 'Subject', Value: 'Q4', Type: 'Input' },
+                    { Name: 'Body', Value: 'On track.', Type: 'Input' },
+                ],
+            } as unknown as RunActionParams);
+
+            expect(res.ResultCode).toBe('SUCCESS');
+            expect(mockCreateDraft).toHaveBeenCalledTimes(1);
+            expect(mockGetProvider).toHaveBeenCalledWith('Gmail');
+            expect(mockGetProvider).toHaveBeenCalledWith('SendGrid');
+        });
+
+        it('reports NO_EMAIL_PROVIDER only when no active provider can be loaded at all', async () => {
+            mockProvidersList.push(buildProviderEntity({ Name: 'Gmail' }));
+            mockGetProvider.mockImplementation(() => { throw new Error('Provider Gmail not found.'); });
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction']({
+                ContextUser: aliceUser,
+                Params: [{ Name: 'Operation', Value: 'CreateDraft', Type: 'Input' }, { Name: 'To', Value: 'a@b.io', Type: 'Input' }],
+            } as unknown as RunActionParams);
+
+            expect(res.ResultCode).toBe('NO_EMAIL_PROVIDER');
+            expect(res.Message).toContain('Gmail');
+        });
+    });
+
     describe('ManageMyEmailInboxAction — approval comes before transport', () => {
         function sendParams(extra: Array<{ Name: string; Value: unknown }> = [], operation = 'Send'): RunActionParams {
             return {
