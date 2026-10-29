@@ -70,7 +70,6 @@ class MockRealtimeSession implements IRealtimeSession {
 class MockRealtimeModel extends BaseRealtimeModel {
     public LastParams: RealtimeSessionParams | null = null;
     public ClientCalled = false;
-    constructor() { super('mock-api-key'); }    public ClientCalled = false;
     /** What the mock driver mints as the effective session cap; unset by default (the key is omitted). */
     public MintedMaxSessionSeconds: number | undefined = undefined;
     constructor() { super('mock-api-key'); }
@@ -87,8 +86,7 @@ class MockRealtimeModel extends BaseRealtimeModel {
             Model: params.Model,
             EphemeralToken: 'ephemeral-123',
             ExpiresAt: '2099-01-01T00:00:00.000Z',
-            SessionConfig: { instructions: params.SystemPrompt }
-        };            SessionConfig: { instructions: params.SystemPrompt },
+            SessionConfig: { instructions: params.SystemPrompt },
             ...(this.MintedMaxSessionSeconds === undefined ? {} : { MaxSessionSeconds: this.MintedMaxSessionSeconds }),
         };
     }
@@ -222,7 +220,6 @@ function makePrepInput(overrides: Partial<PrepareClientSessionInput> = {}): Prep
 // Tests
 // ════════════════════════════════════════════════════════════════════
 
-describe('RealtimeClientSessionService.PrepareClientSession', () => {
 describe('RealtimeClientSessionService.PrepareClientSession', () => {
     it('passes the driver MaxSessionSeconds through unchanged, and undefined stays undefined', async () => {
         const withCap = new TestableService();
