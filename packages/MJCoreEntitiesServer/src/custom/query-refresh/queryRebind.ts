@@ -71,7 +71,7 @@ function restrictedFieldIDs(entities: readonly EntityInfo[]): Set<string> {
 async function queriesWithPermissions(context: QueryRefreshContext, queryIDs: readonly string[]): Promise<Set<string>> {
     const list = queryIDs.map(id => `'${EscapeSQLString(id)}'`).join(',');
     const result = await context.Provider.RunView<{ QueryID: string }>({
-        EntityName: 'MJ: Query Permissions', ExtraFilter: `QueryID IN (${list})`, Fields: ['QueryID'], ResultType: 'simple', BypassCache: true,
+        EntityName: 'MJ: Query Permissions', ExtraFilter: `QueryID IN (${list})`, Fields: ['QueryID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true,
     }, context.User);
     if (!result.Success) throw new Error(`the query permissions could not be read: ${result.ErrorMessage}`);
     return new Set(result.Results.map(r => NormalizeUUID(r.QueryID)));

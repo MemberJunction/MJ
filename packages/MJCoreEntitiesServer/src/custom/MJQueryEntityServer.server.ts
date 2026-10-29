@@ -364,9 +364,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     private async queueReplacedRowDeletionsAsync(): Promise<void> {
         const filter = `QueryID='${EscapeSQLString(this.ID)}'`;
         const [parameters, fields, entities] = await this.RunViewProviderToUse.RunViews([
-            { EntityName: 'MJ: Query Parameters', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true },
-            { EntityName: 'MJ: Query Fields', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true },
-            { EntityName: 'MJ: Query Entities', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true },
+            { EntityName: 'MJ: Query Parameters', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true },
+            { EntityName: 'MJ: Query Fields', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true },
+            { EntityName: 'MJ: Query Entities', ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true },
         ], this.ContextCurrentUser);
         if (!parameters?.Success || !fields?.Success || !entities?.Success) {
             throw new Error(`could not read the query's stored child rows: ${parameters?.ErrorMessage || fields?.ErrorMessage || entities?.ErrorMessage}`);

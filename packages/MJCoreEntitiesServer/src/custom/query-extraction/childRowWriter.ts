@@ -105,7 +105,7 @@ export async function WriteExtractedChildRows(context: ChildRowWriteContext, res
 async function loadStoredChildRows(context: ChildRowWriteContext): Promise<StoredChildRows> {
     const filter = `QueryID='${EscapeSQLString(context.QueryID)}'`;
     const load = async <T extends BaseEntity>(entityName: string): Promise<T[]> => {
-        const result = await context.Provider.RunView<T>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true }, context.User);
+        const result = await context.Provider.RunView<T>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true }, context.User);
         if (!result.Success) throw new Error(`Could not read the stored ${entityName} of query ${context.QueryID}: ${result.ErrorMessage}`);
         return result.Results ?? [];
     };

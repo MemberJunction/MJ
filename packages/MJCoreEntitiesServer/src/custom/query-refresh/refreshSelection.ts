@@ -69,11 +69,11 @@ function entityIDsOf(context: QueryRefreshContext, filter: QueryRefreshFilter): 
 
 async function readAll(context: QueryRefreshContext, withLinks: boolean): Promise<[QueryRow[], CategoryRow[], QueryEntityRow[], CompositionEdge[]]> {
     const views: RunViewParams[] = [
-        { EntityName: 'MJ: Queries', Fields: ['ID', 'Name', 'CategoryID'], OrderBy: 'Name', ResultType: 'simple', BypassCache: true },
-        { EntityName: 'MJ: Query Categories', Fields: ['ID', 'Name', 'ParentID'], ResultType: 'simple', BypassCache: true },
-        { EntityName: 'MJ: Query Dependencies', Fields: ['QueryID', 'DependsOnQueryID'], ResultType: 'simple', BypassCache: true },
+        { EntityName: 'MJ: Queries', Fields: ['ID', 'Name', 'CategoryID'], OrderBy: 'Name', ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
+        { EntityName: 'MJ: Query Categories', Fields: ['ID', 'Name', 'ParentID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
+        { EntityName: 'MJ: Query Dependencies', Fields: ['QueryID', 'DependsOnQueryID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
     ];
-    if (withLinks) views.push({ EntityName: 'MJ: Query Entities', Fields: ['QueryID', 'EntityID'], ResultType: 'simple', BypassCache: true });
+    if (withLinks) views.push({ EntityName: 'MJ: Query Entities', Fields: ['QueryID', 'EntityID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true });
     const results = await context.Provider.RunViews(views, context.User);
     const failed = results.find(r => !r?.Success);
     if (failed) throw new Error(`the queries to refresh could not be read: ${failed.ErrorMessage}`);

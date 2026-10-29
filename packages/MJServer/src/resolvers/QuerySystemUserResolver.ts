@@ -431,7 +431,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      */
     private async readStoredChildrenAsync(provider: DatabaseProviderBase, queryID: string, user: UserInfo): Promise<StoredQueryChildren> {
         const filter = `QueryID='${EscapeSQLString(queryID)}'`;
-        const view = (entityName: string, orderBy?: string) => ({ EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, ResultType: 'entity_object' as const, BypassCache: true });
+        const view = (entityName: string, orderBy?: string) => ({ EntityName: entityName, ExtraFilter: filter, OrderBy: orderBy, ResultType: 'entity_object' as const, BypassCache: true, IgnoreMaxRows: true });
         const [fields, parameters, entities, permissions] = await provider.RunViews([
             view('MJ: Query Fields', 'Sequence'),
             view('MJ: Query Parameters', 'Name'),

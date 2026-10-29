@@ -68,6 +68,9 @@ let ops: string[];
 let stored: Map<string, Record<string, unknown>[]>;
 let lookups: RunViewParams[];
 
+/** The provider's default row cap (an entity's `UserViewMaxRows`), applied unless a read sets `IgnoreMaxRows`. */
+const DEFAULT_ROW_CAP = 1000;
+
 function createEntity(entityName: string, provider: IEntityDataProvider): BaseEntity {
     const info = infos.get(entityName)!;
     switch (entityName) {
@@ -97,7 +100,8 @@ function makeProvider() {
         },
         async RunView(params: RunViewParams): Promise<RunViewResult> {
             lookups.push(params);
-            const results = (stored.get(params.EntityName!) ?? []).map(row => {
+            const rows = stored.get(params.EntityName!) ?? [];
+            const results = (params.IgnoreMaxRows ? rows : rows.slice(0, DEFAULT_ROW_CAP)).map(row => {
                 const entity = createEntity(params.EntityName!, provider as unknown as IEntityDataProvider);
                 entity.LoadFromData(row);
                 return entity;
@@ -252,6 +256,18 @@ describe('WriteExtractedChildRows — entities and dependencies', () => {
 
         expect(lookups.map(l => l.EntityName).sort()).toEqual(['MJ: Query Dependencies', 'MJ: Query Entities', 'MJ: Query Fields', 'MJ: Query Parameters']);
         expect(lookups.every(l => l.BypassCache === true)).toBe(true);
+    });
+
+    it('reconciles every stored row, past the provider\'s default row cap', async () => {
+        const staleCount = DEFAULT_ROW_CAP + 47;
+        stored.set('MJ: Query Fields', Array.from({ length: staleCount }, (_, i) => (
+            { ID: `S${i}`, QueryID: QUERY_ID, Name: `Stale${i}`, Sequence: i + 1, SQLBaseType: 'int', SQLFullType: 'int', DetectionMethod: 'Database' }
+        )));
+        const summary = await WriteExtractedChildRows(context(), result({ Fields: [field('Name', 1)] }));
+
+        expect(ops.filter(op => op.startsWith('delete MJ: Query Fields:'))).toHaveLength(staleCount);
+        expect(summary.Removed).toBe(staleCount);
+        expect(lookups.every(l => l.IgnoreMaxRows === true)).toBe(true);
     });
 });
 

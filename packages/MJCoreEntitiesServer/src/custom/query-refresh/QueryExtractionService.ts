@@ -148,8 +148,8 @@ export class QueryExtractionService {
     private async userCanSeeSources(queryID: string, extraction: QueryExtractionResult): Promise<boolean> {
         const filter = `QueryID='${EscapeSQLString(queryID)}'`;
         const [links, fields] = await this.context.Provider.RunViews<{ EntityID?: string; SourceEntityID?: string | null }>([
-            { EntityName: 'MJ: Query Entities', ExtraFilter: filter, Fields: ['EntityID'], ResultType: 'simple', BypassCache: true },
-            { EntityName: 'MJ: Query Fields', ExtraFilter: filter, Fields: ['SourceEntityID'], ResultType: 'simple', BypassCache: true },
+            { EntityName: 'MJ: Query Entities', ExtraFilter: filter, Fields: ['EntityID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
+            { EntityName: 'MJ: Query Fields', ExtraFilter: filter, Fields: ['SourceEntityID'], ResultType: 'simple', BypassCache: true, IgnoreMaxRows: true },
         ], this.context.User);
         if (!links?.Success || !fields?.Success) return false;
         const stored = [...links.Results.map(r => r.EntityID), ...fields.Results.map(r => r.SourceEntityID)]

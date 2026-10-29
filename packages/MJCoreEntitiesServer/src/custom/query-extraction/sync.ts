@@ -768,7 +768,8 @@ export async function RemoveAllRecords(
         const existingResult = await runViewProvider.RunView({
             EntityName: entityName,
             ExtraFilter: `QueryID='${queryID}'`,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            IgnoreMaxRows: true
         }, contextUser);
 
         if (!existingResult.Success) {
@@ -818,6 +819,7 @@ async function loadExistingRecords<T extends { QueryID: string }>(
         ExtraFilter: `QueryID='${EscapeSQLString(queryID)}'`,
         ResultType: 'entity_object',
         BypassCache: true,
+        IgnoreMaxRows: true,
     }, contextUser);
     if (!result.Success) {
         throw new Error(`Failed to load existing ${entityName} for query ${queryID}: ${result.ErrorMessage}`);

@@ -111,7 +111,7 @@ async function readTargetRows(names: readonly string[], provider: Pick<IRunViewP
 }
 
 function bypassing(entityName: string, filter: string): RunViewParams {
-    return { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true };
+    return { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true };
 }
 
 function candidateOf(query: MJQueryEntity, rows: StoredTargetRows): CompositionCandidate {

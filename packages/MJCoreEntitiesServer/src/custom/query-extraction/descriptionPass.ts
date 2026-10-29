@@ -59,7 +59,7 @@ export async function RunDescriptionPass(request: DescriptionPassRequest): Promi
 async function loadUndescribedRows(request: DescriptionPassRequest): Promise<[MJQueryFieldEntity[], MJQueryParameterEntity[]]> {
     const filter = `QueryID='${EscapeSQLString(request.QueryID)}' AND (Description IS NULL OR Description = '')`;
     const load = async <T extends BaseEntity>(entityName: string): Promise<T[]> => {
-        const result = await request.Provider.RunView<T>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true }, request.User);
+        const result = await request.Provider.RunView<T>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true }, request.User);
         if (!result.Success) throw new Error(`could not read the ${entityName}: ${result.ErrorMessage}`);
         return result.Results ?? [];
     };
