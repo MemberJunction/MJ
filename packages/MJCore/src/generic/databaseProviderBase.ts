@@ -13,8 +13,11 @@ import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, ValidationResult } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
+import { EntityLifecyclePolicyEngine } from "./entityLifecyclePolicy";
+import { DocumentNumberingEngine } from "./documentNumberingEngine";
+import { CrossEntityPolicyEngine } from "./crossEntityPolicyEngine";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
 export { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
@@ -153,6 +156,31 @@ export interface PostCommitToken {
  * Subclasses implement abstract methods for DB-specific SQL dialect generation.
  */
 export abstract class DatabaseProviderBase extends ProviderBase {
+    private static _nextProviderInstanceId = 1;
+    private readonly _providerInstanceId = DatabaseProviderBase._nextProviderInstanceId++;
+    private _transactionEpoch = 0;
+
+    /**
+     * Unique cache key identifying this provider's current active transaction epoch, or `null` when
+     * no entity/physical transaction is open. Used by {@link CrossEntityPolicyEngine} to memoize
+     * parent-record lookups across batch/graph saves and evict them cleanly on commit or rollback.
+     */
+    public get TransactionScopeCacheKey(): string | null {
+        if (this.IsInTransaction || this.CurrentTransactionDepth > 0) {
+            return `tx:${this._providerInstanceId}:${this._transactionEpoch}`;
+        }
+        return null;
+    }
+
+    /**
+     * Advances this provider's transaction epoch and evicts any transaction-scoped
+     * {@link CrossEntityPolicyEngine} caches bound to it.
+     */
+    protected BumpTransactionEpoch(): void {
+        this._transactionEpoch++;
+        CrossEntityPolicyEngine.Instance.ClearProviderScope(this);
+    }
+
     /**
      * Server-side providers trust the local cache completely because it is
      * kept in perfect sync via BaseEntity save/delete events and cross-server
@@ -436,6 +464,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     await this.RollbackTransaction();
                 }
             } finally {
+                if (!isNested) {
+                    if (typeof this.BumpTransactionEpoch === 'function') {
+                        this.BumpTransactionEpoch();
+                    } else {
+                        CrossEntityPolicyEngine.Instance.ClearProviderScope(this);
+                    }
+                }
                 await LocalCacheManager.Instance.EndEntityEventBatch(this, settledAsCommit);
             }
         };
@@ -1892,6 +1927,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
         const entityResult = new BaseEntityResult();
+        let autoNumberTxScope: EntityTransactionScope | null = null;
+        let autoNumberTxCommitted = false;
         // Each suspend is matched by exactly one resume, whichever path (success, transaction
         // callback, or catch) gets there first: providers count suspensions, so a stray resume
         // would re-enable refresh while another save is still running.
@@ -1949,8 +1986,47 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entityResult.OriginalValues = entity.Fields.map((f) => ({ FieldName: f.Name, Value: f.Value }));
                 entity.RegisterResultHistoryEntry(entityResult);
 
-                // Step 2: Validation hook
+                // Step 2: Validation hook (lifecycle gates, state machine, auto-number, cross-entity policies, & provider hook)
                 if (!bReplay) {
+                    const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                        entity,
+                        bNewRecord ? 'Create' : 'Update',
+                        user,
+                        true,
+                    );
+                    if (gateError) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = gateError;
+                        return false;
+                    }
+
+                    const lifecycleValidation = new ValidationResult();
+                    lifecycleValidation.Success = true;
+                    EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(entity, user, lifecycleValidation);
+                    DocumentNumberingEngine.Instance.ValidateAutoNumberFields(entity, lifecycleValidation);
+                    if (!lifecycleValidation.Success) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Errors.push(...lifecycleValidation.Errors);
+                        entityResult.Message = lifecycleValidation.Errors.map((e) => e.Message).join('; ');
+                        entityResult.MessageIncludesErrors = true;
+                        return false;
+                    }
+
+                    const crossPolicyError = await CrossEntityPolicyEngine.Instance.EnforceBeforeSave(
+                        entity,
+                        user,
+                        this,
+                        saveContext,
+                    );
+                    if (crossPolicyError) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = crossPolicyError;
+                        return false;
+                    }
+
                     const validationMessage = await this.OnValidateBeforeSave(entity, user, saveContext);
                     if (validationMessage) {
                         entityResult.Success = false;
@@ -1986,6 +2062,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
+                }
+
+                // Step 3a: Scoped document auto-numbering allocation (transactional & gap-free)
+                if (!bReplay && bNewRecord && DocumentNumberingEngine.Instance.NeedsAllocation(entity)) {
+                    if (
+                        !entity.TransactionGroup &&
+                        !this.IsInTransaction &&
+                        this.CurrentTransactionDepth === 0 &&
+                        DocumentNumberingEngine.Instance.RequiresTransactionalSave(entity.EntityInfo)
+                    ) {
+                        autoNumberTxScope = await this.BeginEntityTransaction();
+                    }
+                    await DocumentNumberingEngine.Instance.AllocateAndAssignForEntity(entity, this, user);
                 }
 
                 // Step 3b: Post-image RLS check. The pre-image/pre-hook check at step 2b
@@ -2068,6 +2157,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
+                                    CrossEntityPolicyEngine.Instance.NotifyEntityMutated(
+                                        this,
+                                        entity,
+                                        bNewRecord ? 'Create' : 'Update',
+                                    );
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
                                     const mergedResult: Record<string, unknown> = preSaveValues
@@ -2104,6 +2198,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     entityResult.EndedAt = new Date();
 
                     if (result && result.length > 0) {
+                        if (autoNumberTxScope) {
+                            await autoNumberTxScope.Commit();
+                            autoNumberTxCommitted = true;
+                        }
+                        CrossEntityPolicyEngine.Instance.NotifyEntityMutated(
+                            this,
+                            entity,
+                            bNewRecord ? 'Create' : 'Update',
+                        );
                         this.OnAfterSaveExecute(entity, user, options, saveContext);
                         entityResult.Success = true;
 
@@ -2143,6 +2246,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 return entity.GetAll(); // nothing to save
             }
         } catch (e) {
+            if (autoNumberTxScope && !autoNumberTxCommitted) {
+                try {
+                    await autoNumberTxScope.Rollback();
+                } catch (rbErr) {
+                    LogError(rbErr);
+                }
+            }
             resumeRefresh();
             entityResult.EndedAt = new Date();
             entityResult.Message = (e as Error).message;
@@ -2188,6 +2298,32 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 Value: f.Value,
             }));
             entity.RegisterResultHistoryEntry(entityResult);
+
+            if (!bReplay) {
+                const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                    entity,
+                    'Delete',
+                    user,
+                    true,
+                );
+                if (gateError) {
+                    entityResult.Success = false;
+                    entityResult.EndedAt = new Date();
+                    entityResult.Message = gateError;
+                    return false;
+                }
+                const crossPolicyError = await CrossEntityPolicyEngine.Instance.EnforceBeforeDelete(
+                    entity,
+                    user,
+                    this,
+                );
+                if (crossPolicyError) {
+                    entityResult.Success = false;
+                    entityResult.EndedAt = new Date();
+                    entityResult.Message = crossPolicyError;
+                    return false;
+                }
+            }
 
             // Generate provider-specific delete SQL
             const sqlDetails = this.GenerateDeleteSQL(entity, user, options);
@@ -2238,6 +2374,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                     entityResult.Success = false;
                                     return;
                                 }
+                                CrossEntityPolicyEngine.Instance.NotifyEntityMutated(this, entity, 'Delete');
                                 this.OnAfterDeleteExecute(entity, user, options);
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
@@ -2271,6 +2408,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         return false;
                     }
 
+                    CrossEntityPolicyEngine.Instance.NotifyEntityMutated(this, entity, 'Delete');
                     this.OnAfterDeleteExecute(entity, user, options);
                     entityResult.EndedAt = new Date();
                     return true;

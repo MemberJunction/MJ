@@ -125,13 +125,13 @@ export function readArtifactSource(rootDir, artifact) {
 /**
  * Core-schema tables that exist without a generated entity, and always will.
  *
- * `SystemEvent` (v2.0) predates the entity system and was never registered in
- * `__mj.Entity`; CodeGen has therefore never generated a subclass for it. It is the only
- * such table in the entire migration history (386 CREATEs at the time of writing), so an
- * allowlist is cheaper and more honest than weakening the check. Adding an entry here is
- * a deliberate statement that the table is not, and will not become, an entity.
+ * - `SystemEvent` (v2.0) predates the entity system and was never registered in `__mj.Entity`.
+ * - `DocumentSequenceCounter` (v6.2) is the internal atomic lock/counter table backing
+ *   `DocumentNumberingEngine`; it is intentionally excluded from `BaseEntity` / GraphQL CRUD
+ *   (`excludeTables` in CodeGenLib) so counters can only be mutated through `UPDLOCK, HOLDLOCK`
+ *   / `ON CONFLICT DO UPDATE` atomic increments inside `DocumentNumberingEngine`.
  */
-export const NON_ENTITY_TABLES = new Set(['systemevent']);
+export const NON_ENTITY_TABLES = new Set(['systemevent', 'documentsequencecounter']);
 
 /**
  * Blank out SQL comments and string literals, leaving only executable text.

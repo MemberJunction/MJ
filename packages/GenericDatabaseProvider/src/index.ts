@@ -1,4 +1,5 @@
 export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';

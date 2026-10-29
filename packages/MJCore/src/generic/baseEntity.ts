@@ -1,5 +1,7 @@
 import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
-import { GetDataHooks, PreSaveHook } from './dataHooks';
+import { GetDataHooks, PreDeleteHook, PreSaveHook } from './dataHooks';
+import { EntityLifecyclePolicyEngine } from './entityLifecyclePolicy';
+import { DocumentNumberingEngine } from './documentNumberingEngine';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
 import { BaseEngineRegistry } from './baseEngineRegistry';
@@ -5500,6 +5502,18 @@ export abstract class BaseEntity<T = unknown> {
             this.CheckFieldLevelUpdatePermissions() // field-level security — throws if a dirty field is not updatable by this user
             this.ApplyFieldLevelCreateSuppression() // field-level security on INSERT — omits fields, never rejects
 
+            if (!_options.ReplayOnly) {
+                const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                    this,
+                    this.IsSaved ? 'Update' : 'Create',
+                    this.ActiveUser,
+                    this.isDatabaseProvider(),
+                );
+                if (gateError) {
+                    throw new Error(gateError);
+                }
+            }
+
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
             // if a Publication already exists with the same Product ID).
@@ -5704,6 +5718,41 @@ export abstract class BaseEntity<T = unknown> {
                 throw new Error(hookResult);
             }
         }
+    }
+
+    /**
+     * Runs all registered PreDelete hooks. If any hook returns false or a string
+     * (error message), the delete is rejected by throwing an Error.
+     */
+    private async runPreDeleteHooks(): Promise<void> {
+        const preDeleteHooks = GetDataHooks<PreDeleteHook>('PreDelete');
+        for (const hook of preDeleteHooks) {
+            const hookResult = await hook(this, this.ActiveUser);
+            if (hookResult === false) {
+                throw new Error('Delete rejected by pre-delete hook');
+            }
+            if (typeof hookResult === 'string') {
+                throw new Error(hookResult);
+            }
+        }
+    }
+
+    /**
+     * Returns true when `ProviderToUse` is a server-side database provider (`ProviderType.Database`)
+     * rather than a client network transport (`ProviderType.Network`).
+     */
+    private isDatabaseProvider(): boolean {
+        const provider = this.ProviderToUse as (IEntityDataProvider & Partial<Pick<IMetadataProvider, 'ProviderType'>>) | null;
+        if (!provider) {
+            return false;
+        }
+        if (provider.ProviderType === ProviderType.Database) {
+            return true;
+        }
+        if (provider.ProviderType === ProviderType.Network) {
+            return false;
+        }
+        return 'ExecuteSQL' in provider && typeof (provider as { ExecuteSQL?: Function }).ExecuteSQL === 'function';
     }
 
     /**
@@ -6643,11 +6692,33 @@ export abstract class BaseEntity<T = unknown> {
                     continue; // skip parent field mirrors — authoritative validation is on _parentEntity
 
                 const err = field.Validate();
-                err.Errors.forEach(element => {
-                    result.Errors.push(element);
-                });
-                result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+                const suppressPreSaveNullForAutoNumber =
+                    !this.IsSaved &&
+                    (field.Value === null ||
+                        field.Value === undefined ||
+                        (typeof field.Value === 'string' && field.Value.trim().length === 0)) &&
+                    DocumentNumberingEngine.Instance.WillAutoPopulateOnCreate(this.EntityInfo, field.Name);
+
+                if (suppressPreSaveNullForAutoNumber) {
+                    const nullErrorMessage = `${field.EntityFieldInfo.DisplayNameOrName} cannot be null`;
+                    const retainedErrors = err.Errors.filter((e) => e.Message !== nullErrorMessage);
+                    retainedErrors.forEach((element) => {
+                        result.Errors.push(element);
+                    });
+                    if (retainedErrors.length > 0) {
+                        result.Success = false;
+                    }
+                } else {
+                    err.Errors.forEach(element => {
+                        result.Errors.push(element);
+                    });
+                    result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+                }
             }
+
+            // Declarative & programmatic lifecycle state machine, field-freeze, and auto-number reserved-namespace rules
+            EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(this, this.ActiveUser, result);
+            DocumentNumberingEngine.Instance.ValidateAutoNumberFields(this, result);
 
             // Companions validate LAST but still BEFORE any write, over their complete state including
             // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
@@ -6878,6 +6949,19 @@ export abstract class BaseEntity<T = unknown> {
                 const unit = part?.unit ?? enclosing;
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
+
+                if (!_options.ReplayOnly) {
+                    const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                        this,
+                        'Delete',
+                        this.ActiveUser,
+                        this.isDatabaseProvider(),
+                    );
+                    if (gateError) {
+                        throw new Error(gateError);
+                    }
+                    await this.runPreDeleteHooks();
+                }
 
                 // Raise delete_started event before the actual delete operation begins
                 this.RaiseEvent('delete_started', null);

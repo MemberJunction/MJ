@@ -639,7 +639,8 @@ const configInfoSchema = z.object({
   cleanupStaleRelationships: z.boolean().default(false),
   excludeTables: excludeTableEntrySchema.array().default([
     { schema: '%', table: 'sys%' },
-    { schema: '%', table: 'flyway_schema_history' }
+    { schema: '%', table: 'flyway_schema_history' },
+    { schema: '%', table: 'DocumentSequenceCounter' }
   ]),
   /**
    * File-emit behaviour for entity subclasses and GraphQL resolvers.
@@ -1072,7 +1073,8 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   excludeSchemas: ['sys', 'staging', '__mj'],
   excludeTables: [
     { schema: '%', table: 'sys%' },
-    { schema: '%', table: 'flyway_schema_history' }
+    { schema: '%', table: 'flyway_schema_history' },
+    { schema: '%', table: 'DocumentSequenceCounter' }
   ],
   customSQLScripts: [],
   dbSchemaJSONOutput: {

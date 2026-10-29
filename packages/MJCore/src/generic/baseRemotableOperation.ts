@@ -64,6 +64,18 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     public readonly ExecutionMode: RemoteOpExecMode = 'Sync';
 
     /**
+     * Whether executing this Remote Operation on the server establishes an authorized
+     * `ServerOperationScope` for entities configured with `WriteAuthority = 'ServerOperationOnly'`.
+     *
+     * Domain operations default to `true`. Generic client CRUD transports (such as
+     * `SaveEntityGraphOperation`) override this to `false` so clients cannot bypass
+     * `ServerOperationOnly` gates by wrapping entity writes in a generic graph mutation.
+     */
+    public get GrantsServerWriteAuthority(): boolean {
+        return true;
+    }
+
+    /**
      * The universal entry point — identical on client and server. Routes the operation through the
      * active (or explicitly supplied) provider's {@link IRemoteOperationProvider.RouteOperation}.
      *
