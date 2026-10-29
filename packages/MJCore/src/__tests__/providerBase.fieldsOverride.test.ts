@@ -231,29 +231,21 @@ describe('ProviderBase Fields-Override Gate — PreRunView', () => {
             expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
         });
 
-        it('TrustLocalCacheCompletely=true (server mode) with CacheLocal=true on narrow Fields → Fields is rewritten', async () => {
+        it('TrustLocalCacheCompletely=true (server mode) on a cache-eligible entity → Fields is rewritten', async () => {
             provider.trustLocalCache = true;
             await provider.RunView({
                 EntityName: 'Cacheable',
                 Fields: NARROW_FIELDS,
-                CacheLocal: true,
             });
             expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
         });
 
-        it('TrustLocalCacheCompletely=true (server mode) with no Fields override → Fields is rewritten for superset cache', async () => {
-            provider.trustLocalCache = true;
-            await provider.RunView({
-                EntityName: 'Cacheable',
-            });
-            expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
-        });
-
-        it('TrustLocalCacheCompletely=true (server mode) with ad-hoc narrow Fields (no CacheLocal) → narrow Fields preserved on miss', async () => {
+        it('TrustLocalCacheCompletely=true (server mode) with explicit CacheLocal=false → narrow Fields preserved on miss', async () => {
             provider.trustLocalCache = true;
             await provider.RunView({
                 EntityName: 'Cacheable',
                 Fields: NARROW_FIELDS,
+                CacheLocal: false,
             });
             expect(lastCapturedFields(provider)).toEqual(NARROW_FIELDS);
         });
@@ -374,13 +366,13 @@ describe('ProviderBase Fields-Override Gate — PreRunViews', () => {
         expect(capturedFieldsAt(provider,1)).toEqual(NARROW_FIELDS);
     });
 
-    it('Batch under TrustLocalCacheCompletely=true: per-entity gating still applies (CacheLocal=true widens cacheable only)', async () => {
+    it('Batch under TrustLocalCacheCompletely=true: per-entity gating still applies and CacheLocal=false opts out', async () => {
         provider.trustLocalCache = true;
         await provider.RunViews([
-            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, CacheLocal: true },
-            { EntityName: 'NoCaching', Fields: NARROW_FIELDS, CacheLocal: true },
-            { EntityName: 'MJ: Record Changes', Fields: NARROW_FIELDS, CacheLocal: true },
             { EntityName: 'Cacheable', Fields: NARROW_FIELDS },
+            { EntityName: 'NoCaching', Fields: NARROW_FIELDS },
+            { EntityName: 'MJ: Record Changes', Fields: NARROW_FIELDS },
+            { EntityName: 'Cacheable', Fields: NARROW_FIELDS, CacheLocal: false },
         ]);
         expect(capturedFieldsAt(provider,0)).toEqual(FULL_FIELDS);
         expect(capturedFieldsAt(provider,1)).toEqual(NARROW_FIELDS);
@@ -1061,11 +1053,10 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
         resetLocalCacheManager();
     });
 
-    it('Cache MISS with CacheLocal=true returns ONLY the caller’s requested Fields while the cache entry keeps the wide superset', async () => {
+    it('Cache MISS returns ONLY the caller’s requested Fields while the cache entry keeps the wide superset', async () => {
         const result = await provider.RunView({
             EntityName: 'Cacheable',
             Fields: ['ID', 'Name'],
-            CacheLocal: true,
         });
 
         // The DB query was widened (cache-superset invariant intact)…
@@ -1081,11 +1072,11 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
         expect(rowKeys(result)).toEqual(['ID', 'Name']);
     });
 
-    it('Ad-hoc narrow Fields without CacheLocal preserves narrow SQL on miss, avoids cache poisoning, and hits 0-SQL when superset is warm', async () => {
-        // 1. Cold ad-hoc narrow query without CacheLocal: narrow SQL, does NOT write partial rows to cache
+    it('Explicit CacheLocal: false in server mode preserves narrow SQL on miss and avoids cache poisoning', async () => {
         await provider.RunView({
             EntityName: 'Cacheable',
             Fields: ['ID', 'Name'],
+            CacheLocal: false,
         });
         expect(lastCapturedFields(provider)).toEqual(['ID', 'Name']);
         const fp = cacheManager.GenerateRunViewFingerprint(
@@ -1093,36 +1084,12 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
             provider.InstanceConnectionString
         );
         expect(await cacheManager.GetRunViewResult(fp)).toBeNull();
-
-        // 2. Warm the superset slot via a full-row query (e.g. BaseEngine / standard RunView)
-        provider.reset();
-        await provider.RunView({ EntityName: 'Cacheable' });
-        expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
-        provider.reset();
-
-        // 3. Subsequent ad-hoc narrow query (still WITHOUT CacheLocal) hits the warm superset slot in 0 SQL queries!
-        const warmNarrowHit = await provider.RunView({
-            EntityName: 'Cacheable',
-            Fields: ['ID', 'Name'],
-        });
-        expect(provider.captured).toHaveLength(0);
-        expect(rowKeys(warmNarrowHit)).toEqual(['ID', 'Name']);
-
-        // 4. Explicit CacheLocal: false opts out of reading even a warm server cache slot
-        await provider.RunView({
-            EntityName: 'Cacheable',
-            Fields: ['ID', 'Name'],
-            CacheLocal: false,
-        });
-        expect(provider.captured).toHaveLength(1);
-        expect(lastCapturedFields(provider)).toEqual(['ID', 'Name']);
     });
 
     it('MISS and subsequent HIT return byte-identical shapes for the same request (the regression this fix exists for)', async () => {
         const missResult = await provider.RunView({
             EntityName: 'Cacheable',
             Fields: ['Name', 'Status'],
-            CacheLocal: true,
         });
         provider.reset();
 

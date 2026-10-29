@@ -1970,19 +1970,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * True when a cache-miss read should widen `Fields` to the full entity superset AND populate
      * `LocalCacheManager` with that superset.
      *
-     * Ad-hoc narrow `Fields` reads that do not explicitly opt into cache population (`CacheLocal: true`)
-     * preserve their narrow SQL `SELECT` projection on a cache miss instead of widening to every entity
-     * column and writing megabytes of unneeded columns into cache. When a superset slot is ALREADY warm,
-     * `PreRunView` / `PreRunViews` still serve narrow reads from cache in 0 SQL round-trips.
+     * On the server (`TrustLocalCacheCompletely === true`), cache-allowed entities (`AllowCaching === true`)
+     * widen on miss by default so the Fields-agnostic superset slot serves any future `Fields` subset
+     * (`server-cache` S1 -> S2 -> S3), UNLESS the caller explicitly opts out via `CacheLocal: false` or
+     * `BypassCache: true` (in which case narrow SQL `SELECT` pushdown is preserved end-to-end without
+     * polluting the cache). On the client (`TrustLocalCacheCompletely === false`), only `CacheLocal: true`
+     * widens and caches.
      */
     protected shouldWidenAndPopulateCache(param: RunViewParams): boolean {
-        if (!this.runViewCacheEligible(param)) {
-            return false;
-        }
-        if (this.hasNarrowFieldsOverride(param) && param.CacheLocal !== true) {
-            return false;
-        }
-        return true;
+        return this.runViewCacheEligible(param);
     }
 
     /**
