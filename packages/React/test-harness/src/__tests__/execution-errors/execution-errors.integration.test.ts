@@ -87,6 +87,45 @@ describe.skipIf(!RUN)('page-side failure reporting (integration)', () => {
     expect(result.errors.some(e => e.rule === 'execution-error')).toBe(false);
   }, 60000);
 
+  it.each([
+    ['forwardRef', 'React.forwardRef((props, ref) => <span ref={ref}>{props.label}</span>)'],
+    ['memo', 'React.memo(props => <span>{props.label}</span>)'],
+  ])('a %s component rendered in a list is not an invalid element type', async (_kind, definition) => {
+    const result = await run(buildSpec('Listed', `function Listed() {
+  const Item = ${definition};
+  const items = Array.from({ length: 30 }, (_, i) => i);
+  return <div>{items.map(i => <Item key={i} label={'Row ' + i} />)}</div>;
+}`));
+
+    expect(result.errors.filter(e => e.rule === 'invalid-jsx-element')).toEqual([]);
+    expect(criticalOrHigh(result)).toEqual([]);
+  }, 60000);
+
+  it('an invalid element type created many times fails the run even when nothing crashes', async () => {
+    // The elements are built but never rendered, so React itself never complains.
+    const result = await run(buildSpec('Unrendered', `function Unrendered() {
+  const NotAComponent = { label: 'oops' };
+  const unused = Array.from({ length: 30 }, (_, i) => React.createElement(NotAComponent, { key: i }));
+  return <div>{unused.length} built</div>;
+}`));
+
+    const jsx = result.errors.filter(e => e.rule === 'invalid-jsx-element');
+    expect(jsx.map(e => e.severity)).toEqual(['high']);
+    expect(result.codeExecutionSuccess).toBe(false);
+  }, 60000);
+
+  it('a single invalid element type is reported but does not fail the run', async () => {
+    const result = await run(buildSpec('Once', `function Once() {
+  const NotAComponent = { label: 'oops' };
+  const unused = React.createElement(NotAComponent);
+  return <div>{unused ? 'built' : ''}</div>;
+}`));
+
+    const jsx = result.errors.filter(e => e.rule === 'invalid-jsx-element');
+    expect(jsx.map(e => e.severity)).toEqual(['low']);
+    expect(result.codeExecutionSuccess).toBe(true);
+  }, 60000);
+
   it('a working component reports no errors', async () => {
     const result = await run(buildSpec('Hello', `function Hello() {
   return <div>Hello</div>;
