@@ -30,14 +30,57 @@ export function buildMetadataSupportObjectsSQL(mjCoreSchema: string): string {
 }
 const METADATA_SUPPORT_OBJECTS_DDL: string = String.raw`
 -- ----------------------------------------------------------------------------
--- 0. Drop the view first — it depends on fnMapPGDefaultToMJ, so on re-apply
---    the helper DROPs below would otherwise fail with a dependency error.
+-- 0. Drop the view first — it depends on fnMapPGDefaultToMJ and fnSafePGGetExpr,
+--    so on re-apply the helper DROPs below would otherwise fail with a
+--    dependency error.
 -- ----------------------------------------------------------------------------
 DROP VIEW IF EXISTS __mj."vwSQLColumnsAndEntityFields";
 
 -- ----------------------------------------------------------------------------
 -- 1. Default-value helpers
 -- ----------------------------------------------------------------------------
+
+-- Crash-safe wrapper around pg_get_expr(). pg_get_expr() does not just read a
+-- catalog row: it OPENS the relation named by adrelid so it can resolve column
+-- references while rendering the expression. CodeGen races its OWN object
+-- regeneration — a relation can be dropped between the catalog scan that
+-- produced the row and the moment the expression is rendered — and the open
+-- then fails with "could not open relation with OID <n>", which aborts the
+-- whole statement and kills the entire CodeGen run. Of the four catalog views
+-- this file's routines consume, only vwSQLColumnsAndEntityFields calls
+-- pg_get_expr (the FK/PK/unique-key views do not), and col_description() cannot
+-- raise this error because it only reads pg_description — so these two call
+-- sites are the only place a mid-run DROP can abort the introspection.
+--
+-- STRICT IS LOAD-BEARING, DO NOT REMOVE IT. A STRICT function returns NULL for
+-- a NULL argument WITHOUT ENTERING THE BODY. ad.adbin is NULL for every column
+-- that has no default — the overwhelming majority — so those rows never reach
+-- the EXCEPTION block and therefore never open a subtransaction. A non-STRICT
+-- wrapper would open one subtransaction PER COLUMN (PL/pgSQL enters a
+-- subtransaction whenever it executes a block with an EXCEPTION clause), which
+-- is not an acceptable cost on the hot path of a procedure that is already
+-- O(N^2) in schema size. The guard must also never blank out a legitimate
+-- default: on success it returns pg_get_expr's own result unchanged, so a
+-- healthy schema renders exactly the same DefaultValue set as before.
+--
+-- WHEN OTHERS is deliberately broad: the underlying failure is an elog() inside
+-- relation_open, which carries the generic internal-error SQLSTATE (XX000), so a
+-- narrower handler would buy nothing. PL/pgSQL's OTHERS still does not trap
+-- query_canceled or assert_failure, so statement_timeout and cancellation
+-- continue to propagate normally.
+DROP FUNCTION IF EXISTS __mj."fnSafePGGetExpr"(pg_node_tree, oid);
+CREATE OR REPLACE FUNCTION __mj."fnSafePGGetExpr"(p_expr pg_node_tree, p_relid oid)
+RETURNS TEXT
+LANGUAGE plpgsql STABLE STRICT AS $$
+BEGIN
+  RETURN pg_get_expr(p_expr, p_relid);
+EXCEPTION WHEN OTHERS THEN
+  -- The relation vanished mid-render (or is otherwise unreadable right now).
+  -- A missing default is recoverable — the next CodeGen run re-reads it — but
+  -- an aborted statement is not.
+  RETURN NULL;
+END;
+$$;
 
 -- Normalizer used ONLY for change detection. Collapses formatting variance
 -- (paren wrapping, N-prefix, ::casts, current-timestamp function family, uuid
@@ -178,8 +221,11 @@ SELECT
   CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN 1 ELSE 0 END AS "IsComputed",
   src_cls.oid AS object_id,
   NULL::text AS "DefaultConstraintName",
-  __mj."fnMapPGDefaultToMJ"(pg_get_expr(ad.adbin, ad.adrelid)) AS "DefaultValue",
-  CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN pg_get_expr(ad.adbin, ad.adrelid) ELSE NULL END AS "ComputedColumnDefinition",
+  -- both expression renders go through fnSafePGGetExpr (see section 1): a relation
+  -- dropped by CodeGen's own concurrent regeneration must yield NULL for that one
+  -- column, not abort the statement and with it the run.
+  __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) AS "DefaultValue",
+  CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN __mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid) ELSE NULL END AS "ComputedColumnDefinition",
   COALESCE(col_description(src_cls.oid, a.attnum::integer), col_description(bt_cls.oid, bt_a.attnum::integer)) AS "Description",
   col_description(src_cls.oid, a.attnum::integer) AS "ViewColumnDescription",
   CASE WHEN bt_a.attnum IS NOT NULL THEN col_description(bt_cls.oid, bt_a.attnum::integer) ELSE NULL END AS "TableColumnDescription"
@@ -245,22 +291,46 @@ BEGIN
   -- needs no ANALYZE privileges on pg_catalog.
   SET LOCAL enable_nestloop = off;
 
-  DROP TABLE IF EXISTS _uef_excluded;
-  CREATE TEMP TABLE _uef_excluded AS
-    SELECT TRIM(s) AS schema_name
+  -- ==========================================================================
+  -- TEMP-TABLE LIFECYCLE: CREATE-ONCE + TRUNCATE. DO NOT REINTRODUCE
+  -- "DROP TABLE IF EXISTS x; CREATE TEMP TABLE x AS ...".
+  --
+  -- PL/pgSQL plan-caches every static SQL statement in this body for the life
+  -- of the SESSION, and those cached plans reference each temp table by its
+  -- relation OID. Dropping a temp table at the end of a call and re-creating it
+  -- on the next call through the SAME pooled connection hands the next call a
+  -- cached plan pointing at the OID of a relation that no longer exists, and the
+  -- routine dies with "could not open relation with OID <n>". It is intermittent
+  -- precisely because it depends on whether the pool hands back a connection
+  -- this routine has already run on.
+  --
+  -- Creating each table ONCE per session and TRUNCATE-ing it around each use
+  -- keeps the OID stable forever, so no cached plan can ever go stale, while
+  -- TRUNCATE still hands the storage back between calls. Crucially it leaves
+  -- every downstream statement (the reconciliation join, both UPDATEs, the
+  -- RETURN QUERY) textually unchanged, and — the reason dynamic SQL was
+  -- rejected — it PRESERVES THE ANALYZE CALLS below, which are load-bearing for
+  -- the planner in a routine that is already O(N^2) in schema size.
+  -- ==========================================================================
+  CREATE TEMP TABLE IF NOT EXISTS _uef_excluded (schema_name TEXT);
+  TRUNCATE _uef_excluded;
+  INSERT INTO _uef_excluded (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
 
-  DROP TABLE IF EXISTS _uef_included;
-  CREATE TEMP TABLE _uef_included AS
-    SELECT TRIM(s) AS schema_name
+  CREATE TEMP TABLE IF NOT EXISTS _uef_included (schema_name TEXT);
+  TRUNCATE _uef_included;
+  INSERT INTO _uef_included (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
   v_has_include := EXISTS (SELECT 1 FROM _uef_included);
 
-  DROP TABLE IF EXISTS _uef_scope;
-  CREATE TEMP TABLE _uef_scope AS
-    SELECT DISTINCT TRIM(v)::uuid AS entity_id
+  CREATE TEMP TABLE IF NOT EXISTS _uef_scope (entity_id UUID);
+  TRUNCATE _uef_scope;
+  INSERT INTO _uef_scope (entity_id)
+    SELECT DISTINCT TRIM(v)::uuid
     FROM unnest(string_to_array(COALESCE(p_EntityIDs, ''), ',')) AS v
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _uef_scope);
@@ -276,20 +346,28 @@ BEGIN
   -- codegen adds objects mid-run. Materializing each view exactly once + ANALYZE
   -- gives the planner real cardinalities so the reconciliation join hash-joins
   -- instead of nested-looping.
-  DROP TABLE IF EXISTS _uef_cols;
-  CREATE TEMP TABLE _uef_cols AS SELECT * FROM __mj."vwSQLColumnsAndEntityFields";
+  -- Shape comes from the view itself via WITH NO DATA (which plans the query for
+  -- its column types but never runs it), so these four stay in lockstep with the
+  -- views automatically. The ANALYZE after each load is the whole point of
+  -- materializing and must survive any future rework of this block.
+  CREATE TEMP TABLE IF NOT EXISTS _uef_cols AS SELECT * FROM __mj."vwSQLColumnsAndEntityFields" WITH NO DATA;
+  TRUNCATE _uef_cols;
+  INSERT INTO _uef_cols SELECT * FROM __mj."vwSQLColumnsAndEntityFields";
   ANALYZE _uef_cols;
 
-  DROP TABLE IF EXISTS _uef_fk;
-  CREATE TEMP TABLE _uef_fk AS SELECT * FROM __mj."vwForeignKeys";
+  CREATE TEMP TABLE IF NOT EXISTS _uef_fk AS SELECT * FROM __mj."vwForeignKeys" WITH NO DATA;
+  TRUNCATE _uef_fk;
+  INSERT INTO _uef_fk SELECT * FROM __mj."vwForeignKeys";
   ANALYZE _uef_fk;
 
-  DROP TABLE IF EXISTS _uef_pk;
-  CREATE TEMP TABLE _uef_pk AS SELECT * FROM __mj."vwTablePrimaryKeys";
+  CREATE TEMP TABLE IF NOT EXISTS _uef_pk AS SELECT * FROM __mj."vwTablePrimaryKeys" WITH NO DATA;
+  TRUNCATE _uef_pk;
+  INSERT INTO _uef_pk SELECT * FROM __mj."vwTablePrimaryKeys";
   ANALYZE _uef_pk;
 
-  DROP TABLE IF EXISTS _uef_uk;
-  CREATE TEMP TABLE _uef_uk AS SELECT * FROM __mj."vwTableUniqueKeys";
+  CREATE TEMP TABLE IF NOT EXISTS _uef_uk AS SELECT * FROM __mj."vwTableUniqueKeys" WITH NO DATA;
+  TRUNCATE _uef_uk;
+  INSERT INTO _uef_uk SELECT * FROM __mj."vwTableUniqueKeys";
   ANALYZE _uef_uk;
 
   -- Orphan-tolerant renumber (#4050): an EntityField row whose column is no longer in the base
@@ -322,8 +400,41 @@ BEGIN
     ON mx."EntityID" = o.entity_id
   WHERE tgt."ID" = o.field_id;
 
-  DROP TABLE IF EXISTS _uef_filtered;
-  CREATE TEMP TABLE _uef_filtered AS
+  -- _uef_filtered is the one temp table whose shape cannot be derived from a
+  -- view, so it is declared explicitly rather than duplicating the ~110-line
+  -- projection below purely to get its column types. The column list here is
+  -- POSITIONAL against that projection: if you add, remove or reorder a column
+  -- in the SELECT, change this DDL to match. A mismatch fails the INSERT loudly
+  -- (wrong column count, or no assignment cast), it does not silently mis-map.
+  CREATE TEMP TABLE IF NOT EXISTS _uef_filtered (
+    entity_id                 UUID,
+    entity_name               TEXT,
+    entity_field_id           UUID,
+    entity_field_name         TEXT,
+    auto_update_description   BOOLEAN,
+    existing_description      TEXT,
+    sql_description           TEXT,
+    new_type                  TEXT,
+    new_length                INTEGER,
+    new_precision             INTEGER,
+    new_scale                 INTEGER,
+    new_allows_null           BOOLEAN,
+    new_default_value         TEXT,
+    new_auto_increment        BOOLEAN,
+    new_is_virtual            BOOLEAN,
+    new_is_computed           BOOLEAN,
+    new_sequence              INTEGER,
+    related_entity_id         UUID,
+    related_entity_field_name TEXT,
+    new_is_primary_key        BOOLEAN,
+    new_is_unique             BOOLEAN,
+    is_isa_inherited          BOOLEAN,
+    is_material_change        BOOLEAN,
+    change_reasons            TEXT,
+    is_sequence_change        BOOLEAN
+  );
+  TRUNCATE _uef_filtered;
+  INSERT INTO _uef_filtered
   SELECT * FROM (
   SELECT
     e."ID"   AS entity_id,
@@ -489,10 +600,19 @@ BEGIN
   -- byte-identical view+sproc regeneration.
   WHERE fr.is_material_change;
 
-  DROP TABLE IF EXISTS _uef_filtered;
-  DROP TABLE IF EXISTS _uef_scope;
-  DROP TABLE IF EXISTS _uef_excluded;
-  DROP TABLE IF EXISTS _uef_included;
+  -- Hand the storage back but KEEP the relations (and therefore their OIDs) so
+  -- the plans cached above stay valid for the next call on this connection.
+  -- These are deliberately TRUNCATE and not DROP — see the lifecycle note above.
+  -- The four materialized view snapshots are included: on a large schema they
+  -- are the bulk of this routine's temp footprint.
+  TRUNCATE _uef_filtered;
+  TRUNCATE _uef_cols;
+  TRUNCATE _uef_fk;
+  TRUNCATE _uef_pk;
+  TRUNCATE _uef_uk;
+  TRUNCATE _uef_scope;
+  TRUNCATE _uef_excluded;
+  TRUNCATE _uef_included;
 END;
 $func$;
 
@@ -518,9 +638,17 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_has_include BOOLEAN := FALSE;
 BEGIN
-  DROP TABLE IF EXISTS _ues_included;
-  CREATE TEMP TABLE _ues_included AS
-    SELECT TRIM(s) AS schema_name
+  -- TEMP-TABLE LIFECYCLE: CREATE-ONCE + TRUNCATE, exactly as in
+  -- spUpdateExistingEntityFieldsFromSchema (see the full note there). Never
+  -- "DROP TABLE IF EXISTS x; CREATE TEMP TABLE x AS ...": on a reused pooled
+  -- connection PL/pgSQL's session-lifetime plan cache still holds the dropped
+  -- relation's OID and the call aborts with "could not open relation with OID
+  -- <n>". Creating each table once per session keeps its OID stable, and keeps
+  -- the ANALYZE calls below, which the planner needs on a large schema.
+  CREATE TEMP TABLE IF NOT EXISTS _ues_included (schema_name TEXT);
+  TRUNCATE _ues_included;
+  INSERT INTO _ues_included (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
   v_has_include := EXISTS (SELECT 1 FROM _ues_included);
@@ -532,19 +660,28 @@ BEGIN
   -- spUpdateExistingEntityFieldsFromSchema and spDeleteUnneededEntityFields (materialise the
   -- introspection view exactly once, then ANALYZE so the reconciliation join hash-joins);
   -- this proc was the one that kept joining the view directly.
-  DROP TABLE IF EXISTS _ues_tables;
-  CREATE TEMP TABLE _ues_tables AS SELECT * FROM __mj."vwSQLTablesAndEntities";
+  CREATE TEMP TABLE IF NOT EXISTS _ues_tables AS SELECT * FROM __mj."vwSQLTablesAndEntities" WITH NO DATA;
+  TRUNCATE _ues_tables;
+  INSERT INTO _ues_tables SELECT * FROM __mj."vwSQLTablesAndEntities";
   ANALYZE _ues_tables;
 
-  DROP TABLE IF EXISTS _ues_filtered;
-  CREATE TEMP TABLE _ues_filtered AS
+  CREATE TEMP TABLE IF NOT EXISTS _ues_filtered (
+    entity_id UUID,
+    entity_name TEXT,
+    current_description TEXT,
+    new_description TEXT,
+    entity_description TEXT,
+    schema_name TEXT
+  );
+  TRUNCATE _ues_filtered;
+  INSERT INTO _ues_filtered (entity_id, entity_name, current_description, new_description, entity_description, schema_name)
   SELECT
-    e."ID" AS entity_id,
-    e."Name" AS entity_name,
-    e."Description" AS current_description,
-    CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END AS new_description,
-    sq."EntityDescription" AS entity_description,
-    sq."SchemaName"::text AS schema_name
+    e."ID",
+    e."Name",
+    e."Description",
+    CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END,
+    sq."EntityDescription",
+    sq."SchemaName"::text
   FROM __mj."Entity" e
   INNER JOIN _ues_tables sq ON e."ID" = sq."EntityID"
   LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
@@ -570,9 +707,11 @@ BEGIN
          fr.new_description::text, fr.entity_description::text, fr.schema_name
   FROM _ues_filtered fr;
 
-  DROP TABLE IF EXISTS _ues_filtered;
-  DROP TABLE IF EXISTS _ues_tables;
-  DROP TABLE IF EXISTS _ues_included;
+  -- Hand the storage back but KEEP the relations (and their OIDs) so the plans
+  -- cached above stay valid for the next call on this connection.
+  TRUNCATE _ues_filtered;
+  TRUNCATE _ues_tables;
+  TRUNCATE _ues_included;
 END;
 $func$;
 
@@ -620,16 +759,22 @@ BEGIN
   -- managed PostgreSQL).
   SET LOCAL enable_nestloop = off;
 
-  DROP TABLE IF EXISTS _del_scope;
-  CREATE TEMP TABLE _del_scope AS
-    SELECT DISTINCT TRIM(v)::uuid AS entity_id
+  -- Create-once + TRUNCATE, never DROP + CREATE on a fixed name: see the
+  -- temp-table lifecycle note in spUpdateExistingEntityFieldsFromSchema. This
+  -- routine is exposed to exactly the same stale-cached-plan abort, and it too
+  -- has ANALYZE calls below that any rewrite must preserve.
+  CREATE TEMP TABLE IF NOT EXISTS _del_scope (entity_id UUID);
+  TRUNCATE _del_scope;
+  INSERT INTO _del_scope (entity_id)
+    SELECT DISTINCT TRIM(v)::uuid
     FROM unnest(string_to_array(COALESCE(p_EntityIDs, ''), ',')) AS v
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _del_scope);
 
-  DROP TABLE IF EXISTS _del_included;
-  CREATE TEMP TABLE _del_included AS
-    SELECT TRIM(s) AS schema_name
+  CREATE TEMP TABLE IF NOT EXISTS _del_included (schema_name TEXT);
+  TRUNCATE _del_included;
+  INSERT INTO _del_included (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
   v_has_include := EXISTS (SELECT 1 FROM _del_included);
@@ -655,14 +800,15 @@ BEGIN
   --
   -- It is a NAME list, not an id list, because the caller's exclusions are declared by name and
   -- apply across entities. Matched case-insensitively for the same reason.
-  DROP TABLE IF EXISTS _del_protected;
-  CREATE TEMP TABLE _del_protected AS
-    SELECT LOWER(TRIM(s)) AS field_name
+  CREATE TEMP TABLE IF NOT EXISTS _del_protected (field_name TEXT);
+  TRUNCATE _del_protected;
+  INSERT INTO _del_protected (field_name)
+    SELECT LOWER(TRIM(s))
     FROM unnest(string_to_array(COALESCE(p_ProtectedFieldNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
 
-  DROP TABLE IF EXISTS _del_ext_entities;
-  CREATE TEMP TABLE _del_ext_entities (entity_id UUID);
+  CREATE TEMP TABLE IF NOT EXISTS _del_ext_entities (entity_id UUID);
+  TRUNCATE _del_ext_entities;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = '__mj' AND table_name = 'vwEntities' AND column_name = 'ExternalDataSourceID'
@@ -672,9 +818,10 @@ BEGIN
   END IF;
 
   -- metadata-side fields for in-scope, non-virtual entities
-  DROP TABLE IF EXISTS _del_ef;
-  CREATE TEMP TABLE _del_ef AS
-  SELECT ef."ID" AS field_id, ef."EntityID" AS entity_id, ef."Entity"::text AS entity_name, ef."Name"::text AS field_name
+  CREATE TEMP TABLE IF NOT EXISTS _del_ef (field_id UUID, entity_id UUID, entity_name TEXT, field_name TEXT);
+  TRUNCATE _del_ef;
+  INSERT INTO _del_ef (field_id, entity_id, entity_name, field_name)
+  SELECT ef."ID", ef."EntityID", ef."Entity"::text, ef."Name"::text
   FROM __mj."vwEntityFields" ef
   INNER JOIN __mj."vwEntities" e ON ef."EntityID" = e."ID"
   LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
@@ -690,9 +837,10 @@ BEGIN
   ANALYZE _del_ef;
 
   -- actual columns present in the database
-  DROP TABLE IF EXISTS _del_actual;
-  CREATE TEMP TABLE _del_actual AS
-  SELECT sq."EntityID" AS entity_id, sq."FieldName"::text AS field_name
+  CREATE TEMP TABLE IF NOT EXISTS _del_actual (entity_id UUID, field_name TEXT);
+  TRUNCATE _del_actual;
+  INSERT INTO _del_actual (entity_id, field_name)
+  SELECT sq."EntityID", sq."FieldName"::text
   FROM __mj."vwSQLColumnsAndEntityFields" sq
   WHERE (NOT v_is_scoped OR sq."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
   -- [Large Schema Series] _del_actual is a single materialization of the heavy
@@ -701,8 +849,9 @@ BEGIN
   ANALYZE _del_actual;
 
   -- orphans: metadata field with no matching DB column
-  DROP TABLE IF EXISTS _del_deleted;
-  CREATE TEMP TABLE _del_deleted AS
+  CREATE TEMP TABLE IF NOT EXISTS _del_deleted (field_id UUID, entity_id UUID, entity_name TEXT, field_name TEXT);
+  TRUNCATE _del_deleted;
+  INSERT INTO _del_deleted (field_id, entity_id, entity_name, field_name)
   SELECT ef.field_id, ef.entity_id, ef.entity_name, ef.field_name
   FROM _del_ef ef
   LEFT JOIN _del_actual actual
@@ -718,16 +867,18 @@ BEGIN
   DELETE FROM __mj."EntityField" delf
   WHERE delf."ID" IN (SELECT d.field_id FROM _del_deleted d);
 
-  DROP TABLE IF EXISTS _del_protected;
-
   RETURN QUERY
   SELECT d.field_id, d.entity_id, d.entity_name, d.field_name FROM _del_deleted d;
 
-  DROP TABLE IF EXISTS _del_deleted;
-  DROP TABLE IF EXISTS _del_actual;
-  DROP TABLE IF EXISTS _del_ef;
-  DROP TABLE IF EXISTS _del_scope;
-  DROP TABLE IF EXISTS _del_included;
+  -- TRUNCATE, never DROP: frees the storage while keeping each relation's OID
+  -- stable so the plans cached above survive the next call on this connection.
+  TRUNCATE _del_deleted;
+  TRUNCATE _del_actual;
+  TRUNCATE _del_ef;
+  TRUNCATE _del_ext_entities;
+  TRUNCATE _del_protected;
+  TRUNCATE _del_scope;
+  TRUNCATE _del_included;
 END;
 $func$;
 
@@ -783,15 +934,19 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_has_include BOOLEAN := FALSE;
 BEGIN
-  DROP TABLE IF EXISTS _usi_excluded;
-  CREATE TEMP TABLE _usi_excluded AS
-    SELECT TRIM(s) AS schema_name
+  -- Create-once + TRUNCATE, never DROP + CREATE on a fixed name: see the
+  -- temp-table lifecycle note in spUpdateExistingEntityFieldsFromSchema.
+  CREATE TEMP TABLE IF NOT EXISTS _usi_excluded (schema_name TEXT);
+  TRUNCATE _usi_excluded;
+  INSERT INTO _usi_excluded (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
 
-  DROP TABLE IF EXISTS _usi_included;
-  CREATE TEMP TABLE _usi_included AS
-    SELECT TRIM(s) AS schema_name
+  CREATE TEMP TABLE IF NOT EXISTS _usi_included (schema_name TEXT);
+  TRUNCATE _usi_included;
+  INSERT INTO _usi_included (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
   v_has_include := EXISTS (SELECT 1 FROM _usi_included);
@@ -839,8 +994,9 @@ BEGIN
   WHERE ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x)
     AND (NOT v_has_include OR ss."SchemaName" IN (SELECT i.schema_name FROM _usi_included i));
 
-  DROP TABLE IF EXISTS _usi_excluded;
-  DROP TABLE IF EXISTS _usi_included;
+  -- TRUNCATE, never DROP — the relation OIDs must stay stable for the cached plans.
+  TRUNCATE _usi_excluded;
+  TRUNCATE _usi_included;
 END;
 $func$;
 
@@ -982,15 +1138,19 @@ DECLARE
   v_has_include BOOLEAN := FALSE;
   v_row RECORD;
 BEGIN
-  DROP TABLE IF EXISTS _rav_included;
-  CREATE TEMP TABLE _rav_included AS
-    SELECT TRIM(s) AS schema_name
+  -- Create-once + TRUNCATE, never DROP + CREATE on a fixed name: see the
+  -- temp-table lifecycle note in spUpdateExistingEntityFieldsFromSchema.
+  CREATE TEMP TABLE IF NOT EXISTS _rav_included (schema_name TEXT);
+  TRUNCATE _rav_included;
+  INSERT INTO _rav_included (schema_name)
+    SELECT TRIM(s)
     FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
   v_has_include := EXISTS (SELECT 1 FROM _rav_included);
 
-  DROP TABLE IF EXISTS _rav_drift;
-  CREATE TEMP TABLE _rav_drift AS
+  CREATE TEMP TABLE IF NOT EXISTS _rav_drift (schema_name TEXT, view_name TEXT, entity_name TEXT, missing_columns TEXT);
+  TRUNCATE _rav_drift;
+  INSERT INTO _rav_drift (schema_name, view_name, entity_name, missing_columns)
   WITH scoped AS (
     SELECT
       e."ID"          AS entity_id,
@@ -1041,8 +1201,8 @@ BEGIN
   FROM _rav_drift d
   ORDER BY d.schema_name, d.view_name;
 
-  DROP TABLE IF EXISTS _rav_drift;
-  DROP TABLE IF EXISTS _rav_included;
+  TRUNCATE _rav_drift;
+  TRUNCATE _rav_included;
 END;
 $rav$;
 `;
