@@ -17,7 +17,7 @@ import base64
 import binascii
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Optional, Protocol, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -603,8 +603,17 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
 _LEGACY_IMPORTANCE_DRAWS = 0
 
 
+class _FittedEstimator(Protocol):
+    """What held-out importance calls on a fitted legacy estimator: `predict` for a regressor, `predict_proba` for a
+    classifier (only a classifier's is ever called)."""
+
+    def predict(self, X: np.ndarray) -> np.ndarray: ...
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray: ...
+
+
 def _importance_predictions(
-    estimator: Any, is_classification: bool, columns: List[str]
+    estimator: _FittedEstimator, is_classification: bool, columns: List[str]
 ) -> Callable[[pd.DataFrame], FArr]:
     """The predictions the held-out loss scores: P(class 1) for a binary classifier, the class probabilities for a
     multiclass one, the prediction for a regressor. Each is the shape `scores` expects."""
@@ -620,7 +629,7 @@ def _importance_predictions(
 
 
 def _extract_importance(
-    estimator: Any,
+    estimator: _FittedEstimator,
     fitted: FittedPreprocessing,
     X_eval: np.ndarray,
     y_eval: np.ndarray,
