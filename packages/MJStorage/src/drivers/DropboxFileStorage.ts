@@ -800,27 +800,6 @@ export class DropboxFileStorage extends FileStorageBase {
     try {
       const normalizedPath = this._normalizePath(prefix);
 
-      console.log('[DropboxFileStorage] ListObjects called:', {
-        prefix,
-        normalizedPath,
-        delimiter,
-        hasClient: !!this._client,
-        isConfigured: this.IsConfigured,
-        rootPath: this._rootPath,
-      });
-
-      // Debug: Try to get current account info to understand access type
-      try {
-        const accountInfo = await this._client.usersGetCurrentAccount();
-        console.log('[DropboxFileStorage] Account info:', {
-          accountId: accountInfo.result.account_id,
-          email: accountInfo.result.email,
-          name: accountInfo.result.name.display_name,
-        });
-      } catch (error) {
-        console.log('[DropboxFileStorage] Could not get account info:', error?.message);
-      }
-
       const response = await this._client.filesListFolder({
         path: normalizedPath,
         recursive: false,
@@ -828,36 +807,6 @@ export class DropboxFileStorage extends FileStorageBase {
         include_deleted: false,
         include_has_explicit_shared_members: false,
       });
-
-      console.log('[DropboxFileStorage] filesListFolder response:', {
-        entriesCount: response.result.entries.length,
-        entries: response.result.entries.map((e) => ({ name: e.name, tag: e['.tag'] })),
-        has_more: response.result.has_more,
-        cursor: response.result.cursor,
-      });
-
-      // Check if we're in an app folder scenario
-      if (response.result.entries.length === 0 && normalizedPath === '') {
-        console.log('[DropboxFileStorage] Empty root - this might be an app-folder-only token');
-        console.log('[DropboxFileStorage] Note: If using app folder access, files are in /Apps/[YourAppName]/');
-        console.log('[DropboxFileStorage] You can set rootPath in configuration to point to your app folder');
-
-        // Try to list a few common app folder paths to help diagnose
-        const testPaths = ['/Apps', '/Apps/MJ-Files-Test', '/MJ-FileTest'];
-        for (const testPath of testPaths) {
-          try {
-            console.log(`[DropboxFileStorage] Testing path: ${testPath}`);
-            const testResponse = await this._client.filesListFolder({ path: testPath, recursive: false });
-            console.log(
-              `[DropboxFileStorage] Found ${testResponse.result.entries.length} items at ${testPath}:`,
-              testResponse.result.entries.map((e) => ({ name: e.name, tag: e['.tag'] })),
-            );
-          } catch (testError) {
-            const errorMsg = testError.error?.error_summary || testError.message;
-            console.log(`[DropboxFileStorage] Cannot access ${testPath}: ${errorMsg}`);
-          }
-        }
-      }
 
       const objects: StorageObjectMetadata[] = [];
       const prefixes: string[] = [];
@@ -875,16 +824,9 @@ export class DropboxFileStorage extends FileStorageBase {
         if (entry['.tag'] === 'folder') {
           const folderPath = prefix ? (prefix.endsWith('/') ? `${prefix}${entry.name}` : `${prefix}/${entry.name}`) : entry.name;
 
-          console.log('[DropboxFileStorage] Adding folder prefix:', folderPath);
           prefixes.push(`${folderPath}/`);
         }
       }
-
-      console.log('[DropboxFileStorage] Final result:', {
-        objectsCount: objects.length,
-        prefixesCount: prefixes.length,
-        prefixes,
-      });
 
       return { objects, prefixes };
     } catch (error) {

@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S5.4",
+    "Description": "Gate G0.10 (owner PR 2, phase 0, dataset W1, criterion S5.4): two single-threaded trainings each of logistic regression, xgboost, lightgbm and random forest on W1-signal s42 give predictions on the first 500 rows equal within 1e-9, 4 of 4. This proves the validation split is seeded (an unseeded split changes every algorithm's training rows) and the estimators are seeded (random forest bootstraps, so its predictions move if the estimator seed is dropped; the other three do not sample on their sidecar defaults), on a single-threaded sidecar (the truth-suite sidecar pins OMP_NUM_THREADS=1; thread-count nondeterminism is not tested).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.10\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S5.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "4 of 4 algorithms reproduce predictions within 1e-9."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s5-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "F5E2CFF1-552B-4195-B0C0-BCA9AF731F9F"
+  }
+}

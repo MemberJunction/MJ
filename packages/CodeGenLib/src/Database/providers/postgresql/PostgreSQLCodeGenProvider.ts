@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IsValidSQLIdentifier, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -10,6 +10,7 @@ import {
     PhasedExecutionResult,
     DataSourceResult,
     ExcludedBaseViewFieldNames,
+    OrderAlternateBaseViewsTopologically,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, MjCoreSchema } from '../../../Config/config';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
@@ -1614,13 +1615,35 @@ $$ LANGUAGE sql STABLE;
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
     /** @inheritdoc */
-    generateViewPermissions(entity: EntityInfo): string {
-        const viewName = this.getBaseViewName(entity);
+    override GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
         const roles = this.collectPermissionRoles(entity.Permissions);
         if (roles.length === 0) return '';
         return roles.map((role: string) =>
-            `GRANT SELECT ON ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} TO ${pgDialect.QuoteIdentifier(role)};`
+            `GRANT SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} TO ${pgDialect.QuoteIdentifier(role)};`
         ).join('\n');
+    }
+
+    /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const roles = this.collectPermissionRoles(entity.Permissions);
+        if (roles.length === 0) return '';
+        return roles.map((role: string) =>
+            `REVOKE SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} FROM ${pgDialect.QuoteIdentifier(role)};`
+        ).join('\n');
+    }
+
+    /** @inheritdoc */
+    generateViewPermissions(entity: EntityInfo): string {
+        const viewName = this.getBaseViewName(entity);
+        return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, viewName);
     }
 
     /**
@@ -2135,16 +2158,51 @@ ORDER BY ordinal_position`;
         if (!entity.HasLayeredBaseView) {
             return '';
         }
+        return this.GenerateAlternateBaseViewRebindSQL(
+            entity,
+            entity.SchemaName,
+            entity.BaseView,
+            entity.GeneratedViewName,
+        );
+    }
+
+    /** @inheritdoc */
+    override GenerateAlternateBaseViewRebindSQL(
+        _entity: EntityInfo,
+        altViewSchema: string,
+        altViewName: string,
+        innerViewName: string,
+    ): string {
         let core = '__mj';
         try {
             core = (MjCoreSchema() || '__mj').replace(/"/g, '""');
         } catch {
             core = '__mj';
         }
-        const schema = entity.SchemaName.replace(/'/g, "''");
-        const outer = entity.BaseView.replace(/'/g, "''");
-        const inner = entity.GeneratedViewName.replace(/'/g, "''");
+        const schema = altViewSchema.replace(/'/g, "''");
+        const outer = altViewName.replace(/'/g, "''");
+        const inner = innerViewName.replace(/'/g, "''");
         return `SELECT "${core}"."spRebindLayeredOuterView"('${schema}', '${outer}', '${inner}');`;
+    }
+
+    /** @inheritdoc */
+    override getViewDependenciesSQL(schema: string, viewName: string): string {
+        const escapedSchema = EscapeSQLString(schema);
+        const escapedView = EscapeSQLString(viewName);
+        return `SELECT DISTINCT
+    ns.nspname AS "ReferencedSchema",
+    cl.relname AS "ReferencedObject",
+    cl.relkind AS "ReferencedType"
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid = d.objid
+JOIN pg_class v ON v.oid = r.ev_class
+JOIN pg_namespace vns ON vns.oid = v.relnamespace
+JOIN pg_class cl ON cl.oid = d.refobjid
+JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+WHERE vns.nspname = '${escapedSchema}'
+  AND v.relname = '${escapedView}'
+  AND cl.oid <> v.oid
+  AND cl.relkind IN ('r', 'v', 'm', 'f', 'p')`;
     }
 
     /**
@@ -2160,21 +2218,86 @@ ORDER BY ordinal_position`;
         if (!entity.HasLayeredBaseView) {
             return;
         }
-        const schemaLit = entity.SchemaName.replace(/'/g, "''").replace(/"/g, '""');
-        const outerLit = entity.BaseView.replace(/'/g, "''").replace(/"/g, '""');
-        const innerLit = entity.GeneratedViewName.replace(/'/g, "''").replace(/"/g, '""');
+        await this.rebindOuterViewAgainstInnerIfPresent(
+            client,
+            entity.SchemaName,
+            entity.BaseView,
+            entity.SchemaName,
+            entity.GeneratedViewName,
+            willRegenerate,
+        );
+    }
+
+    /**
+     * Rebinds each registered alternate base view on `entity` in topological
+     * `ParentID` order so `SELECT *` / `alias.*` re-expands after the entity's
+     * `BaseView` (or parent alternate view) is regenerated. Wrapped per-view in
+     * `try/catch` so a single broken alternate view logs a warning without
+     * failing the owning entity's view phase.
+     */
+    private async rebindAlternateBaseViewsIfPresent(
+        client: PGQueryable,
+        entity: EntityInfo,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        const orderedAltViews = OrderAlternateBaseViewsTopologically(entity.AlternateBaseViews ?? []);
+        if (orderedAltViews.length === 0) {
+            return;
+        }
+        const defaultInnerName = this.getBaseViewName(entity);
+        for (const altView of orderedAltViews) {
+            if (!IsValidSQLIdentifier(altView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ViewName)) {
+                logError(
+                    `[AlternateBaseView] Skipping rebind for alternate view '${altView.Name}' on '${entity.Name}': invalid SQL identifier '${altView.EffectiveSchemaName}.${altView.ViewName}'.`
+                );
+                continue;
+            }
+            const parentView = altView.ParentView;
+            const innerSchema = parentView ? parentView.EffectiveSchemaName : entity.SchemaName;
+            const innerName = parentView ? parentView.ViewName : defaultInnerName;
+            try {
+                await this.rebindOuterViewAgainstInnerIfPresent(
+                    client,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName,
+                    innerSchema,
+                    innerName,
+                    willRegenerate,
+                );
+            } catch (e) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Failed to rebind alternate view '${altView.Name}' (${altView.EffectiveSchemaName}.${altView.ViewName}) on '${entity.Name}': ${
+                        e instanceof Error ? e.message : String(e)
+                    }`,
+                );
+            }
+        }
+    }
+
+    private async rebindOuterViewAgainstInnerIfPresent(
+        client: PGQueryable,
+        outerSchema: string,
+        outerViewName: string,
+        innerSchema: string,
+        innerViewName: string,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        const outerSchemaLit = outerSchema.replace(/'/g, "''").replace(/"/g, '""');
+        const outerLit = outerViewName.replace(/'/g, "''").replace(/"/g, '""');
+        const innerSchemaLit = innerSchema.replace(/'/g, "''").replace(/"/g, '""');
+        const innerLit = innerViewName.replace(/'/g, "''").replace(/"/g, '""');
         const existsResult = await client.query(
-            `SELECT to_regclass('"${schemaLit}"."${outerLit}"') IS NOT NULL AS present`,
+            `SELECT to_regclass('"${outerSchemaLit}"."${outerLit}"') IS NOT NULL AS present`,
         );
         if (!existsResult.rows?.[0]?.['present']) {
             return;
         }
 
-        const defResult = await client.query(this.getViewDefinitionSQL(entity.SchemaName, entity.BaseView));
+        const defResult = await client.query(this.getViewDefinitionSQL(outerSchema, outerViewName));
         const viewDefinition = String(defResult.rows?.[0]?.['ViewDefinition'] ?? defResult.rows?.[0]?.['viewdefinition'] ?? '');
         if (!viewDefinition) {
             throw new LayeredOuterRestarError(
-                `Could not read pg_get_viewdef for layered outer view ${entity.SchemaName}.${entity.BaseView}`,
+                `Could not read pg_get_viewdef for layered outer view ${outerSchema}.${outerViewName}`,
             );
         }
 
@@ -2183,7 +2306,7 @@ ORDER BY ordinal_position`;
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = '${schemaLit}'
+             WHERE n.nspname = '${innerSchemaLit}'
                AND c.relname = '${innerLit}'
                AND a.attnum > 0
                AND NOT a.attisdropped
@@ -2192,14 +2315,14 @@ ORDER BY ordinal_position`;
         const innerColumns = (colResult.rows ?? []).map((r) => String(r['Name'] ?? r['name'] ?? ''));
         const restarred = restarLayeredOuterView({
             viewDefinition,
-            innerViewName: entity.GeneratedViewName,
+            innerViewName,
             innerColumns,
         });
-        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
+        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(outerSchema, outerViewName, restarred);
         await ExecuteWithFallback({
             Client: client,
-            schema: entity.SchemaName,
-            ViewName: entity.BaseView,
+            schema: outerSchema,
+            ViewName: outerViewName,
             CreateOrReplaceSQL: createSQL,
             WillRegenerate: willRegenerate,
         });
@@ -2454,6 +2577,7 @@ WHERE p.prokind IN ('f', 'p')
                 BaseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
             await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
+            await this.rebindAlternateBaseViewsIfPresent(client, entity, willRegenerate);
         } finally {
             client.release();
         }
@@ -2518,6 +2642,7 @@ WHERE p.prokind IN ('f', 'p')
                         BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
+                    await this.rebindAlternateBaseViewsIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {
                     return {
                         success: false,

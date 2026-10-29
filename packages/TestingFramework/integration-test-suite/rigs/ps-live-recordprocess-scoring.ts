@@ -55,6 +55,7 @@
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-recordprocess-scoring.ts
  */
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { PromoteToPublished } from './lib/ps-promote';
 import { Metadata, RunView, UserInfo, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
@@ -511,6 +512,8 @@ async function main(): Promise<void> {
     console.log(`  status        = ${out.status}`);
     console.log(`  leakageFlagged= ${out.leakageFlagged}`);
     console.log(`  holdoutMetrics= ${out.holdoutMetrics ?? '(none)'}`);
+    // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
+    console.log(`  promoted      → ${await PromoteToPublished(route, user, out.modelId, TAG)}`);
 
     // ── 4. Resolve a small, deterministic scope + create the SAVED Record Process ──────
     banner('4. RESOLVE SCOPE + CREATE MJ: Record Processes (WorkType=ML Model)');

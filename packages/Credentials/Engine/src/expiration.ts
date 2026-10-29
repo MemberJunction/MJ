@@ -283,3 +283,23 @@ export class CredentialNotFoundError extends CredentialResolutionError {
         this.CredentialName = credentialName;
     }
 }
+
+/**
+ * Thrown when a user-delegated (`3LO`) credential is bound to a specific `ownerUserId`
+ * and a caller attempts to resolve it without a matching `contextUser.ID`.
+ */
+export class CredentialOwnerMismatchError extends CredentialResolutionError {
+    public readonly CredentialName: string;
+    public readonly OwnerUserID: string;
+    public readonly RequestingUserID: string | null;
+
+    constructor(credentialName: string, ownerUserId: string, requestingUserId: string | null) {
+        super(
+            `Credential owner mismatch for '${credentialName}': bound to user '${ownerUserId}', ` +
+            `but requested by '${requestingUserId ?? 'anonymous'}'. Cross-user access to delegated OAuth credentials is forbidden.`
+        );
+        this.CredentialName = credentialName;
+        this.OwnerUserID = ownerUserId;
+        this.RequestingUserID = requestingUserId;
+    }
+}

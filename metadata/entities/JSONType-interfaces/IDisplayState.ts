@@ -25,6 +25,12 @@ export interface IDisplayState {
     /** Grid-specific configuration */
     grid?: IGridDisplayState;
     /**
+     * Logical name of an alternate base view (`MJ: Entity Alternate Base Views.Name`)
+     * that this view reads from. When omitted or null, the view reads from the
+     * entity's primary `BaseView`.
+     */
+    alternateBaseView?: string;
+    /**
      * Per-view-type configuration, one entry per view type the user has configured.
      * Keyed by the `MJ: View Types` row ID so each type (Grid, Cards, Timeline, Map,
      * Cluster, …) keeps its own settings in parallel — switching from one type to another

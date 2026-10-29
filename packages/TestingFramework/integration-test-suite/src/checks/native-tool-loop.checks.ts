@@ -40,13 +40,14 @@ import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
-import { AGENT_LIVE_SETTLE_MS, Sleep } from './agent-live-shared';
+import { AGENT_LIVE_SETTLE_MS } from './agent-live-shared';
 import {
     AdjacencyViolations, CreateLoopAgent, CreateModel, CreateModelVendor, CreateNativePrompt, CreateVendor, FailedTurn,
-    NewFixture, RejectedCallTurn, RemoveStaleFixtures, ResetScript, ResultBlocksOf, SCRIPTED_DRIVER, ScriptState, StepsOf,
+    IdsWhere, NewFixture, RejectedCallTurn, RemoveStaleFixtures, ResetScript, ResultBlocksOf, SCRIPTED_DRIVER, ScriptState, StepsOf,
     TeardownFixture, TextOf, TextTurn, ToolCallTurn, ToolCallingModesOf,
     type NativeLoopFixture, type RecordedRequest, type ScriptedTurn
 } from './native-tool-loop-shared';
+import { WaitUntil } from './wait-until';
 
 const PREFIX = 'IT: NTL ';
 const ACTION_AGENT = `${PREFIX}Action Agent`;
@@ -159,7 +160,37 @@ async function run(ctx: IntegrationCheckContext, agentName: string, request: str
     const runID = result.agentRun?.ID;
     Assert(!!runID, `${agentName}: the run was recorded`);
     fx().RunIds.push(runID!);
-    await Sleep(AGENT_LIVE_SETTLE_MS);
+
+    // Step and prompt-run rows are written fire-and-forget AFTER RunAgent returns. Nothing in this
+    // bundle reads them — every assertion below is on the in-memory Outcome — but TEARDOWN does:
+    // PurgeAgentRun finds a run's prompt runs only by reading its step rows first ("the steps are
+    // the only path to them"). If they have not landed when the fixture is torn down, the parent
+    // run is deleted and every step and prompt-run row is orphaned, silently, with the tier still
+    // green. That is why this wait exists.
+    //
+    // It used to be `Sleep(AGENT_LIVE_SETTLE_MS)` — a flat 5s, 13 times, about 65s a run. A fixed
+    // sleep is the wrong shape twice over: it pays 5s when the rows land in 200ms, and it is still
+    // not enough on a runner slow enough to need 6, where it leaks without saying so. The run
+    // itself knows how many steps it produced, so wait for exactly that many to be readable and
+    // let the old constant be the ceiling instead of the floor.
+    const expectedSteps = result.agentRun?.Steps?.length ?? 0;
+    if (expectedSteps > 0) {
+        try {
+            await WaitUntil(
+                async () => (await IdsWhere(ctx, 'MJ: AI Agent Run Steps', `AgentRunID='${runID}'`)).length >= expectedSteps,
+                `${agentName}: ${expectedSteps} agent-run step row(s) to land`,
+                // Double the old constant as the ceiling: strictly more headroom than the sleep it
+                // replaces. StableReads guards the case where the server writes more rows than the
+                // in-memory run knows about, so the count is confirmed settled, not merely reached.
+                { TimeoutMs: AGENT_LIVE_SETTLE_MS * 2, PollMs: 100, StableReads: 2 }
+            );
+        } catch (e) {
+            // Non-fatal, matching the suite's teardown philosophy: deliberately non-throwing, but
+            // NOT silent. Turning a slow write into a red check would trade a quiet leak for a
+            // flake; the warning is what makes the leak visible.
+            console.warn(`native-tool-loop: ${e instanceof Error ? e.message : String(e)} — teardown may orphan this run's step and prompt-run rows.`);
+        }
+    }
     return {
         RunID: runID!,
         Status: result.agentRun?.Status ?? 'Unknown',

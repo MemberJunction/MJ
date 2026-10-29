@@ -78,6 +78,7 @@ vi.mock('@memberjunction/templates', () => ({
 vi.mock('@memberjunction/templates-base-types', () => ({}));
 
 import { EntityVectorSyncer } from '../models/entityVectorSync';
+import { EntityInfo } from '@memberjunction/core';
 
 /* ------------------------------------------------------------------ */
 /*  Helper: expose private methods for testing via subclass            */
@@ -568,10 +569,10 @@ describe('EntityDocumentConfiguration', () => {
     const templateContent = { ID: 'TPL-1' };
 
     describe('addSystemMetadata', () => {
-      it('should set RecordID / Entity / TemplateID when not explicit', () => {
+      it('should set RecordID / Entity / EntityDocumentID / TemplateID when not explicit', () => {
         const metadata: Record<string, string | number | boolean> = {};
         syncer.testAddSystemMetadata(metadata, { __mj_compositeKey: 'ID|abc' }, entityDocument, templateContent, false);
-        expect(metadata).toEqual({ RecordID: 'ID|abc', Entity: 'Content Items', TemplateID: 'TPL-1' });
+        expect(metadata).toEqual({ RecordID: 'ID|abc', Entity: 'Content Items', EntityDocumentID: 'DOC-1', TemplateID: 'TPL-1' });
       });
 
       it('should add nothing when explicit', () => {
@@ -650,6 +651,39 @@ describe('EntityDocumentConfiguration', () => {
       expect(metadata['RecordID']).toBe('ID|abc');
       expect(metadata['TemplateID']).toBe('TPL-1');
       expect(metadata['__mj_UpdatedAt']).toBe('2026-01-01T00:00:00Z');
+    });
+  });
+
+  /* ---- field-level security in getDisplayFields ---- */
+  describe('getDisplayFields under field-level security', () => {
+    const HR = 'A0000000-0000-0000-0000-000000000001';
+    const STAFF = 'A0000000-0000-0000-0000-000000000002';
+    const rules = (staffRead: string) => [
+      { ID: `p-hr-${staffRead}`, RoleID: HR, ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+      { ID: `p-st-${staffRead}`, RoleID: STAFF, ReadAccess: staffRead, UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+    ];
+    const field = (name: string, staffRead: string, isPK = false) => ({
+      ID: `F-${name}`, EntityID: 'E-1', Name: name, Entity: 'Employees', Type: 'nvarchar', IsPrimaryKey: isPK,
+      MaxLength: 100, EntityFieldPermissions: rules(staffRead),
+    });
+    const employees = new EntityInfo({
+      ID: 'E-1', Name: 'Employees', EnableFieldLevelSecurity: true, Permissions: [],
+      Fields: [field('ID', 'Allow', true), field('Name', 'Allow'), field('Salary', 'Deny'), field('Review', 'No Access')],
+    });
+
+    it('never stores a field restricted for any role in vector metadata (default strategy)', () => {
+      const names = syncer.testGetDisplayFields(employees as unknown as { Fields: MockField[] }).map((f: MockField) => f.Name);
+      expect(names).toEqual(['Name']);
+    });
+
+    it('refuses an explicit inclusion of a restricted field, with a logged error', async () => {
+      const core = await import('@memberjunction/core');
+      const names = syncer.testGetDisplayFields(employees as unknown as { Fields: MockField[] }, {
+        fieldStrategy: 'include',
+        fields: { Name: { included: true }, Salary: { included: true } },
+      }).map((f: MockField) => f.Name);
+      expect(names).toEqual(['Name']);
+      expect(core.LogError).toHaveBeenCalledWith(expect.stringContaining('Salary'));
     });
   });
 });

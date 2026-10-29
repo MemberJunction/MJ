@@ -97,9 +97,16 @@ export interface SheddingPlan {
  * Two numbers, not one, on purpose: shedding to exactly the trigger guarantees an immediate
  * re-trigger and a sawtooth that spends its whole life at the edge of a kill. The gap is the
  * hysteresis that lets a sync do some work between decisions.
+ *
+ * Measured as memory in use on the HOST (see `PressureBytes`). The kernel kills when the host runs
+ * out, and a deployment commonly gives V8 most of the box: a heap sized at (RAM - 1 GB) x 0.70 is 65%
+ * of a 16 GB machine, which a large workspace fills just by booting (10.2 GB, 72.7%, five minutes after
+ * a restart, with nothing running). A trigger at 0.70 made that ordinary state "pressure", and a
+ * release line at 0.55 sat below the idle floor, where it could never fire. 0.85 still leaves 15% of
+ * RAM for the kernel to hand out; 0.75 is reachable from a normal idle.
  */
-export const SHED_ABOVE_FRACTION = 0.70;
-export const SHED_DOWN_TO_FRACTION = 0.55;
+export const SHED_ABOVE_FRACTION = 0.85;
+export const SHED_DOWN_TO_FRACTION = 0.75;
 
 /**
  * Operator overrides for both thresholds.
@@ -196,12 +203,13 @@ export function planShedding(
         // for no reason.
         return { Levers: [], ProjectedFreedBytes: 0, Exhausted: false, Reason: 'host memory unknown' };
     }
-    const fraction = reading.ResidentBytes / total;
+    const used = PressureBytes(reading);
+    const fraction = used / total;
     if (fraction < shedAbove) {
         return { Levers: [], ProjectedFreedBytes: 0, Exhausted: false, Reason: 'within headroom' };
     }
     const targetBytes = total * shedDownTo;
-    const mustFree = reading.ResidentBytes - targetBytes;
+    const mustFree = used - targetBytes;
 
     const ranked = rankLevers(contributors.flatMap(c => c.Levers));
     const taken: Lever[] = [];
@@ -220,6 +228,24 @@ export function planShedding(
                 ? 'under pressure with no lever available'
                 : `at ${Math.round(fraction * 100)}% of machine memory — shedding ${taken.length} of ${ranked.length} available`
     };
+}
+
+/**
+ * The memory the HOST has in use: total minus MemAvailable.
+ *
+ * This process's RSS is the wrong number for a decision about the kernel. It counts heap the
+ * deployment deliberately gave V8, which V8 fills before it collects, and it leaves out every other
+ * process on the box. MemAvailable is what the kernel can still hand out, reclaimable cache
+ * included, so it is the number that reaches zero right before a kill. Off Linux there is no
+ * MemAvailable, and RSS is the only reading there is.
+ */
+export function PressureBytes(reading: GovernorReading): number {
+    const total = reading.HostTotalBytes;
+    const available = reading.HostAvailableBytes;
+    if (total && total > 0 && available !== null && available >= 0) {
+        return Math.max(0, total - available);
+    }
+    return reading.ResidentBytes;
 }
 
 /**

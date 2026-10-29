@@ -1,9 +1,10 @@
 # @memberjunction/ai-elevenlabs
 
-MemberJunction AI provider for ElevenLabs. The package ships two drivers:
+MemberJunction AI provider for ElevenLabs. The package ships three drivers:
 
 - **`ElevenLabsAudioGenerator`** — `BaseTextToSpeech` implementation for text-to-speech, voice management, and pronunciation dictionaries (documented below).
 - **`ElevenLabsRealtime`** — `BaseRealtimeModel` driver for the **ElevenLabs Agents Platform**, powering realtime full-duplex voice sessions (see the next section).
+- **`ElevenRealtime`** — `BaseRealtimeModel` driver for **Eleven Realtime**, ElevenLabs' OpenAI-Realtime-compatible speech-to-speech models (see [Eleven Realtime](#realtime-driver--elevenrealtime-eleven-realtime-models)).
 
 ## Realtime driver — `ElevenLabsRealtime` (Agents Platform)
 
@@ -38,6 +39,29 @@ MemberJunction AI provider for ElevenLabs. The package ships two drivers:
 - `InitialContext` is injected as a `contextual_update` once the session is confirmed (the protocol has no history-seeding channel)
 
 For the full architecture (topologies, co-agent model, capability matrix across all four realtime providers), see [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
+
+---
+
+## Realtime driver — `ElevenRealtime` (Eleven Realtime models)
+
+`ElevenRealtime` (`src/elevenRealtime.ts`, registered via `@RegisterClass(BaseRealtimeModel, 'ElevenRealtime')`) drives `eleven_realtime_v1_mini` and `eleven_realtime_v1_max`. They are cascaded (speech recognition, an LLM, ElevenLabs turn-taking and voice) but sold as one model, and their API follows the OpenAI Realtime spec over a WebSocket. So the driver subclasses `OpenAIRealtime` from `@memberjunction/ai-openai`, as the Grok Voice driver does, and an `OpenAIRealtimeProfile` gates the features. Unlike `ElevenLabsRealtime`, there is no server-side agent to provision: the session carries the prompt and tools. The browser-direct client driver is `ElevenRealtimeClient` (ClassFactory key `'eleven-realtime'`) in `@memberjunction/ai-realtime-client`.
+
+| Concern | How this provider does it |
+| --- | --- |
+| Endpoint | `wss://api.elevenlabs.io/v1/convai/realtime?model=…` — WebSocket only, no WebRTC |
+| Authentication | Client secrets from `POST /v1/convai/realtime/client_secrets`, sent with `xi-api-key` (ElevenLabs does not take a bearer token). The socket is opened with a secret in the `openai-insecure-api-key.` subprotocol, as the `openai` SDK does — on **both** topologies: the server-bridged `StartSession` mints one first rather than sending the API key on the socket |
+| Session-ready gate | The session config is sent after `session.created`, on both topologies |
+| Transcripts | No input-transcription model is sent: the cascade transcribes the user itself, and `audio.input.transcription` takes only a `language` |
+| Reasoning | Not a session setting. ElevenLabs accepts `reasoning` and `parallel_tool_calls` but drops them from the session it echoes back, so the profile sends neither. Choose Max for reasoning |
+| Tools | Function tools, plus MCP servers from the `mcpTools` Config key |
+| Turn detection | `server_vad` and `semantic_vad`. Eagerness is `low` / `medium` / `high`, so MJ's `auto` is sent as `medium`. With nothing requested, ElevenLabs' own turn-taking applies; meeting mode sends `semantic_vad` with `create_response: false` |
+| Voice | `Config.voice` is an ElevenLabs voice id, sent as `audio.output.voice` |
+| Audio | PCM16 at 24 kHz both ways (the OpenAI default; no format is sent) |
+
+### Configuration
+
+- API key env alias: `AI_VENDOR_API_KEY__ElevenRealtime`
+- `max_duration_seconds` (an ElevenLabs extension) passes through the Config bag; ElevenLabs then closes the session with code 1000 when it is exceeded, which MJ reports as an unexpected close
 
 ---
 
@@ -139,9 +163,12 @@ for (const model of models) {
 
 - `ElevenLabsAudioGenerator` via `@RegisterClass(BaseTextToSpeech, 'ElevenLabsAudioGenerator')`, and via `@RegisterClass(BaseAudioGenerator, 'ElevenLabsAudioGenerator')` for callers of the deprecated base
 - `ElevenLabsRealtime` via `@RegisterClass(BaseRealtimeModel, 'ElevenLabsRealtime')`
+- `ElevenRealtime` via `@RegisterClass(BaseRealtimeModel, 'ElevenRealtime')`
 
 ## Dependencies
 
 - `@memberjunction/ai` - Core AI abstractions (BaseAudioGenerator, BaseRealtimeModel)
+- `@memberjunction/ai-openai` - The shared OpenAI Realtime protocol implementation `ElevenRealtime` subclasses
+- `openai` - The SDK client and realtime socket `ElevenRealtime` uses against ElevenLabs' endpoints
 - `@memberjunction/global` - Class registration
 - `@elevenlabs/elevenlabs-js` - Official ElevenLabs SDK (REST agent management + TTS; the realtime conversation websocket is spoken raw — the SDK's high-level wrapper owns audio devices, which a server bridge must not)

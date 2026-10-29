@@ -16,7 +16,7 @@
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { EscapeSQLString, MJLruCache } from '@memberjunction/global';
-import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 
 /** The conversation `ApplicationScope` values (mirrors the entity union). `'Application'` hides it from the main chat list. */
 export type ConversationApplicationScope = 'Global' | 'Both' | 'Application';
@@ -191,8 +191,9 @@ async function writeTranscriptDetail(
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<void> {
-    const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, contextUser);
+    const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>(CONVERSATION_DETAIL_ENTITY, contextUser);
     detail.NewRecord();
+    detail.MarkServerAuthoredReply(); // the agent's lines are the server's to write
     detail.ConversationID = conversationID;
     // The scribe's own speech is the agent ('AI'); everything it heard (humans + other agents) is 'User'.
     detail.Role = line.IsAgentSpeech ? 'AI' : 'User';
