@@ -3,6 +3,30 @@ import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
 /**
  * Configuration types for DBAutoDoc
  */
+
+/** Bounds and thresholds for key verification. Every field has a documented default. */
+export interface KeyVerificationConfig {
+    /** Run the probe at all. Default true — `false` makes every key Unprobed, not Verified. */
+    enabled?: boolean;
+    /** Distinct child values sampled per probe. Default 1000. */
+    sampleSize?: number;
+    /** Hard cap on probes per run. Default 500. Past it, candidates are Unprobed. */
+    maxProbes?: number;
+    /** Per-probe timeout in ms. Default 5000. A slow probe is Unprobed, not Refuted. */
+    probeTimeoutMs?: number;
+    /**
+     * Containment floor for Verified. Default 0.05.
+     *
+     * Deliberately far below FKDetector's 75% GATE 6: that gate decides whether a
+     * *statistically discovered* FK is real, where near-perfect containment is the
+     * evidence. This floor answers a much weaker question — "does this join match
+     * anything at all?" — whose whole point is to catch the 0% case (a namespaced
+     * parent key, a type-mismatched cross-schema guess) without discarding a
+     * genuinely sparse soft key in a connector schema full of orphans.
+     */
+    minContainment?: number;
+}
+
 export interface DBAutoDocConfig {
   version: string;
   database: DatabaseConfig;
@@ -95,6 +119,20 @@ export interface AIConfig {
   apiKey: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Wall-clock ceiling, in milliseconds, on EACH model call. `0` disables the bound.
+   * Default: 120000 (two minutes).
+   *
+   * Every LLM call in this package was previously unbounded. The retry machinery below cannot
+   * help: it only engages once a promise settles, and a provider that accepts the socket and then
+   * stops sending never settles one. `maxTokens` bounds the RESPONSE, not the wait.
+   *
+   * The bound is applied two ways at once, mirroring how `AIPromptRunner` bounds its own calls:
+   * the request is aborted through `ChatParams.cancellationToken` (which the provider drivers
+   * forward to their SDKs, so the socket is torn down rather than abandoned) AND the awaited
+   * promise is rejected, so a driver that ignores the signal still cannot park a caller forever.
+   */
+  callTimeoutMs?: number;
   /** @deprecated Use rateLimits.requestsPerMinute instead */
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
@@ -173,6 +211,13 @@ export interface AnalysisConfig {
   sampleQueryGeneration?: SampleQueryGenerationConfig;
   organicKeyDetection?: OrganicKeyDetectionConfig;
   /**
+   * Bounds and thresholds for verifying a proposed key against the data before it is
+   * emitted. See `KeyVerificationConfig` in `discovery/JoinProbe.ts` for the defaults
+   * and the reasoning behind each one. Omitted means "use the defaults" — NOT "skip
+   * verification"; set `keyVerification.enabled: false` for that.
+   */
+  keyVerification?: KeyVerificationConfig;
+  /**
    * Read the existing indexes on every table and show them to the LLM as evidence for keys and
    * important columns (default true). Indexes often exist where no PK/FK is declared.
    */
@@ -226,6 +271,14 @@ export interface OrganicKeyDetectionConfig {
   minDistinctTables?: number;
   /** Number of sample values per column to include in the embedding input and refiner prompt. Default: 5. */
   sampleValueCount?: number;
+  /**
+   * Set `AutoCreateRelatedViewOnForm` on every emitted organic key. Default FALSE.
+   *
+   * Was a hardcoded `true`: each emitted key auto-created one related-record grid per
+   * spoke — around 22 per key on a real run — each grid a value-join on a column the
+   * detector had never verified. A machine-proposed key should be opted into.
+   */
+  autoCreateRelatedViewOnForm?: boolean;
 
   // ─── LLM Refinement ──────────────────────────────────────────────────
   /** Concurrency for per-cluster LLM refinement calls. Default: 4. */
@@ -236,17 +289,31 @@ export interface OrganicKeyDetectionConfig {
   onRefinementError?: 'fail' | 'skip';
 
   // ─── Budget / Cost ───────────────────────────────────────────────────
-  /** Soft token budget for the entire detection pass (warns when exceeded). Default: 0 = unlimited. */
+  /**
+   * Token budget for the normalization pass. Default: 0 = unlimited.
+   *
+   * Enforced by NOT SCHEDULING further tables once the running total exceeds it; calls already in
+   * flight are allowed to finish, so the recorded total may overshoot by up to `concurrency`
+   * tables' worth. The result reports `BudgetExhausted` and how many tables were skipped, because
+   * normalizing 300 of 500 tables and reporting success is its own defect.
+   *
+   * This was declared and read nowhere, so the pass had no token, cost or call-count cap at all.
+   */
   tokenBudget?: number;
 
   // ─── Embeddings ──────────────────────────────────────────────────────
   /**
    * Embedding provider override. Maps to a MemberJunction `BaseEmbeddings` driver
-   * (resolved via the ClassFactory). Defaults to `openai` when absent. The API key
-   * is taken from the top-level `ai` config.
+   * (resolved via the ClassFactory). The API key is taken from the top-level `ai` config.
+   *
+   * When absent this defaults to the embedding driver of the SAME vendor as the configured LLM
+   * provider, because that is the one credential the operator has definitely supplied. It used to
+   * default to the literal `openai`, which meant the shipped default configuration handed a Gemini
+   * key to `OpenAIEmbedding`. A vendor with no embedding driver (anthropic, groq, openrouter, …)
+   * is a named error asking for an explicit choice; `local` needs no key at all.
    */
   embedding?: {
-    provider?: 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
+    provider?: 'openai' | 'gemini' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
     model?: string;
     dimensions?: number;
     batchSize?: number;
@@ -323,6 +390,15 @@ export interface RelationshipDiscoveryConfig {
     enabled: boolean;                // Re-analyze after discoveries (default: true)
     maxIterations: number;           // Max discovery iterations (default: 10)
   };
+
+  /**
+   * Use existing unique indexes as PK evidence for tables with no declared primary key (default true):
+   * a unique index on NOT NULL columns becomes a candidate even when the statistics can't show
+   * uniqueness (e.g. an empty table), and composite unique indexes are considered when no single column
+   * qualifies (next to a qualifying single-column key they are alternate keys and are not added).
+   * Needs `analysis.useExistingIndexes` (also default true).
+   */
+  indexBackedCandidates?: boolean;
 }
 
 export interface GuardrailsConfig {

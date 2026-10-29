@@ -8,16 +8,17 @@
  * Also hosts server-side recovery ({@link RecoverRealtimeRecordingFromSegments}): rebuilding a recording
  * from its crash-recovery shards when the end-of-call upload never arrived. Recovery defers to a
  * recording that already exists on a best-effort basis: it re-checks the session immediately before
- * its stamp, but `BaseEntity` has no compare-and-set, so a writer landing inside that one load -> save
- * window can still be overwritten.
+ * its stamp, but `spStampAIAgentSessionRecordingFile` has no compare-and-set, so a writer landing inside
+ * that one load -> stamp proc call window can still be overwritten.
  *
  * @module @memberjunction/ai-agents
  */
 import { randomBytes } from 'crypto';
-import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, FileStorageBase } from '@memberjunction/storage';
 import { RealtimeRecordingMedia } from './realtime-recording-capture';
+import { SqlRealtimeRecordingLedger } from './realtime-recording-ledger';
 
 /**
  * Resolves the storage account a session recording should be written to: the agent's
@@ -96,9 +97,9 @@ export interface StoreRealtimeRecordingInput {
     /**
      * When true, the order becomes re-check -> stamp -> link: the session is re-read immediately before
      * the stamp and, if it already has a `RecordingFileID`, that recording is left alone (nothing is
-     * linked or stamped; the result is `Superseded`). The link is written only after the stamp saved, so
+     * linked or stamped; the result is `Superseded`). The link is written only after the stamp landed, so
      * a superseded or failed store never leaves a link row. Best effort, not a guarantee: without a
-     * compare-and-set, a recording stamped inside the one load -> save window is still overwritten.
+     * compare-and-set, a recording stamped inside the one load -> stamp proc call window is still overwritten.
      * Recovery sets this. Left false (the default) for the end-of-call upload, which links and then
      * stamps unconditionally.
      */
@@ -327,7 +328,8 @@ export interface StoreRealtimeRecordingResult {
 /**
  * Uploads a session recording to MJStorage, links it to the `AIAgentSession` (via
  * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` / `RecordingStartedAt`
- * on the session. Never throws — a recording-storage failure must not fail the session; failures are
+ * on the session through the ledger's `spStampAIAgentSessionRecordingFile` proc (the recording columns are
+ * not updatable through an entity save, #6010). Never throws — a recording-storage failure must not fail the session; failures are
  * logged AND carried out in the result so the caller can report the real cause (a bare `null` used to
  * strand reasons like Drive's "Service Accounts do not have storage quota" three layers down).
  *
@@ -374,15 +376,18 @@ async function linkAndStamp(input: StoreRealtimeRecordingInput, fileID: string):
     const sessionLoaded = await session.Load(SessionID);
     await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     if (sessionLoaded) {
-        await stampRecordingOnSession(session, fileID, Media, StartedAt);
+        const stampFailure = await stampRecordingOnSession(session, fileID, Media, StartedAt, ContextUser, Provider);
+        if (stampFailure !== null) {
+            return { FileID: fileID, ErrorMessage: `file ${fileID} uploaded and linked, but not stamped on session ${SessionID}: ${stampFailure}`, Superseded: false };
+        }
     }
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
 }
 
 /**
  * Recovery path: re-check -> stamp -> link. The re-check is the last read before the stamp, so the
- * window in which a late recording can still be overwritten is one load -> save. The link is written
- * only once the stamp saved, so a `Superseded` or failed result never leaves a link row behind.
+ * window in which a late recording can still be overwritten is one load -> stamp proc call. The link is written
+ * only once the stamp landed, so a `Superseded` or failed result never leaves a link row behind.
  */
 async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileID: string): Promise<StoreRealtimeRecordingResult> {
     const { Media, StartedAt, SessionID, ContextUser, Provider } = input;
@@ -396,9 +401,9 @@ async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileI
         LogStatus(`storeRealtimeRecording: session ${SessionID} already has recording file ${session.RecordingFileID}; the just-uploaded file ${fileID} is orphaned and was not linked or stamped`);
         return { FileID: fileID, ErrorMessage: null, Superseded: true };
     }
-    if (!await stampRecordingOnSession(session, fileID, Media, StartedAt)) {
-        const reason = session.LatestResult?.CompleteMessage ?? 'unknown error';
-        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${reason}`, Superseded: false };
+    const stampFailure = await stampRecordingOnSession(session, fileID, Media, StartedAt, ContextUser, Provider);
+    if (stampFailure !== null) {
+        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${stampFailure}`, Superseded: false };
     }
     await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
@@ -429,18 +434,41 @@ export async function LinkRecordingToSession(fileID: string, sessionID: string, 
     return true;
 }
 
-/** Stamps the recording fields on an already-loaded session (file + media kind + t0). Logs and returns false on a failed save. */
+/**
+ * Stamps the recording file, media kind and t0 on a session through `spStampAIAgentSessionRecordingFile`
+ * (the recording columns are not updatable through an entity save, #6010). Logs with the session id and
+ * returns the failure reason, or `null` when the stamp landed. Never throws.
+ */
 async function stampRecordingOnSession(
-    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date
-): Promise<boolean> {
-    session.RecordingFileID = fileID;
-    session.RecordingMedia = media;
-    session.RecordingStartedAt = startedAt;
-    if (!await session.Save()) {
-        LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${session.ID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        return false;
+    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date,
+    contextUser: UserInfo, provider: IMetadataProvider
+): Promise<string | null> {
+    try {
+        const ledger = new SqlRealtimeRecordingLedger(requireDatabaseProvider(provider, session.ID), contextUser);
+        await ledger.StampFile(session.ID, { fileID, media, startedAt });
+        return null;
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        LogError(`storeRealtimeRecording: failed to stamp recording file ${fileID} on session ${session.ID}: ${reason}`);
+        return reason;
     }
-    return true;
+}
+
+/**
+ * The provider as a server-side database provider. Checked structurally (it can run SQL) rather than with
+ * `instanceof`, so a provider from another module copy or a test double still qualifies. The stamp proc
+ * call needs `ExecuteSQL`, so a provider without it fails here with a clear message.
+ */
+function requireDatabaseProvider(provider: IMetadataProvider, sessionID: string): DatabaseProviderBase {
+    if (!isDatabaseProvider(provider)) {
+        throw new Error(`session ${sessionID}: the recording file can only be stamped through a server-side database provider`);
+    }
+    return provider;
+}
+
+/** True when the provider can run SQL, the one capability the stamp proc call needs. */
+function isDatabaseProvider(provider: IMetadataProvider): provider is IMetadataProvider & DatabaseProviderBase {
+    return typeof (provider as Partial<DatabaseProviderBase>).ExecuteSQL === 'function';
 }
 
 /** @deprecated Use {@link StoreRealtimeRecording}. */
@@ -688,14 +716,14 @@ interface ListedShard {
  * failure at any step leaves the shards for the next try. If the session has (or gains) another
  * recording, the outcome is `Superseded` and the shards are kept. Deferring to that recording is best
  * effort: the session is re-checked immediately before the stamp, but a recording stamped inside that
- * one load -> save window is overwritten (there is no compare-and-set).
+ * one load -> stamp proc call window is overwritten (there is no compare-and-set).
  *
  * The sample rate comes from the shard keys (`seg-NNNN.r<rate>.pcm`) or, for legacy `seg-NNNN.pcm`
  * shards, from each object's stored content type. When no shard declares a rate (a legacy shard on a
  * driver that keeps no content type, such as Box), it is inferred from the size of the full shards; see
  * {@link LEGACY_SHARD_SECONDS}.
  *
- * Once the stamp has saved, the outcome is `Recovered` even if the confirming reload or a shard delete
+ * Once the stamp has landed, the outcome is `Recovered` even if the confirming reload or a shard delete
  * fails; the shards it could not remove are named in a `LogError` (nothing revisits a stamped session).
  *
  * Never throws: every failure is logged with the session id and returned as `Failed`.
@@ -763,7 +791,7 @@ async function finishRecovery(
     const { SessionID, StorageAccountID, ContextUser, Provider } = input;
     const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
     if (!await session.Load(SessionID)) {
-        // The stamp and link already saved, so the recording is in place; only the overwrite check could
+        // The stamp and link already landed, so the recording is in place; only the overwrite check could
         // not run. Keep the shards (they might belong to a recording that replaced ours) and name them.
         LogError(
             `RecoverRealtimeRecordingFromSegments (session ${SessionID}): recovered file ${fileID} is stamped, but the session ` +

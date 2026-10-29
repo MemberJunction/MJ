@@ -44,6 +44,15 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     Filter?: string;
     /**
+     * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
+     * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
+     *
+     * When set, `BaseEngine` passes `AlternateBaseView` to `RunViewParams` and disables
+     * immediate in-memory array mutation on save events (forcing a full database refresh
+     * so updated records that fall out of the alternate view's SQL predicate are removed).
+     */
+    AlternateBaseView?: string;
+    /**
      * Optional, filters to apply to each item in a dataset, only applies when type is 'dataset' and is optional in those cases.
      */
     DatasetItemFilters?: DatasetItemFilterType[];
@@ -998,13 +1007,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                     return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName;
                 });
+                const matchingDatasetItems = (this._datasetItemMappings.get(eName) ?? []).filter(
+                    m => m.config.AutoRefresh !== false
+                );
 
-                if (matchingConfigs.length === 0) {
+                if (matchingConfigs.length === 0 && matchingDatasetItems.length === 0) {
                     return true;
                 }
 
-                // Check if ALL matching configs can use immediate mutation
-                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
+                // Check if ALL matching entity configs can use immediate mutation. A saved object
+                // that lacks columns (its saver could not read them) would put a narrowed row into
+                // an engine every user reads, so that save takes the full-refresh path instead,
+                // which reloads the row as this engine's own user.
+                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config))
+                    && this.savedRowIsComplete(event);
 
                 if (allCanUseImmediate) {
                     const applyAll = async (): Promise<void> => {
@@ -1012,6 +1028,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         // provider rebound) before being cached
                         for (const config of matchingConfigs) {
                             await this.applyImmediateMutation(config, event);
+                        }
+                        if (matchingDatasetItems.length > 0) {
+                            await this.applyDatasetItemMutations(matchingDatasetItems, event);
                         }
                     };
                     // The entity raises save/delete as soon as its own write returns, while an
@@ -1037,6 +1056,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     await applyAll();
                     return true;
                 } else {
+                    if (matchingDatasetItems.length > 0) {
+                        const provider = event.baseEntity.ProviderToUse;
+                        if (provider instanceof DatabaseProviderBase && provider.TransactionDepth > 0) {
+                            const token = provider.CapturePostCommitToken();
+                            const savedKey = event.type === 'save' ? event.baseEntity.PrimaryKey.ToString() : null;
+                            provider.RunAfterCommit(async () => {
+                                if (savedKey !== null && event.baseEntity.PrimaryKey.ToString() !== savedKey) return;
+                                await this.applyDatasetItemMutations(matchingDatasetItems, event);
+                            }, `BaseEngine dataset cache mutation for ${eName}`, token);
+                        } else {
+                            await this.applyDatasetItemMutations(matchingDatasetItems, event);
+                        }
+                    }
                     // At least one config requires full refresh, use debouncing
                     return this.DebounceIndividualBaseEntityEvent(event);
                 }
@@ -1331,7 +1363,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
                     if (needingWork.length > 0) {
                         // Check if we can use immediate array mutation instead of running a view
-                        if (this.canUseImmediateMutation(config)) {
+                        // A save carrying a row with missing columns can't replace an engine row
+                        // in place (see savedRowIsComplete), so the whole window refreshes instead.
+                        if (this.canUseImmediateMutation(config) && needingWork.every(c => this.savedRowIsComplete(c.event))) {
                             // Apply, in order, every event the array hasn't seen yet
                             for (const c of needingWork) {
                                 await this.applyImmediateMutation(config, c.event);
@@ -1396,7 +1430,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected classifyEventForConfig(config: BaseEnginePropertyConfig, event: BaseEntityEvent): EntityEventDisposition {
         if (event.type === 'save') {
             if (event.saveSubType === 'update' || event.saveSubType === 'create') {
-                if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
+                // When AlternateBaseView is set on the config, the SQL view applies a canonical
+                // WHERE/JOIN predicate — an in-memory update can cause the record to fall out of
+                // the alternate view (e.g. Status changed from 'Active' to 'Inactive'), so we
+                // must refresh from the database rather than only notifying in place.
+                if (!config.AlternateBaseView && this.isEntityAlreadyInArray(config, event.baseEntity)) {
                     return { action: 'notify', changeType: event.saveSubType === 'create' ? 'add' : 'update' };
                 }
             }
@@ -1597,6 +1635,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return false;
         }
 
+        // An AlternateBaseView applies a canonical SQL WHERE/JOIN in the database view;
+        // immediate in-memory mutations cannot evaluate that SQL predicate.
+        if (config.AlternateBaseView) {
+            return false;
+        }
+
         // If there's an OrderBy, we can't safely do immediate mutations because:
         // - For creates: we'd need to insert at the correct position
         // - For updates: the entity might need to move to a different position
@@ -1639,6 +1683,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // If the instance's AdditionalLoading is different from the base class's,
         // it means the subclass has overridden it
         return instanceProto.AdditionalLoading !== baseProto.AdditionalLoading;
+    }
+
+    /**
+     * Whether a save event's entity carries every column, so it can replace an engine row in
+     * place. Deletes and non-save events always qualify.
+     */
+    protected savedRowIsComplete(event: BaseEntityEvent): boolean {
+        if (event.type !== 'save' || !event.baseEntity) {
+            return true;
+        }
+        const entity = event.baseEntity;
+        // Asked of the object directly, so no throwaway GetAll() row is built per event. An object
+        // that is not a BaseEntity (a test double) is judged on its row, as before.
+        return typeof entity.HoldsEveryField === 'function'
+            ? entity.HoldsEveryField()
+            : LocalCacheManager.RowHasEveryField(entity.EntityInfo, entity.GetAll());
     }
 
     /**
@@ -1794,20 +1854,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the connection string from the provider for fingerprint generation
-        // The provider is needed because fingerprints include connection prefix
-        const provider = this.ProviderToUse;
-        let connectionString: string | undefined;
-        if (provider && 'InstanceConnectionString' in provider) {
-            connectionString = (provider as ProviderBase).InstanceConnectionString;
-        }
-
-        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
-        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            this.BuildRunViewParamsForConfig(config),
-            connectionString
-        );
+        // The same builder as LoadSingleEntityConfig and RegisterCacheChangeCallbacks, so the
+        // slot maintained here is the one this engine reads and listens on.
+        const fingerprint = this.configFingerprint(config);
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1835,6 +1884,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             );
         } else {
             const entityData = entity.GetAll();
+            // A row-filtered or field-secured slot, or a saved row missing columns, cannot take the
+            // saver's values in place: clear it and let the next read refill it.
+            if (!LocalCacheManager.Instance.CanUpsertRowIntoSlot(fingerprint, entity.EntityInfo, entityData)) {
+                await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+                return;
+            }
             await LocalCacheManager.Instance.UpsertSingleEntity(
                 fingerprint,
                 entityData,
@@ -1911,6 +1966,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
+        this.WarnAboutFieldSecuredEntities(entityConfigs);
 
         // All-or-nothing permission check: if the user lacks read access on ANY
         // entity config, skip ALL entity configs for this engine. Returns the
@@ -1923,6 +1979,37 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
+    }
+
+    /** Engine-class and entity pairs already warned about by {@link WarnAboutFieldSecuredEntities}. */
+    private static _fieldSecurityWarned: Set<string> = new Set();
+
+    /**
+     * On a server, says once per engine class and entity when an entity this engine caches has
+     * field-level security (its own, or an IS-A ancestor's). Changes nothing about the load.
+     *
+     * A server-side engine loads as the system user (see {@link ResolveContextUser}), so its
+     * cache holds every column, including ones some users are denied. That is correct for a
+     * process-wide cache, and it makes every path that hands engine data to a person responsible
+     * for projecting it to that person first.
+     */
+    protected WarnAboutFieldSecuredEntities(entityConfigs: BaseEnginePropertyConfig[]): void {
+        const provider = this.ProviderToUse;
+        if (provider?.ProviderType !== ProviderType.Database) {
+            return;
+        }
+        for (const config of entityConfigs) {
+            const entityInfo = config.EntityName ? provider.EntityByName(config.EntityName) : undefined;
+            if (!entityInfo?.FieldLevelSecurityApplies) {
+                continue;
+            }
+            const key = `${this.constructor.name}|${entityInfo.Name}`.toLowerCase();
+            if (BaseEngine._fieldSecurityWarned.has(key)) {
+                continue;
+            }
+            BaseEngine._fieldSecurityWarned.add(key);
+            LogStatus(`${this.constructor.name}: '${entityInfo.Name}' has field-level security. Engine data is loaded as the system user and holds every column; project it for the acting user before it reaches a person.`);
+        }
     }
 
     /**
@@ -2088,14 +2175,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * IgnoreMaxRows, IncludeBinaryFields) are always consistent — preventing cache key mismatches that break
      * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
      *
-     * **Row-level security is not part of the fingerprints built from these params.** The engine
-     * builds them with `GenerateRunViewFingerprint(params, connection)`, without the RLS clause the
-     * provider adds for the reading user. On a server that is correct: engines load as the system
-     * user, whose RLS clause is empty, so the provider's fingerprint for the same read matches. An
-     * engine loaded by an RLS-scoped user (possible on a client) would compute an unscoped
-     * fingerprint for a slot the provider stored under a scoped one, so its cache callbacks and
-     * `syncLocalCacheForConfig` would target a different slot. Pass the RLS clause here if such an
-     * engine is ever needed.
+     * The slot fingerprint for these params also carries the engine user's row-level-security
+     * and field-security segments; see {@link configFingerprint}.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
         return {
@@ -2103,6 +2184,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
+            ...(config.AlternateBaseView ? { AlternateBaseView: config.AlternateBaseView } : {}),
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
@@ -2274,6 +2356,69 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Maps normalized entity names (`entityName.trim().toLowerCase()`) to dataset item properties
+     * loaded via `DatasetResultHandling === 'single_property'`, allowing in-place auto-refresh of
+     * dataset-backed engines (such as `TemplateEngineBase`) on entity save/delete events.
+     */
+    private _datasetItemMappings: Map<string, Array<{ config: BaseEnginePropertyConfig; itemCode: string; entityName: string }>> = new Map();
+
+    /**
+     * Applies an immediate in-place mutation to dataset item arrays when a constituent entity is saved or deleted,
+     * then invokes {@link AdditionalLoading} so derived associations (e.g. Template Content / Params) stay current.
+     */
+    protected async applyDatasetItemMutations(
+        mappings: Array<{ config: BaseEnginePropertyConfig; itemCode: string; entityName: string }>,
+        event: BaseEntityEvent,
+    ): Promise<void> {
+        const entity = event.baseEntity;
+        let mutated = false;
+        const notifiedProperties = new Set<string>();
+
+        for (const mapping of mappings) {
+            const container = (this as Record<string, unknown>)[mapping.config.PropertyName] as Record<string, BaseEntity[]> | undefined;
+            const currentData = container?.[mapping.itemCode];
+            if (!Array.isArray(currentData)) {
+                continue;
+            }
+
+            if (event.type === 'save') {
+                const provider = this.ProviderToUse;
+                if (!provider) continue;
+                const cached = await provider.GetEntityObject<BaseEntity>(mapping.entityName, this._contextUser);
+                if (!cached) continue;
+                await cached.LoadFromData(entity.GetAll());
+
+                const existsByRef = currentData.indexOf(entity) >= 0;
+                if (!existsByRef) {
+                    const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                    if (index >= 0) {
+                        currentData[index] = cached;
+                    } else {
+                        currentData.push(cached);
+                    }
+                }
+                mutated = true;
+                notifiedProperties.add(mapping.config.PropertyName);
+            } else if (event.type === 'delete') {
+                const oldValues = (event.payload as { OldValues?: Record<string, unknown> } | undefined)?.OldValues;
+                const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
+                if (index >= 0) {
+                    currentData.splice(index, 1);
+                    mutated = true;
+                    notifiedProperties.add(mapping.config.PropertyName);
+                }
+            }
+        }
+
+        if (mutated) {
+            await this.AdditionalLoading(this._contextUser);
+            for (const propName of notifiedProperties) {
+                this.emitPropertyChange(propName);
+            }
+        }
+    }
+
+    /**
      * Handles the process of loading a single config of type 'dataset'.
      * @param config
      * @param contextUser
@@ -2291,7 +2436,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
             await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
         } else {
-            result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+            result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser);
         }
         if (!result) {
             const errorMsg = `GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`;
@@ -2318,25 +2463,38 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (result.Success) {
             if (config.AddToObject !== false) {
                 if (config.DatasetResultHandling === 'single_property') {
-                    const singleObject = {};
-                    for (const item of result.Results) {
-                        //convert the results to entity objects before
-                        //adding them to the singleObject
-                        const entities: BaseEntity[] = [];
-                        for(const entityData of item.Results) {
+                    // Clear previous dataset item mappings for this property before re-indexing
+                    for (const [key, list] of this._datasetItemMappings.entries()) {
+                        const filtered = list.filter(m => m.config.PropertyName !== config.PropertyName);
+                        if (filtered.length === 0) {
+                            this._datasetItemMappings.delete(key);
+                        } else if (filtered.length !== list.length) {
+                            this._datasetItemMappings.set(key, filtered);
+                        }
+                    }
+
+                    const singleObject: Record<string, BaseEntity[]> = {};
+                    await Promise.all(result.Results.map(async (item) => {
+                        const entities = await Promise.all(item.Results.map(async (entityData) => {
                             const entity: BaseEntity = await p.GetEntityObject(item.EntityName, contextUser);
                             await entity.LoadFromData(entityData);
-                            entities.push(entity);
-                        }
-
+                            return entity;
+                        }));
                         singleObject[item.Code] = entities;
-                    }
-                    (this as any)[config.PropertyName] = singleObject;
+
+                        if (item.EntityName && item.Code) {
+                            const normName = item.EntityName.trim().toLowerCase();
+                            const existing = this._datasetItemMappings.get(normName) ?? [];
+                            existing.push({ config, itemCode: item.Code, entityName: item.EntityName });
+                            this._datasetItemMappings.set(normName, existing);
+                        }
+                    }));
+                    (this as Record<string, unknown>)[config.PropertyName] = singleObject;
                 }
                 else {
                     // explode out the items within the DS into individual properties
                     for (const item of result.Results) {
-                        (this as any)[`${config.PropertyName}_${item.Code}`] = item.Results;
+                        (this as Record<string, unknown>)[`${config.PropertyName}_${item.Code}`] = item.Results;
                     }
                 }
             }
@@ -2806,11 +2964,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     }
 
-    /** The cache fingerprint of a config's slot, as {@link RegisterCacheChangeCallbacks} computes it. */
+    /**
+     * The cache fingerprint of a config's slot: the one {@link RegisterCacheChangeCallbacks} listens
+     * on, {@link syncLocalCacheForConfig} maintains and {@link storeConfigRows} writes.
+     *
+     * Built by the provider for this engine's user, with that user's row-level-security and
+     * field-security segments, so it names the same slot the provider's own RunView read used. An
+     * engine running as a restricted user holds only what that user may see; without the segments
+     * its rows would be written into, and its callbacks registered on, the slot unrestricted
+     * readers share.
+     */
     protected configFingerprint(config: BaseEnginePropertyConfig): string {
+        const params = this.BuildRunViewParamsForConfig(config);
         const provider = this.RunViewProviderToUse;
-        const connectionPrefix = provider instanceof ProviderBase ? provider.InstanceConnectionString : undefined;
-        return LocalCacheManager.Instance.GenerateRunViewFingerprint(this.BuildRunViewParamsForConfig(config), connectionPrefix);
+        if (provider instanceof ProviderBase) {
+            return provider.ComputeRunViewCacheFingerprint(params, this._contextUser);
+        }
+        const connection = provider && 'InstanceConnectionString' in provider
+            ? (provider as { InstanceConnectionString?: string }).InstanceConnectionString
+            : undefined;
+        return LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connection);
     }
 
     /**

@@ -158,12 +158,12 @@ export class AgentPreExecutionRAG {
         const principal = await this.resolveSkillPrincipal(params);
         if (!principal.ok) return null;
 
-        // 2–4. For each agent-scope row, check permission, render the query and run scoped search.
-        const perScopeResults: ScopeSearchResult[] = [];
-        for (const row of agentScopeRows) {
-            const r = await this.searchOneAgentScope(row, params, searchContext, hasContext, principal.skill);
-            if (r) perScopeResults.push(r);
-        }
+        // 2–4. For each agent-scope row, check permission, render the query and run scoped search in parallel
+        // while preserving Priority order (agentScopeRows is pre-sorted by Priority ascending).
+        const settledResults = await Promise.all(
+            agentScopeRows.map(row => this.searchOneAgentScope(row, params, searchContext, hasContext, principal.skill))
+        );
+        const perScopeResults: ScopeSearchResult[] = settledResults.filter((r): r is ScopeSearchResult => r !== null);
         if (perScopeResults.length === 0) return null;
 
         // 5. Cross-scope RRF when multiple scopes contributed
@@ -637,7 +637,7 @@ export class AgentPreExecutionRAG {
                 scopeDescription: scope.Description ?? ''
             };
 
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data, undefined, undefined, { ContextUser: params.contextUser });
             if (rendered?.Success && rendered.Output) {
                 return rendered.Output.trim();
             }

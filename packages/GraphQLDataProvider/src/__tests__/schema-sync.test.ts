@@ -197,7 +197,8 @@ const CLIENT_CONTRACTS: Record<string, {
         clientLocation: 'RunViewsWithCacheCheck() cacheStatus mapping',
         fields: [
             'maxUpdatedAt',
-            'rowCount'
+            'rowCount',
+            'fieldSecurityKey'
         ]
     },
     RunViewWithCacheCheckInput: {

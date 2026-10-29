@@ -1,5 +1,41 @@
 # @memberjunction/ai-openrouter
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- cc9fa3c: OpenRouter requests can carry an ordered model preference. `MJ_OPENROUTER_MODEL_PREFERENCE` (comma-separated, highest first) is sent as OpenRouter's `models` array, which it walks on any error from the model before — downtime, rate limiting, moderation, context-length validation — billing only for the one that answered. The caller's own model is always appended last, so a preference reorders rather than vetoes and a deliberately chosen model stays reachable. Unset changes nothing: the request body is byte-for-byte what it was.
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [709de1a]
+- Updated dependencies [914e6ff]
+- Updated dependencies [1141164]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-openai@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

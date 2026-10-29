@@ -1,5 +1,126 @@
 # @memberjunction/integration-engine
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- b1295d2: Discovery stops for memory instead of being killed, and no longer has to hold the whole catalog to finish.
+  - **A memory budget beside the time budget.** Introspect and PK classification stop taking on new work when the V8 heap reaches `HEAP_STOP_FRACTION` of its limit or resident memory reaches `RSS_STOP_FRACTION` of the box, keep what they gathered, and report `HOST_MEMORY_PRESSURE`. PK classification refreshes only the catalog (not every engine dataset) and yields to the collector every 25 objects. A discovery sample never requests a page larger than its target.
+  - **An absolute heap floor.** `heap_size_limit` includes a fixed ~192 MB young-generation reserve that live data never occupies, so a fraction of it alone sits above V8's real abort line on any heap under ~2.4 GB. The heap gate also stops when no more than `HEAP_STOP_MIN_HEADROOM_BYTES` (320 MB) remain; large heaps are unaffected.
+  - **Streaming introspection.** `IntrospectSchemaOptions.OnObject` lets a caller take each object as a base connector builds it (`SourceSchemaInfo.Streamed` says it did). The creation pipeline uses it to sample and persist each object as it is produced, carrying only object names to a final pass that retires absent objects — so peak memory is one object, not the catalog. `PersistDiscoveredSchema` gains `DeactivateAbsentObjects` / `DeactivateAbsentFields`, each defaulting to `DeactivateAbsent`. Connectors whose `IntrospectSchema` does not forward the option behave exactly as before.
+
+- 420fc02: Discovery no longer persists an object with no fields. Two independent routes led there, both ending with an object that maps to nothing and syncs nothing, while the run reported a sample that had succeeded.
+  - **A runtime-discovered object was never sampled at all.** `BaseRESTIntegrationConnector.DiscoverySampleRecordStream` opened by resolving the object from the engine cache, and that lookup throws when the object has no persisted row. Sampling is what decides what the row will contain, so it necessarily runs before the row exists: the throw fired on the first line, before the connector was consulted, and unwound into the failure fallback. The whole sampling chain therefore ran with zero records for precisely the objects discovery exists to learn — no statistical primary key, no observed column widths. The lookup is now optional. A missing row disqualifies only the record-constrained sampler, which reads the object's API path and ID; the generic `FetchChanges` loop needs neither and hands routing to the connector, which owns first contact with an object the catalog has never seen. Deadline and watchdog forwarding on that route are unchanged.
+  - **An empty source table produced a fieldless object.** A sample returns zero fields whenever it saw zero records, which is the ordinary state of an empty table rather than a malfunction — so it never threw, never took the existing fallback, and the empty result was written out verbatim as the object's schema. Because discovery does not re-run on its own, the emptiness of a table at one moment became a permanent property of the schema, even though the connector's describe surface knew the columns throughout. `StageIntrospect` now consults that describe surface as a last resort before persisting an object with no fields, and reports it on the existing `discover-fields-fallback` channel so a discovery that learned nothing stays distinguishable from one that succeeded.
+
+    The backstop is deliberately placed at the point of persistence and gated on there being no declared fields either, because zero fields is also a _designed_ outcome: a composition child whose parent tuple is unknowable adjourns to declared-only fields on purpose. Only the two paths where the sample is the sole source of fields — a runtime-discovered object, and a name-only declaration — can reach the backstop; an object that declared fields keeps them and merges exactly as before.
+
+- f68e17b: The discovery run deadline — the outermost bound, and the only one that can fail a whole run — is configurable per connection and defaults to 12 hours. Resolution order is the explicit `RunDeadlineMs` argument, then the connection's `Configuration.runDeadlineMs`, then `MJ_INTEGRATION_RUN_DEADLINE_MS`, then the default; `0` disables the ceiling, and a negative, non-numeric or malformed value falls through rather than disabling it. The default was 45 minutes, which failed large catalogs mid-introspection and discarded everything gathered; the ceiling exists to release a run that has hung, not to bound one that is merely big.
+- a1a7e2c: Schema evolution acts on the watermark-field change it already detects, and the remaining bare RSU pipeline calls retry.
+
+  **A watermark-field change now resets the watermark (MJ-RUN-37).**
+
+  When a connector upgrade moves an object's incremental cursor to a different source column, `IntegrationSchemaSync.UpsertObject` has always overlaid `IntegrationObject.IncrementalWatermarkField` and recorded `'IncrementalWatermarkField'` on a local `changes` array. Nothing consumed that array. The schema evolution's `changedObjects` — the only input to `ResetPullWatermarks` — was built from a physical column diff and a field-map add/disable, and a cursor swap produces neither: no column moves and no field map changes. So the object read as unchanged, its Pull watermark survived, and the next incremental sync applied the OLD column's stored value as a lower bound on the NEW one.
+
+  Where the new column sorts later than the old one, every row below that value is filtered out at the source and never fetched again. Nothing reports it. On an incremental the source returns a total consistent with the filter it was handed, so the run's fetch-integrity check sees fetched equal to expected and closes clean — the defect produces silent, permanent absence rather than an error or a duplicate.
+
+  The fix is wiring, not detection. `ObjectMergeLog` now carries the `ChangedAttributes` the persist layer already computed, and `IntegrationSchemaEvolution` consumes it through a new pure helper, `ObjectsWithWatermarkFieldChange`, so such an object is marked changed and its Pull watermark is reset exactly as a column change already does. The helper is scoped to the evolution's CONTINUING entity maps and excludes newly-created objects, so it cannot inflate the change set (and therefore `HasChanges`, and therefore a full re-fetch) with objects nothing can act on.
+
+  `SupportsIncrementalSync` is deliberately NOT covered: the persist layer never writes that column on an existing row, so there is no detected change to consume. Making it work is a detection change, not a wiring one.
+
+  **The remaining bare `RunPipelineBatch` calls retry (MJ-APPLY-6 residual).**
+
+  `SchemaBuilder.RunSchemaPipeline` already states the reason: the pipeline's expensive middle steps (`ExecuteMigration`, `RunCodeGen`, `CompileTypeScript`, `RestartMJAPI`) fail transiently, `RunPipelineBatchWithRetry` whitelists exactly those and refuses to replay once anything has been applied, and "the callers simply never used it". Three of the four remaining bare call sites now do: `IntegrationApplySchemaBatch` (parity with its single-connector sibling, which retries), `IntegrationSchemaEvolution`, and the post-sync `CustomColumnPromoter` (which runs unattended, mid-sync, where a dropped promotion is invisible).
+
+  `RunRuntimeSchemaUpdateBatch` deliberately keeps the bare call, now with the reason stated in the code: it replays CALLER-AUTHORED SQL, and `executeMigration` is not transactional — it issues one `ExecuteSQL` per GO/statement chunk, so a migration that fails on a later chunk leaves earlier chunks committed while the step records `failed`, which is exactly the state a replay reads as safe. For SchemaBuilder-generated DDL that risk is accepted upstream; for arbitrary operator SQL it is not.
+
+- 315e8f7: Per-connection integration catalog, engine half: a resolution API and catalog scope (`WithCatalogScope`/`RunInCatalogScope`), a `CatalogSource` flag (`Shared` | `PerConnection`, per connection or via `MJ_INTEGRATION_CATALOG_SOURCE`), and a catalog writer that persists discovery into the connection's own rows and rebases them from the declared definition. Flag off is byte-identical behaviour. `MJ_INTEGRATION_CATALOG_STRICT=1` makes the declared catalog read-only at runtime. The per-connection rows are never loaded at boot: a catalog scope loads its connection's objects and a narrow dependency-edge set, and field rows are warmed per object into a row-bounded cache that the sync loop warms and pins around each entity map. Catalog reads made during a run (the scope's loads, the catalog store, the catalog writer) bypass the query-result cache, whose entries for these entities are not invalidated by the run's own writes.
+- 0a348e2: `RunViewParams.SkipTotalRowCount` — an explicit caller opt-out of the extra COUNT round trip. A row-limited read that comes back exactly full runs the count SQL as a second, sequential query, and a paginated read counts up front; a caller that only consumes `Results` can now skip both. (`next` already skips the full-page count for a `MaxRows: 1` probe; this covers every other read that never reads `TotalRowCount`.) With the flag, `TotalRowCount` is the number of rows returned; `count_only` ignores it. Calls with the flag get their own RunView cache slot (`strc:1`), so a counted and an uncounted result are never served for each other. The integration engine's per-record match lookups set it explicitly.
+- 5ba9ce9: The discovery watchdog stops reporting work that is not running.
+
+  `End` is called in a `finally`, so an in-flight entry survives its owner only when the owner never unwound at all — a process killed mid-discovery, or an await that neither settled nor rejected. The registry had no way to notice: the entry stayed, and every report line kept claiming `"Orders" 4211s still in flight`.
+
+  That is the failure this class exists to prevent, pointed the other way. Its own doc argues a watchdog that under-reports what is in flight is worse than no watchdog, because the whole contract is that the report is true; a watchdog that OVER-reports sends an operator chasing a sample that stopped existing an hour ago.
+
+  `Tick` now evicts entries older than `StaleAfterMs` (default one hour, `<= 0` disables) before building the report, so a single tick can never both describe an entry and bury it. Eviction is loud: a sample disappearing quietly would read as completion, which is the opposite of what happened, so each one is named along with how long it sat and what stage it died at.
+
+  This is not a timeout and it cancels nothing. It only decides when the watchdog should stop asserting something it cannot know.
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [315e8f7]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [48c974e]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/integration-engine-base@6.2.0-edge.6
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.6
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 9c2a051: Fix "Maximum call stack size exceeded" in the full-sync orphan sweep and full push on large record maps. The record-map loader set `IgnoreMaxRows`, which also drops `MaxRows`, so its first "page" was the whole map (~126k rows on one HubSpot portal) and `rows.push(...page)` overflowed the stack. It now pages at `MaxRows` and appends without spreading.
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/integration-engine-base@6.2.0-edge.5
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.5
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

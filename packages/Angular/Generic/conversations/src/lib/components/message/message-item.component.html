@@ -154,7 +154,7 @@
           </button>
         }
         <div class="message-text">
-          <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true"></mj-markdown>
+          <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true" (ImageClicked)="OnMarkdownImageClicked($event)"></mj-markdown>
           @if (isMessageEdited) {
             <span class="edited-badge">(edited)</span>
           }

@@ -6,11 +6,11 @@
 
 import { UserInfo, IMetadataProvider, LogStatus, LogError } from '@memberjunction/core';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { MSGraphProvider, type MSGraphCredentials } from '@memberjunction/communication-ms-graph';
 import {
     CalendarWatcher,
     ScheduledBridgeRunner,
     GraphCalendarSource,
-    GraphCalendarClient,
     type CalendarSourceResolver,
     type ScheduledBridgeSessionFactory,
     type StartBridgeSessionParams,
@@ -45,13 +45,17 @@ export interface CalendarSchedulerHandle {
 }
 
 /**
- * Builds the {@link CalendarSourceResolver} that binds the real calendar clients per identity.
+ * Builds the {@link CalendarSourceResolver} that binds a calendar source per identity: Teams
+ * identities read their Graph calendar through the Communication MS Graph provider, authenticated
+ * with the bot's own token (no client secret, no default mailbox: the identity names the calendar).
  */
 export function BuildCalendarSourceResolver(teamsConfig: TeamsMeetingsConfig): CalendarSourceResolver {
+    const graph = new MSGraphProvider();
     return (_identity, provider) => {
         const driver = provider?.DriverClass?.trim();
         if (driver === TEAMS_PROVIDER_DRIVER && teamsConfig.botAccessToken) {
-            return new GraphCalendarSource(new GraphCalendarClient({ Credentials: { AccessToken: teamsConfig.botAccessToken } }));
+            const credentials: MSGraphCredentials = { accessToken: teamsConfig.botAccessToken, disableEnvironmentFallback: true };
+            return new GraphCalendarSource(graph, credentials);
         }
         return null;
     };

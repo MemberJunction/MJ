@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ModelImportanceView,
   ParseMetrics,
   ParseFeatureImportance,
   PrimaryModelScore,
   MetricsToDisplay,
   OverfitGap,
   HumanizeFeatureName,
+  humanizeFeatureName,
   FormatMetricValue,
   PS_FEATURE_DOMINANCE_THRESHOLD,
 } from '../lib/custom/MLModels/ml-model-view-models';
@@ -107,9 +109,22 @@ describe('ml-model-view-models', () => {
   });
 
   describe('humanizeFeatureName', () => {
+    // Pins the published export's output as it is on next: an `Is` prefix is dropped and every word is title-cased.
     it('turns camelCase and snake_case into clean Title Case', () => {
       expect(HumanizeFeatureName('daysUntilExpiration')).toBe('Days Until Expiration');
       expect(HumanizeFeatureName('total_spend_amount')).toBe('Total Spend Amount');
+    });
+
+    it('drops a leading Is before a capital and title-cases snake_case words', () => {
+      expect(HumanizeFeatureName('IsActive')).toBe('Active');
+      expect(HumanizeFeatureName('membership_type')).toBe('Membership Type');
+      expect(HumanizeFeatureName('IsAutoRenew=1')).toBe('Auto Renew=1');
+      expect(HumanizeFeatureName('')).toBe('');
+    });
+
+    it('keeps the deprecated camelCase twin identical', () => {
+      expect(humanizeFeatureName('IsActive')).toBe('Active');
+      expect(humanizeFeatureName('membership_type')).toBe('Membership Type');
     });
   });
 
@@ -121,6 +136,18 @@ describe('ml-model-view-models', () => {
       const auc = displays.find((d) => d.key === 'AUC');
       expect(auc?.label).toBe('AUC (ROC)');
       expect(auc?.value).toBe('0.885');
+    });
+  });
+
+  describe('ModelImportanceView.DisplayedFeatureImportance', () => {
+    const raw = JSON.stringify({ AutoRenew: 1.13, IncomeK: 0.01, Noise1: 0.002 });
+    const lineage = (kind: string): string => JSON.stringify({ evaluation: { ImportanceKind: kind } });
+    it('shows coefficient importance for logistic regression', () => {
+      expect(ModelImportanceView.DisplayedFeatureImportance(lineage('coefficient'), raw).map((b) => b.name)).toEqual(['AutoRenew', 'IncomeK', 'Noise1']);
+    });
+    it('hides split / impurity importance', () => {
+      expect(ModelImportanceView.DisplayedFeatureImportance(lineage('split_or_impurity'), raw)).toEqual([]);
+      expect(ModelImportanceView.DisplayedFeatureImportance(null, raw)).toEqual([]);
     });
   });
 });

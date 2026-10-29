@@ -1,5 +1,47 @@
 # @memberjunction/ng-livekit-room
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [0581392]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [dae1d31]
+- Updated dependencies [a610c6e]
+- Updated dependencies [cb1e602]
+- Updated dependencies [db4e210]
+- Updated dependencies [c4645bc]
+- Updated dependencies [f125bb4]
+- Updated dependencies [4c34ab8]
+- Updated dependencies [e600813]
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ai-realtime-client@6.2.0-edge.6
+  - @memberjunction/ng-whiteboard@6.2.0-edge.6
+  - @memberjunction/ng-realtime-media@6.2.0-edge.6
+  - @memberjunction/livekit-room-core@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 1aefcb4: `<mj-realtime-whiteboard-host>` gains a `ShowFocusToggle` input (default `true`). The header's Focus toggle ("Move to stage" / "Back to tab") only emits `FocusModeChange`; a host that composes the board into its own chrome has nothing to collapse, so the button was visible and did nothing, and could only be removed by `!important` CSS against an internal class name. Hosts without a stage now pass `[ShowFocusToggle]="false"`. `SetOnStage` and `FocusMode` keep working with the toggle hidden; the rest of the header is unchanged.
+
+  `<mj-livekit-whiteboard-surface>` passes it: the LiveKit room has no stage and never serviced `FocusModeChange`, so its board header no longer carries the inert button.
+
+- Updated dependencies [8b62f8c]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [1aefcb4]
+- Updated dependencies [2f9e209]
+- Updated dependencies [382de4d]
+- Updated dependencies [8576224]
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+  - @memberjunction/ng-whiteboard@6.2.0-edge.5
+  - @memberjunction/ng-realtime-media@6.2.0-edge.5
+  - @memberjunction/livekit-room-core@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

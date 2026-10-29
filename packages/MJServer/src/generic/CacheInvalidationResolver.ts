@@ -1,5 +1,9 @@
-import { Ctx, Field, ObjectType, Resolver, Root, Subscription } from 'type-graphql';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import 'reflect-metadata';
+import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver, Root, Subscription } from 'type-graphql';
+import { EntityInfo, Metadata, RecordChangeFieldSecurityProjector, RecordChangesEntityName, UserInfo } from '@memberjunction/core';
+import {
+    CacheInvalidationBroadcastManager,
+} from '../broadcast/index.js';
 
 export const CACHE_INVALIDATION_TOPIC = 'CACHE_INVALIDATION';
 
@@ -36,20 +40,53 @@ export function ConfigureRecordDataBroadcast(entities: readonly string[] | undef
  *
  * The subscription below is filtered only by ENTITY-level read permission, so anything included
  * here is disclosed to every signed-in session that may read the entity at all — regardless of
- * row-level security or any tenant scoping a consumer applies on the read path, neither of which
- * this push traverses. The answer is therefore NO unless a deployment has explicitly opted the
- * entity in via `cacheSettings.recordDataBroadcastEntities`.
+ * row-level security, field-level security, or any tenant scoping a consumer applies on the read
+ * path, none of which this push traverses. The answer is therefore NO unless a deployment has
+ * explicitly opted the entity in via `cacheSettings.recordDataBroadcastEntities`, and always NO
+ * for an entity under field-level security (its own flag or an IS-A ancestor's), and for
+ * `MJ: Record Changes`, whatever the allowlist says: the row would carry columns (or, for Record
+ * Changes, other entities' values) some of those sessions may not read.
  *
  * Callers that get `false` simply omit `recordData`; the event still carries the entity name and
  * primary key, so clients evict and re-fetch through the normal access-controlled read path.
  *
  * Matching is exact (trimmed, case-insensitive) rather than substring: a loose match would let an
  * allowlisted name drag in every entity whose name contains it.
+ *
+ * @param entityInfo The entity's metadata, when the caller holds it. Otherwise it is looked up by
+ *   name, so the field-security refusal applies either way.
  */
-export function MayBroadcastRecordData(entityName: string): boolean {
+export function MayBroadcastRecordData(entityName: string, entityInfo?: EntityInfo | null): boolean {
   if (allowedRecordDataEntities.length === 0) return false;
+  if (fieldSecurityApplies(entityName, entityInfo)) return false;
+  if (isRecordChanges(entityName, entityInfo)) return false;
   if (allowedRecordDataEntities.includes('*')) return true;
   return allowedRecordDataEntities.includes(entityName.trim().toLowerCase());
+}
+
+/** Whether field-level security applies to the entity, resolving it by name when not supplied. */
+function fieldSecurityApplies(entityName: string, entityInfo: EntityInfo | null | undefined): boolean {
+  const info = entityInfo ?? lookUpEntity(entityName);
+  return Boolean(info?.FieldLevelSecurityApplies);
+}
+
+/**
+ * Whether the entity is the Record Changes audit trail. Its rows carry other entities' values in
+ * `ChangesJSON` and `FullRecordJSON`, which are projected per reader, so a row is never broadcast
+ * even though field-level security is not switched on for the audit entity itself.
+ */
+function isRecordChanges(entityName: string, entityInfo: EntityInfo | null | undefined): boolean {
+  if (entityInfo) return RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo);
+  return entityName.trim().toLowerCase() === RecordChangesEntityName.toLowerCase();
+}
+
+/** The entity by name from the process's metadata, or undefined when none is loaded. */
+function lookUpEntity(entityName: string): EntityInfo | undefined {
+  try {
+    return new Metadata().EntityByName(entityName) ?? undefined; // global-provider-ok: metadata lookup for a process-wide broadcast gate
+  } catch {
+    return undefined;
+  }
 }
 
 @ObjectType()
@@ -74,6 +111,48 @@ export class CacheInvalidationNotification {
 
     @Field(() => String, { nullable: true })
     RecordData?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+}
+
+@ObjectType()
+export class CacheInvalidationCatchUpResult {
+    @Field(() => Boolean)
+    RequiresFullRefresh!: boolean;
+
+    @Field(() => Int)
+    CurrentSequence!: number;
+
+    @Field(() => String)
+    ServerProcessID!: string;
+
+    @Field(() => [CacheInvalidationNotification])
+    Events!: CacheInvalidationNotification[];
+}
+
+@ObjectType()
+export class CacheBroadcastConnectionToken {
+    @Field(() => String)
+    Provider!: string;
+
+    @Field(() => String)
+    Url!: string;
+
+    @Field(() => String, { nullable: true })
+    Token?: string;
+
+    @Field(() => [String])
+    Groups!: string[];
+
+    @Field(() => String)
+    ExpiresAt!: string;
+
+    @Field(() => String)
+    ServerProcessID!: string;
+
+    @Field(() => Int)
+    CurrentSequence!: number;
 }
 
 /**
@@ -88,6 +167,7 @@ export interface CacheInvalidationPayload {
     timestamp: Date;
     originSessionId?: string;
     recordData?: string;
+    sequence?: number;
 }
 
 /**
@@ -116,39 +196,23 @@ export interface CacheInvalidationFilterContext {
  * see the class docblock below.
  *
  * `GetUserPermisions` is an in-memory match of the entity's permission rows against the user's
- * roles, so this stays cheap enough to run per subscriber per event. It is not free: it runs for
- * every connected socket on every save, so keep it free of I/O.
+ * roles, memoized per `(payload, entityName, roleFingerprint)` by the active
+ * {@link BaseCacheInvalidationBroadcastProvider} so $N$ connected subscribers sharing $R$ role
+ * combinations only run `GetUserPermisions` $R$ times per event.
  */
 export function CacheInvalidationFilter(data: {
     payload: CacheInvalidationPayload;
     context: CacheInvalidationFilterContext | undefined;
 }): boolean {
     const user = data.context?.userPayload?.userRecord as UserInfo | undefined;
-    // FAIL CLOSED on identity, matching `statusUpdatesFilter`. `onConnect` rejects a socket whose
-    // token does not validate, so a subscriber with no user record should not exist; if one does,
-    // it is the case least deserving of an unfiltered firehose.
     if (!user) {
         return false;
     }
-
-    const entityName = data.payload?.entityName;
-    if (!entityName) {
-        return false;
-    }
-
-    // A pub/sub subscription filter has no per-request provider to thread: it runs on the server's
-    // own metadata, which is the one place the entity's permission rows can be answered from.
-    const entity = new Metadata().EntityByName(entityName); // global-provider-ok: subscription filter — server-wide metadata, no request-scoped provider exists here
-    // DELIVER when the entity is unknown here, deliberately — the opposite of the choice above.
-    // A name absent from metadata cannot be permission-checked, and withholding would silently
-    // stop invalidating a legitimately cacheable entity, which is a correctness bug rather than a
-    // disclosure one. All it discloses is the name and key of something this server cannot
-    // describe.
-    if (!entity) {
-        return true;
-    }
-
-    return entity.GetUserPermisions(user).CanRead;
+    return CacheInvalidationBroadcastManager.Instance.Provider.EvaluateEntityReadAccess(
+        data.payload,
+        user,
+        (entityName) => new Metadata().EntityByName(entityName) // global-provider-ok: subscription filter — server-wide metadata, no request-scoped provider exists here
+    );
 }
 
 /** The part of a permission row and of a user this module reads, so the rule can be tested on plain objects. */
@@ -174,39 +238,23 @@ export interface RoleHolder {
  * The same in-memory match `GetUserPermisions` does, with no I/O, so it can run per subscriber per event.
  */
 export function ReadIsRowFiltered(entity: { Permissions: ReadonlyArray<ReadPermissionRow> }, user: RoleHolder): boolean {
-    const roles = new Set((user.UserRoles ?? []).map((role) => (role.RoleID ?? '').trim().toLowerCase()));
-    let filteredReads = 0;
-    for (const row of entity.Permissions) {
-        if (!row.CanRead) continue;
-        const isDeny = row.IsDeny ?? (row.Type ?? 'Allow').trim().toLowerCase() === 'deny';
-        if (isDeny) continue;
-        if (!roles.has((row.RoleID ?? '').trim().toLowerCase())) continue;
-        if (!row.ReadRLSFilterID) return false;
-        filteredReads += 1;
-    }
-    return filteredReads > 0;
+    return CacheInvalidationBroadcastManager.Instance.Provider.ReadIsRowFiltered(entity, user);
 }
 
 /**
  * The event as one subscriber may see it. A subscriber whose read of the entity is row-filtered gets the entity, the action and
  * the time, and neither the key nor the row: "something in this entity changed", which the client already takes as a
  * whole-entity invalidation (a null key on `remote-invalidate`). Everyone else gets the event as published.
+ *
+ * Memoized per `(payload, entity, roleFingerprint)` via the active broadcast provider so $N$ subscribers
+ * sharing $R$ role buckets only allocate and evaluate `ReadIsRowFiltered` $R$ times per event.
  */
 export function ShapeCacheInvalidationEvent(
     payload: CacheInvalidationPayload,
     user: RoleHolder | undefined,
     entity: { Permissions: ReadonlyArray<ReadPermissionRow> } | null | undefined,
 ): CacheInvalidationNotification {
-    const withholdKey = !!user && !!entity && ReadIsRowFiltered(entity, user);
-    return {
-        EntityName: payload.entityName,
-        PrimaryKeyValues: withholdKey ? undefined : (payload.primaryKeyValues ?? undefined),
-        Action: payload.action,
-        SourceServerID: payload.sourceServerId,
-        Timestamp: payload.timestamp,
-        OriginSessionID: payload.originSessionId ?? undefined,
-        RecordData: withholdKey ? undefined : (payload.recordData ?? undefined),
-    };
+    return CacheInvalidationBroadcastManager.Instance.Provider.ShapeEventForSubscriber(payload, user, entity);
 }
 
 /** @deprecated Use {@link CacheInvalidationFilter}. */
@@ -223,30 +271,8 @@ export class CacheInvalidationResolver {
      * Subscription that broadcasts cache invalidation events to connected clients, so cross-server
      * cache invalidation reaches browsers.
      *
-     * Delivery is filtered only by ENTITY-level read permission (see {@link CacheInvalidationFilter}).
-     * Every session that may read an entity at all still receives every event for it, from every
-     * other session and tenant.
-     *
-     * Because that narrowing stops well short of row level, `RecordData` is only populated for entities a
-     * deployment has opted in through `cacheSettings.recordDataBroadcastEntities` — see
-     * {@link MayBroadcastRecordData}, applied at both publish sites.
-     *
-     * `EntityName`, `PrimaryKeyValues`, `Action` and `Timestamp` ARE still broadcast to every
-     * session, and that is a disclosure, not a safe residue. An earlier version of this comment
-     * called them "safe to broadcast" on the grounds that reading the record still goes through
-     * the access-controlled path — true of the row's CONTENTS, and beside the point for the
-     * metadata itself. A session with no relationship to a record still learns that it exists,
-     * its stable key, and every time it changes; across entities it learns the cadence and volume
-     * of another tenant's activity.
-     *
-     * The key is kept for a subscriber who could read the row anyway, because consumers need it to
-     * re-read the record they were told about (see `ResolveEntityEventKey` in @memberjunction/core),
-     * and the coarse "something in this entity changed" forces whole-entity invalidation on the
-     * hottest write paths. It is withheld, with the row, from a subscriber whose every read of the
-     * entity goes through a row-level security filter ({@link ReadIsRowFiltered}): a filter the
-     * subscription cannot evaluate per event stands between them and the row, so they learn only
-     * that a row of the entity changed, and their caches refresh the entity as a whole. That is the
-     * same in-memory role match as the entity-level filter, once more per subscriber per event.
+     * Delivery is filtered by ENTITY-level read permission (see {@link CacheInvalidationFilter})
+     * and shaped per role-fingerprint bucket (see {@link ShapeCacheInvalidationEvent}).
      */
     @Subscription(() => CacheInvalidationNotification, {
         topics: CACHE_INVALIDATION_TOPIC,
@@ -258,8 +284,39 @@ export class CacheInvalidationResolver {
         @Ctx() context: CacheInvalidationFilterContext | undefined
     ): CacheInvalidationNotification {
         const user = context?.userPayload?.userRecord as UserInfo | undefined;
-        // The same server-wide metadata the filter read; an entity unknown here was delivered whole by the filter's own choice
-        const entity = payload?.entityName ? new Metadata().EntityByName(payload.entityName) : null; // global-provider-ok: subscription resolver — server-wide metadata, no request-scoped provider exists here
-        return ShapeCacheInvalidationEvent(payload, user, entity);
+        const provider = CacheInvalidationBroadcastManager.Instance.Provider;
+        const entity = payload?.entityName ? provider.ResolveEntityForPayload(payload) : null;
+        return provider.ShapeEventForSubscriber(payload, user, entity);
+    }
+
+    /**
+     * Returns all permission-allowed, RLS-shaped cache invalidation events strictly after
+     * `sinceSequence` from the server's bounded circular ring buffer.
+     *
+     * Invoked by `GraphQLDataProvider` when an HTTP response's `X-MJ-Cache-Seq` header or a
+     * WebSocket reconnect reveals missed invalidation sequence numbers.
+     */
+    @Query(() => CacheInvalidationCatchUpResult)
+    GetCacheInvalidationsSince(
+        @Arg('sinceSequence', () => Int) sinceSequence: number,
+        @Ctx() context: CacheInvalidationFilterContext | undefined
+    ): CacheInvalidationCatchUpResult {
+        const user = context?.userPayload?.userRecord as UserInfo | undefined;
+        return CacheInvalidationBroadcastManager.Instance.Provider.GetChangesSince(sinceSequence, user);
+    }
+
+    /**
+     * Negotiates a client broadcast connection (URL, signed token, and authorized role-bucket groups)
+     * for the active {@link BaseCacheInvalidationBroadcastProvider}.
+     */
+    @Query(() => CacheBroadcastConnectionToken)
+    async NegotiateCacheBroadcastConnection(
+        @Ctx() context: CacheInvalidationFilterContext | undefined
+    ): Promise<CacheBroadcastConnectionToken> {
+        const user = context?.userPayload?.userRecord as UserInfo | undefined;
+        if (!user) {
+            throw new Error('Authentication required to negotiate cache broadcast connection.');
+        }
+        return CacheInvalidationBroadcastManager.Instance.Provider.NegotiateClientConnection(user);
     }
 }

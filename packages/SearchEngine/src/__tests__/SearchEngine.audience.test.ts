@@ -185,6 +185,7 @@ function entity(name: string, canRead: (u: UserInfo) => boolean, rowFilter: stri
         FirstPrimaryKey: { Name: 'ID' },
         PrimaryKeys: [{ Name: 'ID' }],
         GetUserPermisions: (u: UserInfo) => ({ CanRead: canRead(u) }),
+        GetDeniedReadFields: () => new Set<string>(),
         GetEffectiveRowFilterWhereClause: () => rowFilter,
     } as unknown as EntityInfo;
 }
