@@ -615,8 +615,48 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.CreateBodies[0].conversationConfig?.conversation).toBeUndefined();
     });
 
-    it('maxDurationSeconds joins the drift check (an agent re-PATCHes when the cap changes)', async () => {
-        const stored = makeAgentDetail({ agentId: 'agent_cap', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+    /*
+     * The cap is agent-BODY state, so it is part of the managed agent's identity (its name):
+     * a capped session never writes its cap onto the agent an uncapped session uses, and two
+     * sessions with different caps never PATCH one shared agent back and forth.
+     */
+    it('a capped session gets its own agent; a later uncapped session keeps the shared one untouched', async () => {
+        const shared = makeAgentDetail({ agentId: 'agent_shared', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        driver.Agents = [shared];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(driver.UpdateCalls).toEqual([]);
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.CreateBodies[0].name).toBe(ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.UpdateCalls).toEqual([]);
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.SignedUrlMints.at(-1)).toBe('agent_shared');
+        expect(shared.conversationConfig?.conversation).toBeUndefined();
+    });
+
+    it('two different caps resolve to two different agents', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 1800 }));
+        expect(driver.UpdateCalls).toEqual([]);
+        expect(driver.CreateBodies.map((b) => b.name)).toEqual([
+            ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900),
+            ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 1800),
+        ]);
+        expect(driver.CreateBodies.map((b) => b.conversationConfig?.conversation?.maxDurationSeconds)).toEqual([900, 1800]);
+    });
+
+    it('ManagedAgentName keeps the uncapped name exactly and suffixes a cap', () => {
+        expect(ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', undefined)).toBe('MJ Realtime Co-Agent');
+        expect(ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900)).toBe('MJ Realtime Co-Agent (max 900s)');
+    });
+
+    it('maxDurationSeconds joins the drift check (a capped agent re-PATCHes when its stored cap drifted)', async () => {
+        const stored = makeAgentDetail({
+            agentId: 'agent_cap', name: ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900), tools: [WEATHER_TOOL],
+        });
         stored.conversationConfig!.conversation = { maxDurationSeconds: 600 };
         driver.Agents = [stored];
 

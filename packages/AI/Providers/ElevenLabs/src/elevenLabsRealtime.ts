@@ -417,6 +417,9 @@ export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManaged
  *   (with the session's client-tool set and the override enablement that lets each session
  *   supply its own system prompt, voice and opening utterance); PATCH when the order-insensitive tool fingerprint
  *   differs or any required override is not enabled. Results are instance-cached per name+tools.
+ * - a host session cap (`MaxSessionSeconds`) is agent-BODY state (`conversation.max_duration_seconds`),
+ *   so it is part of the managed agent's NAME ({@link ManagedAgentName}): each distinct cap gets its
+ *   own agent and uncapped sessions keep the plain-named agent, never PATCHed with anyone's cap.
  *
  * **Per-session prompt, voice AND opening-utterance authority** stays with MJ: the managed agent
  * stores only a placeholder prompt and explicitly enables the overrides in
@@ -638,6 +641,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      *   the order-insensitive client-tool fingerprint differs or any required per-session
      *   override is not enabled. The resolution is instance-cached per name + fingerprint —
      *   deliberately NOT per voice, which is a per-session override rather than agent state.
+     *   A host session cap selects a cap-suffixed name ({@link ManagedAgentName}).
      */
     protected async ensureAgent(params: RealtimeSessionParams): Promise<string> {
         const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
@@ -650,29 +654,34 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             return model;
         }
         const tools = params.Tools ?? [];
+        // The session cap is agent-BODY state, so it is part of the agent's IDENTITY (its name),
+        // not a value PATCHed onto one shared agent: otherwise a capped session would leave its
+        // cap on the agent a later uncapped session uses, and concurrent sessions with different
+        // caps would PATCH one agent back and forth. Uncapped sessions keep the plain name.
+        const maxSessionSeconds = this.resolveNativeMaxDuration(params);
+        const name = ElevenLabsRealtime.ManagedAgentName(model, maxSessionSeconds);
         // The cache key carries the DESIRED model settings alongside the tool fingerprint (#3859).
         // Without them, a config-bag llm/temperature change inside one process lifetime would be
         // served from cache and never reach the drift check — the same never-re-PATCHed defect,
-        // one layer earlier.
-        const maxSessionSeconds = this.resolveNativeMaxDuration(params);
+        // one layer earlier. (The cap needs no place here: the name already carries it.)
         const fingerprint = ElevenLabsRealtime.ToolSetFingerprint(tools)
-            + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config, maxSessionSeconds);
-        const cached = this.agentCache.get(model);
+            + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config);
+        const cached = this.agentCache.get(name);
         if (cached && cached.fingerprint === fingerprint && Date.now() - cached.cachedAt < ENSURE_CACHE_TTL_MS) {
             return cached.agentId;
         }
         // Publish the in-flight ensure BEFORE awaiting it, so a second caller arriving mid-flight
         // joins this one rather than starting a rival find-create and forking a duplicate agent.
-        const pending = this.findCreateOrUpdateAgent(model, tools, params.Config, maxSessionSeconds);
-        this.agentCache.set(model, { agentId: pending, fingerprint, cachedAt: Date.now() });
+        const pending = this.findCreateOrUpdateAgent(name, tools, params.Config, maxSessionSeconds);
+        this.agentCache.set(name, { agentId: pending, fingerprint, cachedAt: Date.now() });
         try {
             return await pending;
         } catch (error) {
             // A REJECTED promise is a cache entry too. Evict it, or one transient REST failure
             // would be replayed from memory to every later session for this name — disabling the
             // agent until the process restarts, without ever retrying the API.
-            if (this.agentCache.get(model)?.agentId === pending) {
-                this.agentCache.delete(model);
+            if (this.agentCache.get(name)?.agentId === pending) {
+                this.agentCache.delete(name);
             }
             throw error;
         }
@@ -706,6 +715,18 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config, maxSessionSeconds));
         }
         return existing.agentId;
+    }
+
+    /**
+     * The managed agent's NAME — its identity for find-by-name and the ensure cache. With no
+     * host cap it is `baseName` exactly (today's agent, untouched); with a cap it is suffixed,
+     * so each distinct cap owns its own agent and no session's cap reaches another's agent.
+     *
+     * @param baseName The managed agent name from `params.Model` (or the default).
+     * @param maxSessionSeconds The clamped native max duration, or `undefined` when the host set none.
+     */
+    public static ManagedAgentName(baseName: string, maxSessionSeconds: number | undefined): string {
+        return maxSessionSeconds === undefined ? baseName : `${baseName} (max ${maxSessionSeconds}s)`;
     }
 
     /**
@@ -968,7 +989,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * and `temperature` in one stable string. Unconfigured values serialize as absent, so a bag
      * that says nothing produces the same fingerprint forever.
      */
-    public static ModelSettingsFingerprint(config?: JSONObject, maxSessionSeconds?: number): string {
+    public static ModelSettingsFingerprint(config?: JSONObject): string {
         const llm = resolveTrimmedConfigString(config, 'llm');
         const temperature = config?.['temperature'];
         const turnEagerness = resolveTurnEagerness(config);
@@ -976,7 +997,6 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             ...(llm === undefined ? {} : { llm }),
             ...(typeof temperature === 'number' && Number.isFinite(temperature) ? { temperature } : {}),
             ...(turnEagerness === undefined ? {} : { turnEagerness }),
-            ...(maxSessionSeconds === undefined ? {} : { maxSessionSeconds }),
         });
     }
 
