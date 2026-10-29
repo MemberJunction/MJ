@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { RunView, LogError } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { MJCredentialEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, InspectBackupResult, AzureBlobItem } from '../../services/integration-data.service';
 import {
@@ -57,7 +58,7 @@ export function IsBackupSourceValid(value: BackupSourceValue): boolean {
   standalone: false,
   selector: 'app-backup-source-picker',
   templateUrl: './backup-source-picker.component.html',
-  styleUrls: ['./backup-source-picker.component.css']
+  styleUrls: ['../shared/backup-wizard.css', './backup-source-picker.component.css']
 })
 export class BackupSourcePickerComponent extends BaseAngularComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
@@ -103,6 +104,15 @@ export class BackupSourcePickerComponent extends BaseAngularComponent implements
     { Label: 'Root /backups', Path: '/backups' }
   ];
 
+  readonly SourceTypeOptions: ViewToggleOption[] = [
+    { key: 'azure', icon: 'fa-solid fa-cloud-arrow-down', label: 'Azure Blob Storage' },
+    { key: 'local', icon: 'fa-solid fa-hard-drive', label: 'Local Disk File' },
+  ];
+  readonly AuthModeOptions: ViewToggleOption[] = [
+    { key: 'sas', icon: 'fa-solid fa-key', label: 'Direct SAS Token' },
+    { key: 'credential', icon: 'fa-solid fa-vault', label: 'Credential Engine' },
+  ];
+
   ngOnInit(): void {
     void this.loadCredentials();
   }
@@ -124,6 +134,20 @@ export class BackupSourcePickerComponent extends BaseAngularComponent implements
     this.Patch({ SourceType: type, BackupUrls: '' });
     this.RefreshLocalFiles();
     this.cdr.detectChanges();
+  }
+
+  /** The source-type toggle picked an option. */
+  public OnSourceTypeKey(key: string): void {
+    if (key === 'azure' || key === 'local') {
+      this.SetSourceType(key);
+    }
+  }
+
+  /** The authentication toggle picked an option. */
+  public OnAuthModeKey(key: string): void {
+    if ((key === 'sas' || key === 'credential') && key !== this._value.AuthMode) {
+      this.Patch({ AuthMode: key });
+    }
   }
 
   // --- Azure Blob browser ---

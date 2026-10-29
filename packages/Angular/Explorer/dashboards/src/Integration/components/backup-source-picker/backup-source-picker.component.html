@@ -1,184 +1,118 @@
-<div class="picker">
-  <!-- Source Type Toggle -->
+<div class="step-content">
+  <!-- Source Type -->
   <div class="form-section">
-    <label class="form-label required">Backup Source Type</label>
-    <div class="source-type-selector">
-      <div
-        class="source-type-card"
-        [class.selected]="Value.SourceType === 'azure'"
-        (click)="SetSourceType('azure')"
-      >
-        <div class="source-type-icon azure">
-          <i class="fa-solid fa-cloud-arrow-down"></i>
-        </div>
-        <div class="source-type-info">
-          <span class="source-type-title">Azure Blob Storage</span>
-          <span class="source-type-desc">Direct URL restore from container via SAS token</span>
-        </div>
-        <div class="source-type-check">
-          @if (Value.SourceType === 'azure') {
-            <i class="fa-solid fa-circle-check"></i>
-          }
-        </div>
-      </div>
-
-      <div
-        class="source-type-card"
-        [class.selected]="Value.SourceType === 'local'"
-        (click)="SetSourceType('local')"
-      >
-        <div class="source-type-icon local">
-          <i class="fa-solid fa-hard-drive"></i>
-        </div>
-        <div class="source-type-info">
-          <span class="source-type-title">Local Disk File</span>
-          <span class="source-type-desc">Direct file restore from SQL Server host storage (FROM DISK)</span>
-        </div>
-        <div class="source-type-check">
-          @if (Value.SourceType === 'local') {
-            <i class="fa-solid fa-circle-check"></i>
-          }
-        </div>
-      </div>
-    </div>
+    <span class="form-label required">Backup Source Type</span>
+    <mj-view-toggle [Options]="SourceTypeOptions" [ActiveKey]="Value.SourceType" (KeyChange)="OnSourceTypeKey($event)"></mj-view-toggle>
+    <span class="form-hint">
+      @if (Value.SourceType === 'azure') {
+        Direct URL restore from an Azure Blob container via SAS token or a stored credential.
+      } @else {
+        Direct file restore from SQL Server host storage (FROM DISK).
+      }
+    </span>
   </div>
 
   <!-- ================= AZURE BLOB STORAGE SECTION ================= -->
   @if (Value.SourceType === 'azure') {
     <div class="form-section">
-      <label class="form-label required">Authentication</label>
-      <div class="radio-toggle-group">
-        <label class="radio-label">
-          <input type="radio" name="authMode" value="sas" [ngModel]="Value.AuthMode" (ngModelChange)="Patch({ AuthMode: $event })" />
-          <span>Direct SAS Token</span>
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="authMode" value="credential" [ngModel]="Value.AuthMode" (ngModelChange)="Patch({ AuthMode: $event })" />
-          <span>Credential Engine</span>
-        </label>
-      </div>
+      <span class="form-label required" id="backup-auth-label">Authentication</span>
+      <mj-view-toggle [Options]="AuthModeOptions" [ActiveKey]="Value.AuthMode" (KeyChange)="OnAuthModeKey($event)"></mj-view-toggle>
 
       @if (Value.AuthMode === 'sas') {
         <input
           type="password"
-          class="form-control"
+          class="mj-input"
+          aria-labelledby="backup-auth-label"
           placeholder="sp=rl&st=2026-10-26T00:00:00Z&se=2026-10-27T00:00:00Z&sig=..."
           [ngModel]="Value.SasToken"
           (ngModelChange)="Patch({ SasToken: $event })"
         />
-        <span class="form-hint">
-          Container SAS token with Read (r) and List (l) permissions.
-        </span>
+        <span class="form-hint">Container SAS token with Read (r) and List (l) permissions.</span>
       } @else {
-        <select class="form-control" [ngModel]="Value.StorageCredentialID" (ngModelChange)="Patch({ StorageCredentialID: $event })">
-          <option value="" disabled>-- Select a storage credential --</option>
-          @for (cred of AvailableCredentials; track cred.ID) {
-            <option [value]="cred.ID">{{ cred.Name }}</option>
-          }
-        </select>
+        <mj-dropdown
+          AriaLabel="Storage credential"
+          [Data]="AvailableCredentials"
+          TextField="Name"
+          ValueField="ID"
+          [ValuePrimitive]="true"
+          Placeholder="Select a storage credential"
+          [ngModel]="Value.StorageCredentialID"
+          (ngModelChange)="Patch({ StorageCredentialID: $event ?? '' })"
+        ></mj-dropdown>
         @if (CredentialsError) {
-          <span class="form-hint error-hint">
-            <i class="fa-solid fa-triangle-exclamation"></i> {{ CredentialsError }}
-          </span>
+          <mj-alert Variant="warning" Size="sm" [Message]="CredentialsError"></mj-alert>
         } @else {
-          <span class="form-hint">
-            Resolved via MemberJunction CredentialEngine.
-          </span>
+          <span class="form-hint">Resolved via MemberJunction CredentialEngine.</span>
         }
       }
     </div>
 
-    <!-- Interactive Azure Blob Browser -->
-    <div class="browser-card">
-      <div class="browser-header">
-        <div class="browser-title">
-          <i class="fa-solid fa-cloud-arrow-down"></i> Azure Blob Browser
-        </div>
-        <button
-          type="button"
-          mjButton
-          variant="secondary"
-          size="sm"
-          [disabled]="IsBrowsingAzure"
-          (click)="BrowseAzureBlobs()"
-        >
-          @if (IsBrowsingAzure) {
-            <i class="fa-solid fa-spinner fa-spin"></i> Browsing Blobs...
-          } @else {
-            <i class="fa-solid fa-folder-open"></i> Browse Container Blobs
-          }
+    <!-- Azure Blob Browser -->
+    <div class="list-card">
+      <div class="list-card-header">
+        <span><i class="fa-solid fa-cloud-arrow-down"></i> Azure Blob Browser</span>
+        <button type="button" mjButton variant="secondary" size="sm" [disabled]="IsBrowsingAzure" (click)="BrowseAzureBlobs()">
+          <i class="fa-solid fa-folder-open"></i> {{ IsBrowsingAzure ? 'Browsing Blobs…' : 'Browse Container Blobs' }}
         </button>
       </div>
 
-      <div class="browser-inputs">
+      <div class="browser-section">
         <input
           type="text"
-          class="form-control"
+          class="mj-input"
+          aria-label="Container URL"
           placeholder="Container URL: https://myaccount.blob.core.windows.net/backups"
           [(ngModel)]="AzureContainerUrl"
         />
+
+        @if (IsBrowsingAzure) {
+          <mj-loading Text="Listing container blobs…" Size="small"></mj-loading>
+        }
+
+        @if (AzureBrowseError) {
+          <mj-alert Variant="warning" Size="sm" [Message]="AzureBrowseError"></mj-alert>
+        }
+
+        @if (AzureBlobs.length > 0) {
+          <div class="browser-controls">
+            <input type="text" class="mj-input" aria-label="Search blobs" placeholder="Search blobs..." [(ngModel)]="AzureBlobSearch" />
+            <label class="check-label">
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="ShowOnlyBakBlobs" />
+              .bak files only
+            </label>
+          </div>
+        }
       </div>
 
-      @if (AzureBrowseError) {
-        <div class="browser-error-banner">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <span>{{ AzureBrowseError }}</span>
-        </div>
-      }
-
       @if (AzureBlobs.length > 0) {
-        <div class="browser-controls-row">
-          <div class="search-input-box">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input
-              type="text"
-              placeholder="Search blobs..."
-              [(ngModel)]="AzureBlobSearch"
-            />
-          </div>
-          <label class="filter-toggle-label">
-            <input type="checkbox" [(ngModel)]="ShowOnlyBakBlobs" />
-            <span>.bak files only</span>
-          </label>
-        </div>
-
-        <div class="browser-items-list">
+        <div class="list-card-body">
           @for (blob of FilteredAzureBlobs; track blob.Name) {
-            <div
-              class="browser-item-row"
-              [class.selected]="SelectedAzureBlobs.has(blob.Name)"
-              (click)="ToggleAzureBlob(blob.Name)"
-            >
-              <input
-                type="checkbox"
-                [checked]="SelectedAzureBlobs.has(blob.Name)"
-                (click)="$event.stopPropagation(); ToggleAzureBlob(blob.Name)"
-              />
-              <i class="fa-solid fa-file-zipper file-icon"></i>
+            <label class="list-row check-label" [class.selected]="SelectedAzureBlobs.has(blob.Name)">
+              <input type="checkbox" class="mj-checkbox" [checked]="SelectedAzureBlobs.has(blob.Name)" (change)="ToggleAzureBlob(blob.Name)" />
+              <i class="fa-solid fa-file-zipper" aria-hidden="true"></i>
               <span class="file-name" [title]="blob.Name">{{ blob.Name }}</span>
-              <span class="file-size-badge">{{ blob.SizeFormatted }}</span>
-              <span class="select-only">
-                <button
-                  type="button"
-                  mjButton
-                  variant="flat"
-                  size="sm"
-                  title="Select only this file"
-                  (click)="$event.stopPropagation(); SelectSingleAzureBlob(blob.Name)"
-                >
-                  Select
-                </button>
-              </span>
-            </div>
+              <span class="badge">{{ blob.SizeFormatted }}</span>
+              <button
+                type="button"
+                mjButton
+                variant="flat"
+                size="sm"
+                title="Select only this file"
+                (click)="$event.preventDefault(); $event.stopPropagation(); SelectSingleAzureBlob(blob.Name)"
+              >
+                Select
+              </button>
+            </label>
           }
         </div>
       }
     </div>
 
     <div class="form-section">
-      <label class="form-label required">Azure Blob Backup URL(s)</label>
+      <label class="form-label required" for="backup-azure-urls">Azure Blob Backup URL(s)</label>
       <textarea
-        class="form-control"
+        id="backup-azure-urls"
+        class="mj-textarea"
         rows="3"
         placeholder="https://myaccount.blob.core.windows.net/backups/db_stripe1.bak, https://myaccount.blob.core.windows.net/backups/db_stripe2.bak"
         [ngModel]="Value.BackupUrls"
@@ -192,11 +126,9 @@
 
   <!-- ================= LOCAL DISK FILE SECTION ================= -->
   @if (Value.SourceType === 'local') {
-    <div class="browser-card">
-      <div class="browser-header">
-        <div class="browser-title">
-          <i class="fa-solid fa-hard-drive"></i> Backup Verification
-        </div>
+    <div class="list-card">
+      <div class="list-card-header">
+        <span><i class="fa-solid fa-hard-drive"></i> Backup Verification</span>
         <button
           type="button"
           mjButton
@@ -205,62 +137,56 @@
           [disabled]="IsVerifyingBackup || !Value.BackupUrls.trim()"
           (click)="VerifyLocalBackup()"
         >
-          @if (IsVerifyingBackup) {
-            <i class="fa-solid fa-spinner fa-spin"></i> Verifying...
-          } @else {
-            <i class="fa-solid fa-circle-check"></i> Verify Backup
-          }
+          <i class="fa-solid fa-circle-check"></i> {{ IsVerifyingBackup ? 'Verifying…' : 'Verify Backup' }}
         </button>
       </div>
 
-      <div class="preset-chips">
-        <span class="preset-label">Quick Paths:</span>
-        @for (preset of DirectoryPresets; track preset.Path) {
-          <button
-            type="button"
-            class="preset-chip"
-            (click)="ApplyDirectoryPreset(preset.Path)"
-          >
-            {{ preset.Label }}
-          </button>
-        }
-      </div>
-
-      @if (VerifyBackupError) {
-        <div class="browser-error-banner">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <span>{{ VerifyBackupError }}</span>
+      <div class="browser-section">
+        <div class="preset-row">
+          <span class="form-hint">Quick Paths:</span>
+          @for (preset of DirectoryPresets; track preset.Path) {
+            <button type="button" mjButton variant="outline" size="sm" (click)="ApplyDirectoryPreset(preset.Path)">
+              {{ preset.Label }}
+            </button>
+          }
         </div>
-      }
 
-      @if (VerifiedBackupHeader) {
-        <div class="header-metadata-card">
-          <div class="metadata-grid">
-            <div class="metadata-item">
-              <span class="meta-label">Database Name</span>
-              <span class="meta-value"><strong>{{ VerifiedBackupHeader.DatabaseName }}</strong></span>
+        @if (IsVerifyingBackup) {
+          <mj-loading Text="Reading the backup header…" Size="small"></mj-loading>
+        }
+
+        @if (VerifyBackupError) {
+          <mj-alert Variant="warning" Size="sm" [Message]="VerifyBackupError"></mj-alert>
+        }
+
+        @if (VerifiedBackupHeader) {
+          <div class="metrics-grid">
+            <div class="metric">
+              <span class="metric-label">Database Name</span>
+              <span class="metric-value">{{ VerifiedBackupHeader.DatabaseName }}</span>
             </div>
-            <div class="metadata-item">
-              <span class="meta-label">Backup Start Date (UTC)</span>
-              <span class="meta-value">{{ VerifiedBackupHeader.BackupStartDate }}</span>
+            <div class="metric">
+              <span class="metric-label">Backup Start Date (UTC)</span>
+              <span class="metric-value">{{ VerifiedBackupHeader.BackupStartDate }}</span>
             </div>
-            <div class="metadata-item">
-              <span class="meta-label">Backup Size</span>
-              <span class="meta-value">{{ VerifiedBackupHeader.SizeBytes != null ? FormatBytes(VerifiedBackupHeader.SizeBytes) : '—' }}</span>
+            <div class="metric">
+              <span class="metric-label">Backup Size</span>
+              <span class="metric-value">{{ VerifiedBackupHeader.SizeBytes != null ? FormatBytes(VerifiedBackupHeader.SizeBytes) : '—' }}</span>
             </div>
-            <div class="metadata-item">
-              <span class="meta-label">Stripes</span>
-              <span class="meta-value">{{ VerifiedBackupHeader.Stripes ?? 1 }} file(s)</span>
+            <div class="metric">
+              <span class="metric-label">Stripes</span>
+              <span class="metric-value">{{ VerifiedBackupHeader.Stripes ?? 1 }} file(s)</span>
             </div>
           </div>
-        </div>
-      }
+        }
+      </div>
     </div>
 
     <div class="form-section">
-      <label class="form-label required">Local Backup File Path(s)</label>
+      <label class="form-label required" for="backup-local-paths">Local Backup File Path(s)</label>
       <textarea
-        class="form-control"
+        id="backup-local-paths"
+        class="mj-textarea"
         rows="3"
         placeholder="/var/opt/mssql/backup/AdventureWorks2022.bak, /var/opt/mssql/backup/AdventureWorks2022_stripe2.bak"
         [ngModel]="Value.BackupUrls"

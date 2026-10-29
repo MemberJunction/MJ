@@ -1,0 +1,295 @@
+/* ==========================================================================
+   Shared layout for the backup wizards (bootstrap, archive seed) and the
+   backup source picker. The dialog chrome comes from mj-dialog, form controls
+   from .mj-input / .mj-textarea / .mj-checkbox and the MJ UI controls.
+   ========================================================================== */
+
+/* --- Dialog title bar content --- */
+.wizard-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  min-width: 0;
+}
+
+.wizard-heading-icon {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: var(--mj-brand-primary);
+}
+
+.wizard-title {
+  margin: 0;
+  font-size: var(--mj-text-lg);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.wizard-subtitle {
+  margin: var(--mj-space-1) 0 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+/* --- Stepper --- */
+.stepper-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--mj-space-5);
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+}
+
+.step-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+}
+
+.step-item.active .step-circle {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+.step-item.completed .step-circle {
+  border-color: var(--mj-status-success);
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+}
+
+.step-label {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-secondary);
+}
+
+.step-item.active .step-label {
+  color: var(--mj-brand-primary);
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  margin: 0 var(--mj-space-2);
+  background: var(--mj-border-default);
+}
+
+.step-line.completed {
+  background: var(--mj-status-success);
+}
+
+/* --- Step body and forms --- */
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-4);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--mj-space-4);
+}
+
+.form-section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--mj-space-1-5);
+}
+
+.form-label {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.form-label.required::after {
+  content: ' *';
+  color: var(--mj-status-error);
+}
+
+.form-hint {
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+/* --- Bordered list card (entity maps, tables, blobs) --- */
+.list-card {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+}
+
+.list-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.list-card-body {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  font-size: var(--mj-text-sm);
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+.list-row.selected {
+  background: var(--mj-bg-surface-active);
+}
+
+.list-empty {
+  padding: var(--mj-space-5);
+  text-align: center;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-muted);
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 2px var(--mj-space-2);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+}
+
+.badge.success {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+}
+
+.badge.warning {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}
+
+/* --- Running job: live log --- */
+.progress-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1);
+  max-height: 220px;
+  margin: 0;
+  padding: var(--mj-space-2) var(--mj-space-2-5);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+
+.progress-log-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mj-space-2);
+}
+
+.progress-log-line.is-warn {
+  color: var(--mj-status-warning-text);
+}
+
+.progress-log-line.is-error {
+  color: var(--mj-status-error-text);
+}
+
+.progress-log-stage {
+  min-width: 96px;
+  font-weight: var(--mj-font-semibold);
+}
+
+.progress-log-message {
+  flex: 1;
+  word-break: break-word;
+}
+
+.run-note {
+  margin: 0;
+  text-align: center;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+/* --- Completion metrics --- */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--mj-space-3);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  text-align: center;
+}
+
+.metric-label {
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-secondary);
+}
+
+.metric-value {
+  margin-top: var(--mj-space-1);
+  font-size: var(--mj-text-lg);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+/* --- Footer --- */
+.footer-spacer {
+  margin-right: auto;
+}
+
+.footer-note {
+  margin-right: auto;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    flex-direction: column;
+  }
+
+  .step-label {
+    display: none;
+  }
+}

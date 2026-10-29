@@ -122,6 +122,40 @@ describe('Bootstrap Wizard Review Fixes', () => {
       expect(wizard.Closed.emit).toHaveBeenCalled();
     });
 
+    it('IsOpen is a setter: opening resets to step 1 and names the staging database after the connection', () => {
+      const wizard = Object.create(BootstrapWizardComponent.prototype) as BootstrapWizardComponent;
+      wizard.CompanyIntegration = { ID: 'ABCD-1234-EF56' } as unknown as MJCompanyIntegrationEntity;
+      wizard.CurrentStep = 3;
+      wizard.ExecutionError = 'old failure';
+      wizard.IsOpen = true;
+      expect(wizard.IsOpen).toBe(true);
+      expect(wizard.CurrentStep).toBe(1);
+      expect(wizard.ExecutionError).toBeNull();
+      expect(wizard.StagingDatabaseName).toMatch(/^MJ_Staging_ABCD1234_/);
+    });
+
+    it('closing through the IsOpen input stops following the run', () => {
+      const wizard = createWizard();
+      const internals = wizard as unknown as Record<string, unknown>;
+      internals['pollTimer'] = setTimeout(() => undefined, 60_000);
+      wizard.RunID = 'run-1';
+      wizard.IsOpen = false;
+      expect(internals['pollTimer']).toBeNull();
+      expect(wizard.RunID).toBeNull();
+      expect(wizard.Closed.emit).not.toHaveBeenCalled();
+    });
+
+    it('the picker toggles map their keys onto the backup source value', () => {
+      const picker = createPicker();
+      picker.OnSourceTypeKey('local');
+      expect(picker.Value.SourceType).toBe('local');
+      picker.OnSourceTypeKey('bogus');
+      expect(picker.Value.SourceType).toBe('local');
+      picker.OnAuthModeKey('credential');
+      expect(picker.Value.AuthMode).toBe('credential');
+      expect(picker.ValueChange.emit).toHaveBeenLastCalledWith(expect.objectContaining({ SourceType: 'local', AuthMode: 'credential' }));
+    });
+
     it('RefreshLocalFiles resets verification state', () => {
       const picker = createPicker();
       picker.VerifiedBackupHeader = { Success: true, Message: 'Verified' };
@@ -275,8 +309,9 @@ describe('Bootstrap Wizard Review Fixes', () => {
         Params: []
       });
 
-      (svc as unknown as { Provider: unknown }).Provider = {};
       const origGraphQLActionClient = await import('@memberjunction/graphql-dataprovider');
+      // The service narrows its provider with instanceof GraphQLDataProvider before building the action client.
+      svc.Provider = Object.create(origGraphQLActionClient.GraphQLDataProvider.prototype) as InstanceType<typeof origGraphQLActionClient.GraphQLDataProvider>;
       vi.spyOn(origGraphQLActionClient, 'GraphQLActionClient').mockImplementation(class {
         RunAction = mockRunAction;
       } as unknown as typeof origGraphQLActionClient.GraphQLActionClient);
@@ -290,6 +325,16 @@ describe('Bootstrap Wizard Review Fixes', () => {
       expect(res.BackupStartDate).toBe('2026-10-26T02:00:00.000Z');
       expect(res.SizeBytes).toBe(26628587520);
       expect(res.Stripes).toBe(2);
+    });
+  });
+
+  describe('IntegrationDataService needs a GraphQL provider to run actions', () => {
+    it('reports a clear error instead of casting a non-GraphQL provider', async () => {
+      const svc = new IntegrationDataService();
+      vi.spyOn(svc as unknown as { lookupActionID: (name: string) => Promise<string> }, 'lookupActionID')
+        .mockResolvedValue('inspect-action-id');
+      svc.Provider = {} as unknown as IntegrationDataService['Provider'];
+      await expect(svc.InspectSQLServerBackup('ci-1', { BackupUrls: '/b/a.bak' })).rejects.toThrow(/GraphQLDataProvider/);
     });
   });
 
@@ -311,8 +356,9 @@ describe('Bootstrap Wizard Review Fixes', () => {
         Params: []
       });
 
-      (svc as unknown as { Provider: unknown }).Provider = {};
       const origGraphQLActionClient = await import('@memberjunction/graphql-dataprovider');
+      // The service narrows its provider with instanceof GraphQLDataProvider before building the action client.
+      svc.Provider = Object.create(origGraphQLActionClient.GraphQLDataProvider.prototype) as InstanceType<typeof origGraphQLActionClient.GraphQLDataProvider>;
       vi.spyOn(origGraphQLActionClient, 'GraphQLActionClient').mockImplementation(class {
         RunAction = mockRunAction;
       } as unknown as typeof origGraphQLActionClient.GraphQLActionClient);

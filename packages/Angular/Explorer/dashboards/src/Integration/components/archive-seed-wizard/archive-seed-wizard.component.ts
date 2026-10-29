@@ -1,4 +1,5 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, Output, inject } from '@angular/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type {
   IntegrationArchiveSeedState,
@@ -39,7 +40,7 @@ const RESTING_STATES = new Set(['AwaitingSelection', 'AwaitingCleanupDecision', 
   standalone: false,
   selector: 'app-archive-seed-wizard',
   templateUrl: './archive-seed-wizard.component.html',
-  styleUrls: ['./archive-seed-wizard.component.css']
+  styleUrls: ['../shared/backup-wizard.css', './archive-seed-wizard.component.css']
 })
 export class ArchiveSeedWizardComponent extends BaseAngularComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
@@ -84,7 +85,7 @@ export class ArchiveSeedWizardComponent extends BaseAngularComponent implements 
   @Input()
   set ResumeJobID(value: string | null) {
     this.resumeJobID = value;
-    if (value && this.isOpen && this.JobID !== value) {
+    if (value && this.isOpen && !UUIDsEqual(this.JobID, value)) {
       void this.resumeJob(value);
     }
   }

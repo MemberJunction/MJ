@@ -1,267 +1,230 @@
 @if (IsOpen) {
-  <div class="modal-overlay" (click)="Close()">
-    <div class="modal-card" (click)="$event.stopPropagation()">
-      <!-- Modal Header -->
-      <div class="modal-header">
-        <div class="header-left">
-          <div class="header-icon">
-            <i class="fa-solid fa-box-archive"></i>
+  <mj-dialog [Visible]="IsOpen" Width="820px" AriaLabel="Seed a Connection from a Backup Archive" (Close)="Close()">
+    <mj-dialog-titlebar>
+      <div class="wizard-heading">
+        <i class="fa-solid fa-box-archive wizard-heading-icon" aria-hidden="true"></i>
+        <div>
+          <h2 class="wizard-title">Seed a Connection from a Backup Archive</h2>
+          <p class="wizard-subtitle">
+            Restore a SQL Server backup, choose its tables, and bring them into MemberJunction as a new connection
+          </p>
+        </div>
+      </div>
+    </mj-dialog-titlebar>
+
+    <!-- Stepper Strip -->
+    <div class="stepper-bar">
+      @for (step of Steps; track step.Number; let last = $last) {
+        <div class="step-item" [class.active]="CurrentStep === step.Number" [class.completed]="CurrentStep > step.Number">
+          <div class="step-circle">
+            @if (CurrentStep > step.Number) { <i class="fa-solid fa-check"></i> } @else { {{ step.Number }} }
           </div>
-          <div>
-            <h3 class="modal-title">Seed a Connection from a Backup Archive</h3>
-            <p class="modal-subtitle">
-              Restore a SQL Server backup, choose its tables, and bring them into MemberJunction as a new connection
-            </p>
+          <span class="step-label">{{ step.Label }}</span>
+        </div>
+        @if (!last) {
+          <div class="step-line" [class.completed]="CurrentStep > step.Number"></div>
+        }
+      }
+    </div>
+
+    <!-- STEP 1: Archive -->
+    @if (CurrentStep === 1) {
+      <div class="step-content">
+        <div class="form-row">
+          <div class="form-section">
+            <label class="form-label required" for="archive-seed-connection-name">Connection Name</label>
+            <input id="archive-seed-connection-name" type="text" class="mj-input" [(ngModel)]="ConnectionName" placeholder="e.g. Legacy CRM" />
+            <span class="form-hint">The new connection the archive's tables are seeded into.</span>
+          </div>
+          <div class="form-section">
+            <span class="form-label required" id="archive-seed-company-label">Company</span>
+            <mj-dropdown
+              AriaLabelledBy="archive-seed-company-label"
+              [Data]="Companies"
+              TextField="Name"
+              ValueField="ID"
+              [ValuePrimitive]="true"
+              Placeholder="Select a company"
+              [(ngModel)]="SelectedCompanyID"
+            ></mj-dropdown>
           </div>
         </div>
-        <button class="modal-close-btn" (click)="Close()" aria-label="Close dialog">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
 
-      <!-- Stepper Strip -->
-      <div class="stepper-bar">
-        @for (step of Steps; track step.Number; let last = $last) {
-          <div class="step-item" [class.active]="CurrentStep === step.Number" [class.completed]="CurrentStep > step.Number">
-            <div class="step-circle">
-              @if (CurrentStep > step.Number) { <i class="fa-solid fa-check"></i> } @else { {{ step.Number }} }
-            </div>
-            <span class="step-label">{{ step.Label }}</span>
+        <app-backup-source-picker
+          [CompanyIntegrationID]="null"
+          [(Value)]="Source"
+          (Verified)="OnVerified($event)"
+          [Provider]="Provider"
+        ></app-backup-source-picker>
+
+        <div class="form-row">
+          <div class="form-section">
+            <label class="form-label required" for="archive-seed-staging">Staging Database Name</label>
+            <input id="archive-seed-staging" type="text" class="mj-input" [(ngModel)]="StagingDatabaseName" />
+            <span class="form-hint">The archive is restored into this database on the local instance.</span>
           </div>
-          @if (!last) {
-            <div class="step-line" [class.completed]="CurrentStep > step.Number"></div>
-          }
+          <div class="form-section">
+            <label class="form-label" for="archive-seed-batch">Batch Size</label>
+            <mj-numeric-input InputId="archive-seed-batch" [(ngModel)]="BatchSize" [Min]="50000" [Step]="50000" [Decimals]="0"></mj-numeric-input>
+            <span class="form-hint">Chunk threshold for massive tables (default: 500,000).</span>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- STEP 2: Restore -->
+    @if (CurrentStep === 2) {
+      <div class="step-content">
+        @if (ExecutionError) {
+          <mj-alert Variant="error" Title="Restore Failed" [Message]="ExecutionError"></mj-alert>
+        } @else {
+          <mj-loading Text="Restoring the archive and discovering its tables…" Size="medium"></mj-loading>
+          <ng-container [ngTemplateOutlet]="jobInfo"></ng-container>
         }
       </div>
+    }
 
-      <!-- Modal Body -->
-      <div class="modal-body">
-        <!-- STEP 1: Archive -->
-        @if (CurrentStep === 1) {
-          <div class="step-content">
-            <div class="form-row">
-              <div class="form-section flex-1">
-                <label class="form-label required" for="archive-seed-connection-name">Connection Name</label>
-                <input id="archive-seed-connection-name" type="text" class="form-control" [(ngModel)]="ConnectionName" placeholder="e.g. Legacy CRM" />
-                <span class="form-hint">The new connection the archive's tables are seeded into.</span>
-              </div>
-              <div class="form-section flex-1">
-                <label class="form-label required" for="archive-seed-company">Company</label>
-                <select id="archive-seed-company" class="form-control" [(ngModel)]="SelectedCompanyID">
-                  <option value="" disabled>-- Select a company --</option>
-                  @for (company of Companies; track company.ID) {
-                    <option [value]="company.ID">{{ company.Name }}</option>
-                  }
-                </select>
-              </div>
-            </div>
+    <!-- STEP 3: Tables -->
+    @if (CurrentStep === 3) {
+      <div class="step-content">
+        <mj-alert Variant="info">
+          The archive was restored to <code>[{{ StagingDatabaseName }}]</code>. Choose the tables to bring in;
+          each becomes a table and entity in MemberJunction, mapped to the new connection.
+        </mj-alert>
 
-            <app-backup-source-picker
-              [CompanyIntegrationID]="null"
-              [(Value)]="Source"
-              (Verified)="OnVerified($event)"
-              [Provider]="Provider"
-            ></app-backup-source-picker>
-
-            <div class="form-row">
-              <div class="form-section flex-1">
-                <label class="form-label required" for="archive-seed-staging">Staging Database Name</label>
-                <input id="archive-seed-staging" type="text" class="form-control" [(ngModel)]="StagingDatabaseName" />
-                <span class="form-hint">The archive is restored into this database on the local instance.</span>
-              </div>
-              <div class="form-section flex-1">
-                <label class="form-label" for="archive-seed-batch">Batch Size</label>
-                <input id="archive-seed-batch" type="number" class="form-control" [(ngModel)]="BatchSize" min="50000" step="50000" />
-                <span class="form-hint">Chunk threshold for massive tables (default: 500,000).</span>
-              </div>
-            </div>
+        <div class="list-card">
+          <div class="list-card-header">
+            <label class="table-check">
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="AllSelected" [disabled]="Tables.length === 0" />
+              Select all
+            </label>
+            <span class="form-hint">{{ Selected.size }} of {{ Tables.length }} selected</span>
           </div>
-        }
 
-        <!-- STEP 2: Restore -->
-        @if (CurrentStep === 2) {
-          <div class="step-content execution-view">
-            @if (ExecutionError) {
-              <div class="error-box">
-                <div class="error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-                <h4 class="error-title">Restore Failed</h4>
-                <p class="error-message">{{ ExecutionError }}</p>
-              </div>
-            } @else {
-              <mj-loading Text="Restoring the archive and discovering its tables…" Size="medium"></mj-loading>
-              <ng-container [ngTemplateOutlet]="jobInfo"></ng-container>
+          <div class="list-card-body">
+            @if (Tables.length === 0) {
+              <div class="list-empty">The archive reported no tables.</div>
             }
-          </div>
-        }
-
-        <!-- STEP 3: Tables -->
-        @if (CurrentStep === 3) {
-          <div class="step-content">
-            <div class="info-banner">
-              <i class="fa-solid fa-circle-info"></i>
-              <div>
-                The archive was restored to <code>[{{ StagingDatabaseName }}]</code>. Choose the tables to bring in;
-                each becomes a table and entity in MemberJunction, mapped to the new connection.
-              </div>
-            </div>
-
-            <div class="preview-card">
-              <div class="preview-header">
-                <label class="table-select-all">
-                  <input type="checkbox" [(ngModel)]="AllSelected" [disabled]="Tables.length === 0" />
-                  <span class="preview-title">Select all</span>
-                </label>
-                <span class="table-count">{{ Selected.size }} of {{ Tables.length }} selected</span>
-              </div>
-
-              <div class="table-list">
-                @if (Tables.length === 0) {
-                  <div class="empty-preview">The archive reported no tables.</div>
+            @for (table of Tables; track table.Name) {
+              <label class="list-row table-check" [class.selected]="Selected.has(table.Name)">
+                <input type="checkbox" class="mj-checkbox" [checked]="Selected.has(table.Name)" (change)="ToggleTable(table.Name)" />
+                <code class="table-name" [title]="table.Name">{{ table.Name }}</code>
+                <span class="badge">{{ table.ColumnCount }} columns</span>
+                @if (table.HasPrimaryKey) {
+                  <span class="badge success">Primary key</span>
+                } @else {
+                  <span class="badge warning" title="Without a primary key, rows cannot be matched on later syncs">No primary key</span>
                 }
-                @for (table of Tables; track table.Name) {
-                  <label class="table-row" [class.selected]="Selected.has(table.Name)">
-                    <input type="checkbox" [checked]="Selected.has(table.Name)" (change)="ToggleTable(table.Name)" />
-                    <code class="table-name" [title]="table.Name">{{ table.Name }}</code>
-                    <span class="table-badge">{{ table.ColumnCount }} columns</span>
-                    @if (table.HasPrimaryKey) {
-                      <span class="table-badge pk">Primary key</span>
-                    } @else {
-                      <span class="table-badge no-pk" title="Without a primary key, rows cannot be matched on later syncs">No primary key</span>
-                    }
-                    @if (table.WatermarkField) {
-                      <span class="table-badge watermark" title="Incremental syncs use this field as their watermark">
-                        <i class="fa-solid fa-water"></i> {{ table.WatermarkField }}
-                      </span>
-                    }
-                  </label>
+                @if (table.WatermarkField) {
+                  <span class="badge" title="Incremental syncs use this field as their watermark">
+                    <i class="fa-solid fa-water"></i> {{ table.WatermarkField }}
+                  </span>
                 }
-              </div>
-            </div>
-
-            @if (SelectionError) {
-              <div class="warning-banner">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <div>{{ SelectionError }}</div>
-              </div>
+              </label>
             }
           </div>
-        }
+        </div>
 
-        <!-- STEP 4: Build -->
-        @if (CurrentStep === 4) {
-          <div class="step-content execution-view">
-            @if (ExecutionError) {
-              <div class="error-box">
-                <div class="error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-                <h4 class="error-title">Archive Seed Failed</h4>
-                <p class="error-message">{{ ExecutionError }}</p>
-                <p class="error-cleanup-note">The staging database was left in place so the job can be inspected.</p>
-              </div>
-            } @else {
-              @if (IsReconnecting) {
-                <div class="warning-banner reconnect-banner" role="status">
-                  <i class="fa-solid fa-plug-circle-exclamation"></i>
-                  <div>API restarting, reconnecting…</div>
-                </div>
-              }
-              <mj-loading [Text]="BuildStageLabel" Size="medium"></mj-loading>
-              <ng-container [ngTemplateOutlet]="jobInfo"></ng-container>
-            }
-          </div>
-        }
-
-        <!-- STEP 5: Cleanup -->
-        @if (CurrentStep === 5) {
-          <div class="step-content">
-            <div class="success-header">
-              <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
-              <h4 class="success-title">The tables are loaded</h4>
-              <p class="success-subtitle">One decision left: what to do with the restored archive.</p>
-            </div>
-
-            <ng-container [ngTemplateOutlet]="summaryMetrics"></ng-container>
-
-            <div class="cleanup-prompt">
-              <div class="cleanup-title"><i class="fa-solid fa-database"></i> Remove the restored archive?</div>
-              <p class="cleanup-text">
-                The staging database <code>[{{ StagingDatabaseName }}]</code> holds the full restored backup. Removing it
-                reclaims its disk space; keep it if you want to seed more tables from it later.
-              </p>
-            </div>
-
-            @if (ExecutionError) {
-              <div class="warning-banner">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <div>{{ ExecutionError }}</div>
-              </div>
-            }
-          </div>
-        }
-
-        <!-- STEP 6: Done -->
-        @if (CurrentStep === 6) {
-          <div class="step-content completion-view">
-            <div class="success-header">
-              <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
-              <h4 class="success-title">Archive Seed Completed</h4>
-              <p class="success-subtitle">
-                <strong>{{ ConnectionName || 'The new connection' }}</strong> is seeded and waits for a live source before incremental syncs run.
-              </p>
-            </div>
-            <ng-container [ngTemplateOutlet]="summaryMetrics"></ng-container>
-          </div>
+        @if (SelectionError) {
+          <mj-alert Variant="warning" [Message]="SelectionError"></mj-alert>
         }
       </div>
+    }
 
-      <!-- Modal Footer: confirm on the left, cancel on the right -->
-      <div class="modal-footer">
-        @switch (CurrentStep) {
-          @case (1) {
-            <button mjButton variant="primary" [disabled]="!IsStep1Valid || IsSubmitting" (click)="StartRestore()">
-              <i class="fa-solid fa-box-open"></i> Restore Archive
-            </button>
-            <button mjButton variant="secondary" (click)="Close()">Cancel</button>
+    <!-- STEP 4: Build -->
+    @if (CurrentStep === 4) {
+      <div class="step-content">
+        @if (ExecutionError) {
+          <mj-alert Variant="error" Title="Archive Seed Failed" [Message]="ExecutionError">
+            <p class="form-hint">The staging database was left in place so the job can be inspected.</p>
+          </mj-alert>
+        } @else {
+          @if (IsReconnecting) {
+            <mj-alert Variant="warning" Icon="fa-solid fa-plug-circle-exclamation" Role="status" Message="API restarting, reconnecting…"></mj-alert>
           }
-          @case (2) {
-            @if (ExecutionError) {
-              <button mjButton variant="primary" (click)="BackToArchive()">
-                <i class="fa-solid fa-arrow-left"></i> Back to Archive
-              </button>
-            } @else {
-              <span class="footer-busy-note">Running on the server. You may close this window; the job continues.</span>
-            }
-            <button mjButton variant="secondary" (click)="Close()">Close</button>
-          }
-          @case (3) {
-            <button mjButton variant="primary" [disabled]="Selected.size === 0 || IsSubmitting" (click)="CreateAndLoad()">
-              <i class="fa-solid fa-wand-magic-sparkles"></i> Create and Load
-            </button>
-            <button mjButton variant="danger" [disabled]="IsSubmitting" (click)="CancelSeed()" title="Abandon this seed: drops the restored staging database">
-              <i class="fa-solid fa-ban"></i> Cancel Seed
-            </button>
-            <button mjButton variant="secondary" (click)="Close()">Close</button>
-          }
-          @case (4) {
-            @if (!ExecutionError) {
-              <span class="footer-busy-note">Running on the server. You may close this window; the job continues.</span>
-            }
-            <button mjButton variant="secondary" (click)="Close()">Close</button>
-          }
-          @case (5) {
-            <button mjButton variant="primary" [disabled]="IsSubmitting" (click)="RemoveArchive(true)">
-              <i class="fa-solid fa-trash-can"></i> Remove
-            </button>
-            <button mjButton variant="secondary" [disabled]="IsSubmitting" (click)="RemoveArchive(false)">Keep</button>
-          }
-          @case (6) {
-            <button mjButton variant="primary" (click)="Finish()">
-              <i class="fa-solid fa-check"></i> Done
-            </button>
-          }
+          <mj-loading [Text]="BuildStageLabel" Size="medium"></mj-loading>
+          <ng-container [ngTemplateOutlet]="jobInfo"></ng-container>
         }
       </div>
-    </div>
-  </div>
+    }
+
+    <!-- STEP 5: Cleanup -->
+    @if (CurrentStep === 5) {
+      <div class="step-content">
+        <mj-alert Variant="success" Title="The tables are loaded" Message="One decision left: what to do with the restored archive."></mj-alert>
+
+        <ng-container [ngTemplateOutlet]="summaryMetrics"></ng-container>
+
+        <mj-alert Variant="info" Icon="fa-solid fa-database" Title="Remove the restored archive?">
+          The staging database <code>[{{ StagingDatabaseName }}]</code> holds the full restored backup. Removing it
+          reclaims its disk space; keep it if you want to seed more tables from it later.
+        </mj-alert>
+
+        @if (ExecutionError) {
+          <mj-alert Variant="warning" [Message]="ExecutionError"></mj-alert>
+        }
+      </div>
+    }
+
+    <!-- STEP 6: Done -->
+    @if (CurrentStep === 6) {
+      <div class="step-content">
+        <mj-alert Variant="success" Title="Archive Seed Completed">
+          <strong>{{ ConnectionName || 'The new connection' }}</strong> is seeded and waits for a live source before incremental syncs run.
+        </mj-alert>
+        <ng-container [ngTemplateOutlet]="summaryMetrics"></ng-container>
+      </div>
+    }
+
+    <!-- Footer: destructive far left, then confirm, then cancel on the right -->
+    <mj-dialog-actions>
+      @switch (CurrentStep) {
+        @case (1) {
+          <button mjButton variant="primary" [disabled]="!IsStep1Valid || IsSubmitting" (click)="StartRestore()">
+            <i class="fa-solid fa-box-open"></i> Restore Archive
+          </button>
+          <button mjButton variant="secondary" (click)="Close()">Cancel</button>
+        }
+        @case (2) {
+          @if (ExecutionError) {
+            <button mjButton variant="primary" (click)="BackToArchive()">
+              <i class="fa-solid fa-arrow-left"></i> Back to Archive
+            </button>
+          } @else {
+            <span class="footer-note">Running on the server. You may close this window; the job continues.</span>
+          }
+          <button mjButton variant="secondary" (click)="Close()">Close</button>
+        }
+        @case (3) {
+          <button mjButton variant="danger" [disabled]="IsSubmitting" (click)="CancelSeed()" title="Abandon this seed: drops the restored staging database">
+            <i class="fa-solid fa-ban"></i> Cancel Seed
+          </button>
+          <span class="footer-spacer"></span>
+          <button mjButton variant="primary" [disabled]="Selected.size === 0 || IsSubmitting" (click)="CreateAndLoad()">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Create and Load
+          </button>
+          <button mjButton variant="secondary" (click)="Close()">Close</button>
+        }
+        @case (4) {
+          @if (!ExecutionError) {
+            <span class="footer-note">Running on the server. You may close this window; the job continues.</span>
+          }
+          <button mjButton variant="secondary" (click)="Close()">Close</button>
+        }
+        @case (5) {
+          <button mjButton variant="primary" [disabled]="IsSubmitting" (click)="RemoveArchive(true)">
+            <i class="fa-solid fa-trash-can"></i> Remove
+          </button>
+          <button mjButton variant="secondary" [disabled]="IsSubmitting" (click)="RemoveArchive(false)">Keep</button>
+        }
+        @case (6) {
+          <button mjButton variant="primary" (click)="Finish()">
+            <i class="fa-solid fa-check"></i> Done
+          </button>
+        }
+      }
+    </mj-dialog-actions>
+  </mj-dialog>
 }
 
 <!-- The running job: its ID and the live progress log -->
@@ -277,7 +240,7 @@
     </ul>
   }
   @if (JobID) {
-    <p class="job-note">
+    <p class="run-note">
       <i class="fa-solid fa-satellite-dish"></i> Running on the server as job <code>{{ JobID }}</code>. Closing this window does not stop it.
     </p>
   }
@@ -286,29 +249,23 @@
 <!-- The seed's totals -->
 <ng-template #summaryMetrics>
   @if (Summary) {
-    <div class="summary-metrics-grid">
-      <div class="metric-card">
+    <div class="metrics-grid">
+      <div class="metric">
         <span class="metric-label">Tables Seeded</span>
         <span class="metric-value">{{ Summary.TablesProcessed ?? '—' }}</span>
       </div>
-      <div class="metric-card">
+      <div class="metric">
         <span class="metric-label">Rows Loaded</span>
-        <span class="metric-value highlight">{{ Summary.TotalRowsTransferred?.toLocaleString() ?? '—' }}</span>
+        <span class="metric-value">{{ Summary.TotalRowsTransferred?.toLocaleString() ?? '—' }}</span>
       </div>
-      <div class="metric-card">
+      <div class="metric">
         <span class="metric-label">Duration</span>
         <span class="metric-value">{{ FormatSeconds(Summary.DurationSeconds) }}</span>
       </div>
       @if (CurrentStep === 6) {
-        <div class="metric-card">
+        <div class="metric">
           <span class="metric-label">Restored Archive</span>
-          <span class="metric-value">
-            @if (Summary.StagingDatabaseDropped) {
-              <span class="status-tag dropped">Removed</span>
-            } @else {
-              <span class="status-tag kept">Kept</span>
-            }
-          </span>
+          <span class="metric-value">{{ Summary.StagingDatabaseDropped ? 'Removed' : 'Kept' }}</span>
         </div>
       }
     </div>

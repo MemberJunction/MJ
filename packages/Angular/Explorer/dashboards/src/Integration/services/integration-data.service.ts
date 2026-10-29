@@ -953,9 +953,17 @@ export class IntegrationDataService {
     if (!actionID) {
       return undefined;
     }
-    const provider = this.Provider as unknown as GraphQLDataProvider;
-    const actionClient = new GraphQLActionClient(provider);
+    const actionClient = new GraphQLActionClient(this.requireGraphQLProvider());
     return actionClient.RunAction(actionID, params);
+  }
+
+  /** The provider as the GraphQL provider the action client needs; the browser always runs on one. */
+  private requireGraphQLProvider(): GraphQLDataProvider {
+    const provider = this.Provider;
+    if (!(provider instanceof GraphQLDataProvider)) {
+      throw new Error('Integration actions need a GraphQLDataProvider; the current provider is not one.');
+    }
+    return provider;
   }
 
   /** Input params from a name → value map; undefined values are omitted, booleans become 'true'/'false'. */

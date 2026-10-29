@@ -249,7 +249,11 @@ function readSeededFromBackup(configuration: string | null | undefined): Record<
   return seeded && typeof seeded === 'object' ? (seeded as Record<string, unknown>) : undefined;
 }
 
-/** The archive seed job ID a connection records in its Configuration (`seededFromBackup.jobID`). */
+/**
+ * The archive seed job ID a connection records in its Configuration (`seededFromBackup.jobID`).
+ * The server reads the same block with `ReadArchiveSeedConfiguration` in
+ * `@memberjunction/core-entities-server`; keep the two in step. Browser code cannot import that package.
+ */
 export function ReadSeededJobID(configuration: string | null | undefined): string | undefined {
   const id = readSeededFromBackup(configuration)?.['jobID'];
   return typeof id === 'string' && id.length > 0 ? id : undefined;

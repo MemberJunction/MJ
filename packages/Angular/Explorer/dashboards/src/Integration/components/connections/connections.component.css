@@ -216,16 +216,6 @@ mj-empty-state {
   font-size: 13px;
 }
 
-.bootstrap-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.bootstrap-action-btn i {
-  font-size: 13px;
-}
-
 /* Sync dropdown menu */
 .sync-menu-wrapper {
   position: relative;
@@ -2655,55 +2645,52 @@ button.direction-toggle:hover {
 .connect-mode-selector {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 4px;
+  gap: var(--mj-space-3);
+  margin-top: var(--mj-space-1);
 }
 
 .connect-mode-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1.5px solid var(--mj-border-default);
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
   background: var(--mj-bg-surface);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: var(--mj-transition-colors);
 }
 
 .connect-mode-card:hover {
   border-color: var(--mj-brand-primary);
   background: var(--mj-bg-surface-hover);
-  transform: translateY(-1px);
+}
+
+.connect-mode-card:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
 }
 
 .connect-mode-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
   flex-shrink: 0;
-  background: linear-gradient(135deg, var(--mj-brand-primary), var(--mj-brand-primary-hover));
-  color: var(--mj-text-inverse);
+  font-size: 1.25rem;
+  color: var(--mj-brand-primary);
 }
 
 .connect-mode-info {
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
 }
 
 .connect-mode-title {
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
 }
 
 .connect-mode-desc {
-  font-size: 0.75rem;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-secondary);
 }

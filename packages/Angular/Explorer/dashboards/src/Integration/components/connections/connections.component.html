@@ -132,7 +132,6 @@
               @if (IsSqlServerIntegration(summary)) {
                 <button mjButton
                         variant="outline"
-                        class="bootstrap-action-btn"
                         (click)="OpenBootstrapWizard(summary.Integration, $event)"
                         title="Bootstrap from Azure SQL Server Backup">
                   <i class="fa-solid fa-cloud-arrow-down"></i>
@@ -261,7 +260,6 @@
             @if (IsSqlServerIntegration(SelectedSummary)) {
               <button mjButton
                       variant="outline"
-                      class="bootstrap-action-btn"
                       (click)="OpenBootstrapWizard(SelectedSummary.Integration, $event)"
                       title="Bootstrap from Azure SQL Server Backup">
                 <i class="fa-solid fa-cloud-arrow-down"></i>
@@ -789,7 +787,7 @@
           <div class="step-content">
             <h3 class="step-title">How do you want to connect?</h3>
             <div class="connect-mode-selector">
-              <div class="connect-mode-card" (click)="ChooseConnectMode('credentials')">
+              <div class="connect-mode-card" mjClickable="Specify credentials" (click)="ChooseConnectMode('credentials')">
                 <div class="connect-mode-icon">
                   <i class="fa-solid fa-key"></i>
                 </div>
@@ -798,7 +796,7 @@
                   <span class="connect-mode-desc">Connect to a live SQL Server with a connection credential</span>
                 </div>
               </div>
-              <div class="connect-mode-card" (click)="ChooseConnectMode('archive')">
+              <div class="connect-mode-card" mjClickable="Choose an archive" (click)="ChooseConnectMode('archive')">
                 <div class="connect-mode-icon">
                   <i class="fa-solid fa-box-archive"></i>
                 </div>
@@ -1205,8 +1203,9 @@
 }
     <!-- Bootstrap Wizard Modal -->
     <app-bootstrap-wizard
-      [IsOpen]="BootstrapWizardOpen"
       [CompanyIntegration]="SelectedBootstrapIntegration"
+      [IsOpen]="BootstrapWizardOpen"
+      [Provider]="Provider"
       (Closed)="CloseBootstrapWizard()"
       (Completed)="OnBootstrapCompleted($event)">
     </app-bootstrap-wizard>

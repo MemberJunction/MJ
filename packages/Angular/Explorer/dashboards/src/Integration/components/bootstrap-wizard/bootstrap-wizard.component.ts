@@ -3,10 +3,8 @@ import {
   Component,
   EventEmitter,
   Input,
-  OnChanges,
   OnDestroy,
   Output,
-  SimpleChanges,
   inject
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -38,20 +36,44 @@ export type ExecutionStatusType = 'idle' | 'running' | 'succeeded' | 'failed';
   standalone: false,
   selector: 'app-bootstrap-wizard',
   templateUrl: './bootstrap-wizard.component.html',
-  styleUrls: ['./bootstrap-wizard.component.css']
+  styleUrls: ['../shared/backup-wizard.css', './bootstrap-wizard.component.css']
 })
-export class BootstrapWizardComponent extends BaseAngularComponent implements OnChanges, OnDestroy {
+export class BootstrapWizardComponent extends BaseAngularComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private integrationService = inject(IntegrationDataService);
 
+  /** Bind before IsOpen: opening names the staging database after this connection. */
   @Input() CompanyIntegration: MJCompanyIntegrationEntity | null = null;
-  @Input() IsOpen = false;
+
+  private isOpen = false;
+  /** Opening resets the wizard to step 1; closing stops following the run (it continues on the server). */
+  @Input()
+  set IsOpen(value: boolean) {
+    const opening = value && !this.isOpen;
+    const closing = !value && this.isOpen;
+    this.isOpen = value;
+    if (opening) {
+      this.resetWizard();
+    }
+    if (closing) {
+      this.stopFollowing();
+    }
+  }
+  get IsOpen(): boolean {
+    return this.isOpen;
+  }
 
   @Output() Closed = new EventEmitter<void>();
   @Output() Completed = new EventEmitter<BootstrapResultSummary>();
 
   // Wizard state
   CurrentStep: WizardStepType = 1;
+  readonly Steps: ReadonlyArray<{ Number: WizardStepType; Label: string }> = [
+    { Number: 1, Label: 'Backup Config' },
+    { Number: 2, Label: 'Preview & Inspect' },
+    { Number: 3, Label: 'Execution' },
+    { Number: 4, Label: 'Completion' },
+  ];
 
   // Step 1: Configuration — the backup source half is owned by <app-backup-source-picker>
   Source: BackupSourceValue = DefaultBackupSourceValue();
@@ -79,12 +101,6 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
 
   // Step 4: Completion
   ResultSummary: BootstrapResultSummary | null = null;
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['IsOpen'] && this.IsOpen) {
-      this.resetWizard();
-    }
-  }
 
   ngOnDestroy(): void {
     this.stopTimer();
@@ -229,10 +245,15 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   }
 
   public Close(): void {
+    this.stopFollowing();
+    this.Closed.emit();
+  }
+
+  /** Stops the timer and polling; clearing RunID makes any in-flight poll discard its answer. */
+  private stopFollowing(): void {
     this.stopTimer();
     this.stopPolling();
     this.RunID = null;
-    this.Closed.emit();
   }
 
   public Finish(): void {

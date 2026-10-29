@@ -288,6 +288,15 @@ describe('ArchiveSeedWizardComponent', () => {
     expect(wizard.Completed.emit).toHaveBeenCalledWith(expect.objectContaining({ Success: true, TablesProcessed: 3, StagingDatabaseDropped: true }));
   });
 
+  it('ResumeJobID matching the followed job in a different case does not restart following it', () => {
+    const { wizard, service } = createWizard();
+    (wizard as unknown as Record<string, unknown>)['isOpen'] = true;
+    wizard.JobID = 'ab12cd34-0000-4000-8000-00000000000a';
+    wizard.ResumeJobID = 'AB12CD34-0000-4000-8000-00000000000A';
+    expect(service.GetArchiveSeedState).not.toHaveBeenCalled();
+    expect(wizard.JobID).toBe('ab12cd34-0000-4000-8000-00000000000a');
+  });
+
   it('opening the wizard defaults the staging name to the server prefix, unique per open', () => {
     const { wizard } = createWizard();
     const now = vi.spyOn(Date, 'now');
