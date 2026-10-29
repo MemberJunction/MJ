@@ -7,7 +7,7 @@ import {
 } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { ComputeComponentFingerprintAsync, MJComponentEntityExtended } from "@memberjunction/core-entities";
-import { EmbedTextLocalHelper } from "./util";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import { FormScopeRefusalResult } from "./FormScopeGuard";
 import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponentGuard";
 import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
@@ -103,6 +103,11 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
      */
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
+    }
+
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
     }
 
     /** This component as the guard reads it. Built here because `ActiveUser` is protected on `BaseEntity`. */
