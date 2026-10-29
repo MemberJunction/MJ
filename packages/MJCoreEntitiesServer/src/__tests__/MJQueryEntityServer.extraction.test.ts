@@ -110,12 +110,16 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 });
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: {} } }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('../custom/util', () => ({ EmbedTextLocalHelper: vi.fn().mockResolvedValue({ vector: [1, 2], modelID: 'm' }) }));
+vi.mock('../custom/util', () => ({
+    EmbedTextLocalHelper: vi.fn().mockResolvedValue({ vector: [1, 2], modelID: 'm' }),
+    IsLocalEmbeddingStaleHelper: vi.fn().mockResolvedValue(false),
+}));
 vi.mock('../custom/approvalStamp', () => ({ ApplyApprovalRulesAsync: vi.fn().mockResolvedValue(false), ApprovalRefusalResult: vi.fn() }));
 
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { MJQuerySQLEntityServer } from '../custom/MJQuerySQLEntityServer.server';
 import { RunDescriptionPass } from '../custom/query-extraction/descriptionPass';
+import { IsLocalEmbeddingStaleHelper } from '../custom/util';
 
 /** A SQL Server database provider stub: a real `DatabaseProviderBase` prototype, so the entity treats it as one. */
 function sqlServerProvider(): DatabaseProviderBase {
@@ -236,6 +240,30 @@ describe('MJQueryEntityServer Save — extraction', () => {
         const embedded = createQuery();
         await embedded.Save();
         expect(embedded.EmbeddingVector).toBe('[1,2]');
+    });
+
+    it('re-embeds a saved query whose text is unchanged when its stored vector is from a stale model', async () => {
+        vi.mocked(IsLocalEmbeddingStaleHelper).mockResolvedValueOnce(true);
+        const query = createQuery();
+        query.IsSaved = true; query.SQLDirty = false;
+        await query.Save();
+        expect(query.EmbeddingVector).toBe('[1,2]');
+    });
+
+    it('keeps the stored vector of an unchanged query when its model is current', async () => {
+        const query = createQuery();
+        query.IsSaved = true; query.SQLDirty = false;
+        await query.Save();
+        expect(query.EmbeddingVector).toBe('stored-vector');
+    });
+
+    it('does not check the stored vector\'s model when SkipEmbeddings is set', async () => {
+        vi.mocked(IsLocalEmbeddingStaleHelper).mockClear();
+        const query = createQuery();
+        query.IsSaved = true; query.SQLDirty = false; query.SkipEmbeddings = true;
+        await query.Save();
+        expect(IsLocalEmbeddingStaleHelper).not.toHaveBeenCalled();
+        expect(query.EmbeddingVector).toBe('stored-vector');
     });
 
     it('M6: RerunExtraction forces a refresh from the SQL it is given', async () => {

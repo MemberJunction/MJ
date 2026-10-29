@@ -252,13 +252,26 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
     private _pendingSlotInvalidations = new Map<string, ReturnType<typeof setTimeout>>();
 
     /**
+     * The default settle window, in milliseconds, before an edited query's cached results are
+     * deleted. Settable so a harness can collapse it: a test that edits a query and then wants to
+     * observe the deletion otherwise has to sleep past this window on every such check, and a test
+     * that warms a slot after creating a fixture has to sleep past it to avoid the deletion landing
+     * mid-check. Mirrors {@link ProviderBase.MetadataDatasetRefreshDebounceMs}, which exists for
+     * the same reason.
+     *
+     * Lower it only in a harness. In a real process the window is what makes the deletion happen
+     * once per edit instead of once per save in the burst — see the instance getter.
+     */
+    public static DefaultDefinitionEditSettleMs: number = 3000;
+
+    /**
      * How long, in milliseconds, a query must go without a result-affecting save on this process
      * before its cached results are deleted. One edit saves the query, then its parameters, fields,
      * entities and dependencies, then the query again, over several seconds; waiting for the burst
      * to settle deletes the slots once instead of once per save.
      */
     protected get DefinitionEditSettleMs(): number {
-        return 3000;
+        return QueryEngine.DefaultDefinitionEditSettleMs;
     }
 
     /**

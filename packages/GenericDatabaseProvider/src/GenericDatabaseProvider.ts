@@ -8178,7 +8178,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * `AIEngine.Models` to recover the driver class / APIName and call
      * `EmbedText(model, text)` directly. If the EntityDocument does not specify
      * a model (or the model isn't loaded) we fall back to
-     * `EmbedTextLocal` (highest-power local model) only as a last resort.
+     * `EmbedTextLocal` (the default local model) only as a last resort. The search
+     * text is embedded as a query (`inputType: 'query'`). The index's
+     * `VectorIndex.Dimensions` is not passed, so this pass assumes an index stored at
+     * the model's native size.
      *
      * Vector ranking runs against the in-process `SimpleVectorServiceProvider`,
      * which rehydrates the vector pool for `entityDocumentId` from
@@ -8211,14 +8214,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
                     return [];
                 }
-                const result = await AIEngine.Instance.EmbedText(model, searchText);
+                const result = await AIEngine.Instance.EmbedText(model, searchText, undefined, { inputType: 'query' });
                 queryVector = result?.vector ?? null;
             } else {
                 // No model on the EntityDocument — last-resort fallback to the
                 // highest-power local embedder. Logged because this path means
                 // indexing-time and query-time models can diverge.
-                LogError(`searchEntitiesSemanticPass: no AIModelID on EntityDocument "${entityDocumentId}"; falling back to highest-power local embedding model. Index/query mismatch possible.`);
-                const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
+                LogError(`searchEntitiesSemanticPass: no AIModelID on EntityDocument "${entityDocumentId}"; falling back to the default local embedding model. Index/query mismatch possible.`);
+                const embed = await AIEngine.Instance.EmbedTextLocal(searchText, { inputType: 'query' });
                 queryVector = embed?.result?.vector ?? null;
             }
         } catch (e) {

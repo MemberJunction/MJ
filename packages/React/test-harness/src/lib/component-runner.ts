@@ -2747,7 +2747,7 @@ export class ComponentRunner {
           // Generate embeddings for all texts
           const embeddings: number[][] = [];
           for (const text of texts) {
-            const result = await aiEngine.EmbedText(model, text);
+            const result = await aiEngine.EmbedText(model, text, undefined, { inputType: params.inputType });
             if (result && result.vector) {
               embeddings.push(result.vector);
             } else {

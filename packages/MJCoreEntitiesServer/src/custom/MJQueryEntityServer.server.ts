@@ -27,7 +27,7 @@ import {
 import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { GenericDatabaseProvider, UserCache } from "@memberjunction/generic-database-provider";
 import { CompositionFullPath } from "@memberjunction/sql-parser";
-import { EmbedTextLocalHelper } from "./util";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import {
     CleanupQueryData,
     ConvertTSQLToPostgreSQL,
@@ -126,6 +126,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
 
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
+    }
+
     /**
      * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
      * Stores the vector in EmbeddingVector (JSON) and EmbeddingVectorBinary (float32 bytes, base64), and the
@@ -138,8 +143,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      *
      * Does nothing when {@link SkipEmbeddings} is set (a bulk load computes them later), so the stored
      * vector is left as it is.
+     *
+     * @param textChanged - false when the text is unchanged and only the stored vector's model is stale:
+     *   a failed embed then keeps the existing vector, which still matches the text.
      */
-    protected async GenerateCompositeEmbedding(): Promise<void> {
+    protected async GenerateCompositeEmbedding(textChanged: boolean = true): Promise<void> {
         if (this.SkipEmbeddings) {
             return;
         }
@@ -166,7 +174,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         } catch (error) {
             LogError(`[MJQueryEntityServer] Embedding refresh failed for query "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
         }
-        this.clearEmbedding();
+        if (textChanged) {
+            this.clearEmbedding();
+        }
     }
 
     /** Clears the stored vector (both forms) and the model it was computed with. */
@@ -176,13 +186,12 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         this.EmbeddingModelID = null;
     }
 
-    /** Re-embeds when the embedded text changed; clears a stale vector when there is no description. */
+    /** Re-embeds when the embedded text changed, or when the stored vector came from a model other than the default local one. */
     private async refreshEmbeddingAsync(): Promise<void> {
-        const changed = !this.IsSaved || ['Name', 'Description', 'UserQuestion'].some(f => this.GetFieldByName(f).Dirty);
-        if (changed) {
-            await this.GenerateCompositeEmbedding();
-        } else if ((!this.Description || this.Description.trim().length === 0) && !this.SkipEmbeddings) {
-            this.clearEmbedding();
+        if (this.SkipEmbeddings) return;
+        const textChanged = !this.IsSaved || ['Name', 'Description', 'UserQuestion'].some(f => this.GetFieldByName(f).Dirty);
+        if (textChanged || (this.EmbeddingVector != null && await this.IsEmbeddingStale(this.EmbeddingModelID))) {
+            await this.GenerateCompositeEmbedding(textChanged);
         }
     }
 

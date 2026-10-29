@@ -1525,7 +1525,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (164 classes)
+// @memberjunction/core-actions (165 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1644,6 +1644,7 @@ import {
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2909,6 +2910,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
