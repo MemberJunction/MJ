@@ -1,5 +1,75 @@
 # @memberjunction/credentials
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- cc41d33: Chief of Staff Phase 2: Executive Cockpit, event-driven agent wakes, and a per-user OAuth prototype.
+  - **Executive Cockpit (`ChiefOfStaffDashboardComponent`, `@memberjunction/ng-dashboards`).** A new Explorer surface registered as `ChiefOfStaffDashboard` with four tabs: an overview of counts, Priorities & OKRs built from `MJ_BizApps_Tasks: Tasks` when that OpenApp is installed, Approvals & Wakes (one-click Approve/Reject on pending `MJ: AI Agent Requests`, Wake Now / pause / resume on `MJ: User Routines` of type `AgentWake`), and a Governance tab that edits the user's `MJ: AI Agent User Policies` row. Tab, health filter and search round-trip through query params. The cockpit publishes read-only agent context and navigation tools; approvals, policy saves, wakes and task edits are deliberately not exposed to the agent. Metadata adds an opt-in `Chief of Staff` application whose only nav item is the cockpit.
+  - **Event-driven agent wakes (`AgentWakeTriggerService`, `@memberjunction/ai-agents`).** When an action-created `MJ: AI Agent Requests` row moves from `Requested` to `Approved`, `Rejected` or `Responded`, or a new inter-agent request is created, `MJAIAgentRequestEntityServer.Save()` upserts a one-shot `AgentWake` routine with the resolved request in `resumeState`, so the owning user's agent runs on the dispatcher's next sweep instead of waiting for its cron. A routing method for inbound utility-mailbox email is included but has no ingestion caller yet.
+  - **Per-user OAuth 2.0 (3LO) prototype (`CommunicationUserOAuthService`, `@memberjunction/core-actions`; `@memberjunction/credentials`).** PKCE S256 authorization flow with four enterprise gates (admin opt-in, allowed email domains, allowed tenant IDs, strict principal match) and owner-bound credential storage: `CredentialEngine.StoreUserDelegatedCredential` / `GetUserDelegatedCredential` / `RevokeUserDelegatedCredential`, with `CredentialOwnerMismatchError` thrown when a delegated credential is resolved by a different user. Off by default: the administrator gates (`AllowUserDelegatedOAuth`, `AllowedEmailDomains`, `AllowedOAuthTenantIDs`) live on `MJ: Communication Providers` and credentials are stored through `CredentialEngine`; there are no API routes or token transport implementation yet, and no communication provider consumes the stored token.
+  - **Chief of Staff actions.** Approval requests created by the calendar/email, inter-agent and outbound-call actions now carry the `Approval` request type. The agent prompt template and action descriptions name the BizApps entities correctly (`MJ_BizApps_Tasks: Tasks`, `MJ_BizApps_Issues: Issues`) and warn against querying system catalogs.
+  - **Review follow-ups.** The approval-creating actions resolve the `Approval` type through `AIEngine.Instance.ResolveAgentRequestTypeID` (the request-type cache shipped with the CRUD key-shape fix) instead of a hardcoded id (new result code `REQUEST_TYPE_NOT_FOUND`); the cockpit resolves the agent by name too. The inter-agent and outbound-call actions are renamed after what they do: `Send Inter-Agent Request` (`SendInterAgentRequestAction`, envelope type `InterAgentCoordinationEnvelope`, delivery mode `InterAgent`; the previous `InterAgentCoS` value is still accepted on in-flight rows) and `Prepare Outbound Call Brief` (`PrepareOutboundCallBriefAction`, `OutboundCallBrief`). `AgentWakeTriggerService` resolves inbound-mailbox senders through `UserCache` (roles loaded) and serializes wake upserts per user, agent and workstream. `CredentialEngine` hides `UserOAuth3LO:*` rows from the shared accessors (`Credentials`, `GetCredentialById`, `GetCredentialByName`, `GetDefaultCredentialForType`), checks the stored owner before overwriting a delegated row, and serializes the delegated create path.
+
+- e8e6cd6: Enforce credential expiration in `CredentialEngine`.
+
+  `Credential.ExpiresAt` has existed since v2.129, the credential editor lets you set it, and the Credentials dashboard counts expired and expiring-soon credentials. Nothing enforced it. `CredentialEngine.getCredential()` filtered on `IsActive` only, so an expired credential resolved and was handed to callers exactly like a live one — despite the column's own description promising that "expired credentials are treated as inactive". Operators could see an expiry date in the UI and reasonably believe it meant something.
+
+  **Enforcement.** Expiry is now evaluated in `getCredential()`, at resolution time rather than at cache-load time — the engine caches credential rows for the life of the process, so a credential that lapses between two calls is caught on the second call rather than staying live until the next refresh. The check runs before the values are decrypted, so a blocked credential never reaches the caller.
+
+  **Policy** is configurable via `CredentialEngine.Instance.ExpirationConfig`:
+  - `policy: 'block'` (default) throws `CredentialExpiredError`.
+  - `policy: 'warn'` returns the credential flagged and logged — an escape hatch for cleaning up stale expiry dates, not a safe steady state.
+  - `graceMs` (default `0`) lets a `'block'` policy tolerate a short, noisy overrun where a hard cutoff at the expiry instant is riskier than the overrun. Grace never changes the reported status: a credential inside grace still reports `expired`, so dashboards and audit logs stay truthful.
+  - `warningWindowMs` (default 30 days, matching the dashboard's existing "expiring soon" KPI window) controls when a credential begins reporting `expiring-soon` and warning. It never blocks.
+
+  **Typed errors.** `CredentialExpiredError` and `CredentialNotFoundError` (both extending `CredentialResolutionError`) let callers tell a credential that needs rotating from one that does not exist — previously both surfaced as "Credential not found", sending operators hunting for a record that was sitting right there. `CredentialNotFoundError`'s message is byte-identical to the string thrown before, so callers matching on message text keep working.
+
+  **Lookup semantics.** `getCredentialByName()` and `getDefaultCredentialForType()` now exclude expired credentials. `getCredentialById()` deliberately does not: addressing by primary key is an exact request, and rotation tooling must be able to load an expired record in order to replace it. The same need is served per-call by the new `expirationPolicy` option.
+
+  **Consolidation.** `AIPromptRunner` had hand-rolled `new Date(c.ExpiresAt) < new Date()` comparisons in two places and none on its resolve-by-ID path — the inconsistency that having no shared primitive produces. Both now call `CredentialEngine.GetExpirationStatus()`, so the failover path honors the same window and grace period the engine applies.
+
+  `ResolvedCredential` gains `expirationStatus` and `daysUntilExpiration`, and every resolution records its expiration status in the audit log so an auditor can answer "was any credential used while expired?".
+
+  ⚠️ **Behavior change.** Under the default `'block'` policy, an expired credential that previously resolved now throws. Any deployment carrying stale `ExpiresAt` values will see failures on upgrade where it previously saw silent success. This is the intended correction — the credential was already expired and the platform was ignoring it — but it is worth an inventory query before rolling out:
+
+  ```sql
+  SELECT ID, Name, ExpiresAt FROM __mj.Credential
+  WHERE IsActive = 1 AND ExpiresAt IS NOT NULL AND ExpiresAt <= SYSDATETIMEOFFSET();
+  ```
+
+  Deployments that need a staged rollout can start on `policy: 'warn'` (or a non-zero `graceMs`) and tighten once that query comes back empty.
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

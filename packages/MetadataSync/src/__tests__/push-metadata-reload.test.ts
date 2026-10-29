@@ -179,9 +179,10 @@ function makeSyncEngine(): SyncEngine {
         setMetadataEngine: vi.fn(),
         getProvider: () => host,
         calculateChecksum: () => 'checksum',
+        CalculateChecksumWithFileContent: async () => 'checksum',
         WarningSink: undefined,
         getEntityInfo: () => ({ PrimaryKeys: [{ Name: 'ID' }] }),
-        loadEntity: async () => ({
+        LoadEntityFromDatabase: async () => ({
             Get: () => 'id-1',
             Delete: async () => {
                 host.events.push('delete:metadata');

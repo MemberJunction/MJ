@@ -7,7 +7,14 @@
  * derived from the object's fields.
  *
  * Output is designed to be written directly to /metadata/ for `mj sync push`.
+ *
+ * Every generated Action, Action Param and Action Result Code carries a `primaryKey`: `mj sync push`
+ * inserts a record without one as a new row on every push. Pass the previously generated records as
+ * {@link ActionGeneratorConfig.ExistingActionRecords} to keep their IDs, so regenerating and pushing
+ * again updates the same rows.
  */
+
+import { Uuidv4, UUIDSet } from '@memberjunction/global';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -78,11 +85,38 @@ export interface ActionGeneratorConfig {
     ParentCategoryName?: string;
     /** Whether to emit a category record. Defaults to true. Set false if the category already exists in metadata. */
     CreateCategory?: boolean;
+    /**
+     * The action records this generator wrote last time (the parsed `.<integration>-actions.json`).
+     * Their primary keys are reused for the same records, matched by action `Name`, param `Name` +
+     * `Type`, and `ResultCode`, so a regenerated file updates the rows a previous push created.
+     * Records with no match get a new ID.
+     */
+    ExistingActionRecords?: ExistingActionRecord[];
+}
+
+/** An mj-sync record's primary key */
+interface MetadataPrimaryKey {
+    ID: string;
+}
+
+/** A previously generated record as it reads back from mj-sync JSON; only names and keys are used. */
+export interface ExistingMetadataRecord {
+    // case-violation-ok-legacy-back-compat: mirrors the mj-sync JSON record format
+    fields?: Record<string, unknown>;
+    // case-violation-ok-legacy-back-compat: mirrors the mj-sync JSON record format
+    primaryKey?: { ID?: string };
+}
+
+/** A previously generated action, with the nested records whose keys can be reused. */
+export interface ExistingActionRecord extends ExistingMetadataRecord {
+    // case-violation-ok-legacy-back-compat: mirrors the mj-sync JSON record format
+    relatedEntities?: Record<string, ExistingMetadataRecord[] | undefined>;
 }
 
 /** A single generated action record in mj-sync format */
 interface ActionRecord {
     fields: Record<string, unknown>;
+    primaryKey: MetadataPrimaryKey;
     relatedEntities: {
         'MJ: Action Params': ActionParamRecord[];
         'MJ: Action Result Codes': ActionResultCodeRecord[];
@@ -92,11 +126,13 @@ interface ActionRecord {
 /** A single generated action param record in mj-sync format */
 interface ActionParamRecord {
     fields: Record<string, unknown>;
+    primaryKey: MetadataPrimaryKey;
 }
 
 /** A single generated result code record in mj-sync format */
 interface ActionResultCodeRecord {
     fields: Record<string, unknown>;
+    primaryKey: MetadataPrimaryKey;
 }
 
 /** A single generated category record in mj-sync format */
@@ -132,6 +168,7 @@ export class ActionMetadataGenerator {
         for (const obj of config.Objects) {
             actions.push(...this.generateActionsForObject(config, obj));
         }
+        this.reuseExistingKeys(actions, config.ExistingActionRecords ?? []);
 
         return {
             SyncConfig: this.buildSyncConfig(),
@@ -355,6 +392,7 @@ export class ActionMetadataGenerator {
         };
 
         return {
+            primaryKey: this.newPrimaryKey(),
             fields: {
                 Name: `${config.IntegrationName} - ${verb} ${displayName}`,
                 Description: description,
@@ -379,6 +417,7 @@ export class ActionMetadataGenerator {
         description: string
     ): ActionParamRecord {
         return {
+            primaryKey: this.newPrimaryKey(),
             fields: {
                 ActionID: '@parent:ID',
                 Name: name,
@@ -393,6 +432,7 @@ export class ActionMetadataGenerator {
 
     private fieldToInputParam(field: IntegrationFieldInfo, requiredOverride?: boolean): ActionParamRecord {
         return {
+            primaryKey: this.newPrimaryKey(),
             fields: {
                 ActionID: '@parent:ID',
                 Name: field.Name,
@@ -407,6 +447,7 @@ export class ActionMetadataGenerator {
 
     private fieldToOutputParam(field: IntegrationFieldInfo): ActionParamRecord {
         return {
+            primaryKey: this.newPrimaryKey(),
             fields: {
                 ActionID: '@parent:ID',
                 Name: field.Name,
@@ -421,19 +462,93 @@ export class ActionMetadataGenerator {
 
     private buildStandardResultCodes(verb: IntegrationActionVerb): ActionResultCodeRecord[] {
         const codes: ActionResultCodeRecord[] = [
-            { fields: { ActionID: '@parent:ID', ResultCode: 'SUCCESS', IsSuccess: true, Description: `${verb} operation completed successfully` } },
-            { fields: { ActionID: '@parent:ID', ResultCode: 'EXECUTOR_ERROR', IsSuccess: false, Description: 'Internal executor error' } },
+            this.buildResultCode('SUCCESS', true, `${verb} operation completed successfully`),
+            this.buildResultCode('EXECUTOR_ERROR', false, 'Internal executor error'),
         ];
 
         if (verb === 'Get') {
-            codes.push({ fields: { ActionID: '@parent:ID', ResultCode: 'NOT_FOUND', IsSuccess: false, Description: 'Record not found' } });
+            codes.push(this.buildResultCode('NOT_FOUND', false, 'Record not found'));
         }
         if (verb === 'Create' || verb === 'Update' || verb === 'Delete' || verb === 'Upsert') {
-            codes.push({ fields: { ActionID: '@parent:ID', ResultCode: `${verb.toUpperCase()}_FAILED`, IsSuccess: false, Description: `${verb} operation failed` } });
-            codes.push({ fields: { ActionID: '@parent:ID', ResultCode: 'NOT_SUPPORTED', IsSuccess: false, Description: `${verb} not supported by this connector` } });
+            codes.push(this.buildResultCode(`${verb.toUpperCase()}_FAILED`, false, `${verb} operation failed`));
+            codes.push(this.buildResultCode('NOT_SUPPORTED', false, `${verb} not supported by this connector`));
         }
 
         return codes;
+    }
+
+    private buildResultCode(resultCode: string, isSuccess: boolean, description: string): ActionResultCodeRecord {
+        return {
+            primaryKey: this.newPrimaryKey(),
+            fields: { ActionID: '@parent:ID', ResultCode: resultCode, IsSuccess: isSuccess, Description: description },
+        };
+    }
+
+    // ─── Primary Keys ────────────────────────────────────────────────
+
+    /** A new primary key, upper-case like the IDs elsewhere in MJ metadata. */
+    private newPrimaryKey(): MetadataPrimaryKey {
+        return { ID: Uuidv4().toUpperCase() };
+    }
+
+    /**
+     * Gives each generated record the ID its counterpart had in the previous output, so a
+     * regenerated file updates rather than duplicates. An ID is never handed out twice: if two
+     * generated records match the same existing one, the second keeps its new ID.
+     */
+    private reuseExistingKeys(actions: ActionRecord[], existing: ExistingActionRecord[]): void {
+        if (existing.length === 0) return;
+        const used = new UUIDSet();
+        const existingActions = this.indexByKey(existing, r => this.textField(r, 'Name'));
+        for (const action of actions) {
+            const previous = existingActions.get(this.textField(action, 'Name'));
+            this.reuseKey(action, previous, used);
+            if (!previous) continue;
+            const related = previous.relatedEntities ?? {};
+            this.reuseKeysForChildren(action.relatedEntities['MJ: Action Params'], related['MJ: Action Params'] ?? [],
+                r => `${this.textField(r, 'Name')}|${this.textField(r, 'Type')}`, used);
+            this.reuseKeysForChildren(action.relatedEntities['MJ: Action Result Codes'], related['MJ: Action Result Codes'] ?? [],
+                r => this.textField(r, 'ResultCode'), used);
+        }
+    }
+
+    private reuseKeysForChildren(
+        generated: Array<{ fields: Record<string, unknown>; primaryKey: MetadataPrimaryKey }>,
+        existing: ExistingMetadataRecord[],
+        naturalKey: (record: ExistingMetadataRecord) => string,
+        used: UUIDSet
+    ): void {
+        const byKey = this.indexByKey(existing, naturalKey);
+        for (const record of generated) {
+            this.reuseKey(record, byKey.get(naturalKey(record)), used);
+        }
+    }
+
+    /** Copies the previous record's ID onto the generated one, unless it is missing or already taken. */
+    private reuseKey(
+        record: { primaryKey: MetadataPrimaryKey },
+        previous: ExistingMetadataRecord | undefined,
+        used: UUIDSet
+    ): void {
+        const previousID = previous?.primaryKey?.ID?.trim();
+        if (!previousID || used.Has(previousID)) return;
+        record.primaryKey = { ID: previousID };
+        used.Add(previousID);
+    }
+
+    /** First record per natural key; records with an empty key are skipped. */
+    private indexByKey<T extends ExistingMetadataRecord>(records: T[], naturalKey: (record: T) => string): Map<string, T> {
+        const index = new Map<string, T>();
+        for (const record of records) {
+            const key = naturalKey(record);
+            if (key && !index.has(key)) index.set(key, record);
+        }
+        return index;
+    }
+
+    private textField(record: ExistingMetadataRecord, field: string): string {
+        const value = record.fields?.[field];
+        return typeof value === 'string' ? value : '';
     }
 
     // ─── .mj-sync.json ──────────────────────────────────────────────

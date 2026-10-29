@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url';
 
 const componentCss = readFileSync(fileURLToPath(new URL('../lib/explorer-app.component.css', import.meta.url)), 'utf8');
 const componentHtml = readFileSync(fileURLToPath(new URL('../lib/explorer-app.component.html', import.meta.url)), 'utf8');
+const componentTs = readFileSync(fileURLToPath(new URL('../lib/explorer-app.component.ts', import.meta.url)), 'utf8');
 
 describe('login surface theming contract', () => {
   it('references no primitive tokens (they do not adapt to dark mode or theming)', () => {
@@ -243,5 +244,21 @@ describe('login surface overflow contract', () => {
     expect(wrapper).not.toMatch(/justify-content:\s*center/);
     expect(ruleBody('.login-wrapper--centered .main-banner')).toContain('margin-top: auto');
     expect(ruleBody('.login-wrapper--centered .login-btn')).toContain('margin-bottom: auto');
+  });
+});
+
+/**
+ * First-paint brand overlay: the org brand's persisted CSS must be re-injected before the login
+ * screen or the shell's loading screen paints. The only code that runs that early is this
+ * component's constructor, so it must call the theme service's restore. Pinned on the source,
+ * like the login contract above: the component takes ~20 injected services and no harness
+ * here builds it with DI.
+ */
+describe('first-paint brand overlay restore', () => {
+  it('the constructor restores the persisted org brand overlay before anything renders', () => {
+    const ctor = componentTs.slice(componentTs.indexOf('  constructor('));
+    const body = ctor.slice(ctor.indexOf(') {'), ctor.indexOf('\n  }\n'));
+    // A live statement, not a substring: a commented-out call would still `toContain`.
+    expect(body).toMatch(/^\s*this\.themeService\.RestorePersistedBrandOverlay\(\);/m);
   });
 });

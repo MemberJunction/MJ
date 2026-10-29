@@ -11,6 +11,7 @@
  * @author MemberJunction.com
  */
 
+import { createHash } from 'crypto';
 import { GoogleGenAI, Modality, type GoogleGenAIOptions, type LiveConnectConfig, type LiveConnectParameters } from '@google/genai';
 import { GoogleAuth, type GoogleAuthOptions } from 'google-auth-library';
 import {
@@ -32,7 +33,7 @@ import {
     type GeminiLiveSession,
     type GeminiLiveSetupTarget,
 } from '@memberjunction/ai-gemini';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseSingleton, MJLruCache, RegisterClass } from '@memberjunction/global';
 import {
     AssertVertexKeyFileAllowed,
     AssertVertexLiveHostAllowed,
@@ -109,6 +110,35 @@ export interface GeminiEnterpriseLiveClient {
 }
 
 /**
+ * Process-wide bounded cache of `VertexGoogleAuth` instances keyed by a SHA-256 hash of the credential source
+ * and payload — inline service-account keys only, whose JSON is the key material. Because `RealtimeClientSessionService` instantiates a fresh `GeminiEnterpriseRealtime` per session
+ * via `ClassFactory.CreateInstance`, caching inside `CreateGoogleAuth` preserves `google-auth-library`'s ~55-minute
+ * OAuth access-token cache across concurrent sessions while letting subclasses that override `CreateGoogleAuth`
+ * naturally supply their own auth client.
+ */
+class GeminiEnterpriseAuthCache extends BaseSingleton<GeminiEnterpriseAuthCache> {
+    private readonly authByCredentialHash = new MJLruCache<string, VertexGoogleAuth>({ maxSize: 64 });
+
+    public constructor() {
+        super();
+    }
+
+    public static get Instance(): GeminiEnterpriseAuthCache {
+        return GeminiEnterpriseAuthCache.getInstance<GeminiEnterpriseAuthCache>();
+    }
+
+    public GetOrCreate(credentialHash: string, create: () => VertexGoogleAuth): VertexGoogleAuth {
+        const existing = this.authByCredentialHash.Get(credentialHash);
+        if (existing) {
+            return existing;
+        }
+        const created = create();
+        this.authByCredentialHash.Set(credentialHash, created);
+        return created;
+    }
+}
+
+/**
  * Gemini Live on **Gemini Enterprise** (Vertex AI), with live avatars where the model renders them.
  *
  * Registered as `GeminiEnterpriseRealtime`. Its key (`AI_VENDOR_API_KEY__GeminiEnterpriseRealtime`, or the run's key) is
@@ -139,6 +169,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
     private readonly credentialsProblem: string | null;
     /** Whether the key is the platform's environment key, the only key that may name a key file. */
     private readonly keySource: VertexKeySource;
+    private readonly credentialHash: string | null;
     private tokenProvider: VertexAccessTokenProvider | null = null;
     private vertexClient: Promise<GeminiEnterpriseLiveClient> | null = null;
 
@@ -152,6 +183,9 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
         this.credentials = read.Credentials;
         this.credentialsProblem = read.Problem;
         this.keySource = VertexKeySourceOf(DRIVER_CLASS, credentialsJson);
+        this.credentialHash = GeminiEnterpriseRealtime.holdsKeyMaterial(read.Credentials)
+            ? createHash('sha256').update(`${this.keySource}|${credentialsJson}`).digest('hex')
+            : null;
     }
 
     /** Gemini Enterprise: what a model renders (live avatars) is looked up on this endpoint. */
@@ -232,11 +266,17 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
 
     /**
      * Creation seam for the `GoogleAuth` that mints this driver's tokens (tests return a fake).
+     * Shares the underlying `GoogleAuth` across driver instances with an identical inline service-account key (keyed by
+     * SHA-256 hash) so `google-auth-library`'s OAuth token cache survives across sessions. A key-file or ADC key gets a
+     * fresh one each time (see {@link holdsKeyMaterial}).
      *
      * @param options The credentials' `google-auth-library` options, with the `cloud-platform` scope.
      */
     protected CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
-        return new GoogleAuth(options);
+        if (!this.credentialHash) {
+            return new GoogleAuth(options);
+        }
+        return GeminiEnterpriseAuthCache.Instance.GetOrCreate(this.credentialHash, () => new GoogleAuth(options));
     }
 
     /**
@@ -335,6 +375,15 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             const problem = error instanceof VertexCredentialsError ? CREDENTIALS_PROBLEMS[error.Problem] : 'is not a JSON object';
             return { Credentials: null, Problem: problem };
         }
+    }
+
+    /**
+     * Whether the key JSON itself holds the key material (an inline service account), so a hash of the JSON identifies
+     * the credential. A key-file path or Application Default Credentials point at material that can change behind the
+     * same JSON — a rotated key file keeps its path — so their `GoogleAuth` must not be shared across sessions.
+     */
+    private static holdsKeyMaterial(credentials: VertexAICredentials | null): boolean {
+        return !!credentials && !credentials.keyFilePath && credentials.type === 'service_account' && !!credentials.private_key;
     }
 
     /**

@@ -21,3 +21,12 @@
 .part-dialog__error { margin: var(--mj-space-2) 0 0; font-size: 13px; color: var(--mj-status-error); }
 .part-dialog__warning { margin: 0 0 var(--mj-space-2); font-size: 13px; color: var(--mj-status-warning-text); }
 @media (max-width: 900px) { .part-dialog__types { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.part-dialog__hint { margin: 0 0 var(--mj-space-2); font-size: 12px; color: var(--mj-text-muted); }
+.part-dialog__inputs { display: flex; flex-direction: column; gap: var(--mj-space-2); }
+.part-dialog__input { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--mj-border-subtle); border-radius: var(--mj-radius-md); }
+.part-dialog__input--broken { flex-direction: row; align-items: center; justify-content: space-between; border-color: var(--mj-status-error-border); color: var(--mj-status-error-text); font-size: 13px; }
+.part-dialog__input-name { font-size: 13px; font-weight: var(--mj-font-semibold); color: var(--mj-text-primary); }
+.part-dialog__input-type { margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--mj-text-muted); }
+.part-dialog__input-required { margin-left: 2px; color: var(--mj-status-error); }
+.part-dialog__input-note { font-size: 12px; color: var(--mj-text-muted); }
+.part-dialog__input-controls { display: flex; flex-direction: column; gap: 6px; }

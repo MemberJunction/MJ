@@ -21,7 +21,7 @@ vi.mock('type-graphql', () => {
     return Object.fromEntries(exportNames.map((name) => [name, decoratorFactory]));
 });
 
-const runViewCalls: Array<{ params: RunViewParams; contextUser: UserInfo | undefined }> = [];
+const runViewCalls: Array<{ params: RunViewParams; contextUser: UserInfo | undefined; provider: unknown }> = [];
 /** Each RunViews call, as the list of entity names it batched. */
 const runViewsBatches: string[][] = [];
 let runViewHandler: RunViewHandler = () => ({ Success: true, Results: [] });
@@ -29,8 +29,12 @@ let runViewHandler: RunViewHandler = () => ({ Success: true, Results: [] });
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class MockRunView {
+        constructor(private readonly provider?: unknown) {}
+        static FromMetadataProvider(provider: unknown): MockRunView {
+            return new MockRunView(provider);
+        }
         async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<ViewResult> {
-            runViewCalls.push({ params, contextUser });
+            runViewCalls.push({ params, contextUser, provider: this.provider });
             return runViewHandler(params, contextUser);
         }
         async RunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<ViewResult[]> {
@@ -60,9 +64,13 @@ import type { AppContext } from '../types.js';
 const DOC_ID = 'DOC-1';
 const contextUser = new UserInfo();
 
+/** Entity read and field-level security the external-index path checks, per test. */
+const access = { canRead: true, deniedReadFields: new Set<string>() };
+
 const membersEntity = {
     Name: 'Members',
     PrimaryKeys: [{ Name: 'ID' }],
+    FirstPrimaryKey: { Name: 'ID' },
     Fields: [
         { Name: 'ID', IsNameField: false },
         { Name: 'FirstName', IsNameField: true },
@@ -70,11 +78,16 @@ const membersEntity = {
         { Name: 'Email', IsNameField: false },
     ],
     NameField: undefined,
+    GetUserPermisions: (user: UserInfo) => ({ CanRead: user === contextUser && access.canRead }),
+    GetDeniedReadFields: (user: UserInfo) => (user === contextUser ? access.deniedReadFields : new Set<string>()),
 } as unknown as EntityInfo;
 
 const orderLinesEntity = {
     Name: 'Order Lines',
     PrimaryKeys: [{ Name: 'OrderID' }, { Name: 'LineNo' }],
+    FirstPrimaryKey: { Name: 'OrderID' },
+    GetUserPermisions: (user: UserInfo) => ({ CanRead: user === contextUser && access.canRead }),
+    GetDeniedReadFields: () => new Set<string>(),
     Fields: [
         { Name: 'OrderID', IsNameField: false },
         { Name: 'LineNo', IsNameField: false },
@@ -143,6 +156,19 @@ function erdView(rows: Array<Record<string, string>>) {
     };
 }
 
+/**
+ * A fake `Members` view of the rows the caller may read (row-level security already applied):
+ * returns the requested `Fields` of the rows named by an `ID IN ('a','b')` filter.
+ */
+function readableMembersView(readableIDs: string[]) {
+    return (params: RunViewParams): ViewResult => {
+        const idList = /^ID IN \((.*)\)$/.exec(params.ExtraFilter ?? '');
+        const requested = idList ? idList[1].split(',').map((v) => v.trim().replace(/^'|'$/g, '')) : [];
+        const rows = requested.filter((id) => readableIDs.includes(id)).map((id) => ({ ID: id }));
+        return { Success: true, Results: rows.map((r) => Object.fromEntries((params.Fields ?? ['ID']).map((f) => [f, r[f as 'ID']]))) };
+    };
+}
+
 /** The VectorJSON fetches: Entity Record Documents views filtered by ID. */
 function vectorFetches() {
     return callsFor('MJ: Entity Record Documents').filter((c) => c.params.ExtraFilter?.startsWith('ID IN ('));
@@ -160,6 +186,8 @@ describe('FetchEntityVectorsResolver', () => {
     beforeEach(() => {
         runViewCalls.length = 0;
         runViewsBatches.length = 0;
+        access.canRead = true;
+        access.deniedReadFields = new Set<string>();
     });
 
     afterEach(() => {
@@ -200,6 +228,21 @@ describe('FetchEntityVectorsResolver', () => {
             expect(vectorCall.params.Fields).toEqual(['ID', 'VectorJSON']);
             expect(vectorCall.params.ResultType).toBe('simple');
             expect(vectorCall.params.IgnoreMaxRows).toBe(true);
+        });
+
+        it("REGRESSION: runs every view on the request's provider", async () => {
+            useVectorDB(true);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': erdView(storedRows),
+                Members: () => ({ Success: true, Results: memberRows }),
+            });
+            const context = appContext(membersEntity);
+
+            await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, context);
+
+            const requestProvider = context.providers[0].provider;
+            expect(callsFor('MJ: Entity Record Documents')).toHaveLength(2);
+            expect(runViewCalls.every((c) => c.provider === requestProvider)).toBe(true);
         });
 
         it('bypasses the server RunView cache for both Entity Record Documents views, so Fields is honoured', async () => {
@@ -413,7 +456,7 @@ describe('FetchEntityVectorsResolver', () => {
     describe('index-keyed providers (Pinecone path, unchanged)', () => {
         it('queries the provider index by name and never reads Entity Record Documents', async () => {
             const { queryIndex } = useVectorDB(false);
-            routeViews('Members', {});
+            routeViews('Members', { Members: readableMembersView(['a']) });
 
             const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
 
@@ -427,7 +470,167 @@ describe('FetchEntityVectorsResolver', () => {
             expect(query.vector).toHaveLength(2);
             expect(result.Results).toEqual([{ ID: 'pc-1', Values: [0.5, 0.5], Metadata: JSON.stringify({ Entity: 'Members', RecordID: 'a' }) }]);
             expect(callsFor('MJ: Entity Record Documents')).toHaveLength(0);
+        });
+
+        it('removes metadata keys naming fields the caller may not read', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({
+                success: true,
+                data: { matches: [{ id: 'pc-1', values: [0.5, 0.5], metadata: { Entity: 'Members', RecordID: 'a', FirstName: 'Ada', Email: 'ada@secret.org' } }] },
+            });
+            access.deniedReadFields = new Set(['email']);
+            routeViews('Members', { Members: readableMembersView(['a']) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(true);
+            expect(JSON.parse(result.Results[0].Metadata)).toEqual({ Entity: 'Members', RecordID: 'a', FirstName: 'Ada' });
+        });
+
+        it('keeps every metadata key for a caller denied nothing', async () => {
+            const { queryIndex } = useVectorDB(false);
+            const metadata = { Entity: 'Members', RecordID: 'a', FirstName: 'Ada', Email: 'ada@secret.org' };
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: [{ id: 'pc-1', values: [0.5, 0.5], metadata }] } });
+            routeViews('Members', { Members: readableMembersView(['a']) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(JSON.parse(result.Results[0].Metadata)).toEqual(metadata);
+        });
+
+        it('refuses, without querying the index, a caller who may not read the source entity', async () => {
+            const { queryIndex } = useVectorDB(false);
+            access.canRead = false;
+            routeViews('Members', {});
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(false);
+            expect(result.Results).toEqual([]);
+            expect(result.ErrorMessage).toBe('Entity "Members" does not exist or you do not have permission to read it');
+            expect(queryIndex).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('index-keyed providers: rows the caller cannot read', () => {
+        function matchesFor(recordIDs: Array<string | undefined>) {
+            return recordIDs.map((recordID, i) => ({
+                id: `pc-${i}`,
+                values: [i, i],
+                score: 1 - i / 10,
+                metadata: recordID === undefined ? { Entity: 'Members' } : { Entity: 'Members', RecordID: recordID },
+            }));
+        }
+
+        it('drops matches whose record the caller cannot read, keeping the order of the rest', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor(['ID|aaa', 'ID|bbb', 'ID|ccc']) } });
+            routeViews('Members', { Members: readableMembersView(['ccc', 'aaa']) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(true);
+            expect(result.Results.map((r) => r.ID)).toEqual(['pc-0', 'pc-2']);
+            expect(result.Results.map((r) => r.Values)).toEqual([[0, 0], [2, 2]]);
+            expect(result.TotalCount).toBe(2);
+        });
+
+        it("REGRESSION: runs every view, the key check included, on the request's provider", async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor(['ID|aaa']) } });
+            routeViews('Members', { Members: readableMembersView(['aaa']) });
+            const context = appContext(membersEntity);
+
+            await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, context);
+
+            const requestProvider = context.providers[0].provider;
+            expect(callsFor('Members')).toHaveLength(1);
+            expect(runViewCalls.length).toBeGreaterThan(1);
+            expect(runViewCalls.every((c) => c.provider === requestProvider)).toBe(true);
+        });
+
+        it('checks the matched keys with a simple view of the primary key, as the caller', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor(['ID|aaa', 'bbb']) } });
+            routeViews('Members', { Members: readableMembersView(['aaa', 'bbb']) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Results.map((r) => r.ID)).toEqual(['pc-0', 'pc-1']);
+            const [check] = callsFor('Members');
+            expect(check.contextUser).toBe(contextUser);
+            expect(check.params.ExtraFilter).toBe("ID IN ('aaa','bbb')");
+            expect(check.params.Fields).toEqual(['ID']);
+            expect(check.params.ResultType).toBe('simple');
+            expect(check.params.IgnoreMaxRows).toBe(true);
+        });
+
+        it('drops a match with no record ID, or one naming a field that is not the primary key, without querying for it', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor([undefined, "Salary|1' OR 1=1 --", 'ID|aaa']) } });
+            routeViews('Members', { Members: readableMembersView(['aaa']) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Results.map((r) => r.ID)).toEqual(['pc-2']);
+            expect(callsFor('Members').map((c) => c.params.ExtraFilter)).toEqual(["ID IN ('aaa')"]);
+        });
+
+        it('returns no matches and runs no check when none carries a usable record ID', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor([undefined]) } });
+            routeViews('Members', { Members: readableMembersView([]) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(true);
+            expect(result.Results).toEqual([]);
             expect(callsFor('Members')).toHaveLength(0);
+        });
+
+        it('checks composite keys with one clause per record, using the real key columns', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({
+                success: true,
+                data: { matches: [
+                    { id: 'pc-a', values: [1], metadata: { Entity: 'Order Lines', RecordID: 'OrderID|o-1||LineNo|2' } },
+                    { id: 'pc-b', values: [2], metadata: { Entity: 'Order Lines', RecordID: 'OrderID|o-2||LineNo|1' } },
+                ] },
+            });
+            routeViews('Order Lines', {
+                'Order Lines': () => ({ Success: true, Results: [{ OrderID: 'o-2', LineNo: 1 }] }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(orderLinesEntity));
+
+            expect(result.Results.map((r) => r.ID)).toEqual(['pc-b']);
+            const [check] = callsFor('Order Lines');
+            expect(check.params.ExtraFilter).toBe("(OrderID='o-1' AND LineNo='2') OR (OrderID='o-2' AND LineNo='1')");
+            expect(check.params.Fields).toEqual(['OrderID', 'LineNo']);
+        });
+
+        it('splits a large key check into lists of at most 1000, sent in one RunViews batch', async () => {
+            const { queryIndex } = useVectorDB(false);
+            const ids = Array.from({ length: 1500 }, (_, i) => `id-${i}`);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor(ids.map((id) => `ID|${id}`)) } });
+            routeViews('Members', { Members: readableMembersView(ids) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 1500, undefined, appContext(membersEntity));
+
+            expect(result.TotalCount).toBe(1500);
+            expect(callsFor('Members').map((c) => (c.params.ExtraFilter ?? '').split(',').length)).toEqual([1000, 500]);
+            expect(runViewsBatches).toEqual([['Members', 'Members']]);
+        });
+
+        it('returns an error result when the key check fails', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor(['ID|aaa']) } });
+            routeViews('Members', { Members: () => ({ Success: false, Results: [], ErrorMessage: 'timeout' }) });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(false);
+            expect(result.Results).toEqual([]);
         });
     });
 });

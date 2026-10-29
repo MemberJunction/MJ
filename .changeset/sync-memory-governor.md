@@ -34,3 +34,13 @@ requested batch costs 10x the memory, the reading notices, and the cap follows. 
 a sync always makes progress rather than deadlocking on a full box.
 
 `ResourcePressureOutput` exposes `ResidentFraction`, `HostMemTotalMB` and `HostMemAvailableMB`.
+
+The governor judges pressure on the HOST — memory in use, `MemTotal - MemAvailable` — not this
+process's RSS, and sheds above 0.85 / releases below 0.75. RSS counts heap the deployment gave V8
+on purpose: with the heap sized at (RAM - 1 GB) x 0.70, a large workspace sits at 72.7% of RAM five
+minutes after a restart with nothing running, so a 0.70 trigger fired on ordinary work and a 0.55
+release line sat below the idle floor. It takes at most one step per run every 10 s
+(`DECISION_INTERVAL_MS`), whichever map reports, and under the release line gives one step back:
+`ReleaseAdmissions` lets the concurrency controller ramp again and the page doubles back to its
+configured size. Measured on a 825-table sync before this: five tables at 25 records a page for 75
+minutes while 711 never started. `EvaluatePressure` uses the same reading and line.

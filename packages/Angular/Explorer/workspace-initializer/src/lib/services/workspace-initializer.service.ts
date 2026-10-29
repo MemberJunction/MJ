@@ -228,6 +228,7 @@ export class WorkspaceInitializerService {
         ResultType: 'entity_object',
       });
       let theme = result.Success ? result.Results?.[0] : undefined;
+      let everyQuerySucceeded = result.Success;
       // User's selection is gone/inactive — fall back to the org default.
       if (!theme && selectedId) {
         result = await rv.RunView<MJThemeEntity>({
@@ -237,8 +238,18 @@ export class WorkspaceInitializerService {
           ResultType: 'entity_object',
         });
         theme = result.Success ? result.Results?.[0] : undefined;
+        everyQuerySucceeded = everyQuerySucceeded && result.Success;
       }
       if (!theme) {
+        // The org has no active brand (and the user's selection is gone). A brand restored from
+        // localStorage before bootstrap (RestorePersistedBrandOverlay) would otherwise keep
+        // painting forever — a retired brand on the sign-in page and through the session, for
+        // every browser that ever loaded it. Clear it only when EVERY query above succeeded: a
+        // failed selection query followed by an empty org-default query proves nothing about the
+        // selection, and a transient read failure must not wipe a perfectly good cached brand.
+        if (everyQuerySucceeded) {
+          this.themeService.ClearBrandOverlay();
+        }
         return;
       }
       this.themeService.RegisterBrandTheme({

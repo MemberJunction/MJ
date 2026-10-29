@@ -13,8 +13,8 @@
  * @module @memberjunction/ai-mcp-server
  */
 
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { CountByUUID, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
+import { EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
+import { CountByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -28,8 +28,10 @@ import { z } from "zod";
 import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
+import { BuildAgentRunStepExportData } from './tools/agentRunStepExport.js';
+import { AddEntityCreateTool, AddEntityDeleteTool, AddEntityGetTool, AddEntityRunViewTool, AddEntityUpdateTool } from './tools/entityTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -733,6 +735,12 @@ export interface ToolConfig {
     name: string;
     description: string;
     parameters: z.ZodObject<z.ZodRawShape>;
+    /**
+     * The input schema for one session user, for a tool whose schema differs by user (an entity
+     * tool leaves out the fields that user may not write). When absent every session is shown
+     * {@link parameters}.
+     */
+    parametersForUser?: (user: UserInfo) => z.ZodObject<z.ZodRawShape>;
     execute: (props: Record<string, unknown>, sessionContext: MCPSessionContext) => Promise<string>;
     /**
      * Scope information for authorization. Can be:
@@ -846,6 +854,7 @@ export async function GetOrBuildCompiledToolConfigs(
                     suggestion: "Use Get_Entity_List to see available entity names"
                 });
             }
+            // fls-guard: EntityInfo metadata, not record values
             return JSON.stringify(entity, null, 2);
         }
     });
@@ -872,23 +881,24 @@ export async function GetOrBuildCompiledToolConfigs(
 }
 
 /**
- * Registers all tools with the MCP server for a specific authenticated session.
- * This function is called per-connection to create user-scoped tool handlers.
+ * The function that registers one tool on a session's MCP server: it applies the tool filter,
+ * skips a duplicate name, advertises the input schema built for the session's user (a tool with
+ * `parametersForUser` omits the fields that user may not send), and checks the tool's scope on
+ * every call.
  *
- * @param server - The McpServer instance to register tools on
- * @param sessionContext - The authenticated session context with user info
- * @param systemUser - System user for server initialization tasks
+ * @param server - The McpServer instance of one authenticated session
+ * @param sessionContext - That session's context; its user selects each tool's input schema
+ * @param filterOptions - The tool include/exclude filter in force
  */
-async function registerAllTools(
+export function CreateSessionToolRegistrar(
     server: McpServer,
     sessionContext: MCPSessionContext,
-    systemUser: UserInfo
-): Promise<void> {
-    // Helper to register a tool with filter check and authorization
+    filterOptions: ToolFilterOptions
+): AddToolFn {
     // Track tools registered on THIS server instance to prevent SDK duplicate registration errors
     const registeredOnServer = new Set<string>();
-    const addToolWithFilter = (config: ToolConfig): void => {
-        if (!shouldIncludeTool(config.name, activeFilterOptions)) {
+    return (config: ToolConfig): void => {
+        if (!shouldIncludeTool(config.name, filterOptions)) {
             return;
         }
 
@@ -905,7 +915,8 @@ async function registerAllTools(
             config.name,
             {
                 description: config.description,
-                inputSchema: config.parameters.shape
+                // The schema object itself, not its shape, so a tool's unknown-key policy holds.
+                inputSchema: config.parametersForUser ? config.parametersForUser(sessionContext.user) : config.parameters
             },
             async (params: Record<string, unknown>) => {
                 // Check authorization if scopeInfo is provided
@@ -934,6 +945,23 @@ async function registerAllTools(
             }
         );
     };
+}
+
+/**
+ * Registers all tools with the MCP server for a specific authenticated session.
+ * This function is called per-connection to create user-scoped tool handlers.
+ *
+ * @param server - The McpServer instance to register tools on
+ * @param sessionContext - The authenticated session context with user info
+ * @param systemUser - System user for server initialization tasks
+ */
+async function registerAllTools(
+    server: McpServer,
+    sessionContext: MCPSessionContext,
+    systemUser: UserInfo
+): Promise<void> {
+    // Registers a tool with filter check and authorization
+    const addToolWithFilter = CreateSessionToolRegistrar(server, sessionContext, activeFilterOptions);
 
     const compiledTools = await GetOrBuildCompiledToolConfigs(systemUser, sessionContext);
     for (const toolConfig of compiledTools) {
@@ -2166,6 +2194,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
                 return JSON.stringify({ error: result.ErrorMessage });
             }
 
+            // fls-guard: RunView as the session user; the provider drops the columns it is denied
             return JSON.stringify(result.Results);
         }
     });
@@ -2335,13 +2364,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            // A step can store its start or end payload as a pointer to an earlier step's end; export the resolved payloads.
-            const stepsById = IndexByUUID(steps);
-            const stepData: Record<string, unknown> = {
-                ...step.GetAll(),
-                PayloadAtStart: ResolvePayloadAtStart(step, stepsById),
-                PayloadAtEnd: ResolvePayloadAtEnd(step, stepsById),
-            };
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            const stepData = BuildAgentRunStepExportData(step, steps, sessionUser, md);
 
             // Determine output file path
             const runIdShort = (props.runId as string).substring(0, 8);
@@ -2940,336 +2964,25 @@ async function loadEntityTools(addToolWithFilter: AddToolFn): Promise<void> {
             const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
             matchingEntities.forEach((entity) => {
                 if (tool.get) {
-                    addEntityGetTool(addToolWithFilter, entity);
+                    AddEntityGetTool(addToolWithFilter, entity);
                 }
                 if (tool.create) {
-                    addEntityCreateTool(addToolWithFilter, entity);
+                    AddEntityCreateTool(addToolWithFilter, entity);
                 }
                 if (tool.update) {
-                    addEntityUpdateTool(addToolWithFilter, entity);
+                    AddEntityUpdateTool(addToolWithFilter, entity);
                 }
                 if (tool.delete) {
-                    addEntityDeleteTool(addToolWithFilter, entity);
+                    AddEntityDeleteTool(addToolWithFilter, entity);
                 }
                 if (tool.runView) {
-                    addEntityRunViewTool(addToolWithFilter, entity);
+                    AddEntityRunViewTool(addToolWithFilter, entity);
                 }
             });
         });
     }
 }
 
-/**
- * Creates a RunView tool for querying entity records.
- * Allows filtering, sorting, and field selection.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityRunViewTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = z.object({
-        extraFilter: z.string().optional(),
-        orderBy: z.string().optional(),
-        fields: z.array(z.string()).optional(),
-    });
-
-    addToolWithFilter({
-        name: `Run_${entity.ClassName}_View`,
-        description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
-        parameters: paramObject,
-        scopeInfo: { scopePath: 'view:run', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: entity.Name,
-                ExtraFilter: props.extraFilter ? props.extraFilter as string : undefined,
-                OrderBy: props.orderBy ? props.orderBy as string : undefined,
-                Fields: props.fields ? props.fields as string[] : undefined,
-            }, sessionUser);
-            return JSON.stringify(result);
-        }
-    });
-}
-
-/**
- * Creates a tool for creating new records in an entity.
- * Parameters are generated from the entity's non-readonly fields.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityCreateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = getEntityParamObject(entity, true, false, false);
-
-    addToolWithFilter({
-        name: `Create_${entity.ClassName}_Record`,
-        description: `Creates a new record in the ${entity.Name} entity`,
-        parameters: z.object(paramObject),
-        scopeInfo: { scopePath: 'entity:create', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            record.SetMany(props, true);
-            const success = await record.Save();
-            if (!success) {
-                return JSON.stringify({success, record: undefined, errorMessage: record.LatestResult.CompleteMessage });
-            }
-            else {
-                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: undefined });
-            }
-        }
-    });
-}
-
-/**
- * Creates a tool for updating existing records in an entity.
- * Requires primary key fields to identify the record, plus optional fields to update.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityUpdateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = getEntityParamObject(entity, true, true, true);
-
-    addToolWithFilter({
-        name: `Update_${entity.ClassName}_Record`,
-        description: `Updates the specified record in the ${entity.Name} entity`,
-        parameters: z.object(paramObject),
-        scopeInfo: { scopePath: 'entity:update', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            const loaded = await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
-            ));
-            if (loaded) {
-                // remove the primary keys from the props so we don't try to update them
-                const newProps = { ...props };
-                entity.PrimaryKeys.forEach((pk) => {
-                    delete newProps[pk.Name];
-                });
-                record.SetMany(newProps, true);
-                const success = await record.Save();
-                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });
-            }
-            else {
-                return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
-            }
-        }
-    });
-}
-
-/**
- * Creates a tool for deleting records from an entity.
- * Only requires the primary key field(s) to identify the record.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityDeleteTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
-
-    addToolWithFilter({
-        name: `Delete_${entity.ClassName}_Record`,
-        description: `Deletes the specified record from the ${entity.Name} entity`,
-        parameters: z.object(pkeyParams),
-        scopeInfo: { scopePath: 'entity:delete', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            const loaded = await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
-            ));
-            if (loaded) {
-                const savedRecordJSON = await convertEntityObjectToJSON(record);
-                const success = await record.Delete();
-                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });
-            }
-            else {
-                return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
-            }
-        }
-    });
-}
-
-
-/*******************************************************************************
- * ENTITY HELPER FUNCTIONS
- ******************************************************************************/
-
-/**
- * Converts a BaseEntity object to a JSON representation suitable for API responses.
- *
- * @param record - The entity record to convert
- * @returns JSON string representation of the entity data
- */
-async function convertEntityObjectToJSON(record: BaseEntity): Promise<string> {
-    const output = await record.GetDataObjectJSON({
-        includeRelatedEntityData: false,
-        oldValues: false,
-        omitEmptyStrings: false,
-        omitNullValues: false,
-        excludeFields: [],
-        relatedEntityList: [],
-    });
-    return output;
-}
-
-/**
- * Builds a Zod parameter object for entity CRUD operations.
- *
- * @param entity - The entity to build parameters for
- * @param excludeReadOnlyFields - If true, excludes read-only fields from the schema
- * @param includePrimaryKeys - If true, includes primary key fields
- * @param nonPKeysOptional - If true, makes non-primary-key fields optional
- * @returns Object with Zod schemas for each included field
- */
-function getEntityParamObject(
-    entity: EntityInfo,
-    excludeReadOnlyFields: boolean,
-    includePrimaryKeys: boolean,
-    nonPKeysOptional: boolean
-): Record<string, z.ZodTypeAny> {
-    const paramObject: Record<string, z.ZodTypeAny> = {};
-
-    entity.Fields.filter(f => {
-        if (f.IsPrimaryKey && includePrimaryKeys) {
-            return true;
-        }
-        else if (f.ReadOnly && excludeReadOnlyFields) {
-            return false;
-        }
-        else {
-            return true;
-        }
-    }).forEach((f) => {
-        // Primary keys are always required. For non-PK fields, mark as optional if:
-        // 1. The caller requested all non-PKs optional (e.g. Update tools), OR
-        // 2. The field allows NULL in the database, OR
-        // 3. The field has a default value defined
-        const isOptional = f.IsPrimaryKey ? false : (nonPKeysOptional || f.AllowsNull || !!f.DefaultValue);
-        addSingleParamToObject(paramObject, f, isOptional);
-    });
-
-    return paramObject;
-}
-
-/**
- * Adds a single field as a Zod parameter to the parameter object.
- * Handles type mapping from MemberJunction types to Zod schemas,
- * including support for value lists (enums).
- *
- * @param theObject - The parameter object to add the field to
- * @param field - The entity field info
- * @param optional - If true, makes the parameter optional
- */
-function addSingleParamToObject(
-    theObject: Record<string, z.ZodTypeAny>,
-    field: EntityFieldInfo,
-    optional: boolean
-): void {
-    let newParam: z.ZodTypeAny;
-    switch (field.TSType) {
-        case 'Date':
-            newParam = z.coerce.date();
-            break;
-        case 'boolean':
-            newParam = z.boolean();
-            break;
-        case 'number':
-            newParam = z.number();
-            break;
-        case 'string':
-        default:
-            // For strings, check if we have a value list and create an enum
-            if (field.ValueListTypeEnum === 'None' || field.EntityFieldValues.length === 0) {
-                newParam = z.string();
-            }
-            else {
-                const enumList = field.EntityFieldValues.map((v) => v.Value);
-                if (field.ValueListTypeEnum === 'List') {
-                    newParam = z.enum(enumList as [string, ...string[]]);
-                }
-                else {
-                    // List + user input: allow enum values or any string
-                    newParam = z.union([z.enum(enumList as [string, ...string[]]), z.string()]);
-                }
-            }
-            break;
-    }
-
-    // If the field allows NULL in the database, wrap with .nullable()
-    if (field.AllowsNull) {
-        newParam = newParam.nullable();
-    }
-
-    if (optional) {
-        theObject[field.Name] = newParam.optional();
-    }
-    else {
-        theObject[field.Name] = newParam;
-    }
-}
-
-/**
- * Builds a Zod parameter object containing only the primary key fields for an entity.
- * Used for Get and Delete operations that only need to identify the record.
- *
- * @param entity - The entity to build primary key parameters for
- * @returns Object with Zod schemas for each primary key field
- */
-function getEntityPrimaryKeyParamsObject(entity: EntityInfo): Record<string, z.ZodTypeAny> {
-    const paramObject: Record<string, z.ZodTypeAny> = {};
-    entity.PrimaryKeys.forEach((pk) => {
-        addSingleParamToObject(paramObject, pk, false);
-    });
-    return paramObject;
-}
-
-/**
- * Creates a tool for retrieving a single record from an entity by primary key.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
-
-    addToolWithFilter({
-        name: `Get_${entity.ClassName}_Record`,
-        description: `Retrieves the specified record from the ${entity.Name} entity`,
-        parameters: z.object(pkeyParams),
-        scopeInfo: { scopePath: 'entity:read', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            await record.InnerLoad(new CompositeKey(
-                entity.PrimaryKeys.map((pk) => ({
-                    FieldName: pk.Name,
-                    Value: props[pk.Name]
-                }))
-            ));
-            return await convertEntityObjectToJSON(record);
-        }
-    });
-}
 
 /**
  * Configuration interface for entity tool matching.

@@ -68,7 +68,7 @@ Leakage is any information the model could use in testing that it **would not ac
 1. Read the target. Use approved queries + DBAutoDoc to find relevant sources and features.
 2. Check Agent Notes and existing approved models for proven features and known leakage traps on similar problems.
 3. Propose a focused, well-reasoned set of candidate sources and features — quality and rationale over quantity.
-4. Enumerate leakage risks thoroughly. Respect the point-in-time `AsOfStrategy` from the target definition.
+4. Enumerate leakage risks thoroughly. Point-in-time assembly is not available; treat post-decision columns as leakage.
 
 ## Response format
 {{ _OUTPUT_EXAMPLE }}

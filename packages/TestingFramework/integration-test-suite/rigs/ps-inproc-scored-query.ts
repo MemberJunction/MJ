@@ -40,6 +40,7 @@
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
+import { PromoteToPublished } from './lib/ps-promote';
 import {
   RunView,
   RunQuery,
@@ -306,6 +307,8 @@ async function main(): Promise<void> {
     console.log(`  modelId = ${trainResult.model.ID}  (status=${trainResult.model.Status}, version=${trainResult.model.Version})`);
     console.log(`  trainingRunId = ${trainResult.run.ID}`);
     check(!!modelId, 'training produced a model id');
+    // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
+    console.log(`  promoted → ${await PromoteToPublished(provider, user, modelId, TAG)}`);
 
     // ── 3. Create the throwaway saved Query (returns ID + Status) ─────────────
     banner('3. CREATE SAVED QUERY (MJ: Queries)');

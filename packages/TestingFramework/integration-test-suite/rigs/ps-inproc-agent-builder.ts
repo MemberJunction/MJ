@@ -3,7 +3,7 @@
  * builder**: `PredictiveStudioPipelineBuilder.build(ModelingPlanSpec)` — the code (no-LLM) step that
  * turns the agent's approved, strongly-typed modeling plan into real metadata: it creates the
  * `MJ: ML Training Pipelines` row, trains a model via the engine, and **publishes the model only if
- * the trust verdict clears the bar** (the same `deriveTrustVerdict` gate the business UI uses).
+ * the trust verdict clears the bar** (the same `TrustVerdicts.DeriveTrustVerdict` gate the business UI uses).
  *
  * This is what proves "the agent can BUILD NEW THINGS" without needing the full LLM loop — we feed the
  * builder a hand-authored plan (what the Goal Analyst / Data Scout / Experiment Designer sub-agents

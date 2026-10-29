@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "Name": "Chief of Staff",
+    "Description": "Executive cockpit for your personal Chief of Staff AI agent — manage strategic priority objectives, pending approvals, autonomous wake routines, and governance policy.",
+    "Icon": "fa-solid fa-user-tie",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 15,
+    "Color": "#1565c0",
+    "DefaultNavItems": [
+      {
+        "Label": "Cockpit",
+        "Icon": "fa-solid fa-user-tie",
+        "ResourceType": "Custom",
+        "DriverClass": "ChiefOfStaffDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70"
+  },
+  "sync": {
+    "lastModified": "2026-10-28T00:36:03.431Z",
+    "checksum": "22eee86b0ee2d7cdf9d35b1bc84707cd35f7f04d98ba58d0afa80a202fa0ec1c"
+  }
+}

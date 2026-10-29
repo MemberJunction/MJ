@@ -265,10 +265,11 @@
   font-size: var(--mj-text-xs);
 }
 
+/* Inside the selected block's outline, at its top-right corner, so it covers that block and not the one above. */
 .lr__tools {
   position: absolute;
   z-index: 2;
-  top: calc(-1 * var(--mj-space-8));
+  top: 0;
   right: 0;
   display: inline-flex;
   align-items: center;
@@ -286,25 +287,6 @@
   font-size: var(--mj-text-xs);
   font-weight: var(--mj-font-semibold);
   color: var(--mj-text-secondary);
-}
-.lr__tools button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--mj-radius-sm);
-  background: transparent;
-  color: inherit;
-  font-size: var(--mj-text-xs);
-  cursor: pointer;
-}
-.lr__tools button:hover { background: var(--mj-bg-surface-hover); }
-.lr__tools button:focus-visible {
-  outline: none;
-  box-shadow: var(--mj-focus-ring);
 }
 
 .lr__placeholder {

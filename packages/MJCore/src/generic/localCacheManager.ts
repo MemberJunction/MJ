@@ -1,11 +1,14 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
-import { AggregateExpression, RunViewParams, IsMaterializedDataSource } from "../views/runView";
+import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
+import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
+import { ViewPropertyValuesKey } from "../views/viewProperties";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
 import { BufferedEntityChange, EntityEventBatch, EntityEventBatchSet } from "./entityEventBatch";
+import type { EntityInfo } from "./entityInfo";
 
 /** Verbose-only status logging — hidden unless verbose logging is enabled */
 function LogStatusVerbose(message: string): void {
@@ -1034,6 +1037,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *                  segment is built. Same misclassification, worse consequence: a save by
      *                  user A was upserted into user B's RLS-scoped slot, injecting a row B's
      *                  predicate excludes. That is an RLS bypass.
+     *   - `fls:<h>`  — the slot holds only the columns one permission class may read. Upserting a
+     *                  saver's row would put columns into it that its readers may not see (or
+     *                  take away ones they may), so it is invalidated like the two above.
      *
      * ## Why it is written as a DENY-by-default allowlist
      * Enumerating the narrowing segments would repeat the original mistake: the next segment
@@ -1056,6 +1062,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             const seg = parts[i];
             if (!seg) {
                 continue;
+            }
+            if (seg.startsWith('abv:')) {
+                return true;           // alternate base view applies a canonical WHERE/JOIN — never maintain in place on save
             }
             if (seg.startsWith('imr:')) {
                 continue;          // widens the set — safe to maintain
@@ -1842,11 +1851,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         const snapshot = [...fingerprints];
         const nowISO = new Date().toISOString();
+        const savesComplete = LocalCacheManager.everySavedRowComplete(changes); // per change, not per slot
         const BATCH_SIZE = 8;
         for (let i = 0; i < snapshot.length; i += BATCH_SIZE) {
             await Promise.all(snapshot.slice(i, i + BATCH_SIZE).map(async (fingerprint) => {
                 try {
-                    await this.applyEntityChangesToSlot(fingerprint, changes, nowISO);
+                    await this.applyEntityChangesToSlot(fingerprint, changes, nowISO, savesComplete);
                 } catch (err) {
                     LogError(`LocalCacheManager: failed to apply batched changes to "${fingerprint}": ${(err as Error).message}`);
                 }
@@ -1858,12 +1868,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * One slot, several changes: the same decisions {@link processEntityEventForFingerprint} makes
      * per event, made once for the whole list.
      */
-    private async applyEntityChangesToSlot(fingerprint: string, changes: BufferedEntityChange[], nowISO: string): Promise<void> {
+    private async applyEntityChangesToSlot(
+        fingerprint: string,
+        changes: BufferedEntityChange[],
+        nowISO: string,
+        savesComplete: boolean = LocalCacheManager.everySavedRowComplete(changes),
+    ): Promise<void> {
         const hasSave = changes.some(c => c.Type === 'save');
         // Subset and aggregate slots cannot be maintained in place; filtered slots cannot take an
         // upsert (the new row may not match the filter) but can drop deleted rows.
+        // A saved row missing columns cannot replace a full-width row either (see RowHasEveryField).
         if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fingerprint.split('|'))
-            || (hasSave && this.isFilteredFingerprint(fingerprint))) {
+            || (hasSave && this.isFilteredFingerprint(fingerprint))
+            || !savesComplete) {
             await this.InvalidateRunViewResult(fingerprint);
             return;
         }
@@ -1966,11 +1983,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 LogStatusVerbose(`LocalCacheManager: remote-invalidate (save) for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
 
+                const rowComplete = LocalCacheManager.RowHasEveryField(entityInfo, recordData); // per row, not per slot
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
                         // Subset slot (MaxRows/StartRow): upserting would grow the slot past the
                         // caller's own row limit. Invalidate, same as a filtered slot.
-                        if (!this.isFilteredFingerprint(fingerprint) && !this.isSubsetFingerprint(fingerprint)) {
+                        if (rowComplete && !this.isFilteredFingerprint(fingerprint) && !this.isSubsetFingerprint(fingerprint)) {
                             await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
                         } else {
                             await this.InvalidateRunViewResult(fingerprint);
@@ -2090,9 +2108,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             const maintained = await this.RemoveSingleEntity(fingerprint, key, nowISO);
             await this.invalidateIfNotMaintained(fingerprint, maintained);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
-            // Unfiltered cache: update the record in place
-            LogStatusVerbose(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
+            // Unfiltered cache: update the record in place, unless the saved row is missing columns
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
+            if (!LocalCacheManager.RowHasEveryField(baseEntity.EntityInfo, entityData)) {
+                LogStatusVerbose(`LocalCacheManager: Invalidating "${fingerprint.substring(0, 60)}" — the saved row is missing columns`);
+                await this.InvalidateRunViewResult(fingerprint);
+                return;
+            }
+            LogStatusVerbose(`LocalCacheManager: Upserting entity ${keyStr} in unfiltered cache "${fingerprint.substring(0, 60)}"`);
             const maintained = await this.UpsertSingleEntity(fingerprint, entityData, key, nowISO);
             await this.invalidateIfNotMaintained(fingerprint, maintained);
         } else {
@@ -2100,6 +2123,61 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             LogStatusVerbose(`LocalCacheManager: Invalidating filtered cache "${fingerprint.substring(0, 60)}"`);
             await this.InvalidateRunViewResult(fingerprint);
         }
+    }
+
+    /**
+     * True when `row` has a key for every non-binary field of `entity`, so it may replace the
+     * cached copy of its record in place.
+     *
+     * A save event carries the saver's own values (`GetAll()`), and an object leaves out every
+     * field it does not hold: one its user may not read, or one that was never loaded. Upserting
+     * such a row into a full-width slot would replace a complete cached row with a partial one,
+     * and every later reader of that slot, including users entitled to the missing columns, would
+     * be served the row without them. A partial row therefore clears the slot instead, and the
+     * next read refills it from the database. Binary fields are not required, because slots
+     * leave them out unless asked for.
+     *
+     * A row is judged against the entity's field list, so without one (no entity metadata on
+     * the event, which a real entity always carries) there is nothing to compare and the row is
+     * accepted, as before this check existed.
+     *
+     * @param entity - The saved record's entity
+     * @param row - The values the event carries
+     */
+    public static RowHasEveryField(entity: EntityInfo | null | undefined, row: Record<string, unknown> | null | undefined): boolean {
+        if (!row || typeof row !== 'object') {
+            return false;
+        }
+        const fields = entity?.Fields;
+        if (!Array.isArray(fields) || fields.length === 0) {
+            return true;
+        }
+        for (const field of fields) {
+            if (!field.IsBinaryFieldType && !Object.prototype.hasOwnProperty.call(row, field.Name)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether every saved row among `changes` carries every column ({@link RowHasEveryField}). */
+    private static everySavedRowComplete(changes: BufferedEntityChange[]): boolean {
+        return changes.every(c => c.Type !== 'save' || LocalCacheManager.RowHasEveryField(c.EntityInfo, c.Record));
+    }
+
+    /**
+     * True when a saved row may be written into `fingerprint`'s slot in place: the slot is neither
+     * filtered (including row-security and field-security segments) nor a subset, and the row
+     * carries every column ({@link RowHasEveryField}). Otherwise the slot must be invalidated.
+     *
+     * @param fingerprint - The slot to maintain
+     * @param entity - The saved record's entity
+     * @param row - The values the save carries
+     */
+    public CanUpsertRowIntoSlot(fingerprint: string, entity: EntityInfo | null | undefined, row: Record<string, unknown> | null | undefined): boolean {
+        return !this.isFilteredFingerprint(fingerprint)
+            && !this.isSubsetFingerprint(fingerprint)
+            && LocalCacheManager.RowHasEveryField(entity, row);
     }
 
     /**
@@ -2440,16 +2518,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   what goes in it, and `ProviderBase.ComputeRunViewFLSFingerprintKey` is the single place
      *   that decision lives so the two tiers cannot drift.
      *
-     *   **CLIENT-ONLY in practice.** The client passes its ALLOWED set
-     *   (`ProviderBase.ComputeClientFLSAllowedKey`); the SERVER passes nothing. Server slots are
-     *   full-width and shared by every user, with narrowing applied at read time by
-     *   `ApplyFieldSecurityProjection` on both the hit and miss paths — a segment there would
-     *   fragment one shared slot into one per permission class and protect nothing. Client slots
-     *   are stored exactly as the server returned them (already narrowed on the wire) and are
-     *   never projected on read, so the field set has to be part of slot identity: without it a
-     *   user whose access is tightened keeps being served their persisted IndexedDB slot, because
-     *   the currency check compares only `maxUpdatedAt` and `rowCount` and neither notices a
-     *   column.
+     *   **Both tiers pass it.** Each slot holds the rows of one permission class: the provider
+     *   fetches only the columns the reading user may see, so the field set has to be part of slot
+     *   identity on the server exactly as it is in the browser, where rows are stored as the server
+     *   returned them and never projected on read. Users with the same allowed set share a slot;
+     *   users with different sets never do. That also keeps a user search's row set apart, since
+     *   which rows match depends on which columns the reader may search.
      *
      *   Keyed on the ALLOWED set rather than the denied one deliberately: once client metadata is
      *   filtered for restricted users ([#3485](https://github.com/MemberJunction/MJ/issues/3485))
@@ -2460,7 +2534,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   Empty for unrestricted users and non-FLS entities, which appends no segment at all — so
      *   their fingerprints stay byte-identical and keep sharing slots (the `rls:` rule). A
      *   permission change produces a new hash → fresh slot; slots keyed to the old hash strand
-     *   until eviction (memory cost, not a leak).
+     *   until eviction (memory cost, not a leak). Hashed with {@link HashSecuritySegment}.
      * @param datasetSegment - Namespace for dataset-item slots (see the `ds:` append below): keeps
      *   `GetDatasetByName` item caching from colliding with a plain unfiltered read of the same
      *   entity. Appended only when supplied, so ordinary reads keep their pre-existing key.
@@ -2531,6 +2605,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('bin:1');
         }
 
+        // SkipTotalRowCount segment. A call that skips the fallback COUNT stores a result whose
+        // TotalRowCount was never counted, so it must not share a slot with the otherwise
+        // identical counted call (each would be served the other's TotalRowCount). Appended only
+        // when true, so every existing fingerprint stays byte-for-byte identical. Not allowlisted
+        // in hasNarrowingSegment, so such a slot is invalidated on save rather than maintained.
+        if (params.SkipTotalRowCount === true) {
+            parts.push('strc:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
@@ -2539,6 +2622,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // identical and no existing cache entries are invalidated.
         if (IsMaterializedDataSource(params.DataSource)) {
             parts.push('ds:materialized');
+        }
+
+        // AlternateBaseView segment. Routing a read through an alternate base view (explicitly via
+        // params.AlternateBaseView or pinned inside a loaded params.ViewEntity's DisplayState JSON)
+        // targets a different physical SQL view with its own canonical WHERE/JOIN, so it MUST NOT
+        // share a cache slot with the entity's canonical BaseView or another alternate view.
+        // Appended only when non-empty so canonical reads keep their exact pre-existing fingerprint.
+        const effectiveAbv = NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params));
+        if (effectiveAbv.length > 0) {
+            parts.push(`abv:${effectiveAbv}`);
         }
 
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
@@ -2559,26 +2652,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // substitutions) hash differently and therefore never collide.
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
-            parts.push(`rls:${this.simpleHash(rls)}`);
+            parts.push(`rls:${this.HashSecuritySegment(rls)}`);
         }
 
-        // Field-Level-Security segment — the column counterpart of `rls:`, and CLIENT-ONLY.
+        // Field-Level-Security segment — the column counterpart of `rls:`.
         //
-        // A browser stores rows exactly as the server returned them (already narrowed to the
-        // user's allowed columns) and never projects on read, so the field set has to be part
-        // of slot identity. Without it, a user whose access is tightened keeps being served
-        // their persisted IndexedDB slot: the currency check compares maxUpdatedAt and rowCount
-        // only, neither of which notices a column.
-        //
-        // The server passes nothing here — its slots are full-width and shared, with narrowing
-        // applied at read time by ApplyFieldSecurityProjection.
-        // ProviderBase.ComputeRunViewFLSFingerprintKey is where that split is decided.
+        // A slot holds the columns one permission class may read, on both tiers: the server
+        // fetches only the reader's allowed columns, and a browser stores rows exactly as the
+        // server returned them. So the field set is part of slot identity, and a user is only
+        // ever served a slot filled for the same allowed set. Without it, a user whose access is
+        // tightened keeps being served a slot with the column in it (the currency check compares
+        // maxUpdatedAt and rowCount only, neither of which notices a column), and a restricted
+        // reader's narrow rows would be served to an unrestricted one.
+        // ProviderBase.ComputeRunViewFLSFingerprintKey decides what the key contains.
         //
         // Appended ONLY when non-empty, so unrestricted users and non-FLS entities keep
         // byte-identical fingerprints and shared slots (the rls: rule).
         const fls = (flsFieldsKey ?? '').trim();
         if (fls.length > 0) {
-            parts.push(`fls:${this.simpleHash(fls)}`);
+            parts.push(`fls:${this.HashSecuritySegment(fls)}`);
         }
 
         // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
@@ -2591,6 +2683,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // View-property segment. A stored view's property values (RunViewParams.Properties and
+        // ServerProperties) each add a predicate the provider builds, so one chapter's run must
+        // never be served another chapter's slot. On the server the provider has already replaced
+        // both with the resolved values (token defaults included) before this runs. The values go
+        // in as canonical JSON rather than a hash: a 32-bit hash of values a client partly chooses
+        // could be steered onto another run's slot. Appended ONLY when a value is present, so every
+        // run without properties keeps its exact fingerprint.
+        const propertyKey = ViewPropertyValuesKey(params.Properties, params.ServerProperties);
+        if (propertyKey.length > 0) {
+            parts.push(`vp:${propertyKey}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
@@ -2683,6 +2787,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             reordered.push(match);
         }
         return reordered;
+    }
+
+    /**
+     * A 128-bit hash, as 32 hex characters, of a security key that becomes part of a slot's
+     * identity: the `rls:` and `fls:` fingerprint segments, and the field-security key a browser
+     * sends with its cache status.
+     *
+     * These keys decide which users may share a slot, so two different keys must not land on the
+     * same value. The 32-bit {@link simpleHash} used for the other segments is too short for that:
+     * at a few tens of thousands of distinct row filters a collision becomes likely, and a
+     * collision here serves one user's rows to another. Four independent 32-bit multiply-xor lanes
+     * keep it synchronous, deterministic and identical in Node and the browser.
+     *
+     * @param str - The security key
+     * @returns 32 lowercase hex characters
+     */
+    public HashSecuritySegment(str: string): string {
+        let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+        for (let i = 0; i < str.length; i++) {
+            const k = str.charCodeAt(i);
+            h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+            h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+            h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+            h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+        }
+        h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+        h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+        h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+        h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+        h1 ^= (h2 ^ h3 ^ h4); h2 ^= h1; h3 ^= h1; h4 ^= h1;
+        return [h1, h2, h3, h4].map(h => (h >>> 0).toString(16).padStart(8, '0')).join('');
     }
 
     /**

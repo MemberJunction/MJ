@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   planShedding, rankLevers, scoreLever, calibrate, estimateEntityMapBytes, batchSizeLever,
-  SHED_ABOVE_FRACTION, SHED_DOWN_TO_FRACTION, CALIBRATION_MIN, CALIBRATION_MAX, resolveThresholds,
+  SHED_ABOVE_FRACTION, SHED_DOWN_TO_FRACTION, CALIBRATION_MIN, CALIBRATION_MAX, resolveThresholds, PressureBytes,
   type Contributor, type Lever, type GovernorReading
 } from '../MemoryGovernor.js';
 
@@ -22,8 +22,12 @@ const contributor = (levers: Lever[], over: Partial<Contributor> = {}): Contribu
 });
 
 /** The sandbox box, to scale: 3,830 MB total, killed at 3,478 MB resident. */
-const sandbox = (residentMB: number): GovernorReading => ({
-  ResidentBytes: residentMB * MB, HostTotalBytes: 3830 * MB, HostAvailableBytes: 120 * MB
+/**
+ * The 3,830 MB sandbox box. At the kill it held RSS 3,478 MB with 120 MB available, so everything else on
+ * the box came to 232 MB; a reading at another RSS keeps those other processes.
+ */
+const sandbox = (residentMB: number, othersMB = 232): GovernorReading => ({
+  ResidentBytes: residentMB * MB, HostTotalBytes: 3830 * MB, HostAvailableBytes: (3830 - residentMB - othersMB) * MB
 });
 
 describe('scoring and ranking', () => {
@@ -93,7 +97,7 @@ describe('planShedding', () => {
   });
 
   it('sheds once past the trigger, and stops as soon as the target is met', () => {
-    // 3,478 of 3,830 MB. Target is 55% = ~2,107 MB, so it must free ~1,371 MB.
+    // 3,710 of 3,830 MB in use on the host. Target is 75% = ~2,873 MB, so it must free ~838 MB.
     const levers = [
       lever({ Code: 'HOLD_ADMISSIONS', FreesBytes: 800 * MB, ThroughputCost: 0 }),
       lever({ Code: 'REDUCE_CONCURRENCY', FreesBytes: 700 * MB, ThroughputCost: 0.5 }),
@@ -139,8 +143,8 @@ describe('planShedding', () => {
 
   it('crosses the trigger exactly at the threshold, not before', () => {
     const at = 3830 * SHED_ABOVE_FRACTION;
-    expect(planShedding(sandbox(at - 1), [contributor([lever()])]).Levers).toHaveLength(0);
-    expect(planShedding(sandbox(at + 1), [contributor([lever()])]).Levers.length).toBeGreaterThan(0);
+    expect(planShedding(sandbox(at - 1, 0), [contributor([lever()])]).Levers).toHaveLength(0);
+    expect(planShedding(sandbox(at + 1, 0), [contributor([lever()])]).Levers.length).toBeGreaterThan(0);
   });
 });
 
@@ -215,7 +219,31 @@ describe('operator thresholds', () => {
   });
 
   it('accepts one override and keeps the other default, when the pair still makes sense', () => {
-    expect(resolveThresholds({ MJ_INTEGRATION_SHED_ABOVE_FRACTION: '0.60' }))
-      .toEqual({ ShedAbove: 0.6, ShedDownTo: SHED_DOWN_TO_FRACTION });
+    expect(resolveThresholds({ MJ_INTEGRATION_SHED_ABOVE_FRACTION: '0.90' }))
+      .toEqual({ ShedAbove: 0.9, ShedDownTo: SHED_DOWN_TO_FRACTION });
+  });
+});
+
+describe('what counts as pressure', () => {
+  const BIG = 15766; // MB — the sandbox after its resize: heap ceiling 10,319 MB = (RAM - 1 GB) x 0.70
+  const big = (residentMB: number, availableMB: number | null): GovernorReading => ({
+    ResidentBytes: residentMB * MB, HostTotalBytes: BIG * MB, HostAvailableBytes: availableMB === null ? null : availableMB * MB
+  });
+
+  it('measures the host, not this process: total minus MemAvailable', () => {
+    expect(PressureBytes(big(11100, 3400))).toBe((BIG - 3400) * MB);
+  });
+
+  it('falls back to RSS where there is no MemAvailable', () => {
+    expect(PressureBytes(big(11100, null))).toBe(11100 * MB);
+  });
+
+  it('does not shed a busy box whose kernel still has a fifth of RAM to give', () => {
+    // RSS 72% of RAM is a normal sync when the heap ceiling is 65% of RAM. Shedding here halted 711 maps.
+    expect(planShedding(big(11100, 3400), [contributor([lever()])]).Levers).toHaveLength(0);
+  });
+
+  it('still sheds when the host is genuinely nearly out', () => {
+    expect(planShedding(big(13500, 950), [contributor([lever()])]).Levers.length).toBeGreaterThan(0);
   });
 });

@@ -167,7 +167,8 @@ describe('EvaluatePressure — host memory, not just heap', () => {
     const findings = EvaluatePressure(r);
     const mem = findings.filter(f => f.Code === 'HOST_MEMORY_PRESSURE');
     expect(mem).toHaveLength(1);
-    expect(mem[0].Fraction).toBeCloseTo(3478 / 3830, 3);
+    // The host's own count — this process plus everything else on the box — not RSS alone.
+    expect(mem[0].Fraction).toBeCloseTo((3830 - 120) / 3830, 3);
   });
 
   it("names the machine, not the workspace's allowance, when the host is the bound", () => {
@@ -183,17 +184,27 @@ describe('EvaluatePressure — host memory, not just heap', () => {
   });
 
   it('reports ONE finding at the worse of the two fractions when both are over', () => {
-    const mem = EvaluatePressure(base({ HeapUsedFraction: 0.88, ResidentFraction: 0.95 }))
+    const mem = EvaluatePressure(base({ HeapUsedFraction: 0.88, HostMemAvailableBytes: 0.05 * 8 * GB }))
       .filter(f => f.Code === 'HOST_MEMORY_PRESSURE');
     expect(mem).toHaveLength(1);
     expect(mem[0].Fraction).toBeCloseTo(0.95, 3);
   });
 
   it('is silent just below the resident threshold, and fires just above it', () => {
-    const under = base({ ResidentFraction: RESIDENT_WARN_FRACTION - 0.01 });
-    const over = base({ ResidentFraction: RESIDENT_WARN_FRACTION + 0.01 });
+    const under = base({ HostMemAvailableBytes: (1 - (RESIDENT_WARN_FRACTION - 0.01)) * 8 * GB });
+    const over = base({ HostMemAvailableBytes: (1 - (RESIDENT_WARN_FRACTION + 0.01)) * 8 * GB });
     expect(EvaluatePressure(under).filter(f => f.Code === 'HOST_MEMORY_PRESSURE')).toHaveLength(0);
     expect(EvaluatePressure(over).filter(f => f.Code === 'HOST_MEMORY_PRESSURE')).toHaveLength(1);
+  });
+
+  it('is silent on a busy box whose kernel still has a fifth of RAM to give', () => {
+    // Sandbox 2026-10-23: RSS 72% of a 15.7 GB box (heap ceiling 65% of RAM), 22% still available. The engine
+    // halved its in-flight cap on this after every map.
+    const r = base({
+      ResidentBytes: 11100 * MB, HostMemTotalBytes: 15766 * MB, HostMemAvailableBytes: 3400 * MB,
+      ResidentFraction: 11100 / 15766, HeapLimitBytes: 10319 * MB, HeapUsedFraction: 0.6,
+    });
+    expect(EvaluatePressure(r).filter(f => f.Code === 'HOST_MEMORY_PRESSURE')).toHaveLength(0);
   });
 
   it('falls back to heap-only where /proc is unreadable (ResidentFraction null)', () => {
