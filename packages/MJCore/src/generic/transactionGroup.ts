@@ -340,6 +340,8 @@ export abstract class TransactionGroupBase {
             await this.waitForPreprocessing();
 
             if (this._pendingTransactions.length > 0) {
+                await this.BeginGroupTransaction();
+
                 // subclass handles the actual submit implementation whatever that does
                 let results: TransactionResult[] = await this.HandleSubmit();
 
@@ -347,7 +349,11 @@ export abstract class TransactionGroupBase {
                 const overallSuccess = results.every(r => r.Success);
 
                 // now we have the results back, so we can call the callback functions and notify the group's entities
+                // while the group transaction is still open (so OnSaveCompleted runs in-transaction and RunAfterCommit
+                // defers post-commit side effects until CommitGroupTransaction settles the transaction).
                 await this.completeSubmittedResults(results, overallSuccess);
+
+                await this.CommitGroupTransaction();
 
                 this._status = overallSuccess ? 'Complete' : 'Failed';
                 return overallSuccess;
@@ -360,6 +366,7 @@ export abstract class TransactionGroupBase {
             }
         }
         catch (err) {
+            await this.RollbackGroupTransaction();
             console.error(err);
             // it failed, so we have to call the callback functions with the error
             for (let i = 0; i < this._pendingTransactions.length; i++) {
@@ -370,6 +377,34 @@ export abstract class TransactionGroupBase {
             this._status = 'Failed';
             return false;
         }
+    }
+
+    /**
+     * Optional hook for database-backed subclasses to open a provider-scoped transaction (or
+     * nested savepoint) before {@link HandleSubmit} executes statements.
+     *
+     * NOTE: Keep overrides non-`async` in their synchronous prefix when delegating to
+     * `provider.BeginTransaction()` so `TransactionAffinity.Claim()` binds the caller's async
+     * execution context before the first `await`.
+     */
+    protected BeginGroupTransaction(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    /**
+     * Optional hook for database-backed subclasses to commit the transaction opened in
+     * {@link BeginGroupTransaction} after {@link completeSubmittedResults} finishes.
+     */
+    protected async CommitGroupTransaction(): Promise<void> {
+        // Default no-op for non-DB subclasses (e.g., GraphQLTransactionGroup)
+    }
+
+    /**
+     * Optional hook for database-backed subclasses to roll back an open group transaction on
+     * statement or callback failure. Implementations MUST be idempotent.
+     */
+    protected async RollbackGroupTransaction(): Promise<void> {
+        // Default no-op for non-DB subclasses (e.g., GraphQLTransactionGroup)
     }
 
     /**

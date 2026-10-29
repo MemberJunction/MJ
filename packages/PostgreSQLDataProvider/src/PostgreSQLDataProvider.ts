@@ -637,8 +637,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         } catch { /* swallow — surfacing the primary error */ }
     }
 
+    /**
+     * Returns the currently active `pg.PoolClient` transaction handle managed by this provider,
+     * or `null` when no physical transaction is open.
+     */
+    public get ActiveTransactionClient(): pg.PoolClient | null {
+        return this._transaction;
+    }
+
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return new PostgreSQLTransactionGroup();
+        return new PostgreSQLTransactionGroup(this);
     }
 
     protected override BuildPaginationSQL(maxRows: number, startRow: number): string {

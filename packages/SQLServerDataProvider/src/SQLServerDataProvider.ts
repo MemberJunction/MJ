@@ -3248,8 +3248,42 @@ IF ${varName} IS NOT NULL
     return this._fileSystemProvider;
   }
 
-        public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-    return new SQLServerTransactionGroup();
+  /**
+   * Returns the currently active physical `mssql.Transaction` handle managed by this provider,
+   * or `null` when no physical transaction is open.
+   */
+  public get ActiveTransactionHandle(): sql.Transaction | null {
+    return this._transaction ?? null;
+  }
+
+  /**
+   * Executes a `mssql` request callback against `transaction`, serialized through this provider's
+   * transaction SQL queue when `transaction` is the provider's active transaction handle.
+   */
+  public async ExecuteOnTransactionHandle<TRow>(
+    transaction: sql.Transaction,
+    description: string,
+    run: (tx: sql.Transaction) => Promise<sql.IResult<TRow>>,
+  ): Promise<sql.IResult<TRow>> {
+    if (transaction !== this._transaction) {
+      return run(transaction);
+    }
+    let result!: sql.IResult<TRow>;
+    await this.enqueueTransactionAction(description, transaction, async () => {
+      await this.waitForActiveRequest();
+      if (this._endedHandles.has(transaction) || transaction !== this._transaction) {
+        throw new Error(
+          'The ambient transaction ended before this TransactionGroup request ran. ' +
+          'Await every query issued on the transaction before committing or rolling back.'
+        );
+      }
+      result = await run(transaction);
+    });
+    return result;
+  }
+
+  public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
+    return new SQLServerTransactionGroup(this);
   }
 
   /**************************************************************************/

@@ -1906,8 +1906,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 this.OnResumeRefresh();
             }
         };
+        let transactionPreprocessingRegistered = false;
+        let transactionReadyRaised = false;
         try {
             entity.RegisterTransactionPreprocessing();
+            transactionPreprocessingRegistered = Boolean(entity.TransactionGroup);
 
             // External-data-source entities are read-only — MJ is never the system of record for
             // remote data. Refuse writes at the provider layer so the guarantee holds regardless of
@@ -2047,6 +2050,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
                     entity.RaiseReadyForTransaction();
+                    transactionReadyRaised = true;
                     suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
@@ -2057,6 +2061,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     });
                     extraData.entityName = entity.EntityInfo.Name;
 
+                    type TransactionRowValue = string | number | boolean | Date | Uint8Array | object | null | undefined;
                     entity.TransactionGroup.AddTransaction(
                         new TransactionItem(
                             entity,
@@ -2064,16 +2069,29 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.literalSQL ?? sqlDetails.fullSQL,
                             sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                             extraData,
-                            (transactionResult: Record<string, unknown>, success: boolean) => {
+                            async (transactionResult: Record<string, TransactionRowValue>, success: boolean) => {
                                 resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    const mergedResult: Record<string, unknown> = preSaveValues
-                                        ? { ...preSaveValues, ...transactionResult }
-                                        : transactionResult;
-                                    entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
+                                    if (preSaveValues) {
+                                        for (const [key, val] of Object.entries(preSaveValues as Record<string, TransactionRowValue>)) {
+                                            if (!(key in transactionResult)) {
+                                                transactionResult[key] = val;
+                                            }
+                                        }
+                                        Object.defineProperty(transactionResult, '__mj_preMerged', {
+                                            value: true,
+                                            enumerable: false,
+                                            configurable: true,
+                                        });
+                                    }
+                                    const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                                    if (patches) {
+                                        Object.assign(transactionResult, patches);
+                                    }
+                                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 } else {
                                     entityResult.Success = false;
                                     entityResult.Message = 'Transaction Failed';
@@ -2148,6 +2166,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entityResult.Message = (e as Error).message;
             LogError(e);
             throw e;
+        } finally {
+            if (transactionPreprocessingRegistered && !transactionReadyRaised) {
+                entity.RaiseReadyForTransaction();
+            }
         }
     }
 
@@ -2163,8 +2185,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
         const entityResult = new BaseEntityResult();
+        let transactionPreprocessingRegistered = false;
+        let transactionReadyRaised = false;
         try {
             entity.RegisterTransactionPreprocessing();
+            transactionPreprocessingRegistered = Boolean(entity.TransactionGroup);
 
             // External-data-source entities are read-only (see Save) — refuse deletes at the provider
             // layer regardless of the generated base class. The normal path (ReadOnlyExternalBaseEntity)
@@ -2211,6 +2236,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (entity.TransactionGroup && !bReplay) {
                 // ---- Transaction Group path ----
                 entity.RaiseReadyForTransaction();
+                transactionReadyRaised = true;
 
                 const extraData = this.GetTransactionExtraData(entity);
                 if (entity.EntityInfo.TrackRecordChanges) {
@@ -2286,6 +2312,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entityResult.Success = false;
             entityResult.EndedAt = new Date();
             return false;
+        } finally {
+            if (transactionPreprocessingRegistered && !transactionReadyRaised) {
+                entity.RaiseReadyForTransaction();
+            }
         }
     }
 
