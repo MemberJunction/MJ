@@ -898,6 +898,8 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
       Audio: {
         Narration: {
           Enabled: false,
+          VoiceID: 'none',
+          Provider: 'none',
           Script: [],
         },
         Captions: 'None',

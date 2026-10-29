@@ -1203,6 +1203,11 @@ LEFT OUTER JOIN
 OUTER APPLY
     [${flyway:defaultSchema}].[fnAIAgentParentID_GetHierarchyMeta]([a].[ID], [a].[ParentID]) AS hier_ParentID
 GO
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIAgentsActive]', 'V') IS NOT NULL
+BEGIN
+    EXEC sp_executesql N'EXEC sp_refreshview ''${flyway:defaultSchema}.vwAIAgentsActive'';';
+END
+GO
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwAIAgents] FROM [cdp_Developer]
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwAIAgents] FROM [cdp_Integration]
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwAIAgents] FROM [cdp_UI]
@@ -2642,6 +2647,26 @@ BEGIN
 
     CLOSE cascade_update_MJAIAgentSteps_SubAgentID_cursor
     DEALLOCATE cascade_update_MJAIAgentSteps_SubAgentID_cursor
+    
+    -- Cascade delete from AIAgentUserPolicy using cursor to call spDeleteAIAgentUserPolicy
+    DECLARE @MJAIAgentUserPolicies_AgentIDID uniqueidentifier
+    DECLARE cascade_delete_MJAIAgentUserPolicies_AgentID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[AIAgentUserPolicy]
+        WHERE [AgentID] = @ID
+    
+    OPEN cascade_delete_MJAIAgentUserPolicies_AgentID_cursor
+    FETCH NEXT FROM cascade_delete_MJAIAgentUserPolicies_AgentID_cursor INTO @MJAIAgentUserPolicies_AgentIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteAIAgentUserPolicy] @ID = @MJAIAgentUserPolicies_AgentIDID
+        
+        FETCH NEXT FROM cascade_delete_MJAIAgentUserPolicies_AgentID_cursor INTO @MJAIAgentUserPolicies_AgentIDID
+    END
+    
+    CLOSE cascade_delete_MJAIAgentUserPolicies_AgentID_cursor
+    DEALLOCATE cascade_delete_MJAIAgentUserPolicies_AgentID_cursor
     
     -- Cascade update on AIAgent using cursor to call spUpdateAIAgent
     DECLARE @MJAIAgents_ParentIDID uniqueidentifier
@@ -4491,6 +4516,53 @@ BEGIN
     CLOSE cascade_update_MJEntityDocuments_ReasoningPromptID_cursor
     DEALLOCATE cascade_update_MJEntityDocuments_ReasoningPromptID_cursor
     
+    -- Cascade update on FeaturePipelineVersion using cursor to call spUpdateFeaturePipelineVersion
+    DECLARE @MJFeaturePipelineVersions_PromptIDID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_RecordProcessID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_Version int
+    DECLARE @MJFeaturePipelineVersions_PromptID_PinHash nvarchar(64)
+    DECLARE @MJFeaturePipelineVersions_PromptID_SpecHash nvarchar(64)
+    DECLARE @MJFeaturePipelineVersions_PromptID_PromptID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_PromptVersionHash nvarchar(64)
+    DECLARE @MJFeaturePipelineVersions_PromptID_AIModelID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_ParametersHash nvarchar(64)
+    DECLARE @MJFeaturePipelineVersions_PromptID_Status nvarchar(20)
+    DECLARE @MJFeaturePipelineVersions_PromptID_Gated bit
+    DECLARE @MJFeaturePipelineVersions_PromptID_GoldenSetTestID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_GoldenSetTestRunID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_Metric nvarchar(20)
+    DECLARE @MJFeaturePipelineVersions_PromptID_Threshold float(53)
+    DECLARE @MJFeaturePipelineVersions_PromptID_ResultValue float(53)
+    DECLARE @MJFeaturePipelineVersions_PromptID_ResultLower float(53)
+    DECLARE @MJFeaturePipelineVersions_PromptID_ResultUpper float(53)
+    DECLARE @MJFeaturePipelineVersions_PromptID_ResultN int
+    DECLARE @MJFeaturePipelineVersions_PromptID_ResultDetails nvarchar(MAX)
+    DECLARE @MJFeaturePipelineVersions_PromptID_ActivatedAt datetimeoffset
+    DECLARE @MJFeaturePipelineVersions_PromptID_ApprovedByUserID uniqueidentifier
+    DECLARE @MJFeaturePipelineVersions_PromptID_RetiredAt datetimeoffset
+    DECLARE @MJFeaturePipelineVersions_PromptID_BackfilledAt datetimeoffset
+    DECLARE cascade_update_MJFeaturePipelineVersions_PromptID_cursor CURSOR FOR
+        SELECT [ID], [RecordProcessID], [Version], [PinHash], [SpecHash], [PromptID], [PromptVersionHash], [AIModelID], [ParametersHash], [Status], [Gated], [GoldenSetTestID], [GoldenSetTestRunID], [Metric], [Threshold], [ResultValue], [ResultLower], [ResultUpper], [ResultN], [ResultDetails], [ActivatedAt], [ApprovedByUserID], [RetiredAt], [BackfilledAt]
+        FROM [${flyway:defaultSchema}].[FeaturePipelineVersion]
+        WHERE [PromptID] = @ID
+
+    OPEN cascade_update_MJFeaturePipelineVersions_PromptID_cursor
+    FETCH NEXT FROM cascade_update_MJFeaturePipelineVersions_PromptID_cursor INTO @MJFeaturePipelineVersions_PromptIDID, @MJFeaturePipelineVersions_PromptID_RecordProcessID, @MJFeaturePipelineVersions_PromptID_Version, @MJFeaturePipelineVersions_PromptID_PinHash, @MJFeaturePipelineVersions_PromptID_SpecHash, @MJFeaturePipelineVersions_PromptID_PromptID, @MJFeaturePipelineVersions_PromptID_PromptVersionHash, @MJFeaturePipelineVersions_PromptID_AIModelID, @MJFeaturePipelineVersions_PromptID_ParametersHash, @MJFeaturePipelineVersions_PromptID_Status, @MJFeaturePipelineVersions_PromptID_Gated, @MJFeaturePipelineVersions_PromptID_GoldenSetTestID, @MJFeaturePipelineVersions_PromptID_GoldenSetTestRunID, @MJFeaturePipelineVersions_PromptID_Metric, @MJFeaturePipelineVersions_PromptID_Threshold, @MJFeaturePipelineVersions_PromptID_ResultValue, @MJFeaturePipelineVersions_PromptID_ResultLower, @MJFeaturePipelineVersions_PromptID_ResultUpper, @MJFeaturePipelineVersions_PromptID_ResultN, @MJFeaturePipelineVersions_PromptID_ResultDetails, @MJFeaturePipelineVersions_PromptID_ActivatedAt, @MJFeaturePipelineVersions_PromptID_ApprovedByUserID, @MJFeaturePipelineVersions_PromptID_RetiredAt, @MJFeaturePipelineVersions_PromptID_BackfilledAt
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJFeaturePipelineVersions_PromptID_PromptID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateFeaturePipelineVersion] @ID = @MJFeaturePipelineVersions_PromptIDID, @RecordProcessID = @MJFeaturePipelineVersions_PromptID_RecordProcessID, @Version = @MJFeaturePipelineVersions_PromptID_Version, @PinHash = @MJFeaturePipelineVersions_PromptID_PinHash, @SpecHash = @MJFeaturePipelineVersions_PromptID_SpecHash, @PromptID_Clear = 1, @PromptID = @MJFeaturePipelineVersions_PromptID_PromptID, @PromptVersionHash = @MJFeaturePipelineVersions_PromptID_PromptVersionHash, @AIModelID = @MJFeaturePipelineVersions_PromptID_AIModelID, @ParametersHash = @MJFeaturePipelineVersions_PromptID_ParametersHash, @Status = @MJFeaturePipelineVersions_PromptID_Status, @Gated = @MJFeaturePipelineVersions_PromptID_Gated, @GoldenSetTestID = @MJFeaturePipelineVersions_PromptID_GoldenSetTestID, @GoldenSetTestRunID = @MJFeaturePipelineVersions_PromptID_GoldenSetTestRunID, @Metric = @MJFeaturePipelineVersions_PromptID_Metric, @Threshold = @MJFeaturePipelineVersions_PromptID_Threshold, @ResultValue = @MJFeaturePipelineVersions_PromptID_ResultValue, @ResultLower = @MJFeaturePipelineVersions_PromptID_ResultLower, @ResultUpper = @MJFeaturePipelineVersions_PromptID_ResultUpper, @ResultN = @MJFeaturePipelineVersions_PromptID_ResultN, @ResultDetails = @MJFeaturePipelineVersions_PromptID_ResultDetails, @ActivatedAt = @MJFeaturePipelineVersions_PromptID_ActivatedAt, @ApprovedByUserID = @MJFeaturePipelineVersions_PromptID_ApprovedByUserID, @RetiredAt = @MJFeaturePipelineVersions_PromptID_RetiredAt, @BackfilledAt = @MJFeaturePipelineVersions_PromptID_BackfilledAt
+
+        FETCH NEXT FROM cascade_update_MJFeaturePipelineVersions_PromptID_cursor INTO @MJFeaturePipelineVersions_PromptIDID, @MJFeaturePipelineVersions_PromptID_RecordProcessID, @MJFeaturePipelineVersions_PromptID_Version, @MJFeaturePipelineVersions_PromptID_PinHash, @MJFeaturePipelineVersions_PromptID_SpecHash, @MJFeaturePipelineVersions_PromptID_PromptID, @MJFeaturePipelineVersions_PromptID_PromptVersionHash, @MJFeaturePipelineVersions_PromptID_AIModelID, @MJFeaturePipelineVersions_PromptID_ParametersHash, @MJFeaturePipelineVersions_PromptID_Status, @MJFeaturePipelineVersions_PromptID_Gated, @MJFeaturePipelineVersions_PromptID_GoldenSetTestID, @MJFeaturePipelineVersions_PromptID_GoldenSetTestRunID, @MJFeaturePipelineVersions_PromptID_Metric, @MJFeaturePipelineVersions_PromptID_Threshold, @MJFeaturePipelineVersions_PromptID_ResultValue, @MJFeaturePipelineVersions_PromptID_ResultLower, @MJFeaturePipelineVersions_PromptID_ResultUpper, @MJFeaturePipelineVersions_PromptID_ResultN, @MJFeaturePipelineVersions_PromptID_ResultDetails, @MJFeaturePipelineVersions_PromptID_ActivatedAt, @MJFeaturePipelineVersions_PromptID_ApprovedByUserID, @MJFeaturePipelineVersions_PromptID_RetiredAt, @MJFeaturePipelineVersions_PromptID_BackfilledAt
+    END
+
+    CLOSE cascade_update_MJFeaturePipelineVersions_PromptID_cursor
+    DEALLOCATE cascade_update_MJFeaturePipelineVersions_PromptID_cursor
+    
     -- Cascade delete from FeatureValueCache using cursor to call spDeleteFeatureValueCache
     DECLARE @MJFeatureValueCaches_PromptIDID uniqueidentifier
     DECLARE cascade_delete_MJFeatureValueCaches_PromptID_cursor CURSOR FOR 
@@ -4532,13 +4604,19 @@ BEGIN
     DECLARE @MJFeatureValues_PromptID_AIPromptRunID uniqueidentifier
     DECLARE @MJFeatureValues_PromptID_FeatureValueCacheID uniqueidentifier
     DECLARE @MJFeatureValues_PromptID_ComputedAt datetimeoffset
+    DECLARE @MJFeatureValues_PromptID_PipelineVersion int
+    DECLARE @MJFeatureValues_PromptID_AIModelID uniqueidentifier
+    DECLARE @MJFeatureValues_PromptID_ParametersHash nvarchar(64)
+    DECLARE @MJFeatureValues_PromptID_InputHash nvarchar(64)
+    DECLARE @MJFeatureValues_PromptID_ValueKeyHash nvarchar(64)
+    DECLARE @MJFeatureValues_PromptID_Source nvarchar(20)
     DECLARE cascade_update_MJFeatureValues_PromptID_cursor CURSOR FOR
-        SELECT [ID], [RecordProcessID], [EntityID], [RecordID], [FeatureName], [ValueText], [ValueNumeric], [ValueDate], [ValueBoolean], [ValueJSON], [Reasoning], [Confidence], [PromptID], [PromptVersionHash], [ConstraintHash], [ProcessRunID], [ProcessRunDetailID], [AIPromptRunID], [FeatureValueCacheID], [ComputedAt]
+        SELECT [ID], [RecordProcessID], [EntityID], [RecordID], [FeatureName], [ValueText], [ValueNumeric], [ValueDate], [ValueBoolean], [ValueJSON], [Reasoning], [Confidence], [PromptID], [PromptVersionHash], [ConstraintHash], [ProcessRunID], [ProcessRunDetailID], [AIPromptRunID], [FeatureValueCacheID], [ComputedAt], [PipelineVersion], [AIModelID], [ParametersHash], [InputHash], [ValueKeyHash], [Source]
         FROM [${flyway:defaultSchema}].[FeatureValue]
         WHERE [PromptID] = @ID
 
     OPEN cascade_update_MJFeatureValues_PromptID_cursor
-    FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt
+    FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt, @MJFeatureValues_PromptID_PipelineVersion, @MJFeatureValues_PromptID_AIModelID, @MJFeatureValues_PromptID_ParametersHash, @MJFeatureValues_PromptID_InputHash, @MJFeatureValues_PromptID_ValueKeyHash, @MJFeatureValues_PromptID_Source
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -4546,9 +4624,9 @@ BEGIN
         SET @MJFeatureValues_PromptID_PromptID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateFeatureValue] @ID = @MJFeatureValues_PromptIDID, @RecordProcessID = @MJFeatureValues_PromptID_RecordProcessID, @EntityID = @MJFeatureValues_PromptID_EntityID, @RecordID = @MJFeatureValues_PromptID_RecordID, @FeatureName = @MJFeatureValues_PromptID_FeatureName, @ValueText = @MJFeatureValues_PromptID_ValueText, @ValueNumeric = @MJFeatureValues_PromptID_ValueNumeric, @ValueDate = @MJFeatureValues_PromptID_ValueDate, @ValueBoolean = @MJFeatureValues_PromptID_ValueBoolean, @ValueJSON = @MJFeatureValues_PromptID_ValueJSON, @Reasoning = @MJFeatureValues_PromptID_Reasoning, @Confidence = @MJFeatureValues_PromptID_Confidence, @PromptID_Clear = 1, @PromptID = @MJFeatureValues_PromptID_PromptID, @PromptVersionHash = @MJFeatureValues_PromptID_PromptVersionHash, @ConstraintHash = @MJFeatureValues_PromptID_ConstraintHash, @ProcessRunID = @MJFeatureValues_PromptID_ProcessRunID, @ProcessRunDetailID = @MJFeatureValues_PromptID_ProcessRunDetailID, @AIPromptRunID = @MJFeatureValues_PromptID_AIPromptRunID, @FeatureValueCacheID = @MJFeatureValues_PromptID_FeatureValueCacheID, @ComputedAt = @MJFeatureValues_PromptID_ComputedAt
+        EXEC [${flyway:defaultSchema}].[spUpdateFeatureValue] @ID = @MJFeatureValues_PromptIDID, @RecordProcessID = @MJFeatureValues_PromptID_RecordProcessID, @EntityID = @MJFeatureValues_PromptID_EntityID, @RecordID = @MJFeatureValues_PromptID_RecordID, @FeatureName = @MJFeatureValues_PromptID_FeatureName, @ValueText = @MJFeatureValues_PromptID_ValueText, @ValueNumeric = @MJFeatureValues_PromptID_ValueNumeric, @ValueDate = @MJFeatureValues_PromptID_ValueDate, @ValueBoolean = @MJFeatureValues_PromptID_ValueBoolean, @ValueJSON = @MJFeatureValues_PromptID_ValueJSON, @Reasoning = @MJFeatureValues_PromptID_Reasoning, @Confidence = @MJFeatureValues_PromptID_Confidence, @PromptID_Clear = 1, @PromptID = @MJFeatureValues_PromptID_PromptID, @PromptVersionHash = @MJFeatureValues_PromptID_PromptVersionHash, @ConstraintHash = @MJFeatureValues_PromptID_ConstraintHash, @ProcessRunID = @MJFeatureValues_PromptID_ProcessRunID, @ProcessRunDetailID = @MJFeatureValues_PromptID_ProcessRunDetailID, @AIPromptRunID = @MJFeatureValues_PromptID_AIPromptRunID, @FeatureValueCacheID = @MJFeatureValues_PromptID_FeatureValueCacheID, @ComputedAt = @MJFeatureValues_PromptID_ComputedAt, @PipelineVersion = @MJFeatureValues_PromptID_PipelineVersion, @AIModelID = @MJFeatureValues_PromptID_AIModelID, @ParametersHash = @MJFeatureValues_PromptID_ParametersHash, @InputHash = @MJFeatureValues_PromptID_InputHash, @ValueKeyHash = @MJFeatureValues_PromptID_ValueKeyHash, @Source = @MJFeatureValues_PromptID_Source
 
-        FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt
+        FETCH NEXT FROM cascade_update_MJFeatureValues_PromptID_cursor INTO @MJFeatureValues_PromptIDID, @MJFeatureValues_PromptID_RecordProcessID, @MJFeatureValues_PromptID_EntityID, @MJFeatureValues_PromptID_RecordID, @MJFeatureValues_PromptID_FeatureName, @MJFeatureValues_PromptID_ValueText, @MJFeatureValues_PromptID_ValueNumeric, @MJFeatureValues_PromptID_ValueDate, @MJFeatureValues_PromptID_ValueBoolean, @MJFeatureValues_PromptID_ValueJSON, @MJFeatureValues_PromptID_Reasoning, @MJFeatureValues_PromptID_Confidence, @MJFeatureValues_PromptID_PromptID, @MJFeatureValues_PromptID_PromptVersionHash, @MJFeatureValues_PromptID_ConstraintHash, @MJFeatureValues_PromptID_ProcessRunID, @MJFeatureValues_PromptID_ProcessRunDetailID, @MJFeatureValues_PromptID_AIPromptRunID, @MJFeatureValues_PromptID_FeatureValueCacheID, @MJFeatureValues_PromptID_ComputedAt, @MJFeatureValues_PromptID_PipelineVersion, @MJFeatureValues_PromptID_AIModelID, @MJFeatureValues_PromptID_ParametersHash, @MJFeatureValues_PromptID_InputHash, @MJFeatureValues_PromptID_ValueKeyHash, @MJFeatureValues_PromptID_Source
     END
 
     CLOSE cascade_update_MJFeatureValues_PromptID_cursor
