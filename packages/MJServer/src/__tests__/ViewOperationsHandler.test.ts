@@ -267,16 +267,13 @@ describe('ViewOperationsHandler.getEntityViews', () => {
         expect(outcome.error).toBe('timeout talking to DB');
     });
 
-    it('KNOWN GAP: the entity name is interpolated into ExtraFilter without escaping', async () => {
-        // Reachable only for names registered in metadata, so a hostile value requires a
-        // hostile entity name — but an entity legitimately named with an apostrophe
-        // (e.g. "O'Brien Records") already produces a broken/injectable filter today.
+    it('escapes single quotes in the entity name when building ExtraFilter', async () => {
         registerEntity("O'Brien Records", true);
         mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
         await ViewOperationsHandler.getEntityViews("O'Brien Records", makeUser());
 
         const executed = mockRunViewFn.mock.calls[0][0] as RunViewParams;
-        expect(executed.ExtraFilter).toBe(`Entity = 'O'Brien Records'`); // quote NOT doubled
+        expect(executed.ExtraFilter).toBe(`Entity = 'O''Brien Records'`);
     });
 });

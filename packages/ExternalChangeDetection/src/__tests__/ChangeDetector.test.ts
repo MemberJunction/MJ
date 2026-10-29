@@ -9,6 +9,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
+const { mockRunViewFn } = vi.hoisted(() => ({
+  mockRunViewFn: vi.fn(),
+}));
+
 vi.mock('@memberjunction/core', () => {
   class FakeCompositeKey {
     KeyValuePairs: { FieldName: string; Value: unknown }[];
@@ -81,7 +85,7 @@ vi.mock('@memberjunction/core', () => {
       static Provider = {};
     },
     RunView: class {
-      RunView = vi.fn();
+      RunView = mockRunViewFn;
     },
     UpdateCurrentConsoleLine: vi.fn(),
     UpdateCurrentConsoleProgress: vi.fn(),
@@ -155,6 +159,7 @@ vi.mock('@memberjunction/encryption', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
+import { CompositeKey } from '@memberjunction/core';
 import {
   FieldChange,
   ChangeDetectionItem,
@@ -541,5 +546,33 @@ describe('ExternalChangeDetectorEngine - buildEntityFromRow', () => {
 
     expect(loadedRow.Mystery).toBe('$ENC$blob:unknown');
     expect(mockEncryptionEngine.Decrypt).not.toHaveBeenCalled();
+  });
+});
+
+describe('GetLatestRecordChangesDataForEntityRecord SQL escaping', () => {
+  beforeEach(() => {
+    mockRunViewFn.mockReset();
+  });
+
+  it('escapes single quotes in concatenated primary keys and entity IDs when building ExtraFilter', async () => {
+    mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'rc-escaped' }] });
+
+    const engine = ExternalChangeDetectorEngine.Instance;
+    const item = new ChangeDetectionItem();
+    item.Entity = { ID: "ent-1'2" } as ChangeDetectionItem['Entity'];
+    item.PrimaryKey = new CompositeKey([{ FieldName: 'Code', Value: "O'Brien' OR '1'='1" }]);
+
+    const method = Reflect.get(engine, 'GetLatestRecordChangesDataForEntityRecord') as (
+      change: ChangeDetectionItem,
+    ) => Promise<Record<string, string> | null>;
+
+    const row = await method.call(engine, item);
+    expect(row).toEqual({ ID: 'rc-escaped' });
+    expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+
+    const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
+    expect(params.ExtraFilter).toBe(
+      "EntityID = 'ent-1''2' AND RecordID = 'Code|O''Brien'' OR ''1''=''1' AND Type IN ('Update', 'Create')",
+    );
   });
 });

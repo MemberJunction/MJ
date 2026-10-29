@@ -836,10 +836,12 @@ export class SyncEngine {
         } else {
           // An unquoted value is spliced into the SQL verbatim, so it must be a pure
           // numeric/boolean token — anything else (e.g. `1 OR 1=1`) would rewrite the lookup.
-          if (!quotes && !/^-?\d+(\.\d+)?$/.test(fieldValue.trim()) && !/^(true|false)$/i.test(fieldValue.trim())) {
+          const trimmedLookupVal = fieldValue.trim();
+          if (!quotes && !/^-?\d+(\.\d+)?$/.test(trimmedLookupVal) && !/^(true|false)$/i.test(trimmedLookupVal)) {
             throw new Error(`Lookup value '${fieldValue}' for non-string field '${fieldName}' on entity '${entityName}' must be a numeric or boolean literal`);
           }
-          filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+          const formattedVal = quotes ? fieldValue.replace(/'/g, "''") : trimmedLookupVal;
+          filterParts.push(`${fieldName} = ${quotes}${formattedVal}${quotes}`);
         }
       }
     }
@@ -1529,16 +1531,34 @@ export class SyncEngine {
         throw new Error(`Missing primary key value for ${pk.Name} in entity ${entityName}`);
       }
       
+      // Reject non-primitive or non-finite values from untrusted JSON metadata (e.g. arrays/objects/NaN)
+      // before building either quoted or unquoted SQL primary-key predicates.
+      if (
+        (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') ||
+        (typeof value === 'number' && !Number.isFinite(value))
+      ) {
+        throw new Error(`Primary key value for '${pk.Name}' on entity '${entityName}' must be a string, finite number, or boolean primitive`);
+      }
+
       // Check if field needs quotes
       const field = entityInfo.Fields.find(f => f.Name === pk.Name);
       const quotes = field?.NeedsQuotes ? "'" : '';
-      // An unquoted value is spliced into the SQL verbatim, so it must be a pure numeric/boolean
-      // token — anything else would splice SQL into the primary-key filter.
-      if (!quotes && typeof value === 'string' && !/^-?\d+(\.\d+)?$/.test(value.trim()) && !/^(true|false)$/i.test(value.trim())) {
-        throw new Error(`Primary key value '${value}' for non-string field '${pk.Name}' on entity '${entityName}' must be a numeric or boolean literal`);
+      if (!quotes) {
+        // An unquoted value is spliced into the SQL verbatim, so string forms must also be pure
+        // numeric/boolean tokens — anything else would splice SQL into the primary-key filter.
+        if (typeof value === 'string') {
+          const trimmedPk = value.trim();
+          if (!/^-?\d+(\.\d+)?$/.test(trimmedPk) && !/^(true|false)$/i.test(trimmedPk)) {
+            throw new Error(`Primary key value '${value}' for non-string field '${pk.Name}' on entity '${entityName}' must be a numeric or boolean literal`);
+          }
+          filters.push(`${pk.Name} = ${trimmedPk}`);
+        } else {
+          filters.push(`${pk.Name} = ${String(value)}`);
+        }
+      } else {
+        const escapedValue = String(value).replace(/'/g, "''");
+        filters.push(`${pk.Name} = '${escapedValue}'`);
       }
-      const escapedValue = typeof value === 'string' ? value.replace(/'/g, "''") : value;
-      filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
     }
     
     const result = await rv.RunView({

@@ -6,7 +6,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJFileFormComponent } from '../../generated/Entities/MJFile/mjfile.form.component';
-import { ClassifyFileMediaType, DescribeFileSize, MediaLoadsByElement, type FileMediaType } from './file-form.logic';
+import { ClassifyFileMediaType, DescribeFileSize, IsEmbeddableMediaUrl, MediaLoadsByElement, type FileMediaType } from './file-form.logic';
 import { z } from 'zod';
 
 const CreateMediaAccessTokenMutation = gql`
@@ -106,20 +106,22 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
   }
 
   /**
-   * Trusts a server-returned media/download URL for element binding, but only after verifying it
-   * resolves to http(s) (absolute, or relative to this origin). `bypassSecurityTrustResourceUrl`
-   * disables Angular's sanitizer, so a poisoned URL on a File record must never reach it.
+   * Accepts a server-returned media/download URL for element binding, `fetch`, and `window.open`
+   * ONLY after verifying it resolves to `http:` or `https:` (and is not scheme-relative).
+   * Rejecting invalid schemes before setting `this.MediaUrl` guarantees poisoned URLs never reach
+   * `bypassSecurityTrustResourceUrl`, `OpenInExternalTab()`, `fetch()`, or sub-viewers, and avoids
+   * leaving element-loaded types (such as PDF) stuck waiting for a `load` event that never fires.
    */
-  private trustEmbeddableUrl(url: string): SafeResourceUrl | null {
-    try {
-      const parsed = new URL(url, window.location.origin);
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-        return this.sanitizer.bypassSecurityTrustResourceUrl(url);
-      }
-    } catch {
-      // fall through — refuse anything that does not parse
+  private acceptEmbeddableMediaUrl(candidateUrl: string): void {
+    const trimmed = candidateUrl.trim();
+    if (!IsEmbeddableMediaUrl(trimmed, window.location.origin)) {
+      console.warn('[MJFileFormComponentExtended] Refused media URL with non-http(s) or scheme-relative target');
+      this.MediaUrl = null;
+      this.SafeMediaUrl = null;
+      return;
     }
-    return null;
+    this.MediaUrl = trimmed;
+    this.SafeMediaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(trimmed);
   }
 
   /**
@@ -143,8 +145,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
       );
       const parsedMedia = CreateMediaAccessTokenMutationSchema.safeParse(mediaResult);
       if (parsedMedia.success && parsedMedia.data.CreateMediaAccessToken.Success && parsedMedia.data.CreateMediaAccessToken.Url) {
-        this.MediaUrl = parsedMedia.data.CreateMediaAccessToken.Url;
-        this.SafeMediaUrl = this.trustEmbeddableUrl(this.MediaUrl);
+        this.acceptEmbeddableMediaUrl(parsedMedia.data.CreateMediaAccessToken.Url);
       } else {
         // 2. Fallback to DownloadUrl
         const downloadResult = await GraphQLDataProvider.ExecuteGQL(
@@ -153,8 +154,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
         );
         const parsedDownload = DownloadUrlMutationSchema.safeParse(downloadResult);
         if (parsedDownload.success && parsedDownload.data.DownloadUrl.Success && parsedDownload.data.DownloadUrl.Url) {
-          this.MediaUrl = parsedDownload.data.DownloadUrl.Url;
-          this.SafeMediaUrl = this.trustEmbeddableUrl(this.MediaUrl);
+          this.acceptEmbeddableMediaUrl(parsedDownload.data.DownloadUrl.Url);
         }
       }
 

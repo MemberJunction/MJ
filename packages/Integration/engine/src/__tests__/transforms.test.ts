@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { FieldTransformEngine } from '@memberjunction/global';
 import { FieldMappingEngine } from '../FieldMappingEngine.js';
 import type { ExternalRecord } from '../types.js';
 import type { ICompanyIntegrationFieldMap } from '../entity-types.js';
@@ -731,10 +732,11 @@ describe('transforms', () => {
             expect(resultHigh[0].MappedFields['Level']).toBe('high');
         });
 
-        it('should compile an identical expression only once across a batch', () => {
+        it('should compile an identical expression only once across a batch (without calling Function)', () => {
             // Use a fresh engine so the compile cache starts empty for this assertion.
             const localEngine = new FieldMappingEngine();
-            const compileSpy = vi.spyOn(global, 'Function');
+            const compileSpy = vi.spyOn(FieldTransformEngine.prototype, 'Compile');
+            const functionSpy = vi.spyOn(global, 'Function');
             try {
                 const pipeline: TransformStep[] = [
                     { Type: 'custom', Config: { Expression: 'value * 2' } },
@@ -750,19 +752,23 @@ describe('transforms', () => {
                 expect(result.map(r => r.MappedFields['Out'])).toEqual(
                     records.map((_, i) => i * 2)
                 );
-                // ...but the expression was compiled exactly once, not 25 times.
+                // ...the expression was parsed/compiled once across all 25 records...
                 expect(compileSpy).toHaveBeenCalledTimes(1);
+                // ...and `new Function` was never called (pure AST interpreter).
+                expect(functionSpy).not.toHaveBeenCalled();
             } finally {
                 compileSpy.mockRestore();
+                functionSpy.mockRestore();
             }
         });
 
         it('should compile a malformed expression only once, re-throwing from cache per record', () => {
             const localEngine = new FieldMappingEngine();
-            const compileSpy = vi.spyOn(global, 'Function');
+            const compileSpy = vi.spyOn(FieldTransformEngine.prototype, 'Compile');
+            const functionSpy = vi.spyOn(global, 'Function');
             try {
                 const pipeline: TransformStep[] = [
-                    // Syntax error -> new Function throws at compile time.
+                    // Syntax error -> Compile returns an Error once, cached across the batch.
                     { Type: 'custom', Config: { Expression: 'value +' }, OnError: 'Null' },
                 ];
                 const records = Array.from({ length: 10 }, (_, i) => record({ Val: i }));
@@ -776,8 +782,10 @@ describe('transforms', () => {
                 expect(result.every(r => r.MappedFields['Out'] === null)).toBe(true);
                 // ...yet the failing expression was only compiled once, then served from cache.
                 expect(compileSpy).toHaveBeenCalledTimes(1);
+                expect(functionSpy).not.toHaveBeenCalled();
             } finally {
                 compileSpy.mockRestore();
+                functionSpy.mockRestore();
             }
         });
     });

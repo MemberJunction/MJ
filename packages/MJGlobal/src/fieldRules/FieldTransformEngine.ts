@@ -1,5 +1,5 @@
 import { MJLruCache } from '../MJLruCache';
-import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
+import { CompileTransformExpression } from './SafeTransformAstEvaluator';
 import { GetFieldTransform } from './transformRegistry';
 import type {
     TransformStep,
@@ -30,7 +30,6 @@ export type CompiledExpression = (value: unknown, fields: Record<string, unknown
  */
 export class FieldTransformEngine {
     private readonly compiledExpressionCache = new MJLruCache<string, CompiledExpression | Error>();
-    private readonly expressionGuard = new SafeExpressionEvaluator();
 
     /**
      * Runs `value` through every step of `steps`, returning the final value (or `Skipped` when an
@@ -196,7 +195,7 @@ export class FieldTransformEngine {
     private getCompiled(expression: string): CompiledExpression {
         let cached = this.compiledExpressionCache.Get(expression);
         if (cached === undefined) {
-            cached = this.compile(expression);
+            cached = this.Compile(expression);
             this.compiledExpressionCache.Set(expression, cached);
         }
         if (cached instanceof Error) {
@@ -205,22 +204,13 @@ export class FieldTransformEngine {
         return cached;
     }
 
-    private compile(expression: string): CompiledExpression | Error {
-        // SECURITY: custom/formula expressions arrive from STORED records (integration entity-map
-        // TransformPipeline columns, field-rule value sources), so compiling them unchecked would
-        // let anyone who can edit those rows run arbitrary JS in the server process. Walk the same
-        // structural allowlist the rule-CONDITION path already uses (SafeExpressionEvaluator) and
-        // refuse anything outside it — `process`, `Function`, constructor climbs, computed member
-        // access and every other host-reaching construct never reach the compiler.
-        const screened = this.expressionGuard.ValidateSyntax(expression);
-        if (!screened.Valid) {
-            return new Error(`Transform expression rejected by the safe-expression allowlist: ${screened.Error}`);
-        }
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-implied-eval
-            return new Function('value', 'fields', `"use strict"; return (${expression});`) as CompiledExpression;
-        } catch (err) {
-            return err instanceof Error ? err : new Error(String(err));
-        }
+    /**
+     * Parses, validates against the structural AST allowlist, and compiles a custom/formula
+     * expression into a sandboxed AST-interpreted {@link CompiledExpression} — without ever
+     * invoking `new Function` or `eval`. Returns an `Error` value (cached by {@link Evaluate})
+     * when the expression fails syntax or allowlist validation.
+     */
+    public Compile(expression: string): CompiledExpression | Error {
+        return CompileTransformExpression(expression);
     }
 }

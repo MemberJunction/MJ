@@ -2750,7 +2750,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Filter stays server-side; no client-side `.filter()` post-pass.
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as DatabaseProviderBase;
             const filters: string[] = [];
-            if (companyID) filters.push(`CompanyID='${companyID}'`);
+            if (companyID) filters.push(`CompanyID='${sqlUuid(companyID, 'companyID')}'`);
             if (activeOnly) filters.push(`IsActive = ${provider.Dialect.BooleanLiteral(true)}`);
             const filter = filters.join(' AND ');
             const result = await rv.RunView<MJCompanyIntegrationEntity>({
@@ -4676,13 +4676,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         companyIntegrationID: string,
         user: UserInfo
     ): Promise<{ ID: string } | null> {
-        const esc = (s: string) => s.replace(/'/g, "''");
-        const lower = esc(companyIntegrationID.toLowerCase());
-        const upper = esc(companyIntegrationID.toUpperCase());
+        const validJobTypeID = sqlUuid(jobTypeID, 'jobTypeID');
+        const validCompanyIntegrationID = sqlUuid(companyIntegrationID, 'companyIntegrationID');
+        const lower = validCompanyIntegrationID.toLowerCase();
+        const upper = validCompanyIntegrationID.toUpperCase();
         const result = await new RunView().RunView<{ ID: string }>({
             EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter:
-                `JobTypeID='${esc(jobTypeID)}' AND Status IN ('Active','Paused') AND ` +
+                `JobTypeID='${validJobTypeID}' AND Status IN ('Active','Paused') AND ` +
                 // Structured "CompanyIntegrationID":"<uuid>" predicate (same form as IntegrationListSchedules),
                 // NOT a bare-UUID substring — so this CI's id can't false-match the same UUID appearing in
                 // another config key (e.g. RelatedCompanyIntegrationID) and repurpose an unrelated job.

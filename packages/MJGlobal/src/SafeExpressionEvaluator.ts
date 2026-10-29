@@ -153,6 +153,10 @@ export class SafeExpressionEvaluator {
         'require', 'module', 'exports', '__dirname', '__filename', 'self', 'top',
         'parent', 'frames', 'Reflect', 'Proxy', 'WebAssembly', 'Atomics',
         'SharedArrayBuffer', 'import', 'arguments', 'constructor', 'prototype', '__proto__',
+        'fetch', 'Buffer', 'XMLHttpRequest', 'WebSocket', 'Worker', 'SharedWorker',
+        'ServiceWorker', 'BroadcastChannel', 'MessageChannel', 'setTimeout', 'setInterval',
+        'setImmediate', 'queueMicrotask', 'crypto', 'navigator', 'location', 'history',
+        'localStorage', 'sessionStorage', 'indexedDB', 'caches', 'cookieStore', 'Deno', 'Bun',
     ]);
 
     /**
@@ -194,6 +198,17 @@ export class SafeExpressionEvaluator {
         'trim',
         'trimStart',
         'trimEnd',
+        'slice',
+        'substring',
+        'split',
+        'join',
+        'concat',
+        'at',
+        'charAt',
+        'charCodeAt',
+        'padStart',
+        'padEnd',
+        'toFixed',
         'toString',
         'valueOf',
         'some',
@@ -203,6 +218,16 @@ export class SafeExpressionEvaluator {
         'map',
         'reduce'
     ];
+
+    /** Higher-order array methods whose first argument is invoked as a callback. @private */
+    private static readonly HIGHER_ORDER_ARRAY_METHODS = new Set<string>([
+        'some', 'every', 'find', 'filter', 'map', 'reduce',
+    ]);
+
+    /** Safe coercion/predicate callables permitted as bare callbacks to higher-order array methods. @private */
+    private static readonly SAFE_CALLBACK_IDENTIFIERS = new Set<string>([
+        'Boolean', 'Number', 'String', 'isNaN', 'isFinite',
+    ]);
 
     /**
      * Evaluates a boolean expression against a context object
@@ -492,6 +517,21 @@ export class SafeExpressionEvaluator {
         const method = (member.property as Identifier).name;
         if (!this.isCallableMethod(member.object, method)) {
             return this.forbidden(`the method "${method}" is not on the safe-method allowlist`);
+        }
+        // Higher-order array methods invoke their first argument as a function. Require an
+        // inline arrow function or a safe coercion identifier so ambient globals or context
+        // functions can never be smuggled in as callbacks (e.g. `[url].reduce(fetch)`).
+        if (SafeExpressionEvaluator.HIGHER_ORDER_ARRAY_METHODS.has(method)) {
+            const cb = node.arguments[0];
+            if (!cb) {
+                return this.forbidden(`"${method}" requires a callback argument`);
+            }
+            const isAllowedCallback =
+                cb.type === 'ArrowFunctionExpression' ||
+                (cb.type === 'Identifier' && SafeExpressionEvaluator.SAFE_CALLBACK_IDENTIFIERS.has((cb as Identifier).name));
+            if (!isAllowedCallback) {
+                return this.forbidden(`"${method}" callback must be an arrow function or safe coercion`);
+            }
         }
         const receiverError = this.checkNode(member.object);
         if (receiverError) return receiverError;

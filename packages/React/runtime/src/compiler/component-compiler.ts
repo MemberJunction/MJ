@@ -15,7 +15,11 @@ import {
 } from '../types';
 import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
-import { LibraryLoader } from '../utilities/library-loader';
+import {
+  FindDomSubresourceByUrl,
+  IsAllowedSubresourceUrl,
+  LibraryLoader,
+} from '../utilities/library-loader';
 import { UnwrapLibraryComponent, UnwrapLibraryComponents, UnwrapAllLibraryComponents } from '../utilities/component-unwrapper';
 import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
@@ -643,8 +647,14 @@ export class ComponentCompiler {
   private async loadStyles(urls: string[]): Promise<void> {
     const loadPromises = urls.map(url => {
       return new Promise<void>((resolve) => {
-        // Check if stylesheet already exists
-        const existingLink = document.querySelector(`link[href="${url}"]`);
+        if (!IsAllowedSubresourceUrl(url)) {
+          resolve();
+          return;
+        }
+
+        // Check if stylesheet already exists via direct href attribute comparison instead of
+        // interpolating the URL into a CSS selector.
+        const existingLink = FindDomSubresourceByUrl('link', 'href', url);
         if (existingLink) {
           resolve();
           return;
@@ -673,12 +683,15 @@ export class ComponentCompiler {
    */
   private loadScript(url: string, globalName: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (!IsAllowedSubresourceUrl(url)) {
+        reject(new Error(`Refused to load script from non-http(s) URL: ${url}`));
+        return;
+      }
+
       // Check if script already exists. Compare src attributes directly instead of interpolating
       // the URL into a CSS selector, where quotes/brackets in a URL would break (or redirect) the
       // selector match.
-      const existingScript = Array.from(document.getElementsByTagName('script')).find(
-        (s) => s.getAttribute('src') === url
-      );
+      const existingScript = FindDomSubresourceByUrl('script', 'src', url);
       if (existingScript) {
         // Wait for it to finish loading with exponential backoff
         let attempts = 0;

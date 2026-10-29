@@ -289,6 +289,19 @@ describe('SafeExpressionEvaluator - Security', () => {
       expectBlocked('f?.() === 1', { f: 1 });
       expectBlocked('x?.constructor', { x: 1 });
     });
+
+    it('blocks smuggling ambient host globals or context functions as array-method callbacks', () => {
+      expectBlocked('["http://169.254.169.254", undefined].reduce(fetch)');
+      expectBlocked('[1024].map(Buffer)');
+      expectBlocked('[1].some(setTimeout)');
+      expectBlocked('[1].map(payload.fn)', { payload: { fn: () => 1 } });
+    });
+
+    it('allows safe coercion identifiers as array-method callbacks', () => {
+      const r = evaluator.evaluate('items.filter(Boolean).length == 2', { items: ['a', '', 'b', null] });
+      expect(r.success).toBe(true);
+      expect(r.value).toBe(true);
+    });
   });
 
   // ---------------------------------------------------------------
