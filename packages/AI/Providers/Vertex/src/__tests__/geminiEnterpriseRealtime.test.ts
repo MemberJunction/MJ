@@ -903,4 +903,20 @@ describe('GeminiEnterpriseRealtime', () => {
             }
         });
     });
+
+    describe('driver facts on the session', () => {
+        it('carries the Enterprise driver ceiling on Capabilities', async () => {
+            const session = await new TestEnterprise(serviceAccountKey()).StartSession(makeParams());
+            expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(GeminiEnterpriseRealtime.DriverFacts.ProviderMaxSessionSeconds);
+            expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(1800);
+        });
+
+        it('a subclass driver\'s own static wins over the parent\'s, never a hard-coded class', async () => {
+            class ShortEnterprise extends TestEnterprise {
+                public static override readonly DriverFacts = { ProviderMaxSessionSeconds: 99 };
+            }
+            const session = await new ShortEnterprise(serviceAccountKey()).StartSession(makeParams());
+            expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(99);
+        });
+    });
 });

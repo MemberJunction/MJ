@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeModel, RealtimeVoiceOption } from '@memberjunction/ai';
+import { BaseRealtimeModel, RealtimeDriverFactsOf, RealtimeVoiceOption, type RealtimeDriverFacts } from '@memberjunction/ai';
 import {
     OpenAIRealtime,
     OpenAIRealtimeSession,
@@ -144,6 +144,9 @@ export interface IxAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GrokRealtime')
 export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
+    /** xAI's Grok Voice sessions run up to 120 minutes. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 7200 };
+
     public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
     /**
@@ -163,7 +166,7 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
 
     /** Returns the xAI-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new xAIRealtimeSession(connection);
+        return new xAIRealtimeSession(connection, RealtimeDriverFactsOf(this));
     }
 
     /**
@@ -186,8 +189,9 @@ export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violati
     /**
      * @param connection The injectable provider-connection seam (a real `OpenAIRealtimeWebSocket`
      * in production, a fake in tests).
+     * @param driverFacts The creating driver's static facts; defaults to xAI's for direct construction.
      */
-    constructor(connection: IxAIRealtimeConnection) {
-        super(connection, XAI_REALTIME_PROFILE);
+    constructor(connection: IxAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts) {
+        super(connection, XAI_REALTIME_PROFILE, driverFacts);
     }
 }

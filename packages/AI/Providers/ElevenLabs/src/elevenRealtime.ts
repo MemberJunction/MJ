@@ -2,6 +2,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeTurnDetectionSettings,
@@ -160,6 +162,9 @@ export const ELEVEN_REALTIME_PROFILE: OpenAIRealtimeProfile = {
  */
 @RegisterClass(BaseRealtimeModel, 'ElevenRealtime')
 export class ElevenRealtime extends OpenAIRealtime {
+    /** The provider's session ceiling is not documented in-repo (the readme only says `max_duration_seconds` passes through, which is not a ceiling), so it stays unknown. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     public static override readonly SupportsDynamicToolSet = ELEVEN_REALTIME_PROFILE.supportsDynamicToolSet;
 
     /**
@@ -177,7 +182,7 @@ export class ElevenRealtime extends OpenAIRealtime {
 
     /** Returns the Eleven-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new ElevenRealtimeSession(connection);
+        return new ElevenRealtimeSession(connection, RealtimeDriverFactsOf(this));
     }
 
     /**
@@ -234,8 +239,9 @@ export class ElevenRealtimeSession extends OpenAIRealtimeSession {
     /**
      * @param connection The provider connection (a real `OpenAIRealtimeWebSocket` in production, a
      * fake in tests).
+     * @param driverFacts The creating driver's static facts; defaults to Eleven Realtime's for direct construction.
      */
-    constructor(connection: IOpenAIRealtimeConnection) {
-        super(connection, ELEVEN_REALTIME_PROFILE);
+    constructor(connection: IOpenAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = ElevenRealtime.DriverFacts) {
+        super(connection, ELEVEN_REALTIME_PROFILE, driverFacts);
     }
 }

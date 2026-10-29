@@ -18,6 +18,8 @@ import {
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
     RealtimeDroppedInputReporter,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
@@ -818,6 +820,9 @@ export interface IOpenAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
+    /** OpenAI documents a 60-minute maximum for one Realtime session. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 3600 };
+
     public static override readonly SupportsDynamicToolSet = OPENAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
     private _openAI: OpenAI;
@@ -866,7 +871,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
      * @returns The session bound to this driver's {@link Profile}.
      */
     protected createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new OpenAIRealtimeSession(connection, this.Profile);
+        return new OpenAIRealtimeSession(connection, this.Profile, RealtimeDriverFactsOf(this));
     }
 
     /**
@@ -975,6 +980,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
 export class OpenAIRealtimeSession implements IRealtimeSession {
     private connection: IOpenAIRealtimeConnection;
     private profile: OpenAIRealtimeProfile;
+    private readonly driverFacts: Readonly<RealtimeDriverFacts>;
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
     private toolCallHandler?: (call: RealtimeToolCall) => void;
@@ -1057,9 +1063,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
-    constructor(connection: IOpenAIRealtimeConnection, profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE) {
+    /**
+     * @param driverFacts The creating driver's static facts. Passed in (not read from a hard-coded
+     * class) so a subclass driver's own ceiling wins; direct construction defaults to OpenAI's.
+     */
+    constructor(
+        connection: IOpenAIRealtimeConnection,
+        profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE,
+        driverFacts: Readonly<RealtimeDriverFacts> = OpenAIRealtime.DriverFacts,
+    ) {
         this.connection = connection;
         this.profile = profile;
+        this.driverFacts = driverFacts;
         this.droppedInput = new RealtimeDroppedInputReporter(`${profile.providerKey}Realtime`, 'this session sends audio only');
         this.configAppliedPromise = new Promise<void>((resolve, reject) => {
             this.resolveConfigApplied = resolve;
@@ -1321,6 +1336,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
         const caps: RealtimeSessionCapabilities = {
+            ...this.driverFacts,
             CanReconfigureTurnMode: this.profile.supportsLiveReconfigure,
         };
         if (this.profile.supportsDynamicToolSet) {

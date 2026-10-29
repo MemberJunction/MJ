@@ -18,6 +18,7 @@ import {
     type RealtimeTurnDetectionSettings,
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
+    type RealtimeDriverFacts,
 } from '@memberjunction/ai';
 import { BaseSingleton, RegisterClass } from '@memberjunction/global';
 import { ElevenLabsPremadeVoices } from './elevenLabsVoices';
@@ -441,6 +442,9 @@ export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManaged
  */
 @RegisterClass(BaseRealtimeModel, 'ElevenLabsRealtime')
 export class ElevenLabsRealtime extends BaseRealtimeModel {
+    /** ElevenLabs conversational-agent session ceiling (2 hours) as stated in the #6182 brief. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 7200 };
+
     private elevenClient: ElevenLabsClient | null = null;
 
     /**

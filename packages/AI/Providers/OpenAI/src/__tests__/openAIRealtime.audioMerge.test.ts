@@ -16,7 +16,9 @@ vi.mock('@memberjunction/ai', async () => {
   const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
   const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
   const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-  return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+  // Mirrors the real RealtimeDriverFactsOf: reads the static off the instance's actual constructor.
+  const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts?: object }).DriverFacts ?? {};
+  return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 vi.mock('openai/realtime/websocket', () => ({ OpenAIRealtimeWebSocket: vi.fn() }));
 vi.mock('openai', () => ({

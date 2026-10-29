@@ -62,7 +62,9 @@ vi.mock('@memberjunction/ai', async () => {
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
     // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+    // Mirrors the real RealtimeDriverFactsOf: reads the static off the instance's actual constructor.
+    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts?: object }).DriverFacts ?? {};
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -921,7 +923,9 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
 
     it('inherits live Reconfigure with the Grok transcription model', async () => {
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
-        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        // The session carries xAI's own ceiling, not the OpenAI parent's.
+        expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 7200, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(xAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
         expect(xAIRealtime.SupportsDynamicToolSet).toBe(true);
         const before = driver.Fake.Sent.length;
         session.Reconfigure({ DisableAutoResponse: true });

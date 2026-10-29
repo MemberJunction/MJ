@@ -56,6 +56,8 @@ import {
     type RealtimeAvatarUnavailableReason,
     type RealtimeVideoFrame,
     type RealtimeTurnCoverage,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -221,6 +223,9 @@ interface GeminiOpenedConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiRealtime')
 export class GeminiRealtime extends BaseRealtimeModel {
+    /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS); session resumption continues a conversation past a single connection, but the token bounds the session. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 1800 };
+
     private geminiClient: GoogleGenAI | null = null;
     private geminiTokenClient: GoogleGenAI | null = null;
 
@@ -275,7 +280,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
-        const session = new GeminiRealtimeSession(profile);
+        const session = new GeminiRealtimeSession(profile, RealtimeDriverFactsOf(this));
         session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.BuildConnectConfig(this.withoutAvatarOnServer(params));
         session.SetAvatar(this.serverAvatarStatus(params, config), profile.AvatarOutputEncoding);
@@ -1254,8 +1259,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private live: GeminiLiveSession | null = null;
     private profile: GeminiLiveModelProfile;
 
-    constructor(profile?: GeminiLiveModelProfile) {
+    private readonly driverFacts: Readonly<RealtimeDriverFacts>;
+
+    /**
+     * @param driverFacts The creating driver's static facts, passed in so a subclass driver's own
+     * ceiling wins; direct construction defaults to Gemini's.
+     */
+    constructor(profile?: GeminiLiveModelProfile, driverFacts: Readonly<RealtimeDriverFacts> = GeminiRealtime.DriverFacts) {
         this.profile = profile ?? GEMINI_LIVE_FALLBACK_PROFILE;
+        this.driverFacts = driverFacts;
     }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
@@ -1484,6 +1496,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             outbound.push({ Modality: 'video', Direction: 'outbound', ...(this.avatarEncoding ? { Encoding: this.avatarEncoding } : {}) });
         }
         return {
+            ...this.driverFacts,
             CanReconfigureTurnMode: false,
             // Proactive audio is permanently on for the 3.8 line: the model listens while speaking and decides
             // for itself when to speak. A meeting-mode session (auto activity detection off) is turn-based.

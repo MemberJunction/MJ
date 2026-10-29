@@ -29,7 +29,9 @@ vi.mock('@memberjunction/ai', async () => {
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
     // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+    // Mirrors the real RealtimeDriverFactsOf: reads the static off the instance's actual constructor.
+    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts?: object }).DriverFacts ?? {};
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -1269,7 +1271,8 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+            expect(session.Capabilities?.ProviderMaxSessionSeconds).toBe(OpenAIRealtime.DriverFacts.ProviderMaxSessionSeconds);
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             const frame = driver.Fake.Sent.slice(before)[0];
@@ -1286,7 +1289,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
+            expect(session.Capabilities).toEqual({ ProviderMaxSessionSeconds: 3600, CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);

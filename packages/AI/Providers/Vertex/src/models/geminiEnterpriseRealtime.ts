@@ -22,6 +22,7 @@ import {
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
+    type RealtimeDriverFacts,
 } from '@memberjunction/ai';
 import {
     BuildGeminiLiveModelPath,
@@ -165,6 +166,9 @@ class GeminiEnterpriseAuthCache extends BaseSingleton<GeminiEnterpriseAuthCache>
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')
 export class GeminiEnterpriseRealtime extends GeminiRealtime {
+    /** Declared on its own so inheritance never hides a missing override; same 30-minute Gemini Live ceiling, applied through the MJ relay. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ProviderMaxSessionSeconds: 1800 };
+
     private readonly credentials: VertexAICredentials | null;
     private readonly credentialsProblem: string | null;
     /** Whether the key is the platform's environment key, the only key that may name a key file. */

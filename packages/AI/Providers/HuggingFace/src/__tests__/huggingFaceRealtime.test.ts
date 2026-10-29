@@ -628,3 +628,10 @@ describe('QA hardening regressions (plan A-items, HF-specific)', () => {
         expect(seen).toHaveLength(0);
     });
 });
+
+describe('HuggingFaceRealtime DriverFacts', () => {
+    it('declares its own DriverFacts, with the provider ceiling unknown', () => {
+        expect(Object.prototype.hasOwnProperty.call(HuggingFaceRealtime, 'DriverFacts')).toBe(true);
+        expect(HuggingFaceRealtime.DriverFacts.ProviderMaxSessionSeconds).toBeUndefined();
+    });
+});
