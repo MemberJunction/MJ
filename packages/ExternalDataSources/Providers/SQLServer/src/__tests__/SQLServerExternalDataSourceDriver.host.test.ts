@@ -102,11 +102,29 @@ describe('SQLServerExternalDataSourceDriver — host auth mode', () => {
     });
 
     it("refuses host mode targeting the host's own database, case-insensitively", () => {
-      SetHostConnectionResolver(() => ({ ...hostInfo, Database: 'MJ_Main' }));
-      expect(() => d.hostGuard(ds({ DefaultDatabase: 'mj_main' }), { authMode: 'host' })).toThrow(
-        /^host auth mode refuses DefaultDatabase 'mj_main': it is the host's own database/,
+      // Only reachable when the host database itself carries the staging prefix; the prefix rule refuses the rest.
+      SetHostConnectionResolver(() => ({ ...hostInfo, Database: 'MJ_Staging_Main' }));
+      expect(() => d.hostGuard(ds({ DefaultDatabase: 'mj_staging_main' }), { authMode: 'host' })).toThrow(
+        /^host auth mode refuses DefaultDatabase 'mj_staging_main': it is the host's own database/,
       );
-      expect(d.hostGuard(ds({ DefaultDatabase: 'MJ_Staging_X' }), { authMode: 'host' })).toEqual({ ...hostInfo, Database: 'MJ_Main' });
+      expect(d.hostGuard(ds({ DefaultDatabase: 'MJ_Staging_X' }), { authMode: 'host' })).toEqual({ ...hostInfo, Database: 'MJ_Staging_Main' });
+    });
+
+    it.each(['HR_Payroll', 'MJ_Main', 'OtherTenantDb', 'MJ_Staging_', 'xMJ_Staging_abc'])(
+      'refuses host mode for %s, which is not an archive-seed staging database',
+      name => {
+        expect(() => d.assertAllowed(ds({ DefaultDatabase: name }), { authMode: 'host' })).toThrow(
+          /^host auth mode refuses DefaultDatabase .*only an archive-seed staging database \(a name starting with 'MJ_Staging_'\)/,
+        );
+        SetHostConnectionResolver(() => ({ ...hostInfo, Database: 'MJ_Main' }));
+        expect(() => d.hostGuard(ds({ DefaultDatabase: name }), { authMode: 'host' })).toThrow(/only an archive-seed staging database/);
+      },
+    );
+
+    it('allows a staging database whatever its case', () => {
+      SetHostConnectionResolver(() => ({ ...hostInfo, Database: 'MJ_Main' }));
+      expect(() => d.assertAllowed(ds({ DefaultDatabase: 'mj_staging_ci1_1730000000' }), { authMode: 'host' })).not.toThrow();
+      expect(d.hostGuard(ds({ DefaultDatabase: 'MJ_STAGING_X' }), { authMode: 'host' })).toEqual({ ...hostInfo, Database: 'MJ_Main' });
     });
 
     it('refuses host mode when no resolver is registered', () => {

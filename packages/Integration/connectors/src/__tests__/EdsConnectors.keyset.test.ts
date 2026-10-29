@@ -128,8 +128,14 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
     const connector = new TestSeekConnector(resolvedFor(new MockSeekDriver()), { PrimaryKeyFields: ['id'] });
 
     describe('ExtractKeysetMarker', () => {
-        it('extracts scalar string marker for single PK without watermark', () => {
-            expect(connector.ExtractKeysetMarker({ id: 101, customer_name: 'Acme' }, ['id'])).toBe('101');
+        it('extracts a JSON key marker for a single PK without watermark, keeping a numeric key numeric', () => {
+            expect(JSON.parse(connector.ExtractKeysetMarker({ id: 101, customer_name: 'Acme' }, ['id'])!)).toEqual({ k: { id: 101 } });
+        });
+
+        it('records the walk position and the within-bucket flag', () => {
+            expect(JSON.parse(connector.ExtractKeysetMarker({ id: 101 }, ['id'], undefined, { Position: 40 })!)).toEqual({ k: { id: 101 }, o: 40 });
+            const marker = connector.ExtractKeysetMarker({ id: 7, modified_at: new Date('2026-10-26T01:00:00.123Z') }, ['id'], 'modified_at', { WithinBucket: true });
+            expect(JSON.parse(marker!)).toEqual({ w: '2026-10-26T01:00:00.123Z', wx: '2026-10-26T01:00:00.124Z', k: { id: 7 }, b: true });
         });
 
         it('extracts compound JSON marker with an exact (string) watermark', () => {
@@ -153,7 +159,7 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
         });
 
         it('drops the keys from a Date marker when the whole range was consumed', () => {
-            const marker = connector.ExtractKeysetMarker({ id: 7, modified_at: new Date('2026-10-26T01:00:00.123Z') }, ['id'], 'modified_at', true);
+            const marker = connector.ExtractKeysetMarker({ id: 7, modified_at: new Date('2026-10-26T01:00:00.123Z') }, ['id'], 'modified_at', { BucketConsumed: true });
             expect(JSON.parse(marker!)).toEqual({ w: '2026-10-26T01:00:00.123Z', wx: '2026-10-26T01:00:00.124Z', k: {} });
         });
 
@@ -182,6 +188,14 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
         it('preserves a NULL watermark as null and omits an absent one', () => {
             expect(connector.ParseKeysetMarker(JSON.stringify({ w: null, k: { id: 1 } }), ['id'], 'modified_at')).toEqual({ Watermark: null, Keys: { id: 1 } });
             expect(connector.ParseKeysetMarker(JSON.stringify({ k: { id: 1 } }), ['id'], 'modified_at')).toEqual({ Keys: { id: 1 } });
+        });
+
+        it('parses the walk position and the within-bucket flag', () => {
+            const marker = JSON.stringify({ w: '2026-10-26T01:00:00.000Z', wx: '2026-10-26T01:00:00.001Z', k: { id: 3 }, b: true, o: 12 });
+            expect(connector.ParseKeysetMarker(marker, ['id'], 'modified_at')).toEqual({
+                Watermark: '2026-10-26T01:00:00.000Z', WatermarkUpper: '2026-10-26T01:00:00.001Z', Keys: { id: 3 }, WithinBucket: true, Position: 12,
+            });
+            expect(connector.ParseKeysetMarker(JSON.stringify({ k: { id: 3 }, o: -1 }), ['id'])).toEqual({ Keys: { id: 3 } });
         });
 
         it('parses composite PK JSON marker', () => {
@@ -220,6 +234,16 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
             expect(connector.BuildSeekAfter({ Watermark: null, Keys: {} }, ['id'], 'modified_at')).toBeUndefined();
         });
 
+        it('builds a within-range seek from a within-bucket marker, and refuses one without a range', () => {
+            expect(connector.BuildSeekAfter(
+                { Watermark: '2026-10-26T01:00:00.000Z', WatermarkUpper: '2026-10-26T01:00:00.001Z', Keys: { id: 3 }, WithinBucket: true }, ['id'], 'modified_at'))
+                .toEqual({
+                    Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.000Z', ExclusiveUpper: '2026-10-26T01:00:00.001Z', WithinRange: true },
+                    Keys: [{ Field: 'id', Value: 3 }],
+                });
+            expect(connector.BuildSeekAfter({ Watermark: '2026-10-26T01:00:00.000Z', Keys: { id: 3 }, WithinBucket: true }, ['id'], 'modified_at')).toBeUndefined();
+        });
+
         it('refuses to seek a watermark-ordered walk from a marker without a watermark', () => {
             expect(connector.BuildSeekAfter({ Keys: { id: 100 } }, ['id'], 'modified_at')).toBeUndefined();
         });
@@ -244,10 +268,11 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
             expect(page.BucketConsumed).toBe(true);
         });
 
-        it('keeps a page that is one bucket and resumes by key inside it', () => {
+        it('flags a page that is one bucket continuing past the page', () => {
             const page = connector.TrimPageToWatermarkBucket([at(1000, 1), at(1000, 2)], at(1000, 3), 'modified_at');
             expect(page.Rows.map(r => r.id)).toEqual([1, 2]);
             expect(page.BucketConsumed).toBe(false);
+            expect(page.SingleBucket).toBe(true);
         });
 
         it('leaves non-Date and NULL watermarks alone (they are exact)', () => {
@@ -279,7 +304,7 @@ describe('BaseExternalDataSourceConnector — FetchChanges with Keyset Seek Pagi
         expect(driver.LastView?.filter).toBeUndefined();
 
         // The marker comes from the 2nd row (id=20); string watermarks are exact, so no range is emitted.
-        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:30:00.000Z', k: { id: 20 } });
+        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:30:00.000Z', k: { id: 20 }, o: 2 });
     });
 
     it('subsequent batch with AfterKeyValue sets offset=0 and hands the driver a structured seek, never SQL', async () => {
@@ -346,10 +371,10 @@ describe('BaseExternalDataSourceConnector — FetchChanges with Keyset Seek Pagi
         // batch) and the marker says the .100 bucket is fully consumed.
         expect(result.Records.map(r => r.Fields.id)).toEqual([1]);
         expect(result.HasMore).toBe(true);
-        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:00:00.100Z', wx: '2026-10-26T01:00:00.101Z', k: {} });
+        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:00:00.100Z', wx: '2026-10-26T01:00:00.101Z', k: {}, o: 1 });
     });
 
-    it('seeks by key inside a bucket when a whole page shares one watermark (bulk update)', async () => {
+    it('walks a bucket larger than the batch in key order, inside the bucket only', async () => {
         const driver = new MockSeekDriver();
         const same = new Date('2026-10-26T01:00:00.500Z');
         driver.Rows = [1, 2, 3, 4].map(id => ({ id, modified_at: same }));
@@ -357,14 +382,29 @@ describe('BaseExternalDataSourceConnector — FetchChanges with Keyset Seek Pagi
 
         const result = await connector.FetchChanges(makeFetchContext({ BatchSize: 2 }));
 
+        // The (watermark, key) page was one bucket, so the connector re-read the bucket in key order.
+        const range = { Field: 'modified_at', Value: '2026-10-26T01:00:00.500Z', ExclusiveUpper: '2026-10-26T01:00:00.501Z', WithinRange: true };
+        expect(driver.LastView?.seekAfter).toEqual({ Watermark: range, Keys: [] });
+        expect(driver.LastView?.defaultOrderByColumns).toEqual(['id']);
         expect(result.Records.map(r => r.Fields.id)).toEqual([1, 2]);
-        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:00:00.500Z', wx: '2026-10-26T01:00:00.501Z', k: { id: 2 } });
+        expect(result.HasMore).toBe(true);
+        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:00:00.500Z', wx: '2026-10-26T01:00:00.501Z', k: { id: 2 }, b: true, o: 2 });
 
         await connector.FetchChanges(makeFetchContext({ BatchSize: 2, AfterKeyValue: result.NextAfterKeyValue }));
-        expect(driver.LastView?.seekAfter).toEqual({
-            Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.500Z', ExclusiveUpper: '2026-10-26T01:00:00.501Z' },
-            Keys: [{ Field: 'id', Value: 2 }],
-        });
+        expect(driver.LastView?.seekAfter).toEqual({ Watermark: range, Keys: [{ Field: 'id', Value: 2 }] });
+    });
+
+    it('marks the bucket consumed once the key walk inside it is exhausted', async () => {
+        const driver = new MockSeekDriver();
+        driver.Rows = [{ id: 4, modified_at: new Date('2026-10-26T01:00:00.500Z') }];
+        const connector = new TestSeekConnector(resolvedFor(driver), { WatermarkField: 'modified_at', PrimaryKeyFields: ['id'] });
+        const marker = JSON.stringify({ w: '2026-10-26T01:00:00.500Z', wx: '2026-10-26T01:00:00.501Z', k: { id: 3 }, b: true, o: 3 });
+
+        const result = await connector.FetchChanges(makeFetchContext({ BatchSize: 2, AfterKeyValue: marker }));
+
+        expect(result.Records.map(r => r.Fields.id)).toEqual([4]);
+        expect(result.HasMore).toBe(true);
+        expect(JSON.parse(result.NextAfterKeyValue!)).toEqual({ w: '2026-10-26T01:00:00.500Z', wx: '2026-10-26T01:00:00.501Z', k: {}, o: 4 });
     });
 
     describe('Fallback to Offset Pagination', () => {
@@ -388,6 +428,19 @@ describe('BaseExternalDataSourceConnector — FetchChanges with Keyset Seek Pagi
 
             expect(driver.LastView?.offset).toBe(2);
             expect(driver.LastView?.seekAfter).toBeUndefined();
+        });
+
+        it('falls back to the position the marker carries when the engine reports no offset (after a keyset batch)', async () => {
+            const driver = new MockSeekDriver();
+            const connector = new TestSeekConnector(resolvedFor(driver), { PrimaryKeyFields: ['tenant_id', 'id'] });
+
+            const result = await connector.FetchChanges(makeFetchContext({
+                BatchSize: 2, CurrentOffset: undefined, AfterKeyValue: JSON.stringify({ k: { tenant_id: 'T1' }, o: 2 }),
+            }));
+
+            expect(driver.LastView?.offset).toBe(2);
+            expect(driver.LastView?.seekAfter).toBeUndefined();
+            expect(result.NextOffset).toBe(4);
         });
     });
 });

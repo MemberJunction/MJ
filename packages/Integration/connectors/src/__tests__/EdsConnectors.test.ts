@@ -159,6 +159,51 @@ describe('BaseExternalDataSourceConnector — descriptor → SourceSchemaInfo ma
         expect(schema.IsAuthoritative).toBe(true);
     });
 
+    it('introspects several schemas concurrently (bounded) and keeps the schema order in the result', async () => {
+        class SlowSchemaDriver extends MockDriver {
+            public InFlight = 0;
+            public MaxInFlight = 0;
+            public override async IntrospectSchema(_ds: MJExternalDataSourceEntity, schemaName: string | undefined): Promise<ExternalSchemaDescriptor> {
+                this.InFlight++;
+                this.MaxInFlight = Math.max(this.MaxInFlight, this.InFlight);
+                // Later schemas answer first, so an order-preserving merge is actually exercised.
+                await new Promise(resolve => setTimeout(resolve, 30 - Number(schemaName?.slice(1)) * 3));
+                this.InFlight--;
+                return { Database: 'db', Objects: [{ ...DESCRIPTOR.Objects[0], Schema: undefined, Name: 'customers' }] };
+            }
+        }
+        const driver = new SlowSchemaDriver();
+        const c = new TestSqlConnector(resolvedFor(driver));
+        const schemas = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'];
+        const schema = await c.IntrospectSchema(CI, USER, { Schemas: schemas });
+        expect(driver.MaxInFlight).toBeGreaterThan(1);
+        expect(driver.MaxInFlight).toBeLessThanOrEqual(4);
+        expect(schema.Objects.map(o => o.ExternalName)).toEqual(schemas.map(s => `${s}.customers`));
+    });
+
+    it('BaseTablesOnly drops views (and every non-table object) and is then not authoritative', async () => {
+        class ViewDriver extends MockDriver {
+            public override async IntrospectSchema(): Promise<ExternalSchemaDescriptor> {
+                return {
+                    Database: 'db',
+                    Objects: [
+                        DESCRIPTOR.Objects[0],
+                        { ...DESCRIPTOR.Objects[1], Name: 'payload', ObjectType: 'view' },
+                        { ...DESCRIPTOR.Objects[1], Name: 'docs', ObjectType: 'collection' },
+                    ],
+                };
+            }
+        }
+        const c = new TestSqlConnector(resolvedFor(new ViewDriver()));
+        const all = await c.IntrospectSchema(CI, USER);
+        expect(all.Objects.map(o => o.ExternalName)).toEqual(['customers', 'payload', 'docs']);
+        const tablesOnly = await c.IntrospectSchema(CI, USER, { BaseTablesOnly: true });
+        expect(tablesOnly.Objects.map(o => o.ExternalName)).toEqual(['customers']);
+        expect(tablesOnly.IsAuthoritative).toBe(false);
+        const scoped = await c.IntrospectSchema(CI, USER, { BaseTablesOnly: true, Schemas: ['dbo'] });
+        expect(scoped.Objects.map(o => o.ExternalName)).toEqual(['dbo.customers']);
+    });
+
     it('without Schemas, introspects the data source default schema with bare names', async () => {
         const c = new TestSqlConnector(resolvedFor(new MockDriver()));
         const schema = await c.IntrospectSchema(CI, USER, { Schemas: [] });

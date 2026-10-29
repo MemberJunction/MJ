@@ -174,6 +174,16 @@ describe('PostgresExternalDataSourceDriver — SQL building', () => {
 
   // PostgreSQL sorts NULL last in an ascending ORDER BY, so a keyset seek must still reach the NULL run.
   describe('seekAfter (NULLS LAST dialect)', () => {
+    it('a consumed truncated range keeps the NULL tail and its AND stays parenthesized', () => {
+      const seek = { Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z' }, Keys: [] };
+      expect(d.sel('"s"."t"', { objectName: 't', seekAfter: seek }))
+        .toBe('SELECT * FROM "s"."t" WHERE ("modified_at" >= \'2026-10-26T01:00:00.124Z\' AND "modified_at" > \'2026-10-26T01:00:00.123Z\') OR "modified_at" IS NULL');
+    });
+    it('a within-range seek never reaches into the NULL tail', () => {
+      const seek = { Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z', WithinRange: true }, Keys: [{ Field: 'id', Value: 3 }] };
+      expect(d.sel('"s"."t"', { objectName: 't', seekAfter: seek }))
+        .toBe('SELECT * FROM "s"."t" WHERE "modified_at" >= \'2026-10-26T01:00:00.123Z\' AND ("modified_at" < \'2026-10-26T01:00:00.124Z\' OR "modified_at" = \'2026-10-26T01:00:00.123Z\') AND "id" > 3');
+    });
     it('quotes identifiers with double quotes', () => {
       expect(d.sel('"s"."t"', { objectName: 't', seekAfter: { Keys: [{ Field: 'id', Value: 101 }] } }))
         .toBe('SELECT * FROM "s"."t" WHERE "id" > 101');

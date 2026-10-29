@@ -189,8 +189,15 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
       return nullRun;
     }
     const value = seek.Watermark.Value as string;
-    const afterWatermark = seek.Watermark.ExclusiveUpper
-      ? this.buildSeekTruncatedRangePredicate(field, value, seek.Watermark.ExclusiveUpper, keysAfter)
+    const upper = seek.Watermark.ExclusiveUpper;
+    if (seek.Watermark.WithinRange) {
+      if (!upper) {
+        throw new Error('seekAfter.Watermark.WithinRange requires ExclusiveUpper.');
+      }
+      return this.buildSeekWithinRangePredicate(field, value, upper, keysAfter);
+    }
+    const afterWatermark = upper
+      ? this.buildSeekTruncatedRangePredicate(field, value, upper, keysAfter)
       : this.buildSeekExactWatermarkPredicate(field, value, keysAfter);
     // A NULL watermark sorts after every value on a NULLS-LAST dialect, so the NULL run is still ahead.
     return this.nullsSortFirst() ? afterWatermark : `${afterWatermark} OR ${field} IS NULL`;
@@ -217,14 +224,37 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
     return keysAfter ? `${field} > ${literal} OR (${field} = ${literal} AND ${keysAfter})` : `${field} > ${literal}`;
   }
 
-  /** The seek for a truncated temporal watermark whose consumed rows lie in `[lower, upper)`. */
+  /**
+   * The seek for a truncated temporal watermark whose consumed rows lie in `[lower, upper)`.
+   *
+   * "After the range" is `W >= upper AND W > lower`, never `W >= upper` alone: a column coarser than a
+   * millisecond rounds the `upper` literal back into the consumed value (SQL Server `datetime` turns
+   * `.004` into `.003`, `smalldatetime` drops the milliseconds), so `W >= upper` alone re-reads the
+   * range forever. For such a column `lower` converts to exactly the stored value, so `W > lower` excludes
+   * it; for a finer column `W >= upper` already implies `W > lower`.
+   */
   private buildSeekTruncatedRangePredicate(field: string, lower: string, upper: string, keysAfter: string | undefined): string {
-    const upperLiteral = this.formatIncrementalLiteral(upper);
-    if (!keysAfter) {
-      return `${field} >= ${upperLiteral}`;
-    }
     const lowerLiteral = this.formatIncrementalLiteral(lower);
-    return `${field} >= ${upperLiteral} OR (${field} >= ${lowerLiteral} AND ${field} < ${upperLiteral} AND ${keysAfter})`;
+    const upperLiteral = this.formatIncrementalLiteral(upper);
+    const afterRange = `(${field} >= ${upperLiteral} AND ${field} > ${lowerLiteral})`;
+    if (!keysAfter) {
+      return afterRange;
+    }
+    return `${afterRange} OR (${this.buildInRangePredicate(field, lowerLiteral, upperLiteral)} AND ${keysAfter})`;
+  }
+
+  /** Rows inside the truncated range `[lower, upper)` with keys after the marker (all of them without keys). */
+  private buildSeekWithinRangePredicate(field: string, lower: string, upper: string, keysAfter: string | undefined): string {
+    const inRange = this.buildInRangePredicate(field, this.formatIncrementalLiteral(lower), this.formatIncrementalLiteral(upper));
+    return keysAfter ? `${inRange} AND ${keysAfter}` : inRange;
+  }
+
+  /**
+   * "Inside `[lower, upper)`", exact for every column precision: `W = lower` keeps the range for a column
+   * that rounds `upper` down onto `lower` (where `W < upper` would be empty).
+   */
+  private buildInRangePredicate(field: string, lowerLiteral: string, upperLiteral: string): string {
+    return `${field} >= ${lowerLiteral} AND (${field} < ${upperLiteral} OR ${field} = ${lowerLiteral})`;
   }
 
   /**

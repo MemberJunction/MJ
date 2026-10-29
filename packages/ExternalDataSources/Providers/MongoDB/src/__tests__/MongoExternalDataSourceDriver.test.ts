@@ -123,6 +123,16 @@ describe('MongoExternalDataSourceDriver — seekAfter (structured keyset resume 
     });
     expect(d.seek({ Watermark: wm, Keys: [] })).toEqual({ updatedAt: { $gte: upper } });
   });
+  it('within-range seek → only docs inside the range (after the key when one is given)', () => {
+    const lower = new Date('2026-10-26T01:00:00.123Z');
+    const upper = new Date('2026-10-26T01:00:00.124Z');
+    const wm = { Field: 'updatedAt', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z', WithinRange: true };
+    expect(d.seek({ Watermark: wm, Keys: [] })).toEqual({ updatedAt: { $gte: lower, $lt: upper } });
+    expect(d.seek({ Watermark: wm, Keys: [{ Field: 'seq', Value: 9 }] })).toEqual({
+      $and: [{ updatedAt: { $gte: lower, $lt: upper } }, { seq: { $gt: 9 } }],
+    });
+    expect(() => d.seek({ Watermark: { Field: 'updatedAt', Value: 'x', WithinRange: true }, Keys: [] })).toThrow(/WithinRange requires ExclusiveUpper/);
+  });
   it('NULL watermark (BSON sorts null first) → finish the null run by key, then every non-null doc', () => {
     expect(d.seek({ Watermark: { Field: 'updatedAt', Value: null }, Keys: [{ Field: 'seq', Value: 9 }] })).toEqual({
       $or: [{ $and: [{ updatedAt: null }, { seq: { $gt: 9 } }] }, { updatedAt: { $ne: null } }],

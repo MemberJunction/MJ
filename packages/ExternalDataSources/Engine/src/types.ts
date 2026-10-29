@@ -83,14 +83,28 @@ export interface ExternalSeekAfter {
      * Present when `Value` is a temporal value truncated by the driver (JavaScript `Date` holds whole
      * milliseconds, so a `datetime2(7)` / `timestamp(6)` value comes back without its sub-millisecond part):
      * every consumed row's watermark lies in `[Value, ExclusiveUpper)`. With `Keys` empty that whole range
-     * has been consumed and the seek is `Field >= ExclusiveUpper`; with `Keys` the seek is
-     * `Field >= ExclusiveUpper OR (Field in the range AND keys after)`.
+     * has been consumed and the seek is "after the range"; with `Keys` the seek is
+     * "after the range OR (in the range AND keys after)".
+     *
+     * A column coarser than a millisecond (SQL Server `datetime` holds 1/300 s, `smalldatetime` whole
+     * minutes) rounds the `ExclusiveUpper` literal back down into the consumed range, so a driver must
+     * not render "after the range" as `Field >= ExclusiveUpper` alone: SQL drivers render
+     * `Field >= ExclusiveUpper AND Field > Value` and "in the range" as
+     * `Field >= Value AND (Field < ExclusiveUpper OR Field = Value)`, which are exact for every precision.
      */
     ExclusiveUpper?: string;
+    /**
+     * Only with `ExclusiveUpper` and a non-NULL `Value`: restrict the read to rows INSIDE
+     * `[Value, ExclusiveUpper)` with keys after `Keys` (every row of the range when `Keys` is empty).
+     * The caller then orders by the key columns alone. Used to walk one truncated range that holds more
+     * rows than a batch, where the full-precision watermark order inside the range cannot be resumed.
+     */
+    WithinRange?: boolean;
   };
   /**
    * The primary-key components in ordering position, each holding the last consumed value. May be empty
-   * only together with `Watermark.ExclusiveUpper` (the whole truncation range was consumed).
+   * only together with `Watermark.ExclusiveUpper` (the whole truncation range was consumed, or — with
+   * `WithinRange` — none of it has been read yet).
    */
   Keys: Array<{ Field: string; Value: string | number }>;
 }

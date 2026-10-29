@@ -18,6 +18,8 @@ import {
   ExternalQueryResult,
   ExternalRow,
   HostSqlConnectionInfo,
+  HOST_MODE_DATABASE_PREFIX,
+  IsHostModeDatabaseAllowed,
   ResolveHostConnection,
 } from "@memberjunction/external-data-sources";
 
@@ -143,8 +145,10 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
    * `server`/`host` (the target is always the host's own server) and the row must carry no
    * `CredentialID` (host mode never mixes with a stored credential), and the row must name its
    * target in `DefaultDatabase` (otherwise the host login would land in its own default database —
-   * the MJ database). A system database (`master`, `model`, `msdb`, `tempdb`) is refused too. Throws a
-   * configuration error.
+   * the MJ database). A system database (`master`, `model`, `msdb`, `tempdb`) is refused, and so is any
+   * database that is not an archive-seed staging database (`MJ_Staging_*`, case-insensitive): host
+   * mode reads with MJAPI's own login, and any user who can edit an External Data Source can set it.
+   * Throws a configuration error.
    */
   protected assertHostModeAllowed(dataSource: MJExternalDataSourceEntity, config: SQLServerConnectionConfig): void {
     if (config.server || config.host) {
@@ -158,6 +162,12 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     const database = this.requireHostDatabase(dataSource);
     if (HOST_MODE_SYSTEM_DATABASES.has(database.toLowerCase())) {
       throw new Error(`host auth mode refuses DefaultDatabase '${database}': it is a system database (external data source '${dataSource.Name}').`);
+    }
+    if (!IsHostModeDatabaseAllowed(database)) {
+      throw new Error(
+        `host auth mode refuses DefaultDatabase '${database}': only an archive-seed staging database (a name starting with ` +
+        `'${HOST_MODE_DATABASE_PREFIX}') may be opened with the host's login (external data source '${dataSource.Name}').`,
+      );
     }
   }
 

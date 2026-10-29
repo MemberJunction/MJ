@@ -356,10 +356,16 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
       return { $or: [{ $and: [{ [field]: null }, keysAfter] }, { [field]: { $ne: null } }] };
     }
     const lower = this.coerceIncrementalValue(seek.Watermark.Value);
+    if (seek.Watermark.WithinRange && !seek.Watermark.ExclusiveUpper) {
+      throw new Error('seekAfter.Watermark.WithinRange requires ExclusiveUpper.');
+    }
     if (seek.Watermark.ExclusiveUpper) {
+      // BSON dates hold whole milliseconds, exactly the precision of the range, so `$gte upper` is exact.
       const upper = this.coerceIncrementalValue(seek.Watermark.ExclusiveUpper);
+      const inRange = { [field]: { $gte: lower, $lt: upper } };
+      if (seek.Watermark.WithinRange) return keysAfter ? { $and: [inRange, keysAfter] } : inRange;
       if (!keysAfter) return { [field]: { $gte: upper } };
-      return { $or: [{ [field]: { $gte: upper } }, { $and: [{ [field]: { $gte: lower, $lt: upper } }, keysAfter] }] };
+      return { $or: [{ [field]: { $gte: upper } }, { $and: [inRange, keysAfter] }] };
     }
     if (!keysAfter) return { [field]: { $gt: lower } };
     return { $or: [{ [field]: { $gt: lower } }, { $and: [{ [field]: lower }, keysAfter] }] };

@@ -6,6 +6,10 @@
  * host registers a resolver at startup; drivers ask for the connection info when they build a pool.
  * When no resolver is registered (or it fails), resolution returns undefined and the driver refuses
  * host mode.
+ *
+ * Host mode exists for one purpose: reading the archive seed's staging database (a backup restored on
+ * the host's own server). Any user who can edit an External Data Source can set `authMode: "host"`, so a
+ * driver refuses it for every database outside that purpose — see {@link IsHostModeDatabaseAllowed}.
  */
 
 /** The host process's own SQL Server connection, as handed to drivers running in `host` auth mode. */
@@ -47,4 +51,21 @@ export function ResolveHostConnection(): HostSqlConnectionInfo | undefined {
     } catch {
         return undefined;
     }
+}
+
+/**
+ * The name prefix of the archive seed's staging databases — the only databases `host` auth mode may
+ * open. Compared case-insensitively.
+ */
+export const HOST_MODE_DATABASE_PREFIX = 'MJ_Staging_';
+
+/**
+ * True when `host` auth mode may open `database`: its name starts with {@link HOST_MODE_DATABASE_PREFIX}
+ * (case-insensitively) and has something after the prefix. The host's login can read every database it
+ * is a user of, so without this any External Data Source editor could read any of them through it.
+ */
+export function IsHostModeDatabaseAllowed(database: string): boolean {
+    const name = database.trim();
+    return name.length > HOST_MODE_DATABASE_PREFIX.length
+        && name.toLowerCase().startsWith(HOST_MODE_DATABASE_PREFIX.toLowerCase());
 }

@@ -30,6 +30,29 @@ export interface ParsedKeysetMarker {
     WatermarkUpper?: string;
     /** Last consumed primary-key values by field. Empty when the whole watermark range was consumed. */
     Keys: Record<string, unknown>;
+    /** True while the walk reads one `[Watermark, WatermarkUpper)` range in key order (see `FetchWithinBucket`). */
+    WithinBucket?: boolean;
+    /** Rows the walk has consumed so far: where offset paging resumes when the marker cannot seek. */
+    Position?: number;
+}
+
+/** What `ExtractKeysetMarker` records beside the last row's watermark and keys. */
+export interface KeysetMarkerOptions {
+    /** Every row sharing the last row's millisecond watermark bucket is consumed, so the keys are dropped. */
+    BucketConsumed?: boolean;
+    /** The walk is inside one millisecond bucket, ordered by key alone. */
+    WithinBucket?: boolean;
+    /** Rows the walk has consumed, including this page. */
+    Position?: number;
+}
+
+/** The serialized keyset marker (`AfterKeyValue`). Short keys keep the persisted string small. */
+interface KeysetMarkerJson {
+    w?: string | null;
+    wx?: string;
+    k: Record<string, unknown>;
+    b?: true;
+    o?: number;
 }
 
 /** A page trimmed so it ends on a watermark boundary the next seek can resume from exactly. */
@@ -37,6 +60,18 @@ interface TrimmedPage {
     Rows: Record<string, unknown>[];
     /** True when every row sharing the last row's (millisecond-truncated) watermark is inside the page. */
     BucketConsumed: boolean;
+    /** True when the whole page is one millisecond bucket that continues past the page. */
+    SingleBucket?: boolean;
+}
+
+/** The state one `FetchChanges` call pages with. */
+export interface KeysetWalk {
+    Driver: BaseExternalDataSourceDriver;
+    DataSource: MJExternalDataSourceEntity;
+    Context: FetchContext;
+    Meta: ExternalObjectMeta;
+    /** Rows the walk consumed before this batch. */
+    Position: number;
 }
 
 /** Resolved foreign-key edge for one referencing column (built from the descriptor's relationships). */
@@ -48,7 +83,7 @@ interface ForeignKeyEdge {
 }
 
 /** Per-object sync metadata resolved from the persisted IntegrationObject/Field cache. */
-interface ExternalObjectMeta {
+export interface ExternalObjectMeta {
     /** The vendor-side "last changed" column, when the object declares one. */
     WatermarkField?: string;
     /** Primary-key column name(s), used for record identity + deterministic ordering. */
@@ -190,19 +225,23 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         const wanted = options?.ObjectNames && options.ObjectNames.length > 0
             ? new Set(options.ObjectNames.map(n => n.toLowerCase()))
             : null;
-        const objects = wanted
-            ? descriptorObjects.filter(o => wanted.has(o.Name.toLowerCase()))
-            : descriptorObjects;
+        const tablesOnly = options?.BaseTablesOnly === true;
+        const objects = descriptorObjects.filter(o =>
+            (!wanted || wanted.has(o.Name.toLowerCase())) && (!tablesOnly || o.ObjectType === 'table'));
         return {
             Objects: objects.map(o => this.MapObjectToSourceObject(o)),
             // A scoped introspection is never authoritative over the whole surface (mirrors the base rule).
-            IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted,
+            IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted && !tablesOnly,
         };
     }
 
+    /** How many schemas {@link IntrospectSchemas} introspects at once. */
+    protected static readonly SchemaIntrospectionConcurrency = 4;
+
     /**
-     * Introspects each schema in turn and returns the objects with schema-qualified names
-     * (`schema.object`), so the same table name in two schemas stays distinct downstream.
+     * Introspects the schemas a few at a time (bounded by {@link SchemaIntrospectionConcurrency}) and
+     * returns the objects in schema order with schema-qualified names (`schema.object`), so the same table
+     * name in two schemas stays distinct downstream.
      */
     protected async IntrospectSchemas(
         driver: BaseExternalDataSourceDriver,
@@ -210,14 +249,28 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         schemas: readonly string[],
         contextUser: UserInfo,
     ): Promise<ExternalSchemaObject[]> {
-        const objects: ExternalSchemaObject[] = [];
-        for (const schema of schemas) {
-            const descriptor = await driver.IntrospectSchema(dataSource, schema, contextUser);
-            for (const o of descriptor.Objects) {
-                objects.push(o.Name.includes('.') ? o : { ...o, Name: `${schema}.${o.Name}`, Schema: o.Schema ?? schema });
+        const perSchema: ExternalSchemaObject[][] = new Array(schemas.length);
+        let next = 0;
+        const worker = async (): Promise<void> => {
+            while (next < schemas.length) {
+                const index = next++;
+                perSchema[index] = await this.introspectQualifiedSchema(driver, dataSource, schemas[index], contextUser);
             }
-        }
-        return objects;
+        };
+        const workers = Math.min(BaseExternalDataSourceConnector.SchemaIntrospectionConcurrency, schemas.length);
+        await Promise.all(Array.from({ length: workers }, () => worker()));
+        return perSchema.flat();
+    }
+
+    /** One schema's objects, each name qualified with the schema unless the driver already qualified it. */
+    private async introspectQualifiedSchema(
+        driver: BaseExternalDataSourceDriver,
+        dataSource: MJExternalDataSourceEntity,
+        schema: string,
+        contextUser: UserInfo,
+    ): Promise<ExternalSchemaObject[]> {
+        const descriptor = await driver.IntrospectSchema(dataSource, schema, contextUser);
+        return descriptor.Objects.map(o => (o.Name.includes('.') ? o : { ...o, Name: `${schema}.${o.Name}`, Schema: o.Schema ?? schema }));
     }
 
     /** The source's schemas that hold objects, from the driver; empty when the driver cannot enumerate them. */
@@ -262,28 +315,118 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         const { dataSource, driver } = await this.Resolve(ctx.CompanyIntegration, ctx.ContextUser);
         const meta = await this.ResolveObjectMeta(ctx);
 
+        // Keyset seek: a marker from the previous batch becomes a structured resume point the driver renders
+        // in its own dialect. Without a usable marker (first batch, or a PK-less object) fall back to offset.
+        const marker = meta.PrimaryKeyFields.length > 0 && ctx.AfterKeyValue
+            ? this.ParseKeysetMarker(ctx.AfterKeyValue, meta.PrimaryKeyFields, meta.WatermarkField)
+            : undefined;
+        const seekAfter = marker ? this.BuildSeekAfter(marker, meta.PrimaryKeyFields, meta.WatermarkField) : undefined;
+        // Rows the walk consumed before this batch. A keyset batch reports no NextOffset, so the marker carries
+        // the position: a marker that cannot seek then falls back to offset paging from where the walk is,
+        // instead of restarting at row 0.
+        const walk: KeysetWalk = {
+            Driver: driver,
+            DataSource: dataSource,
+            Context: ctx,
+            Meta: meta,
+            Position: marker?.Position ?? ctx.CurrentOffset ?? 0,
+        };
+        return seekAfter?.Watermark?.WithinRange
+            ? this.FetchWithinBucket(walk, seekAfter)
+            : this.FetchOrderedPage(walk, seekAfter);
+    }
+
+    /**
+     * One page in (watermark, key) order: seeking from `seekAfter`, or offsetting from the walk position
+     * without one. When the whole page is one millisecond bucket that continues past the page, the page is
+     * discarded and the bucket is walked by key instead ({@link FetchWithinBucket}).
+     */
+    protected async FetchOrderedPage(walk: KeysetWalk, seekAfter: ExternalSeekAfter | undefined): Promise<FetchBatchResult> {
+        const { Context: ctx, Meta: meta } = walk;
         // Order by watermark then PK (ascending) so the last row carries the max watermark and paging is
         // deterministic. Raw identifiers — the EDS driver quotes them per its own dialect.
         const orderColumns = [meta.WatermarkField, ...meta.PrimaryKeyFields].filter(
             (c): c is string => typeof c === 'string' && c.length > 0,
         );
+        // When seeking, offset is always 0 (eliminating the deep OFFSET scan penalty).
+        const fetched = await this.RunWalkView(walk, orderColumns, seekAfter, seekAfter ? 0 : walk.Position);
+        const hasMore = fetched.length > ctx.BatchSize;
+        let rows = hasMore ? fetched.slice(0, ctx.BatchSize) : fetched;
 
-        // Keyset seek: a marker from the previous batch becomes a structured resume point the driver renders
-        // in its own dialect. Without a usable marker (first batch, or a PK-less object) fall back to offset.
-        const canUseKeyset = meta.PrimaryKeyFields.length > 0;
-        let seekAfter: ExternalSeekAfter | undefined;
-        if (canUseKeyset && ctx.AfterKeyValue) {
-            const parsed = this.ParseKeysetMarker(ctx.AfterKeyValue, meta.PrimaryKeyFields, meta.WatermarkField);
-            seekAfter = parsed ? this.BuildSeekAfter(parsed, meta.PrimaryKeyFields, meta.WatermarkField) : undefined;
+        // Compute the next seek marker from the final row of the batch. A page is first trimmed so it ends on
+        // a watermark boundary, which keeps the resume exact for sub-millisecond watermarks.
+        let nextAfterKey: string | undefined;
+        if (meta.PrimaryKeyFields.length > 0 && hasMore && rows.length > 0) {
+            const page = this.TrimPageToWatermarkBucket(rows, fetched[ctx.BatchSize], meta.WatermarkField);
+            if (page.SingleBucket && meta.WatermarkField) {
+                return this.FetchWithinBucket(walk, this.bucketStartSeek(rows[0], meta.WatermarkField));
+            }
+            rows = page.Rows;
+            nextAfterKey = this.ExtractKeysetMarker(rows[rows.length - 1], meta.PrimaryKeyFields, meta.WatermarkField, {
+                BucketConsumed: page.BucketConsumed,
+                Position: walk.Position + rows.length,
+            });
         }
-        const useKeyset = seekAfter !== undefined;
 
-        // When seeking, offset is always 0 (eliminating the deep OFFSET scan penalty);
-        // otherwise fall back to offset pagination via ctx.CurrentOffset.
-        const offset = useKeyset ? 0 : (ctx.CurrentOffset ?? 0);
+        return {
+            Records: rows.map(r => this.BuildRecord(r, ctx.ObjectName, meta.PrimaryKeyFields, meta.WatermarkField)),
+            HasMore: hasMore,
+            NextOffset: seekAfter || !hasMore ? undefined : walk.Position + rows.length,
+            NextAfterKeyValue: nextAfterKey,
+            NewWatermarkValue: this.MaxWatermark(rows, meta.WatermarkField),
+        };
+    }
 
-        const result = await driver.RunView(
-            dataSource,
+    /**
+     * One batch of a millisecond bucket that holds more rows than a batch, read in key order. Inside such a
+     * bucket the full-precision watermark order (`datetime2(7)`, `timestamp(6)`) cannot be resumed from a
+     * millisecond `Date`, so a (watermark, key) seek would skip any row with a later sub-millisecond stamp
+     * and a lower key. Key order inside the bucket is exact. Once the bucket is exhausted the marker says
+     * the whole bucket is consumed and the walk carries on in (watermark, key) order after it.
+     */
+    protected async FetchWithinBucket(walk: KeysetWalk, seekAfter: ExternalSeekAfter): Promise<FetchBatchResult> {
+        const { Context: ctx, Meta: meta } = walk;
+        const fetched = await this.RunWalkView(walk, meta.PrimaryKeyFields, seekAfter, 0);
+        const bucketHasMore = fetched.length > ctx.BatchSize;
+        const rows = bucketHasMore ? fetched.slice(0, ctx.BatchSize) : fetched;
+        const position = walk.Position + rows.length;
+        const range = seekAfter.Watermark;
+        const nextAfterKey = bucketHasMore || !range
+            ? this.ExtractKeysetMarker(rows[rows.length - 1], meta.PrimaryKeyFields, meta.WatermarkField, { WithinBucket: true, Position: position })
+            : JSON.stringify({ w: range.Value, wx: range.ExclusiveUpper, k: {}, o: position } satisfies KeysetMarkerJson);
+        return {
+            Records: rows.map(r => this.BuildRecord(r, ctx.ObjectName, meta.PrimaryKeyFields, meta.WatermarkField)),
+            // Rows may follow the bucket; the next batch seeks after it and reports the real end.
+            HasMore: true,
+            NextAfterKeyValue: nextAfterKey,
+            NewWatermarkValue: this.MaxWatermark(rows, meta.WatermarkField),
+        };
+    }
+
+    /** The seek that reads a row's whole millisecond bucket from its start, in key order. */
+    private bucketStartSeek(row: Record<string, unknown>, watermarkField: string): ExternalSeekAfter {
+        const bucket = (row[watermarkField] as Date).getTime();
+        return {
+            Watermark: {
+                Field: watermarkField,
+                Value: new Date(bucket).toISOString(),
+                ExclusiveUpper: new Date(bucket + 1).toISOString(),
+                WithinRange: true,
+            },
+            Keys: [],
+        };
+    }
+
+    /** Runs one walk page through the driver (one extra row to detect HasMore) and returns its rows. */
+    protected async RunWalkView(
+        walk: KeysetWalk,
+        orderColumns: string[],
+        seekAfter: ExternalSeekAfter | undefined,
+        offset: number,
+    ): Promise<Record<string, unknown>[]> {
+        const { Context: ctx, Meta: meta } = walk;
+        const result = await walk.Driver.RunView(
+            walk.DataSource,
             {
                 objectName: ctx.ObjectName,
                 // Structured incremental bound (>=) — the EDS driver renders the dialect predicate, quoting,
@@ -293,7 +436,6 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
                     : undefined,
                 seekAfter,
                 defaultOrderByColumns: orderColumns.length ? orderColumns : undefined,
-                // Fetch one extra to detect HasMore without a separate COUNT.
                 maxRows: ctx.BatchSize + 1,
                 offset,
             },
@@ -302,26 +444,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         if (!result.success) {
             throw new Error(result.errorMessage ?? `RunView failed for object '${ctx.ObjectName}'`);
         }
-
-        const hasMore = result.rows.length > ctx.BatchSize;
-        let rows = hasMore ? result.rows.slice(0, ctx.BatchSize) : result.rows;
-
-        // Compute the next seek marker from the final row of the batch. A page is first trimmed so it ends on
-        // a watermark boundary wherever possible, which keeps the resume exact for sub-millisecond watermarks.
-        let nextAfterKey: string | undefined;
-        if (canUseKeyset && hasMore && rows.length > 0) {
-            const page = this.TrimPageToWatermarkBucket(rows, result.rows[ctx.BatchSize], meta.WatermarkField);
-            rows = page.Rows;
-            nextAfterKey = this.ExtractKeysetMarker(rows[rows.length - 1], meta.PrimaryKeyFields, meta.WatermarkField, page.BucketConsumed);
-        }
-
-        return {
-            Records: rows.map(r => this.BuildRecord(r, ctx.ObjectName, meta.PrimaryKeyFields, meta.WatermarkField)),
-            HasMore: hasMore,
-            NextOffset: useKeyset ? undefined : (hasMore ? offset + ctx.BatchSize : undefined),
-            NextAfterKeyValue: nextAfterKey,
-            NewWatermarkValue: this.MaxWatermark(rows, meta.WatermarkField),
-        };
+        return result.rows;
     }
 
     /**
@@ -330,9 +453,8 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
      * `datetime2(7)` values differ only below the millisecond are indistinguishable here. Resuming from
      * such a value is exact only when every row sharing it (the "bucket") is inside the page, so when the
      * bucket straddles the page boundary the trailing rows of the bucket are dropped and re-read next
-     * batch. When the whole page is one bucket (a bulk update that stamped more rows than the batch size)
-     * nothing can be dropped; the resume then seeks within the bucket by primary key, which is exact
-     * whenever the rows carry the same value, the bulk-update case.
+     * batch. When the whole page is one bucket (more rows in one millisecond than the batch size) nothing
+     * can be dropped: the result says `SingleBucket` and the caller walks that bucket in key order.
      */
     protected TrimPageToWatermarkBucket(
         rows: Record<string, unknown>[],
@@ -351,7 +473,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         const bucketStart = rows.findIndex(r => watermarkField && this.watermarkBucket(r[watermarkField]) === lastBucket);
         return bucketStart > 0
             ? { Rows: rows.slice(0, bucketStart), BucketConsumed: true }
-            : { Rows: rows, BucketConsumed: false };
+            : { Rows: rows, BucketConsumed: false, SingleBucket: true };
     }
 
     /** The millisecond bucket of a temporal watermark value; undefined for anything that is not a `Date`. */
@@ -360,17 +482,18 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
     }
 
     /**
-     * Extracts a deterministic keyset/seek marker string from the last row of a page for the next batch.
-     * Shapes: a bare scalar for a single key without a watermark; otherwise JSON `{ w?, wx?, k }` where `w`
-     * is the watermark (`null` when NULL), `wx` the exclusive upper bound of a millisecond-truncated `Date`
-     * watermark, and `k` the key values — empty when `bucketConsumed` says the whole `[w, wx)` range is in
-     * the page, so the next seek needs no key tiebreak.
+     * Extracts a deterministic keyset/seek marker string from the last row of a page for the next batch:
+     * JSON `{ w?, wx?, k, b?, o? }` where `w` is the watermark (`null` when NULL), `wx` the exclusive upper
+     * bound of a millisecond-truncated `Date` watermark, `k` the key values with their JSON types (a numeric
+     * key stays a number, so a type-strict source such as MongoDB keeps matching it) — empty when
+     * `BucketConsumed` says the whole `[w, wx)` range is in the page — `b` set while walking inside one
+     * bucket in key order, and `o` the walk position (rows consumed so far).
      */
     public ExtractKeysetMarker(
         row: Record<string, unknown>,
         primaryKeyFields: string[],
         watermarkField?: string,
-        bucketConsumed = false
+        options: KeysetMarkerOptions = {}
     ): string | undefined {
         if (!row || primaryKeyFields.length === 0) {
             return undefined;
@@ -383,32 +506,40 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
             }
         }
 
+        const marker: KeysetMarkerJson = { k: keys };
         if (watermarkField) {
-            const raw = row[watermarkField];
-            if (raw == null) {
-                return JSON.stringify({ w: null, k: keys });
-            }
-            if (raw instanceof Date) {
-                const bucket = raw.getTime();
-                return JSON.stringify({
-                    w: new Date(bucket).toISOString(),
-                    wx: new Date(bucket + 1).toISOString(),
-                    k: bucketConsumed ? {} : keys,
-                });
-            }
-            return JSON.stringify({ w: String(raw), k: keys });
+            this.addWatermarkToMarker(marker, row[watermarkField], options);
         }
+        if (options.Position !== undefined) {
+            marker.o = options.Position;
+        }
+        return JSON.stringify(marker);
+    }
 
-        if (primaryKeyFields.length === 1) {
-            const singleVal = keys[primaryKeyFields[0]];
-            return singleVal !== undefined ? String(singleVal) : undefined;
+    /** Sets the marker's watermark part: `null`, an exact value, or a millisecond range for a `Date`. */
+    private addWatermarkToMarker(marker: KeysetMarkerJson, raw: unknown, options: KeysetMarkerOptions): void {
+        if (raw == null) {
+            marker.w = null;
+            return;
         }
-        return JSON.stringify({ k: keys });
+        if (!(raw instanceof Date)) {
+            marker.w = String(raw);
+            return;
+        }
+        const bucket = raw.getTime();
+        marker.w = new Date(bucket).toISOString();
+        marker.wx = new Date(bucket + 1).toISOString();
+        if (options.BucketConsumed) {
+            marker.k = {};
+        } else if (options.WithinBucket) {
+            marker.b = true;
+        }
     }
 
     /**
      * Parses an `AfterKeyValue` string into its watermark and primary-key components. Accepts the JSON
-     * shape `ExtractKeysetMarker` writes, a direct key map (`{ "id": 123 }`), or a bare scalar for a single key.
+     * shape `ExtractKeysetMarker` writes, a direct key map (`{ "id": 123 }`), or a bare scalar for a single
+     * key (the shape earlier versions wrote; its value is a string).
      */
     public ParseKeysetMarker(
         marker: string,
@@ -435,7 +566,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return primaryKeyFields.length === 1 ? { Keys: { [primaryKeyFields[0]]: trimmed } } : undefined;
     }
 
-    /** The JSON marker shapes: `{ w?, wx?, k }` from `ExtractKeysetMarker`, or a direct key map. */
+    /** The JSON marker shapes: `{ w?, wx?, k, b?, o? }` from `ExtractKeysetMarker`, or a direct key map. */
     private parseStructuredMarker(
         parsed: Record<string, unknown>,
         primaryKeyFields: string[],
@@ -448,6 +579,12 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
             }
             if (typeof parsed.wx === 'string') {
                 result.WatermarkUpper = parsed.wx;
+            }
+            if (parsed.b === true) {
+                result.WithinBucket = true;
+            }
+            if (typeof parsed.o === 'number' && Number.isInteger(parsed.o) && parsed.o >= 0) {
+                result.Position = parsed.o;
             }
             return result;
         }
@@ -486,6 +623,11 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         }
         if (marker.Watermark === undefined) {
             return undefined;
+        }
+        if (marker.WithinBucket) {
+            return typeof marker.Watermark === 'string' && marker.WatermarkUpper
+                ? { Watermark: { Field: watermarkField, Value: marker.Watermark, ExclusiveUpper: marker.WatermarkUpper, WithinRange: true }, Keys: keys }
+                : undefined;
         }
         if (keys.length === 0 && (marker.Watermark === null || !marker.WatermarkUpper)) {
             return undefined;
