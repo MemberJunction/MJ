@@ -548,6 +548,38 @@ export interface ComponentExecutionOptions extends LinterOptions {
   dataCaps?: DataCapOptions;
 }
 
+/**
+ * One error recorded inside the page for {@link ComponentRunner} to collect after the run.
+ * `type` selects the rule the error is reported under.
+ */
+interface BrowserRuntimeErrorEntry {
+  message: string;
+  stack?: string;
+  type: string;
+  phase?: string;
+  source?: Violation['source'];
+}
+
+/** The harness's own globals on the page's `window`. */
+interface HarnessPageGlobals {
+  __testHarnessRuntimeErrors?: BrowserRuntimeErrorEntry[];
+  __testHarnessTestFailed?: boolean;
+}
+
+/** One failed entry in the component manager's load result. */
+interface ComponentLoadFailure {
+  componentName: string;
+  error: string;
+  phase?: string;
+}
+
+/**
+ * Rule for a call to a component utility the harness was not given (for example
+ * `utilities.ai` when the caller passes no AI tools). The call cannot be tested here,
+ * which is a limit of the harness, not a defect in the component.
+ */
+export const SANDBOX_UTILITY_UNAVAILABLE_RULE = 'sandbox-utility-unavailable';
+
 export interface ComponentExecutionResult {
   success: boolean;
   html: string;
@@ -641,6 +673,24 @@ export class ComponentRunner {
   }
 
   /**
+   * One warning per utility the component called that this harness was not given. They are
+   * warnings rather than errors so they never fail the run or reach a fixer as a defect:
+   * the call was not tested, and the component may well be correct.
+   */
+  private static buildUnavailableUtilityWarnings(unavailableUtilities: Set<string>): Violation[] {
+    return [...unavailableUtilities].map(name => ({
+      message:
+        `${name} is not available in the test harness, so this call was not tested. ` +
+        `This is a limit of the harness, not a defect in the component.`,
+      severity: 'medium' as const,
+      rule: SANDBOX_UTILITY_UNAVAILABLE_RULE,
+      line: 0,
+      column: 0,
+      source: 'test-harness' as const
+    }));
+  }
+
+  /**
    * Reclassify violations that are actually browser crashes.
    * Browser crashes should be marked as low severity with rule='browser-crash'
    * since they're infrastructure issues, not code errors.
@@ -701,6 +751,7 @@ export class ComponentRunner {
     const warnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
     const dataErrors: string[] = []; // Track data access errors from RunView/RunQuery
+    const unavailableUtilities = new Set<string>(); // Utilities the component called that this harness was not given
     const dataAccess: DataAccessRecord[] = []; // Track every data call: target, rows, cap state
     let renderCount = 0;
     
@@ -785,7 +836,7 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page, options, dataErrors, dataAccess, debug)
+      await this.exposeMJUtilities(page, options, dataErrors, unavailableUtilities, dataAccess, debug)
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
@@ -826,12 +877,23 @@ export class ComponentRunner {
         
         // Declare renderCheckInterval at the top scope for cleanup
         let renderCheckInterval: any;
-        
+        const harnessWindow = window as Window & HarnessPageGlobals;
+
+        // A failure the harness can name is thrown with that name, so the catch below can
+        // report it under its own rule instead of the catch-all 'execution-error'.
+        // HarnessSetupError: the page itself is not ready, so the component never ran.
+        // ComponentLoadError: the component compiled but did not yield a usable root.
+        const namedError = (name: 'HarnessSetupError' | 'ComponentLoadError', message: string): Error => {
+          const error = new Error(message);
+          error.name = name;
+          return error;
+        };
+
         try {
           // Access the real runtime classes
           const MJRuntime = (window as any).MJReactRuntime;
           if (!MJRuntime) {
-            throw new Error('React runtime not loaded');
+            throw namedError('HarnessSetupError', 'React runtime not loaded');
           }
 
           const {
@@ -872,7 +934,7 @@ export class ComponentRunner {
           if (!(window as any).React) {
             console.error('🔴 CRITICAL: React is NULL when creating runtimeContext!');
             console.error('Window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('react')));
-            throw new Error('React is not available in window context');
+            throw namedError('HarnessSetupError', 'React is not available in window context');
           }
           
           if (debug) {
@@ -930,7 +992,7 @@ export class ComponentRunner {
           // Don't call createRuntimeUtilities() as it tries to create new Metadata() which fails
           const utilities = (window as any).__mjUtilities;
           if (!utilities) {
-            throw new Error('Utilities not found - exposeMJUtilities may have failed');
+            throw namedError('HarnessSetupError', 'Utilities not found - exposeMJUtilities may have failed');
           }
           
           // The test harness renders components in isolation without the MJExplorer
@@ -1083,7 +1145,25 @@ export class ComponentRunner {
           }
 
           if (!registrationResult.success) {
-            throw new Error('Component registration failed: ' + JSON.stringify(registrationResult.errors));
+            // One entry per failed component, naming it and the phase that failed, so
+            // unrelated failures are reported (and grouped by consumers) separately.
+            const failures: ComponentLoadFailure[] = registrationResult.errors;
+            harnessWindow.__testHarnessRuntimeErrors = harnessWindow.__testHarnessRuntimeErrors || [];
+            for (const failure of failures) {
+              const who = failure.componentName ? `Component "${failure.componentName}"` : 'A component';
+              harnessWindow.__testHarnessRuntimeErrors.push({
+                message: `${who} failed during ${failure.phase || 'registration'}: ${failure.error || 'no error message was reported'}`,
+                type: 'registration-error',
+                phase: failure.phase,
+                source: 'runtime-wrapper'
+              });
+            }
+            harnessWindow.__testHarnessTestFailed = true;
+            return {
+              success: false,
+              error: `Component registration failed for ${failures.length} component(s)`,
+              componentCount: 0
+            };
           }
 
           if (debug) {
@@ -1094,7 +1174,7 @@ export class ComponentRunner {
 
           // NEW: With ComponentManager, we already have the components from loadResult
           if (!loadResult) {
-            throw new Error('Component loading failed - no result returned');
+            throw namedError('ComponentLoadError', 'Component loading failed - no result returned');
           }
           
           const RootComponentObject = loadResult.rootComponent;
@@ -1102,13 +1182,13 @@ export class ComponentRunner {
             // Enhanced error message with debugging info
             console.error('Failed to load component:', spec.name);
             console.error('Load errors:', loadResult.errors);
-            throw new Error('Root component not loaded: ' + spec.name);
+            throw namedError('ComponentLoadError', `Root component "${spec.name}" was not loaded`);
           }
           
           // Extract the React component from the ComponentObject
           const RootComponent = RootComponentObject.component;
           if (!RootComponent || typeof RootComponent !== 'function') {
-            throw new Error('Component object does not contain a valid React component');
+            throw namedError('ComponentLoadError', `Component "${spec.name}" does not contain a valid React component`);
           }
 
           // Get all loaded components from the result
@@ -1446,14 +1526,16 @@ export class ComponentRunner {
           console.error('🔴 BROWSER: Error type:', typeof error);
           console.error('🔴 BROWSER: Error stringified:', JSON.stringify(error, null, 2));
           
-          (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
-          (window as any).__testHarnessRuntimeErrors.push({
+          const isSetupError = error?.name === 'HarnessSetupError';
+          const isLoadError = error?.name === 'ComponentLoadError';
+          harnessWindow.__testHarnessRuntimeErrors = harnessWindow.__testHarnessRuntimeErrors || [];
+          harnessWindow.__testHarnessRuntimeErrors.push({
             message: error.message || String(error),
             stack: error.stack,
-            type: 'execution-error',
-            source: 'runtime-wrapper'
+            type: isSetupError ? 'harness-setup-error' : isLoadError ? 'component-load-error' : 'execution-error',
+            source: isSetupError ? 'test-harness' : 'runtime-wrapper'
           });
-          (window as any).__testHarnessTestFailed = true;
+          harnessWindow.__testHarnessTestFailed = true;
           
           return {
             success: false,
@@ -1834,6 +1916,7 @@ export class ComponentRunner {
             column: 0
           })),
           ...capWarnings,
+          ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
         ],
         console: consoleLogs,
         screenshot,
@@ -1911,13 +1994,16 @@ export class ComponentRunner {
         success: false,
         html: '',
         errors: errorViolations,
-        warnings: warnings.map(w => ({
-          message: w,
-          severity: 'low' as const,
-          rule: 'warning',
-          line: 0,
-          column: 0
-        })),
+        warnings: [
+          ...warnings.map(w => ({
+            message: w,
+            severity: 'low' as const,
+            rule: 'warning',
+            line: 0,
+            column: 0
+          })),
+          ...ComponentRunner.buildUnavailableUtilityWarnings(unavailableUtilities),
+        ],
         console: consoleLogs,
         executionTime: Date.now() - startTime,
         renderCount,
@@ -2492,6 +2578,12 @@ export class ComponentRunner {
         case 'execution-error':
           rule = 'execution-error';
           break;
+        case 'harness-setup-error':
+          rule = 'harness-setup-error';
+          break;
+        case 'component-load-error':
+          rule = 'component-load-error';
+          break;
         case 'runtime':
           rule = 'runtime-error';
           break;
@@ -2827,6 +2919,7 @@ export class ComponentRunner {
     page: any,
     options: ComponentExecutionOptions,
     dataErrors: string[],
+    unavailableUtilities: Set<string>,
     dataAccess: DataAccessRecord[],
     debug: boolean = false
   ): Promise<void> {
@@ -3082,10 +3175,11 @@ export class ComponentRunner {
 
     // Expose AI tools
     await page.exposeFunction('__mjExecutePrompt', async (params: SimpleExecutePromptParams) => {
+      if (typeof util.ai?.ExecutePrompt !== 'function') {
+        unavailableUtilities.add('utilities.ai.ExecutePrompt');
+        return { success: false, result: 'AI tools are not available in the test harness', modelName: '' };
+      }
       try {
-        if (!util.ai) {
-          throw new Error('AI tools not available');
-        }
         // Add contextUser to params if not provided
         const paramsWithUser = { ...params, contextUser: options.contextUser };
         const result = await util.ai.ExecutePrompt(paramsWithUser);
@@ -3113,10 +3207,11 @@ export class ComponentRunner {
     });
 
     await page.exposeFunction('__mjEmbedText', async (params: SimpleEmbedTextParams) => {
+      if (typeof util.ai?.EmbedText !== 'function') {
+        unavailableUtilities.add('utilities.ai.EmbedText');
+        throw new Error('AI tools are not available in the test harness');
+      }
       try {
-        if (!util.ai) {
-          throw new Error('AI tools not available');
-        }
         // Add contextUser to params if not provided
         const paramsWithUser = { ...params, contextUser: options.contextUser };
         const result = await util.ai.EmbedText(paramsWithUser);

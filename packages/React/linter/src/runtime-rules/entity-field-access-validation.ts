@@ -1,8 +1,8 @@
-import { traverse, NodePath, createViolation, truncateCode, findClosestMatch, findCaseMismatch, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
+import { traverse, NodePath, createViolation, truncateCode, findClosestMatch, findCaseMismatch, FindSimilarNames, NUMERIC_COERCION_FUNCTIONS, NON_ENTITY_PROPERTIES } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
-import { Violation } from '../component-linter';
+import { Violation, FieldAccessViolationDetails } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { LinterOptions } from '../linter-options';
 import { TypeContext, FieldTypeInfo } from '../type-context';
@@ -223,7 +223,8 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       entityName: string,
       validFields: string[],
       objectName: string,
-      propertyName: string
+      propertyName: string,
+      targetType: FieldAccessViolationDetails['TargetType']
     ): void {
       if (validFields.includes(propertyName)) return;
 
@@ -231,15 +232,27 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       // and would indicate a scope mismatch (variable shadowed by a different context)
       if (NON_ENTITY_PROPERTIES.has(propertyName)) return;
 
+      const details: FieldAccessViolationDetails = {
+        Kind: 'field-access',
+        Field: propertyName,
+        TargetType: targetType,
+        TargetName: entityName,
+        SimilarFields: FindSimilarNames(propertyName, validFields),
+        AvailableFields: [...validFields],
+      };
+
       const caseFix = findCaseMismatch(propertyName, validFields);
       if (caseFix) {
-        violations.push(createViolation(
-          'entity-field-access-validation', 'medium', node,
-          `Field "${propertyName}" on entity "${entityName}" has incorrect casing. Did you mean "${caseFix}"?`,
-          `${objectName}.${propertyName}`,
-          { text: `Use the correct casing: "${caseFix}". MemberJunction entity fields use PascalCase.`,
-            example: `// Change:\n${objectName}.${propertyName}\n// To:\n${objectName}.${caseFix}` }
-        ));
+        violations.push({
+          ...createViolation(
+            'entity-field-access-validation', 'medium', node,
+            `Field "${propertyName}" on entity "${entityName}" has incorrect casing. Did you mean "${caseFix}"?`,
+            `${objectName}.${propertyName}`,
+            { text: `Use the correct casing: "${caseFix}". MemberJunction entity fields use PascalCase.`,
+              example: `// Change:\n${objectName}.${propertyName}\n// To:\n${objectName}.${caseFix}` }
+          ),
+          Details: details,
+        });
         return;
       }
 
@@ -247,16 +260,19 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
       const preview = validFields.slice(0, 10).join(', ');
       const more = validFields.length > 10 ? ` and ${validFields.length - 10} more` : '';
 
-      violations.push(createViolation(
-        'entity-field-access-validation', 'high', node,
-        closest
-          ? `Field "${propertyName}" does not exist on entity "${entityName}". Did you mean "${closest}"? Available fields: ${preview}${more}`
-          : `Field "${propertyName}" does not exist on entity "${entityName}". Available fields: ${preview}${more}`,
-        `${objectName}.${propertyName}`,
-        closest
-          ? { text: `Replace "${propertyName}" with "${closest}".`, example: `${objectName}.${closest}` }
-          : { text: `Use one of the valid fields from the "${entityName}" entity.` }
-      ));
+      violations.push({
+        ...createViolation(
+          'entity-field-access-validation', 'high', node,
+          closest
+            ? `Field "${propertyName}" does not exist on entity "${entityName}". Did you mean "${closest}"? Available fields: ${preview}${more}`
+            : `Field "${propertyName}" does not exist on entity "${entityName}". Available fields: ${preview}${more}`,
+          `${objectName}.${propertyName}`,
+          closest
+            ? { text: `Replace "${propertyName}" with "${closest}".`, example: `${objectName}.${closest}` }
+            : { text: `Use one of the valid fields from the "${entityName}" entity.` }
+        ),
+        Details: details,
+      });
     }
 
     /**
@@ -297,7 +313,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         if (!validFields) return;
 
         const objectName = t.isIdentifier(path.node.object) ? path.node.object.name : '(expr)';
-        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName);
+        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName, resolved.queryName ? 'query' : 'entity');
       },
 
       OptionalMemberExpression(path: NodePath<t.OptionalMemberExpression>) {
@@ -320,7 +336,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
         if (!validFields) return;
 
         const objectName = t.isIdentifier(path.node.object) ? path.node.object.name : '(expr)';
-        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName);
+        validateFieldAccess(path.node, resolved.entityName, validFields, objectName, propertyName, resolved.queryName ? 'query' : 'entity');
       },
 
       // Check for numeric coercion on GUID fields
