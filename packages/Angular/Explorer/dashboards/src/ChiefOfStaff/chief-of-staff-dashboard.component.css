@@ -1143,6 +1143,19 @@
     border: 1px solid var(--mj-border-default);
 }
 
+/* An unassigned milestone shows who holds it by default (its creator or the objective's owner):
+   outlined rather than filled, so a real assignment still stands out. */
+.cos-assignee-chip--implicit {
+    background: transparent;
+    border: 1px dashed var(--mj-border-default);
+    color: var(--mj-text-secondary);
+}
+
+.cos-assignee-chip--implicit.cos-assignee-chip--me {
+    border-color: var(--mj-color-primary);
+    color: var(--mj-color-primary);
+}
+
 /* To-dos & reminders */
 .cos-todo-list {
     display: flex;

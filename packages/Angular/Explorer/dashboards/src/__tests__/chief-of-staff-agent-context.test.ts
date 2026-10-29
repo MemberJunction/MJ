@@ -797,6 +797,55 @@ describe('CalculateChiefOfStaffMetrics — the objective names its owner', () =>
     });
 });
 
+describe('CalculateChiefOfStaffMetrics — an unassigned milestone is held by its creator, or by the objective\'s owner', () => {
+    const root = () => makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: 'P1', CreatedByPerson: 'Paul Christmann' });
+
+    it('a milestone with assignees is held by them, explicitly', () => {
+        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: 'P1' });
+        const assignees = new UUIDMap<TaskAssignee[]>();
+        assignees.Set('M1', [{ PersonID: 'P2', Name: 'Jimmy Smits' }]);
+        const row = CalculateChiefOfStaffMetrics([root(), m], [], [], new Date(), { Assignees: assignees, CurrentPersonID: 'P1' }).PriorityCards[0].Milestones[0];
+        expect(row.Holders).toEqual([{ PersonID: 'P2', Name: 'Jimmy Smits' }]);
+        expect(row.IsImplicitlyHeld).toBe(false);
+        expect(row.HeldByMe).toBe(false);
+    });
+
+    it('a milestone with no assignment is held by the person who created it', () => {
+        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: 'p1', CreatedByPerson: 'Paul Christmann' });
+        const row = CalculateChiefOfStaffMetrics([root(), m], [], [], new Date(), { CurrentPersonID: 'P1' }).PriorityCards[0].Milestones[0];
+        expect(row.Holders).toEqual([{ PersonID: 'p1', Name: 'Paul Christmann' }]);
+        expect(row.IsImplicitlyHeld).toBe(true);
+        expect(row.HeldByMe).toBe(true);
+        // Implicit ownership is not an assignment: the row is not highlighted as assigned work.
+        expect(row.AssignedToMe).toBe(false);
+    });
+
+    it('a milestone with no assignment and no creator falls back to the objective\'s owner', () => {
+        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: null });
+        const row = CalculateChiefOfStaffMetrics([root(), m], [], [], new Date(), { CurrentPersonID: 'p1' }).PriorityCards[0].Milestones[0];
+        expect(row.Holders).toEqual([{ PersonID: 'P1', Name: 'Paul Christmann' }]);
+        expect(row.IsImplicitlyHeld).toBe(true);
+        expect(row.HeldByMe).toBe(true);
+    });
+
+    it('has no holder when neither the milestone nor the objective carries a creator', () => {
+        const orphanRoot = makeBaseTask({ ID: 'R1', Name: 'Launch', CreatedByPersonID: null });
+        const m = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'Implement core', CreatedByPersonID: null });
+        const row = CalculateChiefOfStaffMetrics([orphanRoot, m], [], []).PriorityCards[0].Milestones[0];
+        expect(row.Holders).toEqual([]);
+        expect(row.IsImplicitlyHeld).toBe(false);
+        expect(row.HeldByMe).toBe(false);
+    });
+
+    it('a non-owner sees a milestone they created under someone else\'s objective even without an assignment row', () => {
+        const mine = makeBaseTask({ ID: 'M1', ParentID: 'R1', Name: 'My add-on', CreatedByPersonID: 'P2' });
+        const theirs = makeBaseTask({ ID: 'M2', ParentID: 'R1', Name: 'Core', CreatedByPersonID: 'P1' });
+        const card = CalculateChiefOfStaffMetrics([root(), mine, theirs], [], [], new Date(), { CurrentPersonID: 'P2' }).PriorityCards[0];
+        expect(card.IsOwner).toBe(false);
+        expect(card.Milestones.map((m) => m.Task.ID)).toEqual(['M1']);
+    });
+});
+
 describe('To-dos and reminders', () => {
     const now = new Date('2026-10-28T18:00:00.000Z');
     const todo = (over: Partial<BizAppsTaskRecordLike>) => makeBaseTask({

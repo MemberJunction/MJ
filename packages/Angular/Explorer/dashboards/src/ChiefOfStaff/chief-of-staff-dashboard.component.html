@@ -566,10 +566,13 @@
                                                             </div>
                                                         </div>
                                                         <div class="cos-subtask-row__right">
-                                                            @if (row.Assignees.length > 0) {
-                                                                <span class="cos-assignees cos-assignees--inline" title="Assigned to">
-                                                                    @for (who of row.Assignees; track who.PersonID) {
-                                                                        <span class="cos-assignee-chip" [class.cos-assignee-chip--me]="IsCurrentPerson(who.PersonID)">{{ IsCurrentPerson(who.PersonID) ? 'You' : who.Name }}</span>
+                                                            @if (row.Holders.length > 0) {
+                                                                <span class="cos-assignees cos-assignees--inline"
+                                                                      [title]="row.IsImplicitlyHeld ? 'Not assigned to anyone, so it stays with the person who created it' : 'Assigned to'">
+                                                                    @for (who of row.Holders; track who.PersonID) {
+                                                                        <span class="cos-assignee-chip"
+                                                                              [class.cos-assignee-chip--me]="IsCurrentPerson(who.PersonID)"
+                                                                              [class.cos-assignee-chip--implicit]="row.IsImplicitlyHeld">{{ IsCurrentPerson(who.PersonID) ? 'You' : who.Name }}</span>
                                                                     }
                                                                 </span>
                                                             }

@@ -116,6 +116,16 @@ export interface MilestoneRowViewModel {
     Assignees: TaskAssignee[];
     /** True when the signed-in user's person is among the assignees. */
     AssignedToMe: boolean;
+    /**
+     * Who holds the milestone: its assignees when it has any; otherwise the person who created it,
+     * or failing that the objective's owner. An unassigned milestone is the owner's own work, not
+     * nobody's, so the cockpit never shows it as a gap.
+     */
+    Holders: TaskAssignee[];
+    /** True when `Holders` came from the creator or owner rather than an assignment row. */
+    IsImplicitlyHeld: boolean;
+    /** True when the signed-in user's person is among `Holders`. */
+    HeldByMe: boolean;
 }
 
 export interface PriorityObjectiveCardViewModel {
@@ -649,6 +659,11 @@ export function CalculateChiefOfStaffMetrics(
     const assigneesOf = (taskID: string): TaskAssignee[] => options.Assignees?.Get(taskID) ?? [];
     const heldByMe = (assignees: readonly TaskAssignee[]): boolean =>
         !!options.CurrentPersonID && assignees.some((a) => UUIDsEqual(a.PersonID, options.CurrentPersonID));
+    /** The person who created a task, named from the view's denormalized column, or null when it carries no creator. */
+    const creatorOf = (task: BizAppsTaskRecordLike): TaskAssignee | null =>
+        task.CreatedByPersonID
+            ? { PersonID: task.CreatedByPersonID, Name: task.CreatedByPerson?.trim() || task.CreatedByPersonID }
+            : null;
     const subtasksByParent = GroupByUUID(
         tasks.filter((t) => !!t.ParentID),
         (t) => t.ParentID,
@@ -712,18 +727,26 @@ export function CalculateChiefOfStaffMetrics(
 
         const rootAssignees = assigneesOf(root.ID);
         const assignedToMe = heldByMe(rootAssignees);
-        const owner: TaskAssignee | null = root.CreatedByPersonID
-            ? { PersonID: root.CreatedByPersonID, Name: root.CreatedByPerson?.trim() || root.CreatedByPersonID }
-            : null;
+        const owner = creatorOf(root);
         const ownedByMe = !!owner && !!options.CurrentPersonID && UUIDsEqual(owner.PersonID, options.CurrentPersonID);
         const isOwner = assignedToMe || ownedByMe;
         const milestoneRows: MilestoneRowViewModel[] = children.map((child) => {
             const assignees = assigneesOf(child.ID);
-            return { Task: child, Assignees: assignees, AssignedToMe: heldByMe(assignees) };
+            const creator = creatorOf(child);
+            const implicitHolder = creator ?? owner;
+            const holders = assignees.length > 0 ? assignees : implicitHolder ? [implicitHolder] : [];
+            return {
+                Task: child,
+                Assignees: assignees,
+                AssignedToMe: heldByMe(assignees),
+                Holders: holders,
+                IsImplicitlyHeld: assignees.length === 0 && holders.length > 0,
+                HeldByMe: heldByMe(holders),
+            };
         });
         // The objective is shared context; the milestone list is the person's own unless they own the objective.
         // With no current person (no People record resolved) nothing is hidden.
-        const milestones = isOwner || !options.CurrentPersonID ? milestoneRows : milestoneRows.filter((m) => m.AssignedToMe);
+        const milestones = isOwner || !options.CurrentPersonID ? milestoneRows : milestoneRows.filter((m) => m.HeldByMe);
         return {
             Task: root,
             Subtasks: children,
