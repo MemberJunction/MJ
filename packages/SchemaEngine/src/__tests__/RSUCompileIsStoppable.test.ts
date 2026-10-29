@@ -27,6 +27,7 @@ interface ManagerInternals {
     defaultCompileCommand(): string;
     runCommandInOwnProcessGroup(command: string, opts: { timeoutMs: number; maxBuffer?: number; env?: NodeJS.ProcessEnv }): Promise<{ stdout: string; stderr: string }>;
     runCodeGen(): Promise<boolean>;
+    verifyEntitiesExist(affectedTables: string[]): Promise<void>;
     writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<number>;
     gitCommitAndPRForCycle(files: string[], tables: string[], description: string): Promise<string>;
     restartMJAPI(): Promise<boolean>;
@@ -173,6 +174,8 @@ describe('a failed compile stops the pipeline before it can do damage', () => {
         const item = { Input: input({ CompanyIntegrationID: 'CI-A' }), FilePath: '/tmp/V1__x.sql', Success: true, Steps: [] as RSUPipelineStep[] };
         vi.spyOn(mgr, 'writeAdditionalSchemaInfo').mockResolvedValue(0);
         vi.spyOn(mgr, 'runCodeGen').mockResolvedValue(true);
+        // RunCodeGen also verifies each affected table got an entity (#5858); that needs a live provider.
+        vi.spyOn(mgr, 'verifyEntitiesExist').mockResolvedValue(undefined);
         const compile = vi.spyOn(mgr, 'compileTypeScript').mockRejectedValue(new Error('Command exceeded its 300000ms timeout'));
         const git = vi.spyOn(mgr, 'gitCommitAndPRForCycle').mockResolvedValue('rsu/branch');
         const restart = vi.spyOn(mgr, 'restartMJAPI').mockResolvedValue(true);
@@ -201,6 +204,8 @@ describe('a failed compile stops the pipeline before it can do damage', () => {
         const item = { Input: input(), FilePath: '/tmp/V1__x.sql', Success: true, Steps: [] as RSUPipelineStep[] };
         vi.spyOn(mgr, 'writeAdditionalSchemaInfo').mockResolvedValue(0);
         vi.spyOn(mgr, 'runCodeGen').mockResolvedValue(true);
+        // RunCodeGen also verifies each affected table got an entity (#5858); that needs a live provider.
+        vi.spyOn(mgr, 'verifyEntitiesExist').mockResolvedValue(undefined);
         vi.spyOn(mgr, 'compileTypeScript').mockResolvedValue(true);
         const git = vi.spyOn(mgr, 'gitCommitAndPRForCycle').mockResolvedValue('rsu/branch');
         const restart = vi.spyOn(mgr, 'restartMJAPI').mockResolvedValue(true);
