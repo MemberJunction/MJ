@@ -695,6 +695,79 @@ describe('GenericDatabaseProvider', () => {
         });
     });
 
+    describe('Row-Level Security — Create check projects NULL fields as typed NULLs', () => {
+        interface CreateRLSAccess {
+            CheckCreateRLS: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
+        }
+        const RLS = (): CreateRLSAccess => provider as unknown as CreateRLSAccess;
+
+        function makeCreateEntity(rlsClause: string, fields: Array<{ Name: string; Value: unknown; Type?: string; Length?: number; MaxLength?: number; SQLFullType?: string }>): BaseEntity {
+            const infoFields = fields.map(f => ({
+                Name: f.Name,
+                IsVirtual: false,
+                NeedsQuotes: true,
+                Type: f.Type,
+                Length: f.Length ?? 0,
+                MaxLength: f.MaxLength ?? 0,
+                Precision: 0,
+                Scale: 0,
+                SQLFullType: f.SQLFullType,
+            }));
+            const values = new Map<string, unknown>(fields.map(f => [f.Name, f.Value]));
+            return {
+                EntityInfo: {
+                    Fields: infoFields,
+                    GetUserRowLevelSecurityWhereClause: () => rlsClause,
+                },
+                Get: (name: string) => values.get(name),
+            } as unknown as BaseEntity;
+        }
+
+        it('projects a null field as a typed NULL, so a filter on it evaluates instead of failing to bind', async () => {
+            // A shared folder leaves OwnerUserID NULL. Skipping the column made any create filter
+            // that mentions it fail with `Invalid column name` instead of evaluating.
+            const entity = makeCreateEntity("OwnerUserID IS NULL OR OwnerUserID = 'u1'", [
+                { Name: 'Name', Value: 'Shared folder' },
+                { Name: 'OwnerUserID', Value: null, Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier' },
+            ]);
+            provider.executeSQLResults = [[{ pass: 1 }]];
+
+            const result = await RLS().CheckCreateRLS(entity, mockUser);
+
+            expect(result).toBe(true);
+            expect(provider.executeSQLCalls[0].sql).toContain('CAST(NULL AS uniqueidentifier) AS "OwnerUserID"');
+        });
+
+        it('maps the type through the dialect in characters, not bytes, keeps the MAX sentinel and binary byte lengths', async () => {
+            for (const [dialect, expected] of [
+                [new SQLServerDialect(), ['CAST(NULL AS NVARCHAR(4000)) AS "FileName"', 'CAST(NULL AS NVARCHAR(MAX)) AS "Body"', 'CAST(NULL AS VARBINARY(16)) AS "Hash"']],
+                [new PostgreSQLDialect(), ['CAST(NULL AS VARCHAR(4000)) AS "FileName"', 'CAST(NULL AS TEXT) AS "Body"', 'CAST(NULL AS BYTEA) AS "Hash"']],
+            ] as const) {
+                const entity = makeCreateEntity("FileName IS NULL", [
+                    { Name: 'FileName', Value: null, Type: 'nvarchar', Length: 8000, MaxLength: 4000, SQLFullType: 'nvarchar(4000)' },
+                    { Name: 'Body', Value: null, Type: 'nvarchar', Length: -1, MaxLength: 0, SQLFullType: 'nvarchar(MAX)' },
+                    // MaxLength is a character count and is 0 for binary; VARBINARY(0) is rejected.
+                    { Name: 'Hash', Value: null, Type: 'varbinary', Length: 16, MaxLength: 0, SQLFullType: 'varbinary(16)' },
+                ]);
+                (provider as unknown as { getDialect(): unknown }).getDialect = () => dialect;
+                provider.resetExecuteSQLState();
+                provider.executeSQLResults = [[{ pass: 1 }]];
+
+                await RLS().CheckCreateRLS(entity, mockUser);
+
+                for (const projection of expected) {
+                    expect(provider.executeSQLCalls[0].sql, dialect.constructor.name).toContain(projection);
+                }
+            }
+        });
+
+        it('fails the save for a null field with no resolvable SQL type instead of emitting an untyped NULL', async () => {
+            const entity = makeCreateEntity("Notes IS NULL", [{ Name: 'Notes', Value: null, Type: '', SQLFullType: '' }]);
+
+            await expect(RLS().CheckCreateRLS(entity, mockUser)).rejects.toThrow(/no resolvable SQL type/i);
+        });
+    });
+
     describe('AdjustDatetimeFields (default no-op)', () => {
         it('returns rows unchanged by default', async () => {
             const now = new Date();
