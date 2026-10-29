@@ -151,11 +151,10 @@ def _most_implausible(y_dev: FArr, ref_dev: FArr, out: TR.SelectionOutcome,
 
 def _explaining_columns(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
                         columns: List[encoding.ColumnSpec], out: TR.SelectionOutcome, spec: CandidateSpec,
-                        ref_dev: FArr, clock: RunClock) -> List[DropColumnFlag]:
+                        y_dev: FArr, ref_dev: FArr, clock: RunClock) -> List[DropColumnFlag]:
     """Drop-column trials: `spec` cross-validated on `out`'s folds without each source column in turn (no refit);
     a source whose removal alone makes it plausible is flagged with the loss increase its removal causes."""
-    y_val = np.asarray(enc.y, dtype=np.float64)[dev][out.validated]
-    ref_val = ref_dev[out.validated]
+    y_val, ref_val = y_dev[out.validated], ref_dev[out.validated]
     base_loss = float(np.mean(out.cv[spec.name].row_loss))
     flags: List[DropColumnFlag] = []
     for src in sorted(encoding.source_map(columns)):
@@ -185,7 +184,7 @@ def _reference_rule(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel
     spec = _most_implausible(y_dev, ref_dev, out, list(req.candidates))
     if spec is None:
         return columns, out, []
-    explaining = _explaining_columns(req, snap, enc, dev, columns, out, spec, ref_dev, clock)
+    explaining = _explaining_columns(req, snap, enc, dev, columns, out, spec, y_dev, ref_dev, clock)
     if not explaining:
         raise TrainerFailure("inner-cv", f"candidate '{spec.name}' beats the reference score by an implausible margin "
                                          f"(paired DeLong p < {AU.REFERENCE_P}) and no single source column explains it")
