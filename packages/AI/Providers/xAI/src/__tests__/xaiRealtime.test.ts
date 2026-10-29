@@ -859,6 +859,43 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
             throw new Error('expected realtime session.update');
         }
     });
+
+    describe('Eagerness silence ladder (xAI has no eagerness knob)', () => {
+        async function startTurnDetection(turnDetection: Record<string, unknown>, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+            await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { turnDetection, ...extra } });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                const td = (update.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+                if (!td) throw new Error('expected turn_detection in session.update');
+                expect(td).not.toHaveProperty('eagerness');
+                return td;
+            }
+            throw new Error('expected realtime session.update');
+        }
+
+        it("Eagerness 'low' alone -> silence_duration_ms 1200", async () => {
+            expect(await startTurnDetection({ Eagerness: 'low' })).toMatchObject({ type: 'server_vad', silence_duration_ms: 1200 });
+        });
+
+        it("Eagerness 'high' -> 400; 'auto' -> 700", async () => {
+            expect(await startTurnDetection({ Mode: 'serverVad', Eagerness: 'high' })).toMatchObject({ silence_duration_ms: 400 });
+            driver.Fake.Sent.length = 0;
+            expect(await startTurnDetection({ Mode: 'serverVad', Eagerness: 'auto' })).toMatchObject({ silence_duration_ms: 700 });
+        });
+
+        it('explicit SilenceDurationMs 900 beats the ladder', async () => {
+            expect(await startTurnDetection({ Mode: 'serverVad', Eagerness: 'low', SilenceDurationMs: 900 })).toMatchObject({ silence_duration_ms: 900 });
+        });
+
+        it('no Eagerness and no silence -> no silence_duration_ms', async () => {
+            expect(await startTurnDetection({ Mode: 'serverVad', Threshold: 0.6 })).not.toHaveProperty('silence_duration_ms');
+        });
+
+        it('the ladder keeps the meeting floor', async () => {
+            const td = await startTurnDetection({ Mode: 'serverVad', Eagerness: 'high' }, { disableAutoResponse: true });
+            expect(td).toMatchObject({ create_response: false, interrupt_response: true, silence_duration_ms: 400 });
+        });
+    });
 });
 
 describe('xAIRealtime edge coverage (shared-driver surface)', () => {

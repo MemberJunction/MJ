@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeModel, RealtimeDriverFactsOf, RealtimeVoiceOption, type RealtimeDriverFacts } from '@memberjunction/ai';
+import { BaseRealtimeModel, RealtimeDriverFactsOf, RealtimeVoiceOption, type RealtimeDriverFacts, type RealtimeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     OpenAIRealtime,
     OpenAIRealtimeSession,
@@ -29,6 +29,28 @@ const XAI_BASE_URL = 'https://api.x.ai/v1';
  * {@link RealtimeSessionParams.Config} bag.
  */
 const XAI_INPUT_TRANSCRIPTION_MODEL = 'whisper-1';
+
+/**
+ * xAI has no eagerness knob, so MJ maps the normalized patient/normal/eager levels onto end-of-turn
+ * silence instead (values from the approved design for Caliber's Grok voice).
+ */
+export const XAI_EAGERNESS_SILENCE_MS: Readonly<Record<NonNullable<RealtimeTurnDetectionSettings['Eagerness']>, number>> = {
+    low: 1200,
+    auto: 700,
+    high: 400,
+};
+
+/**
+ * Turns a requested Eagerness into a silence duration unless the merged request already carries an
+ * explicit SilenceDurationMs (any cascade layer), which always wins. serverVad is xAI's only mode, so
+ * an Eagerness with no Mode is read as serverVad; without that the mapping would drop the ladder.
+ */
+function deriveSilenceFromEagerness(requested: RealtimeTurnDetectionSettings | undefined): RealtimeTurnDetectionSettings | undefined {
+    if (!requested?.Eagerness || requested.SilenceDurationMs !== undefined) {
+        return requested;
+    }
+    return { ...requested, Mode: requested.Mode ?? 'serverVad', SilenceDurationMs: XAI_EAGERNESS_SILENCE_MS[requested.Eagerness] };
+}
 
 /**
  * The Grok Voice provider profile — the per-provider knobs the shared {@link OpenAIRealtime}
@@ -66,7 +88,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     // detection but hands the speak decision to the bridge. A normalized request maps first
     // (serverVad tuning knobs apply); the required explicit block is the unconditional fallback.
     buildTurnDetection: (disableAutoResponse, requested) =>
-        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, requested)
+        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, deriveSilenceFromEagerness(requested))
         ?? {
             type: 'server_vad',
             create_response: !disableAutoResponse,
