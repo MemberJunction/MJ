@@ -18,6 +18,9 @@ import {
   LOCKFILE,
 } from './back-merge.mjs';
 
+/** Escapes every regex metacharacter so a literal string can sit inside a RegExp. */
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, (ch) => `\\${ch}`);
+
 /**
  * Minimal simple-git stand-in. Records every call so a test can assert on what the
  * back-merge did to the working tree, not just on what it returned.
@@ -329,7 +332,7 @@ test('analyzeManifestConflict: changes only the version strings in next\'s text'
   const base = manifest({ ...basePackage() });
   const verdict = analyzeManifestConflict({ base, ours, theirs: manifest(bumped(basePackage())) });
   assert.equal(verdict.resolvable, true);
-  assert.equal(verdict.content, ours.replaceAll(`"${OLD}"`, `"${NEW}"`));
+  assert.equal(verdict.content, ours.replaceAll(`"${OLD}"`, () => `"${NEW}"`));
   assert.match(verdict.content, /"files": \["\/dist"\]/);
 });
 
@@ -409,7 +412,7 @@ test('mergeMainIntoNext: one real conflict aborts the merge with nothing written
   await assert.rejects(
     () => mergeMainIntoNext(client, { writeFile: (p, c) => written.set(p, c) }),
     (err) => {
-      assert.match(err.message, new RegExp(`${meta.replace(/\./g, '\\.')}, ${ts.replace(/\./g, '\\.')}`));
+      assert.match(err.message, new RegExp(`${escapeRegExp(meta)}, ${escapeRegExp(ts)}`));
       assert.ok(!err.message.includes(PKG), 'the resolvable manifest is not blamed');
       return true;
     }
@@ -436,7 +439,7 @@ test('mergeMainIntoNext: a package.json with a real change on main aborts and sa
   await assert.rejects(
     () => mergeMainIntoNext(client, { writeFile: (p, c) => written.set(p, c) }),
     (err) => {
-      assert.match(err.message, new RegExp(`${PKG.replace(/\./g, '\\.')}: main changed more than version strings`));
+      assert.match(err.message, new RegExp(`${escapeRegExp(PKG)}: main changed more than version strings`));
       assert.match(err.message, /already published/);
       return true;
     }

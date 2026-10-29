@@ -240,7 +240,7 @@ function serializeLike(oursText, resolved, oldVersions, releaseVersion) {
     const escape = (text) => text.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
     const olds = [...oldVersions].map(escape).join('|');
     const pattern = new RegExp(`("(?:version|${escape(INTERNAL_SCOPE)}[^"]+)"\\s*:\\s*")(${olds})(")`, 'g');
-    const edited = oursText.replace(pattern, `$1${releaseVersion}$3`);
+    const edited = oursText.replace(pattern, (_match, prefix, _old, suffix) => `${prefix}${releaseVersion}${suffix}`);
     try {
         if (JSON.stringify(JSON.parse(edited)) === JSON.stringify(resolved)) return edited;
     } catch {
