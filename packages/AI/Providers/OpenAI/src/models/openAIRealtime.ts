@@ -942,11 +942,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private closedByConsumer = false;
 
     /**
-     * The normalized turn-detection request from the LAST applied session config, kept so
-     * {@link Reconfigure}'s partial `session.update` rebuilds the session's actual mode rather
-     * than hardcoding server_vad (which would silently downgrade a semantic/native session).
+     * The features extracted from the LAST applied session config, kept so {@link Reconfigure}'s
+     * partial `session.update` rebuilds the session's actual mode (`turnDetection`) rather than
+     * hardcoding server_vad (which would silently downgrade a semantic/native session), and
+     * re-applies the same transcription model and raw `audio` override the start payload carried.
      */
-    private lastTurnDetectionRequest?: RealtimeTurnDetectionSettings;
+    private lastFeatures?: ExtractedRealtimeFeatures;
 
     /** Backing promise for {@link WaitForConfigApplied}; resolve/reject handles null once settled. */
     private configAppliedPromise: Promise<void>;
@@ -1286,8 +1287,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @inheritdoc
      *
      * Live turn-mode change via a partial `session.update` — flips server-VAD auto-response on/off without
-     * reconnecting (e.g. re-gate a 1:1 agent to meeting mode when its room becomes multi-agent). The input
-     * transcription block is re-sent alongside so the partial update can't drop it.
+     * reconnecting (e.g. re-gate a 1:1 agent to meeting mode when its room becomes multi-agent). It re-sends
+     * the merged `audio.input` block (transcription, turn detection and any raw bag `audio.input` override)
+     * so the partial update can't drop them. It never sends `audio.output`: OpenAI rejects a voice change on
+     * a live session once audio has played.
      */
     public Reconfigure(params: RealtimeReconfigureParams): void {
         if (!this.profile.supportsLiveReconfigure) {
@@ -1302,19 +1305,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // only fall back to explicit server_vad when no request produced a block — the partial
         // update must ALWAYS carry create_response, since flipping it is the whole point here.
         const turnDetection: RealtimeAudioInputTurnDetection =
-            this.profile.buildTurnDetection(disable, this.lastTurnDetectionRequest)
+            this.profile.buildTurnDetection(disable, this.lastFeatures?.turnDetection)
             ?? { type: 'server_vad', create_response: !disable, interrupt_response: true };
-        // Re-send the transcription block alongside ONLY when this profile transcribes via an
-        // opt-in model — a partial update must not fabricate `transcription: { model: undefined }`
-        // for natively-transcribing providers.
-        const transcription = this.profile.inputTranscriptionModel
-            ? { transcription: { model: this.profile.inputTranscriptionModel } }
-            : {};
+        // Before any start there are no remembered features: fall back to the profile's transcription
+        // model only (a partial update must not fabricate `transcription: { model: undefined }` for
+        // natively-transcribing providers — BuildAudioBlock omits it when no model is set).
+        const features = this.lastFeatures ?? ExtractRealtimeFeatures({});
+        const built = BuildAudioBlock(this.profile, features, turnDetection);
+        const merged = MergeAudioOverride(built, features.rest.audio, disable);
         this.connection.send({
             type: 'session.update',
             session: {
                 type: 'realtime',
-                audio: { input: { ...transcription, turn_detection: turnDetection } },
+                audio: { input: merged?.input },
             },
         });
     }
@@ -1617,7 +1620,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         const features = ExtractRealtimeFeatures(config);
         // Remember the normalized request so a LIVE Reconfigure (meeting-mode flip) rebuilds the
         // SAME mode instead of silently downgrading a semantic/native session to server_vad.
-        this.lastTurnDetectionRequest = features.turnDetection;
+        this.lastFeatures = features;
         // Opts into USER input transcription (as CreateClientSession does) so user-role transcripts flow
         // server-bridged too; see BuildSessionPayload for how the audio block and raw override merge.
         const session = BuildSessionPayload(this.profile, features, systemPrompt);

@@ -228,3 +228,46 @@ describe('session payload', () => {
     }
   });
 });
+
+describe('Reconfigure', () => {
+  /** The `session` of the LAST session.update the driver sent (the Reconfigure frame). */
+  function lastSession(driver: PayloadCapture): { audio: Record<string, unknown> } & Record<string, unknown> {
+    const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+    const last = updates[updates.length - 1];
+    if (last?.type !== 'session.update') {
+      throw new Error('no session.update was sent');
+    }
+    return last.session as { audio: Record<string, unknown> } & Record<string, unknown>;
+  }
+
+  it('re-sends the merged input block after a start with an override', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({
+      Model: 'gpt-realtime', SystemPrompt: 'hi',
+      Config: { audio: { input: { turn_detection: { idle_timeout_ms: 8000 } } }, turnDetection: { Mode: 'serverVad', SilenceDurationMs: 700 } },
+    });
+    session.Reconfigure?.({ DisableAutoResponse: true });
+    const audio = lastSession(driver).audio as AudioShape;
+    expect(audio.input?.turn_detection).toMatchObject({ idle_timeout_ms: 8000, silence_duration_ms: 700, create_response: false });
+    expect(audio.input?.transcription).toBeDefined();
+  });
+
+  it('without a bag override sends the bare block', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'hi', Config: {} });
+    session.Reconfigure?.({ DisableAutoResponse: true });
+    const turnDetection = (lastSession(driver).audio as AudioShape).input?.turn_detection;
+    expect(turnDetection).toMatchObject({ create_response: false });
+    expect(turnDetection).not.toHaveProperty('idle_timeout_ms');
+  });
+
+  it('never re-sends audio.output, even when the start carried a voice', async () => {
+    const driver = new PayloadCapture('k');
+    const session = await driver.StartSession({
+      Model: 'gpt-realtime', SystemPrompt: 'hi', Config: { voice: 'alloy', audio: { output: { speed: 1.2 } } },
+    });
+    expect((driver.SentSession().audio as AudioShape).output).toBeDefined();
+    session.Reconfigure?.({ DisableAutoResponse: true });
+    expect(lastSession(driver).audio).not.toHaveProperty('output');
+  });
+});
