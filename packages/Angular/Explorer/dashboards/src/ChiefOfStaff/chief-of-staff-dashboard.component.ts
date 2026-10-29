@@ -1137,8 +1137,6 @@ export class ChiefOfStaffDashboardComponent
         this.cdr.markForCheck();
     }
 
-    /** The request whose email draft is opened inline on its card, if any. */
-    public ExpandedDraftRequestID: string | null = null;
     private readonly emailDraftsByRequest = new UUIDMap<EmailApprovalDraft | null>();
 
     /** The outbound email an approval request carries, or null when the request is not an email. */
@@ -1150,16 +1148,6 @@ export class ChiefOfStaffDashboardComponent
         const draft = ParseEmailApprovalPayload(request.Comments);
         this.emailDraftsByRequest.Set(request.ID, draft);
         return draft;
-    }
-
-    public IsDraftExpanded(request: MJAIAgentRequestEntity): boolean {
-        return this.ExpandedDraftRequestID != null && UUIDsEqual(this.ExpandedDraftRequestID, request.ID);
-    }
-
-    public ToggleEmailDraft(request: MJAIAgentRequestEntity, event?: Event): void {
-        event?.stopPropagation();
-        this.ExpandedDraftRequestID = this.IsDraftExpanded(request) ? null : request.ID;
-        this.cdr.markForCheck();
     }
 
     /** Copies the draft as plain text (headers, blank line, body) for pasting into a mail client. */

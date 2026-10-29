@@ -162,29 +162,6 @@
     color: var(--mj-text-muted);
 }
 
-.cos-inline-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 28px 16px;
-    color: var(--mj-text-muted);
-    gap: 8px;
-    background-color: var(--mj-bg-surface-sunken);
-    border-radius: 8px;
-}
-
-.cos-inline-empty i {
-    font-size: 22px;
-    color: var(--mj-text-secondary);
-}
-
-.cos-inline-empty p {
-    margin: 0;
-    font-size: 13px;
-}
-
 /* Priority Mini Cards */
 .cos-priority-mini {
     padding: 14px;
@@ -621,21 +598,10 @@
     line-height: 1.45;
 }
 
-/* An outbound email waiting for approval, opened inline on its card */
+/* An outbound email waiting for approval: a bare mj-accordion-panel inside the card */
 .cos-email-draft {
     margin-top: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 8px;
-    background: var(--mj-bg-subtle);
     cursor: default;
-}
-
-.cos-email-draft__header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
 }
 
 .cos-email-draft__meta {
@@ -648,7 +614,7 @@
 }
 
 .cos-email-draft__body {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     padding: 0;
     border: 0;
     background: transparent;

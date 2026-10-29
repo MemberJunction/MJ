@@ -171,10 +171,7 @@
                         </div>
 
                         @if (FilteredPriorityCards.length === 0) {
-                            <div class="cos-inline-empty">
-                                <i class="fa-solid fa-bullseye"></i>
-                                <p>No priority objectives found. Ask your Chief of Staff in chat to establish your quarterly priorities.</p>
-                            </div>
+                            <mj-empty-state Size="compact" Icon="fa-solid fa-bullseye" Message="No priority objectives found. Ask your Chief of Staff in chat to establish your quarterly priorities." />
                         } @else {
                             <div class="cos-stack">
                                 @for (card of FilteredPriorityCards.slice(0, 4); track card.Task.ID) {
@@ -230,10 +227,7 @@
                                 <span class="cos-meta-badge">{{ Metrics.OpenTodoCount }} open</span>
                             </div>
                             @if (Metrics.TodoItems.length === 0) {
-                                <div class="cos-inline-empty">
-                                    <i class="fa-solid fa-list-check"></i>
-                                    <p>Nothing pending. Tell your Chief of Staff in chat, for example "remind me to call Mom on Wednesday", and it appears here.</p>
-                                </div>
+                                <mj-empty-state Size="compact" Icon="fa-solid fa-list-check" Message='Nothing pending. Tell your Chief of Staff in chat, for example "remind me to call Mom on Wednesday", and it appears here.' />
                             } @else {
                                 <div class="cos-todo-list">
                                     @for (item of Metrics.TodoItems.slice(0, 8); track item.Task.ID) {
@@ -285,10 +279,7 @@
                             </div>
 
                             @if (PendingRequests.length === 0) {
-                                <div class="cos-inline-empty">
-                                    <i class="fa-solid fa-circle-check"></i>
-                                    <p>No pending requests awaiting approval.</p>
-                                </div>
+                                <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check" Message="No pending requests awaiting approval." />
                             } @else {
                                 <div class="cos-stack">
                                     @for (req of PendingRequests.slice(0, 3); track req.ID) {
@@ -320,37 +311,33 @@
                                                         (click)="OpenRequestDetail(req); $event.stopPropagation()">
                                                     Inspect
                                                 </button>
-                                                @let draft = EmailDraftFor(req);
-                                                @if (draft) {
-                                                    <button mjButton variant="outline" size="sm"
-                                                            [title]="IsDraftExpanded(req) ? 'Hide the email draft' : 'Show the email the agent wants to send'"
-                                                            (click)="ToggleEmailDraft(req, $event)">
-                                                        <i class="fa-solid" [class.fa-envelope-open]="IsDraftExpanded(req)" [class.fa-envelope]="!IsDraftExpanded(req)"></i>
-                                                        {{ IsDraftExpanded(req) ? 'Hide draft' : 'View draft' }}
-                                                    </button>
-                                                }
                                             </div>
                                             @let openDraft = EmailDraftFor(req);
-                                            @if (openDraft && IsDraftExpanded(req)) {
+                                            @if (openDraft) {
                                                 <div class="cos-email-draft" (click)="$event.stopPropagation()">
-                                                    <div class="cos-email-draft__header">
-                                                        <div class="cos-email-draft__meta">
-                                                            <div><strong>To:</strong> {{ openDraft.To }}</div>
-                                                            @if (openDraft.CC.length > 0) {
-                                                                <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
-                                                            }
-                                                            @if (openDraft.From) {
-                                                                <div><strong>From:</strong> {{ openDraft.From }}</div>
-                                                            }
-                                                            <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
-                                                        </div>
-                                                        <button mjButton variant="outline" size="sm"
-                                                                title="Copy To, Subject and body as plain text for your mail client"
-                                                                (click)="CopyEmailDraft(req, $event)">
-                                                            <i class="fa-regular fa-copy"></i> Copy
-                                                        </button>
-                                                    </div>
-                                                    <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                    <mj-accordion-panel [Bare]="true" Size="sm">
+                                                        <ng-template mjAccordionTitle><i class="fa-solid fa-envelope"></i> Email draft to {{ openDraft.To }}</ng-template>
+                                                        <ng-template mjAccordionActions>
+                                                            <button mjButton variant="outline" size="sm"
+                                                                    title="Copy To, Subject and body as plain text for your mail client"
+                                                                    (click)="CopyEmailDraft(req, $event)">
+                                                                <i class="fa-regular fa-copy"></i> Copy
+                                                            </button>
+                                                        </ng-template>
+                                                        <ng-template mjAccordionBody>
+                                                            <div class="cos-email-draft__meta">
+                                                                <div><strong>To:</strong> {{ openDraft.To }}</div>
+                                                                @if (openDraft.CC.length > 0) {
+                                                                    <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
+                                                                }
+                                                                @if (openDraft.From) {
+                                                                    <div><strong>From:</strong> {{ openDraft.From }}</div>
+                                                                }
+                                                                <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
+                                                            </div>
+                                                            <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                        </ng-template>
+                                                    </mj-accordion-panel>
                                                 </div>
                                             }
                                         </div>
@@ -375,10 +362,7 @@
                             </div>
 
                             @if (Routines.length === 0) {
-                                <div class="cos-inline-empty">
-                                    <i class="fa-regular fa-clock"></i>
-                                    <p>No wake routines configured yet.</p>
-                                </div>
+                                <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No wake routines configured yet." />
                             } @else {
                                 <div class="cos-stack">
                                     @for (routine of UpcomingRoutines.slice(0, 3); track routine.ID) {
@@ -648,10 +632,7 @@
                         </div>
 
                         @if (PendingRequests.length === 0) {
-                            <div class="cos-inline-empty">
-                                <i class="fa-solid fa-circle-check"></i>
-                                <p>Inbox Zero — no pending requests awaiting your decision.</p>
-                            </div>
+                            <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check" Message="Inbox Zero — no pending requests awaiting your decision." />
                         } @else {
                             <div class="cos-stack">
                                 @for (req of PendingRequests; track req.ID) {
@@ -693,37 +674,33 @@
                                                     (click)="OpenRequestDetail(req); $event.stopPropagation()">
                                                 <i class="fa-solid fa-expand"></i> Full Details / Comment
                                             </button>
-                                            @let draft = EmailDraftFor(req);
-                                            @if (draft) {
-                                                <button mjButton variant="outline" size="sm"
-                                                        [title]="IsDraftExpanded(req) ? 'Hide the email draft' : 'Show the email the agent wants to send'"
-                                                        (click)="ToggleEmailDraft(req, $event)">
-                                                    <i class="fa-solid" [class.fa-envelope-open]="IsDraftExpanded(req)" [class.fa-envelope]="!IsDraftExpanded(req)"></i>
-                                                    {{ IsDraftExpanded(req) ? 'Hide draft' : 'View draft' }}
-                                                </button>
-                                            }
                                         </div>
                                         @let openDraft = EmailDraftFor(req);
-                                        @if (openDraft && IsDraftExpanded(req)) {
+                                        @if (openDraft) {
                                             <div class="cos-email-draft" (click)="$event.stopPropagation()">
-                                                <div class="cos-email-draft__header">
-                                                    <div class="cos-email-draft__meta">
-                                                        <div><strong>To:</strong> {{ openDraft.To }}</div>
-                                                        @if (openDraft.CC.length > 0) {
-                                                            <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
-                                                        }
-                                                        @if (openDraft.From) {
-                                                            <div><strong>From:</strong> {{ openDraft.From }}</div>
-                                                        }
-                                                        <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
-                                                    </div>
-                                                    <button mjButton variant="outline" size="sm"
-                                                            title="Copy To, Subject and body as plain text for your mail client"
-                                                            (click)="CopyEmailDraft(req, $event)">
-                                                        <i class="fa-regular fa-copy"></i> Copy
-                                                    </button>
-                                                </div>
-                                                <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                <mj-accordion-panel [Bare]="true" Size="sm">
+                                                    <ng-template mjAccordionTitle><i class="fa-solid fa-envelope"></i> Email draft to {{ openDraft.To }}</ng-template>
+                                                    <ng-template mjAccordionActions>
+                                                        <button mjButton variant="outline" size="sm"
+                                                                title="Copy To, Subject and body as plain text for your mail client"
+                                                                (click)="CopyEmailDraft(req, $event)">
+                                                            <i class="fa-regular fa-copy"></i> Copy
+                                                        </button>
+                                                    </ng-template>
+                                                    <ng-template mjAccordionBody>
+                                                        <div class="cos-email-draft__meta">
+                                                            <div><strong>To:</strong> {{ openDraft.To }}</div>
+                                                            @if (openDraft.CC.length > 0) {
+                                                                <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
+                                                            }
+                                                            @if (openDraft.From) {
+                                                                <div><strong>From:</strong> {{ openDraft.From }}</div>
+                                                            }
+                                                            <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
+                                                        </div>
+                                                        <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                    </ng-template>
+                                                </mj-accordion-panel>
                                             </div>
                                         }
                                     </div>
@@ -778,10 +755,7 @@
                         }
 
                         @if (FilteredRoutines.length === 0) {
-                            <div class="cos-inline-empty">
-                                <i class="fa-regular fa-clock"></i>
-                                <p>No AgentWake routines found for your Chief of Staff.</p>
-                            </div>
+                            <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No AgentWake routines found for your Chief of Staff." />
                         } @else {
                             <div class="cos-stack">
                                 @for (routine of FilteredRoutines; track routine.ID) {
