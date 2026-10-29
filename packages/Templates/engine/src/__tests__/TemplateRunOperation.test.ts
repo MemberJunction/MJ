@@ -5,7 +5,8 @@
  * sessions and callers who cannot read templates, before the operation loads anything.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EntityInfo, Metadata, UserInfo, UserRoleInfo, type IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, Metadata, RunView, UserInfo, UserRoleInfo, type IMetadataProvider } from '@memberjunction/core';
+import { TemplateEngineServer } from '../TemplateEngine';
 import { TemplateRunServerOperation } from '../operations/TemplateRunOperation';
 
 const UI_ROLE_ID = '0b9b7b55-0000-4000-8000-0000000000a1';
@@ -119,5 +120,38 @@ describe('Template.Run authorization', () => {
 
         expect(result).toMatchObject({ Success: false, ResultCode: 'EXECUTION_ERROR', ErrorMessage: 'reached data access for MJ: Templates' });
         expect(provider.EntityObjectRequests).toEqual(['MJ: Templates']);
+    });
+});
+
+/** Metadata plus a template that loads, so the operation reaches the render. */
+class RenderingProvider {
+    public readonly Template = { Load: async () => true, IsSaved: true, Name: 'T' };
+    constructor(private readonly entities: EntityInfo[]) {}
+    public EntityByName(name: string): EntityInfo | undefined {
+        return this.entities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase());
+    }
+    public async GetEntityObject(): Promise<object> {
+        return this.Template;
+    }
+}
+
+describe('Template.Run render user', () => {
+    it('REGRESSION: renders as the invoking user, not whoever last configured the engine', async () => {
+        const provider = new RenderingProvider(readableEverywhere());
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(provider as unknown as IMetadataProvider);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: async () => ({ Success: true, Results: [{ ID: 'content-1', TemplateText: 'x' }] }),
+        } as unknown as RunView);
+        vi.spyOn(TemplateEngineServer.Instance, 'Config').mockResolvedValue(undefined);
+        const render = vi.spyOn(TemplateEngineServer.Instance, 'RenderTemplate').mockResolvedValue({ Success: true, Output: 'ok', Message: undefined });
+        const caller = makeUser([UI_ROLE_ID]);
+
+        const result = await new TemplateRunServerOperation().ExecuteServer(
+            { templateID: TEMPLATE_ID },
+            { provider: provider as unknown as IMetadataProvider, user: caller, emitProgress: () => undefined },
+        );
+
+        expect(result).toMatchObject({ Success: true });
+        expect(render.mock.calls[0][5]).toEqual({ ContextUser: caller });
     });
 });

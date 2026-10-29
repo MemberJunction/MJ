@@ -45,6 +45,8 @@ interface RecordedRun {
   Success?: boolean;
   Result?: string;
   ErrorMessage?: string;
+  Cancelled?: boolean;
+  CancellationReason?: string | null;
   TokensUsed?: number;
   Cost?: number;
   SaveCount: number;
@@ -78,6 +80,15 @@ const h = vi.hoisted(() => {
     return map;
   };
 
+  const byPromptID = <T extends { PromptID: string }>(rows: T[]): Map<string, T[]> => {
+    const map = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = norm(row.PromptID);
+      map.set(key, [...(map.get(key) ?? []), row]);
+    }
+    return map;
+  };
+
   const engine = {
     Config: vi.fn().mockResolvedValue(undefined),
     get VendorTypeDefinitions() { return state.vendorTypeDefinitions; },
@@ -96,9 +107,12 @@ const h = vi.hoisted(() => {
     get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
     get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
     get ModelVendorsByModelID() { return byModelID(state.modelVendors); },
+    get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
     GetConfigurationChain() { return []; },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
+    // The real one prefixes texts from the model's catalog config; AIEngine's own tests cover that.
+    PrepareEmbeddingInput: vi.fn((_model: unknown, texts: string[]) => ({ texts, maxInputTokens: undefined as number | undefined })),
   };
 
   let runSeq = 0;
@@ -577,6 +591,27 @@ describe('AIEmbeddingRunner', () => {
     expect(run?.ErrorMessage).toContain('Fatal unrecoverable network crash');
   });
 
+  it('sends the texts AIEngine prepared, with the input type and the catalog token cap', async () => {
+    h.engine.PrepareEmbeddingInput.mockImplementationOnce((_model: unknown, texts: string[]) => ({
+      texts: texts.map(t => `task: search result | query: ${t}`),
+      maxInputTokens: 8192,
+    }));
+    const result = await runner.RunEmbedding({
+      Texts: ['red planet'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      InputType: 'query',
+    });
+
+    expect(result.Success).toBe(true);
+    expect(h.engine.PrepareEmbeddingInput).toHaveBeenCalledWith(expect.objectContaining({ ID: expect.any(String) }), ['red planet'], 'query', expect.anything());
+    expect(scriptFor(DRIVER_1).Calls[0]).toMatchObject({
+      texts: ['task: search result | query: red planet'],
+      inputType: 'query',
+      maxInputTokens: 8192,
+    });
+  });
+
   it('Dimensions are forwarded to the driver', async () => {
     const result = await runner.RunEmbedding({
       Texts: ['dimension test text'],
@@ -718,6 +753,152 @@ describe('AIEmbeddingRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toContain('was not found');
       expect(h.state.runs).toHaveLength(0);
+    });
+  });
+
+  describe('timeout and cancellation', () => {
+    /** A driver call that never settles on its own: it ignores any signal it is given. */
+    const neverSettles = (): Promise<EmbedTextsResult> => new Promise<EmbedTextsResult>(() => { /* hangs */ });
+
+    /** A driver call that hangs until its signal aborts, then rejects as `fetch` does. */
+    const hangsUntilAborted = (params: EmbedTextsParams): Promise<EmbedTextsResult> =>
+      new Promise<EmbedTextsResult>((_, reject) => {
+        params.CancellationToken?.addEventListener('abort', () => {
+          const abort = new Error('This operation was aborted');
+          abort.name = 'AbortError';
+          reject(abort);
+        }, { once: true });
+      });
+
+    it('a token already aborted is refused before a run row exists, and no driver is called', async () => {
+      const controller = new AbortController();
+      controller.abort('stop');
+
+      const result = await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        CancellationToken: controller.signal,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The Embeddings call was cancelled before it started');
+      expect(result.PromptRunID).toBeNull();
+      expect(h.state.runs).toHaveLength(0);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+    });
+
+    it('cancelled mid-call: the call ends at once, is not failed over, and the row is recorded Cancelled', async () => {
+      addSecondVendorToModel1();
+      const controller = new AbortController();
+      scriptFor(DRIVER_1).Answer = () => {
+        controller.abort('user pressed stop');
+        return neverSettles();
+      };
+
+      const result = await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        CancellationToken: controller.signal,
+      });
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The Embeddings call was cancelled');
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+      const run = lastRun();
+      expect(run?.ID).toBe(result.PromptRunID);
+      expect(run?.Status).toBe('Cancelled');
+      expect(run?.Cancelled).toBe(true);
+      expect(run?.CancellationReason).toBe('user_requested');
+      expect(run?.Success).toBe(false);
+    });
+
+    it('a driver that reports the abort itself is still recorded Cancelled, not failed over', async () => {
+      addSecondVendorToModel1();
+      const controller = new AbortController();
+      scriptFor(DRIVER_1).Answer = (params) => {
+        const pending = hangsUntilAborted(params);
+        controller.abort('user pressed stop');
+        return pending;
+      };
+
+      const result = await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        TimeoutMS: 60_000,
+        CancellationToken: controller.signal,
+      });
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(false);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+      expect(lastRun()?.Status).toBe('Cancelled');
+    });
+
+    it('a timeout aborts the driver\'s request and fails over to the next vendor', async () => {
+      addSecondVendorToModel1();
+      scriptFor(DRIVER_1).Answer = hangsUntilAborted;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        TimeoutMS: 30,
+      });
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(true);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+      expect(scriptFor(DRIVER_1).Calls[0].CancellationToken?.aborted).toBe(true);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+      expect(lastRun()?.Status).toBe('Completed');
+    });
+
+    it('a timeout on a driver that ignores its signal still ends the wait and fails over', async () => {
+      addSecondVendorToModel1();
+      scriptFor(DRIVER_1).Answer = neverSettles;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        TimeoutMS: 30,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+    });
+
+    it('the driver receives the bound\'s signal, which aborts when the caller cancels', async () => {
+      const controller = new AbortController();
+      let seen: AbortSignal | undefined;
+      scriptFor(DRIVER_1).Answer = (params) => {
+        seen = params.CancellationToken;
+        const pending = hangsUntilAborted(params);
+        controller.abort('stop');
+        return pending;
+      };
+
+      await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        TimeoutMS: 60_000,
+        CancellationToken: controller.signal,
+      });
+
+      expect(seen).toBeDefined();
+      expect(seen).not.toBe(controller.signal); // the composed bound, not the caller's token itself
+      expect(seen?.aborted).toBe(true);
+    });
+
+    it('with neither a timeout nor a token, the driver gets no signal', async () => {
+      await runner.RunEmbedding({ Texts: ['text'], ContextUser: mockUser, PromptID: PROMPT_ID });
+      expect(scriptFor(DRIVER_1).Calls[0].CancellationToken).toBeUndefined();
     });
   });
 

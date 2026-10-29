@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileFunction } from 'node:vm';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+import { PackageRunsOnTier } from '../manifest/package-platform.js';
 import { ResolveServerPackagePath } from './workspace-paths.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
@@ -327,6 +328,9 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
     const sharedPkgs = manifest.packages?.shared ?? [];
 
     for (const pkg of [...serverPkgs, ...sharedPkgs]) {
+        if (!PackageRunsOnTier(pkg, 'server')) {
+            continue;
+        }
         if (pkg.startupExport) {
             entries.push({
                 PackageName: pkg.name,
@@ -342,9 +346,14 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
 
 /**
  * Extracts client package entries from a manifest's packages section.
- * Includes `client` and `shared` packages (shared packages run in both the server
- * and client bundles). Unlike server entries, every client/shared package is emitted
- * regardless of startupExport — client entries are side-effect imports.
+ *
+ * Includes `client` and `shared` packages, minus any whose platform excludes the browser — see
+ * {@link PackageRunsOnTier}. `shared` says which tiers a package is FOR, not that it can run on
+ * all of them: an actions package is shared source that reaches `@google-cloud/storage`, and
+ * namespace-importing it into the Angular bundle breaks the host's build (#4428).
+ *
+ * Unlike server entries, a qualifying package is emitted regardless of startupExport — client
+ * entries are side-effect imports and the client bootstrap never calls a startup function.
  */
 function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageEntry[] {
     const entries: DynamicPackageEntry[] = [];
@@ -352,6 +361,9 @@ function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
     const sharedPkgs = manifest.packages?.shared ?? [];
 
     for (const pkg of [...clientPkgs, ...sharedPkgs]) {
+        if (!PackageRunsOnTier(pkg, 'client')) {
+            continue;
+        }
         entries.push({
             PackageName: pkg.name,
             AppName: manifest.name,

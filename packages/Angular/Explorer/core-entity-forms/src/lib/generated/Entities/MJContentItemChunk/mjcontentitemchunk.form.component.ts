@@ -22,7 +22,6 @@ export class MJContentItemChunkFormComponent extends BaseFormComponent {
             { sectionKey: 'lifecycleStatus', sectionName: 'Lifecycle Status', isExpanded: true },
             { sectionKey: 'lifecycleTimestamps', sectionName: 'Lifecycle Timestamps', isExpanded: true },
             { sectionKey: 'provenance', sectionName: 'Provenance', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItemChunks', sectionName: 'Content Item Chunks', isExpanded: false }
         ]);

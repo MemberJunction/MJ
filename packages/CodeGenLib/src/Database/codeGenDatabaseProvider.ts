@@ -1,7 +1,50 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
+
+/**
+ * Topologically orders an entity's alternate base views by `ParentID` so parent
+ * alternate views are always refreshed/rebound before derived child alternate views.
+ * Preserves the input order (`Sequence, Name`) among siblings and roots, and safely
+ * terminates if a cycle is encountered.
+ */
+export function OrderAlternateBaseViewsTopologically(
+    views: readonly EntityAlternateBaseViewInfo[]
+): EntityAlternateBaseViewInfo[] {
+    if (views.length <= 1) {
+        return [...views];
+    }
+    const byId = new Map<string, EntityAlternateBaseViewInfo>();
+    for (const v of views) {
+        byId.set(v.ID.toLowerCase(), v);
+    }
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const result: EntityAlternateBaseViewInfo[] = [];
+
+    const visit = (v: EntityAlternateBaseViewInfo): void => {
+        const key = v.ID.toLowerCase();
+        if (visited.has(key) || visiting.has(key)) {
+            return;
+        }
+        visiting.add(key);
+        if (v.ParentID) {
+            const parent = byId.get(v.ParentID.toLowerCase());
+            if (parent) {
+                visit(parent);
+            }
+        }
+        visiting.delete(key);
+        visited.add(key);
+        result.push(v);
+    };
+
+    for (const v of views) {
+        visit(v);
+    }
+    return result;
+}
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -208,6 +251,78 @@ export interface FullTextSearchResult {
 /**
  * Options for generating a base view.
  */
+/**
+ * BASE-VIEW COLUMN EXCLUSION — the run-scoped switch and the name matcher.
+ *
+ * Both providers emit `SELECT <alias>.*` for a base view, so there is no column list to filter:
+ * excluding a column means ENUMERATING columns, for the affected entity only. Everything that
+ * decides which columns those are lives here, shared by both dialects, so the two cannot disagree
+ * about what an exclusion means.
+ *
+ * WHY THE SWITCH IS RUN-SCOPED STATE RATHER THAN A PARAMETER. Whether an exclusion may be applied
+ * at all depends on a DATABASE fact — whether this install's `spDeleteUnneededEntityFields` accepts
+ * a protected-field list, without which the excluded column's `EntityField` row is deleted on the
+ * next run. Base-view generation is synchronous and has no connection, so the fact is probed once
+ * per run (during metadata management, which precedes SQL generation) and recorded here.
+ *
+ * Default DISABLED, so a caller that never probes — a unit test, a `--skipdb` run — emits exactly
+ * what it emitted before, and no code path can turn an exclusion on by accident.
+ */
+let _baseViewExclusionsPermitted = false;
+
+/**
+ * Records whether base-view column exclusions may be applied in this run.
+ * Called by metadata management after probing the prune routine. See {@link ExcludedBaseViewFieldNames}.
+ */
+export function SetBaseViewExclusionsPermitted(permitted: boolean): void {
+    _baseViewExclusionsPermitted = permitted;
+}
+
+/** Whether base-view column exclusions may be applied in this run. */
+export function BaseViewExclusionsPermitted(): boolean {
+    return _baseViewExclusionsPermitted;
+}
+
+/** Test-only: restore the default (disabled) between cases. */
+export function ResetBaseViewExclusionsPermitted(): void {
+    _baseViewExclusionsPermitted = false;
+}
+
+/**
+ * Normalises the configured exclusion entries into the set of field names excluded for one entity.
+ *
+ * An entry is either a bare `FieldName` (every entity) or `EntityName.FieldName` (that entity only).
+ * Entity names contain spaces and colons in MJ (`MJ: Entities`), field names do not contain dots, so
+ * splitting on the LAST dot is unambiguous.
+ *
+ * Returns an empty set when exclusions are not permitted in this run, so every caller gets the
+ * unchanged `alias.*` behaviour without having to remember to check.
+ */
+export function ExcludedBaseViewFieldNames(entityName: string, configuredEntries: readonly string[]): ReadonlySet<string> {
+    const out = new Set<string>();
+    if (!_baseViewExclusionsPermitted) {
+        return out;
+    }
+    const entity = entityName.trim().toLowerCase();
+    for (const raw of configuredEntries) {
+        const entry = raw.trim();
+        if (entry.length === 0) {
+            continue;
+        }
+        const lastDot = entry.lastIndexOf('.');
+        if (lastDot <= 0 || lastDot === entry.length - 1) {
+            out.add(entry.toLowerCase());
+            continue;
+        }
+        const qualifiedEntity = entry.slice(0, lastDot).trim().toLowerCase();
+        const field = entry.slice(lastDot + 1).trim().toLowerCase();
+        if (qualifiedEntity === entity && field.length > 0) {
+            out.add(field);
+        }
+    }
+    return out;
+}
+
 export interface BaseViewGenerationContext {
     /** Entity to generate the view for */
     entity: EntityInfo;
@@ -527,6 +642,54 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateTimestampTrigger(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
+    /**
+     * The base-table part of a base view's SELECT list: `<alias>.*`, or an explicit column list when
+     * this entity has at least one excluded column.
+     *
+     * `<alias>.*` UNLESS SOMETHING IS ACTUALLY EXCLUDED, deliberately. Enumerating columns
+     * unconditionally would rewrite every base view in every tenant on the next CodeGen run for no
+     * behavioural gain, churn a large generated diff, and hand the golden-master suite a rebaseline
+     * that hides any real change inside it. Emitting the star whenever the exclusion set is empty
+     * keeps the output byte-identical for every entity nobody has named — which, with the default
+     * empty config, is all of them.
+     *
+     * The enumerated list is BASE-TABLE columns only, in `Sequence` order. Virtual fields are the
+     * view's own joined columns and are appended by the caller from
+     * {@link BaseViewGenerationContext}; including them here would project them twice.
+     */
+    protected baseTableSelectList(entity: EntityInfo, alias: string, excludedFieldNames: ReadonlySet<string>): string {
+        if (excludedFieldNames.size === 0) {
+            return `${alias}.*`;
+        }
+        const columns = entity.Fields
+            .filter((f) => !f.IsVirtual && !excludedFieldNames.has(f.Name.trim().toLowerCase()))
+            .sort((a, b) => a.Sequence - b.Sequence);
+        // An exclusion that would leave nothing to select is a misconfiguration, not an instruction:
+        // a zero-column view will not create. Fall back to the star and let the run continue.
+        if (columns.length === 0) {
+            return `${alias}.*`;
+        }
+        return columns.map((f) => `${alias}.${this.Dialect.QuoteIdentifier(f.Name)}`).join(',\n    ');
+    }
+
+    /**
+     * The STANDING COST of the full-text objects this dialect emits for {@link entity}, as a single
+     * human-readable line, or `null` when the dialect adds no ongoing cost.
+     *
+     * WHY A METHOD AND NOT A COMMENT. Turning on full-text search for an entity is a metadata flag,
+     * and the flag says nothing about what it buys. What it actually buys differs per dialect and is
+     * charged on every write to the table forever, not at generation time — so the operator who
+     * flipped the flag is not the person who sees the cost. CodeGen is the last point at which the
+     * two are in the same place, which makes it the right place to say it out loud.
+     *
+     * Returning a string rather than logging directly keeps the decision dialect-local and the
+     * emission orchestrator-local, so the call site cannot accidentally describe the wrong dialect's
+     * objects.
+     */
+    FullTextSearchCostDisclosure(_entity: EntityInfo, _searchFields: EntityFieldInfo[]): string | null {
+        return null;
+    }
+
     // ─── INDEXES ─────────────────────────────────────────────────────────
 
     /**
@@ -545,9 +708,12 @@ export abstract class CodeGenDatabaseProvider {
      * {@link isIndexableForeignKey}.
      */
     GenerateForeignKeyIndexes(entity: EntityInfo): string[] {
-        return entity.Fields
-            .filter((f) => this.isIndexableForeignKey(f))
+        const verified = this.verifiedJoinColumnNames(entity);
+        const indexes = entity.Fields
+            .filter((f) => this.isIndexableForeignKey(f, verified))
             .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+        const declined = this.unindexableOrganicKeyDisclosure(entity);
+        return declined ? [...indexes, declined] : indexes;
     }
 
     /** @deprecated Use {@link GenerateForeignKeyIndexes}. */
@@ -575,8 +741,110 @@ export abstract class CodeGenDatabaseProvider {
      * (no FK field in the reference database is also a primary key or virtual), so this is a
      * guard against a future case rather than a change in today's generated output.
      */
-    protected isIndexableForeignKey(f: EntityFieldInfo): boolean {
-        return !!f.RelatedEntityID && !f.IsPrimaryKey && !f.IsVirtual;
+    protected isIndexableForeignKey(f: EntityFieldInfo, verifiedJoinColumns?: ReadonlySet<string>): boolean {
+        const isJoinColumn = !!f.RelatedEntityID || this.isUnindexedVerifiedJoinColumn(f, verifiedJoinColumns);
+        return isJoinColumn && !f.IsPrimaryKey && !f.IsVirtual;
+    }
+
+    /**
+     * Whether `f` is a verified join column (see {@link verifiedJoinColumnNames}) that still needs an
+     * index of its own.
+     *
+     * A column that is already `IsUnique` has one: the unique constraint's index serves the join. A
+     * declared FK can only reference a column with a unique constraint or index, on both dialects, so
+     * every `EntityKeyField` set from a declared non-PK FK lands here; indexing it again would add a
+     * second index on the same column, charged on every write and never chosen over the first. Only a
+     * soft FK or organic-key target with no unique index of its own gains anything from one.
+     */
+    protected isUnindexedVerifiedJoinColumn(f: EntityFieldInfo, verifiedJoinColumns?: ReadonlySet<string>): boolean {
+        if (!verifiedJoinColumns?.has(f.Name.trim().toLowerCase())) {
+            return false;
+        }
+        return !f.IsUnique;
+    }
+
+    /**
+     * The columns on THIS entity that MJ itself joins or filters on, over and above its declared
+     * foreign keys, lower-cased for comparison.
+     *
+     * WHY FK METADATA ALONE IS NOT ENOUGH. `RelatedEntityID` is the only thing
+     * {@link isIndexableForeignKey} used to look at, so indexing and FK metadata were the same
+     * decision. On an imported schema they are not: the real joins are on external ids, the inferred
+     * FKs pointing at them get deleted as wrong (that is what the delete is for), and the entity is
+     * then left with a join MJ performs on every parent record and no index for it. Removing bad FK
+     * metadata and getting the indexes you need were mutually exclusive, and the more correct the
+     * metadata became the worse the query plans got.
+     *
+     * TWO SOURCES, both of which are MJ's own verified join declarations rather than inferences:
+     *
+     *  - `EntityRelationship.EntityKeyField` on the relationships this entity parents. That column is
+     *    exactly what `BuildRelationshipViewParams` puts on the left of the predicate for every
+     *    related-records view, once per parent record. It is only ever set for a NON-PK join, so
+     *    every value here is a column that no primary-key index covers. (One that a unique index
+     *    already covers is filtered out in {@link isUnindexedVerifiedJoinColumn}.)
+     *
+     *  - The match fields of this entity's ACTIVE, `ExactMatch`-normalized organic keys. An organic
+     *    key is a human-verified join over columns that carry no constraint at all.
+     *
+     * ONLY `ExactMatch`, DELIBERATELY. Every other normalization strategy wraps the column in a
+     * function — `LOWER(LTRIM(RTRIM(col)))` for the default `LowerCaseTrim` — and a plain B-tree
+     * index on `col` cannot serve `LOWER(TRIM(col)) = ?` on either dialect. Emitting one would ship
+     * an index that is never used, costs a write on every insert, and reads in a catalog listing
+     * exactly like an index that works. See {@link unindexableOrganicKeyDisclosure} for what is said
+     * instead.
+     */
+    protected verifiedJoinColumnNames(entity: EntityInfo): ReadonlySet<string> {
+        const out = new Set<string>();
+        for (const r of entity.RelatedEntities ?? []) {
+            const keyField = r.EntityKeyField?.trim();
+            if (keyField) {
+                out.add(keyField.toLowerCase());
+            }
+        }
+        for (const ok of entity.OrganicKeys ?? []) {
+            if (ok.Status !== 'Active' || ok.NormalizationStrategy !== 'ExactMatch') {
+                continue;
+            }
+            for (const name of ok.MatchFieldNamesArray) {
+                const trimmed = name.trim();
+                if (trimmed) {
+                    out.add(trimmed.toLowerCase());
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The generated-SQL note for organic keys this dialect will not index, or `null` when there are
+     * none.
+     *
+     * A normalizing organic key is the one case where the honest answer is "no index, and here is
+     * why". Saying it in the emitted SQL follows {@link GenerateSoftPrimaryKeyIndex}: the failure
+     * mode both methods exist to end is an index that is silently absent, and swapping one silence
+     * for another leaves the next person with the same puzzle. The fix is an expression index, which
+     * has to match the normalization expression exactly and is therefore a deliberate act, not
+     * something to guess at from metadata.
+     */
+    protected unindexableOrganicKeyDisclosure(entity: EntityInfo): string | null {
+        const normalizing = (entity.OrganicKeys ?? []).filter(
+            (ok) => ok.Status === 'Active' && ok.NormalizationStrategy !== 'ExactMatch' && ok.MatchFieldNamesArray.length > 0
+        );
+        if (normalizing.length === 0) {
+            return null;
+        }
+        const lines = normalizing.map(
+            (ok) => `--   ${ok.Name}: ${ok.MatchFieldNamesArray.join(', ')} (normalization: ${ok.NormalizationStrategy})`
+        );
+        return [
+            `-- ORGANIC KEY INDEXES NOT EMITTED for ${entity.SchemaName}.${entity.BaseTable}`,
+            ...lines,
+            `-- MJ matches these keys through the key's normalization expression, so the predicate is`,
+            `-- LOWER(LTRIM(RTRIM(col))) = ? (or the key's custom expression) rather than col = ?. A plain`,
+            `-- index on the column cannot serve that, so emitting one would cost a write per insert and`,
+            `-- never be used. Add a matching EXPRESSION index by hand, or set the key's`,
+            `-- NormalizationStrategy to ExactMatch and CodeGen will index the columns directly.`,
+        ].join('\n');
     }
 
     /**
@@ -742,6 +1010,26 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
+    /**
+     * Whether {@link generateFullTextSearch} embeds the table's PHYSICAL primary-key index name
+     * in the DDL it emits — and therefore whether CodeGen must look that name up before calling it.
+     *
+     * SQL Server: `true` — `CREATE FULLTEXT INDEX … KEY INDEX <name>` names a unique index on the
+     *   table, so the DDL literally cannot be composed without it.
+     * PostgreSQL: `false` (the default) — full-text search there is a GIN index over a `tsvector`
+     *   column, and the search function joins the base view on MJ's DECLARED primary keys. No
+     *   physical index name appears anywhere in the generated SQL.
+     *
+     * The default is `false` so that a provider which does not consume the value does not inherit a
+     * precondition it cannot satisfy. The lookup (`GetEntityPrimaryKeyIndexName`) THROWS when the
+     * table has no `PRIMARY KEY` constraint, which is legitimate on PostgreSQL — MJ's primary key
+     * may be a soft key declared only in metadata. Requiring the name unconditionally made full-text
+     * search unreachable on every such table, on a platform that never wanted the name.
+     */
+    get FullTextIndexNeedsPrimaryKeyIndexName(): boolean {
+        return false;
+    }
+
     // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
 
     /**
@@ -830,6 +1118,31 @@ export abstract class CodeGenDatabaseProvider {
      * Generates GRANT SELECT permission for a base view.
      */
     abstract generateViewPermissions(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Generates GRANT SELECT (and on SQL Server, managed-scope REVOKEs and column-level
+     * FLS DENY SELECTs) for a specific target view belonging to `entity` (e.g. a registered
+     * alternate base view). Defaults to `generateViewPermissions(entity)`.
+     */
+    GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        _targetSchemaName: string,
+        _targetViewName: string,
+    ): string {
+        return this.generateViewPermissions(entity);
+    }
+
+    /**
+     * Generates REVOKE SELECT statements for a disabled alternate base view belonging to `entity`
+     * so disabling a previously active alternate base view revokes its database read grants.
+     */
+    GenerateDisabledViewRevokePermissionsForTarget(
+        _entity: EntityInfo,
+        _targetSchemaName: string,
+        _targetViewName: string,
+    ): string {
+        return '';
+    }
 
     /**
      * Generates GRANT EXECUTE permission for a CRUD routine.
@@ -1007,6 +1320,27 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Returns true when the field's database default must be resolved into its
+     * parameter BEFORE the INSERT rather than inlined into the value list's
+     * null-coalescing wrap. The base implementation inlines every default; a
+     * dialect whose null-coalescing call rejects some default expressions
+     * (SQL Server: `NEXT VALUE FOR` inside `ISNULL`/`CASE`) overrides this and
+     * emits the assignments through {@link GeneratePreInsertDefaultAssignments}.
+     */
+    protected isPreInsertDefault(_ef: EntityFieldInfo): boolean {
+        return false;
+    }
+
+    /**
+     * Returns the statements that assign expression defaults (see
+     * {@link isPreInsertDefault}) to their parameters before the INSERT of a
+     * create routine. Empty when the dialect inlines every default.
+     */
+    GeneratePreInsertDefaultAssignments(_entity: EntityInfo): string {
+        return '';
+    }
+
+    /**
      * Generates the parameter list string for a CRUD routine with tolerant
      * SP signatures (Pillar 1 of the cross-app migration architecture).
      *
@@ -1122,7 +1456,17 @@ export abstract class CodeGenDatabaseProvider {
 
             const paramRef = dialect.ParameterRef(ef.CodeName);
 
-            if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
+            if (ef.HasDefaultValue && this.isPreInsertDefault(ef)) {
+                // The default is an expression that cannot sit inside ISNULL/CASE (e.g. NEXT VALUE
+                // FOR). GeneratePreInsertDefaultAssignments already resolved it into the parameter
+                // before the INSERT, so the value list only reads the parameter back.
+                if (ef.AllowsNull && !ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
+                    const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
+                    parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${paramRef} END`);
+                } else {
+                    parts.push(paramRef);
+                }
+            } else if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
                 // GUID-PK insert: detect empty-sentinel and fall back to DB default
                 const formattedDefault = this.formatInsertDefaultValue(ef);
                 parts.push(`CASE WHEN ${paramRef} = ${dialect.EmptyUUIDLiteral()} THEN ${formattedDefault} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
@@ -1270,6 +1614,23 @@ export abstract class CodeGenDatabaseProvider {
      * for executing the query with proper parameterization for the target database platform.
      */
     abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Returns a query listing every non-primary-key unique index (or unique constraint) that
+     * contains a column, one row per index, with two columns:
+     * - `KeyColumnCount`: the number of key columns in the index, not counting INCLUDE columns
+     * - `IsIncludedColumn`: true when the column is only an INCLUDE column of that index
+     *
+     * A column that is unique on its own has a row with `KeyColumnCount = 1` and
+     * `IsIncludedColumn = false`. `EntityField.IsUnique` cannot tell that apart: schema sync sets it
+     * on every column of a composite unique constraint.
+     *
+     * The default returns null, meaning the platform cannot answer; callers then keep relying on
+     * `EntityField.IsUnique`.
+     */
+    public GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return null;
+    }
 
     /**
      * Returns a SQL query string to check if a foreign key index already exists.
@@ -1457,6 +1818,29 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * SQL that rebinds an alternate base view after its entity's base view (or parent
+     * alternate view) has been regenerated. SQL Server: empty here — the alternate view
+     * is refreshed via {@link generateViewRefreshSQL}. PostgreSQL: invokes
+     * `__mj.spRebindLayeredOuterView` against the immediate inner view.
+     */
+    GenerateAlternateBaseViewRebindSQL(
+        _entity: EntityInfo,
+        _altViewSchema: string,
+        _altViewName: string,
+        _innerViewName: string,
+    ): string {
+        return '';
+    }
+
+    /**
+     * Returns SQL to query catalog dependencies of a view (`ReferencedSchema`, `ReferencedObject`, `ReferencedType`).
+     * Used by alternate base view parity/safety checks.
+     */
+    getViewDependenciesSQL(_schema: string, _viewName: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this
+        return '';
+    }
+
+    /**
      * Wraps `innerSQL` so it runs only when the named view already exists.
      *
      * Used for objects CodeGen refreshes or grants on but does NOT create — specifically the
@@ -1575,6 +1959,20 @@ export abstract class CodeGenDatabaseProvider {
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
+     * Reduces a CRUD routine definition — a generated script or the live catalog text — to a
+     * canonical form, so CodeGen can tell when the live routine no longer matches what it would
+     * generate now (a column default or type changed before CodeGen ran, or a cascade target
+     * dropped a column). Two definitions that normalize to the same string are treated as equal.
+     *
+     * Returns `null` when the platform does not support the comparison or the text holds no
+     * routine; callers then fall back to their other regeneration triggers. The base returns
+     * `null`; SQL Server implements it against `OBJECT_DEFINITION`.
+     */
+    NormalizeRoutineDefinitionForComparison(_definition: string): string | null {
+        return null;
+    }
+
+    /**
      * Optional — dialect-specific fast path for regenerating a single entity's
      * base view with recovery logic.
      *
@@ -1623,7 +2021,10 @@ export abstract class CodeGenDatabaseProvider {
      *             rejects the view with `function does not exist`.
      *   Phase 1 = view DDL (viewSQL) — may invoke provider-specific recovery.
      *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
-     *   Phase 3 = view permissions (viewPermSQL) — runs only if phase 2 succeeded.
+     *   Phase 3 = full-text search DDL (ftsSQL) — runs after the view phase
+     *             because the search function's result type is the base view.
+     *   Phase 4 = view permissions (viewPermSQL) — runs only if the earlier
+     *             phases succeeded.
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
@@ -1636,6 +2037,11 @@ export abstract class CodeGenDatabaseProvider {
         crudCreateSQL: string;
         crudUpdateSQL: string;
         crudDeleteSQL: string;
+        /** Full-text search DDL (tsvector column/trigger/index plus the search
+         *  function). Empty when the entity has no full-text search. Must run
+         *  AFTER the view phase — the search function `RETURNS SETOF <baseview>`,
+         *  so it cannot be created against a missing or stale view. */
+        ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult>;
@@ -1899,8 +2305,10 @@ export interface FieldResolutionGap {
 export interface PhasedExecutionResult {
     /** True only when every requested phase succeeded. */
     success: boolean;
-    /** Which phase failed. Null when `success` is true. */
-    phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
+    /** Which phase failed. Null when `success` is true. `fulltext-generate`
+     *  is the caller-side failure to GENERATE the full-text DDL, as distinct
+     *  from `fulltext`, the provider's failure to EXECUTE it. */
+    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
 }

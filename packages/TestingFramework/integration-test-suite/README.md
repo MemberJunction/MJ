@@ -120,6 +120,13 @@ gates the one-process catalog can't provide, and they are **not** dispatched by 
 npx tsx packages/TestingFramework/integration-test-suite/rigs/runview-matrix-tests.ts
 ```
 
+### Golden-label-quality rig (`rigs/feature-pipelines/`)
+
+`golden-label-quality.ts` labels the job-title golden set with two vendors' models, adjudicates against labeler A and
+writes the set with its label-quality record (usage and exit codes in its header; live model calls, capped by
+`--max-cost`). The rigs sit outside the package's `tsconfig`, so `pnpm run check:rigs` (`tsconfig.rigs.json`)
+type-checks this folder; the package's `pnpm test` runs it too.
+
 ## Further reading
 
 - [`docs/README.md`](docs/README.md) — **this suite's documentation home**: comprehensive per-sub-suite docs (cache, data-access, security, writes/transactions, AI, platform — mechanism, per-check inventory, tiers/transports, known pinned gaps) plus the [candidate test-catalog](docs/test-catalog.md)

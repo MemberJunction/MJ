@@ -7333,5 +7333,2264 @@
       "lastModified": "2026-02-13T21:08:55.602Z",
       "checksum": "b5b228587075bea3370d89e94d85502daf43a6f71c90b5047758bfb97ed3ef41"
     }
+  },
+  {
+    "fields": {
+      "Name": "CreateJournalEntry",
+      "Description": "Posts a balanced journal entry to the company's ERP (Business Central and QuickBooks Online). Dispatches to the plugin for the company's accounting integration.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "CreateJournalEntry",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-invoice"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A3D63AEB-E133-4310-89A5-C9C552DE5918"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "91070EED-7954-4059-95A3-A0814C4A1225"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E6503143-FF16-470F-A445-4806C9EC0300"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntryDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Posting date of the journal entry (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EA8511F3-F09B-4F07-8DD2-D2D6FFE82404"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Lines",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Journal entry lines: AccountID or account number, Amount (positive for debit, negative for credit) and optional Description",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E9ADAFAB-0C86-4BA1-BABF-8ED216B8AD8B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DocNumber",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Document number for the journal entry; returns the number the ERP assigned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "63249438-0BF4-49B0-9A96-39CC20E4BDF2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Description of the journal entry (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B758C30A-89DD-44FC-9BCE-CF5848D4A495"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrivateNote",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Private note for internal use",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "765A5A24-6FC8-43CB-9AD3-09022D7112F0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JournalCode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "General journal batch code to post through (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D5F2EEAF-E50D-4758-B853-883788C19810"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AdjustmentEntry",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether this is an adjustment entry (QuickBooks Online)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "7BBE629D-9FEA-41FB-BCC1-9B46639E41ED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JournalEntryID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ERP ID of the created journal entry"
+          },
+          "primaryKey": {
+            "ID": "1C40636F-DEA7-49BA-9FFF-039BA07E29CD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalAmount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total debit amount of the entry"
+          },
+          "primaryKey": {
+            "ID": "08887A5A-2217-444E-A150-CB79EFD589D4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedDate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When the ERP created the entry (QuickBooks Online)"
+          },
+          "primaryKey": {
+            "ID": "18481709-AA66-49ED-A278-C2E7B5EFC29E"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "912FE4CA-C7F1-49C9-A5E0-685E00CF3A0A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "FE290E32-B76D-4057-8C23-38DE9449FBA6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "34310C32-CF2E-4ACC-AC4C-8D31458D4E73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "DF2FC29E-2CAC-47BB-86E3-292CE960E3D3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "9836B3E3-018E-4F6F-92F0-5BA04F6A4BF0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "5D9448E9-0EDF-4399-A442-77670C93BF8F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "F8A34B3C-ADB1-449E-BAF2-0D23AED9BEED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "38FC896D-53DB-43F4-8C5F-001610393263"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "56AA2BED-1DC3-403D-AE41-7FF5D58EF197"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "3EF1493E-8F2F-44FC-AF23-B88EFCB5D8C9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6DC6B5F9-CDCC-4BA7-8D1D-6FCD2C2BBA55"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetChartOfAccounts",
+      "Description": "Retrieves the chart of accounts from the company's ERP (Business Central and QuickBooks Online).",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetChartOfAccounts",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "EC999431-E7AD-438B-8C81-703A99022656"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9044B2A3-4E0F-4257-995C-12670501C8E3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "14BA5DB7-330C-46E6-BA27-63B94DD3E962"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccountTypes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Filter by account types",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D4DC395C-E34F-4168-A639-2B53ED87C8C7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Categories",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Filter by account categories (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AA4DD4D8-FF54-4D6B-B7DD-A00E641A6FD0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeBlocked",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include blocked accounts (Business Central)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "72FB9EED-0838-4042-B67F-D7A8B8101614"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeInactive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include inactive accounts (QuickBooks Online)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "853C72F0-87E1-4B86-A443-05712A0A31A9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ParentAccountID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only accounts under this parent account (QuickBooks Online)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7DC60B52-3743-40C4-B419-6A2448BD8614"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinBalance",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum account balance (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5847F346-B2F9-4AEF-9C4B-47B9E173145C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxBalance",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum account balance (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AED74B5E-54B9-4DAA-8F86-902B194B34B4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum accounts to return (Business Central)",
+            "IsRequired": false,
+            "DefaultValue": "1000"
+          },
+          "primaryKey": {
+            "ID": "0FF88857-E819-426F-B97A-906870A36172"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Accounts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Chart of accounts"
+          },
+          "primaryKey": {
+            "ID": "CCACE268-D4F2-4856-9D74-C734E1DE077C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GLAccounts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "GL accounts (Business Central)"
+          },
+          "primaryKey": {
+            "ID": "C456EBC8-1E9E-4214-A7D2-9887416E1402"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GLCodes",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "GL codes (QuickBooks Online)"
+          },
+          "primaryKey": {
+            "ID": "DE195D17-B5E2-4062-BE69-4CCF3DF155E4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of accounts returned"
+          },
+          "primaryKey": {
+            "ID": "3900C6D1-72D4-490C-BC3C-58488C766240"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Account summary (Business Central)"
+          },
+          "primaryKey": {
+            "ID": "FA068C8D-21DD-44DC-B133-3DFCB401B4A0"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "9B7FD104-813E-41B2-BE1F-5460DF0DEB73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "D53E3B96-585D-45AB-94D8-693D0C02A5E8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "000D6962-3191-4869-95D1-A9112B34D9FB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "ABBBACBE-7847-43BB-A8A3-48D234BA614D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "AA1282E5-A34B-4CA5-80D0-9C34C3BC322D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "9092F074-2F68-4D1A-A8EB-6A3C57593A29"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "8E71EE5C-77B4-43B1-8E5A-8102B42045B6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "55494DBE-A622-44CD-AF21-7ADBC72E5F03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "F34DDDBD-C993-4691-B956-87D34DEF69FB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "9C31752C-164A-4CE5-A70D-874747CB5A46"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FAB75C52-0882-4945-8C90-3B308CE6672F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetAccountBalances",
+      "Description": "Retrieves account balances from the company's ERP (Business Central and QuickBooks Online) as of a given date.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetAccountBalances",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-balance-scale"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0EC0555C-BAD2-4554-A44B-ED4E64A70D92"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F022FBDE-2691-4B05-82E6-51C13D0C4932"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "546C4BD4-4937-4BD8-A3BD-675F3C3207EC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AsOfDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Balance as of this date (YYYY-MM-DD); defaults to today",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "637F0F7D-C33A-48D1-A6D9-F2DF9CA61939"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccountTypes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Filter by account types",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9BE6C84E-1FD2-4053-A31A-AAA2A72C1765"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeZeroBalances",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include accounts with a zero balance",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1AE79A9-43BE-4C40-93A4-8B11FD930E95"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeBlocked",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include blocked accounts (Business Central)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "1E0E7BE6-838C-4FE4-A7B3-58A669D5CC47"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeInactive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include inactive accounts (QuickBooks Online)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "FA8F4C98-2415-4503-AB87-CF1C9C7AAF5D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SummarizeByType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Also return totals by account type (QuickBooks Online)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "81F9A5BE-4D2A-4009-815F-E8274F5AEEB0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum accounts to return (Business Central)",
+            "IsRequired": false,
+            "DefaultValue": "1000"
+          },
+          "primaryKey": {
+            "ID": "03D634C2-D791-4E14-B409-32642648152B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccountBalances",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Account balances"
+          },
+          "primaryKey": {
+            "ID": "0A816E8C-36E2-4F02-A2ED-DD70423E1CD6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalAccounts",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of accounts returned (Business Central)"
+          },
+          "primaryKey": {
+            "ID": "CA58BAD1-6733-497B-AAE6-EFA1FA7DAF41"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TrialBalanceSummary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Trial balance totals (QuickBooks Online)"
+          },
+          "primaryKey": {
+            "ID": "E6DC2A29-DD4F-4744-9E9D-0625DC84787B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TypeSummary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Totals by account type (QuickBooks Online)"
+          },
+          "primaryKey": {
+            "ID": "1EE486FB-803A-4BA9-8587-E9BB759D89F5"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "0371EF89-601C-453F-81D0-6B8871A56BB6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "91BC73AA-40FD-48F7-A332-0F4F2DBF1B95"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "72E84DAB-0359-4F4A-ADC7-29E166C45A77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "87E23906-B505-4FDA-BB4C-30C6774A2133"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "C44EACB8-89BB-46DE-84B8-436856BEB991"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "448FD4D0-573C-4067-A83B-BB4BA1A60568"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "A11AEA5E-D5B3-4AD2-91EC-3A82A9A8E730"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "66A4EBBE-FC15-4EFC-A6E0-C4ECEEDABF8B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "0F9B2AAE-07D2-4F1D-8DE4-D7EFEEAF6ECE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "4B427F48-A95E-4D88-BCC1-E8DAA469E6EF"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1D05CA04-71AD-4A21-BC01-8AF0A0376458"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetDimensions",
+      "Description": "Retrieves dimensions and dimension values from the company's ERP (Business Central and QuickBooks Online): Business Central dimensions, QuickBooks classes and departments.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetDimensions",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-tags"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DA9FEC1B-A461-4941-85F1-AD27D789E870"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BF85EEC8-3C75-41F0-932C-EC8B4F8A3719"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5394FB2B-618A-401A-9B36-97A055712B66"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Dimensions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Dimensions, each with its values"
+          },
+          "primaryKey": {
+            "ID": "47C2D2CF-3351-4D0E-8F14-CAEAD58988AD"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "01D6B685-8CED-4C64-9FFF-98318249998E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "A294D172-1A5E-4226-9A8C-3A5C62D8FDD6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "B52F9EEB-3F86-4A23-8958-A42D788C40B7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "401AEF7A-4430-4AAA-937E-53723D79F7B9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "6D993471-8B38-461B-8B5D-EDA21E62461A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "895C06A6-4000-4713-A3DD-3137DDBDF623"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "7D3D2D81-FE22-40BE-8B35-E9A95033E2CF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "B105088E-F2B9-4F96-86EE-26A34AEF0069"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "1E6A5090-1945-4CAB-9C5E-F49472C5A70D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "3D0F1870-30FD-4455-BD75-9AA1E1C98E0B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "129CA399-8063-4A4E-A58E-6A4FBA835E6F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetGLEntries",
+      "Description": "Retrieves general ledger entries / transactions from the company's ERP (Business Central and QuickBooks Online).",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetGLEntries",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B75900B0-5354-48AD-B9D4-8FC4F03354A9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3A49C5F1-B5BC-4EF9-925C-5298E16CE987"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8A695F86-ACFD-433C-9357-F71DFB3AF3F2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Earliest posting date (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9542D31C-24FB-4A81-B46A-E28027806965"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Latest posting date (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "70045BE8-2C01-45C6-A6FC-1AB82727678E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccountNumber",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by GL account number (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F41C8132-0210-43A3-8699-635A08EAECBF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DocumentNumber",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by document number (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4073A95B-E32F-4E1E-8A3B-A00CEEC20EB2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DocumentType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by document type (Business Central)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF8DFE8D-2216-4D23-926A-FD4D31F054BF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TransactionType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by transaction type (QuickBooks Online)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2952F949-BD08-4115-B2BF-2C505C6782FC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by customer or vendor ID (QuickBooks Online)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "06924884-A853-46CC-85C2-FA913441F795"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinAmount",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum amount",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "34B6282E-99C9-4939-AEA0-EA6EC49CA410"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxAmount",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum amount",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6AF5B784-73D5-4CED-94C3-F16F40F96DD1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeDimensions",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include dimension set lines (Business Central)",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "73336FB5-A098-4F89-A206-6171180A607A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum entries to return",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7B8924A9-C9CE-4A22-BF75-4379E05E3C41"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GLEntries",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "General ledger entries (Business Central)"
+          },
+          "primaryKey": {
+            "ID": "543C2F18-FBE8-4923-87A2-1743868B1827"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Transactions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Transactions (QuickBooks Online)"
+          },
+          "primaryKey": {
+            "ID": "B87002D9-B1B0-4D78-949C-14D6789BFA2C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of entries returned"
+          },
+          "primaryKey": {
+            "ID": "A1DDF1F4-0A49-465F-924E-84B248071CBE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether more transactions matched than were returned (QuickBooks Online)"
+          },
+          "primaryKey": {
+            "ID": "BCF56557-8321-43D8-BF82-B927969CF18E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Entry totals (Business Central)"
+          },
+          "primaryKey": {
+            "ID": "808C707A-EAD1-45FB-9FB7-AF53F51E3AFB"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "8ACCEA20-F78C-41AD-8FF9-480F571FA98B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "BBB702D8-2977-4C68-A8FF-E71A3C3EF233"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "67D98704-8F4A-4A0E-AD4C-E688B9D95223"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "CFA300A9-E754-4DD3-87E1-DC6DFDD27880"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "8768249D-E240-445D-B90C-BEA095A28790"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "2FFE775D-478F-46C2-90DA-311973BCEC80"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "BC797AAB-C4CB-45C8-905C-DEE725AC8F1B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "74F2FB5E-DEC4-4CF3-A904-D5478352B09C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "133C8F6E-3F50-44B3-8661-8BB62957B4ED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "5B7DCA86-7B0C-4CAC-A6E3-E5D5B5EA7261"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "17E4D9A0-D3C1-4DFD-AB8D-441454E2233F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetCustomers",
+      "Description": "Retrieves customers from the company's ERP (Business Central).",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetCustomers",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-users"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D250B1F4-918D-49F1-AB75-C7D11A8D467D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1E2F0393-B834-407B-A59B-4689B81CD329"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "02F6CFC7-699B-4EB0-B37F-0B6ABAA7C8F8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search customer name, number or email",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C2BD2A7B-5013-4ACC-A8F8-984B6EB633B1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomerType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by customer type",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4C9A56F0-C590-4E1C-A344-FF7397894E84"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeBlocked",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include blocked customers",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "209E910B-5D17-4E34-A45C-F7FE16ECBB40"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinBalance",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum balance",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9674B5B1-9D48-4144-906E-101F81084CB9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxBalance",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum balance",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77C51081-D7A5-4D41-BDA5-D5B494D01369"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OnlyOverdue",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only customers with an overdue balance",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "6FE50253-00D3-4A64-9129-8EB5DA1D4830"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SortBy",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field to sort by",
+            "IsRequired": false,
+            "DefaultValue": "displayName"
+          },
+          "primaryKey": {
+            "ID": "A704E621-E210-455F-8DD4-29233D24552C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum customers to return",
+            "IsRequired": false,
+            "DefaultValue": "100"
+          },
+          "primaryKey": {
+            "ID": "C11FF1EE-725F-4155-AEC9-2B5A34E2CBBA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Customers",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Customers"
+          },
+          "primaryKey": {
+            "ID": "2F7E482F-73BE-4A92-843F-D01BC19F8093"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of customers returned"
+          },
+          "primaryKey": {
+            "ID": "C11629EC-A79B-4417-BF03-24476FC62875"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Customer summary"
+          },
+          "primaryKey": {
+            "ID": "C0FCFABE-F87E-4B2F-8B3B-B42D967E7B4E"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "0F6AAD37-5F8F-4540-A89D-1BDA915AC6C3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "E6A251F8-317E-4037-AF75-166D2E880529"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "585BBB91-192C-4AA4-B68D-E3AB833AB3E6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "A4904F83-B15E-4D9A-B68B-9E49F12FF8D7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "61DC608C-00B6-4E6F-BCD8-F704CA906282"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "EDE1D38B-ACE8-41A6-8836-2B154948C158"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "E5647B4A-0187-4AF6-9C09-E9DEFBF18E5A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "82830568-0866-4F21-9FCC-3DE7D8BE98A8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "3AFE45C3-76DB-4541-8471-78828AECF42B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "06423F9E-1A30-4E1D-B6F1-0F133882BB5E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "84D5102E-A2A2-4775-A482-82EEDA5BE065"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetSalesInvoices",
+      "Description": "Retrieves sales invoices from the company's ERP (Business Central).",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetSalesInvoices",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-invoice-dollar"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ company whose ERP connection is used",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BBA53732-E2D4-4D35-ABEE-B63F2F3BD1F3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (ERP connection) to use. Required when the company has more than one active accounting connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "777699EA-2040-4540-A13C-3139FDF4938D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Integration name of the ERP to use, e.g. 'Microsoft Dynamics 365 Business Central' or 'QuickBooks Online'. Narrows the connection lookup when CompanyIntegrationID is not given",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7FD5D4CF-1896-4371-81F2-A3F520DFD20D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomerNumber",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by customer number",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DD6CEBF3-DFAB-4585-A216-09454B3EA701"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by status (draft, open, paid, canceled)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DDDB4E5C-A458-4A10-A604-C088AC171CE9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Earliest invoice date (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "45C6D61D-85B8-43D8-8B88-35607128AB13"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Latest invoice date (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "540EDEA3-1CC7-40E7-8CD0-B903053A1E4F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DueStartDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Earliest due date (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E9F45F18-475F-4F5D-9E2C-5C03A25AE83D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DueEndDate",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Latest due date (YYYY-MM-DD)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8AA4D1C5-E257-4E20-9D0B-BD46A8533CB5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinAmount",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum invoice amount",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "39B9CA49-D55C-4D59-9967-25C7EB630D87"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxAmount",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum invoice amount",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3CB7102D-107C-4FA2-817D-75B1C3B9ED98"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OnlyUnpaid",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only unpaid invoices",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "4DB1C6AF-8539-4644-BC1D-FD69E97C1D3A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeLines",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include invoice lines",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "1702F395-1648-42C3-93D5-84315DC2877D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum invoices to return",
+            "IsRequired": false,
+            "DefaultValue": "100"
+          },
+          "primaryKey": {
+            "ID": "66FC1804-BBEB-4443-A4C1-F4BAC9A47C97"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Invoices",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Sales invoices"
+          },
+          "primaryKey": {
+            "ID": "7C62AB83-97C1-46A7-8B31-6316F1268D5F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of invoices returned"
+          },
+          "primaryKey": {
+            "ID": "58ED68C8-8CC7-45F9-9D1E-F5B7AE7ED347"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Invoice summary"
+          },
+          "primaryKey": {
+            "ID": "88F642EA-A48C-4447-BAF3-10B33801487C"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The ERP plugin ran successfully"
+          },
+          "primaryKey": {
+            "ID": "D3D3EECF-412F-4C4B-9AA5-E33FDA012A6C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required input is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "1085BE23-6B53-457B-A518-50574EAA29E5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has no active accounting ERP connection"
+          },
+          "primaryKey": {
+            "ID": "45965166-854C-46D8-ADEB-37A319D91D83"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "The company has more than one matching connection; pass CompanyIntegrationID"
+          },
+          "primaryKey": {
+            "ID": "D978BFBB-C63A-4CBE-B2F6-313E03C12C16"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID does not match a company integration"
+          },
+          "primaryKey": {
+            "ID": "5C0BE722-03E0-4B03-AB78-2DC0349F4DA5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_WRONG_COMPANY",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID belongs to another company"
+          },
+          "primaryKey": {
+            "ID": "94DD541D-E15C-4EF4-AA88-305D53C88520"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPANY_INTEGRATION_INACTIVE",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names an inactive connection"
+          },
+          "primaryKey": {
+            "ID": "2779FB7B-055F-412C-BFBB-D199F149FDED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACCOUNTING_INTEGRATION",
+            "IsSuccess": false,
+            "Description": "CompanyIntegrationID names a connection that is not an accounting ERP"
+          },
+          "primaryKey": {
+            "ID": "E3291D83-1B11-4203-99EB-F4A973089079"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_REGISTERED",
+            "IsSuccess": false,
+            "Description": "No ERP plugin is registered for this verb and the connection's integration"
+          },
+          "primaryKey": {
+            "ID": "DFCF9289-185F-44F2-A1D8-DCF6C1058055"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error"
+          },
+          "primaryKey": {
+            "ID": "2C3B254B-DE02-4BDF-A2A0-3BE90D13D08C"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "403220D7-DE3E-4408-83B4-0000A7C7DCE4"
+    }
   }
 ]

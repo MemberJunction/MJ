@@ -10,13 +10,24 @@
  * Excellent, say in plain words how much to rely on it, and — critically — GATE the downstream
  * actions: a Poor (or unmeasured) model returns `canAct: false`.
  *
- * It lives in the **types-only Core package on purpose**: the SAME rule must drive both the business
+ * It lives in the **Core package on purpose** (browser-safe, dependency-free runtime logic shared by
+ * the server engine, the UI and the agent): the SAME rule must drive both the business
  * UI (catalog trust badges + the workspace action gate) and the Predictive Studio Agent's **publish
  * gate** (it won't publish a model the verdict can't clear). One source of truth, no drift.
  *
- * Pure + dependency-free (Core is types-only). Tolerant of missing/garbage metrics: an unmeasurable
+ * Holdout metrics preferred; validation metrics only when recorded out-of-sample; a
+ * time-indexed model not evaluated as a forecast is Poor; a classifier no better than the majority class is Poor under
+ * the model's recorded majority-baseline rule `enforce` (the default). Under `warn` the finding is computed and carried
+ * on the verdict (`MajorityBaseline`) without capping the grade, but nothing renders or records it yet, so under `warn`
+ * nothing tells the user that always guessing the majority does as well (accuracy-only verdicts are capped under either
+ * rule). Without an AUC, accuracy is graded on its lift over the majority rate, never on its raw value.
+ *
+ * Pure + dependency-free. Tolerant of missing/garbage metrics: an unmeasurable
  * model grades `unknown` and is gated OFF — fail-safe, never fail-open.
  */
+import { EvaluationLineage, type EvaluationRecord } from './evaluation-record';
+import type { MajorityBaselineRule } from './pipeline-spec';
+import { ProblemTypes } from './sidecar-contract';
 
 /** Plain-language reliability grade shown to business users instead of raw metrics. */
 export type TrustGrade = 'Poor' | 'Fair' | 'Good' | 'Excellent';
@@ -26,9 +37,21 @@ export interface TrustModelInput {
   Metrics?: string | null;
   HoldoutMetrics?: string | null;
   ProblemType?: string | null;
+  /**
+   * The model's `Lineage` JSON. Its `evaluation` record says whether `Metrics` were measured out of sample and whether
+   * the verdict is withheld (a declared time index not evaluated as a forecast). `MJMLModelEntity` satisfies this.
+   * Required (pass null when there is none) so a call site that drops it, and with it the withheld cap, fails to compile.
+   */
+  Lineage: string | null;
 }
 
-/** The full plain-language verdict for a model, derived from its metrics. */
+/**
+ * The full plain-language verdict for a model, derived from its metrics.
+ *
+ * The mixed member casing is deliberate: the camelCase members predate the PascalCase convention and are kept so existing
+ * consumers keep compiling; members added later (`WithheldReason`, `MajorityBaseline`) follow the convention. Do not
+ * rename either half to match the other.
+ */
 export interface TrustVerdict {
   /** The plain reliability grade. */
   grade: TrustGrade;
@@ -46,6 +69,30 @@ export interface TrustVerdict {
   headlineMetric: { key: 'AUC' | 'Accuracy' | 'R2'; value: number } | null;
   /** True when no usable quality metric was found — trust is unknown and actions are gated off. */
   unknown: boolean;
+  /** The stored reason the verdict is withheld (e.g. "not evaluated as a forecast"); null otherwise. */
+  WithheldReason: string | null;
+  /**
+   * Set when a classifier is no better than always guessing the most common class (or predicts one class): the rule
+   * in force, whether it capped the grade, and the numbers. Null otherwise. It is computed and carried here but not yet
+   * rendered or recorded anywhere: under `warn`, where it does not cap the grade, nothing tells the user.
+   */
+  MajorityBaseline: MajorityBaselineFinding | null;
+}
+
+/** The majority-baseline check's result on one model (decision D2-C5d). */
+export interface MajorityBaselineFinding {
+  /** The rule recorded in the model's `Lineage.evaluation` (`'enforce'` when the lineage has none). */
+  Rule: MajorityBaselineRule;
+  /** True when the finding graded the model Poor: rule `enforce`, or an accuracy-only verdict under either rule. */
+  Enforced: boolean;
+  /** Holdout (or out-of-sample validation) accuracy; null when not reported. */
+  Accuracy: number | null;
+  /** Accuracy of always guessing the most common class on the same rows (sidecar `baseline_accuracy`). */
+  BaselineAccuracy: number | null;
+  /** How many distinct classes the model predicted on those rows (sidecar `predicted_classes`). */
+  PredictedClasses: number | null;
+  /** One plain sentence with the numbers. */
+  Note: string;
 }
 
 /** Optional context for the human-readable evidence line. */
@@ -61,6 +108,8 @@ interface TrustMetrics {
   AUC?: number;
   Accuracy?: number;
   R2?: number;
+  BaselineAccuracy?: number;
+  PredictedClasses?: number;
 }
 const TRUST_METRIC_ALIASES: Record<string, keyof TrustMetrics> = {
   auc: 'AUC',
@@ -71,31 +120,20 @@ const TRUST_METRIC_ALIASES: Record<string, keyof TrustMetrics> = {
   r2: 'R2',
   r_squared: 'R2',
   rsquared: 'R2',
+  baseline_accuracy: 'BaselineAccuracy',
+  predicted_classes: 'PredictedClasses',
 };
 
-/** Parse a metrics JSON string into the three keys the trust verdict needs. Never throws. */
-function parseTrustMetrics(json: string | null | undefined): TrustMetrics {
-  if (!json) return {};
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return {};
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  const out: TrustMetrics = {};
-  for (const [rawKey, rawVal] of Object.entries(parsed as Record<string, unknown>)) {
-    const value = typeof rawVal === 'number' && Number.isFinite(rawVal) ? rawVal : null;
-    if (value == null) continue;
-    const canonical = TRUST_METRIC_ALIASES[rawKey.trim().toLowerCase()];
-    if (canonical && out[canonical] == null) out[canonical] = value;
-  }
-  return out;
+/** The metric that drove the grade, with the grade and the 0–1 meter value it produced. */
+interface GradedHeadline {
+  Metric: NonNullable<TrustVerdict['headlineMetric']>;
+  Grade: TrustGrade;
+  Score01: number;
 }
 
 // --- grade thresholds (single source of truth) --------------------------------
-// Classification is judged on AUC (rank-quality, base-rate-independent); Accuracy is a fallback.
-// AUC 0.5 = a coin flip. Regression is judged on R².
+// Classification is judged on AUC (rank-quality, base-rate-independent); Accuracy is a fallback, graded on these bands
+// as `0.5 + lift / 2` where lift is its gain over the majority rate. AUC 0.5 = a coin flip. Regression is judged on R².
 const AUC_BANDS: ReadonlyArray<readonly [min: number, grade: TrustGrade]> = [
   [0.85, 'Excellent'],
   [0.7, 'Good'],
@@ -108,25 +146,6 @@ const R2_BANDS: ReadonlyArray<readonly [min: number, grade: TrustGrade]> = [
   [0.3, 'Fair'],
   [-Infinity, 'Poor'],
 ];
-
-function bandGrade(value: number, bands: ReadonlyArray<readonly [number, TrustGrade]>): TrustGrade {
-  for (const [min, grade] of bands) {
-    if (value >= min) return grade;
-  }
-  return 'Poor';
-}
-
-const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n);
-
-function isRegression(problemType: string | null | undefined): boolean {
-  return (problemType ?? '').trim().toLowerCase() === 'regression';
-}
-
-/** Holdout metrics preferred (honest, unseen-data estimate); fall back to training metrics. */
-function bestMetrics(model: TrustModelInput): TrustMetrics {
-  const holdout = parseTrustMetrics(model.HoldoutMetrics);
-  return Object.keys(holdout).length > 0 ? holdout : parseTrustMetrics(model.Metrics);
-}
 
 const GRADE_EXPLANATION: Record<TrustGrade, string> = {
   Excellent: 'Highly reliable — you can lean on this to make decisions.',
@@ -143,63 +162,176 @@ const GRADE_HEADLINE: Record<TrustGrade, string> = {
   Poor: 'Not reliable — about as accurate as guessing.',
 };
 
-/** Build the plain "right about N out of 10" headline (classification) or the R² headline (regression). */
-function buildOneLiner(grade: TrustGrade, regression: boolean, metrics: TrustMetrics): string {
-  if (regression) {
-    if (metrics.R2 != null) {
-      return grade === 'Poor'
-        ? 'Barely better than a flat guess — not reliable.'
-        : `Explains about ${Math.round(clamp01(metrics.R2) * 100)}% of what drives the outcome.`;
-    }
-    return GRADE_HEADLINE[grade];
-  }
-  if (grade === 'Poor') return 'About as accurate as guessing — not reliable.';
-  if (metrics.Accuracy != null) {
-    const outOf10 = Math.round(clamp01(metrics.Accuracy) * 10);
-    const suffix = grade === 'Excellent' ? ' — very reliable.' : grade === 'Fair' ? ' — a useful signal, not a sure thing.' : '.';
-    return `Right about ${outOf10} out of 10 times${suffix}`;
-  }
-  return GRADE_HEADLINE[grade];
-}
-
 const POOR_GATE_REASON =
   "This prediction is about as accurate as guessing, so it isn't safe to act on yet. An analyst needs to improve it first.";
 const UNKNOWN_GATE_REASON =
   "We can't tell how reliable this prediction is yet, so actions are locked until it's been checked against real results.";
+const MAJORITY_ONE_LINER = 'No better than always guessing the most common outcome — not reliable.';
+const MAJORITY_GATE_REASON =
+  "This prediction is right no more often than always guessing the most common outcome, so it isn't safe to act on yet. An analyst needs to improve it first.";
+const NOT_FORECAST_ONE_LINER = 'Not checked as a forecast — not reliable for future periods yet.';
+const NOT_FORECAST_GATE_REASON =
+  "This prediction looks ahead in time, but it was only checked on periods it learned from, not on later ones, so it isn't safe to act on yet.";
+const WITHHELD_ONE_LINER = "This model's accuracy was not measured in a way we trust yet.";
+const WITHHELD_GATE_REASON = "This model's accuracy was not measured in a way we trust yet, so it isn't safe to act on.";
 
-/**
- * Derive the plain-language trust verdict for a model from its metrics. Holdout metrics preferred.
- * Classification grades on AUC (then Accuracy); regression on R². An unmeasured model is gated OFF.
- *
- * @param model the model's metric JSON + problem type.
- * @returns the grade, plain copy, and the `canAct` gate (false for Poor or unmeasured models).
- */
-export function DeriveTrustVerdict(model: TrustModelInput): TrustVerdict {
-  const regression = isRegression(model.ProblemType);
-  const metrics = bestMetrics(model);
-
-  let headlineMetric: { key: 'AUC' | 'Accuracy' | 'R2'; value: number } | null = null;
-  let grade: TrustGrade | null = null;
-  let score01 = 0;
-
-  if (regression) {
-    if (metrics.R2 != null) {
-      headlineMetric = { key: 'R2', value: metrics.R2 };
-      grade = bandGrade(metrics.R2, R2_BANDS);
-      score01 = clamp01(metrics.R2);
-    }
-  } else if (metrics.AUC != null) {
-    headlineMetric = { key: 'AUC', value: metrics.AUC };
-    grade = bandGrade(metrics.AUC, AUC_BANDS);
-    score01 = clamp01((metrics.AUC - 0.5) / 0.5);
-  } else if (metrics.Accuracy != null) {
-    headlineMetric = { key: 'Accuracy', value: metrics.Accuracy };
-    grade = bandGrade(metrics.Accuracy, AUC_BANDS); // reuse the bands as a rough fallback
-    score01 = clamp01((metrics.Accuracy - 0.5) / 0.5);
+/** Static entry points for the plain-language trust verdict and evidence helpers. */
+export class TrustVerdicts {
+  /**
+   * Derive the plain-language trust verdict for a model from its metrics. Holdout metrics preferred.
+   * Classification grades on AUC (then Accuracy); regression on R². An unmeasured model is gated OFF.
+   *
+   * @param model the model's metric JSON + problem type.
+   * @returns the grade, plain copy, and the `canAct` gate (false for Poor or unmeasured models).
+   */
+  public static DeriveTrustVerdict(model: TrustModelInput): TrustVerdict {
+    const regression = ProblemTypes.IsRegression(model.ProblemType);
+    const evaluation = EvaluationLineage.Read(model.Lineage);
+    const metrics = TrustVerdicts.bestMetrics(model, evaluation);
+    const headline = TrustVerdicts.headlineFor(metrics, regression);
+    // Unmeasurable → unknown trust → GATE OFF (fail-safe).
+    if (headline === null) return TrustVerdicts.unknownVerdict();
+    return TrustVerdicts.applyCaps(headline, regression, metrics, evaluation);
   }
 
-  // Unmeasurable → unknown trust → GATE OFF (fail-safe).
-  if (grade == null) {
+  /**
+   * Human-readable "checked against N members it had never seen" evidence line. Returns a generic
+   * phrasing when no count is available (never fabricates a number).
+   */
+  public static TrustEvidenceLine(opts?: TrustEvidenceOptions): string {
+    const noun = opts?.noun?.trim() || 'records';
+    if (opts?.count != null && Number.isFinite(opts.count) && opts.count > 0) {
+      return `Checked against ${Math.round(opts.count).toLocaleString()} past ${noun} it had never seen.`;
+    }
+    return `Checked against past ${noun} it had never seen.`;
+  }
+
+  /** The 0–5 "filled dots/stars" count for a grade, for compact visuals. */
+  public static TrustDots(grade: TrustGrade): number {
+    return grade === 'Excellent' ? 5 : grade === 'Good' ? 4 : grade === 'Fair' ? 3 : 1;
+  }
+
+  /** Parse a metrics JSON string into the keys the trust verdict needs. Never throws. */
+  private static parseTrustMetrics(json: string | null | undefined): TrustMetrics {
+    if (!json) return {};
+    let parsed: unknown; // JSON.parse output is untyped until the object check below narrows it
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return {};
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: TrustMetrics = {};
+    for (const [rawKey, rawVal] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) continue;
+      const canonical = TRUST_METRIC_ALIASES[rawKey.trim().toLowerCase()];
+      if (canonical !== undefined && out[canonical] === undefined) out[canonical] = rawVal;
+    }
+    return out;
+  }
+
+  private static bandGrade(value: number, bands: ReadonlyArray<readonly [number, TrustGrade]>): TrustGrade {
+    for (const [min, grade] of bands) {
+      if (value >= min) return grade;
+    }
+    return 'Poor';
+  }
+
+  private static clamp01(n: number): number {
+    return n < 0 ? 0 : n > 1 ? 1 : n;
+  }
+
+  /**
+   * Holdout metrics first. Validation `Metrics` count only when the model's evaluation record says they were measured
+   * out of sample (F-TR-3): models trained before this change scored k-fold / holdout in-sample.
+   */
+  private static bestMetrics(model: TrustModelInput, evaluation: EvaluationRecord | null): TrustMetrics {
+    const holdout = TrustVerdicts.parseTrustMetrics(model.HoldoutMetrics);
+    if (Object.keys(holdout).length > 0) return holdout;
+    return evaluation?.ValidationOutOfSample === true ? TrustVerdicts.parseTrustMetrics(model.Metrics) : {};
+  }
+
+  /** The metric that grades the model: R² for regression, else AUC, else accuracy (only with its majority rate). */
+  private static headlineFor(metrics: TrustMetrics, regression: boolean): GradedHeadline | null {
+    if (regression) {
+      if (metrics.R2 === undefined) return null;
+      return {
+        Metric: { key: 'R2', value: metrics.R2 },
+        Grade: TrustVerdicts.bandGrade(metrics.R2, R2_BANDS),
+        Score01: TrustVerdicts.clamp01(metrics.R2),
+      };
+    }
+    if (metrics.AUC !== undefined) {
+      return {
+        Metric: { key: 'AUC', value: metrics.AUC },
+        Grade: TrustVerdicts.bandGrade(metrics.AUC, AUC_BANDS),
+        Score01: TrustVerdicts.clamp01((metrics.AUC - 0.5) / 0.5),
+      };
+    }
+    // accuracy means nothing without the always-majority rate (F-TR-1); without it the model is unmeasured
+    if (metrics.Accuracy === undefined || metrics.BaselineAccuracy === undefined) return null;
+    const lift = TrustVerdicts.accuracyLift(metrics.Accuracy, metrics.BaselineAccuracy);
+    return {
+      Metric: { key: 'Accuracy', value: metrics.Accuracy },
+      // lift 0 (no better than the majority) sits at AUC 0.5, a coin flip; lift 1 (perfect) at AUC 1
+      Grade: TrustVerdicts.bandGrade(0.5 + lift / 2, AUC_BANDS),
+      Score01: TrustVerdicts.clamp01(lift),
+    };
+  }
+
+  /**
+   * How much of the room above the always-majority rate the accuracy covers: `(accuracy − baseline) / (1 − baseline)`,
+   * 0 when the baseline is already 1. Accuracy 0.91 against a 0.90 majority rate is a lift of 0.1, not "9 out of 10".
+   */
+  private static accuracyLift(accuracy: number, baseline: number): number {
+    return baseline >= 1 ? 0 : (accuracy - baseline) / (1 - baseline);
+  }
+
+  /**
+   * Caps a graded headline: a withheld verdict and an enforced majority finding each grade the model Poor and gate it
+   * off. The rule comes from the model's own lineage (D2-C5d): a model is graded by the rule it was trained under.
+   */
+  private static applyCaps(headline: GradedHeadline, regression: boolean, metrics: TrustMetrics, evaluation: EvaluationRecord | null): TrustVerdict {
+    const rule = evaluation?.MajorityBaselineRule || EvaluationLineage.DefaultMajorityBaselineRule;
+    const majority =
+      !regression && TrustVerdicts.noBetterThanMajority(metrics)
+        ? TrustVerdicts.majorityFinding(metrics, rule, headline.Metric.key === 'Accuracy')
+        : null;
+    if (evaluation?.WithheldReason) {
+      const forecast = evaluation.WithheldReason === EvaluationLineage.NotEvaluatedAsForecast;
+      return TrustVerdicts.cappedVerdict(
+        headline.Metric,
+        forecast ? NOT_FORECAST_ONE_LINER : WITHHELD_ONE_LINER,
+        forecast ? NOT_FORECAST_GATE_REASON : WITHHELD_GATE_REASON,
+        evaluation.WithheldReason,
+        majority,
+      );
+    }
+    if (majority?.Enforced) {
+      return TrustVerdicts.cappedVerdict(headline.Metric, MAJORITY_ONE_LINER, MAJORITY_GATE_REASON, null, majority);
+    }
+    return TrustVerdicts.gradedVerdict(headline, regression, metrics, majority);
+  }
+
+  /** The verdict for an uncapped grade: actions unlock unless the grade is Poor. */
+  private static gradedVerdict(headline: GradedHeadline, regression: boolean, metrics: TrustMetrics, majority: MajorityBaselineFinding | null): TrustVerdict {
+    const canAct = headline.Grade !== 'Poor';
+    return {
+      grade: headline.Grade,
+      score01: headline.Score01,
+      oneLiner: TrustVerdicts.buildOneLiner(headline, regression, metrics),
+      explanation: GRADE_EXPLANATION[headline.Grade],
+      canAct,
+      gateReason: canAct ? null : POOR_GATE_REASON,
+      headlineMetric: headline.Metric,
+      unknown: false,
+      WithheldReason: null,
+      MajorityBaseline: majority,
+    };
+  }
+
+  /** The verdict for a model with no usable quality metric: unknown trust, gated off. */
+  private static unknownVerdict(): TrustVerdict {
     return {
       grade: 'Poor',
       score01: 0,
@@ -209,50 +341,107 @@ export function DeriveTrustVerdict(model: TrustModelInput): TrustVerdict {
       gateReason: UNKNOWN_GATE_REASON,
       headlineMetric: null,
       unknown: true,
+      WithheldReason: null,
+      MajorityBaseline: null,
     };
   }
 
-  const canAct = grade !== 'Poor';
-  return {
-    grade,
-    score01,
-    oneLiner: buildOneLiner(grade, regression, metrics),
-    explanation: GRADE_EXPLANATION[grade],
-    canAct,
-    gateReason: canAct ? null : POOR_GATE_REASON,
-    headlineMetric,
-    unknown: false,
-  };
-}
-
-/** @deprecated Use {@link DeriveTrustVerdict}. */
-export function deriveTrustVerdict(model: TrustModelInput): TrustVerdict {
-  return DeriveTrustVerdict(model);
-}
-
-/**
- * Human-readable "checked against N members it had never seen" evidence line. Returns a generic
- * phrasing when no count is available (never fabricates a number).
- */
-export function TrustEvidenceLine(opts?: TrustEvidenceOptions): string {
-  const noun = opts?.noun?.trim() || 'records';
-  if (opts?.count != null && Number.isFinite(opts.count) && opts.count > 0) {
-    return `Checked against ${Math.round(opts.count).toLocaleString()} past ${noun} it had never seen.`;
+  /** A classifier right no more often than always guessing the most common class, or one that predicts a single class. */
+  private static noBetterThanMajority(m: TrustMetrics): boolean {
+    if (m.PredictedClasses !== undefined && m.PredictedClasses <= 1) return true;
+    return m.Accuracy !== undefined && m.BaselineAccuracy !== undefined && m.Accuracy <= m.BaselineAccuracy;
   }
-  return `Checked against past ${noun} it had never seen.`;
+
+  /** "79.6%" — a share as a percentage with one decimal. */
+  private static formatShare(value: number): string {
+    return `${(value * 100).toFixed(1)}%`;
+  }
+
+  /**
+   * The majority-baseline finding for a classifier that fails {@link TrustVerdicts.noBetterThanMajority}. Under `warn` it caps the
+   * grade only when the headline is accuracy: without an AUC, accuracy against the majority rate is the only evidence.
+   */
+  private static majorityFinding(m: TrustMetrics, rule: MajorityBaselineRule, accuracyIsHeadline: boolean): MajorityBaselineFinding {
+    const singleClass = m.PredictedClasses !== undefined && m.PredictedClasses <= 1;
+    const note =
+      !singleClass && m.Accuracy !== undefined && m.BaselineAccuracy !== undefined
+        ? `Right ${TrustVerdicts.formatShare(m.Accuracy)} of the time; always guessing the most common outcome is right ${TrustVerdicts.formatShare(m.BaselineAccuracy)} of the time.`
+        : 'Predicts the same outcome for every record.';
+    return {
+      Rule: rule,
+      Enforced: rule === 'enforce' || accuracyIsHeadline,
+      // `??` on purpose: an accuracy, baseline or class count of 0 is a legitimate value.
+      Accuracy: m.Accuracy ?? null,
+      BaselineAccuracy: m.BaselineAccuracy ?? null,
+      PredictedClasses: m.PredictedClasses ?? null,
+      Note: note,
+    };
+  }
+
+  /** A Poor, gated-off verdict that keeps the measured headline (and any majority finding) for the analyst disclosure. */
+  private static cappedVerdict(
+    headlineMetric: TrustVerdict['headlineMetric'],
+    oneLiner: string,
+    gateReason: string,
+    withheldReason: string | null,
+    majorityBaseline: MajorityBaselineFinding | null,
+  ): TrustVerdict {
+    return {
+      grade: 'Poor', score01: 0, oneLiner, explanation: GRADE_EXPLANATION.Poor, canAct: false, gateReason, headlineMetric,
+      unknown: false, WithheldReason: withheldReason, MajorityBaseline: majorityBaseline,
+    };
+  }
+
+  /**
+   * Build the plain "right about N out of 10" headline (classification) or the R² headline (regression). When accuracy
+   * is the headline it names the majority rate too, since accuracy alone overstates a model on lopsided outcomes.
+   */
+  private static buildOneLiner(headline: GradedHeadline, regression: boolean, metrics: TrustMetrics): string {
+    const grade = headline.Grade;
+    if (regression) {
+      if (metrics.R2 === undefined) return GRADE_HEADLINE[grade];
+      return grade === 'Poor'
+        ? 'Barely better than a flat guess — not reliable.'
+        : `Accounts for about ${Math.round(TrustVerdicts.clamp01(metrics.R2) * 100)}% of the variation in the outcome — an association, not a cause.`;
+    }
+    if (grade === 'Poor') return 'About as accurate as guessing — not reliable.';
+    if (metrics.Accuracy === undefined) return GRADE_HEADLINE[grade];
+    const outOf10 = Math.round(TrustVerdicts.clamp01(metrics.Accuracy) * 10);
+    const suffix = grade === 'Excellent' ? ' — very reliable.' : grade === 'Fair' ? ' — a useful signal, not a sure thing.' : '.';
+    if (headline.Metric.key === 'Accuracy' && metrics.BaselineAccuracy !== undefined) {
+      const baselineOutOf10 = Math.round(TrustVerdicts.clamp01(metrics.BaselineAccuracy) * 10);
+      return `Right about ${outOf10} out of 10 times, against ${baselineOutOf10} out of 10 by always guessing the majority${suffix}`;
+    }
+    return `Right about ${outOf10} out of 10 times${suffix}`;
+  }
 }
 
-/** @deprecated Use {@link TrustEvidenceLine}. */
+/** @deprecated Use {@link TrustVerdicts.DeriveTrustVerdict}. */
+export function DeriveTrustVerdict(model: TrustModelInput): TrustVerdict {
+  return TrustVerdicts.DeriveTrustVerdict(model);
+}
+
+/** @deprecated Use {@link TrustVerdicts.DeriveTrustVerdict}. */
+export function deriveTrustVerdict(model: TrustModelInput): TrustVerdict {
+  return TrustVerdicts.DeriveTrustVerdict(model);
+}
+
+/** @deprecated Use {@link TrustVerdicts.TrustEvidenceLine}. */
+export function TrustEvidenceLine(opts?: TrustEvidenceOptions): string {
+  return TrustVerdicts.TrustEvidenceLine(opts);
+}
+
+/** @deprecated Use {@link TrustVerdicts.TrustEvidenceLine}. */
 export function trustEvidenceLine(opts?: TrustEvidenceOptions): string {
-  return TrustEvidenceLine(opts);
+  return TrustVerdicts.TrustEvidenceLine(opts);
 }
 
-/** The 0–5 "filled dots/stars" count for a grade, for compact visuals. */
+/** @deprecated Use {@link TrustVerdicts.TrustDots}. */
 export function TrustDots(grade: TrustGrade): number {
-  return grade === 'Excellent' ? 5 : grade === 'Good' ? 4 : grade === 'Fair' ? 3 : 1;
+  return TrustVerdicts.TrustDots(grade);
 }
 
-/** @deprecated Use {@link TrustDots}. */
+/** @deprecated Use {@link TrustVerdicts.TrustDots}. */
 export function trustDots(grade: TrustGrade): number {
-  return TrustDots(grade);
+  return TrustVerdicts.TrustDots(grade);
 }

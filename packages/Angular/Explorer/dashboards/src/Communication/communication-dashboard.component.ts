@@ -369,6 +369,23 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             ProviderCount: c.providerCards.length,
             ActiveProviderCount: c.providerCards.filter(p => p.Entity.Status === 'Active').length,
             ProviderNames: CapCommunicationList(c.providerCards.map(p => p.Entity.Name)),
+            CalendarCapableProviderNames: CapCommunicationList(
+                c.providerCards.filter(p => p.Entity.SupportsCalendar).map(p => p.Entity.Name),
+            ),
+            FreeBusyCapableProviderNames: CapCommunicationList(
+                c.providerCards.filter(p => p.Entity.SupportsFreeBusy).map(p => p.Entity.Name),
+            ),
+            EnterpriseScopeSummaries: CapCommunicationList(
+                c.providerCards.map(
+                    p => `${p.Entity.Name} · ${p.Entity.EnterpriseScopeMode || 'UtilityMailboxesOnly'} · ${p.Entity.AllowedEmailDomains || 'Any domain'}`,
+                ),
+            ),
+            AgentUtilityMailboxCount: c.AgentUtilityMailboxes.length,
+            AgentUtilityMailboxSummaries: CapCommunicationList(
+                c.AgentUtilityMailboxes.map(
+                    m => `${m.IdentityValue} · ${m.Agent || 'Unassigned'} · ${m.User ? ('Dedicated: ' + m.User) : 'Shared'}`,
+                ),
+            ),
             SelectedItemId: this.selectedProvider?.id ?? null,
             SelectedItemName: this.selectedProvider?.name ?? null,
         };

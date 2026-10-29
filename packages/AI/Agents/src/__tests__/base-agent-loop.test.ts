@@ -49,8 +49,9 @@ import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type'
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
+import { RecordSentPrefixFingerprint, RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import type { AgentToolDefinition } from '../native-tools/agent-tools';
 import { FINISH_IF_MODE_WARNING_SHOWN_MAX, FINISH_IF_MODE_WARNINGS_REMEMBERED } from '../finish-if-mode-warnings';
 import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -59,7 +60,9 @@ import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
-import { AIAPIKeys } from '@memberjunction/ai';
+import { AIAPIKeys, type ChatResult } from '@memberjunction/ai';
+import { UserInfo as CoreUserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -156,6 +159,7 @@ interface AgentRow {
     MaxIterationsPerRun: number | null;
     AgentTypePromptParams: string | null;
     OwnerUserID: string | null;
+    TypeConfiguration: string | null;
 }
 
 /** ActionParam-shaped record used by the scripted action results. */
@@ -168,6 +172,8 @@ interface ScriptedActionParam {
 /** ActionResult-shaped record returned from the scripted RunAction boundary. */
 interface ScriptedActionResult {
     Success: boolean;
+    /** The raw result code (`ActionResult.ResultCode`) — set by the engine's own refusals, e.g. AUDIENCE_UNSUPPORTED. */
+    ResultCode?: string;
     Message: string;
     Params: ScriptedActionParam[];
     Result: { ResultCode: string } | null;
@@ -184,6 +190,8 @@ interface RunActionCall {
     resolveAPIKey?: unknown;
     /** `RunActionParams.CredentialScope` — absent when the run sets none. */
     credentialScope?: unknown;
+    /** `RunActionParams.Audience` — absent when the run's audience adds no reader. */
+    audience?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -210,10 +218,13 @@ class MockStepEntity {
     public InputData: string | null = null;
     public OutputData: string | null = null;
     public PayloadAtStart: string | null = null;
+    public PayloadAtStartSourceStepID: string | null = null;
     public PayloadAtEnd: string | null = null;
     public Skills: string | null = null;
 
     public saveCount = 0;
+    /** True once the INSERT has landed (BaseEntity.IsSaved). */
+    public IsSaved = false;
 
     constructor(private readonly seq: number) {}
 
@@ -223,6 +234,7 @@ class MockStepEntity {
 
     public async Save(): Promise<boolean> {
         this.saveCount++;
+        this.IsSaved = true;
         return true;
     }
 }
@@ -285,6 +297,8 @@ class LoopHarness {
     public steps: MockStepEntity[] = [];
     public runActionCalls: RunActionCall[] = [];
     public runActionParamsJSON: string[] = [];
+    /** `RunActionParams.RunScope` per dispatch — kept off the call record so the toEqual assertions over it stay exact. */
+    public runScopes: unknown[] = [];
     /** Scripted RunAction responder — override per test. */
     public runAction: (call: RunActionCall) => ScriptedActionResult = () => ({
         Success: true,
@@ -318,6 +332,7 @@ class LoopHarness {
             Agents: [],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [
@@ -367,10 +382,20 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown; CredentialScope?: unknown }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: {
+                Action: { Name: string };
+                Params: ScriptedActionParam[];
+                Context?: { ActiveSkillIDs?: unknown };
+                RuntimeAPIKeyResolver?: unknown;
+                CredentialScope?: unknown;
+                Audience?: unknown;
+                RunScope?: unknown;
+            }): Promise<ScriptedActionResult> => {
+                this.runScopes.push(input.RunScope);
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
                 if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
+                if (input.Audience !== undefined) call.audience = input.Audience;
                 // What any log of the whole RunActionParams could contain — kept off the call record so
                 // the toEqual assertions over runActionCalls stay exact.
                 this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
@@ -434,6 +459,7 @@ function makeAgentRow(overrides: Partial<AgentRow> = {}): AgentRow {
         MaxIterationsPerRun: null,
         AgentTypePromptParams: null,
         OwnerUserID: null,
+        TypeConfiguration: null,
         ...overrides,
     };
 }
@@ -612,8 +638,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         expect(harness.steps[1].TargetID).toBe(CHILD_PROMPT_ID);
         expect(harness.steps[2].TargetID).toBe(ACTION_ID);
 
-        // All fire-and-forget saves were flushed by finalizeAgentRun (INSERT + finalize UPDATE each)
-        expect(harness.steps.every((s) => s.saveCount >= 2)).toBe(true);
+        // Pre-completed Validation step persists in a single INSERT; two-phase steps (Prompt, Actions) do INSERT + finalize UPDATE
+        expect(harness.steps[0].saveCount).toBe(1);
+        expect(harness.steps.slice(1).every((s) => s.saveCount >= 2)).toBe(true);
     });
 
     it("propagates the payload: step N's output payload is exactly what step N+1's prompt receives, and the run records the last step's payload", async () => {
@@ -639,8 +666,11 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const [, prompt1, actionStep, prompt2] = harness.steps;
         expect(JSON.parse(prompt1.PayloadAtStart ?? 'null')).toEqual(initialPayload);
         expect(JSON.parse(prompt1.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
-        expect(JSON.parse(actionStep.PayloadAtStart ?? 'null')).toEqual(afterStep1);
-        expect(JSON.parse(actionStep.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
+        // The action step starts from prompt 1's end and leaves the payload unchanged, so both its start and end store a pointer to prompt 1 instead of a copy
+        expect(actionStep.PayloadAtStart).toBeNull();
+        expect(actionStep.PayloadAtStartSourceStepID).toBe(prompt1.ID);
+        expect(actionStep.PayloadAtEnd).toBeNull();
+        expect(actionStep.PayloadAtEndSourceStepID).toBe(prompt1.ID);
         expect(JSON.parse(prompt2.PayloadAtEnd ?? 'null')).toEqual(finalPayload);
 
         // The final run payload is the LAST step's payload
@@ -971,6 +1001,75 @@ describe('BaseAgent.Execute — cancellation', () => {
         expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions']);
         // The action itself had already completed before the abort was observed.
         expect(harness.steps[2].Status).toBe('Completed');
+    });
+
+    it('a prompt the caller cancels mid-call finalizes the run Cancelled, not Failed, though the prompt came back as a fatal failure', async () => {
+        const controller = new AbortController();
+        const { agent, runner, flushSteps } = makeAgent([
+            () => {
+                controller.abort('user stopped the request');
+                return {
+                    success: false,
+                    status: 'Cancelled',
+                    cancelled: true,
+                    cancellationReason: 'user_requested',
+                    errorMessage: 'Chat completion was cancelled',
+                    chatResult: {
+                        success: false,
+                        errorInfo: { errorType: 'Unknown', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' },
+                    } as AIPromptRunResult['chatResult'],
+                };
+            },
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal }));
+
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(harness.run.ErrorMessage).toBe('user stopped the request');
+        await flushSteps();
+        expect(harness.steps[1].StepType).toBe('Prompt');
+        expect(harness.steps[1].ErrorMessage).toBe('Cancelled during prompt execution');
+    });
+
+    it('a cancellation that lands right after nine failed steps still ends the run Cancelled, not by the consecutive-failure limit', async () => {
+        const controller = new AbortController();
+        const failures = Array.from({ length: 9 }, () => () => llmFailure('Rate limit exceeded — 429'));
+        const { agent, runner } = makeAgent([
+            ...failures,
+            () => {
+                controller.abort('user stopped the request');
+                return llmFailure('Chat completion was cancelled');
+            },
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal }));
+
+        expect(runner.Calls).toHaveLength(10);
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(harness.run.ErrorMessage).toBe('user stopped the request');
+    });
+
+    it('a Stop that lands while a final answer is being processed still completes the run: the work had finished', async () => {
+        const controller = new AbortController();
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const onProgress = (progress: { step: string }): void => {
+            // Fires right after the prompt step's own cancellation check, while its answer is processed.
+            if (progress.step === 'decision_processing') {
+                controller.abort('user stopped too late');
+            }
+        };
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal, onProgress }));
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(true);
+        expect(harness.run.Status).toBe('Completed');
     });
 
     it('a token aborted before execution starts yields a cancelled result without creating a run or executing a prompt', async () => {
@@ -1554,7 +1653,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
 
     /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
     function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
-        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } }, TrustReservedRunData: true });
     }
 
     function gatedActionsEnvelope(): LoopAgentResponse {
@@ -1939,6 +2038,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         const result = await agent.Execute(makeParams({
             payload: { tickets: ['Printer on fire.', 'Password reset.', 'Coffee machine.'] },
             data: { __agentTypePromptParams: { decisionsMaxCallsPerTurn: 2 } },
+            TrustReservedRunData: true,
         }));
 
         expect(result.success).toBe(true);
@@ -1969,7 +2069,7 @@ describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
             () => llmEnvelope(actionsEnvelope()),
             () => llmEnvelope(successEnvelope()),
         ]);
-        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } } }));
+        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } }, TrustReservedRunData: true }));
         expect(result.success).toBe(true);
         expect(runner.Calls).toHaveLength(2);
     }
@@ -2141,6 +2241,375 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
     });
 });
 
+describe('BaseAgent.Execute — a run with an audience (ExecuteAgentParams.Audience)', () => {
+    const READER_ID = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+    const UNKNOWN_ID = 'aaaaaaaa-0000-4000-8000-0000000000e2';
+    const READER = new CoreUserInfo(undefined, { ID: READER_ID, Name: 'Room Reader', Email: 'reader@test.mj', UserRoles: [] });
+    const room = { Audience: { Mode: 'Intersection' as const, UserIDs: [READER_ID] } };
+
+    beforeEach(() => {
+        UserCache.Instance.SetUsers([READER]);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        UserCache.Instance.SetUsers([]);
+    });
+
+    it('fails the run before any prompt when the audience names a user who does not exist (after one cache refresh)', async () => {
+        const refresh = vi.spyOn(UserCache.Instance, 'Refresh').mockResolvedValue(undefined);
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [READER_ID, UNKNOWN_ID] } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.runActionCalls).toHaveLength(0);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain(UNKNOWN_ID);
+        // The refresh reads through the run's provider; the harness provider is not a database provider,
+        // so the cache is only consulted again — the point here is that the run is refused, not skipped.
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['an Intersection with no readers', { Mode: 'Intersection' as const, UserIDs: [] }],
+        ['a Caller audience that names readers', { Mode: 'Caller' as const, UserIDs: [READER_ID] }],
+    ])('fails the run before any prompt for %s', async (_label, audience) => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const result = await agent.Execute(makeParams({ Audience: audience }));
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.run.ErrorMessage).toMatch(/^Invalid Audience: /);
+    });
+
+    it('hands every action dispatch the hydrated readers', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(true);
+        expect(harness.runActionCalls).toHaveLength(1);
+        expect(harness.runActionCalls[0].audience).toEqual({ Readers: [READER] });
+    });
+
+    it('runs as with no audience when the only reader is the caller: no Audience on the dispatch, task graphs as configured', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [USER_ID.toUpperCase()] } }));
+
+        expect(harness.runActionCalls[0].audience).toBeUndefined();
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+
+    it('locks out an action the engine refuses for the audience: the model is told, and it is never dispatched again', async () => {
+        harness.runAction = () => ({
+            Success: false,
+            ResultCode: 'AUDIENCE_UNSUPPORTED',
+            Message: `Action '${ACTION_NAME}' is not available here: its output would be shown to people besides the caller.`,
+            Params: [],
+            Result: null,
+            LogEntry: null,
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(harness.runActionCalls).toHaveLength(1);
+        const told = (runner.Calls[1].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        // Told it is unavailable in a shared conversation — not that it failed with a configuration or credential error.
+        expect(told.some((c) => c.includes('[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION]') && c.includes(ACTION_NAME))).toBe(true);
+        expect(told.some((c) => c.includes('[CRITICAL/ACTION_UNAVAILABLE]') || c.includes('configuration or credential error'))).toBe(false);
+        const repeat = (runner.Calls[2].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        expect(repeat.some((c) => c.includes('not available in this shared conversation') && c.includes('Do not call it again'))).toBe(true);
+    });
+
+    it('withholds task graphs from the prompt, without writing the cached base params', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+        const catalog = (harness.engineInstance.GetAgentBaseCatalog as (id: string) => { baseAgentTypePromptParams: Record<string, unknown> })(AGENT_ID);
+        expect(catalog.baseAgentTypePromptParams.enableTaskGraphs).toBe(true);
+    });
+
+    it("offers no client tools and injects none of the caller's app context (control: both without an audience)", async () => {
+        const data = {
+            clientTools: [{ Name: 'NavigateTo', Description: 'Open a view in the browser', InputSchema: {} }],
+            appContext: { App: { Name: 'CRM' }, AdditionalContext: { selectedAccount: 'Acme (private)' } },
+        };
+        const roomRun = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await roomRun.agent.Execute(makeParams({ ...room, data }));
+        expect(roomRun.runner.Calls[0].data?.clientToolDetails).toBe('');
+        expect(roomRun.runner.Calls[0].data?.appContext).toBe('');
+        expect(JSON.stringify(roomRun.runner.Calls[0].data)).not.toContain('Acme (private)');
+
+        harness = new LoopHarness();
+        const alone = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await alone.agent.Execute(makeParams({ data }));
+        expect(alone.runner.Calls[0].data?.clientToolDetails).toContain('NavigateTo');
+        expect(alone.runner.Calls[0].data?.appContext).toContain('Acme (private)');
+    });
+
+    it('leaves the memory-writes docs out of the prompt for an agent that may write memory (control: they are in without one)', async () => {
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true });
+        const roomRun = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await roomRun.agent.Execute(makeParams(room));
+        expect(roomRun.runner.Calls[0].data?._MEMORY_WRITES_ENABLED).toBeUndefined();
+
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true });
+        const alone = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await alone.agent.Execute(makeParams());
+        expect(alone.runner.Calls[0].data?._MEMORY_WRITES_ENABLED).toBe(true);
+    });
+
+    it('forgets the hydrated readers when the run ends, so a later direct dispatch hydrates its own', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams(room));
+        const state = agent as unknown as { _audienceReaders: unknown; _audienceSource: unknown; _runScope: unknown };
+        expect(state._audienceReaders).toBeUndefined();
+        expect(state._audienceSource).toBeUndefined();
+        expect(state._runScope).toBeUndefined();
+    });
+
+    it('refuses a session-driven (realtime) agent type before opening a session', async () => {
+        class SessionAgent extends HarnessAgent {
+            public SessionsOpened = 0;
+            protected override isSessionDrivenAgentType(_agentType: BaseAgentType): _agentType is BaseAgentType & { IsSessionDriven: true } {
+                return true;
+            }
+            protected override async executeRealtimeSession<R>(): Promise<never> {
+                this.SessionsOpened++;
+                throw new Error('a session must not be opened for a room');
+            }
+        }
+        const agent = new SessionAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(false);
+        expect(agent.SessionsOpened).toBe(0);
+        expect(harness.run.ErrorMessage).toMatch(/session-driven/);
+    });
+});
+
+describe('BaseAgent.Execute — the run scope on every action dispatch (RunActionParams.RunScope)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string } =>
+        harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string };
+
+    it('hands every dispatch the scope initializeAgentRun validated and wrote to the run row (defaults applied)', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha' } }));
+
+        expect(result.success).toBe(true);
+        const expected = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha', Region: 'EMEA' } };
+        expect(harness.runScopes).toEqual([expected, expected]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        expect(JSON.parse(scopedRun().SecondaryScopes ?? '{}')).toEqual(expected.SecondaryScopes);
+    });
+
+    it('an unscoped run hands every dispatch a RunScope of nulls — "inside a run, no tenant"', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams());
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+    });
+
+    it('forgets the run scope once the run is over, so a later direct dispatch resolves its own', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        const action = (harness.actionEngineInstance.Actions as MJActionEntityExtended[])[0];
+        await agent.ExecuteSingleAction(makeParams(), { name: ACTION_NAME, params: {} }, action, TEST_USER as unknown as UserInfo);
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
+        expect(harness.runScopes[1]).toMatchObject({ PrimaryScopeRecordID: null });
+    });
+});
+
+describe("BaseAgent.Execute — memory, RAG and the prompt read the run's validated scope", () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000c7';
+    type Spied = { mock: { calls: unknown[][] } };
+    function spyContext(agent: HarnessAgent): { memory: Spied; rag: Spied; parts: Spied } {
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        return {
+            memory: vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] }),
+            rag: vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null),
+            parts: vi.spyOn(keyhole, 'InjectScopedPromptParts').mockReturnValue(undefined),
+        };
+    }
+
+    it('hands notes, pre-execution RAG and scoped prompt parts the scope the run row records: trimmed, defaults applied', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const spies = spyContext(agent);
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: `  ${TENANT}  `, SecondaryScopes: { Team: 'alpha' } }));
+
+        const expected = { RecordID: TENANT, Secondary: { Team: 'alpha', Region: 'EMEA' } };
+        const memory = spies.memory.mock.calls[0];
+        expect({ RecordID: memory[7], Secondary: memory[8] }).toEqual(expected);
+        const rag = spies.rag.mock.calls[0];
+        expect({ RecordID: rag[6], Secondary: rag[7] }).toEqual(expected);
+        const parts = spies.parts.mock.calls[0];
+        expect({ RecordID: parts[3], Secondary: parts[4] }).toEqual(expected);
+        expect(harness.run).toMatchObject({ PrimaryScopeRecordID: TENANT });
+    });
+
+    it('never reads a scope from data the caller was not trusted to set', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const spies = spyContext(agent);
+
+        await agent.Execute(makeParams({ data: { PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' } } }));
+
+        expect(spies.memory.mock.calls[0].slice(6, 9)).toEqual([undefined, undefined, undefined]);
+        expect(spies.rag.mock.calls[0].slice(5, 8)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('withholds task graphs from the prompt of a tenant-scoped run (control: an unscoped run keeps them)', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const scoped = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await scoped.agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+        expect(scoped.runner.Calls[0].data?.__agentTypePromptParams)
+            .toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const unscoped = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await unscoped.agent.Execute(makeParams());
+        expect(unscoped.runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+});
+
+describe('BaseAgent.Execute — system placeholders in scoped prompt parts', () => {
+    afterEach(() => vi.useRealTimers());
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('replaces them in the messages InjectScopedPromptParts adds, even from an override, and nowhere else', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] });
+        vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null);
+        vi.spyOn(keyhole, 'InjectScopedPromptParts').mockImplementation((_agent, messages) => {
+            (messages as AgentChatMessage[]).unshift({ role: 'system', content: 'Today is {{ _CURRENT_DATE }}, {{ _USER_NAME }}.' });
+        });
+
+        await agent.Execute(makeParams({ conversationMessages: [{ role: 'user', content: 'Keep {{ _CURRENT_DATE }} as typed' }] }));
+
+        const sent = (runner.Calls[0].conversationMessages ?? []).map(contentOf);
+        expect(sent).toContain(`Today is 2026-10-14, ${TEST_USER.Name}.`);
+        expect(sent.some((c) => c.includes('Keep {{ _CURRENT_DATE }} as typed'))).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
+    /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
+    const hostileData = (): Record<string, unknown> => ({
+        topic: 'refunds',
+        PrimaryScopeRecordID: TENANT,
+        SecondaryScopes: { Region: 'EMEA' },
+        __agentTypePromptParams: { enableTaskGraphs: true },
+    });
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string | null } => harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string | null };
+    const promptParamsSeen = (runner: ScriptedPromptRunner): Record<string, unknown> | undefined =>
+        runner.Calls[0].data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+    const reservedKeyLogs = (): string[] => vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('reserved run-data key'));
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+    });
+
+    function makeRun(): { agent: HarnessAgent; runner: ScriptedPromptRunner } {
+        return makeAgent([() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())]);
+    }
+
+    it('without it, drops the scope and agent-type keys from data before the run starts, and keeps the rest', async () => {
+        const { agent, runner } = makeRun();
+
+        const result = await agent.Execute(makeParams({ data: hostileData() }));
+
+        expect(result.success).toBe(true);
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+        expect(scopedRun().PrimaryScopeRecordID ?? null).toBeNull();
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).not.toBe(true);
+        expect(runner.Calls[0].data?.topic).toBe('refunds');
+    });
+
+    it("never mutates the caller's params or data, and logs the dropped keys once, never their values", async () => {
+        const data = hostileData();
+        const params = makeParams({ data });
+        const { agent } = makeRun();
+
+        await agent.Execute(params);
+
+        expect(params.data).toBe(data);
+        expect(data).toEqual(hostileData());
+        expect(reservedKeyLogs()).toHaveLength(1);
+        expect(reservedKeyLogs()[0]).toContain('PrimaryScopeRecordID, SecondaryScopes, __agentTypePromptParams');
+        expect(reservedKeyLogs()[0]).not.toContain(TENANT);
+    });
+
+    it('with it, the run reads its scope and agent-type parameters from data, as a trusted server caller intends', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: hostileData(), TrustReservedRunData: true }));
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } }]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        // The trusted agent-type params turn task graphs on, but a tenant-scoped run withholds them (a graph runs outside its scope).
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(false);
+        expect(reservedKeyLogs()).toHaveLength(0);
+    });
+
+    it('with it and no scope in data, the agent-type parameters from data apply (task graphs on)', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { enableTaskGraphs: true } }, TrustReservedRunData: true }));
+
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(true);
+    });
+
+    it('leaves the first-class scope fields alone: server code sets a scope without the marker', async () => {
+        const { agent } = makeRun();
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, data: { PrimaryScopeRecordID: 'aaaaaaaa-0000-4000-8000-0000000000ff' } }));
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
+    });
+});
+
 describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
     const LEAD_ID = 'aaaaaaaa-4444-4000-8000-000000000001';
     const SKIP_ID = 'aaaaaaaa-4444-4000-8000-000000000002';
@@ -2171,5 +2640,621 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
         expect(catalog.subAgentCount).toBe(1);
         expect(catalog.subAgentDetails).toContain('Research Agent');
         expect(catalog.subAgentDetails).not.toContain('Skip');
+    });
+});
+
+describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & folded peer-agent resolution', () => {
+    const PEER_QB_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+
+    it('propagates agent.AgentTypePromptParams.enableTaskGraphs into DetermineNextStep and resolves folded 1-node peer agents', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+
+        const peerQueryBuilder = makeAgentRow({
+            ID: PEER_QB_ID,
+            Name: 'Query Builder',
+            Status: 'Active',
+        });
+
+        // Expose the peer agent in AIEngine.Instance.Agents (not as a ParentID child or AgentRelationship of Sage)
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, peerQueryBuilder],
+        });
+
+        const singleTaskEnvelope = {
+            taskComplete: false,
+            message: "I'll have Query Builder handle this.",
+            nextStep: {
+                type: 'Tasks',
+                tasks: {
+                    workflowName: 'Order Revenue Breakdown',
+                    reasoning: 'Single-agent SQL query delegation',
+                    tasks: [
+                        {
+                            tempId: 'task1',
+                            name: 'Build Order Revenue Query',
+                            description: 'Build a parameterized SQL query for order revenue by status',
+                            kind: 'Agent',
+                            configuration: {
+                                agentName: 'Query Builder',
+                            },
+                            dependsOn: [],
+                            inputPayload: {},
+                        },
+                    ],
+                },
+            },
+        } as unknown as LoopAgentResponse;
+
+        const { agent, internals } = makeAgent([
+            () => llmEnvelope(singleTaskEnvelope),
+            () => llmEnvelope(successEnvelope({ message: 'Here is your query from Query Builder.' })),
+        ]);
+
+        // Verify resolveSubAgentByName only resolves peer agents when allowAnyActiveAgent=true (folded task graph)
+        const internalResolver = agent as unknown as {
+            resolveSubAgentByName: (
+                p: ExecuteAgentParams,
+                name: string,
+                allowAnyActiveAgent?: boolean
+            ) => { subAgentEntity: { ID: string; Name: string } } | undefined;
+        };
+        const execParams = makeParams();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', false)).toBeUndefined();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', true)?.subAgentEntity.ID).toBe(PEER_QB_ID);
+
+        // Stub processSubAgentStep to verify validateSubAgentNextStep approved the folded peer agent
+        const seenDecisions: BaseAgentNextStep[] = [];
+        internals.processSubAgentStep = async function (this: unknown, _p?: ExecuteAgentParams, decision?: BaseAgentNextStep) {
+            if (decision) {
+                seenDecisions.push(decision);
+            }
+            return {
+                step: 'Success',
+                terminate: false,
+                newPayload: { sql: 'SELECT 1' },
+                previousPayload: {},
+            } as BaseAgentNextStep;
+        } as unknown as () => Promise<BaseAgentNextStep>;
+
+        const result = await agent.Execute(execParams);
+
+        expect(result.success).toBe(true);
+        expect(seenDecisions).toHaveLength(1);
+        expect(seenDecisions[0].step).toBe('Sub-Agent');
+        expect(seenDecisions[0].subAgent?.name).toBe('Query Builder');
+        expect(seenDecisions[0].taskGraph?.folded).toBe(true);
+
+        // Pre-completed folded TaskGraph step persists in a single INSERT (saveCount === 1)
+        const foldedStep = harness.steps.find((s) => s.StepType === 'TaskGraph');
+        expect(foldedStep?.saveCount).toBe(1);
+    });
+});
+
+
+describe('BaseAgent.Execute — agent-local tools: write, a failing edit, a successful edit', () => {
+    type DocPayload = { doc?: string };
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    /** `write_doc` / `edit_doc`, the shape of a write/edit agent: state lives in the payload. */
+    const docTools: AgentToolDefinition<DocPayload>[] = [
+        {
+            Name: 'write_doc',
+            Description: 'Call this to write the whole document.',
+            InputSchema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] },
+            Execute: async (args) => ({ Content: 'Document written.', IsError: false, PayloadChange: { newElements: { doc: String(args.content) } } })
+        },
+        {
+            Name: 'edit_doc',
+            Description: 'Call this to replace one exact passage of the document.',
+            InputSchema: { type: 'object', properties: { old_string: { type: 'string' }, new_string: { type: 'string' } }, required: ['old_string', 'new_string'] },
+            Execute: async (args, context) => {
+                const doc = context.CurrentPayload.doc ?? '';
+                const oldString = String(args.old_string);
+                if (!doc.includes(oldString)) {
+                    return { Content: `old_string not found: '${oldString}'`, IsError: true };
+                }
+                return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, () => String(args.new_string)) } } };
+            }
+        }
+    ];
+
+    class DocAgent extends HarnessAgent {
+        protected override GetAgentTools(): AgentToolDefinition[] {
+            return docTools as AgentToolDefinition[];
+        }
+    }
+
+    /** A native turn calling one of the agent's tools, results going back natively. */
+    function llmToolCall(id: string, name: string, args: Record<string, unknown>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: args }] } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult };
+    }
+
+    function makeDocAgent(script: Array<(params: AIPromptParams, callIndex: number) => AIPromptRunResult>) {
+        const agent = new DocAgent();
+        const runner = new ScriptedPromptRunner(script);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        return { agent, runner };
+    }
+
+    /** The tool turn answering the assistant turn that made `callId`. */
+    function answerTo(messages: AgentChatMessage[], callId: string): ToolBlock[] {
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId));
+        const next = messages[at + 1];
+        expect(next?.role).toBe('tool');
+        return next.content as unknown as ToolBlock[];
+    }
+
+    it('applies each change in order, returns the failed edit to the model as an error, and logs a Tool step per call', async () => {
+        const { agent, runner } = makeDocAgent([
+            () => llmToolCall('call_write', 'write_doc', { content: '# Report\nHello world' }),
+            () => llmToolCall('call_bad_edit', 'edit_doc', { old_string: 'Goodbye', new_string: 'Hi' }),
+            () => llmToolCall('call_edit', 'edit_doc', { old_string: 'Hello', new_string: 'Hi' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect((result.payload as DocPayload).doc).toBe('# Report\nHi world');
+
+        const toolSteps = harness.steps.filter((s) => s.StepType === 'Tool');
+        expect(toolSteps.map((s) => [s.StepName, s.Success])).toEqual([
+            ['Agent Tool: write_doc', true],
+            ['Agent Tool: edit_doc', false],
+            ['Agent Tool: edit_doc', true],
+        ]);
+
+        const messages = params.conversationMessages as AgentChatMessage[];
+        expect(answerTo(messages, 'call_write')).toEqual([expect.objectContaining({ toolCallId: 'call_write', isError: false, content: 'Document written.' })]);
+        expect(answerTo(messages, 'call_bad_edit')).toEqual([expect.objectContaining({ toolCallId: 'call_bad_edit', isError: true, content: "old_string not found: 'Goodbye'" })]);
+        expect(answerTo(messages, 'call_edit')).toEqual([expect.objectContaining({ toolCallId: 'call_edit', isError: false })]);
+        // No retry or recap message rides along with the results.
+        expect(messages.some((m) => typeof m.content === 'string' && m.content.includes('Retrying due to'))).toBe(false);
+
+        // The turn after the failed edit saw the document exactly as the write left it.
+        expect(injectedPayload(runner.Calls[2])?.doc).toBe('# Report\nHello world');
+    });
+
+    it('rejects a change outside PayloadSelfWritePaths and tells the model, leaving the payload untouched', async () => {
+        harness.agent = makeAgentRow({ PayloadSelfWritePaths: JSON.stringify(['notes']) });
+        const { agent } = makeDocAgent([
+            () => llmToolCall('call_write', 'write_doc', { content: 'Hello' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect((result.payload as DocPayload | undefined)?.doc).toBeUndefined();
+        const answer = answerTo(params.conversationMessages as AgentChatMessage[], 'call_write');
+        expect(answer[0].isError).toBe(true);
+        expect(answer[0].content).toContain('may not write');
+        expect(harness.steps.find((s) => s.StepType === 'Tool')?.Success).toBe(false);
+    });
+
+    it('reports a tool that throws as an error result instead of failing the run', async () => {
+        const throwing: AgentToolDefinition = {
+            Name: 'explode', Description: 'Call this to fail.', InputSchema: { type: 'object', properties: {} },
+            Execute: async () => { throw new Error('disk full'); }
+        };
+        class ThrowingAgent extends HarnessAgent {
+            protected override GetAgentTools(): AgentToolDefinition[] {
+                return [throwing];
+            }
+        }
+        const agent = new ThrowingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+            () => llmToolCall('call_x', 'explode', {}),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_x')).toEqual([
+            expect.objectContaining({ isError: true, content: 'The tool failed: disk full' })
+        ]);
+    });
+
+    /** An implicit-control-flow turn with several calls, results going back natively. */
+    function llmImplicitCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    it('with relaxed turn shapes, a failed write declines the complete_task that came after it', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeDocAgent([
+            () => llmImplicitCalls([
+                { id: 'call_bad_edit', name: 'edit_doc', arguments: { old_string: 'Goodbye', new_string: 'Hi' } },
+                { id: 'call_done', name: 'complete_task', arguments: { message: 'Edited.' } }
+            ]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        const answers = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answers.map((b) => [b.toolCallId, b.isError])).toEqual([['call_bad_edit', true], ['call_done', true]]);
+        expect(answers[1].content).toMatch(/A write on this turn failed/);
+        expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Task complete'))).toBe(false);
+    });
+
+    it('with relaxed turn shapes, a write that succeeds lets the complete_task after it end the run', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeDocAgent([
+            () => llmImplicitCalls([
+                { id: 'call_write', name: 'write_doc', arguments: { content: 'Hello' } },
+                { id: 'call_done', name: 'complete_task', arguments: { message: 'Written.' } }
+            ]),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect((result.payload as DocPayload).doc).toBe('Hello');
+    });
+});
+
+describe('BaseAgent.Execute — native-only control plane: framework capabilities as tools', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    function llmToolCall(id: string, name: string, args: Record<string, unknown>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: args }] } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    it('declares scratchpad_write, asks for the tools-only prompt, and applies a scratchpad write made on a tool-call turn', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([
+            () => llmToolCall('call_pad', 'scratchpad_write', { notes: 'Sales DB starts in 2019.' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls[0].tools?.map((t) => t.name)).toContain('scratchpad_write');
+        expect(runner.Calls[0].data?._NATIVE_ONLY_REQUESTED).toBe(true);
+        const scratchpad = (agent as unknown as { _scratchpadManager: { GetNotes(): string } })._scratchpadManager;
+        expect(scratchpad.GetNotes()).toBe('Sales DB starts in 2019.');
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_pad'));
+        expect(messages[at + 1].role).toBe('tool');
+        expect(messages[at + 1].content as unknown as ToolBlock[]).toEqual([expect.objectContaining({ toolCallId: 'call_pad', isError: false })]);
+        expect(harness.steps.some((s) => s.StepType === 'Tool' && s.StepName === 'Agent Tool: scratchpad_write')).toBe(true);
+    });
+
+    it('runs a memory_write made on a tool-call turn through the memory write path, and answers the call with its outcome', async () => {
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true, TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([
+            () => llmToolCall('call_mem', 'memory_write', { note: 'The user reports revenue in EUR.', type: 'Preference', scopeHint: 'user' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const writes: Array<{ note: string; type: string; scopeHint?: string }> = [];
+        (agent as unknown as { _memoryWriteManager: { Clear: () => void; ExecuteWrite: (w: { note: string; type: string; scopeHint?: string }) => Promise<{ disposition: string }> } })
+            ._memoryWriteManager = { Clear: () => undefined, ExecuteWrite: async (w) => { writes.push(w); return { disposition: 'created' }; } };
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls[0].tools?.map((t) => t.name)).toContain('memory_write');
+        expect(writes).toEqual([{ note: 'The user reports revenue in EUR.', type: 'Preference', scopeHint: 'user' }]);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_mem'));
+        expect(messages[at + 1].content as unknown as ToolBlock[]).toEqual([expect.objectContaining({ toolCallId: 'call_mem', isError: false, content: 'created' })]);
+        expect(harness.steps.some((s) => s.StepType === 'Tool' && s.StepName === 'Agent Tool: memory_write' && s.Success === true)).toBe(true);
+    });
+
+    it('declares no memory_write for a native-only agent that may not write memory', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls[0].tools?.map((t) => t.name) ?? []).not.toContain('memory_write');
+    });
+
+    it('declares no framework tools for an agent that did not opt in', async () => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls[0].tools?.map((t) => t.name) ?? []).not.toContain('scratchpad_write');
+        expect(runner.Calls[0].data?._NATIVE_ONLY_REQUESTED).toBeUndefined();
+    });
+});
+
+describe('BaseAgent.Execute — one native turn that acts and then asks or completes', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+
+    /** An implicit-control-flow turn with several native calls. */
+    function llmCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+    const actionCall = { id: 'call_act', name: SanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } };
+    const relaxed = () => { harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) }); };
+
+    it('by default runs nothing and asks again, answering every call with the reason', async () => {
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_ask', name: 'ask_user', arguments: { message: 'Which region?' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(0);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_ask'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.map((b) => [b.toolCallId, b.isError])).toEqual([['call_act', true], ['call_ask', true]]);
+        expect(answers[1].content).toMatch(/ask_user must be the only call/);
+    });
+
+    it('with relaxed turn shapes, runs the Action and answers ask_user as not run', async () => {
+        relaxed();
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_ask', name: 'ask_user', arguments: { message: 'Which region?' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(1);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_ask'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.find((b) => b.toolCallId === 'call_act')?.isError).toBe(false);
+        expect(answers.find((b) => b.toolCallId === 'call_ask')?.content).toMatch(/read their results/);
+    });
+
+    it('with relaxed turn shapes, runs the Action and answers complete_task as not run, so the model completes after reading the result', async () => {
+        relaxed();
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_done', name: 'complete_task', arguments: { message: 'Done' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(1);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_done'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.find((b) => b.toolCallId === 'call_act')?.isError).toBe(false);
+        expect(answers.find((b) => b.toolCallId === 'call_done')).toEqual(expect.objectContaining({ isError: true }));
+        expect(messages[at + 2]?.role).not.toBe('tool');
+        expect(answers.find((b) => b.toolCallId === 'call_done')?.content).toMatch(/read their results/);
+        // Both answers sit directly behind the call turn, before anything else.
+        expect(messages[at + 1].role).toBe('tool');
+    });
+});
+
+describe('BaseAgent.Execute — a failed native action carries its guidance in its own error result', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    it('puts the failure guidance inside the is_error tool result and sends no separate guidance message', async () => {
+        harness.runAction = () => ({ Success: false, Message: 'boom — downstream system unavailable', Params: [], Result: { ResultCode: 'FAILED' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', true),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_1'));
+        const result = (messages[at + 1].content as unknown as ToolBlock[]).find((b) => b.toolCallId === 'call_1');
+        expect(result?.isError).toBe(true);
+        expect(result?.content).toContain('boom — downstream system unavailable');
+        expect(result?.content).toContain(`Action '${ACTION_NAME}'`);
+        expect(messages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(false);
+    });
+
+    it('keeps the separate guidance message when results go back as markdown', async () => {
+        harness.runAction = () => ({ Success: false, Message: 'boom', Params: [], Result: { ResultCode: 'FAILED' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', false),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — replayed reasoning behind an unchanged history', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    /** Stands in for a run served by a driver whose replayed reasoning is bound to the history before it. */
+    class BoundReasoningAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return (this as unknown as { _nativeToolBindings?: unknown })._nativeToolBindings !== undefined;
+        }
+    }
+
+    function thinkingCall(id: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('keeps every earlier message of each request, so a replayed thinking block is sent after exactly the history it was made with', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundReasoningAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1'), () => thinkingCall('c2'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls).toHaveLength(3);
+        for (let i = 1; i < runner.Calls.length; i++) {
+            const before = runner.Calls[i - 1].conversationMessages ?? [];
+            const after = runner.Calls[i].conversationMessages ?? [];
+            // Request i extends request i-1: nothing it sent was removed or rewritten.
+            expect(after.slice(0, before.length)).toEqual(before);
+        }
+        const last = runner.Calls[2].conversationMessages as AgentChatMessage[];
+        const replayed = last.findIndex((m) => m.toolCalls?.some((c) => c.id === 'c2'));
+        expect(last[replayed].reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
+    });
+});
+
+describe('BaseAgent.Execute — replayed reasoning after an earlier message is rewritten', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    /** A run on a prefix-bound driver whose first tool result is stubbed before the third request, as expiry would. */
+    class RewritingAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return true;
+        }
+        protected override DriverRequiresStableReasoningPrefix(): boolean {
+            return true;
+        }
+        protected override async pruneAndCompactExpiredMessages(params: ExecuteAgentParams): Promise<void> {
+            const firstResults = params.conversationMessages.findIndex((m) => m.role === 'tool');
+            // Before the third request: both call turns are answered.
+            if (params.conversationMessages.filter((m) => m.role === 'tool').length === 2) {
+                params.conversationMessages[firstResults] = { ...params.conversationMessages[firstResults], content: [{ type: 'tool_result', toolCallId: 'c1', toolName: 'x', content: '[result expired]' }] } as ChatMessage;
+            }
+        }
+    }
+
+    function thinkingCall(id: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('keeps the reasoning made before the change and drops the reasoning after it, in the request and the history', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new RewritingAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1'), () => thinkingCall('c2'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(3);
+        const third = runner.Calls[2].conversationMessages as AgentChatMessage[];
+        const turnOf = (messages: AgentChatMessage[], id: string) => messages.find((m) => m.toolCalls?.some((c) => c.id === id));
+        expect(turnOf(third, 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+        expect(turnOf(third, 'c2')).not.toHaveProperty('reasoning');
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c2')).not.toHaveProperty('reasoning');
+        // The second request, sent before the rewrite, still carried the turn-1 reasoning unchanged.
+        expect(turnOf(runner.Calls[1].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+});
+
+describe('BaseAgent.Execute — the system prompt or tools change mid-run', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    class BoundAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return true;
+        }
+        protected override DriverRequiresStableReasoningPrefix(): boolean {
+            return true;
+        }
+    }
+
+    /** A thinking tool-call turn whose request the runner fingerprinted as `prefix`. */
+    function thinkingCall(id: string, prefix: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        RecordSentPrefixFingerprint(result.chatResult as unknown as ChatResult, prefix);
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('hands each request the previous fingerprint, and drops the history\'s reasoning once it changes', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        // Request 2's prefix differs from request 1's — a skill activated and added a tool.
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1', 'prefix-A'), () => thinkingCall('c2', 'prefix-B'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-B']);
+        const turnOf = (messages: AgentChatMessage[], id: string) => messages.find((m) => m.toolCalls?.some((c) => c.id === id));
+        // c1's thinking was made under prefix A; the runner sent request 2 without it, and the history dropped it.
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+        // c2's thinking was made under prefix B, which request 3 still has.
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c2')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
+    });
+});
+
+describe('BaseAgent — a native complete_task refused by validation', () => {
+    class Probe extends HarnessAgent {
+        public async Process(step: BaseAgentNextStep, params: ExecuteAgentParams): Promise<BaseAgentNextStep> {
+            return (this as unknown as { processNextStep(s: BaseAgentNextStep, p: ExecuteAgentParams, ...rest: unknown[]): Promise<BaseAgentNextStep> })
+                .processNextStep(step, params, {}, {}, {}, {});
+        }
+    }
+
+    it('answers the call with the feedback, as an error, so the model can act on it', async () => {
+        const agent = new Probe();
+        const internals = agent as unknown as { validateNextStep: (p: unknown, s: BaseAgentNextStep) => Promise<BaseAgentNextStep>; checkExecutionGuardrails: (p: unknown, s: BaseAgentNextStep) => Promise<BaseAgentNextStep> };
+        internals.validateNextStep = async (_p, s) => s;
+        internals.checkExecutionGuardrails = async (_p, s) => s;
+        const params = { agent: { Name: 'Probe' }, conversationMessages: [] } as unknown as ExecuteAgentParams;
+        const step: BaseAgentNextStep = {
+            step: 'Retry', terminate: false, payloadToolCallId: 'call_done', message: 'The rubric failed: the summary is missing.',
+            nativeTurn: { text: '', toolCalls: [{ id: 'call_done', name: 'complete_task', arguments: {} }], sendResultsNatively: true }
+        };
+
+        await agent.Process(step, params);
+
+        const answer = (params.conversationMessages[1].content as unknown as Array<{ toolCallId: string; content: string; isError: boolean }>)[0];
+        expect(answer).toMatchObject({ toolCallId: 'call_done', isError: true, content: 'The rubric failed: the summary is missing.' });
     });
 });

@@ -8,6 +8,7 @@
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { Canonicalize } from '@memberjunction/global';
 
 interface TestCase {
     Name: string;
@@ -19,7 +20,7 @@ export interface TestOutcome {
     Passed: boolean;
     DurationMs: number;
     Error?: string;
-    /** True when the check was gated off (mutation/live-model tier) rather than executed. */
+    /** True when the check did not run: gated off (mutation/live-model tier) or skipped at run time ({@link SkipCheck}). */
     Skipped?: boolean;
 }
 
@@ -56,6 +57,11 @@ export class TestRunner {
                 outcomes.push({ Name: test.Name, Passed: true, DurationMs: Date.now() - start });
                 console.log(`  ✓ ${test.Name} (${Date.now() - start}ms)`);
             } catch (error) {
+                if (IsCheckSkip(error)) {
+                    outcomes.push({ Name: test.Name, Passed: true, DurationMs: Date.now() - start, Skipped: true });
+                    console.log(`  − ${test.Name} SKIPPED — ${error.message}`);
+                    continue;
+                }
                 const message = error instanceof Error ? error.message : String(error);
                 outcomes.push({ Name: test.Name, Passed: false, DurationMs: Date.now() - start, Error: message });
                 console.log(`  ✗ ${test.Name} (${Date.now() - start}ms)`);
@@ -113,6 +119,36 @@ export async function EmitOutcomes(runner: TestRunner, path: string): Promise<vo
 // Assertions
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Thrown by {@link SkipCheck}: the check found a precondition it cannot meet (a fixture not seeded,
+ * a transport switched off) and did not run. Both runners record it as a skip — never a pass, never
+ * a failure.
+ */
+export class IntegrationCheckSkip extends Error {
+    constructor(reason: string) {
+        super(reason);
+        this.name = 'IntegrationCheckSkip';
+    }
+}
+
+/**
+ * Ends the running check as SKIPPED. Use it instead of returning early when a precondition is
+ * missing: an early return is scored as a pass, which reports coverage the run did not have.
+ *
+ * @param reason why the check could not run, shown in the run's results
+ */
+export function SkipCheck(reason: string): never {
+    throw new IntegrationCheckSkip(reason);
+}
+
+/**
+ * Whether `error` is a {@link SkipCheck} skip. Matched by name as well as by class, so a skip
+ * thrown from a second loaded copy of this module is still recognised.
+ */
+export function IsCheckSkip(error: unknown): error is IntegrationCheckSkip {
+    return error instanceof IntegrationCheckSkip || (error instanceof Error && error.name === 'IntegrationCheckSkip');
+}
+
 export function Assert(condition: boolean, message: string): void {
     if (!condition) {
         throw new Error(message);
@@ -131,6 +167,15 @@ export const settle = Settle;
 export function AssertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {
         throw new Error(`${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+}
+
+/** Structural equality for objects and arrays: the two values' canonical JSON must match (object keys in any order). */
+export function AssertDeepEqual<T>(actual: T, expected: T, message: string): void {
+    const a = Canonicalize(actual);
+    const e = Canonicalize(expected);
+    if (a !== e) {
+        throw new Error(`${message} — expected ${e}, got ${a}`);
     }
 }
 

@@ -6,9 +6,11 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
   LogError: vi.fn(),
-  LogStatus: vi.fn()
+  LogStatus: vi.fn(),
+  // The real URL resolver: the catalog URL hangs off the MJAPI URL (MJ #5674).
+  ResolveMJAPIURL: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).ResolveMJAPIURL,
 }));
 
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
@@ -87,6 +89,10 @@ describe('AuthProviderCatalog.Fetch', () => {
   it('derives the catalog URL from the GraphQL origin', () => {
     expect(AuthProviderCatalog.BuildCatalogUrl('http://localhost:4000/')).toBe('http://localhost:4000/auth/providers');
     expect(AuthProviderCatalog.BuildCatalogUrl('https://api.example.com/graphql')).toBe('https://api.example.com/auth/providers');
+    // MJ #5674: without MJAPI_URI nothing changes (origin-relative, as before); with it, it is used as given.
+    expect(AuthProviderCatalog.BuildCatalogUrl('https://example.com/api/graphql')).toBe('https://example.com/auth/providers');
+    expect(AuthProviderCatalog.BuildCatalogUrl('https://example.com/api/graphql', 'https://example.com/api/')).toBe('https://example.com/api/auth/providers');
+    expect(AuthProviderCatalog.BuildCatalogUrl('https://example.com/gql', 'https://api.example.com:4002/v2')).toBe('https://api.example.com:4002/v2/auth/providers');
   });
 });
 

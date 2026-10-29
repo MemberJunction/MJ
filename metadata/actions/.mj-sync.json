@@ -32,6 +32,10 @@
         "entity": "MJ: Action Params",
         "foreignKey": "ActionID"
       },
+      "MJ: Action Authorizations": {
+        "entity": "MJ: Action Authorizations",
+        "foreignKey": "ActionID"
+      },
       "MJ: Action Result Codes": {
         "entity": "MJ: Action Result Codes",
         "foreignKey": "ActionID"

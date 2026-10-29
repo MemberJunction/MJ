@@ -330,6 +330,15 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(states).toEqual([]); // narration waits for the first model output
         });
 
+        it('RequestSpokenTurn sends the same user_message but keeps the reply a NORMAL turn (MJ#4591)', () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Greet the participant.');
+            expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'user_message', text: 'Greet the participant.' });
+            expect(client.IsBusy).toBe(true);
+            client.Emit({ type: 'agent_response', agent_response_event: { agent_response: 'Hello, welcome.' } });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello, welcome.', IsFinal: true, Kind: 'normal' }]);
+        });
+
         it("should tag the NEXT agent_response as narration, then reset to normal (stamp-at-send)", () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('progress update');
@@ -342,6 +351,21 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(transcripts).toEqual([
                 { Role: 'Assistant', Text: "I'm on it", IsFinal: true, Kind: 'narration' },
                 { Role: 'Assistant', Text: 'Here is the answer', IsFinal: true, Kind: 'normal' },
+            ]);
+        });
+
+        it("ends the narration response when the user speaks, so the agent's next turn is normal even without agent_response_complete (MJ#6025)", () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenUpdate('greet the participant');
+            client.Emit({ type: 'agent_response', agent_response_event: { agent_response: 'Hello, welcome.' } });
+            // No agent_response_complete arrives; the user answers instead.
+            client.Emit({ type: 'user_transcript', user_transcription_event: { user_transcript: 'Hi, thanks.' } });
+            client.Emit({ type: 'agent_response', agent_response_event: { agent_response: 'Tell me about your work.' } });
+
+            expect(transcripts).toEqual([
+                { Role: 'Assistant', Text: 'Hello, welcome.', IsFinal: true, Kind: 'narration' },
+                { Role: 'User', Text: 'Hi, thanks.', IsFinal: true, Kind: 'normal' },
+                { Role: 'Assistant', Text: 'Tell me about your work.', IsFinal: true, Kind: 'normal' },
             ]);
         });
 
@@ -362,6 +386,20 @@ describe('ElevenLabsRealtimeClient', () => {
     describe('tool calls and tool-result delivery', () => {
         beforeEach(async () => {
             await connect(client);
+        });
+
+        it('sends the tool output as the JSON STRING it was given: ElevenLabs closes the socket on an object result (MJ#4806)', () => {
+            client.Emit({
+                type: 'client_tool_call',
+                client_tool_call: { tool_name: 'Whiteboard_AddNote', tool_call_id: 'call-wb', parameters: { text: 'hello' } },
+            });
+            client.SendToolResult('call-wb', '{"success":true,"noteId":"n1"}');
+            expect(client.Fake.SentFrames().at(-1)).toEqual({
+                type: 'client_tool_result',
+                tool_call_id: 'call-wb',
+                result: '{"success":true,"noteId":"n1"}',
+                is_error: false,
+            });
         });
 
         it('should surface client_tool_call with JSON-string args and release the busy lock', () => {
@@ -393,7 +431,7 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'client_tool_result',
                 tool_call_id: 'call-1',
-                result: { tempF: 72 },
+                result: '{"tempF":72}',
                 is_error: false,
             });
             expect(states).toEqual(['speaking']);
@@ -447,7 +485,7 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'client_tool_result',
                 tool_call_id: 'call-9',
-                result: { success: true, output: '42' },
+                result: '{"success":true,"output":"42"}',
                 is_error: false,
             });
             expect(client.IsBusy).toBe(true);

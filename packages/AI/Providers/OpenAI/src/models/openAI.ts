@@ -1,6 +1,7 @@
-import { AIErrorInfo, BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls } from "@memberjunction/ai";
-import { APIUserAbortError, OpenAI } from "openai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls,
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type OpenAICompatibleToolCallReadout } from "@memberjunction/ai";
+import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
 
@@ -162,7 +163,7 @@ export class OpenAILLM extends BaseLLM {
      * This is honored on BOTH the streaming and non-streaming paths.
      *
      * The SDK's own retry loop checks `options.signal.aborted` before every attempt and throws
-     * {@link APIUserAbortError} rather than retrying, so a cancelled request stays cancelled.
+     * `APIUserAbortError` rather than retrying, so a cancelled request stays cancelled.
      *
      * Returned as a structural literal (rather than the SDK's `RequestOptions`, which is not
      * exported from the package root) — every field of `RequestOptions` is optional, so this is
@@ -170,57 +171,6 @@ export class OpenAILLM extends BaseLLM {
      */
     protected buildRequestOptions(params: ChatParams): { signal?: AbortSignal } {
         return params.cancellationToken ? { signal: params.cancellationToken } : {};
-    }
-
-    /**
-     * True when `error` represents a cancellation of the request rather than a provider failure.
-     * Covers the SDK's typed {@link APIUserAbortError}, the DOM-standard `AbortError`, and the
-     * belt-and-braces case where the token is already aborted but the underlying transport
-     * surfaced some other error shape.
-     */
-    protected isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean {
-        if (error instanceof APIUserAbortError) {
-            return true;
-        }
-        if (error instanceof Error && error.name === 'AbortError') {
-            return true;
-        }
-        return cancellationToken?.aborted === true;
-    }
-
-    /**
-     * Structured error info for a cancelled request. Cancellation is deliberate, so it is marked
-     * Fatal and non-failover-able — retrying or failing over to another vendor would defeat the
-     * cancellation. (`AIErrorType` has no dedicated cancellation member, so `Unknown` is used with
-     * an explicit provider error code.)
-     */
-    protected buildCancellationErrorInfo(error: unknown): AIErrorInfo {
-        return {
-            errorType: 'Unknown',
-            severity: 'Fatal',
-            canFailover: false,
-            providerErrorCode: 'request_cancelled',
-            context: { provider: 'openai', cancelled: true },
-            error
-        };
-    }
-
-    /**
-     * Build the ChatResult returned when a request is cancelled mid-flight. Mirrors the shape of a
-     * failed ChatResult so callers see a clean, typed failure (`success === false`) instead of an
-     * unhandled rejection.
-     */
-    protected buildCancelledChatResult(error: unknown, startTime: Date): ChatResult {
-        const result = new ChatResult(false, startTime, new Date());
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        result.statusText = 'cancelled';
-        result.errorMessage = error instanceof Error ? error.message : 'Request was cancelled';
-        result.exception = error;
-        result.errorInfo = this.buildCancellationErrorInfo(error);
-        return result;
     }
 
     /**
@@ -324,8 +274,8 @@ export class OpenAILLM extends BaseLLM {
         try {
             result = await this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
         } catch (error) {
-            if (this.isCancellationError(error, params.cancellationToken)) {
-                return this.buildCancelledChatResult(error, startTime);
+            if (this.IsCancellationError(error, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
             throw error; // all other failures propagate exactly as before
         }
@@ -386,7 +336,8 @@ export class OpenAILLM extends BaseLLM {
                         }
                     }
                     
-                    const toolCalls = this.extractToolCalls(c.message?.tool_calls);
+                    const read = this.extractToolCalls(c.message?.tool_calls);
+                    const toolCalls = read.Calls;
 
                     return {
                         message: {
@@ -397,7 +348,8 @@ export class OpenAILLM extends BaseLLM {
                         },
                         // OpenAI already reports 'tool_calls' here; normalize defensively so the
                         // value is consistent even if a compatible endpoint reports something else.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : c.finish_reason,
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : read.Malformed ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL : c.finish_reason,
+                        ...(read.Malformed ? { finishMessage: read.Malformed } : {}),
                         index: c.index,
                         logprobs: c.logprobs // Include logprobs if present
                     }
@@ -448,6 +400,15 @@ export class OpenAILLM extends BaseLLM {
     /**
      * Create a streaming request for OpenAI
      */
+    /**
+     * Whether a streaming request asks for the trailing usage chunk (`stream_options.include_usage`).
+     * OpenAI and the compatible hosts this driver fronts accept the field; a subclass for a host that
+     * rejects request fields it does not know returns false.
+     */
+    protected get IncludeStreamingUsage(): boolean {
+        return true;
+    }
+
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
@@ -479,6 +440,10 @@ export class OpenAILLM extends BaseLLM {
             temperature: params.temperature,
             max_completion_tokens: params.maxOutputTokens,
             stream: true,
+            // The final chunk then carries `usage` (with prompt_tokens_details.cached_tokens, which
+            // processStreamingChunk already reads). Without it a streamed call records zero prompt
+            // tokens, zero cache reads and no cost.
+            ...(this.IncludeStreamingUsage ? { stream_options: { include_usage: true } } : {}),
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
@@ -527,26 +492,10 @@ export class OpenAILLM extends BaseLLM {
         // non-streaming path. The OpenAI SDK forwards unknown body keys unchanged.
         Object.assign(openAIParams, this.getProviderRequestExtras(params));
 
-        // Remember the token for this request so finalizeStreamingResponse can report a cancellation.
-        // Set AFTER resetStreamingState() above (which clears it); cleared again by the reset that
-        // BaseLLM.handleStreamingChatCompletion runs in its `finally`.
-        this.activeStreamCancellationToken = params.cancellationToken;
-
         // Same request-option channel as the non-streaming path: aborting the signal cancels the
         // in-flight HTTP request AND the SSE stream, so we stop pulling chunks off a dead socket.
         return this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
     }
-
-    /**
-     * Cancellation token for the in-flight streaming request, captured in createStreamingRequest so
-     * finalizeStreamingResponse can tell "the stream ended" from "the stream was aborted".
-     *
-     * `protected` rather than private because a subclass may override `createStreamingRequest`
-     * without calling `super` (Inception does, to send Mercury's divergent request payload). Such a
-     * subclass still inherits this class's `finalizeStreamingResponse`, so it must be able to stash
-     * the token — otherwise an aborted stream would finalize as a truncated success.
-     */
-    protected activeStreamCancellationToken: AbortSignal | undefined = undefined;
 
     // State tracking for streaming thinking extraction
     private _streamingState: {
@@ -571,7 +520,6 @@ export class OpenAILLM extends BaseLLM {
      * audit R2-C5.
      */
     protected resetStreamingState(): void {
-        this.activeStreamCancellationToken = undefined;
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,
@@ -739,14 +687,6 @@ export class OpenAILLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A mid-stream abort surfaces as an APIUserAbortError inside BaseLLM's for-await loop, which
-        // that loop logs and swallows — so without this check a cancelled stream would be finalized
-        // as a truncated SUCCESS. Report it as a clean, typed failure instead.
-        const cancellationToken = this.activeStreamCancellationToken;
-        if (cancellationToken?.aborted) {
-            return this.buildCancelledChatResult(cancellationToken.reason, new Date());
-        }
-
         // Handle possible null/undefined values
         const content = accumulatedContent || '';
         const promptTokens = usage?.promptTokens || 0;
@@ -887,6 +827,9 @@ export class OpenAILLM extends BaseLLM {
                     } as ChatCompletionUserMessageParam;
                 
                 case 'assistant':
+                    // `m.reasoning` is not replayed: Chat Completions has no field for reasoning
+                    // items, so a reasoning model's thinking does not carry across tool turns here.
+                    // That needs the Responses API, which this driver does not use yet.
                     return {
                         role: 'assistant' as const,
                         // OpenAI wants null, not '', when the turn is carried entirely by tool calls.
@@ -956,15 +899,15 @@ export class OpenAILLM extends BaseLLM {
      * Normalizes OpenAI's `tool_calls` — whose arguments arrive as a JSON STRING — into
      * {@link ChatToolCall}s with parsed arguments.
      *
-     * A model can emit malformed JSON for a call's arguments. That is a tool-specific failure the
-     * caller must be able to see, so the call is still surfaced (with empty arguments) and logged
-     * rather than dropped — dropping it would look to the agent loop like the model said nothing.
+     * A model can emit malformed JSON for a call's arguments. That is reported as a malformed tool
+     * call, with what the model sent — never run with empty arguments, and never dropped, which
+     * would look to the agent loop like the model said nothing.
      *
      * @param toolCalls The raw tool calls from the response, if any
-     * @returns The normalized calls, or undefined when the model called nothing
+     * @returns The normalized calls, or the malformed call's description
      */
-    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): ChatToolCall[] | undefined {
-        return extractOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
+    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): OpenAICompatibleToolCallReadout {
+        return ReadOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
     }
 
 

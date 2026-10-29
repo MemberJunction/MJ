@@ -29,11 +29,13 @@
  */
 
 // The session runtime itself — the orchestration a host subclasses or composes.
-export { RealtimeSessionRuntime } from './session/RealtimeSessionRuntime';
+export { RealtimeSessionRuntime, RealtimeSessionAlreadyActiveError, type SessionEndReason, type ClientCloseReason } from './session/RealtimeSessionRuntime';
 
 // Session-facing types a host or UI binds to.
 export {
     REALTIME_RECORDING_CONSENT_KEY,
+    RECORDING_TERMINAL_ACK_TIMEOUT_MS,
+    RECORDER_STOP_TIMEOUT_MS,
     type RealtimeConnectionState,
     type RealtimeCaption,
     type RealtimeDelegationProgress,
@@ -44,6 +46,7 @@ export {
     type RealtimeThoughtNarration,
     type StartRealtimeClientSessionResult,
     type RealtimeSessionRunOptions,
+    type RecordingTerminalOptions,
 } from './session/RealtimeSessionRuntime';
 
 // Why a connected call shows no avatar its agent asked for (`RealtimeSessionRuntime.AvatarNotice$`).
@@ -167,3 +170,34 @@ export {
     DefaultNarrationInstructions,
     type NarrationBuildOptions,
 } from './narration/narration-template';
+
+// Recording shard durability + transport (IndexedDB queue, fetch upload to MJAPI's REST routes).
+// `RecordingShard` is exported because `IRecordingTransport.UploadShard` takes one.
+export { type RecordingShard } from './session/RecordingShardWindow';
+export {
+    CreateRecordingShardStore,
+    NullRecordingShardStore,
+    RECORDING_SHARD_RETENTION_MS,
+    type IRecordingShardStore,
+    type PendingRecordingShard,
+} from './session/RecordingShardStore';
+export {
+    FetchRecordingTransport,
+    RecordingBaseURLFromGraphQLURL,
+    type FetchRecordingTransportConfig,
+    type IRecordingTransport,
+    type RecordingTerminalInput,
+    type RecordingUploadOptions,
+    type RecordingUploadOutcome,
+} from './session/RecordingTransport';
+export {
+    CreateRecordingTransportForProvider,
+    DeleteStoredRecordingShard,
+    DrainStoredRecordingShardsOnce,
+    MAX_DRAINED_SHARDS_PER_LOAD,
+    RECORDING_LOGOUT_SEND_TIMEOUT_MS,
+    ReleaseRecordingShardsAtLogout,
+    ReleaseUserRecordingShards,
+    type RecordingShardDrainPass,
+    type RecordingShardRelease,
+} from './session/RecordingShardDrain';

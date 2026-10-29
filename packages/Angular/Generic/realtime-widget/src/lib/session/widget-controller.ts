@@ -45,7 +45,7 @@ export type WidgetChannelClass = new () => BaseRealtimeChannelClient;
 /** The slice of the guest-session client the controller uses (the real one is `WidgetKeyClient`). */
 export interface WidgetGuestSessionSource {
   Mint(): Promise<WidgetGuestSession>;
-  Refresh(): Promise<WidgetGuestSession>;
+  Refresh(currentToken: string): Promise<WidgetGuestSession>;
 }
 
 export interface WidgetControllerDeps {
@@ -474,9 +474,9 @@ export class WidgetController {
     return { agentId: guest.pinnedAgentId, applicationId: guest.applicationId, deadline, guestChannels: guest.enabledChannels };
   }
 
-  private async mintGuest(source: WidgetGuestSessionSource, op: 'Mint' | 'Refresh'): Promise<WidgetGuestSession> {
+  private async mintGuest(source: WidgetGuestSessionSource, op: 'Mint' | 'Refresh', currentToken?: string): Promise<WidgetGuestSession> {
     try {
-      return await source[op]();
+      return op === 'Refresh' ? await source.Refresh(currentToken ?? '') : await source.Mint();
     } catch (error) {
       if (error instanceof WidgetKeyError) {
         throw new LaunchFailure(error.message, 'auth-failed');
@@ -487,10 +487,10 @@ export class WidgetController {
 
   /** The provider's way to renew a guest token: ask the server's refresh path and hand back the new one. */
   private async renewGuestToken(): Promise<string> {
-    if (this.guestSource === null) {
+    if (this.guestSource === null || this.guest === null) {
       throw new Error(SESSION_EXPIRED_MESSAGE);
     }
-    const next = await this.mintGuest(this.guestSource, 'Refresh');
+    const next = await this.mintGuest(this.guestSource, 'Refresh', this.guest.token);
     this.guest = next;
     return next.token;
   }

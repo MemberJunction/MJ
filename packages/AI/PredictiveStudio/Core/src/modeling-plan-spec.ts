@@ -10,6 +10,8 @@
  * {@link LeaderboardEntry} shape used to rank experiment iterations.
  */
 
+import type { ValidationStrategy } from './pipeline-spec';
+
 /**
  * Explicit resource budget for an experiment session — the bounded-autonomy
  * guardrail (plan §8.4). Enforced by Record Set Processing's budget gate within
@@ -77,7 +79,7 @@ export interface ModelingPlanSpec {
     Priority: number;
   }>;
   /** Validation strategy for the search. */
-  ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+  ValidationStrategy: ValidationStrategy;
   /** Proposed resource budget for the experiment session. */
   ProposedBudget: { MaxComputeCost?: number; MaxRuns?: number; MaxWallclockMinutes?: number };
   /** User approval gate — execution does not begin until this is true. */

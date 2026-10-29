@@ -3,6 +3,7 @@ import { BaseModel, ModelUsage } from "./baseModel";
 import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
+import { BuildCancellationErrorInfo, DescribeCancellation, IsAbortError } from "./cancellation";
 
 /**
  * Type for thinking stream state management
@@ -55,6 +56,14 @@ export interface TrailingVolatileStateSplit {
  * If a method is not supported an exception will be thrown.
  */
 export abstract class BaseLLM extends BaseModel {
+    /**
+     * Whether a reasoning block this driver replays is accepted only while everything before it
+     * in the request is unchanged since the turn that produced it. When true, a caller that
+     * replays reasoning must keep its history append-only: a message removed or rewritten between
+     * requests invalidates every replayed block after it.
+     */
+    public static readonly ReplayedReasoningRequiresStablePrefix: boolean = false;
+
     /**
      * Protected property to store additional provider-specific settings
      */
@@ -110,13 +119,33 @@ export abstract class BaseLLM extends BaseModel {
         const toolsRequested = this.SupportsTools && params.tools != null && params.tools.length > 0;
         const streamingSuppressedForTools = toolsRequested && params.streaming === true;
 
+        // A request cancelled before it starts opens no socket, on every driver alike.
+        const signal = params.cancellationToken;
+        if (signal?.aborted) {
+            return this.BuildCancelledChatResult(new Date(), { signal });
+        }
+
         // Check if streaming is requested and if we support it
         if (params.streaming && params.streamingCallbacks && this.SupportsStreaming && !streamingSuppressedForTools) {
             return this.handleStreamingChatCompletion(params);
         }
 
         // Continue with normal non-streaming implementation
-        const result = await this.nonStreamingChatCompletion(params);
+        const startTime = new Date();
+        let result: ChatResult;
+        try {
+            result = await this.nonStreamingChatCompletion(params);
+        } catch (error) {
+            if (this.IsCancellationError(error, signal)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal });
+            }
+            throw error;
+        }
+        // A driver that caught the abort itself still reports it as a cancellation, whatever shape of
+        // failure it built.
+        if (!result.success && signal?.aborted) {
+            return this.BuildCancelledChatResult(result.startTime ?? startTime, { error: result.exception, signal, message: result.errorMessage });
+        }
         if (streamingSuppressedForTools) {
             result.modelSpecificResponseDetails = {
                 ...result.modelSpecificResponseDetails,
@@ -371,15 +400,20 @@ export abstract class BaseLLM extends BaseModel {
                         // an abort mid-response silently produced a partial answer that the caller was
                         // told was complete. That is data corruption, and it affected every provider.
                         //
-                        // Cancellation is the one case we deliberately let through to
-                        // finalizeStreamingResponse: providers differ on whether an abort throws here
-                        // or simply ends iteration (Anthropic's stream returns silently), so they own
-                        // that decision and return a cancelled result of their own shape. Everything
-                        // else is a genuine failure and must surface as one.
+                        // Cancellation is the one case let through: the signal check below turns it
+                        // into a cancelled result. Everything else is a genuine failure.
                         if (!params.cancellationToken?.aborted) {
                             throw streamError;
                         }
-                        console.error("Stream aborted while processing chunks:", streamError);
+                    }
+
+                    // An aborted stream is cancelled whether the SDK threw or simply ended iteration
+                    // (Anthropic's stream returns silently). The content so far is partial and is
+                    // never finalized as an answer. The signal is this request's own, so no driver
+                    // has to keep cancellation state on a shared instance.
+                    if (params.cancellationToken?.aborted) {
+                        this.settleCancelledStream(params, this.BuildCancelledChatResult(startTime, { signal: params.cancellationToken }), resolve);
+                        return;
                     }
 
                     // Flush any content the thinking-tag stripper was holding back waiting for more
@@ -427,6 +461,12 @@ export abstract class BaseLLM extends BaseModel {
 
                     resolve(result);
                 } catch (error) {
+                    // An abort raised while opening the stream is a cancellation, not an error.
+                    if (this.IsCancellationError(error, params.cancellationToken)) {
+                        this.settleCancelledStream(params, this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken }), resolve);
+                        return;
+                    }
+
                     if (params.streamingCallbacks?.OnError) {
                         params.streamingCallbacks.OnError(error);
                     }
@@ -470,6 +510,58 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected resetStreamingState(): void {
         // Default no-op. Providers override.
+    }
+
+    /**
+     * Settles a cancelled stream: resolves the request first, then tells `OnComplete`. A callback that
+     * throws is logged, never allowed to leave the request unsettled.
+     */
+    private settleCancelledStream(params: ChatParams, cancelled: ChatResult, resolve: (result: ChatResult) => void): void {
+        resolve(cancelled);
+        try {
+            params.streamingCallbacks?.OnComplete?.(cancelled);
+        } catch (callbackError) {
+            console.error('OnComplete threw for a cancelled stream:', callbackError);
+        }
+    }
+
+    /**
+     * Whether a request ended because it was aborted: its signal is aborted, the error is an abort by
+     * name (`AbortError`, `APIUserAbortError`, `RequestAbortedError`), or {@link IsProviderAbortError}
+     * recognizes it.
+     */
+    protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+        return signal?.aborted === true || IsAbortError(error) || this.IsProviderAbortError(error);
+    }
+
+    /**
+     * Recognizes an abort error the shared names miss. A driver whose SDK raises its own class for an
+     * aborted request overrides this. Default: false.
+     */
+    protected IsProviderAbortError(_error: unknown): boolean {
+        return false;
+    }
+
+    /**
+     * The result of a cancelled request, the same for every driver: a failed result with no choices,
+     * `statusText` `'cancelled'`, and an `errorInfo` that says `Cancelled` (Fatal, never failed over) —
+     * or, when the signal was aborted by a timeout, a retriable `NetworkError`.
+     *
+     * @param options.error The error the abort raised, kept on `exception`.
+     * @param options.signal The request's abort signal, read for why it was aborted.
+     * @param options.message The message to report; defaults to one naming the signal's reason.
+     */
+    protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}): ChatResult {
+        const result = new ChatResult(false, startTime, new Date());
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        result.statusText = 'cancelled';
+        result.errorMessage = options.message || DescribeCancellation(options.signal);
+        result.exception = options.error;
+        result.errorInfo = BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
+        return result;
     }
     
     /**
