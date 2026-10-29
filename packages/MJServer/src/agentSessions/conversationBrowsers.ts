@@ -9,7 +9,7 @@
  */
 import { GraphQLError } from 'graphql';
 import { LogError, LogStatus } from '@memberjunction/core';
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, IShutdownable, ShutdownRegistry } from '@memberjunction/global';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import type { ConversationBrowserConfig } from '../config.js';
 
@@ -42,7 +42,8 @@ interface HeldBrowser {
   IdleMs: number;
 }
 
-export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowserLedger> {
+export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowserLedger> implements IShutdownable {
+  public readonly ShutdownName = 'ConversationBrowserLedger';
   private readonly held = new Map<string, HeldBrowser>();
   private reapTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -116,12 +117,27 @@ export class ConversationBrowserLedger extends BaseSingleton<ConversationBrowser
     return idle.length;
   }
 
-  /** One unref'd timer per process, started with the first browser, so the reaper costs nothing until then. */
+  /** Ends every held browser on a graceful shutdown, so none outlives the server. Idempotent. */
+  public async Shutdown(): Promise<void> {
+    if (this.reapTimer) {
+      clearInterval(this.reapTimer);
+      this.reapTimer = null;
+    }
+    const held = Array.from(this.held.keys());
+    this.held.clear();
+    await Promise.allSettled(held.map((conversationID) => this.EndBrowser(conversationID)));
+  }
+
+  /**
+   * One unref'd timer per process, started with the first browser, so the reaper costs nothing until then.
+   * The ledger joins the graceful shutdown at the same time.
+   */
   private startReaper(): void {
     if (this.reapTimer) {
       return;
     }
     this.reapTimer = setInterval(() => void this.ReapIdle(), REAP_INTERVAL_MS);
     this.reapTimer.unref?.();
+    ShutdownRegistry.Instance.Register(this);
   }
 }

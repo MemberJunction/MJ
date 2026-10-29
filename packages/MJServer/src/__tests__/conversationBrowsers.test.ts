@@ -5,7 +5,7 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
   RemoteBrowserEngine: { Instance: { EndSessionForAgentSession: (id: string) => endSession(id) } },
 }));
 
-import { GetGlobalObjectStore } from '@memberjunction/global';
+import { GetGlobalObjectStore, ShutdownRegistry } from '@memberjunction/global';
 import { ConversationBrowserLedger, RemoteBrowserRefusedError } from '../agentSessions/conversationBrowsers.js';
 
 const USER = { Key: 'user:a1a1a1a1-0000-4000-8000-000000000001', Anonymous: false };
@@ -40,6 +40,17 @@ describe('ConversationBrowserLedger', () => {
     expect(endSession).toHaveBeenCalledWith('conv-idle');
     expect(endSession).not.toHaveBeenCalledWith('conv-used');
     expect(() => ledger.Claim('conv-third', USER, LIMITS)).not.toThrow();
+  });
+
+  it('joins the graceful shutdown with its first browser, and ends every browser it holds there', async () => {
+    endSession.mockClear();
+    ledger.Claim('conv-idle', USER, LIMITS);
+    ledger.Claim('conv-used', USER, LIMITS);
+    expect(ShutdownRegistry.Instance.List()).toContain(ledger);
+
+    await ledger.Shutdown();
+    expect(endSession.mock.calls.map((c) => c[0]).sort()).toEqual(['conv-idle', 'conv-used']);
+    expect(await ledger.ReapIdle()).toBe(0);
   });
 
   it('counts each owner key on its own, so one anonymous guest cannot use up another\'s cap', () => {
