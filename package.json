@@ -43,6 +43,7 @@
     "packages/Archiving/*",
     "packages/geo/*",
     "packages/Lists/*",
+    "packages/ContentPipeline/*",
     "packages/RecordSetProcessor/*",
     "packages/RecordCloning/*",
     "packages/Rubrics/*",

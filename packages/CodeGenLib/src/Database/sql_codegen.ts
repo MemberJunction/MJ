@@ -1,10 +1,10 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, IsValidSQLIdentifier, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
 import { logError, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner, FailSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
+import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult, OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
 
 import { AutoIndexForeignKeys, AutoIndexSoftPrimaryKeys, configInfo, CustomSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { EntityInCustomBaseViewRefreshScope, ShouldEmitCascadeForRelatedEntity } from './schema-filters';
@@ -45,7 +45,258 @@ export function entitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
     entities: T[],
     excludeSchemas: string[],
 ): T[] {
-  return EntitiesNotInExcludedSchemas(entities, excludeSchemas);
+    return EntitiesNotInExcludedSchemas(entities, excludeSchemas);
+}
+
+/** One parent column an IS-A child's base view selects from a parent's base table. */
+export interface InheritedParentColumn {
+    /** The join alias of the parent's base table in the child's view (`__mj_isa_p1` is the direct parent). */
+    Alias: string;
+    /** The parent entity whose base table holds the column. */
+    Parent: EntityInfo;
+    /** The parent's field. */
+    Field: EntityFieldInfo;
+}
+
+/**
+ * The parent columns an IS-A child's generated base view selects, in parent-chain order and each
+ * parent's field order. The child's view joins each parent's BASE TABLE, so a column qualifies only
+ * if it is physically on that table:
+ * - primary keys are shared with the child and `__mj_` columns are the child's own;
+ * - a view-only virtual field (`IsVirtual` and not `IsComputed`) is not on the table and is skipped;
+ * - a computed column (`IsVirtual` and `IsComputed`, e.g. a persisted `DisplayName`) IS on the
+ *   table and is selected (#5899), unless an ancestor further up the chain also has a field of that
+ *   name: then the row on this parent is an inherited mirror and the ancestor's join supplies it.
+ * A name is selected once even if two parents carry it.
+ */
+export function InheritedParentColumns(entity: Pick<EntityInfo, 'IsChildType' | 'ParentChain'>): InheritedParentColumn[] {
+    if (!entity.IsChildType) return [];
+    const chain = entity.ParentChain;
+    const columns: InheritedParentColumn[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < chain.length; i++) {
+        const parent = chain[i];
+        const ancestorFieldNames = new Set(
+            chain.slice(i + 1).flatMap(a => a.Fields.map(f => f.Name.toLowerCase()))
+        );
+        for (const field of parent.Fields) {
+            if (field.IsPrimaryKey || field.Name.startsWith('__mj_')) continue;
+            if (field.IsVirtual && (!field.IsComputed || ancestorFieldNames.has(field.Name.toLowerCase()))) continue;
+            const key = field.Name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            columns.push({ Alias: `__mj_isa_p${i + 1}`, Parent: parent, Field: field });
+        }
+    }
+    return columns;
+}
+
+/** An IS-A child outside this run's scope whose live view lacks columns its in-scope parent now has. */
+export interface OutOfScopeISAChildDrift {
+    ChildName: string;
+    ChildSchema: string;
+    ViewName: string;
+    MissingColumns: string[];
+}
+
+/**
+ * Compares out-of-scope IS-A children's live view columns against the parent columns their view
+ * would select ({@link InheritedParentColumns}). Only children with at least one in-scope parent are
+ * considered: a parent app's run adds the column but cannot regenerate a sibling app's view (#4821).
+ * `liveColumns` maps `schema.view` (lower case) to the view's column names; a view absent from the
+ * map does not exist or was not read, and is skipped rather than reported as missing every column.
+ */
+export function FindOutOfScopeISAChildDrift(
+    entities: EntityInfo[],
+    excludeSchemas: string[],
+    liveColumns: Map<string, Set<string>>,
+): OutOfScopeISAChildDrift[] {
+    const excluded = new Set(excludeSchemas.map(s => s.trim().toLowerCase()));
+    const drift: OutOfScopeISAChildDrift[] = [];
+    for (const child of OutOfScopeISAChildrenWithInScopeParent(entities, excludeSchemas)) {
+        const viewName = child.GeneratedViewName;
+        const live = liveColumns.get(`${child.SchemaName.trim()}.${viewName.trim()}`.toLowerCase());
+        if (!live) continue;
+        const missing = InheritedParentColumns(child)
+            .filter(c => !excluded.has(c.Parent.SchemaName.trim().toLowerCase()))
+            .map(c => c.Field.Name)
+            .filter(name => !live.has(name.trim().toLowerCase()));
+        if (missing.length > 0) {
+            drift.push({ ChildName: child.Name, ChildSchema: child.SchemaName, ViewName: viewName, MissingColumns: missing });
+        }
+    }
+    return drift;
+}
+
+/** IS-A children in an excluded schema with at least one parent in this run's scope. */
+export function OutOfScopeISAChildrenWithInScopeParent(entities: EntityInfo[], excludeSchemas: string[]): EntityInfo[] {
+    const excluded = new Set(excludeSchemas.map(s => s.trim().toLowerCase()));
+    return entities.filter(e =>
+        e.IsChildType &&
+        !e.VirtualEntity &&
+        !e.ExternalDataSourceID &&
+        excluded.has(e.SchemaName.trim().toLowerCase()) &&
+        e.ParentChain.some(p => !excluded.has(p.SchemaName.trim().toLowerCase()))
+    );
+}
+
+export interface AlternateBaseViewDependencyEntry {
+    ReferencedSchema: string;
+    ReferencedObject: string;
+    ReferencedType?: string;
+}
+
+export interface AlternateBaseViewAuditInput {
+    entityName: string;
+    entitySchemaName: string;
+    baseViewName: string;
+    baseViewColumns: readonly string[];
+    registeredAlternateViewNames: ReadonlySet<string>;
+    alternateView: {
+        Name: string;
+        EffectiveSchemaName: string;
+        ViewName: string;
+        CachePolicy: 'Default' | 'Bypass';
+        ParentView?: {
+            Name: string;
+            EffectiveSchemaName: string;
+            ViewName: string;
+        };
+    };
+    viewExists: boolean;
+    viewColumns: readonly string[];
+    viewDefinition: string | null;
+    dependencies: readonly AlternateBaseViewDependencyEntry[];
+}
+
+function stripSQLCommentsAndStringsForAudit(sql: string): string {
+    return sql
+        .replace(/--[^\r\n]*/g, ' ')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/'(?:''|[^'])*'/g, "''");
+}
+
+function escapeRegExpForAudit(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function checkAlternateViewExpectedDependency(input: AlternateBaseViewAuditInput): boolean {
+    const alt = input.alternateView;
+    const expectedSchema = alt.ParentView ? alt.ParentView.EffectiveSchemaName : input.entitySchemaName;
+    const expectedObject = alt.ParentView ? alt.ParentView.ViewName : input.baseViewName;
+    if (input.dependencies.length > 0) {
+        return input.dependencies.some(
+            (d) =>
+                d.ReferencedObject.toLowerCase() === expectedObject.toLowerCase() &&
+                (!d.ReferencedSchema || d.ReferencedSchema.toLowerCase() === expectedSchema.toLowerCase())
+        );
+    }
+    if (!input.viewDefinition) {
+        return false;
+    }
+    const stripped = stripSQLCommentsAndStringsForAudit(input.viewDefinition);
+    const identBoundary = new RegExp(
+        `(?:^|[^A-Za-z0-9_])[\\[""]?${escapeRegExpForAudit(expectedObject)}[\\]""]?(?=$|[^A-Za-z0-9_])`,
+        'i'
+    );
+    return identBoundary.test(stripped);
+}
+
+function findClockExpressionsInViewDefinition(viewDefinition: string | null): string[] {
+    if (!viewDefinition) {
+        return [];
+    }
+    const stripped = stripSQLCommentsAndStringsForAudit(viewDefinition);
+    const clockMatches = new Set<string>();
+    const fnCallRegex = /\b(GETDATE|GETUTCDATE|SYSDATETIME|SYSDATETIMEOFFSET|SYSUTCDATETIME|NOW|CLOCK_TIMESTAMP|STATEMENT_TIMESTAMP|TRANSACTION_TIMESTAMP)\s*\(/gi;
+    let m: RegExpExecArray | null;
+    while ((m = fnCallRegex.exec(stripped)) !== null) {
+        clockMatches.add(m[1].toUpperCase() + '()');
+    }
+    const kwClockRegex = /\b(CURRENT_TIMESTAMP|LOCALTIMESTAMP|CURRENT_DATE|CURRENT_TIME)\b/gi;
+    while ((m = kwClockRegex.exec(stripped)) !== null) {
+        clockMatches.add(m[1].toUpperCase());
+    }
+    return [...clockMatches];
+}
+
+function isEntityHierarchyFunction(objectName: string): boolean {
+    return /^fn_?[a-z0-9_]+_get_(?:root_id|hierarchy_meta|descendants|ancestors)$/i.test(objectName);
+}
+
+function findExternalDependenciesForDefaultCache(input: AlternateBaseViewAuditInput): string[] {
+    if (input.dependencies.length === 0) {
+        return [];
+    }
+    const allowedRelations = new Set<string>([
+        `${input.entitySchemaName}.${input.baseViewName}`.toLowerCase(),
+        ...input.registeredAlternateViewNames,
+    ]);
+    const externalRelations: string[] = [];
+    for (const dep of input.dependencies) {
+        const depType = (dep.ReferencedType ?? '').toUpperCase();
+        if (depType.includes('FUNCTION') && isEntityHierarchyFunction(dep.ReferencedObject)) {
+            continue;
+        }
+        const depSchema = dep.ReferencedSchema || input.entitySchemaName;
+        const depKey = `${depSchema}.${dep.ReferencedObject}`.toLowerCase();
+        if (!allowedRelations.has(depKey) && !externalRelations.includes(`${depSchema}.${dep.ReferencedObject}`)) {
+            externalRelations.push(`${depSchema}.${dep.ReferencedObject}`);
+        }
+    }
+    return externalRelations;
+}
+
+/**
+ * Pure parity and safety evaluator for a registered alternate base view (Phase 4.3).
+ */
+export function EvaluateAlternateBaseViewParityAndSafety(
+    input: AlternateBaseViewAuditInput
+): string[] {
+    const warnings: string[] = [];
+    const alt = input.alternateView;
+    const qualifiedAlt = `${alt.EffectiveSchemaName}.${alt.ViewName}`;
+
+    if (!input.viewExists) {
+        warnings.push(
+            `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) does not exist in the database.`
+        );
+        return warnings;
+    }
+
+    const altColSet = new Set(input.viewColumns.map((c) => c.toLowerCase()));
+    const missingCols = input.baseViewColumns.filter((c) => !altColSet.has(c.toLowerCase()));
+    if (missingCols.length > 0) {
+        warnings.push(
+            `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) is missing column(s) from BaseView '${input.baseViewName}': ${missingCols.join(', ')}. Alternate base views must project the exact column set of BaseView (D10).`
+        );
+    }
+
+    if (!checkAlternateViewExpectedDependency(input)) {
+        const expectedSchema = alt.ParentView ? alt.ParentView.EffectiveSchemaName : input.entitySchemaName;
+        const expectedObject = alt.ParentView ? alt.ParentView.ViewName : input.baseViewName;
+        const expectedLabel = alt.ParentView ? `parent alternate view '${alt.ParentView.Name}'` : 'BaseView';
+        warnings.push(
+            `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) does not depend on ${expectedLabel} '${expectedSchema}.${expectedObject}' (breaks D10).`
+        );
+    }
+
+    if (alt.CachePolicy === 'Default') {
+        const clockMatches = findClockExpressionsInViewDefinition(input.viewDefinition);
+        if (clockMatches.length > 0) {
+            warnings.push(
+                `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) references clock expression(s) (${clockMatches.join(', ')}) while CachePolicy = 'Default'. Set CachePolicy = 'Bypass' so time-sensitive predicates do not serve stale cached results.`
+            );
+        }
+        const externalRelations = findExternalDependenciesForDefaultCache(input);
+        if (externalRelations.length > 0) {
+            warnings.push(
+                `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) depends on external relation(s) (${externalRelations.join(', ')}) while CachePolicy = 'Default'. Cache invalidation only tracks saves to '${input.entityName}'; consider setting CachePolicy = 'Bypass'.`
+            );
+        }
+    }
+
+    return warnings;
 }
 
 
@@ -120,14 +371,37 @@ export class SQLCodeGenBase {
     /**
      * Map of `schema.routine` (lowercased) to its live `OBJECT_DEFINITION` text on SQL Server,
      * used by {@link isRoutineSaveReturnModeChanged} to detect when `Entity.Configuration.SaveReturnMode`
-     * changed via `mj sync push` without a physical table/column change.
+     * changed via `mj sync push` without a physical table/column change, and by
+     * {@link isRoutineDefinitionDrifted} to detect any other difference from the generated body.
      */
     protected existingRoutineDefinitions: Map<string, string> | null = null;
+
+    /**
+     * `schema.routine` keys of CRUD routines whose live definition differed from the body generated
+     * this run, so they were force-logged and re-executed. Reported once after generation.
+     */
+    protected driftedRoutines: Set<string> = new Set();
+
+    /**
+     * Names of LAYERED entities whose generated inner view was written to the migration log this
+     * run. Their application-owned outer view must be refreshed in the same migration, even when the
+     * entity is on neither the new nor the modified list (the inner view changed on its own).
+     */
+    protected layeredEntitiesWithLoggedInnerView: Set<string> = new Set();
+
+    /**
+     * Names of LAYERED entities whose outer-view refresh was written right after their inner view
+     * ({@link logLayeredOuterViewRefresh}). STEP 2(f) does not log their refresh a second time.
+     */
+    protected layeredEntitiesWithInlineRefresh: Set<string> = new Set();
 
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
             this.existingRoutineDefinitions = null;
+            this.driftedRoutines = new Set();
+            this.layeredEntitiesWithLoggedInnerView = new Set();
+            this.layeredEntitiesWithInlineRefresh = new Set();
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -159,11 +433,15 @@ export class SQLCodeGenBase {
             //          objects like spCreate for a given entity might reference the vw for that entity
             StartSpinner('Running custom SQL scripts...');
             const startTime: Date = new Date();
-            if (! await this.RunCustomSQLScripts(pool, 'before-sql')) {
+            // A failed before-sql script fails the step but does not stop the run: the remaining steps
+            // still run so the final result lists every failure, not just the first.
+            const beforeScriptsSucceeded = await this.RunCustomSQLScripts(pool, 'before-sql');
+            if (!beforeScriptsSucceeded) {
                 FailSpinner('Failed to run custom SQL scripts');
-                return false;
             }
-            SucceedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
+            else {
+                SucceedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
+            }
 
             await this.loadExistingRoutines(pool, entities);
 
@@ -184,9 +462,11 @@ export class SQLCodeGenBase {
             await this.markEntitiesForCascadeDeleteRegeneration(pool, includedEntities);
             SucceedSpinner('Cascade delete dependency analysis completed');
 
-            // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
+            // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory.
+            // Only in-scope schemas' directories (#3384): STEP 2(b) rewrites those, and an out-of-scope
+            // schema's files are another run's to regenerate, so deleting them would leave them missing.
             StartSpinner('Cleaning generated files...');
-            this.DeleteGeneratedEntityFiles(directory, baselineEntities);
+            this.DeleteGeneratedEntityFiles(directory, includedEntities);
             SucceedSpinner('Cleaned generated files');
 
             // STEP 2(a.5) - field-level security / permission-reconciliation run context.
@@ -357,7 +637,7 @@ export class SQLCodeGenBase {
 
             // Initialize from entityGenSuccess so any per-batch failures from
             // STEP 2(b)/(c) carry forward instead of being lost. Bug 2 fix.
-            let overallSuccess = entityGenSuccess;
+            let overallSuccess = entityGenSuccess && beforeScriptsSucceeded;
             if (!executionSuccess) {
                 FailSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
@@ -370,6 +650,26 @@ export class SQLCodeGenBase {
                 const step2eEndTime: Date = new Date();
                 SucceedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
             }
+            this.reportDriftedRoutines();
+
+            // STEP 2(f) - refresh every application-owned base view NOW, before STEP 3's field sync.
+            // SQL Server freezes a non-schemabound view's column list at CREATE time, so recreating a
+            // layered entity's inner view in STEP 2(e) does not update the outer view's sys.columns.
+            // STEP 3 decides which EntityField rows are orphaned from that outer view, so a stale
+            // outer view made it delete the rows for columns added this run (#4336). The same refresh
+            // is written to the migration log here, ahead of any field-sync SQL, so a replay of the
+            // migration runs in the same order. STEP 4.5 still emits its refresh as a safety net.
+            // A layered entity whose inner view was logged already had its refresh executed in the
+            // STEP 2(e) batch, between the inner view and its CRUD routines (#4927); this pass
+            // re-runs it live and does not log it a second time.
+            StartSpinner('Refreshing custom base views...');
+            if (! await this.RefreshCustomBaseViewsLive(pool, includedEntities)) {
+                FailSpinner('Failed to refresh one or more custom base views');
+                overallSuccess = false;
+            }
+            else {
+                SucceedSpinner('Custom base views refreshed');
+            }
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -378,7 +678,11 @@ export class SQLCodeGenBase {
             //
             // Pass 1 (in manage-metadata.ts) already discovered all changes and populated _newEntityList ∪ _modifiedEntityList.
             // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
-            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
+            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no schema-sync
+            // work to do. The filter does NOT scope the orphan prune: Step 2 regenerated every included entity's base
+            // view, so a view can LOSE columns on an entity that is on neither list, and by definition that entity is
+            // outside the filter (#4050). manageEntityFields runs the prune unscoped, before its empty-filter fast exit,
+            // and folds the entities it pruned into this pass's scope.
             // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
             //
             // The two lists only ever contain entities something changed on during THIS run, so an
@@ -386,6 +690,8 @@ export class SQLCodeGenBase {
             // record forms stay broken until someone runs forceRegeneration over the whole database.
             // The drift probe closes that: it asks the catalog which entities have a view-only
             // column with no EntityField and unions those in, so recovery is a normal run.
+            // Layered entities whose inner view was rebuilt this run are added as well: STEP 2(f) just
+            // refreshed their outer view, which can now expose columns that need EntityField rows.
             const driftEntities = configInfo.forceRegeneration?.enabled
                 ? []
                 : await manageMD.FindVirtualFieldDriftEntities(pool, configInfo.excludeSchemas);
@@ -395,6 +701,7 @@ export class SQLCodeGenBase {
                     ...ManageMetadataBase.newEntityList,
                     ...ManageMetadataBase.modifiedEntityList,
                     ...driftEntities,
+                    ...this.layeredEntitiesWithLoggedInnerView,
                 ])];
             StartSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
@@ -405,6 +712,12 @@ export class SQLCodeGenBase {
                 SucceedSpinner('Entity fields metadata updated');
             }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
+
+            // STEP 3.1 - stale One To Many relationships (#2071). Runs after Pass 2's unscoped field prune,
+            // so the fields of dropped FK columns are gone. Report-only unless cleanupStaleRelationships is set.
+            if (!await this.CleanupStaleRelationships(pool, manageMD)) {
+                overallSuccess = false;
+            }
 
             // STEP 3.5 - Late-phase view regeneration
             // Some late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
@@ -474,6 +787,7 @@ export class SQLCodeGenBase {
             // STEP 4.5 - Emit sp_refreshview for modified custom base view entities into the
             // migration log file so other environments pick up schema changes automatically.
             this.emitCustomBaseViewRefreshes();
+            await this.validateAlternateBaseViewsForEntities(pool, includedEntities);
 
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             StartSpinner('Running post-generation SQL scripts...');
@@ -493,6 +807,9 @@ export class SQLCodeGenBase {
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
+
+            // Advisory only: an out-of-scope IS-A child's view is another app's to regenerate.
+            await this.WarnOnOutOfScopeISAChildDrift(pool, md.Entities, configInfo.excludeSchemas ?? []);
 
             return overallSuccess;
         }
@@ -839,6 +1156,27 @@ export class SQLCodeGenBase {
       return this.GenerateAndExecuteEntitySQLToSeparateFiles(options);
     }
 
+    /**
+     * Finds stale One To Many EntityRelationship rows among in-scope entities and, when the
+     * `cleanupStaleRelationships` config option is set, deletes them; otherwise each one is logged as a
+     * warning (#2071). Refreshes the global metadata only when rows were deleted, so the late-phase
+     * regeneration that follows sees the current relationships.
+     * @returns false when the cleanup failed
+     */
+    protected async CleanupStaleRelationships(pool: CodeGenConnection, manageMD: ManageMetadataBase): Promise<boolean> {
+        const dryRun = configInfo.cleanupStaleRelationships !== true;
+        if (!await manageMD.CleanupStaleEntityRelationships(pool, configInfo.excludeSchemas ?? [], { DryRun: dryRun })) {
+            logError('Failed to check for stale entity relationships');
+            return false;
+        }
+        if (manageMD.StaleRelationshipsRemoved > 0) {
+            logStatus(`   Removed ${manageMD.StaleRelationshipsRemoved} stale entity relationship(s); refreshing metadata`);
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+            await md.Refresh();
+        }
+        return true;
+    }
+
     public DeleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
         try {
             // for the schemas associated with the specified entities, clean out all the generated files
@@ -937,13 +1275,18 @@ export class SQLCodeGenBase {
                     );
                     return { Success: false, Files: files };
                 }
+                await this.validateAlternateBaseViews(options.pool, options.entity);
                 return { Success: true, Files: files };
             }
 
             // Fallback: original monolithic path (SQL Server; also the path when
             // `onlyPermissions` is set — then we just want the permissions SQL).
+            const execSuccess = await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true);
+            if (execSuccess && !options.onlyPermissions) {
+                await this.validateAlternateBaseViews(options.pool, options.entity);
+            }
             return {
-                Success: await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true),
+                Success: execSuccess,
                 Files: files
             }
         }
@@ -1228,7 +1571,12 @@ export class SQLCodeGenBase {
         return body.replace(/\s+/g, ' ').trim();
     }
 
-    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false, forceLog: boolean = false) {
+    /**
+     * Writes generated SQL to the migration log (and the temp batch executed on SQL Server) when the
+     * entity is new/modified, a force-regeneration rule matches, or `forceLog` is set. Returns whether
+     * the SQL was logged.
+     */
+    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false, forceLog: boolean = false): boolean {
         // Check if we should log this SQL
         let shouldLog = forceLog;
 
@@ -1289,6 +1637,7 @@ export class SQLCodeGenBase {
         }
 
         LogIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
+        return shouldLog;
     }
 
     /**
@@ -1312,6 +1661,111 @@ export class SQLCodeGenBase {
             refreshSQL,
             'Refresh custom base views for modified entities so schema changes are picked up'
         );
+    }
+
+    /**
+     * Executes the custom base view refresh ({@link buildCustomBaseViewRefreshSQL}: inner view, then
+     * the guarded outer view, then its rebind and alternate views) against the live database for
+     * EVERY included entity whose base view is application-owned, and writes the refresh for the
+     * entities whose views changed this run into the migration log.
+     *
+     * Runs right after STEP 2(e), so the outer views expose the columns the regenerated inner views
+     * now have before STEP 3 compares EntityField rows against them (#4336). Every entity is
+     * attempted; failures are logged together and make the step return `false`.
+     *
+     * Only the entities on the new/modified lists, plus layered entities whose inner view was logged
+     * this run, go into the migration log. Logging every custom view on every run would make a
+     * capture non-empty when nothing changed.
+     */
+    public async RefreshCustomBaseViewsLive(pool: CodeGenConnection, includedEntities: EntityInfo[]): Promise<boolean> {
+        if (!this._dbProvider.NeedsViewRefresh) {
+            return true; // PostgreSQL rebinds layered views in its phased executor
+        }
+        const targets = this.getCustomBaseViewEntitiesForLiveRefresh(includedEntities);
+        if (targets.length === 0) {
+            return true;
+        }
+
+        const failures: string[] = [];
+        for (const entity of targets) {
+            const refreshSQL = this.buildCustomBaseViewRefreshSQL([entity]);
+            if (refreshSQL.trim().length === 0) {
+                continue;
+            }
+            try {
+                await pool.query(refreshSQL);
+            } catch (e) {
+                failures.push(`${entity.SchemaName}.${entity.BaseView} (${entity.Name}): ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        // A layered entity whose refresh already follows its inner view in the log is not logged again.
+        const toLog = targets.filter(e => this.shouldLogCustomBaseViewRefresh(e) && !this.layeredEntitiesWithInlineRefresh.has(e.Name));
+        if (toLog.length > 0) {
+            await SQLLogging.AppendToSQLLogFile(
+                this.buildCustomBaseViewRefreshSQL(toLog),
+                'Refresh custom base views before entity field sync so new columns are not pruned'
+            );
+        }
+
+        if (failures.length > 0) {
+            logError(`Custom base view refresh failed for ${failures.length} of ${targets.length} view(s):\n${failures.map(f => `  - ${f}`).join('\n')}`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Included entities whose base view is application-owned (fully custom or layered), that have a
+     * base view, are not virtual or externally sourced, and are in the custom-view refresh scope.
+     */
+    protected getCustomBaseViewEntitiesForLiveRefresh(includedEntities: EntityInfo[]): EntityInfo[] {
+        return includedEntities.filter(e =>
+            !e.BaseViewGenerated &&
+            e.IncludeInAPI &&
+            !e.VirtualEntity &&
+            !e.ExternalDataSourceID &&
+            !!e.BaseView &&
+            EntityInCustomBaseViewRefreshScope(
+                e.SchemaName,
+                configInfo.excludeSchemas ?? [],
+                configInfo.includeSchemas,
+            )
+        );
+    }
+
+    /**
+     * Writes the layered entity's view refresh ({@link buildCustomBaseViewRefreshSQL}: inner view,
+     * then the guarded outer view, its rebind and alternate views) into the migration log AND the
+     * temp batch STEP 2(e) executes, right after the inner view and before the entity's CRUD routines
+     * (#4927). The application-owned outer view selects `g.*`, and SQL Server freezes that column list
+     * when the view is created; when the inner view's columns change, the routines that read the
+     * outer view fail to compile until it is refreshed. STEP 2(f) refreshes the outer view too, but
+     * only after the batch has run, which is too late for the routines in it.
+     *
+     * Called only when the inner view was logged, whether or not the entity is on the new/modified
+     * lists. No-op on platforms that rebind views themselves (PostgreSQL's phased executor).
+     */
+    protected logLayeredOuterViewRefresh(entity: EntityInfo): void {
+        if (!this._dbProvider.NeedsViewRefresh || !entity.HasLayeredBaseView || !entity.BaseView ||
+            entity.VirtualEntity || entity.ExternalDataSourceID) {
+            return;
+        }
+        const refreshSQL = this.buildCustomBaseViewRefreshSQL([entity]);
+        if (refreshSQL.trim().length === 0) {
+            return;
+        }
+        // Closed with its own batch separator: the migration log appends units without one, and the
+        // unit that follows may start with a statement that must open its batch.
+        this.logSQLForNewOrModifiedEntity(entity, `${refreshSQL}\n${this._dbProvider.BatchSeparator}`, `Refresh layered base view for ${entity.Name} after its inner view changed`, true, true);
+        this.layeredEntitiesWithInlineRefresh.add(entity.Name);
+    }
+
+    /** True when this run's migration log must carry the entity's custom base view refresh. */
+    protected shouldLogCustomBaseViewRefresh(entity: EntityInfo): boolean {
+        return ManageMetadataBase.newEntityList.includes(entity.Name) ||
+            ManageMetadataBase.modifiedEntityList.includes(entity.Name) ||
+            this.layeredEntitiesWithLoggedInnerView.has(entity.Name);
     }
 
     /**
@@ -1358,8 +1812,9 @@ export class SQLCodeGenBase {
         return entities
             .map(e => {
                 const outer = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView);
+                const altSteps = this.getAlternateBaseViewRefreshStatements(e);
                 if (!e.HasLayeredBaseView) {
-                    return outer; // fully custom — one view, and it is a standing prerequisite
+                    return [outer, ...altSteps].filter((s) => s && s.trim().length > 0).join('\n'); // fully custom — one view, and it is a standing prerequisite
                 }
                 const inner = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.GeneratedViewName);
                 const rebind = this._dbProvider.generateLayeredOuterRebindSQL(e);
@@ -1369,7 +1824,7 @@ export class SQLCodeGenBase {
                 const rebindSql = rebind.trim().length > 0
                     ? this.guardOnApplicationOwnedView(e, rebind.trim())
                     : '';
-                return [inner, outerSql, rebindSql].filter((s) => s && s.trim().length > 0).join('\n');
+                return [inner, outerSql, rebindSql, ...altSteps].filter((s) => s && s.trim().length > 0).join('\n');
             })
             .join('\n');
     }
@@ -1487,7 +1942,11 @@ export class SQLCodeGenBase {
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.GeneratedViewName, false, true));
                 if (options.writeFiles) {
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    const viewLogged = this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    if (viewLogged && options.entity.HasLayeredBaseView) {
+                        this.layeredEntitiesWithLoggedInnerView.add(options.entity.Name);
+                        this.logLayeredOuterViewRefresh(options.entity);
+                    }
                     files.push(filePath);
                 }
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1500,9 +1959,10 @@ export class SQLCodeGenBase {
             // pass. This copy is what gets written to the permissions FILE and logged into the
             // migration, so leaving it unguarded would fail on other environments even though the
             // executed copy (generateCustomBaseViewRefreshAndPermissions, below) is guarded.
-            const permBody = options.entity.HasLayeredBaseView && rawPermBody.trim().length > 0
+            const altPermBody = this.generateAlternateBaseViewsPermissionsSQL(options.entity);
+            const permBody = (options.entity.HasLayeredBaseView && rawPermBody.trim().length > 0
                 ? '\n' + this.guardOnApplicationOwnedView(options.entity, rawPermBody.trim())
-                : rawPermBody;
+                : rawPermBody) + altPermBody;
             const s = permHeader + permBody;
             if (s.length > 0)
                 permissionsSQL += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1526,6 +1986,8 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.GetSPName(options.entity, SPType.Create);
+                // Recomputed with the generated body below, so drift from the live definition counts too.
+                let routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged);
                 // Only generate if spCreateGenerated is true (respects custom SPs where it's false)
                 // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
                 if (!options.onlyPermissions && options.entity.spCreateGenerated) {
@@ -1534,7 +1996,8 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                        routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1545,7 +2008,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true))
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                     files.push(filePath);
                 }
 
@@ -1558,6 +2021,8 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.GetSPName(options.entity, SPType.Update);
+                // Recomputed with the generated body below, so drift from the live definition counts too.
+                let routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged);
                 // Only generate if spUpdateGenerated is true (respects custom SPs where it's false)
                 // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
                 if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
@@ -1566,7 +2031,8 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                        routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1577,7 +2043,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                     files.push(filePath);
                 }
 
@@ -1590,6 +2056,8 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.GetSPName(options.entity, SPType.Delete);
+                // Recomputed with the generated body below, so drift from the live definition counts too.
+                let routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged);
                 // Only generate if spDeleteGenerated is true (respects custom SPs where it's false)
                 // OR if this entity has cascade delete dependencies that require regeneration
                 // forceRegeneration only forces regeneration of SPs where spDeleteGenerated=true
@@ -1604,7 +2072,8 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                        routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1615,7 +2084,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                     files.push(filePath);
                 }
 
@@ -1768,10 +2237,64 @@ export class SQLCodeGenBase {
         return !selectsFromBaseView;
     }
 
-    protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
+    /**
+     * Returns true when the live definition of the entity's spCreate / spUpdate / spDelete differs
+     * from `generatedSQL`, the body CodeGen generated for it this run, after both are normalized by
+     * the provider (comments, header, DROP batch, `GO` and whitespace removed).
+     *
+     * This catches drift that never reaches the new/modified entity lists: a column default or type
+     * synced by `R__RefreshMetadata` before CodeGen ran (#5636), or a cascade target whose column a
+     * migration dropped together with its EntityField row (#3343). Returns false when the live
+     * definitions were not loaded (PostgreSQL, or the catalog query failed), when the routine is
+     * missing (handled by {@link isRoutineMissing}), or when either side cannot be normalized.
+     */
+    protected isRoutineDefinitionDrifted(entity: EntityInfo, routineName: string, generatedSQL: string): boolean {
+        if (!this.existingRoutineDefinitions || !generatedSQL) {
+            return false;
+        }
+        const lowerRoutine = routineName.toLowerCase();
+        const crudNames = [SPType.Create, SPType.Update, SPType.Delete].map(t => this.GetSPName(entity, t).toLowerCase());
+        if (!crudNames.includes(lowerRoutine)) {
+            return false;
+        }
+        const key = `${entity.SchemaName}.${routineName}`.toLowerCase();
+        const liveDefinition = this.existingRoutineDefinitions.get(key);
+        if (!liveDefinition) {
+            return false;
+        }
+        const generated = this._dbProvider.NormalizeRoutineDefinitionForComparison(generatedSQL);
+        const live = this._dbProvider.NormalizeRoutineDefinitionForComparison(liveDefinition);
+        if (generated === null || live === null) {
+            return false;
+        }
+        if (generated !== live) {
+            this.driftedRoutines.add(key);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Whether a CRUD routine's SQL must be logged and executed regardless of the new/modified lists.
+     * `generatedSQL`, when given, is the body generated this run and enables the live-definition drift
+     * check ({@link isRoutineDefinitionDrifted}).
+     */
+    protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean, generatedSQL?: string): boolean {
         return baseViewChanged ||
                this.isRoutineMissing(entity.SchemaName, routineName) ||
-               this.isRoutineSaveReturnModeChanged(entity, routineName);
+               this.isRoutineSaveReturnModeChanged(entity, routineName) ||
+               (generatedSQL !== undefined && this.isRoutineDefinitionDrifted(entity, routineName, generatedSQL));
+    }
+
+    /** Logs the CRUD routines that were regenerated because their live definition had drifted. */
+    protected reportDriftedRoutines(): void {
+        if (this.driftedRoutines.size === 0) {
+            return;
+        }
+        const names = [...this.driftedRoutines].sort();
+        const shown = names.slice(0, 20).map(n => `  - ${n}`).join('\n');
+        const more = names.length > 20 ? `\n  … and ${names.length - 20} more` : '';
+        logStatus(`Regenerated ${names.length} CRUD routine(s) whose live definition differed from the generated body:\n${shown}${more}`);
     }
 
     public GetEntityPermissionFileNames(entity: EntityInfo): string[] {
@@ -2188,29 +2711,15 @@ export class SQLCodeGenBase {
     /**
      * Generates SELECT field expressions for IS-A parent entity columns.
      * Walks the ParentID chain upward, joining to each parent's base table, and includes
-     * non-PK, non-timestamp, non-virtual fields from each parent table.
+     * the columns physically on each parent table ({@link InheritedParentColumns}).
      * Returns a string starting with ',\n' if there are parent fields, or '' if none.
      */
     protected generateParentEntityFieldSelects(entity: EntityInfo): string {
-        if (!entity.IsChildType) return '';
-
-        const parentChain = entity.ParentChain;
-        if (parentChain.length === 0) return '';
-
-        const fieldExpressions: string[] = [];
-
-        for (let i = 0; i < parentChain.length; i++) {
-            const parent = parentChain[i];
-            const alias = `__mj_isa_p${i + 1}`;
-
-            for (const field of parent.Fields) {
-                // Skip PKs (shared with child), timestamps, and virtual fields (view-computed)
-                if (field.IsPrimaryKey || field.Name.startsWith('__mj_') || field.IsVirtual) continue;
-
-                fieldExpressions.push(`    ${alias}.${this._dbProvider.Dialect.QuoteIdentifier(field.Name)}`);
-            }
-        }
-
+        // Which parent columns qualify (PKs, __mj_ and view-only virtual fields are skipped;
+        // computed columns are kept): see InheritedParentColumns.
+        const fieldExpressions = InheritedParentColumns(entity).map(c =>
+            `    ${c.Alias}.${this._dbProvider.Dialect.QuoteIdentifier(c.Field.Name)}`
+        );
         if (fieldExpressions.length === 0) return '';
         return ',\n' + fieldExpressions.join(',\n');
     }
@@ -2299,14 +2808,15 @@ export class SQLCodeGenBase {
         // sites because generateBaseView concatenates this onto the view DDL and the phased
         // executor consumes it separately — both need it.
         const rawPermissions: string = this.generateViewPermissions(entity);
+        const altPermissions: string = this.generateAlternateBaseViewsPermissionsSQL(entity);
         // The leading newline must stay OUTSIDE the guard. `generateViewPermissions` returns
         // "\nGRANT ..." and the view DDL it is concatenated onto ends in `GO`; wrapping the string
         // verbatim pulls that newline inside the sp_executesql literal and emits `GOIF OBJECT_ID`,
         // fusing the batch separator to the next statement. Non-layered entities keep the raw
         // string byte-for-byte so this cannot churn every other entity's generated SQL.
-        const permissions: string = entity.HasLayeredBaseView && rawPermissions.trim().length > 0
+        const permissions: string = (entity.HasLayeredBaseView && rawPermissions.trim().length > 0
             ? '\n' + this.guardOnApplicationOwnedView(entity, rawPermissions.trim())
-            : rawPermissions;
+            : rawPermissions) + altPermissions;
 
         // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
@@ -2326,8 +2836,16 @@ export class SQLCodeGenBase {
             rootFieldsSelect: rootFields,
             rootJoins: rootJoins,
         };
+        let viewSQL = this._dbProvider.generateBaseView(context);
+        if (!entity.HasLayeredBaseView && this._dbProvider.NeedsViewRefresh) {
+            const altRefreshStatements = this.getAlternateBaseViewRefreshStatements(entity);
+            if (altRefreshStatements.length > 0) {
+                const separator = '\n' + this._dbProvider.BatchSeparator + '\n';
+                viewSQL += separator + altRefreshStatements.join(separator);
+            }
+        }
         return {
-            viewSQL: this._dbProvider.generateBaseView(context),
+            viewSQL,
             viewPermSQL: permissions,
         };
     }
@@ -2342,6 +2860,281 @@ export class SQLCodeGenBase {
 
     protected generateViewPermissions(entity: EntityInfo): string {
         return this._dbProvider.generateViewPermissions(entity);
+    }
+
+    /**
+     * Validates that an alternate base view's `EffectiveSchemaName` and `ViewName`
+     * (and its `ParentView`'s when present) are valid SQL identifiers before splicing
+     * into generated DDL or catalog queries.
+     */
+    protected hasValidAlternateViewIdentifiers(entity: EntityInfo, altView: EntityAlternateBaseViewInfo): boolean {
+        if (!IsValidSQLIdentifier(altView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ViewName)) {
+            logError(
+                `[AlternateBaseView] Skipping alternate view '${altView.Name}' on entity '${entity.Name}': invalid SQL identifier '${altView.EffectiveSchemaName}.${altView.ViewName}'.`
+            );
+            return false;
+        }
+        if (altView.ParentView && (!IsValidSQLIdentifier(altView.ParentView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ParentView.ViewName))) {
+            logError(
+                `[AlternateBaseView] Skipping alternate view '${altView.Name}' on entity '${entity.Name}': parent view has invalid SQL identifier '${altView.ParentView.EffectiveSchemaName}.${altView.ParentView.ViewName}'.`
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns all registered alternate base views with valid SQL identifiers for `entity`
+     * (including `Status === 'Disabled'`), ordered topologically by `ParentID`.
+     */
+    protected getOrderedAllAlternateBaseViews(entity: EntityInfo): EntityAlternateBaseViewInfo[] {
+        const views = (entity.AlternateBaseViews ?? []).filter((v) => this.hasValidAlternateViewIdentifiers(entity, v));
+        return OrderAlternateBaseViewsTopologically(views);
+    }
+
+    /**
+     * Returns usable (`Status !== 'Disabled'`) alternate base views for `entity`,
+     * ordered topologically by `ParentID` so parent views precede derived child views.
+     */
+    protected getOrderedAlternateBaseViews(entity: EntityInfo): EntityAlternateBaseViewInfo[] {
+        return this.getOrderedAllAlternateBaseViews(entity).filter((v) => v.Status !== 'Disabled');
+    }
+
+    /**
+     * Builds guarded refresh/rebind statements for each registered alternate base view on `entity`
+     * (including `Disabled` views so `Active` children of a `Disabled` parent and re-enabled views
+     * never hold stale column metadata) in topological `ParentID` order.
+     */
+    protected getAlternateBaseViewRefreshStatements(entity: EntityInfo): string[] {
+        if (entity.VirtualEntity) {
+            return [];
+        }
+        const ordered = this.getOrderedAllAlternateBaseViews(entity);
+        if (ordered.length === 0) {
+            return [];
+        }
+        const statements: string[] = [];
+        for (const altView of ordered) {
+            const schema = altView.EffectiveSchemaName;
+            const viewName = altView.ViewName;
+            if (this._dbProvider.NeedsViewRefresh) {
+                const refresh = this._dbProvider.generateViewRefreshSQL(schema, viewName);
+                if (refresh.trim().length > 0) {
+                    statements.push(this._dbProvider.generateIfViewExistsSQL(schema, viewName, refresh.trim()));
+                }
+            }
+            const innerViewName = altView.ParentView ? altView.ParentView.ViewName : entity.BaseView;
+            const rebind = this._dbProvider.GenerateAlternateBaseViewRebindSQL(entity, schema, viewName, innerViewName);
+            if (rebind.trim().length > 0) {
+                statements.push(this._dbProvider.generateIfViewExistsSQL(schema, viewName, rebind.trim()));
+            }
+        }
+        return statements;
+    }
+
+    /**
+     * Generates guarded permission statements for each registered alternate base view on `entity`:
+     *  - Usable (`Active` / `Deprecated`) views receive `GenerateViewPermissionsForTarget` (REVOKE + GRANT SELECT + FLS DENY SELECT).
+     *  - `Disabled` views receive `GenerateDisabledViewRevokePermissionsForTarget` (REVOKE SELECT) so disabling a view revokes database read grants.
+     */
+    protected generateAlternateBaseViewsPermissionsSQL(entity: EntityInfo): string {
+        const ordered = this.getOrderedAllAlternateBaseViews(entity);
+        if (ordered.length === 0) {
+            return '';
+        }
+        let sOutput = '';
+        for (const altView of ordered) {
+            const rawPerm = altView.Status === 'Disabled'
+                ? this._dbProvider.GenerateDisabledViewRevokePermissionsForTarget(
+                    entity,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName
+                )
+                : this._dbProvider.GenerateViewPermissionsForTarget(
+                    entity,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName
+                );
+            if (rawPerm.trim().length > 0) {
+                sOutput += '\n' + this._dbProvider.generateIfViewExistsSQL(
+                    altView.EffectiveSchemaName,
+                    altView.ViewName,
+                    rawPerm.trim()
+                );
+            }
+        }
+        return sOutput;
+    }
+
+    /**
+     * Warns about IS-A children outside this run's scope whose live view lacks a column their
+     * in-scope parent's table now has (#4821). This run cannot regenerate those views: the child
+     * belongs to another app, which must run CodeGen or ship a migration. Until it does, the child's
+     * metadata (synced by that app's run) and its view disagree, and its saves fail.
+     * Never fails the run; a failed catalog read is logged and ignored.
+     */
+    public async WarnOnOutOfScopeISAChildDrift(pool: CodeGenConnection, entities: EntityInfo[], excludeSchemas: string[]): Promise<OutOfScopeISAChildDrift[]> {
+        const children = OutOfScopeISAChildrenWithInScopeParent(entities, excludeSchemas);
+        if (children.length === 0) {
+            return [];
+        }
+        try {
+            const esc = (s: string) => s.replace(/'/g, "''");
+            const predicates = children.map(c =>
+                `(TABLE_SCHEMA = '${esc(c.SchemaName)}' AND TABLE_NAME = '${esc(c.GeneratedViewName)}')`
+            );
+            const sql = `SELECT TABLE_SCHEMA AS "TableSchema", TABLE_NAME AS "TableName", COLUMN_NAME AS "ColumnName"
+                         FROM INFORMATION_SCHEMA.COLUMNS
+                         WHERE ${predicates.join(' OR ')}`;
+            const result = await pool.query(sql);
+            const live = new Map<string, Set<string>>();
+            for (const row of result.recordset as Array<{ TableSchema: string; TableName: string; ColumnName: string }>) {
+                const key = `${row.TableSchema}.${row.TableName}`.toLowerCase();
+                const cols = live.get(key) ?? new Set<string>();
+                cols.add(row.ColumnName.toLowerCase());
+                live.set(key, cols);
+            }
+            const drift = FindOutOfScopeISAChildDrift(entities, excludeSchemas, live);
+            for (const d of drift) {
+                LogWarning(
+                    `IS-A child '${d.ChildName}' is outside this run's scope, and its view ${d.ChildSchema}.${d.ViewName} ` +
+                    `lacks column(s) its parent now has: ${d.MissingColumns.join(', ')}. ` +
+                    `Run CodeGen for schema '${d.ChildSchema}', or ship a migration there that regenerates the view; ` +
+                    `once the child's EntityField rows list the column, saves fail until the view has it.`
+                );
+            }
+            return drift;
+        } catch (e) {
+            LogIf(configInfo.verboseOutput, `Could not check out-of-scope IS-A child views: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+    }
+
+    protected async validateAlternateBaseViewsForEntities(
+        pool: CodeGenConnection | null | undefined,
+        entities: readonly EntityInfo[],
+    ): Promise<void> {
+        if (!pool || typeof pool.query !== 'function') {
+            return;
+        }
+        for (const entity of entities) {
+            await this.validateAlternateBaseViews(pool, entity);
+        }
+    }
+
+    /**
+     * Audits each usable alternate base view on `entity` for column parity with `BaseView`,
+     * catalog dependency on `BaseView` / `ParentView` (D10), and `CachePolicy = 'Default'`
+     * safety (clock functions or external relation dependencies). Logs warnings via `LogWarning`.
+     */
+    protected async validateAlternateBaseViews(pool: CodeGenConnection | null | undefined, entity: EntityInfo): Promise<void> {
+        if (!pool || typeof pool.query !== 'function') {
+            return;
+        }
+        const ordered = this.getOrderedAlternateBaseViews(entity);
+        if (ordered.length === 0) {
+            return;
+        }
+        const baseViewColumns = entity.Fields.map((f) => f.Name);
+        const registeredAltNames = new Set<string>(
+            this.getOrderedAllAlternateBaseViews(entity).map(
+                (v) => `${v.EffectiveSchemaName}.${v.ViewName}`.toLowerCase()
+            )
+        );
+        for (const altView of ordered) {
+            await this.auditSingleAlternateBaseView(pool, entity, altView, baseViewColumns, registeredAltNames);
+        }
+    }
+
+    private async auditSingleAlternateBaseView(
+        pool: CodeGenConnection,
+        entity: EntityInfo,
+        altView: EntityAlternateBaseViewInfo,
+        baseViewColumns: readonly string[],
+        registeredAltNames: ReadonlySet<string>,
+    ): Promise<void> {
+        try {
+            const facts = await this.fetchAlternateViewCatalogFacts(pool, entity, altView);
+            const parentView = altView.ParentView;
+            const warnings = EvaluateAlternateBaseViewParityAndSafety({
+                entityName: entity.Name,
+                entitySchemaName: entity.SchemaName,
+                baseViewName: entity.BaseView,
+                baseViewColumns,
+                registeredAlternateViewNames: registeredAltNames,
+                alternateView: {
+                    Name: altView.Name,
+                    EffectiveSchemaName: altView.EffectiveSchemaName,
+                    ViewName: altView.ViewName,
+                    CachePolicy: altView.CachePolicy,
+                    ParentView: parentView
+                        ? {
+                              Name: parentView.Name,
+                              EffectiveSchemaName: parentView.EffectiveSchemaName,
+                              ViewName: parentView.ViewName,
+                          }
+                        : undefined,
+                },
+                viewExists: facts.viewExists,
+                viewColumns: facts.viewColumns,
+                viewDefinition: facts.viewDefinition,
+                dependencies: facts.dependencies,
+            });
+            for (const warning of warnings) {
+                LogWarning(`   ⚠️  ${warning}`);
+            }
+        } catch (e) {
+            LogIf(configInfo.verboseOutput, `Could not audit alternate base view ${altView.Name} on ${entity.Name}: ${e}`);
+        }
+    }
+
+    private async fetchAlternateViewCatalogFacts(
+        pool: CodeGenConnection,
+        entity: EntityInfo,
+        altView: EntityAlternateBaseViewInfo,
+    ): Promise<{
+        viewExists: boolean;
+        viewColumns: string[];
+        viewDefinition: string | null;
+        dependencies: AlternateBaseViewDependencyEntry[];
+    }> {
+        const colSQL = this._dbProvider.getViewColumnsSQL(altView.EffectiveSchemaName, altView.ViewName);
+        const colResult = await pool.query(colSQL);
+        const viewColumns = (colResult.recordset ?? [])
+            .map((r: Record<string, unknown>) => String(r.FieldName ?? r.fieldname ?? ''))
+            .filter((n) => n.length > 0);
+        const viewExists = viewColumns.length > 0;
+        let viewDefinition: string | null = null;
+        let dependencies: AlternateBaseViewDependencyEntry[] = [];
+        if (viewExists) {
+            try {
+                const defSQL = this._dbProvider.getViewDefinitionSQL(altView.EffectiveSchemaName, altView.ViewName);
+                const defRes = await pool.query(defSQL);
+                viewDefinition = defRes.recordset?.[0]?.ViewDefinition ?? defRes.recordset?.[0]?.viewdefinition ?? null;
+            } catch (err) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Could not inspect view definition for ${altView.EffectiveSchemaName}.${altView.ViewName} on '${entity.Name}': ${err instanceof Error ? err.message : String(err)}`
+                );
+            }
+            try {
+                const depSQL = this._dbProvider.getViewDependenciesSQL(altView.EffectiveSchemaName, altView.ViewName);
+                if (depSQL && depSQL.trim().length > 0) {
+                    const depRes = await pool.query(depSQL);
+                    dependencies = (depRes.recordset ?? [])
+                        .map((r: Record<string, unknown>) => ({
+                            ReferencedSchema: String(r.ReferencedSchema ?? r.referencedschema ?? ''),
+                            ReferencedObject: String(r.ReferencedObject ?? r.referencedobject ?? ''),
+                            ReferencedType: r.ReferencedType != null ? String(r.ReferencedType) : undefined,
+                        }))
+                        .filter((d) => d.ReferencedObject.length > 0);
+                }
+            } catch (err) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Could not inspect catalog dependencies for ${altView.EffectiveSchemaName}.${altView.ViewName} on '${entity.Name}': ${err instanceof Error ? err.message : String(err)}`
+                );
+            }
+        }
+        return { viewExists, viewColumns, viewDefinition, dependencies };
     }
 
     /**
@@ -2380,8 +3173,12 @@ export class SQLCodeGenBase {
                 sOutput += this.guardOnApplicationOwnedView(entity, rebindSQL.trim()) + separator;
             }
         }
+        for (const altRefresh of this.getAlternateBaseViewRefreshStatements(entity)) {
+            sOutput += altRefresh + separator;
+        }
 
-        return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + separator;
+        const altPermSQL = this.generateAlternateBaseViewsPermissionsSQL(entity);
+        return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + altPermSQL + separator;
     }
 
     /**

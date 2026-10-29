@@ -448,7 +448,8 @@ export class ComponentRegistryAPIServer {
       const result = await rv.RunView({
         EntityName: 'MJ: Components',
         ExtraFilter: this.getComponentFilter(),
-        MaxRows: 1
+        // count_only: a MaxRows: 1 read skips the total count, so TotalRowCount would be 0 or 1
+        ResultType: 'count_only'
       });
       
       res.json({

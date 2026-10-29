@@ -61,18 +61,20 @@ Per root `CLAUDE.md` rule 5, types are imported **directly from `-core`** — ne
 
 ## Getting started (local, Docker-free)
 
+**One-time setup (fresh clone).** Predictive Studio's packages depend on other workspace packages, so build them
+together, never one by one (a per-package `tsc` on a fresh clone fails with `TS2307 Cannot find module
+'@memberjunction/core'`):
+
 ```bash
-# 1. Build the packages (from repo root or each package dir)
-cd packages/AI/PredictiveStudio/Core    && npm run build
-cd ../Sidecar                            && npm run build
-cd ../Engine                             && npm run build
-
-# 2. Create the bundled Python environment for the sidecar (one time)
-cd ../Sidecar && npm run setup:python    # creates .venv, pip-installs pinned requirements
-
-# macOS only: xgboost/lightgbm need an OpenMP runtime
-brew install libomp                      # MLSidecar injects DYLD_LIBRARY_PATH at spawn time
+pnpm install        # repo root
+pnpm run build      # repo root: builds PS and everything it depends on, in dependency order
+pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
 ```
+
+`setup:python` needs CPython 3.11 or 3.12 (numpy 1.26.4 has no wheels for 3.13+); it tries `python3.11`, `python3.12`,
+`python3`, `python` and stops with the list it probed if none fits. Pass `-- --python <path>` after the `setup:python` command to choose one. On macOS
+also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests on another interpreter, set
+`PREDICTIVE_STUDIO_PYTHON=<path to python>`.
 
 Then train + score in TypeScript:
 

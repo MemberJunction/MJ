@@ -197,6 +197,12 @@ The tool is intended for managing business-level metadata such as:
 
 For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGenLib/README.md).
 
+### Entity fields and entity relationships
+
+**Entity field rows (`MJ: Entity Fields`) belong to CodeGen.** The generated `spCreateEntityField` procedure has no `EntityID`, `Name`, `Sequence`, `Type` or `IsVirtual` parameter, so push cannot create a field row; it can only update the business-level columns of one that exists. If a host database built from migrations is missing a field, such as a virtual field from a view, re-run CodeGen against a database with the schema change and fold its full output into the migration, so every install gets the row.
+
+**Entity relationship rows (`MJ: Entity Relationships`) can be created by push.** `spCreateEntityRelationship` takes `EntityID`, `RelatedEntityID` and `RelatedEntityJoinField`, so an app can carry the relationships CodeGen does not infer in its own metadata folder (for example `entity-relationships/`) and push creates them.
+
 ## Performance: Preloading and Caching During Push
 
 The `push` command preloads existing records and caches files/lookups so the
@@ -1105,6 +1111,7 @@ Skips unchanged files and records using stored checksums, significantly speeding
 - State is stored in `~/.mj/sync-state/` (machine-local, not committed to version control)
 - Combine freely with other flags: `mj sync push --dir ./metadata --incremental --verbose`
 - `--incremental` compares file content only. After you set a variable that `?optional` left out, push once without `--incremental`.
+- A file's checksum includes the content of the `@file:` targets it references. Checksums stored by an earlier version do not, so the first `--incremental` push after upgrading treats every file as changed and processes the whole tree once.
 
 ### Incremental Pull (`--incremental`)
 
@@ -1346,14 +1353,27 @@ SQL logging captures all database operations during push commands for creating m
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | false | Enable SQL logging during push operations |
-| `outputDirectory` | string | "./sql_logging" | Directory for SQL log files |
+| `outputDirectory` | string | "./sql-log-push" | Directory for SQL log files, relative to the sync root |
 | `formatAsMigration` | boolean | false | Format as Flyway migration files |
+| `schemaPlaceholders` | `{ schema, placeholder }[]` | undefined | With `formatAsMigration`, the schema names to rewrite and the Flyway placeholder for each, e.g. an Open App's schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Falls back to `SQLOutput.schemaPlaceholders` in `mj.config.cjs`; without either, `__mj` becomes `${flyway:defaultSchema}`. A schema name followed by `.` is rewritten wherever it appears, string data included |
+| `escapeFlywaySyntax` | boolean | false | Escape `${...}` in captured string data so Flyway does not read it as a placeholder. Always on with `formatAsMigration` |
 | `filterPatterns` | string[] | undefined | Patterns to filter SQL statements |
 | `filterType` | "exclude" or "include" | "exclude" | How to apply filter patterns |
+| `excludeTransactionalDefaults` | boolean | true | Leave out the built-in run and log statements listed below. Applies in exclude mode only |
+| `variableBatchThreshold` | number | 200 | Number of `DECLARE @...` variables to accumulate before emitting a batch separator (avoids SQL Server's 10,000-variable batch limit). `0` emits a separator per statement |
 
 **Filter Pattern Types:**
 - **Regex patterns**: Start with `/` and optionally end with flags (e.g., `/spCreate.*Run/i`)
 - **Simple wildcards**: Use `*` as a wildcard (e.g., `*AIPrompt*`)
+
+**Built-in exclusions:** while a push runs, the server can write run and log records of its own. These rows are activity records, not metadata, so a migration built from the log should not carry them. In exclude mode (the default) push adds patterns that leave out the `spCreate` and `spUpdate` calls for these entities, on top of your own `filterPatterns`:
+
+- `MJ: AI Prompt Runs` (`spCreateAIPromptRun`, `spUpdateAIPromptRun`)
+- `MJ: AI Agent Runs` (`spCreateAIAgentRun`, `spUpdateAIAgentRun`)
+- `MJ: AI Agent Run Steps` (`spCreateAIAgentRunStep`, `spUpdateAIAgentRunStep`)
+- `MJ: Action Execution Logs` (`spCreateActionExecutionLog`, `spUpdateActionExecutionLog`)
+
+Each pattern matches the whole procedure name, so related entities such as `MJ: AI Agent Run Medias` are still logged. Set `"excludeTransactionalDefaults": false` to log these statements. With `"filterType": "include"` the built-in patterns are never added: the log already holds only what your patterns match.
 
 ### User Role Validation
 

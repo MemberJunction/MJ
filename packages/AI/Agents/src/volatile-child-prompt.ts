@@ -28,11 +28,20 @@ export type ResolvedSpecializationPlacement = Exclude<SpecializationPlacement, '
  * category (minus the stable timezone) plus the loop agent's own per-iteration variables (both
  * from `./constants`), so a new temporal placeholder is picked up automatically.
  */
+/**
+ * "Execution Context" system placeholders that change on every loop step: the conversation grows by the
+ * model's turn and its results each iteration, so a child template that renders either of these mutates
+ * from inside the system prompt exactly like a timestamp would. (The other placeholders in that category
+ * — user, agent, prompt, configuration — are fixed for the run.)
+ */
+export const VOLATILE_EXECUTION_CONTEXT_PLACEHOLDERS: readonly string[] = ['_HAS_CONVERSATION_CONTEXT', '_CONVERSATION_LENGTH'];
+
 export const VOLATILE_PLACEHOLDER_NAMES: readonly string[] = [
     ...DEFAULT_SYSTEM_PLACEHOLDERS
         .filter(p => p.category === 'Date & Time' && !STABLE_TEMPORAL_PLACEHOLDERS.has(p.name))
         .map(p => p.name),
     ...VOLATILE_AGENT_VARIABLES,
+    ...VOLATILE_EXECUTION_CONTEXT_PLACEHOLDERS,
 ];
 
 /**

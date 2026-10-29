@@ -40,9 +40,28 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     DatasetName?: string;
     /**
+     * Optional list of constituent entity names for a `Type: 'dataset'` config (for example,
+     * the entities returned by `Template_Metadata` or `ResourceTypes`).
+     *
+     * When supplied, `BaseEngine.CheckPermissionsOrSkipAll` pre-checks `CanRead` on each
+     * constituent entity before firing the dataset request, and `LoadSingleDatasetConfig`
+     * can classify a failed dataset load as a permanent permission denial rather than a
+     * transient error.
+     */
+    Entities?: string[];
+    /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
      */
     Filter?: string;
+    /**
+     * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
+     * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
+     *
+     * When set, `BaseEngine` passes `AlternateBaseView` to `RunViewParams` and disables
+     * immediate in-memory array mutation on save events (forcing a full database refresh
+     * so updated records that fall out of the alternate view's SQL predicate are removed).
+     */
+    AlternateBaseView?: string;
     /**
      * Optional, filters to apply to each item in a dataset, only applies when type is 'dataset' and is optional in those cases.
      */
@@ -1006,8 +1025,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     return true;
                 }
 
-                // Check if ALL matching entity configs can use immediate mutation
-                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
+                // Check if ALL matching entity configs can use immediate mutation. A saved object
+                // that lacks columns (its saver could not read them) would put a narrowed row into
+                // an engine every user reads, so that save takes the full-refresh path instead,
+                // which reloads the row as this engine's own user.
+                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config))
+                    && this.savedRowIsComplete(event);
 
                 if (allCanUseImmediate) {
                     const applyAll = async (): Promise<void> => {
@@ -1350,7 +1373,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
                     if (needingWork.length > 0) {
                         // Check if we can use immediate array mutation instead of running a view
-                        if (this.canUseImmediateMutation(config)) {
+                        // A save carrying a row with missing columns can't replace an engine row
+                        // in place (see savedRowIsComplete), so the whole window refreshes instead.
+                        if (this.canUseImmediateMutation(config) && needingWork.every(c => this.savedRowIsComplete(c.event))) {
                             // Apply, in order, every event the array hasn't seen yet
                             for (const c of needingWork) {
                                 await this.applyImmediateMutation(config, c.event);
@@ -1415,7 +1440,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected classifyEventForConfig(config: BaseEnginePropertyConfig, event: BaseEntityEvent): EntityEventDisposition {
         if (event.type === 'save') {
             if (event.saveSubType === 'update' || event.saveSubType === 'create') {
-                if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
+                // When AlternateBaseView is set on the config, the SQL view applies a canonical
+                // WHERE/JOIN predicate — an in-memory update can cause the record to fall out of
+                // the alternate view (e.g. Status changed from 'Active' to 'Inactive'), so we
+                // must refresh from the database rather than only notifying in place.
+                if (!config.AlternateBaseView && this.isEntityAlreadyInArray(config, event.baseEntity)) {
                     return { action: 'notify', changeType: event.saveSubType === 'create' ? 'add' : 'update' };
                 }
             }
@@ -1616,6 +1645,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return false;
         }
 
+        // An AlternateBaseView applies a canonical SQL WHERE/JOIN in the database view;
+        // immediate in-memory mutations cannot evaluate that SQL predicate.
+        if (config.AlternateBaseView) {
+            return false;
+        }
+
         // If there's an OrderBy, we can't safely do immediate mutations because:
         // - For creates: we'd need to insert at the correct position
         // - For updates: the entity might need to move to a different position
@@ -1658,6 +1693,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // If the instance's AdditionalLoading is different from the base class's,
         // it means the subclass has overridden it
         return instanceProto.AdditionalLoading !== baseProto.AdditionalLoading;
+    }
+
+    /**
+     * Whether a save event's entity carries every column, so it can replace an engine row in
+     * place. Deletes and non-save events always qualify.
+     */
+    protected savedRowIsComplete(event: BaseEntityEvent): boolean {
+        if (event.type !== 'save' || !event.baseEntity) {
+            return true;
+        }
+        const entity = event.baseEntity;
+        // Asked of the object directly, so no throwaway GetAll() row is built per event. An object
+        // that is not a BaseEntity (a test double) is judged on its row, as before.
+        return typeof entity.HoldsEveryField === 'function'
+            ? entity.HoldsEveryField()
+            : LocalCacheManager.RowHasEveryField(entity.EntityInfo, entity.GetAll());
     }
 
     /**
@@ -1813,20 +1864,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the connection string from the provider for fingerprint generation
-        // The provider is needed because fingerprints include connection prefix
-        const provider = this.ProviderToUse;
-        let connectionString: string | undefined;
-        if (provider && 'InstanceConnectionString' in provider) {
-            connectionString = (provider as ProviderBase).InstanceConnectionString;
-        }
-
-        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
-        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            this.BuildRunViewParamsForConfig(config),
-            connectionString
-        );
+        // The same builder as LoadSingleEntityConfig and RegisterCacheChangeCallbacks, so the
+        // slot maintained here is the one this engine reads and listens on.
+        const fingerprint = this.configFingerprint(config);
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1854,6 +1894,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             );
         } else {
             const entityData = entity.GetAll();
+            // A row-filtered or field-secured slot, or a saved row missing columns, cannot take the
+            // saver's values in place: clear it and let the next read refill it.
+            if (!LocalCacheManager.Instance.CanUpsertRowIntoSlot(fingerprint, entity.EntityInfo, entityData)) {
+                await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+                return;
+            }
             await LocalCacheManager.Instance.UpsertSingleEntity(
                 fingerprint,
                 entityData,
@@ -1927,21 +1973,52 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
-        // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
-        const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
+        this.WarnAboutFieldSecuredEntities(entityConfigs);
 
-        // All-or-nothing permission check: if the user lacks read access on ANY
-        // entity config, skip ALL entity configs for this engine. Returns the
-        // original array unchanged when permissions pass, or an empty array when
-        // any entity is denied (marking the engine as permission-constrained).
-        const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
+        // All-or-nothing permission check across all configs (both entity configs and
+        // dataset configs that declare their constituent Entities). If the user lacks
+        // read access on ANY configured entity, skip ALL configs for this engine.
+        const configsToLoad = this.CheckPermissionsOrSkipAll(this._metadataConfigs, contextUser);
+        const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
+        const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
                            this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
+    }
+
+    /** Engine-class and entity pairs already warned about by {@link WarnAboutFieldSecuredEntities}. */
+    private static _fieldSecurityWarned: Set<string> = new Set();
+
+    /**
+     * On a server, says once per engine class and entity when an entity this engine caches has
+     * field-level security (its own, or an IS-A ancestor's). Changes nothing about the load.
+     *
+     * A server-side engine loads as the system user (see {@link ResolveContextUser}), so its
+     * cache holds every column, including ones some users are denied. That is correct for a
+     * process-wide cache, and it makes every path that hands engine data to a person responsible
+     * for projecting it to that person first.
+     */
+    protected WarnAboutFieldSecuredEntities(entityConfigs: BaseEnginePropertyConfig[]): void {
+        const provider = this.ProviderToUse;
+        if (provider?.ProviderType !== ProviderType.Database) {
+            return;
+        }
+        for (const config of entityConfigs) {
+            const entityInfo = config.EntityName ? provider.EntityByName(config.EntityName) : undefined;
+            if (!entityInfo?.FieldLevelSecurityApplies) {
+                continue;
+            }
+            const key = `${this.constructor.name}|${entityInfo.Name}`.toLowerCase();
+            if (BaseEngine._fieldSecurityWarned.has(key)) {
+                continue;
+            }
+            BaseEngine._fieldSecurityWarned.add(key);
+            LogStatus(`${this.constructor.name}: '${entityInfo.Name}' has field-level security. Engine data is loaded as the system user and holds every column; project it for the acting user before it reaches a person.`);
+        }
     }
 
     /**
@@ -1965,17 +2042,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const missingEntities = this.findMissingEntities(configs);
         if (missingEntities.length > 0) {
             LogStatusEx({
-                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                message: `${this.constructor.name}: Skipping ${configs.length} config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
                 verboseOnly: true,
                 category: 'Cache',
             });
 
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                 });
@@ -1992,18 +2067,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const deniedEntities = this.findUnreadableEntities(configs, user);
 
         if (deniedEntities.length > 0) {
-            LogWarning(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
+            LogWarning(`${this.constructor.name}: Skipping ${configs.length} config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
 
-            // Mark all entity configs as successfully loaded with empty data.
+            // Mark all configs as successfully loaded with empty data.
             // This is not a failure — it's expected behavior for limited-permission users.
             // Marking as successful allows the engine to set _loaded = true and avoid
             // endless retry loops from EnsureLoaded().
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                     permissionDenied: true,
@@ -2013,10 +2086,45 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._isPermissionConstrained = true;
             this._deniedEntityNames = deniedEntities;
 
-            return []; // Return empty — don't attempt any RunView calls
+            return []; // Return empty — don't attempt any RunView or dataset calls
         }
 
         return configs;
+    }
+
+    /**
+     * Initializes the target property on `this` when a config is skipped before loading.
+     * Entity configs receive `[]`; `single_property` dataset configs receive `{}` only when
+     * the subclass has not already initialized the property to a default container.
+     */
+    private initializeSkippedConfigProperty(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject === false) {
+            return;
+        }
+        if (config.Type === 'dataset') {
+            if (
+                config.DatasetResultHandling === 'single_property' &&
+                (this as Record<string, unknown>)[config.PropertyName] == null
+            ) {
+                (this as Record<string, unknown>)[config.PropertyName] = {};
+            }
+        } else {
+            (this as Record<string, unknown>)[config.PropertyName] = [];
+        }
+    }
+
+    /**
+     * Returns the entity name(s) governed by `config`: `Entities` (or `EntityName`) for
+     * dataset configs, and `EntityName` for entity configs.
+     */
+    private configEntityNames(config: BaseEnginePropertyConfig): string[] {
+        if (config.Type === 'dataset') {
+            if (config.Entities && config.Entities.length > 0) {
+                return config.Entities;
+            }
+            return config.EntityName ? [config.EntityName] : [];
+        }
+        return config.EntityName ? [config.EntityName] : [];
     }
 
     /**
@@ -2031,9 +2139,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
         const missing: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            if (!md.EntityByName(config.EntityName)) {
-                missing.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                if (!md.EntityByName(entityName) && !missing.includes(entityName)) {
+                    missing.push(entityName);
+                }
             }
         }
         return missing;
@@ -2044,12 +2153,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const md = this.ProviderToUse;
         const denied: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            const entityInfo = md.EntityByName(config.EntityName);
-            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
-            const perms = entityInfo.GetUserPermisions(user);
-            if (!perms || !perms.CanRead) {
-                denied.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                const entityInfo = md.EntityByName(entityName);
+                if (!entityInfo) continue; // Entity not in metadata — let RunView/dataset handle it
+                const perms = entityInfo.GetUserPermisions(user);
+                if ((!perms || !perms.CanRead) && !denied.includes(entityName)) {
+                    denied.push(entityName);
+                }
             }
         }
         return denied;
@@ -2107,14 +2217,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * IgnoreMaxRows, IncludeBinaryFields) are always consistent — preventing cache key mismatches that break
      * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
      *
-     * **Row-level security is not part of the fingerprints built from these params.** The engine
-     * builds them with `GenerateRunViewFingerprint(params, connection)`, without the RLS clause the
-     * provider adds for the reading user. On a server that is correct: engines load as the system
-     * user, whose RLS clause is empty, so the provider's fingerprint for the same read matches. An
-     * engine loaded by an RLS-scoped user (possible on a client) would compute an unscoped
-     * fingerprint for a slot the provider stored under a scoped one, so its cache callbacks and
-     * `syncLocalCacheForConfig` would target a different slot. Pass the RLS clause here if such an
-     * engine is ever needed.
+     * The slot fingerprint for these params also carries the engine user's row-level-security
+     * and field-security segments; see {@link configFingerprint}.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
         return {
@@ -2122,6 +2226,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
+            ...(config.AlternateBaseView ? { AlternateBaseView: config.AlternateBaseView } : {}),
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
@@ -2261,6 +2366,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Returns true when a failed dataset load was caused by the current user lacking Read
+     * permission on one of the dataset's constituent entities — either per local metadata
+     * (`config.Entities` / `config.EntityName`) or per the server's dataset status message
+     * (`does not have read permissions on ...`).
+     */
+    protected IsDatasetReadDenied(
+        config: BaseEnginePropertyConfig,
+        result: DatasetResultType,
+        contextUser: UserInfo | undefined
+    ): boolean {
+        for (const entityName of this.configEntityNames(config)) {
+            if (!this.ContextUserCanReadConfigEntity(entityName, contextUser)) {
+                return true;
+            }
+        }
+        return typeof result.Status === 'string' && /does not have read permissions? on/i.test(result.Status);
+    }
+
+    /**
+     * Records a dataset config as successfully loaded in an empty state after a permanent
+     * permission denial, so `BaseEngine.Load` marks the engine loaded and does not loop on
+     * `EnsureLoaded()` / `Config()`.
+     */
+    protected MarkDatasetConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        this.initializeSkippedConfigProperty(config);
+        this._dataMap.set(config.PropertyName, {
+            datasetName: config.DatasetName,
+            data: [],
+            loadedSuccessfully: true,
+            readDenied: true,
+        });
+        this.NotifyDataChange(config, []);
+    }
+
+    /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
@@ -2371,7 +2511,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         let result: DatasetResultType;
         if (bypassCache) {
             result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
-            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            if (result?.Success) {
+                await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            }
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser);
         }
@@ -2387,6 +2529,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
         if (!result.Success) {
+            if (this.IsDatasetReadDenied(config, result, contextUser)) {
+                this.MarkDatasetConfigEmptyLoaded(config);
+                LogWarning(
+                    `BaseEngine: Dataset ${config.DatasetName} not readable by current role — loaded empty (restricted-role degradation).`,
+                    'Cache'
+                );
+                return;
+            }
             const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
             LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
             this._dataMap.set(config.PropertyName, {
@@ -2901,11 +3051,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     }
 
-    /** The cache fingerprint of a config's slot, as {@link RegisterCacheChangeCallbacks} computes it. */
+    /**
+     * The cache fingerprint of a config's slot: the one {@link RegisterCacheChangeCallbacks} listens
+     * on, {@link syncLocalCacheForConfig} maintains and {@link storeConfigRows} writes.
+     *
+     * Built by the provider for this engine's user, with that user's row-level-security and
+     * field-security segments, so it names the same slot the provider's own RunView read used. An
+     * engine running as a restricted user holds only what that user may see; without the segments
+     * its rows would be written into, and its callbacks registered on, the slot unrestricted
+     * readers share.
+     */
     protected configFingerprint(config: BaseEnginePropertyConfig): string {
+        const params = this.BuildRunViewParamsForConfig(config);
         const provider = this.RunViewProviderToUse;
-        const connectionPrefix = provider instanceof ProviderBase ? provider.InstanceConnectionString : undefined;
-        return LocalCacheManager.Instance.GenerateRunViewFingerprint(this.BuildRunViewParamsForConfig(config), connectionPrefix);
+        if (provider instanceof ProviderBase) {
+            return provider.ComputeRunViewCacheFingerprint(params, this._contextUser);
+        }
+        const connection = provider && 'InstanceConnectionString' in provider
+            ? (provider as { InstanceConnectionString?: string }).InstanceConnectionString
+            : undefined;
+        return LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connection);
     }
 
     /**

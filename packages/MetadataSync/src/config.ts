@@ -13,6 +13,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { configManager } from './lib/config-manager';
+import type { SqlSchemaPlaceholder } from '@memberjunction/generic-database-provider';
 
 /**
  * MemberJunction database configuration
@@ -140,6 +141,13 @@ export interface SyncConfig {
      * - 'include': If ANY pattern matches, the SQL IS logged
      */
     filterType?: 'exclude' | 'include';
+    /**
+     * Whether push also leaves out the create and update calls for run and log records the server
+     * writes during a push: AI prompt runs, AI agent runs, AI agent run steps and action execution
+     * logs. Defaults to true. These patterns are added to `filterPatterns` in exclude mode only;
+     * with `filterType: 'include'` they are never added. Set to false to log those statements.
+     */
+    excludeTransactionalDefaults?: boolean;
     /** Whether to output verbose debug information to console (default: false) */
     verboseOutput?: boolean;
     /**
@@ -148,6 +156,18 @@ export interface SyncConfig {
      * while avoiding one GO per statement. Defaults to 200. Set to 0 for legacy per-statement behavior.
      */
     variableBatchThreshold?: number;
+    /**
+     * Schema name → Flyway placeholder rules for a `formatAsMigration` log, the same shape as
+     * `mj.config.cjs` `SQLOutput.schemaPlaceholders` (which is used when this is absent). An Open
+     * App maps its own schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Without
+     * either, the core schema becomes `${flyway:defaultSchema}`. Used only with `formatAsMigration`.
+     */
+    schemaPlaceholders?: SqlSchemaPlaceholder[];
+    /**
+     * Escape `${...}` inside captured string data so Flyway does not read it as a placeholder.
+     * Always on with `formatAsMigration`; set this to escape a plain log too. Defaults to false.
+     */
+    escapeFlywaySyntax?: boolean;
   };
   /** Watch command configuration */
   watch?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub

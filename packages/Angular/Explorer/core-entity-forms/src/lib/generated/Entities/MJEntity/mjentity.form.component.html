@@ -2913,6 +2913,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Alternate Base Views Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityAlternateBaseViews"
+        SectionName="Entity Alternate Base Views"
+        Icon="fa fa-eye"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityAlternateBaseViews')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Alternate Base Views','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Alternate Base Views','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityAlternateBaseViews')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityAlternateBaseViews', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Feature Values Section -->
     <mj-collapsible-panel
         SectionKey="mJFeatureValues"

@@ -222,7 +222,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (458 classes)
+// @memberjunction/core-entities (459 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -442,6 +442,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1154,7 +1155,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (63 classes)
+// @memberjunction/core-entities-server (65 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1180,9 +1181,11 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -1221,7 +1224,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (164 classes)
+// @memberjunction/core-actions (165 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1239,7 +1242,6 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -1337,10 +1339,11 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -1361,6 +1364,7 @@ import {
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -1732,6 +1736,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1850,11 +1855,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
-    MJRecommendationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
@@ -2054,11 +2059,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
     GetTypeformFileContentAction,
-    GetTypeformFormsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetTypeformFormsAction,
     GetTypeformResponsesAction,
     GetTypeformStatisticsAction,
     UpdateJotFormAction,
@@ -2258,11 +2263,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
@@ -2326,9 +2331,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2381,7 +2388,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -2461,12 +2467,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
-    LoadAgentSpecAction,
-    LoopAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    LoadAgentSpecAction,
+    LoopAction,
     MCPToolAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
@@ -2483,10 +2489,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareChiefOfStaffOutboundCallAction,
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2507,6 +2514,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
+    SendInterAgentRequestAction,
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
@@ -2578,7 +2586,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1095;
+export const CLASS_REGISTRATIONS_COUNT = 1099;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

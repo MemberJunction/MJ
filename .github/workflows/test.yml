@@ -136,6 +136,9 @@ jobs:
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
+            # Same again for the hardcoded-colour gate: it runs in ci-ui-tokens.yml, not here, but
+            # its vitest suite lives in __tests__ — so an edit to the gate script alone must run it too.
+            .github/scripts/check-css-hex-tokens.sh
             # The browser-manifest server-leakage gate runs in this workflow (see that step).
             # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
             # is exactly the shape that can introduce a leak, and neither path is under packages/**
@@ -337,7 +340,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -345,6 +348,7 @@ jobs:
           --passWithNoTests=false
           src/__tests__/UUIDCompliance.test.ts
           src/__tests__/MultiProviderCompliance.test.ts
+          src/__tests__/FieldSecurityEgressCompliance.test.ts
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
@@ -850,7 +854,19 @@ jobs:
           # must stay well under the 16 GB runner's limit — uncapped it OOM'd with exit 137 on
           # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
           # the heavy DOM packages across shards, yet a shard can still draw several.
-          npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}"
+          # Tee into a log so the digest step below can read the vitest counters on failure.
+          # The job's shell already runs with `-o pipefail`, so teeing does not mask the exit code.
+          npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee /tmp/shard-test.log
+
+      # A red shard hands you a job log tens of thousands of lines long in which the decisive
+      # lines are not the ones you would grep for: a worker that loses its IPC heartbeat exits 1
+      # with ZERO failing tests, and `✕`/`FAIL `/`N failed` all return nothing for that shape.
+      # This prints each package's counters and names the timeouts, so "infra, re-run it" and
+      # "the diff broke something" are distinguishable at a glance. Never gates — `|| true`
+      # keeps a digest bug from changing the job's outcome.
+      - name: Summarize test failures
+        if: failure()
+        run: node .github/scripts/summarize-test-failures.mjs /tmp/shard-test.log >> "$GITHUB_STEP_SUMMARY" || true
 
       # A skipped suite and a passing suite look identical in the summary, which is how the
       # Redis-gated files stayed dormant for a whole release. The step above now runs them for
@@ -932,14 +948,43 @@ jobs:
 
       - name: Native-ESM import guard
         env:
-          TURBO_FILTER: ${{ needs.build.outputs.turbo_filter }}
+          # TURBO_FILTER is deliberately NOT passed here any more: this step no longer decides
+          # its scope from the build job's filter, and leaving it would imply a dependency the
+          # logic below does not have. The `Materialize dist/` step above still uses it.
           PR_BASE_REF: ${{ github.base_ref }}
         run: |
-          # Scope to changed packages only when this is a PR whose scope was itself narrowed.
-          # An empty TURBO_FILTER means a root/global change (or a backstop run) — sweep all.
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$TURBO_FILTER" ]; then
+          # Every PR scans only what it changed; the unscoped sweep is the backstop's job.
+          #
+          # This used to also require a non-empty TURBO_FILTER, which meant any PR touching a
+          # root/global path — `package.json`, `turbo.json`, a root tsconfig, or this workflow
+          # file — fell through to sweeping all ~220 type:module packages at ~3s each. That is
+          # ~11 minutes, and it is why a workflow-only PR took 20+ minutes on a job that is
+          # otherwise 2.5-3 minutes (observed on #6123, which edits nothing but a cleanup step).
+          #
+          # Widening on a root change is more caution than this guard was built to need, by its
+          # own design notes: the failure signature lives in a package's OWN emitted dist/, "an
+          # untouched source recompiles identically even when a dependency change forces a
+          # rebuild", and "the push/nightly backstop runs UNSCOPED and covers the residue (a
+          # build-tool or tsconfig change that shifts emit repo-wide)". That backstop runs on
+          # every merge to next, so the residue is never unguarded for more than one merge.
+          #
+          # Narrowing to nothing is not a risk either: the script widens back to the FULL sweep
+          # by itself when the diff cannot be computed (unknown ref, shallow clone, no git),
+          # because "a guard that silently checks zero packages and prints a pass is worse than
+          # one that costs eleven minutes".
+          #
+          # EXCEPTION: a PR that edits the guard itself gets the full sweep. That is the one
+          # change that most needs the real thing rather than a narrowed subset — the same
+          # reasoning the `changes` job applies when it lists gate scripts in its paths filter.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "$PR_BASE_REF"
-            node .github/scripts/check-esm-imports.mjs packages --changed-since "origin/$PR_BASE_REF"
+            if git diff --name-only "origin/$PR_BASE_REF...HEAD" \
+                 | grep -qx '.github/scripts/check-esm-imports.mjs'; then
+              echo "The guard script itself changed — running the full sweep to exercise it."
+              node .github/scripts/check-esm-imports.mjs packages
+            else
+              node .github/scripts/check-esm-imports.mjs packages --changed-since "origin/$PR_BASE_REF"
+            fi
           else
             node .github/scripts/check-esm-imports.mjs packages
           fi
@@ -1043,6 +1088,71 @@ jobs:
             "repos/${{ github.repository }}/actions/caches?key=$CACHE_KEY" \
             && echo "Deleted." \
             || echo "::warning::Could not delete $CACHE_KEY — it will age out via LRU."
+
+      # ── Bound the turbo SEED caches ────────────────────────────────────────────────────
+      # The step above removes this run's own scoped entry. The per-merge seeds that every PR
+      # restores from (`turbo-v1-Linux-<sha>`, saved by the backstop's "Save turbo build cache")
+      # are never removed by anything, and `next` merges roughly every 20 minutes at ~3 GB each.
+      # Measured 2026-10-28: 40 seeds holding 119 GB, of a 141 GB repo total, the oldest 122h old.
+      #
+      # This is HOUSEKEEPING, NOT A SPEED FIX. A slow Build is not a seed miss: the slowest
+      # (16.4m) and fastest (3.1m) builds measured that day both restored the SAME seed
+      # successfully, and differed only in how many packages the PR pulled into scope (~300 vs 6).
+      # What unbounded growth actually risks is the LRU evicting the seed every PR depends on —
+      # which is the failure mode the save step's own comment warns about.
+      #
+      # Backstop-only: PR runs must not delete shared seeds, and fork PRs have a read-only token
+      # anyway. Best-effort throughout — a merge that built and tested cleanly must never go red
+      # because a cache delete failed.
+      - name: Prune old turbo-v1 seed caches
+        if: github.event_name == 'push' || github.event_name == 'schedule'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # ~3.5h of next history at the current merge rate. Only the newest is ever restored
+          # (the PR restore-key is a prefix match, which takes the most recent), so this is
+          # margin, not need.
+          KEEP: '10'
+        run: |
+          set -o pipefail
+          # --slurp cannot be combined with --jq, so page into a file and filter with jq.
+          gh api --paginate --slurp "repos/$REPO/actions/caches?per_page=100" > /tmp/caches.json
+
+          TOTAL=$(jq '[.[] | .actions_caches[]] | length' /tmp/caches.json)
+          SEEDS=$(jq '[.[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-"))] | length' /tmp/caches.json)
+          echo "caches: $TOTAL total, $SEEDS turbo-v1 seeds, keeping the newest $KEEP"
+
+          # Guard: if the filter matched nothing, do nothing. Protects against a key-naming
+          # change silently turning this into either a no-op or, worse, a broad delete.
+          if [ "$SEEDS" -le "$KEEP" ]; then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          jq -r --argjson keep "$KEEP" '
+            [ .[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-")) ]
+            | sort_by(.created_at) | reverse | .[$keep:]
+            | .[] | "\(.id) \(.size_in_bytes)"
+          ' /tmp/caches.json > /tmp/prune.txt
+
+          DELETED=0; FREED=0; FAILED=0
+          # `|| [ -n "$line" ]` so a final line with no trailing newline is still processed —
+          # without it the last entry is silently skipped every time.
+          while read -r id size || [ -n "$id" ]; do
+            [ -z "$id" ] && continue
+            if gh api --method DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1; then
+              DELETED=$((DELETED + 1)); FREED=$((FREED + size))
+            else
+              FAILED=$((FAILED + 1))
+            fi
+          done < /tmp/prune.txt
+
+          echo "Pruned $DELETED seed cache(s), freeing $((FREED / 1073741824)) GB; $FAILED failed."
+          echo "Pruned **$DELETED** turbo-v1 seed cache(s), freeing **$((FREED / 1073741824)) GB**" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::warning::$FAILED seed cache(s) could not be deleted — they will age out via LRU."
+          fi
 
   # Nightly coverage lane. Runs ONLY on the scheduled backstop (plus manual dispatch), in its
   # own job so the backstop suite above is untouched: it executes the curated node-tier

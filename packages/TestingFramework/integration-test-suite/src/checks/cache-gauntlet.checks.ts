@@ -268,28 +268,30 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const created: MJUserSettingEntity[] = [];
             try {
                 // Floor first, for the same reason as CG1: TotalRowCount has to EXCEED the truncated
-                // row count for the #3195 collapse to be observable at all, and that needs at least
-                // two rows to exist before the slot is warmed.
-                for (let i = 1; i <= 2; i++) { created.push(await makeSetting(ctx, `cg5-floor-${i}`)); }
+                // row count for the #3195 collapse to be observable at all, and that needs more rows
+                // than the slot holds before the slot is warmed.
+                // The slot holds 2 rows, not 1: a full `MaxRows: 1` read deliberately skips the
+                // total count (#4450; #6000), so only `MaxRows` of 2 or more promises a DB total.
+                for (let i = 1; i <= 3; i++) { created.push(await makeSetting(ctx, `cg5-floor-${i}`)); }
                 await settle();
 
-                const warm = await rv.RunView(subsetParams(1), ctx.User);
+                const warm = await rv.RunView(subsetParams(2), ctx.User);
                 Assert(warm.Success, `subset warm failed: ${warm.ErrorMessage}`);
                 const before = warm.TotalRowCount ?? -1;
                 Assert(before > 0, `TotalRowCount must be populated on a subset slot (got ${before})`);
-                // The rows are truncated to 1, but the TOTAL must reflect the DB, not the slot size.
+                // The rows are truncated to 2, but the TOTAL must reflect the DB, not the slot size.
                 Assert(before > warm.Results.length,
                     `TotalRowCount (${before}) must exceed the truncated row count (${warm.Results.length}) — this is the #3195 collapse`);
 
                 created.push(await makeSetting(ctx, 'cg5'));
                 await settle();
 
-                const after = await rv.RunView(subsetParams(1), ctx.User);
+                const after = await rv.RunView(subsetParams(2), ctx.User);
                 Assert(after.Success, `post-save read failed: ${after.ErrorMessage}`);
-                AssertEqual(after.Results.length, 1, 'rows still capped at MaxRows:1');
+                AssertEqual(after.Results.length, 2, 'rows still capped at MaxRows:2');
                 AssertEqual(after.TotalRowCount ?? -1, before + 1,
                     `TotalRowCount must track the DB across a save (expected ${before + 1}, got ${after.TotalRowCount})`);
-                console.log(`      → subset slot: rows capped at 1, TotalRowCount tracked ${before} → ${before + 1}`);
+                console.log(`      → subset slot: rows capped at 2, TotalRowCount tracked ${before} → ${before + 1}`);
             } finally {
                 await destroy(created);
             }

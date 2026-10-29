@@ -52,13 +52,15 @@ export function encodeFloat32ToPcm16Base64(samples: Float32Array): string {
     return EncodeFloat32ToPcm16Base64(samples);
 }
 
+const INV_32768 = 1 / 0x8000;
+
 /** Converts raw PCM16 little-endian bytes to Float32 samples (truncates a trailing odd byte). */
 export function Pcm16ToFloat32(pcm: ArrayBuffer): Float32Array<ArrayBuffer> {
-    const even = pcm.byteLength - (pcm.byteLength % 2);
-    const ints = new Int16Array(pcm.slice(0, even));
-    const out = new Float32Array(ints.length);
-    for (let i = 0; i < ints.length; i++) {
-        out[i] = ints[i] / 0x8000;
+    const sampleCount = pcm.byteLength >>> 1;
+    const ints = new Int16Array(pcm, 0, sampleCount);
+    const out = new Float32Array(sampleCount);
+    for (let i = 0; i < sampleCount; i++) {
+        out[i] = ints[i] * INV_32768;
     }
     return out;
 }

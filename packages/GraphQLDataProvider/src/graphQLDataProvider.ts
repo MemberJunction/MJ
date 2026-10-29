@@ -17,7 +17,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
-         GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL } from "@memberjunction/core";
+         GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
+         GetEffectiveAlternateBaseViewName } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -332,6 +333,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * use GetGlobalObjectStore() directly with the same key format.
      */
     private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
+
+    /**
+     * Writable fields on specific entities that are computed or mutated server-side inside
+     * `BaseEntity.Save()` subclasses (e.g. `MJUserViewEntityServer` generating `WhereClause`,
+     * `SmartFilterWhereClause`, and `SmartFilterExplanation` via AI or stamping approval fields).
+     * Even when clean on the client, these fields must be requested in the GraphQL `Update`
+     * selection set so the client entity and local engine caches receive the server-derived values.
+     */
+    private static readonly _serverDerivedUpdateFieldsByEntity: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+        [
+            'MJ: User Views',
+            new Set([
+                'WhereClause',
+                'SmartFilterWhereClause',
+                'SmartFilterExplanation',
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+            ]),
+        ],
+        [
+            'MJ: Queries',
+            new Set([
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+                'UsesTemplate',
+                'TechnicalDescription',
+                'EmbeddingVector',
+                'EmbeddingModelID',
+            ]),
+        ],
+    ]);
 
     /**
      * Returns the singleton instance of GraphQLDataProvider.
@@ -958,16 +992,25 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * error carries them, and its message otherwise.
      */
     private static isUnsupportedDefinitionHashError(e: unknown): boolean {
-        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
-        if (errors && errors.length > 0) {
-            return errors.some(error => GraphQLDataProvider.isDefinitionHashSchemaRejection(error.message, error.extensions?.code));
-        }
-        return e instanceof Error && GraphQLDataProvider.isDefinitionHashSchemaRejection(e.message, undefined);
+        return GraphQLDataProvider.isSchemaRejection(e, GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS);
     }
 
-    /** True when `message` is one of the schema rejections and `code`, if given, is its code. */
-    private static isDefinitionHashSchemaRejection(message: string | undefined, code: string | undefined): boolean {
-        return GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS.some(rejection =>
+    /**
+     * True when one of the GraphQL errors `e` carries is one of `rejections`, with that rejection's
+     * code when the server sends one. Reads the structured GraphQL errors when the thrown error
+     * carries them, and its message otherwise.
+     */
+    private static isSchemaRejection(e: unknown, rejections: ReadonlyArray<{ Code: string; Message: string }>): boolean {
+        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
+        if (errors && errors.length > 0) {
+            return errors.some(error => GraphQLDataProvider.matchesSchemaRejection(rejections, error.message, error.extensions?.code));
+        }
+        return e instanceof Error && GraphQLDataProvider.matchesSchemaRejection(rejections, e.message, undefined);
+    }
+
+    /** True when `message` is one of `rejections` and `code`, if given, is its code. */
+    private static matchesSchemaRejection(rejections: ReadonlyArray<{ Code: string; Message: string }>, message: string | undefined, code: string | undefined): boolean {
+        return rejections.some(rejection =>
             !!message && message.includes(rejection.Message) && (code === undefined || code === rejection.Code));
     }
 
@@ -1157,6 +1200,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // so the default request is unchanged.
                 if (params.IncludeBinaryFields !== undefined)
                     innerParams.IncludeBinaryFields = params.IncludeBinaryFields;
+                // AlternateBaseView selects a registered EntityAlternateBaseView by Name, or "" to
+                // force the entity's default BaseView over a saved UserView pin. Also forwards a
+                // ViewEntity pin when ViewEntity itself is not serialized over the wire.
+                const singleEffectiveAbv = GetEffectiveAlternateBaseViewName(params) ?? params.AlternateBaseView;
+                if (singleEffectiveAbv !== undefined)
+                    innerParams.AlternateBaseView = singleEffectiveAbv;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1361,6 +1410,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.IncludeBinaryFields !== undefined) {
                         innerParam.IncludeBinaryFields = param.IncludeBinaryFields;
                     }
+                    const batchEffectiveAbv = GetEffectiveAlternateBaseViewName(param) ?? param.AlternateBaseView;
+                    if (batchEffectiveAbv !== undefined) {
+                        innerParam.AlternateBaseView = batchEffectiveAbv;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1463,7 +1516,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     ): Promise<RunViewsWithCacheCheckResponse<T>> {
         try {
             // Build the GraphQL input
-            const input = params.map(item => ({
+            const buildInput = (includeFieldSecurityKey: boolean) => params.map(item => ({
                 params: {
                     EntityName: item.params.EntityName || '',
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase
@@ -1487,6 +1540,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
                     // downgrades a DataSource:'Materialized' request to a live read.
                     DataSource: item.params.DataSource,
+                    // AlternateBaseView must be forwarded on the smart-cache-check batch transport too
+                    // (including a ViewEntity pin when ViewEntity itself is not serialized over the wire):
+                    // otherwise a CacheLocal batch requesting an alternate base view silently reads BaseView.
+                    AlternateBaseView: GetEffectiveAlternateBaseViewName(item.params) ?? item.params.AlternateBaseView,
                     // Forwarded on this transport too, so a CacheLocal batch that asked for binary
                     // fields gets them (the slot fingerprint already distinguishes the two widths).
                     IncludeBinaryFields: item.params.IncludeBinaryFields,
@@ -1502,6 +1559,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
                     rowCount: item.cacheStatus.rowCount,
+                    // Lets the server answer "stale" when this user's columns changed but no row did.
+                    // Left out for a server that predates it (see executeRunViewsCacheCheckGQL).
+                    ...(includeFieldSecurityKey && item.cacheStatus.fieldSecurityKey != null
+                        ? { fieldSecurityKey: item.cacheStatus.fieldSecurityKey } : {}),
                 } : null,
             }));
 
@@ -1546,7 +1607,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             `;
 
-            const responseData = await this.ExecuteGQL(query, { input });
+            const responseData = await this.executeRunViewsCacheCheckGQL(query, buildInput);
             const response = responseData?.['RunViewsWithCacheCheck'] as {
                 success: boolean;
                 errorMessage?: string;
@@ -1652,6 +1713,42 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
         }
     }
+
+    /**
+     * Runs the RunViewsWithCacheCheck query, sending each cache status's `fieldSecurityKey`.
+     *
+     * A server older than the field-security key rejects the field. The call is then retried once
+     * without it (the server falls back to row-only validation), and the field is left out of later
+     * calls for {@link DEFINITION_HASH_RETRY_MS} before it is tried again, the same pattern as the
+     * query definition hash.
+     *
+     * @param query - The RunViewsWithCacheCheck document
+     * @param buildInput - Builds the `input` variable, with or without the key
+     */
+    private async executeRunViewsCacheCheckGQL<TInput>(query: string, buildInput: (includeFieldSecurityKey: boolean) => TInput): Promise<Record<string, unknown> | null | undefined> {
+        const sendKey = this._fieldSecurityKeyUnsupportedUntil == null || Date.now() >= this._fieldSecurityKeyUnsupportedUntil;
+        try {
+            return await this.ExecuteGQL(query, { input: buildInput(sendKey) });
+        } catch (e) {
+            if (!sendKey || !GraphQLDataProvider.isSchemaRejection(e, GraphQLDataProvider.UNSUPPORTED_FIELD_SECURITY_KEY_ERRORS)) {
+                throw e;
+            }
+            this._fieldSecurityKeyUnsupportedUntil = Date.now() + GraphQLDataProvider.DEFINITION_HASH_RETRY_MS;
+            LogStatusEx({ message: 'RunViewsWithCacheCheck: the server does not support field-security cache keys — validating cached views by rows only', verboseOnly: true });
+            return await this.ExecuteGQL(query, { input: buildInput(false) });
+        }
+    }
+
+    /**
+     * When a server last rejected `fieldSecurityKey`, the time (ms) until which it is left out of
+     * RunViewsWithCacheCheck calls. Null while the server is assumed to support it.
+     */
+    private _fieldSecurityKeyUnsupportedUntil: number | null = null;
+
+    /** The error a server whose schema predates `fieldSecurityKey` returns: the input field fails variable coercion. */
+    private static readonly UNSUPPORTED_FIELD_SECURITY_KEY_ERRORS: ReadonlyArray<{ Code: string; Message: string }> = [
+        { Code: 'BAD_USER_INPUT', Message: 'Field "fieldSecurityKey" is not defined by type "RunViewCacheStatusInput"' },
+    ];
 
     protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: MJUserViewEntityExtended}> {
         let entityName: string;
@@ -2172,7 +2269,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
     private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
-        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
+        if (!entityInfo?.FieldLevelSecurityApplies || !this.CurrentUser) {
             return new Set<string>();
         }
         return entityInfo.GetDeniedReadFields(this.CurrentUser);
@@ -2194,7 +2291,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * non-nullable column is broken on such a server regardless.
      */
     private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
-        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+        return entityInfo?.FieldLevelSecurityApplies ? ReadableFieldsTransportKey : '';
     }
 
     /**
@@ -2433,6 +2530,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
                     (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
                 )));
+            const serverDerivedFields = GraphQLDataProvider._serverDerivedUpdateFieldsByEntity.get(entity.EntityInfo.Name);
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2445,6 +2543,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
+                        Boolean(serverDerivedFields?.has(f.Name)) ||
                         (!f.NotLoaded &&
                             !f.EntityFieldInfo.IsBinaryFieldType &&
                             (Boolean(f.EntityFieldInfo.IsVirtual) ||
@@ -2956,10 +3055,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 Results: null
             };
@@ -3104,10 +3203,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetStatusByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetStatusByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 EntityUpdateDates: null
             };

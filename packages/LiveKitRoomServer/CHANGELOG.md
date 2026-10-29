@@ -1,5 +1,54 @@
 # @memberjunction/livekit-room-server
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- c4645bc: Anonymous visitors are isolated from each other on three more paths. Every anonymous widget guest and anonymous magic-link invitee authenticates as the one shared Anonymous user, so any check that compares only `UserID` treats every visitor as the same person. A widget now mints a guest session only for a scope-isolated guest role: the stock `Widget Guest` role, or a role the deployment lists in `magicLink.grantableRoleNames`; a widget whose `GuestRoleID` is the stock `UI` role (whose row filters key on `UserID`, so under it visitors read and update each other's conversations and sessions through the generic API, MJ#6043) is refused at mint and at refresh with `guest_role_not_isolated`, and the API log names the widget and the fix. The text agent turn (`RunAIAgentFromConversationDetail`) now checks an anonymous caller's scope id against the conversation's `ExternalID` with the same `AuthorizeSessionAccess` decision the realtime gates use, before any reply row is written, so one guest can no longer run the agent in another guest's conversation (MJ#6032); named users are not read again and are unchanged. The LiveKit room gate's ownership rule no longer admits an anonymous caller by the shared `UserID` or by an offer that names it (MJ#6044): an anonymous visitor joins a call or agent-session room only when it owns one of the room's agent sessions by scope, decided by the same `AuthorizeSessionAccess` the realtime gates use. MJServer registers that check at startup through the new `RoomAuthorizationService.SetAnonymousSessionOwnerCheck`; with none registered, every anonymous caller is refused those rooms.
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [f7a43b2]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [e8e6cd6]
+- Updated dependencies [142d524]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/aiengine@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-bridge-server@6.2.0-edge.6
+  - @memberjunction/network-utils@6.2.0-edge.6
+  - @memberjunction/ai-prompts@6.2.0-edge.6
+  - @memberjunction/storage@6.2.0-edge.6
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.6
+  - @memberjunction/ai-bridge-livekit-native@6.2.0-edge.6
+  - @memberjunction/ai-bridge-base@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes
