@@ -310,7 +310,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
             }
 
-            this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
+            this.ListenForEntityMessages(record, pubSub, context.userPayload);
 
             // Attempt to save the query
             const saveResult = await record.Save();

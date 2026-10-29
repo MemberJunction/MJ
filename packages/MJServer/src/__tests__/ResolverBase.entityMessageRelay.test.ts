@@ -62,6 +62,7 @@ import type { UserPayload } from '../types.js';
 import { BuildUser, EmployeeEntity, FullWidthEmployeeRow, HR_ROLE_ID, SECRET_SALARY } from './fieldSecurityFixtures.js';
 
 const SUBSCRIPTIONS_KEY = '___MJServer___ResolverBase___EventSubscriptions';
+const ACTIVE_SESSIONS_KEY = '___MJServer___ResolverBase___ActiveEntitySessions';
 
 /** An entity object of `entityInfo` loaded by `owner`, holding the full row. */
 function entityOwnedBy(entityInfo: EntityInfo, owner: UserInfo) {
@@ -79,8 +80,14 @@ function entityOwnedBy(entityInfo: EntityInfo, owner: UserInfo) {
 type OwnedEntity = ReturnType<typeof entityOwnedBy>;
 
 class TestResolver extends ResolverBase {
-    public Listen(entity: OwnedEntity, sessionUser: UserInfo) {
-        this.ListenForEntityMessages(entity as unknown as BaseEntity, {} as PubSubEngine, { sessionId: 'session-a', userRecord: sessionUser } as UserPayload);
+    public CloudEventCount = 0;
+
+    protected override async EmitCloudEvent(): Promise<void> {
+        this.CloudEventCount++;
+    }
+
+    public Listen(entity: OwnedEntity, sessionUser: UserInfo, sessionId = 'session-a') {
+        this.ListenForEntityMessages(entity as unknown as BaseEntity, {} as PubSubEngine, { sessionId, userRecord: sessionUser } as UserPayload);
     }
 }
 
@@ -102,6 +109,8 @@ function resetListeners(): void {
     const subscriptions = store[SUBSCRIPTIONS_KEY] as Map<string, Subscription> | undefined;
     subscriptions?.forEach(s => s.unsubscribe());
     subscriptions?.clear();
+    const activeSessions = store[ACTIVE_SESSIONS_KEY] as Map<string, Map<string, object>> | undefined;
+    activeSessions?.clear();
 }
 
 let userA: UserInfo;
@@ -172,5 +181,47 @@ describe('ResolverBase.ListenForEntityMessages: relay to the listening session',
         expect(statusUpdates).toHaveLength(1);
         expect(JSON.parse(statusUpdates[0].message!).message).toBe('step 2 of 5');
         expect(statusUpdates[0].ownerUserId).toBe('user-a');
+    });
+
+    it('REGRESSION: routes status updates to subsequent users on the same entity type while emitting CloudEvent once', async () => {
+        const entityInfo = EmployeeEntity(false);
+        const resolver = new TestResolver();
+
+        // userA registers first on Employees, then userB registers second on Employees
+        resolver.Listen(entityOwnedBy(entityInfo, userA), userA, 'session-a');
+        resolver.Listen(entityOwnedBy(entityInfo, userB), userB, 'session-b');
+
+        // Event raised by userB's entity MUST reach userB's session (not be dropped because userA registered first!)
+        raise(entityOwnedBy(entityInfo, userB), 'other', 'userB progress');
+        await settle();
+
+        expect(statusUpdates).toHaveLength(1);
+        expect(statusUpdates[0].sessionId).toBe('session-b');
+        expect(statusUpdates[0].ownerUserId).toBe('user-b');
+        expect(JSON.parse(statusUpdates[0].message!).message).toBe('userB progress');
+        expect(resolver.CloudEventCount).toBe(1);
+
+        // And userA still receives userA's own events without leaking to userB
+        raise(entityOwnedBy(entityInfo, userA), 'other', 'userA progress');
+        await settle();
+
+        expect(statusUpdates).toHaveLength(2);
+        expect(statusUpdates[1].sessionId).toBe('session-a');
+        expect(statusUpdates[1].ownerUserId).toBe('user-a');
+        expect(resolver.CloudEventCount).toBe(2);
+    });
+
+    it('fans out status updates across multiple active browser sessions for the same user without duplicating CloudEvents', async () => {
+        const entityInfo = EmployeeEntity(false);
+        const resolver = new TestResolver();
+
+        resolver.Listen(entityOwnedBy(entityInfo, userA), userA, 'session-a-tab1');
+        resolver.Listen(entityOwnedBy(entityInfo, userA), userA, 'session-a-tab2');
+
+        raise(entityOwnedBy(entityInfo, userA), 'other', 'tab sync');
+        await settle();
+
+        expect(statusUpdates.map((u) => u.sessionId).sort()).toEqual(['session-a-tab1', 'session-a-tab2']);
+        expect(resolver.CloudEventCount).toBe(1);
     });
 });

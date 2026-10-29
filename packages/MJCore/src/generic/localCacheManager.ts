@@ -1,4 +1,4 @@
-import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType, IsValueEncrypted, ENCRYPTED_SENTINEL } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
 import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
@@ -1983,7 +1983,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 LogStatusVerbose(`LocalCacheManager: remote-invalidate (save) for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
 
-                const rowComplete = LocalCacheManager.RowHasEveryField(entityInfo, recordData); // per row, not per slot
+                const rowComplete = LocalCacheManager.RowHasEveryField(entityInfo, recordData)
+                    && !LocalCacheManager.RowContainsPlaintextEncryptedField(entityInfo, recordData); // per row, not per slot
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
                         // Subset slot (MaxRows/StartRow): upserting would grow the slot past the
@@ -2109,9 +2110,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             await this.invalidateIfNotMaintained(fingerprint, maintained);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
             // Unfiltered cache: update the record in place, unless the saved row is missing columns
+            // or carries decrypted plaintext on an Encrypt=true field (BaseEntity.GetAll() holds
+            // in-memory plaintext after Save(), which must never be persisted to shared cache/Redis).
             const entityData = baseEntity.GetAll() as Record<string, unknown>;
-            if (!LocalCacheManager.RowHasEveryField(baseEntity.EntityInfo, entityData)) {
-                LogStatusVerbose(`LocalCacheManager: Invalidating "${fingerprint.substring(0, 60)}" — the saved row is missing columns`);
+            if (
+                !LocalCacheManager.RowHasEveryField(baseEntity.EntityInfo, entityData) ||
+                LocalCacheManager.RowContainsPlaintextEncryptedField(baseEntity.EntityInfo, entityData)
+            ) {
+                LogStatusVerbose(`LocalCacheManager: Invalidating "${fingerprint.substring(0, 60)}" — the saved row is missing columns or holds decrypted plaintext`);
                 await this.InvalidateRunViewResult(fingerprint);
                 return;
             }
@@ -2160,15 +2166,55 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         return true;
     }
 
-    /** Whether every saved row among `changes` carries every column ({@link RowHasEveryField}). */
+    /**
+     * Returns `true` when `entity` declares one or more encrypted fields (`Encrypt && EncryptionKeyID`)
+     * and `row` contains a non-empty string value for any such field that is neither ciphertext
+     * (`$ENC$...`) nor `ENCRYPTED_SENTINEL`.
+     *
+     * Used as a defense-in-depth gate so decrypted in-memory entity values (e.g. from
+     * `BaseEntity.GetAll()` during `save` events) are never written in plaintext to local or
+     * distributed Redis caches.
+     */
+    public static RowContainsPlaintextEncryptedField(
+        entity: EntityInfo | null | undefined,
+        row: object | null | undefined,
+    ): boolean {
+        if (!entity || !row || typeof row !== 'object') {
+            return false;
+        }
+        const encryptedFields = Array.isArray(entity.EncryptedFields)
+            ? entity.EncryptedFields
+            : Array.isArray(entity.Fields)
+              ? entity.Fields.filter(f => f.Encrypt && Boolean(f.EncryptionKeyID))
+              : [];
+        if (encryptedFields.length === 0) {
+            return false;
+        }
+        const rowMap = row as Record<string, string | number | boolean | null | undefined>;
+        for (const field of encryptedFields) {
+            if (!field.EncryptionKeyID) continue;
+            const val = rowMap[field.Name];
+            if (typeof val === 'string' && val.length > 0 && val !== ENCRYPTED_SENTINEL && !IsValueEncrypted(val)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether every saved row among `changes` carries every column ({@link RowHasEveryField}) and no plaintext encrypted values. */
     private static everySavedRowComplete(changes: BufferedEntityChange[]): boolean {
-        return changes.every(c => c.Type !== 'save' || LocalCacheManager.RowHasEveryField(c.EntityInfo, c.Record));
+        return changes.every(
+            c =>
+                c.Type !== 'save' ||
+                (LocalCacheManager.RowHasEveryField(c.EntityInfo, c.Record) &&
+                    !LocalCacheManager.RowContainsPlaintextEncryptedField(c.EntityInfo, c.Record)),
+        );
     }
 
     /**
      * True when a saved row may be written into `fingerprint`'s slot in place: the slot is neither
      * filtered (including row-security and field-security segments) nor a subset, and the row
-     * carries every column ({@link RowHasEveryField}). Otherwise the slot must be invalidated.
+     * carries every column ({@link RowHasEveryField}) with no plaintext secrets. Otherwise the slot must be invalidated.
      *
      * @param fingerprint - The slot to maintain
      * @param entity - The saved record's entity
@@ -2177,7 +2223,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     public CanUpsertRowIntoSlot(fingerprint: string, entity: EntityInfo | null | undefined, row: Record<string, unknown> | null | undefined): boolean {
         return !this.isFilteredFingerprint(fingerprint)
             && !this.isSubsetFingerprint(fingerprint)
-            && LocalCacheManager.RowHasEveryField(entity, row);
+            && LocalCacheManager.RowHasEveryField(entity, row)
+            && !LocalCacheManager.RowContainsPlaintextEncryptedField(entity, row);
     }
 
     /**
@@ -3026,6 +3073,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 // one, skip the write entirely (fail-safe against the stale-forever hazard).
                 if (entity?.ExternalDataSourceID && !ttlMs) {
                     LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for external entity "${params.EntityName}" — no TTL provided (would never invalidate)`, verboseOnly: true });
+                    return;
+                }
+                // Defense-in-depth on server caches (TrustLocalCacheCompletely === true):
+                // never persist decrypted plaintext values for Encrypt=true columns into shared/Redis cache.
+                const cacheProvider = provider as (IMetadataProvider & { TrustLocalCacheCompletely?: boolean }) | null;
+                if (
+                    entity &&
+                    cacheProvider?.TrustLocalCacheCompletely === true &&
+                    !options?.ProviderInternalScaffolding &&
+                    Array.isArray(results) &&
+                    results.some(r => typeof r === 'object' && r !== null && LocalCacheManager.RowContainsPlaintextEncryptedField(entity, r))
+                ) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping server cache write for "${params.EntityName}" — rows contain decrypted plaintext for an encrypted field`, verboseOnly: true });
                     return;
                 }
             } catch (err) {

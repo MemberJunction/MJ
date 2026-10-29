@@ -120,7 +120,11 @@ export interface RunViewTelemetryOptions {
  * client's request body (the REST endpoint) removes these before running the view, so a client
  * cannot choose them. GraphQL run inputs never carry them in the first place.
  */
-export const SERVER_ONLY_RUN_VIEW_PARAMS: ReadonlyArray<keyof RunViewParams> = ['TimeZone', 'ServerProperties'];
+export const SERVER_ONLY_RUN_VIEW_PARAMS: ReadonlyArray<keyof RunViewParams> = [
+    'TimeZone',
+    'ServerProperties',
+    'PreserveRestrictedApiCiphertext',
+];
 
 /** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_VIEW_PARAMS} fields. */
 export function StripServerOnlyRunViewParams(params: RunViewParams): RunViewParams {
@@ -516,6 +520,18 @@ export class RunViewParams {
      * fingerprint.
      */
     ServerProperties?: ViewPropertyValues;
+
+    /**
+     * Server-only transport optimization flag set by API boundary layers (`ResolverBase` / GraphQL).
+     *
+     * When `true`, database providers leave `Encrypt = true` fields whose `AllowDecryptInAPI` is
+     * `false` in their stored ciphertext form instead of decrypting them on read only for the API
+     * layer to re-encrypt (when `SendEncryptedValue = true`) or mask with `ENCRYPTED_SENTINEL`
+     * (when `SendEncryptedValue = false`). Stripped from client-supplied REST bodies via
+     * {@link SERVER_ONLY_RUN_VIEW_PARAMS} and excluded from cache fingerprints (cache slots always
+     * store ciphertext at rest).
+     */
+    PreserveRestrictedApiCiphertext?: boolean;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.

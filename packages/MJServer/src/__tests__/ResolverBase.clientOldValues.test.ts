@@ -208,39 +208,13 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         expect(errorLogSaves).toHaveLength(0);
     });
 
-    it('detects a concurrent modification when the dirty field DB value differs from OldValues___', async () => {
+    it('rejects a conflicting concurrent modification with CONCURRENT_MODIFICATION_CONFLICT while logging SAVE_INCONSISTENCY', async () => {
         const errorLogSaves: Array<Record<string, unknown>> = [];
         const { entity, user } = createLoadedTagEntity(errorLogSaves);
 
-        // Client thinks Display_Name was 'Stale Client Display', but DB currently has 'Original Display'
-        await probe.TestAndSet(
-            entity,
-            {
-                ID: '11111111-2222-3333-4444-555555555555',
-                Display_Name: 'Client New Display',
-                OldValues___: [
-                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
-                    { Key: 'Display_Name', Value: 'Stale Client Display' },
-                ],
-            },
-            user
-        );
-
-        // Warning is logged to ErrorLog, and save still applies the new value
-        expect(errorLogSaves).toHaveLength(1);
-        expect(errorLogSaves[0].Code).toBe('SAVE_INCONSISTENCY');
-        // ErrorLog.Code is NCHAR(20)
-        expect(String(errorLogSaves[0].Code).length).toBeLessThanOrEqual(20);
-        expect(String(errorLogSaves[0].Message)).toContain('Display_Name');
-        expect(entity.Get('Display Name')).toBe('Client New Display');
-        expect(entity.Get('Description')).toBe('Untouched DB Description');
-    });
-
-    it('reports the entity name and the reason when the ErrorLog save fails', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        const { entity, user } = createLoadedTagEntity([], 'value too long for Code');
-        try {
-            await probe.TestAndSet(
+        // Client thinks Display_Name was 'Stale Client Display', DB has 'Original Display', and client tries to write 'Client New Display'
+        await expect(
+            probe.TestAndSet(
                 entity,
                 {
                     ID: '11111111-2222-3333-4444-555555555555',
@@ -251,7 +225,65 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
                     ],
                 },
                 user
-            );
+            )
+        ).rejects.toMatchObject({
+            extensions: {
+                code: 'CONCURRENT_MODIFICATION_CONFLICT',
+                entityName: 'MJ: Tags',
+                conflictingFields: ['Display_Name'],
+            },
+        });
+
+        // Warning is logged to ErrorLog, and the conflicting DB field is NOT overwritten
+        expect(errorLogSaves).toHaveLength(1);
+        expect(errorLogSaves[0].Code).toBe('SAVE_INCONSISTENCY');
+        // ErrorLog.Code is NCHAR(20)
+        expect(String(errorLogSaves[0].Code).length).toBeLessThanOrEqual(20);
+        expect(String(errorLogSaves[0].Message)).toContain('Display_Name');
+        expect(entity.Get('Display Name')).toBe('Original Display');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
+    });
+
+    it('allows idempotent concurrent convergence when ClientNewValue already matches the current DB value', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const { entity, user } = createLoadedTagEntity(errorLogSaves);
+
+        // Client thinks Display_Name was 'Stale Client Display', and wants 'Original Display' — which DB already holds
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: '11111111-2222-3333-4444-555555555555',
+                Display_Name: 'Original Display',
+                OldValues___: [
+                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                    { Key: 'Display_Name', Value: 'Stale Client Display' },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Display Name')).toBe('Original Display');
+    });
+
+    it('reports the entity name and the reason when the ErrorLog save fails before throwing CONCURRENT_MODIFICATION_CONFLICT', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { entity, user } = createLoadedTagEntity([], 'value too long for Code');
+        try {
+            await expect(
+                probe.TestAndSet(
+                    entity,
+                    {
+                        ID: '11111111-2222-3333-4444-555555555555',
+                        Display_Name: 'Client New Display',
+                        OldValues___: [
+                            { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                            { Key: 'Display_Name', Value: 'Stale Client Display' },
+                        ],
+                    },
+                    user
+                )
+            ).rejects.toThrow(/Concurrent modification conflict/);
             const message = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
             expect(message).toContain('Failed to save ErrorLog record');
             expect(message).toContain('value too long for Code');
@@ -261,7 +293,7 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         }
     });
 
-    it('does not false-positive when a non-overlapping field differs in the DB', async () => {
+    it('merges non-overlapping concurrent edits without overwriting fields that changed in the DB', async () => {
         const errorLogSaves: Array<Record<string, unknown>> = [];
         const { entity, user } = createLoadedTagEntity(errorLogSaves);
 
@@ -283,9 +315,11 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — partial delta Upd
         );
 
         // Description had a DB difference ('Untouched DB Description' !== 'Old Desc'),
-        // but client was NOT changing Description ('Old Desc' === 'Old Desc'), so overlap is empty!
+        // and client was NOT changing Description ('Old Desc' === 'Old Desc'): overlap is empty,
+        // Name is updated, AND Description keeps the concurrent DB value instead of being clobbered!
         expect(errorLogSaves).toHaveLength(0);
         expect(entity.Get('Name')).toBe('RenamedTag');
+        expect(entity.Get('Description')).toBe('Untouched DB Description');
     });
 });
 
