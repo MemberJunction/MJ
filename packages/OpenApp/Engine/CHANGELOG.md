@@ -1,5 +1,206 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 281724a: Round 2 Citizen Agent Builder feedback fixes and local development JWT auth provider (`local`):
+  - **Local Development Mock/Test JWT Auth (`local`)**: Added `LocalDevProvider` in `@memberjunction/auth-providers`, `/auth/dev-login` and `/auth/dev-users` endpoints in `@memberjunction/server` backed by `MagicLinkKeyManager` RS256 signing, `MJLocalDevProvider` in `@memberjunction/ng-auth-services`, and `AuthProvider: "local"` support in `@memberjunction/installer`. Enforced strict security guards: server startup refuses to boot if `MJ_DEV_AUTH_ENABLED=true` when `NODE_ENV=production`, and `/auth/dev-login` / `/auth/dev-users` reject any non-localhost request (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `CF-Connecting-IP`, `Sec-Fetch-Site: cross-site`, `Host`, `Origin`, `Referer`, and socket remote address).
+  - **Single-Tarball OpenApp Archive Download**: Updated `GitHubClient` in `@memberjunction/open-app-engine` to download and extract `.sql` migrations from a single repository `.tar.gz` archive stream (`downloadTarballArchive`) instead of per-directory and per-file Contents/Blob API calls, avoiding anonymous GitHub API rate limits and large-file truncation.
+  - **Flow Agent & CLI Execution Fixes**: Enabled in-process `inRun` execution for Flow agents when no `AgentStepNode` task handler is registered, populated `userMessage` and `payload` in Flow prompt step context, supported multiple starting steps and join deferral, added `--prompt-file` (`-f`) to `mj ai agents run`, and wired `ClientClauseScreen` entity-view authorization for ad-hoc queries in `@memberjunction/ai-cli`.
+  - **Query Action Output & Truncation**: Updated `RunStoredQueryAction` and `RunAdhocQueryAction` in `@memberjunction/core-actions` to populate structured `Results`, `RowCount`, and `TotalRowCount` output parameters, raised default `ColumnMaxLength` to `500`, and appended `...[truncated]` when values are truncated.
+  - **Citizen Builder Template & Turbo Pass-Through**: Updated `citizen-builder` starter template to default to `Loop` agents, bind Docker host ports to `127.0.0.1`, pass `AI_VENDOR_API_KEY__*` and `MJ_*` through `turbo.json`, auto-select free host ports and unique `COMPOSE_PROJECT_NAME` in `mj agent init`, and added `AI_TURBO_ENV_PASSTHROUGH` doctor check in `@memberjunction/installer`.
+
+### Patch Changes
+
+- 9241c65: Tell a missing GitHub credential apart from a missing tag when installing an Open App from a private repository (#4505). GitHub returns 404 rather than 403 for a repo it will not show you, so `mj app install` reported `Tag 'vX.Y.Z' not found` — and pointed at the repo's `/tags` page, where a signed-in maintainer sees the tag and concludes the CLI is right. The engine now probes repository visibility on the 404 path and names all three ways to supply a credential — `GITHUB_TOKEN`, `openApps.github.token`, and the per-repo `openApps.github.tokens` map — when none was supplied, and `mj app install --help` documents them.
+
+  Behavioral note for consumers of `@memberjunction/open-app-engine` directly: `ValidateGitHubTag` and `FetchManifestFromGitHub` now issue one extra `GET /repos/{owner}/{repo}` request on every 404, so a caller validating many tags against an unauthenticated rate-limit budget spends two calls per miss instead of one.
+
+  Two related fixes on the same path. An `openApps.github.tokens` entry keyed by the repository URL now also applies when a multi-app Open App is installed by its subpath URL (`https://github.com/<owner>/<repo>/<subpath>`); before, the token was not sent. An entry keyed by the exact subpath URL still wins. The "Available versions" link for such an app now points at the repository's tags page; before, it kept the subpath and led to a 404 page. And `mj app install` / `mj app upgrade` now exit 1 after one failure line when the install or upgrade fails; before, they printed a second failure line and `Error: EEXIT: 1`, and exited 2.
+
+  `mj app upgrade <app>` with no `--version` now says why it could not resolve a version: for a repository the credential cannot see, it names the missing or insufficient credential instead of `Could not determine target version`. `@memberjunction/open-app-engine` exports one new function for this, `DescribeUnresolvedVersion(repoUrl, options, subpath?)`; nothing existing changed signature.
+
+- 10ba687: Open App manifests can declare where a package runs: `platform: "node" | "browser" | "both"` on any `packages` entry. `mj app install` no longer writes Node-only `shared` packages into `dynamicPackages.client`, so an app that ships an actions package under `shared` can no longer break the host Explorer's build with unresolvable `fs` / `child_process` imports from `@google-cloud/storage` (#4428).
+
+  `platform` defaults to `node` for role `actions` and `both` for every other role, so a manifest with no `role: "actions"` entry routes exactly as before. A `role: "actions"` entry with no `platform` does change: under `shared` it no longer reaches `dynamicPackages.client`, and under `client` it is now rejected at validation. An app that declares a Node-only package under `shared` with role `library` (bizapps-ats and bizapps-caliber do, as of this release) should add `"platform": "node"` to that entry, or move it to `server`. Once an app's manifest does that, hosts already carrying the bad entry drop it on their next `mj app upgrade`, which prunes against the corrected rule — the self-heal only takes effect after the publisher ships that manifest change; it does not happen on its own against an unchanged manifest.
+
+  A manifest that puts `platform: "node"` in `client[]` (or `"browser"` in `server[]`) is now rejected at validation with a message naming the package. A `platform` value other than `node`, `browser` or `both` is rejected everywhere a manifest is read: `mj app install`, `mj dev workspace`, and the dynamic-package loader in a process running inside an Open App repository, which now warns with the file, package and value and loads none of that manifest's packages — the same handling as an unparseable `mj-app.json` — instead of silently skipping only the mistyped package.
+
+- edb0eaf: A monorepo app's version tag is resolved from the tag that exists rather than composed from the app's repo subpath, so an app whose repository tags by package name can be version-resolved, upgraded and pinned instead of only installed at HEAD. All three consumers change together — the tag lookup, the manifest fetch, and the migration download. The migration download mattered most: it always has a version, so it never fell back to HEAD, and a package-tagged app with migrations failed in the Migration phase on every install and upgrade — while the PostgreSQL `-pg` probe, which reads a 404 as "no PG variant here", skipped that app's PG migrations silently.
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/sql-dialect@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/record-cloning@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- d26183d: Fix CodeQL insecure-randomness and filesystem-race findings in runtime code (#5574).
+  - **Open App installs** download migration and teardown SQL into a fresh private temp directory (`mkdtempSync`) instead of a predictable `mj-app-<name>-<timestamp>` path that reused any directory already there.
+  - **Password generation** picks and shuffles characters with `crypto.randomInt`, removing the modulo bias of `randomBytes % length`.
+  - **Number pool `Random` selection** and the **Pi harness session id** use `node:crypto` instead of `Math.random`.
+  - **SQL log reads** drop the existence check before reading; a missing file is still reported through the existing `ENOENT` handling.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/record-cloning@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 0e5a4cd: Template users: an account set up to be copied, with its pinned apps, views, settings, dashboards and Skip conversations, so a new user starts with all of it.
+  - **`User.IsTemplate`** (migration). The User form shows it under Account Settings. A copy is never a template itself.
+  - **The `template` preset on `MJ: Users`** copies a template user whole: views, settings, dashboards with their categories and links, conversations with their messages, and the artifacts and versions in them. Dashboard layouts, pinned items and artifact references point at the copies. The planner refuses the preset for any user not flagged `IsTemplate` (`TEMPLATE_SOURCE_REQUIRED`), so one person's private work is never copied to another. Only a template-mode preset may open a Locked edge or copy an entity marked `CloneableFromTemplate` (conversations and their messages); request overrides still cannot.
+  - **First sign-in.** `userHandling.newUserTemplate: { email, preset }` in `mj.config.cjs` makes MJAPI create each new user as a copy of that template. Any problem falls back to a plain user, so sign-in never breaks.
+  - **`mj user clone`** creates a user as a copy of another: `--from`, `--email`, `--first`, `--last`, `--preset` (default `template`), `--inactive`, `--dry-run`.
+  - **Open Apps can ship a template user.** `templateUser: { email, description?, preset?, newUsers?: offer | always | never }` in `mj-app.json`. After install, the installer gets their own copy, from `MJ_INSTALL_USER_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` or prompts. The template can also be set for later sign-ins (`MJ_INSTALL_TEMPLATE_FOR_NEW_USERS`). The step only warns on failure; it never fails the install.
+  - **Explorer** shows a red banner while a template user is signed in, because everything changed there reaches every later copy.
+
+  Fixes found on the way:
+  - **CurrentUser** now returns `IsTemplate`, `FirstLast` and the `Employee*` fields. It returned null for every `UserInfo` field missing from its hand-written list. The list is now `SessionUserFields`, with a test that it covers every field the client requests.
+  - **Artifact version saves inside a transaction.** `MJArtifactVersionEntityServer` read attributes through the global provider. On a server's per-request provider, inside a clone's transaction, each read waited about 30 s on the transaction's own locks. A 23-version copy took 11 minutes instead of seconds. It now reads through the entity's provider.
+  - **Copies keep their rows' order.** The dependency walker reads children oldest first (`__mj_CreatedAt`). A row whose remapped column points only at its own ancestors, such as a copied user's messages naming the new user, now saves within the graph save instead of after it. Copied conversations kept their messages, but showed each answer above its question.
+  - **User copies keep dashboard and view names.** The entities' `(copy)` rename applies only where a name could collide. A user copy owns its rows, so the rename only mislabelled them.
+  - Record cloning: `Child.JoinField` preset keys, case-insensitive key lookup in JSON remap, Golden Layout and top-level-array JSON remap paths, and a descendant's `JsonRemap` merged with the entity's own.
+  - A conversation message can be created during a clone save (`CloneContext`) by a user who doesn't own the conversation yet. Updates and deletes are still checked.
+
+### Patch Changes
+
+- 5b2162c: Use Skyway 0.7.1. Migration errors now keep the real cause: when a failed batch had already aborted its transaction (a timeout or severe error), the follow-up rollback's "Transaction has been aborted" no longer replaces the batch's own error, and driver errors keep their full detail (message number, procedure and line, earlier errors in the batch). Skyway 0.7.0 also lets a migration opt out of its transaction with a Flyway-style `<file>.sql.conf` containing `executeInTransaction=false`; migrations without one behave as before.
+- 7d5097d: `mj app install` is more robust for clean installs: package installs run asynchronously with a 30-minute default ceiling (override with `MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS`) instead of a blocking 5-minute `execFileSync`; transient GitHub failures (connection resets, timeouts, 502/503/504) are retried with backoff instead of failing the whole dependency chain; and an app left Disabled because its packages did not install is reported as such — with the real remedy — instead of "Successfully installed" and an "npm auth" guess.
+
+  `mj install --yes` no longer warns that config files were "created with default/empty values" when every value was supplied; it now names only the required connection values that are actually unset.
+
+  On macOS, `mj install`, `mj app install`, `mj app upgrade` and `mj migrate` keep the machine awake while they run (a `caffeinate` assertion tied to the CLI process; `MJ_ALLOW_SLEEP=1` opts out). Sleeping mid-install paused the local database and every connection, and on wake in-flight migration batches reported spurious 300-second timeouts and downloads reported `ECONNRESET` — the cause of every intermittent chained-install failure seen in clean-install testing.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/record-cloning@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 506f170: `mj app upgrade` now refreshes an app's `SchemaName` from its manifest, so a corrected schema name — in practice a corrected CASING — no longer has to survive as install-time debris.
+
+  `OpenApp.SchemaName` is a denormalized copy of `mj-app.json` → `schema.name`, and it was written ONLY by install. Upgrade rewrote `ManifestJSON` right next to it and left the column alone, so an app whose manifest later fixed its schema name kept the original value forever.
+
+  That stale value is not inert. CodeGen's `spUpdateSchemaInfoFromDatabase` backfills `SchemaInfo.CanonicalSchemaName` FROM this column, and `vwEntities` prefers `CanonicalSchemaName` when deriving entity `ClassName`/`CodeName` — as does the runtime GraphQL type-name path. So stale casing propagated into the GraphQL operation names a client constructs, which no longer matched the server's generated resolvers: every operation on the app's entities failed with `GRAPHQL_VALIDATION_FAILED`. Worse, the backfill only ever FILLS NULLS, so once a wrong casing was frozen onto `SchemaInfo` no later codegen pass corrected it.
+  - `UpgradeApp` writes `SchemaName` alongside `ManifestJSON` in its Step 9 record update, keeping the column in lockstep with the manifest that is the documented source of truth. Written only when the manifest declares a schema, so a schema-less app's column is left untouched.
+  - `UpgradeApp` also calls `PersistCanonicalSchemaName`, mirroring the install path (Steps 6-7), which re-asserts the canonical name on the app's `SchemaInfo` row. Its UPDATE is unconditional rather than fill-NULLs-only, so this is the one path that HEALS a row already frozen from a stale column. Best-effort by contract (warns, never fatal) and idempotent.
+
+  A casing correction is detected as a schema rename by `PruneStaleServerConfig`, which strips the old name's `entityPackageName` mapping and `excludeSchemas` entry — correct, since those config keys are case-sensitive. That detection reads the previous manifest before Step 9 overwrites it, so it is unaffected.
+
+  No behaviour change for an app whose manifest schema name has not changed: both writes resolve to the value already stored.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

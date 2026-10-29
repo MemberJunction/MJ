@@ -23,7 +23,7 @@ const loadNgDashboardsActionsDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (19 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -47,7 +47,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (38 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (40 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -119,6 +119,12 @@ const loadNgDashboardsTestingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./work-queue-dashboards.module (1 entries) ---
+const loadNgDashboardsWorkQueueDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/work-queue-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/work-queue-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (3 entries) ---
 const loadNgDashboardsWorkflowsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/workflows-dashboards.module',
@@ -160,6 +166,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffDashboard': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::FeaturePipelinesResource': loadNgDashboardsAiDashboardsModule,
@@ -204,6 +212,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::BulkOperationsRunHistory': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ClassRegistryInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::DashboardBrowserResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::DashboardsCategoriesResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::EventMonitorInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
@@ -211,6 +220,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::InteractionOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LazyModuleStatusInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::LoginStudioResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsAuditLogResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsResourceAccessResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsUserAccessResource': loadNgDashboardsCoreDashboardsModule,
@@ -290,6 +300,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::TestingReviewResource': loadNgDashboardsTestingDashboardsModule,
   'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./work-queue-dashboards.module
+  'BaseDashboard::WorkQueueDashboard': loadNgDashboardsWorkQueueDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./workflows-dashboards.module
   'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
   'BaseResourceComponent::WorkflowRunsResource': loadNgDashboardsWorkflowsDashboardsModule,
@@ -308,4 +321,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 124;
+export const LAZY_FEATURE_CONFIG_COUNT = 129;

@@ -10,6 +10,7 @@
         "field": "Name"
       }
     },
+    "ignoreVirtualFields": true,
     "externalizeFields": [
       { "field": "Configuration.ReplayScript", "pattern": "@file:regression/scripts/{Name}.json" },
       { "field": "Configuration.PendingReplayScript", "pattern": "@file:regression/scripts/{Name}.pending.json" }

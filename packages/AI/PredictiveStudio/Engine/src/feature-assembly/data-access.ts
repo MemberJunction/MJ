@@ -51,6 +51,12 @@ export interface FetchRowsResult {
   Success: boolean;
   /** The fetched rows (empty when `Success` is false). */
   Rows: SourceRow[];
+  /**
+   * Rows matching the read's filter as counted by the database, whatever cap applied. Equals `Rows.length` for an
+   * uncapped read and is larger when `MaxRows` cut the read short. Required so an implementation that forgets the
+   * count cannot switch the read-cap refusal off (it compares this against the cap; fail closed). `0` on a failed read.
+   */
+  TotalRowCount: number;
   /** Error detail when `Success` is false. */
   ErrorMessage?: string;
 }
@@ -89,23 +95,20 @@ export interface IFeatureDataAccess {
 /**
  * Production {@link IFeatureDataAccess} backed by `@memberjunction/core`'s
  * `RunView`. Always passes `contextUser` so server-side reads honor per-user
- * data isolation. Constructed with an optional `IMetadataProvider` for
- * multi-provider correctness (CLAUDE.md) — the provider, when supplied, is the
- * one the reads run against.
+ * data isolation, and always reads through the caller's `IMetadataProvider`
+ * (multi-provider correctness — there is no global-provider fallback).
  */
 export class RunViewDataAccess implements IFeatureDataAccess {
   private readonly runView: RunView;
-  private readonly contextUser?: UserInfo;
-  private readonly provider?: IMetadataProvider;
+  private readonly contextUser: UserInfo;
 
   /**
-   * @param contextUser the request's user — REQUIRED on the server for isolation/audit
-   * @param provider optional provider for multi-provider scenarios (defaults to global)
+   * @param contextUser the request's user (isolation/audit)
+   * @param provider the provider every read runs on
    */
-  constructor(contextUser?: UserInfo, provider?: IMetadataProvider) {
+  constructor(contextUser: UserInfo, provider: IMetadataProvider) {
     this.contextUser = contextUser;
-    this.provider = provider;
-    this.runView = this.provider ? RunView.FromMetadataProvider(this.provider) : new RunView();
+    this.runView = RunView.FromMetadataProvider(provider);
   }
 
   /** @inheritdoc */
@@ -117,15 +120,19 @@ export class RunViewDataAccess implements IFeatureDataAccess {
         OrderBy: params.OrderBy ?? '',
         Fields: params.Fields,
         MaxRows: params.MaxRows,
+        // No explicit cap means "every matching row". Without this, RunView silently applies the
+        // entity's UserViewMaxRows (1000 by default) — training would quietly fit on the first
+        // 1000 rows of a larger population and scoring hydration could miss records.
+        IgnoreMaxRows: params.MaxRows === undefined,
         ResultType: 'simple',
       },
       this.contextUser,
     );
 
     if (!result.Success) {
-      return { Success: false, Rows: [], ErrorMessage: result.ErrorMessage };
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: result.ErrorMessage };
     }
-    return { Success: true, Rows: result.Results ?? [] };
+    return { Success: true, Rows: result.Results || [], TotalRowCount: result.TotalRowCount };
   }
 
   /**

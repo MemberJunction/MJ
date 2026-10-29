@@ -17,24 +17,18 @@
  */
 
 import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { IsValidUUID } from '@memberjunction/global';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
 
 import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage } from '../scoring/model-readiness';
 import type {
   IModelPromotionGate,
   PromoteModelRequest,
   PromoteModelOutcome,
 } from './promote-model.action';
-
-/** Canonical UUID shape (8-4-4-4-12 hex), case-insensitive. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Whether a string is a well-formed UUID (the only legal `MJ: ML Models` / pipeline id shape). */
-function isUuid(value: string | null | undefined): value is string {
-  return typeof value === 'string' && UUID_RE.test(value.trim());
-}
 
 /**
  * Loads a model, enforces the leakage sign-off gate, and transitions its status.
@@ -95,15 +89,15 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   /** Load the model as an `entity_object` (it is mutated to set Status). */
   protected async loadModel(
     modelId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<MJMLModelEntity | null> {
     // The model id is interpolated into a SQL filter — it MUST be a UUID. A
     // non-UUID can't match a real row and is refused rather than concatenated.
-    if (!isUuid(modelId)) {
+    if (!IsValidUUID(modelId)) {
       return null;
     }
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLModelEntity>(
       {
         EntityName: 'MJ: ML Models',
@@ -128,8 +122,8 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
    */
   protected async detectLeakage(
     model: MJMLModelEntity,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<{ flagged: boolean; topFeature?: string; topShare?: number }> {
     const importance = this.parseJson<FeatureImportance>(model.FeatureImportance, {});
     const threshold = await this.resolveThreshold(model.PipelineID, contextUser, provider);
@@ -140,15 +134,15 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   /** Resolve the dominance threshold from the producing pipeline's `LeakageGuard`. */
   protected async resolveThreshold(
     pipelineId: string | null | undefined,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<number> {
     // pipelineId is interpolated into a SQL filter — only a UUID is valid. A
     // missing/malformed id falls back to the default threshold (never concatenated).
-    if (!isUuid(pipelineId)) {
+    if (!IsValidUUID(pipelineId)) {
       return DOMINANCE_THRESHOLD_DEFAULT;
     }
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLTrainingPipelineEntity>(
       {
         EntityName: 'MJ: ML Training Pipelines',
@@ -194,14 +188,21 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   protected async transition(
     model: MJMLModelEntity,
     targetStatus: PromoteModelRequest['targetStatus'],
-    signOffNote?: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    signOffNote: string | undefined,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<PromoteModelOutcome> {
     const currentStatus = model.Status ?? 'Draft';
     const allowed = ProductionModelPromotionGate.ALLOWED_TRANSITIONS[currentStatus] ?? [];
     if (!allowed.includes(targetStatus)) {
       return { kind: 'invalid-transition', currentStatus, targetStatus };
+    }
+    // A model with no trained artifact can't score anything, so it must never reach
+    // Published — refuse with the plain "needs training" message instead of letting it
+    // look deployable and then fail every record at run time. Checked after the
+    // lifecycle rule, so an illegal jump is still reported as an invalid transition.
+    if (targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
+      return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
     }
     model.Status = targetStatus;
     const saved = await model.Save();
@@ -222,13 +223,12 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   protected async syncScoringAction(
     model: MJMLModelEntity,
     targetStatus: PromoteModelRequest['targetStatus'],
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
   ): Promise<void> {
-    // The generator needs a contextUser + provider to read/write Action metadata.
-    // Without them (e.g. a bare in-process call) we simply skip — the live path
-    // always supplies both.
-    if (!contextUser || !provider) {
+    // The generator needs a contextUser to read/write Action metadata. Without one
+    // (a bare in-process call) we skip — the live path always supplies it.
+    if (!contextUser) {
       return;
     }
     try {

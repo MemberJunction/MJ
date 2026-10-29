@@ -40,13 +40,14 @@ import { Subject } from 'rxjs';
               class="part-placeholder"
               Icon="fa-solid fa-palette"
               Title="No Artifact Selected"
-              Message="Click the configure button to select an artifact for this part."
+              Message="Use Edit part to choose an artifact."
               Size="compact" />
           }
         
           <!-- Artifact Viewer Panel -->
           @if (!IsLoading && !ErrorMessage && hasArtifact && artifactId) {
             <mj-artifact-viewer-panel
+              [Provider]="Provider"
               [artifactId]="artifactId"
               [currentUser]="currentUser"
               [environmentId]="environmentId"

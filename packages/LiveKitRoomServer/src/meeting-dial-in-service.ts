@@ -24,9 +24,26 @@ interface RateLimitEntry {
   lockedUntil?: number;
 }
 
-/** Rate limiter with configurable attempt limits and lockout windows. */
+/**
+ * Rate limiter with configurable attempt limits and lockout windows.
+ *
+ * Keys are caller-supplied (caller and dialed numbers), so the number of tracked keys is capped.
+ * Two things keep that cap from becoming a weakness under a flood of distinct keys:
+ * - **Constant cost per call.** Expired entries are swept at most once every
+ *   {@link sweepThreshold} inserts, not on every failure, and enforcing the cap drops one entry.
+ *   Before, each failure past 1,000 keys walked the whole map, so a flood cost O(n) per attempt.
+ * - **Lockouts are evicted last.** Locked-out keys live in their own map, and the cap drops the
+ *   oldest key that is still only counting attempts. A locked-out caller can no longer flood
+ *   distinct numbers to push their own lockout out of the map; a lockout is dropped only when
+ *   every tracked key is locked out.
+ */
 export class DialInRateLimiter {
+  /** Keys still counting attempts, oldest first (Map keeps insertion order). */
   private readonly attempts = new Map<string, RateLimitEntry>();
+  /** Keys locked out (or whose lockout ended inside their window), oldest lockout first. */
+  private readonly lockouts = new Map<string, RateLimitEntry>();
+  /** New keys inserted since the last sweep of expired entries. */
+  private insertsSinceSweep = 0;
 
   constructor(
     private readonly maxAttempts: number = 5,
@@ -35,7 +52,7 @@ export class DialInRateLimiter {
   ) {}
 
   public CheckAllowed(key: string): { allowed: boolean; remainingMs?: number } {
-    const entry = this.attempts.get(key);
+    const entry = this.entryFor(key);
     if (!entry) {
       return { allowed: true };
     }
@@ -44,35 +61,98 @@ export class DialInRateLimiter {
       return { allowed: false, remainingMs: entry.lockedUntil - now };
     }
     if (now - entry.firstAttemptAt > this.windowMs) {
-      this.attempts.delete(key);
+      this.remove(key);
       return { allowed: true };
     }
     if (entry.attempts >= this.maxAttempts) {
-      entry.lockedUntil = now + this.lockoutMs;
+      this.lock(key, entry, now);
       return { allowed: false, remainingMs: this.lockoutMs };
     }
     return { allowed: true };
   }
 
+  /** Above this many tracked keys, expired entries are swept, at most once per this many new keys. */
+  private static readonly sweepThreshold = 1000;
+  /** Hard ceiling on tracked keys; when a new key would pass it, one entry is dropped (see the class doc). */
+  private static readonly maxEntries = 10000;
+
+  /** Number of tracked keys (diagnostics/tests). */
+  public get Size(): number {
+    return this.attempts.size + this.lockouts.size;
+  }
+
   public RecordFailure(key: string): void {
     const now = Date.now();
-    const entry = this.attempts.get(key);
+    const entry = this.entryFor(key);
+    if (entry?.lockedUntil && entry.lockedUntil > now) {
+      return; // already locked out: a further failure neither extends nor resets the lockout
+    }
     if (!entry || now - entry.firstAttemptAt > this.windowMs) {
+      this.remove(key);
+      this.makeRoomForNewKey(now);
       this.attempts.set(key, { attempts: 1, firstAttemptAt: now });
-    } else {
-      entry.attempts++;
-      if (entry.attempts >= this.maxAttempts) {
-        entry.lockedUntil = now + this.lockoutMs;
-      }
+      return;
+    }
+    entry.attempts++;
+    if (entry.attempts >= this.maxAttempts) {
+      this.lock(key, entry, now);
     }
   }
 
   public RecordSuccess(key: string): void {
-    this.attempts.delete(key);
+    this.remove(key);
   }
 
   public Clear(): void {
     this.attempts.clear();
+    this.lockouts.clear();
+    this.insertsSinceSweep = 0;
+  }
+
+  private entryFor(key: string): RateLimitEntry | undefined {
+    return this.attempts.get(key) ?? this.lockouts.get(key);
+  }
+
+  private remove(key: string): void {
+    this.attempts.delete(key);
+    this.lockouts.delete(key);
+  }
+
+  /** Locks the key out from `now`, moving it to the lockout map as its newest entry. */
+  private lock(key: string, entry: RateLimitEntry, now: number): void {
+    entry.lockedUntil = now + this.lockoutMs;
+    this.attempts.delete(key);
+    this.lockouts.delete(key);
+    this.lockouts.set(key, entry);
+  }
+
+  /** Called before a new key is inserted: sweeps on the amortized schedule, then enforces the cap. */
+  private makeRoomForNewKey(now: number): void {
+    this.insertsSinceSweep++;
+    if (this.Size >= DialInRateLimiter.sweepThreshold && this.insertsSinceSweep >= DialInRateLimiter.sweepThreshold) {
+      this.sweepExpired(now);
+      this.insertsSinceSweep = 0;
+    }
+    while (this.Size >= DialInRateLimiter.maxEntries) {
+      const victims = this.attempts.size > 0 ? this.attempts : this.lockouts;
+      const oldest = victims.keys().next();
+      if (oldest.done) {
+        break;
+      }
+      victims.delete(oldest.value);
+    }
+  }
+
+  /** Removes entries whose window and lockout have both elapsed. */
+  private sweepExpired(now: number): void {
+    for (const map of [this.attempts, this.lockouts]) {
+      for (const [key, entry] of map) {
+        const lockExpired = !entry.lockedUntil || entry.lockedUntil <= now;
+        if (lockExpired && now - entry.firstAttemptAt > this.windowMs) {
+          map.delete(key);
+        }
+      }
+    }
   }
 }
 

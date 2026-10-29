@@ -62,6 +62,7 @@ const { mocks, state } = vi.hoisted(() => ({
         RenderTemplate: vi.fn<(template: object, content: object, data: Record<string, unknown>) => Promise<{ Success: boolean; Output: string }>>(),
         RunEmbedding: vi.fn<(params: { Texts: string[]; ModelID?: string; ContextUser?: object; Description?: string }) => Promise<{ Success: boolean; Vectors?: number[][]; ErrorMessage?: string }>>(),
         QueryIndex: vi.fn<(params: { id: string; vector: number[]; topK: number }) => Promise<{ success: boolean; data: { matches: VectorMatchFixture[] } }>>(),
+        BuildMetadataFilter: vi.fn((options: { EntityDocumentIDs?: string[] }) => ({ EntityDocumentID: { $in: options.EntityDocumentIDs } })),
         ExecuteDecision: vi.fn<(params: AIDecisionParams) => Promise<AIDecisionRunResult>>(),
         ExecutePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult>>(),
     },
@@ -98,6 +99,7 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
         RequiresAPIKey = false;
         QueryKeyIsEntityDocumentID = false;
         QueryIndex = mocks.QueryIndex;
+        BuildMetadataFilter = mocks.BuildMetadataFilter;
     },
     BaseResponse: class {},
 }));
@@ -141,8 +143,17 @@ vi.mock('@memberjunction/ai-vectors', () => ({
 
 vi.mock('@memberjunction/ai-vector-sync', () => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
+    // Rendering's related-data step is covered by duplicateRecordDetectorTemplateText.test.ts;
+    // here each record renders its own values, as for a template with no Entity params.
+    EntityDocumentTemplateDataBuilder: class {
+        LoadRelatedData = vi.fn().mockResolvedValue([]);
+        MissingRelatedParams = vi.fn().mockReturnValue([]);
+        BuildTemplateData = vi.fn((_entity: unknown, record: Record<string, unknown>) => ({ ...record }));
+    },
     EntityVectorSyncer: class {},
     VectorizeEntityParams: class {},
+    // No record filter: the filter's own behavior is covered by duplicateRecordDetectorRecordFilter.test.ts.
+    GetEntityDocumentRecordFilter: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@memberjunction/templates', () => ({

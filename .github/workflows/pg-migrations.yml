@@ -42,6 +42,18 @@ on:
   schedule:
     - cron: '15 6 * * *'
 
+# Cancel superseded runs for the same ref. Without this a second push to a PR leaves the
+# first run burning a runner for a commit nobody will merge; 108 such runner-minutes were
+# measured across this repo in a single 23-hour window (2026-10-27).
+# EXCEPTION: push (merge to next) gets a per-commit group and is NEVER cancelled.
+# `github.ref` is the same string for every merge, so a shared, cancellable group would let
+# a later merge kill an earlier one's run. Mirrors test.yml.
+# EXCEPTION 2: schedule gets a per-cron group so two different crons firing on the same ref
+# cannot cancel each other. Mirrors integration.yml.
+concurrency:
+  group: pg-migrations-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
 # Least-privilege token: nothing in this workflow writes to the repository.
 permissions:
   contents: read
@@ -474,17 +486,28 @@ jobs:
           CODEGEN_DB_PASSWORD: testpass
           MJ_INTEGRATION_TEST: '1'
           RUN_AGENT_TESTS: '0'
+        # Every test runs even when an earlier one fails, so one regression cannot hide the rest;
+        # the step fails at the end if any did. The query bundles (IT02, IT35, IT102) cover query
+        # rendering, paging and counts on PostgreSQL. The client-transport query bundles (IT33,
+        # IT34, IT103) need a running MJAPI, which this lane does not start.
         run: |
-          set -e
+          FAILED=""
           for TEST in \
             "IT38 - Template Engine Rendering" \
             "IT39 - Actions Pipeline" \
             "IT48 - ClassFactory Resolution Contracts" \
             "IT20 - Lists Keyset Pagination" \
-            "IT87 - Nested Transactions (ambient savepoints)"; do
+            "IT87 - Nested Transactions (ambient savepoints)" \
+            "IT02 - RunQuery Cache Integrity" \
+            "IT35 - RunQuery Feature Surface" \
+            "IT102 - RunQuery Rendering Matrix"; do
             echo "=== $TEST (PostgreSQL) ==="
-            node packages/MJCLI/bin/run.js test run --name "$TEST"
+            node packages/MJCLI/bin/run.js test run --name "$TEST" || FAILED="$FAILED\n  $TEST"
           done
+          if [ -n "$FAILED" ]; then
+            printf "Failed on PostgreSQL:$FAILED\n"
+            exit 1
+          fi
 
       - name: (Nightly) Functional lane verdict
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

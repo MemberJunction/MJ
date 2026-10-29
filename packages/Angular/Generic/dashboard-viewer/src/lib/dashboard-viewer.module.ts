@@ -17,15 +17,28 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // MJ Artifacts for displaying conversation artifacts
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 
-// MJ UI Components for the canonical empty-state placeholder + collapsible config-panel sections
-import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
+// MJ React host for Interactive Component parts
+import { MJReactModule } from '@memberjunction/ng-react';
+
+// MJ UI Components for the canonical empty-state placeholder, collapsible config-panel sections,
+// and the dialog and buttons of the part dialog
+import {
+    MJEmptyStateComponent,
+    MJAccordionModule,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJButtonDirective
+} from '@memberjunction/ng-ui-components';
 
 // Main Component
 import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.component';
 
 // Dialogs
+import { DashboardPartDialogComponent } from './dialogs/part-dialog/dashboard-part-dialog.component';
 import { AddPanelDialogComponent } from './dialogs/add-panel-dialog/add-panel-dialog.component';
 import { EditPartDialogComponent } from './dialogs/edit-part-dialog/edit-part-dialog.component';
+import { DashboardPropertiesDialogComponent } from './dialogs/properties-dialog/dashboard-properties-dialog.component';
+import { PropertyDefaultEditorComponent } from './dialogs/property-default-editor/property-default-editor.component';
 
 // Confirm Dialog (generic utility)
 import { ConfirmDialogComponent } from './config-dialogs/confirm-dialog.component';
@@ -35,18 +48,27 @@ import { WebURLConfigPanelComponent } from './config-panels/weburl-config-panel.
 import { ViewConfigPanelComponent } from './config-panels/view-config-panel.component';
 import { QueryConfigPanelComponent } from './config-panels/query-config-panel.component';
 import { ArtifactConfigPanelComponent } from './config-panels/artifact-config-panel.component';
+import { ComponentConfigPanelComponent } from './config-panels/component-config-panel.component';
 
 // Runtime Part Components (pluggable renderers for each part type)
 import { WebURLPartComponent } from './parts/weburl-part.component';
 import { ViewPartComponent } from './parts/view-part.component';
 import { QueryPartComponent } from './parts/query-part.component';
 import { ArtifactPartComponent } from './parts/artifact-part.component';
+import { ComponentPartComponent } from './parts/component-part.component';
 
 // Dashboard Browser Component (generic, no routing dependencies)
 import { DashboardBrowserComponent } from './dashboard-browser/dashboard-browser.component';
 
 // Breadcrumb Component (reusable navigation component)
 import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.component';
+
+// Layout Preview (a miniature of a saved dashboard layout, for dashboard cards)
+import { DashboardLayoutPreviewComponent } from './layout-preview/dashboard-layout-preview.component';
+import { DashboardLayoutPreviewNodeComponent } from './layout-preview/dashboard-layout-preview-node.component';
+
+// Dashboard Card (one dashboard: picture, name, owner, Shared marker, favorite star)
+import { DashboardCardComponent } from './dashboard-card/dashboard-card.component';
 
 @NgModule({
     declarations: [
@@ -59,10 +81,20 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
         // Breadcrumb Component
         DashboardBreadcrumbComponent,
 
+        // Layout Preview (the node component draws the preview's rows, columns and panels)
+        DashboardLayoutPreviewComponent,
+        DashboardLayoutPreviewNodeComponent,
+
+        // Dashboard Card
+        DashboardCardComponent,
+
         // Generic Dialogs
+        DashboardPartDialogComponent,
         AddPanelDialogComponent,
         EditPartDialogComponent,
         ConfirmDialogComponent,
+        DashboardPropertiesDialogComponent,
+        PropertyDefaultEditorComponent,
 
         // Config Panels (pluggable form components)
         // These are registered with @RegisterClass and loaded dynamically via ClassFactory
@@ -70,13 +102,15 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
         ViewConfigPanelComponent,
         QueryConfigPanelComponent,
         ArtifactConfigPanelComponent,
+        ComponentConfigPanelComponent,
 
         // Runtime Part Components (pluggable renderers)
         // These are registered with @RegisterClass and loaded dynamically via ClassFactory
         WebURLPartComponent,
         ViewPartComponent,
         QueryPartComponent,
-        ArtifactPartComponent
+        ArtifactPartComponent,
+        ComponentPartComponent
     ],
     imports: [
         CommonModule,
@@ -86,8 +120,12 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
         EntityViewerModule,
         QueryViewerModule,
         ArtifactsModule,
+        MJReactModule,
         MJEmptyStateComponent,
-        MJAccordionModule
+        MJAccordionModule,
+        MJDialogComponent,
+        MJDialogActionsComponent,
+        MJButtonDirective
     ],
     exports: [
         // Main Component
@@ -99,22 +137,33 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
         // Breadcrumb Component
         DashboardBreadcrumbComponent,
 
+        // Layout Preview
+        DashboardLayoutPreviewComponent,
+
+        // Dashboard Card
+        DashboardCardComponent,
+
         // Generic Dialogs
+        DashboardPartDialogComponent,
         AddPanelDialogComponent,
         EditPartDialogComponent,
         ConfirmDialogComponent,
+        DashboardPropertiesDialogComponent,
+        PropertyDefaultEditorComponent,
 
         // Config Panels - exported for potential direct use
         WebURLConfigPanelComponent,
         ViewConfigPanelComponent,
         QueryConfigPanelComponent,
         ArtifactConfigPanelComponent,
+        ComponentConfigPanelComponent,
 
         // Runtime Part Components - exported for potential direct use
         WebURLPartComponent,
         ViewPartComponent,
         QueryPartComponent,
-        ArtifactPartComponent
+        ArtifactPartComponent,
+        ComponentPartComponent
     ]
 })
 export class DashboardViewerModule { }

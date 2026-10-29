@@ -1,5 +1,38 @@
 # @memberjunction/ng-markdown
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- 09c7d57: `<mj-markdown>` images can be capped by the host with the `--mj-markdown-image-max-height` CSS custom property (unset: no cap, as before), and a new `ImageClicked` output reports a clicked or keyboard-activated image (not one inside a link; images stay inert unless the output is bound). The conversation message item binds it and opens the image in the chat's existing image viewer, the same way an attachment thumbnail opens. The image viewer's Download opens a cross-origin image in a new tab instead of navigating the app away (browsers ignore `download` across origins).
+  - @memberjunction/markdown-core@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- c271ddf: `<mj-markdown>` re-renders when a PascalCase input changes (`[Data]`, `[EnableHtml]`, ...), not only its deprecated camelCase alias. MathML detection no longer matches custom elements such as `<math-field>`.
+  - @memberjunction/markdown-core@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- ae0a662: Markdown now renders math: TeX the way language models write it (`$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display) and MathML markup, including the prefixed `<mml:math>` that JATS article XML uses.
+  - **markdown-core:** a new `CreateMathExtension` recognizes the math and emits a `code.mj-math` placeholder holding the TeX (a `math` / `mathBlock` token on the AST path). It is tokenized first, so `_` and `*` inside a formula no longer become emphasis, and smartypants leaves its quotes and dashes alone. Single dollars follow Pandoc's rule, so prices stay prices ("$5 and $10", "$5-$10"), and `\[…\]`/`\(…\)` count only around something that reads as TeX, so escaped brackets like "\[1\]" stay brackets. MathML elements (`<math>` or `<mml:math>`) are matched whole, emitted with their prefixes removed, and kept away from markdown, so pretty-printed formulas don't turn into code blocks or emphasis. On by default; `enableMath: false` turns it off.
+  - **ng-markdown:** `MarkdownService.RenderMath(container)` typesets the placeholders with KaTeX as MathML, which browsers lay out natively, so hosts need no KaTeX stylesheet or fonts. KaTeX is loaded on first use, like Mermaid, so documents without math never download it. `<mj-markdown>` calls it after render (new `EnableMath` input). TeX that KaTeX can't parse, or that defines macros, stays visible as source; user sizes are capped. The sanitizer now allows MathML (DOMPurify's MathML profile, plus `columnalign`/`columnspacing`, which its list misspells or lacks). Chrome ignores MathML's `mathvariant` and `columnalign`, so styled letters are spelled with Unicode math characters (\mathbf{E} as 𝐄, \mathbb{R} as ℝ) and the stylesheet aligns `aligned`/`cases` columns.
+  - **ng-chat:** typesets math in its messages (`RenderMath` after `parse()`).
+  - **mobile-app:** shows math as its source, without delimiters, until mobile has a typesetter.
+
+- Updated dependencies [ae0a662]
+  - @memberjunction/markdown-core@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

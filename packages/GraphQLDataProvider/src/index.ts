@@ -2,10 +2,11 @@ export { gql } from 'graphql-request';
 export { SetupGraphQLClient, setupGraphQLClient, ConnectGraphQLClient } from './config';
 export { PACKAGE_VERSION } from './version.generated';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
-export type { AuthenticationErrorCallback, SocketConnectionState, TaskGraphFrameEvent } from './graphQLDataProvider';
+export type { AuthenticationErrorCallback, ExecuteGQLOptions, SocketConnectionState, TaskGraphFrameEvent } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from './sanitizeGraphQLError';
+export { IsGraphQLMutation } from './graphQLOperationKind';
 export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail, VariableShape } from './sanitizeGraphQLError';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
@@ -24,6 +25,7 @@ export type {
     EmbedTextParams,
     EmbedTextResult,
     RunAIAgentFromConversationDetailParams,
+    AgentReplyAcknowledgement,
     AutotagPipelineResult,
     VectorizeEntityParams,
     VectorizeEntityResult,
@@ -47,6 +49,7 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitAgentVisionResult,
     LiveKitRoomTurnState,
     LiveKitRoomTurnStateResult,
     LiveKitRoomTurnAgent,
@@ -107,7 +110,8 @@ export type {
     SearchClientFilters,
     SearchClientProviderInfo,
     SearchSourceCounts,
-    SearchScoreBreakdown
+    SearchScoreBreakdown,
+    SearchStreamClientEvent
 } from './graphQLSearchClient';
 
 export { GraphQLIntegrationClient } from './graphQLIntegrationClient';
@@ -131,6 +135,15 @@ export type {
 } from './graphQLIntegrationClient';
 export { GraphQLConversationClient } from './graphQLConversationClient';
 export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';
+export { GraphQLRealtimeSessionClient, IsKnownRealtimeSessionVerificationErrorCode } from './graphQLRealtimeSessionClient';
+export type {
+    RealtimeSessionVerificationState,
+    RealtimeSessionVerificationErrorCode,
+    RealtimeSessionVerificationResult,
+    RealtimeSessionClientEvent,
+    RequestRealtimeSessionVerificationInput,
+    SubmitRealtimeSessionVerificationCodeInput,
+} from './graphQLRealtimeSessionClient';
 
 export { GraphQLMeetingClient } from './graphQLMeetingClient';
 export type {

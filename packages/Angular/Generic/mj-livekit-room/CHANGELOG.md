@@ -1,5 +1,312 @@
 # @memberjunction/ng-mj-livekit-room
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [0581392]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [a610c6e]
+- Updated dependencies [4c97994]
+- Updated dependencies [cb1e602]
+- Updated dependencies [db4e210]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ai-realtime-client@6.2.0-edge.6
+  - @memberjunction/ng-realtime-media@6.2.0-edge.6
+  - @memberjunction/livekit-room-core@6.2.0-edge.6
+  - @memberjunction/ng-base-types@6.2.0-edge.6
+  - @memberjunction/ng-media-player@6.2.0-edge.6
+  - @memberjunction/ng-livekit-room@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+- Updated dependencies [1aefcb4]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+  - @memberjunction/ng-livekit-room@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-realtime-media@6.2.0-edge.5
+  - @memberjunction/livekit-room-core@6.2.0-edge.5
+  - @memberjunction/ng-media-player@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 8c157aa: A host can word the avatar notice for a reason this version doesn't know. `AvatarNoticeOverrides` gains an `unknown` key, which `AvatarNoticeText` uses for a `null` reason and for a reason with no line in `AVATAR_NOTICE_TEXT` (such a reason used to throw). Without it, or with a blank one, the line is `AVATAR_NOTICE_UNKNOWN_REASON_TEXT`, worded as before. The key doesn't stand in for a known reason the host leaves out. The meeting room's `AvatarNoticeLabels` takes it, so a reason the room can't name, such as a newer bot's, reads in the host's words.
+- 45ba6be: Meet's landing offers a "Preview room" to holders of the `Realtime: Advanced Session Controls` authorization: the meeting room with your camera and microphone and simulated people, and no LiveKit server. `mj-livekit-agent-room` takes `Mode="preview"`: nothing is minted and no agent session starts, the room runs on `LiveKitPreviewRoomController` (on the camera and microphone `LOCAL_MEDIA_CONTROLLER_FACTORY` provides), recording is off, and the preview saves its layout per user under its own keys (`LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY`, `LIVEKIT_PREVIEW_PIP_PREF_KEY`), apart from meetings'. In the other modes the room's controller still comes from `LIVEKIT_ROOM_CONTROLLER_FACTORY` as provided above the binding.
+- b09fe34: The meeting room shows an agent's avatar. The room core maps the camera track an agent's bot publishes the avatar on (`REALTIME_AGENT_AVATAR_TRACK_NAME`, `agent-avatar`, now shared by the bot's publisher) to the participant's avatar instead of a camera, so its tile carries the "AI-generated video" label, and reads the bot's `mj.agentAvatar` attribute (`ReadAgentAvatarAttribute`) into `LiveKitParticipantView.AvatarAudioOnly`. `mj-media-tile` now shows an avatar whole, the full portrait with bars, in every tile: meeting tiles, and the call's avatar on the stage and in picture-in-picture. Its new `AvatarVideoFit` (default `'contain'`) lets a host fill the tile with `'cover'` instead; other video still fills its tile. When an agent's bot says audio only, the MJ room shows everyone one info notice per agent per join ("Audio only for Sage: the avatar can't be shown in this meeting"), dismissible and hiding itself after 10 seconds; `AvatarNoticeLabels` lets a host word it. Its words come from `ng-realtime-media`'s `AvatarNoticeText`, which gains an options argument (`{ NameAgent: true }` names the agent on a call's lines, for meetings; calls are unchanged) and takes `null` for a reason it doesn't know, giving the new `AVATAR_NOTICE_UNKNOWN_REASON_TEXT`.
+- 33d4f4f: The meeting room says when a share, camera, microphone or the room's sound fails while it is connected. Before, these errors reached only the room's connection overlay, which is hidden while connected, so a share the browser refused looked like a click that did nothing. `<mj-livekit-agent-room>` shows the latest device error as a dismissible error notice in its notice stack, after the notice about what the agent sees, worded as "Couldn't <what the user asked for>: <the reason given>": "Couldn't start sharing: To share only the panel, choose this tab in the browser's picker." for a "This panel" share where the user picked another surface, "Couldn't turn on your camera: Could not start video source" for a camera that won't start. A share picker the user closes is still no error and shows nothing. The notice goes when the user dismisses it, asks for another change to their devices (the room's `BeforeMediaToggle` or `BeforeDeviceSwitch`), leaves, or joins again; device errors before the room connects are left to its connection overlay, and every error is still re-emitted on `ErrorOccurred`. In `livekit-room-core`, a `device` error says which device it is about and what the user asked of it: `LiveKitRoomError.Device`, a new `LiveKitErrorDevice` with `Media` (`'microphone' | 'camera' | 'screen' | 'speaker'`) and `Change` (`'on' | 'off' | 'switch'`, absent when the room can't tell). `LiveKitRoomController` sets it when turning the microphone, camera or share on or off, switching a device, or starting the room's sound fails, and on LiveKit's `MediaDevicesError` (the device kind only); the preview room sets it for a share or a camera or microphone that fails to start. A device error about no one device (listing the devices) has none. Error messages are unchanged.
+- 318084b: The meeting room's self-view Hide is saved per user. In `<mj-livekit-agent-room>`, a user who hides their own tile finds it still hidden in their next meeting, on any device, until they click Show on the "Self-view hidden" chip or reset the layout. It is saved in `MJ: User Settings` under `mj.livekit.selfView.hidden.v1`, and the preview room keeps its own under `mj.livekit.preview.selfView.hidden.v1`. Only a saved `true` hides it. Nothing saved, `false`, or a malformed value shows it. When saving fails, the hide still holds for that session. Reset layout now also shows the self-view again and saves that, as the realtime call's Reset brings back a hidden camera box. `<mj-livekit-room>`'s `SelfViewHidden` is now an input, and the new `SelfViewHiddenChange` output fires when the user hides or shows the self-view or resets the layout, so any host can save it. Without a host that saves it, it lasts for the session as before. In `/media`, `MediaLayoutKeys` gains an optional `SelfViewHidden` key, `MediaLayoutPrefs` gains `LoadSelfViewHidden` and `SaveSelfViewHidden`, and `ParseSelfViewHidden` / `SerializeSelfViewHidden` are new. A host that names no key for the self-view, such as the realtime call, reads it as shown and saves nothing: the call's self-view hides by moving its box to Hide, a move it already saves.
+- dbc3462: The realtime picker marks the voices that come with an avatar. `GetRealtimeModelVoices` lists one voice per persona, keyed by `PersonaID`, so two personas that share a voice (a voice, and the same voice with a face) both list. A persona voice also carries the `APIName` of the same persona's preset Video binding on the model's vendor (`AvatarID`) and the persona's `PreviewImageURL`; a binding on another vendor or a custom avatar doesn't count, and a voice only the driver declares carries none of the three. A driver voice is now left out only when a persona offers the same voice without a face, so a voice stays pickable without its face. The GraphQL voice option (`RealtimeVoiceOptionResult`) and the client's `RealtimeVoiceOption` carry the three as nullable fields, and the client selects them. For holders of `Realtime: Advanced Session Controls`, the picker's voice list is now an `mj-dropdown` with one option per persona: a camera icon on voices with an avatar, the persona's preview image when it has one, and a hint under the list ("Comes with an avatar") when the picked voice has a face. A pick sends the voice id, plus the avatar (`RealtimeAgentPick.PreferredAvatarId`) when the persona has a face; the override envelope from both builders (`BuildRealtimeConfigOverridesJson`, `BuildRealtimeOverridesJson`) carries it as `realtime.video.avatarId`. The session asks for that face only when the voiced agent's own video setting is on and it names a Video binding on the vendor it resolves. The meeting room's voice lists (the add-agent list in `mj-livekit-agent-room` and the pre-join list on the Meet page) also key their options by persona, so two personas sharing a voice no longer collide and only the picked one shows picked; either still sends the voice id (`AddVoiceOption`, `SelectedVoiceOption`).
+- aee2d53: Full-duplex realtime models improvements, speech-tuned Meet room options, audio telemetry, and disconnect reason handling:
+  - **FullDuplex metadata**: Added `FullDuplex?: boolean` to Realtime section of `IAIModelConfiguration` with cascaded metadata resolution and helper `ResolveIsModelFullDuplex`. Seeded metadata for full-duplex models (Gemini 3.8 Live family, GPT-Live 1).
+  - **Coordinator turn-taking tools & ResolveHostTools seam**: Withhold turn-taking tools (`turnTakingTools = []`) when model is full-duplex. Added `ResolveHostTools` callback seam to `PrepareClientSessionInput` allowing dynamic resolution of host tools based on resolved model/vendor/driver before session startup.
+  - **Energy gate bypass**: Bypassed `FullDuplexTurnGate` and `HumanSpeechDetector` for full-duplex models by default unless `MJ_REALTIME_MODERATOR_MODE=on`.
+  - **Speech-tuned Meet RoomOptions**: Configured speech defaults (`dtx: false`, `red: true`, `audioPreset: AudioPresets.speech`, `audioCaptureDefaults`) overridable via `RoomOptions` input.
+  - **Audio telemetry**: Added inbound inter-frame gap histogram per participant, outbound `queuedDuration` and underrun tracking, event-loop delay p99 (`perf_hooks.monitorEventLoopDelay`) with 30s rolling window, and speech-to-audio latency logging.
+  - **LiveKit disconnect reason**: Mapped `null`/`undefined` disconnect reason from `livekit-client` to `'connection-lost'` rather than `'client-initiated'`.
+  - **Interaction lifecycle**: Added optional `Status` override on `CloseInteractionParams`.
+
+- b3db2aa: The realtime relay caps what it holds while the upstream opens at 8 MiB as well as 512 frames, and closes a tunnel whose upstream stops reading once 16 MiB is queued for it (1013 to the browser, 1001 upstream), as it already did for a browser that falls behind (#5499).
+
+  Withdrawing agent vision (`SetLiveKitAgentVision` with `Allow: false`) no longer goes through room authorization, so a cancelled meeting or a failed lookup cannot keep an agent watching (#5500).
+
+  The mint fallback for a server without the relay fields matches `field "RelayUrl"`, not any message that names RelayUrl.
+
+  The agent-vision button says what the consent covers: in a room with more than one agent, every agent in the room. Its label there reads "Let agents see me" / "Hide from agents" and its name "Let agents in this room see your camera and screen"; with one agent, "Let the agent see me" / "Hide from the agent" and "Let the agent see your camera and screen". A failure says "Couldn't change what the agent sees" with one agent and "Couldn't change what agents see" with several (#5502).
+
+- dcc5a44: The meeting room lets each person choose whether an agent sees their camera and shared screen. Two LiveKit participant attributes carry it: `mj.agentCanSee` (the person allows it; the server sets it, since a participant's token can't change its own attributes) and `mj.agentWatches` (an agent's bot watches). `LiveKitRoomController` reads them into `LiveKitRoomState.AgentWatching`, `LiveKitLocalMediaState.AgentVisionOn` and each participant view's `AgentCanSee`, which the tiles show as "Agent can see" ("Agents can see" in a room with more than one agent). `mj-livekit-room` offers the "Let the agent see me" switch only while an agent watches (`EnableAgentVisionControl` turns it off) and reports the person's choice through `AgentVisionChange`; the room changes nothing itself. The preview room simulates it: its agent watches, Ada allows it, and `LiveKitPreviewRoomController.SetAgentVision` records your choice at once, which `mj-livekit-agent-room` does in preview mode.
+- d3cfd90: In a meeting, `mj-livekit-agent-room` now asks MJAPI to record the user's choice of whether agents may see their camera and shared screen (`GraphQLLiveKitClient.SetAgentVision`); the room shows the change once LiveKit reports it. When MJAPI can't record it, a dismissible notice over the room says why ("Couldn't change what the agent sees: …"), the room stays open, and `ErrorOccurred` reports it with the new `LiveKitRoomError` kind `'agent-vision'`. The preview room still records the choice itself.
+- 3775aba: The meeting room's layout is saved per user, for every room. `mj-livekit-room` takes the user's moves and boxes as `TileMoves` and `PipRects` and reports them through `TileMovesChange` and `PipRectsChange` (two-way bindable) as the user moves a tile, moves or resizes a box, or resets the layout; Reset layout now also forgets the boxes' positions, as the realtime call's does. `mj-livekit-agent-room` loads and saves them with the shared `MediaLayoutPrefs`, under `mj.livekit.placement.v1` and `mj.livekit.pip.v1` (`LIVEKIT_PLACEMENT_PREF_KEY`, `LIVEKIT_PIP_PREF_KEY`), in its provider's `UserInfoEngine` once that has loaded and the global one otherwise. The binding gets its first DOM spec.
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [c8409ce]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [155aa45]
+- Updated dependencies [e4c355e]
+- Updated dependencies [4412e85]
+- Updated dependencies [6dce70c]
+- Updated dependencies [8c157aa]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [676f0dc]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [b2441c3]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [703c44e]
+- Updated dependencies [435a69b]
+- Updated dependencies [b44a563]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [5b2c8a8]
+- Updated dependencies [33d4f4f]
+- Updated dependencies [4ee3b59]
+- Updated dependencies [318084b]
+- Updated dependencies [69bf67c]
+- Updated dependencies [efe4738]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [dbc3462]
+- Updated dependencies [d9da1ad]
+- Updated dependencies [a16b39d]
+- Updated dependencies [c5472d2]
+- Updated dependencies [666d078]
+- Updated dependencies [ae78a45]
+- Updated dependencies [8704df6]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [4cff918]
+- Updated dependencies [d714f25]
+- Updated dependencies [989b3d0]
+- Updated dependencies [368ce6d]
+- Updated dependencies [ca2791b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [22c9074]
+- Updated dependencies [7f243eb]
+- Updated dependencies [a3fcce8]
+- Updated dependencies [a08ed58]
+- Updated dependencies [2bc4677]
+- Updated dependencies [42f8016]
+- Updated dependencies [6b587b3]
+- Updated dependencies [891dc77]
+- Updated dependencies [98dbb78]
+- Updated dependencies [0a952ee]
+- Updated dependencies [ee81865]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5e1e343]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [54cd610]
+- Updated dependencies [1bed7f7]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [f1fb411]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [6a19f78]
+- Updated dependencies [e402de5]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [25f7b82]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [44428b5]
+- Updated dependencies [1b8791e]
+- Updated dependencies [eee025e]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [dcc5a44]
+- Updated dependencies [d3cfd90]
+- Updated dependencies [a96c392]
+- Updated dependencies [6eec932]
+- Updated dependencies [13ccb0c]
+- Updated dependencies [3775aba]
+- Updated dependencies [d09f068]
+- Updated dependencies [161b7bc]
+- Updated dependencies [c9e1891]
+- Updated dependencies [aac148b]
+- Updated dependencies [0a3a56a]
+- Updated dependencies [7a08dc1]
+- Updated dependencies [005612e]
+- Updated dependencies [cf50330]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [f00d5fc]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/ai-realtime-client@6.2.0-edge.4
+  - @memberjunction/ng-realtime-media@6.2.0-edge.4
+  - @memberjunction/livekit-room-core@6.2.0-edge.4
+  - @memberjunction/ng-livekit-room@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-base-types@6.2.0-edge.4
+  - @memberjunction/ng-media-player@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 279b93e: Multi-agent rooms now take turns properly with full-duplex realtime models, and the Live Room doubles as an agent test bed.
+  - **Model-side addressing.** `IAddressedMatcher` gains a model-judged implementation next to the name-matching one. Full-duplex sessions get two host tools, `i_am_addressed` and `yield_turn`, because neither vendor offers a native signal. `TurnAddressing` (`Auto` | `ModelSide` | `Regex`) is selectable per session; `Auto` uses the model's judgement when the model reports the new `FullDuplex` capability (GPT-Live, Gemini 3.8 Live with always-on proactive audio) and name matching otherwise.
+  - **Floor discipline.** `MultiAgentRoomCoordinator` now grants hand-offs with a TTL (a third agent cannot jump in), keeps backchannels (short "mm-hm" acknowledgements) off the floor, lets a person's speech preempt the holder through the existing barge-in flush path while delegated work keeps running, and caps consecutive agent-to-agent turns (default 8, configurable). A new `FullDuplexTurnGate` enforces it on models that decide for themselves when to speak, so two agents never speak at once even if neither asks first.
+  - **Test bed.** New `GetLiveKitRoomTurnState` query and typed `GraphQLLiveKitClient.GetRoomTurnState`; new `mj-livekit-turn-state` widget; the Live Room gets per-agent turn mode and addressing pickers, roster badges and a live Turns panel (floor holder, hand-offs, backchannels, loop cap, event feed) that also works for a person who joins an existing room.
+  - **Tests.** A deterministic replay harness with twelve recorded room timelines asserts no overlapping agent speech, no run beyond the loop cap, humans always preempt and backchannels never take the floor.
+
+  No schema, metadata or CodeGen changes. Live-model behaviour of the host tools is not yet verified; see the "Multi-agent rooms" section of `plans/realtime/bridges-and-widget/LIVE-CALL-CHECKLIST.md`.
+
+- d0a8dbf: Add multi-party meetings support: MeetingResolver with GraphQL queries and mutations, GraphQLMeetingClient, Angular L2 meeting components (list, schedule form, lobby, participant picker), and L3 MeetingsResource component for MJ Explorer.
+- b1b6d3d: Phone calls can now arrive in a LiveKit room, and an agent can bring a person, a phone number or another agent into that same room.
+
+  No database, entity or metadata change. Handoff offers are held in memory per process, so use a single MJAPI instance for human handoff until a database-backed registry exists (see `plans/realtime/bridges-and-widget/LOCAL-HANDOFF-PR3.md`). None of this has been run against a real LiveKit SIP project or Twilio trunk.
+  - **`@memberjunction/livekit-room-server`** — `LiveKitSipService` (list, dial, remove and provision SIP participants and trunks through the LiveKit SIP client), `LiveKitWebhookParser` (signed LiveKit webhooks), and the room handoff engine: `RoomHandoffEngine`, `HandoffOfferRegistry` and the handoff types. `LiveKitAgentRoomCoordinator.StartAgentRoomSession` takes optional host options (tools, framing, conversation, transcript sink, barge-in and recovery hooks), and an ended agent leaves the room roster. `LiveKitUserIdentity` is shared by the token minter and the handoff engine.
+  - **`@memberjunction/telephony-adapters`** — `telephony.livekitSip` configuration and the `LiveKitSipTelephonyService` server extension (webhook at `/telephony/livekit-sip/webhook`, inbound admission by dialed number, capacity gate, run-as user, outbound through the shared gate), `ISipTrunkCarrier` with a Twilio Elastic SIP implementation that validates configuration only, `RoomCallSessionStarter`, and `PlaceLiveKitSipCall`. Transfer targets gain `kind: 'user' | 'agent'` (`userEmail`, `fallbackNumber`, `agentName`); a `number` target and a call on a carrier media stream behave as before.
+  - **`@memberjunction/server`** — the `telephony.livekitSip` config block; `HumanHandoffResolver` (`MyHandoffOffers`, `AcceptHandoffOffer`, `DeclineHandoffOffer`, subscription `HandoffOfferChanges`, all scoped to the signed-in user, failing closed); `StartLiveKitAgentRoomSession` accepts `EnableHandoff` for web-room escalation.
+  - **`@memberjunction/graphql-dataprovider`** — `GraphQLHandoffClient`; `EnableHandoff` on the agent room input.
+  - **`@memberjunction/ng-conversation-offers`** (new) — `mj-conversation-offers`, a generic widget listing offered conversations with a countdown and Accept / Decline.
+  - **`@memberjunction/ng-mj-livekit-room`** — `EnableHandoff` input.
+  - **`@memberjunction/ng-explorer-core`** — the Conversation Console resource (`HumanHandoffConsoleResource`), opened by a `handoff-offer` notification.
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [b1b6d3d]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ng-livekit-room@6.2.0-edge.3
+  - @memberjunction/ng-base-types@6.2.0-edge.3
+  - @memberjunction/livekit-room-core@6.2.0-edge.3
+  - @memberjunction/ng-media-player@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

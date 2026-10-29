@@ -110,7 +110,21 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 }
 ```
 
+The same holds when the provider goes **into an options object** rather than being called directly. An Angular component (`BaseAngularComponent` subclass) has a bound provider, `this.ProviderToUse`, so hand that one on:
+
+```typescript
+// ❌ WRONG — inside a component: the save goes to the default server, not this component's
+await op.Execute({ spec }, { provider: Metadata.Provider, user: this.CurrentUser });
+
+// ✅ CORRECT
+await op.Execute({ spec }, { provider: this.ProviderToUse, user: this.CurrentUser });
+```
+
+**Genuinely global code** (bootstrap, CLI, CodeGen, a singleton that registers itself as the default) marks the line with `// global-provider-ok: <specific reason>`. A `provider ?? Metadata.Provider` fallback needs no marker. Anything else fails `MultiProviderCompliance` (`npm run check:guards`).
+
 **Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
+
+**Metadata Info objects know their provider.** Providers construct every Info object as `new X(row, provider)`, and `BaseInfo.OwningProvider` keeps that back-reference (outside the instance, so it never serializes). Getters on an Info class that resolve sibling metadata — `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filters, `QueryInfo.Fields`, `AuthorizationInfo.Roles` — go through `MetadataProviderFor(this)`, never `Metadata.Provider`. When you add such a getter, do the same, and when an Info class builds child Info objects, pass the provider on.
 
 **When `new Metadata()` IS fine**: methods that genuinely operate on the global default — e.g., a one-off CLI script, application bootstrap, a singleton initializer that explicitly registers itself as the global provider.
 
@@ -210,6 +224,25 @@ const results = await rv.RunView<TemplateContentEntity>({
 // results.Results is now properly typed as TemplateContentEntity[]
 const entities = results.Results; // No casting needed!
 ```
+
+### Querying Governed Subsets — Alternate Base Views (`RunViewParams.AlternateBaseView`)
+
+When an entity defines **Alternate Base Views** (`MJ: Entity Alternate Base Views`), pass `AlternateBaseView` (by semantic `Name`, case-insensitive) in `RunViewParams` or `BaseEnginePropertyConfig` instead of repeating domain filter predicates in `ExtraFilter`:
+
+```typescript
+const rv = new RunView();
+const result = await rv.RunView<MJUserEntity>({
+    EntityName: 'MJ: Users',
+    AlternateBaseView: 'Active',   // queries vwUsersActive (100% column parity with vwUsers)
+    ExtraFilter: "Type = 'Owner'", // composes with the alternate base view
+    OrderBy: 'Name ASC',
+    ResultType: 'entity_object'
+}, contextUser);
+```
+
+- **100% column parity**: Every Alternate Base View exposes the exact same columns as the entity's canonical `BaseView`, so returned records hydrate the same `BaseEntity` subclass and enforce the same Entity Permissions, Row-Level Security (RLS), and Field-Level Security (FLS).
+- **Fail-closed**: Passing an unknown or `Disabled` `AlternateBaseView` name fails closed (never silently falls back to `BaseView`).
+- Full architecture, authoring rules (`metadata/entities/.alternate-base-views.json`), and out-of-the-box catalog: [`guides/ALTERNATE_BASE_VIEWS_GUIDE.md`](../../guides/ALTERNATE_BASE_VIEWS_GUIDE.md).
 
 ### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
 
@@ -590,6 +623,7 @@ const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
 - **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
 - **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
 - **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+- **Binary fields** (`varbinary`/`bytea`, base64 strings above the DB) are omitted from `RunView` unless `IncludeBinaryFields: true` or one is named in `Fields`; `Load()` always includes them. See [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
 
 #### Anti-Patterns
 ```typescript

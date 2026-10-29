@@ -1480,6 +1480,27 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
   return StripTrailingChars(s, charsToStrip, skipIfExactMatch);
 }
 
+/**
+ * Removes every trailing `/` from a string, typically a base URL before a path is joined onto it.
+ *
+ * Linear in the length of the input. The regex `/\/+$/` is not: on a string holding many slashes that
+ * are NOT at the end, it backtracks quadratically, which makes it a denial-of-service vector on any
+ * caller-supplied URL.
+ *
+ * @example
+ * ```typescript
+ * TrimTrailingSlashes('http://localhost:4000///'); // 'http://localhost:4000'
+ * TrimTrailingSlashes('/');                        // ''
+ * ```
+ */
+export function TrimTrailingSlashes(s: string): string {
+    let end = s.length;
+    while (end > 0 && s.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    return end === s.length ? s : s.substring(0, end);
+}
+
 
 /**
  * Recursively removes all spaces from a given string.
@@ -2077,6 +2098,44 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
     if (value == null) return 0;
     const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
     return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * Compares two values for equality, including cross-representation `Date` comparisons
+ * where one or both values may be `Date` instances, ISO date strings, or numeric epoch
+ * timestamps (e.g., comparing in-memory entity field values before and after database or
+ * JSON wire serialization).
+ *
+ * Returns `true` when:
+ * - `a === b` (strict identity for primitives and references)
+ * - Both `a` and `b` are `Date` instances with identical `.getTime()` epoch milliseconds
+ * - One side is a `Date` and the other is a `string` or `number` that parses to the same
+ *   epoch milliseconds as the `Date`
+ *
+ * @param a - First value to compare
+ * @param b - Second value to compare
+ * @returns `true` if the values are equal, `false` otherwise
+ *
+ * @example
+ * ```typescript
+ * ValuesEqual(42, 42); // true
+ * ValuesEqual(new Date('2026-08-01T00:00:00.000Z'), new Date('2026-08-01T00:00:00.000Z')); // true
+ * ValuesEqual(new Date('2026-08-01T00:00:00.000Z'), '2026-08-01T00:00:00.000Z'); // true
+ * ValuesEqual('a', 'b'); // false
+ * ```
+ */
+export function ValuesEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a instanceof Date && b instanceof Date) {
+        return a.getTime() === b.getTime();
+    }
+    if (a instanceof Date && (typeof b === 'string' || typeof b === 'number')) {
+        return a.getTime() === new Date(b).getTime();
+    }
+    if (b instanceof Date && (typeof a === 'string' || typeof a === 'number')) {
+        return new Date(a).getTime() === b.getTime();
+    }
+    return false;
 }
 
 /**

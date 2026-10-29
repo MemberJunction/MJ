@@ -7,11 +7,13 @@ import { MjFormFieldComponent } from './lib/field/form-field.component';
 import { MjCollapsiblePanelComponent } from './lib/panel/collapsible-panel.component';
 import { MjRecordFormContainerComponent } from './lib/container/record-form-container.component';
 import { MjSectionManagerComponent } from './lib/section-manager/section-manager.component';
+import { MjPanelManagerComponent } from './lib/panel-manager/panel-manager.component';
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
 import { MjIsaRelatedCardComponent } from './lib/isa-related-panel/isa-related-card.component';
 import { MjIsaRelatedPanelComponent } from './lib/isa-related-panel/isa-related-panel.component';
 import { FormPanelSlotComponent } from './lib/panel-slot/form-panel-slot.component';
+import { FormFieldPanelSlotComponent } from './lib/panel-slot/form-field-panel-slot.component';
 import { FormContributionsComponent } from './lib/panel-slot/form-contributions.component';
 import { RelatedEntityGridPanelComponent } from './lib/panel-slot/related-entity-grid-panel.component';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
@@ -23,10 +25,19 @@ import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
+import { InteractiveFormPanelComponent } from './lib/interactive-form/interactive-form-panel.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
+import { MjFormPlacementDialogComponent } from './lib/apply/form-placement-dialog.component';
+import { MjFormPlacementPreviewComponent } from './lib/apply/form-placement-preview.component';
+import { PlacementPreviewPanelComponent } from './lib/panel-slot/placement-preview-panel.component';
 import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
+import { MjRecordLinksComponent } from './lib/links/record-links.component';
+import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.component';
+import { MjRecordLinkDirective } from './lib/links/record-link.directive';
+import { MjRecordLinkComponent } from './lib/links/record-link.component';
+import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -54,21 +65,33 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     MjCollapsiblePanelComponent,
     MjRecordFormContainerComponent,
     MjSectionManagerComponent,
+    MjPanelManagerComponent,
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent,
     MjIsaRelatedCardComponent,
     MjIsaRelatedPanelComponent,
     FormPanelSlotComponent,
+    FormFieldPanelSlotComponent,
     FormContributionsComponent,
     RelatedEntityGridPanelComponent,
     InteractiveFormComponent,
-    MjEntityFormHostComponent
+    InteractiveFormPanelComponent,
+    MjEntityFormHostComponent,
+    MjFormPlacementDialogComponent,
+    MjFormPlacementPreviewComponent,
+    PlacementPreviewPanelComponent,
+    MjRecordLinksComponent,
+    MjRecordLinksDrawerComponent,
+    MjRecordLinkDirective,
+    MjRecordLinkComponent,
+    MjRecordPreviewPopoverComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJButtonDirective,
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule,
@@ -79,6 +102,8 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     CodeEditorModule,
     MJSafeRichHtmlPipe,
     SharedGenericModule,
+    MJButtonDirective,
+    MjIconPickerComponent,
     RecordCloneSlideInComponent
   ],
   exports: [
@@ -87,15 +112,26 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     MjCollapsiblePanelComponent,
     MjRecordFormContainerComponent,
     MjSectionManagerComponent,
+    MjPanelManagerComponent,
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent,
     MjIsaRelatedCardComponent,
     MjIsaRelatedPanelComponent,
     FormPanelSlotComponent,
+    FormFieldPanelSlotComponent,
     FormContributionsComponent,
     RelatedEntityGridPanelComponent,
     InteractiveFormComponent,
-    MjEntityFormHostComponent
+    InteractiveFormPanelComponent,
+    MjEntityFormHostComponent,
+    MjFormPlacementDialogComponent,
+    MjFormPlacementPreviewComponent,
+    PlacementPreviewPanelComponent,
+    MjRecordLinksComponent,
+    MjRecordLinksDrawerComponent,
+    MjRecordLinkDirective,
+    MjRecordLinkComponent,
+    MjRecordPreviewPopoverComponent
   ]
 })
 export class BaseFormsModule { }

@@ -193,6 +193,15 @@ dynamicPackages: {
 `--verbose` prints what loaded on stderr. Full model:
 [`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
+### Keeping the machine awake
+
+`mj install`, `mj app install`, `mj app upgrade` and `mj migrate` run for many minutes against the
+database. If the machine sleeps mid-run, every in-flight request times out on wake and the step is
+rolled back. On macOS these commands therefore hold a `caffeinate` assertion for as long as the
+CLI process lives (it ends with the command). Set `MJ_ALLOW_SLEEP=1` to opt out. Nothing holds
+Windows or Linux machines awake, so on every platform these commands start with a one-line warning
+not to let the machine sleep (or, on a Mac, close the lid) until they finish.
+
 ## Commands
 
 ### mj install
@@ -523,6 +532,28 @@ mj app remove <name> --keep-data
 # See which installed apps have newer versions available
 mj app check-updates
 ```
+
+#### Private repositories
+
+Some BizApp repositories are private or internal (`bizapps-ats` is one). GitHub answers **404, not 403**, for a repository
+it will not show you, so an install without a credential fails as though the app or the version
+did not exist. Supply a token one of three ways:
+
+```bash
+# 1. Environment variable
+GITHUB_TOKEN=$(gh auth token) mj app install https://github.com/MemberJunction/bizapps-ats
+
+# 2. mj.config.cjs — per-repository tokens, keyed by repo URL
+#    openApps: { github: { tokens: { 'https://github.com/MemberJunction/bizapps-ats': process.env.ATS_TOKEN } } }
+
+# 3. mj.config.cjs — one token for every Open App repo
+#    openApps: { github: { token: process.env.GITHUB_TOKEN } }
+```
+
+If more than one is set, the per-repo `tokens` entry wins, then `token`, then `GITHUB_TOKEN` — so a
+stale `token` left in `mj.config.cjs` silently shadows a freshly exported `GITHUB_TOKEN`.
+
+The token needs `repo` scope for the repositories you install from.
 
 #### Internal / dangerous flags
 

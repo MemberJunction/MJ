@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  BuildResizeCommitPatch, IsResizableKind,
+  BuildResizeCommitPatch, IsResizableKind, IsWhiteboardHexColor,
   WhiteboardChange, WhiteboardConnectorItem, WhiteboardHtmlItem, WhiteboardInkItem,
   WhiteboardItemKind, WhiteboardMarkdownItem, WhiteboardShapeItem,
   WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
@@ -586,14 +586,14 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
   });
 
   describe('BuildResizeCommitPatch (what a committed handle drag writes)', () => {
-    it('commits the FULL box (X/Y/W/H) for shape, highlight and html widgets', () => {
-      for (const kind of ['shape', 'highlight', 'html'] as const) {
+    it('commits the FULL box (X/Y/W/H) for shape, highlight, html widgets and markdown panels', () => {
+      for (const kind of ['shape', 'highlight', 'html', 'markdown'] as const) {
         expect(BuildResizeCommitPatch(kind, BOUNDS), kind).toEqual({ X: 30, Y: 40, W: 320, H: 180 });
       }
     });
 
-    it('commits X/Y/W ONLY (height stays content-driven) for sticky, text, image and markdown', () => {
-      for (const kind of ['sticky', 'text', 'image', 'markdown'] as const) {
+    it('commits X/Y/W ONLY (height stays content-driven) for sticky, text and image', () => {
+      for (const kind of ['sticky', 'text', 'image'] as const) {
         const patch = BuildResizeCommitPatch(kind, BOUNDS);
         expect(patch, kind).toEqual({ X: 30, Y: 40, W: 320 });
         expect(patch, kind).not.toHaveProperty('H');
@@ -616,14 +616,16 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
       expect(state.ItemBounds(state.GetItem(widget.ID)!)).toEqual({ X: 30, Y: 40, W: 320, H: 180 });
     });
 
-    it('markdown panel resize changes the width but PRESERVES an existing max-height cap', () => {
+    it('markdown panel resize moves its max-height cap, so a clipped agent panel can be dragged taller', () => {
       const state = new WhiteboardState();
-      const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 200, Markdown: '## hi' }, 'agent') as WhiteboardMarkdownItem;
-      const patch = BuildResizeCommitPatch('markdown', BOUNDS);
-      expect(state.UpdateItem(md.ID, patch!, 'user')).toBe(true);
+      const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 120, Markdown: '## hi' }, 'agent') as WhiteboardMarkdownItem;
+      const taller = { X: 0, Y: 0, W: 280, H: 400 };
+      expect(state.UpdateItem(md.ID, BuildResizeCommitPatch('markdown', taller)!, 'user')).toBe(true);
       const after = state.GetItem(md.ID) as WhiteboardMarkdownItem;
-      expect(after.W).toBe(320);
-      expect(after.H).toBe(200); // the gesture never writes H — the agent-set cap survives
+      expect(after.W).toBe(280);
+      expect(after.H).toBe(400);
+      state.Undo();
+      expect((state.GetItem(md.ID) as WhiteboardMarkdownItem).H).toBe(120);
     });
 
     it('text label resize sets an explicit wrap width and is one undoable step', () => {
@@ -639,14 +641,33 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
 });
 
 describe('WHITEBOARD_TOOL_DEFINITIONS', () => {
-  it('should describe all fourteen channel tools with parameter schemas', () => {
-    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(14);
+  it('should describe all fifteen channel tools with parameter schemas', () => {
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(15);
     const names = WHITEBOARD_TOOL_DEFINITIONS.map((d) => d.Name);
     expect(names).toEqual(Object.values(WHITEBOARD_TOOL_NAMES));
     for (const def of WHITEBOARD_TOOL_DEFINITIONS) {
       expect(def.Description.length).toBeGreaterThan(10);
       expect(def.ParametersSchema['type']).toBe('object');
       expect(def.ParametersSchema['properties']).toBeTruthy();
+    }
+  });
+});
+
+describe('IsWhiteboardHexColor', () => {
+  it('accepts #rgb and #rrggbb in either case', () => {
+    for (const c of ['#abc', '#ABC', '#1d4ed8', '#1D4ED8', '#000000']) {
+      expect(IsWhiteboardHexColor(c)).toBe(true);
+    }
+  });
+
+  it('rejects anything that is not a 3- or 6-digit hex, including CSS that could fetch', () => {
+    const rejected = [
+      '', '#', '#12', '#1234', '#12345', '#1234567', '#12345678', '#ggg', '1d4ed8',
+      ' #1d4ed8', 'red', 'rgb(0, 0, 0)', 'var(--mj-brand)', 'url(https://tracker.example/pixel.gif)',
+      '#fff url(https://tracker.example/pixel.gif)',
+    ];
+    for (const c of rejected) {
+      expect(IsWhiteboardHexColor(c), c).toBe(false);
     }
   });
 });

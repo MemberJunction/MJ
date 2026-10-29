@@ -28,7 +28,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCompanyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJDashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
-            { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
+            { sectionKey: 'mJDashboardsUserID', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJDataContexts', sectionName: 'Data Contexts', isExpanded: false },
             { sectionKey: 'mJDuplicateRunsStartedByUserID', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJListsUserID', sectionName: 'Lists', isExpanded: false },
@@ -46,7 +46,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserRoles', sectionName: 'Roles', isExpanded: false },
             { sectionKey: 'mJUserViewCategories', sectionName: 'User View Categories', isExpanded: false },
             { sectionKey: 'mJUserViewRuns', sectionName: 'User View Runs', isExpanded: false },
-            { sectionKey: 'mJUserViews', sectionName: 'User Views', isExpanded: false },
+            { sectionKey: 'mJUserViewsUserID', sectionName: 'User Views', isExpanded: false },
             { sectionKey: 'mJWorkspaces', sectionName: 'Workspaces', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsRequestForUserID', sectionName: 'AI Agent Requests', isExpanded: false },
@@ -126,7 +126,10 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
             { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJWorkQueueDeliveries', sectionName: 'Work Queue Deliveries', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJWorkQueueMessages', sectionName: 'Work Queue Messages', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
             { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
@@ -134,7 +137,15 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
             { sectionKey: 'mJMeetingParticipants', sectionName: 'Meeting Participants', isExpanded: false },
             { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
-            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false }
+            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false },
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
+            { sectionKey: 'mJUserViewsApprovedByUserID', sectionName: 'User Views (Approved By User ID)', isExpanded: false },
+            { sectionKey: 'mJDashboardsApprovedByUserID', sectionName: 'Dashboards (Approved By User ID)', isExpanded: false },
+            { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
+            { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false },
+            { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
+            { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false }
         ]);
     }
 }

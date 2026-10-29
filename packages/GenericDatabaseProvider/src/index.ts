@@ -7,6 +7,7 @@ export type {
     SaveCoercedValue,
     SaveCallBinding,
     SaveSQLFragment,
+    SaveReturnContext,
     RecordChangePayload,
 } from './saveTypes.js';
 export {
@@ -18,6 +19,8 @@ export {
 } from './crudSprocFieldRules.js';
 export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export { ClientClauseScreen, IsClientClauseScreeningProvider } from './clientClauseScreen.js';
+export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList, ClientClauseScreeningProvider, StatementReads, StatementRelation } from './clientClauseScreen.js';
 export {
     SystemUserFieldAccessLossReason,
     FindSystemUserFieldAccessViolations,
@@ -28,10 +31,13 @@ export {
 // Side-effect import: registers the startup sweep that reports a system user which has lost
 // field-level access on an FLS-enabled entity.
 export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
-export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
-export { SqlLoggingSessionImpl } from './SqlLogger.js';
+export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
+export { SqlLoggingSessionImpl, SCHEMA_PLACEHOLDER_LOOKBEHIND } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
+export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
+export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
+export type { RowCapOutcome, RowCapMethod, RowCapResult } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
 export { SymbolTable } from './symbolTable.js';
 // Re-export from @memberjunction/sql-parser for backward compatibility

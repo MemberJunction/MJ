@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -168,6 +168,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
         this.setState('connecting');
@@ -218,6 +219,9 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         const outputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.agent_output_audio_format, 'output');
         const inputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.user_input_audio_format, 'input');
         this.playback = this.createPlayback(outputRate);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, inputRate, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
@@ -243,6 +247,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.close();
@@ -331,6 +336,14 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.enqueueOrRun(() => this.sendUserMessage(instructions, 'narration', false));
     }
 
+    /** A spoken TURN: the same `user_message` trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.socket) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendUserMessage(instructions, 'normal', false));
+    }
+
     /**
      * Feeds an executed tool's result back via `client_tool_result`, correlated by the
      * platform's `tool_call_id`. EXACTLY-ONCE: the pending id is consumed when the result is
@@ -363,6 +376,16 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         for (const track of tracks) {
             track.enabled = !muted;
         }
+    }
+
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     /** @inheritdoc */
@@ -562,6 +585,11 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
 
     /** User transcript: whole-utterance FINAL (this provider emits no interim deltas). */
     private handleUserTranscript(text: string | undefined): void {
+        // A user turn always ends the response in flight, narration included. The platform does not
+        // always send `agent_response_complete` after a narration response, and without this reset the
+        // narration kind stuck for the rest of the call, so every later agent turn was tagged
+        // disposable and dropped from the transcript (MJ#6025).
+        this.activeResponseKind = 'normal';
         if (text && text.trim().length > 0) {
             this.emitTranscript({ Role: 'User', Text: text, IsFinal: true, Kind: 'normal' });
         }
@@ -714,7 +742,9 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.sendFrame({
             type: 'client_tool_result',
             tool_call_id: callID,
-            result: ElevenLabsRealtimeClient.ParseToolOutput(outputJson),
+            // The JSON string as given: ElevenLabs takes `result` as a string and closes the conversation on an
+            // object (MJ#4806); every other driver forwards the SendToolResult string untouched too.
+            result: outputJson,
             is_error: false,
         });
         this.responseActive = true;
@@ -749,18 +779,6 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         if (this.toolResultNudgeTimer) {
             clearTimeout(this.toolResultNudgeTimer);
             this.toolResultNudgeTimer = null;
-        }
-    }
-
-    /**
-     * Parses a JSON-stringified tool result into a structured value for the `result` slot,
-     * falling back to the raw string so a free-text result still round-trips.
-     */
-    public static ParseToolOutput(output: string): JSONValue {
-        try {
-            return JSON.parse(output) as JSONValue;
-        } catch {
-            return output;
         }
     }
 

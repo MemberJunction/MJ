@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const viewCalls: { EntityName: string; ExtraFilter?: string }[] = [];
+const viewCalls: { EntityName: string; ExtraFilter?: string; OrderBy?: string }[] = [];
 const promptCalls: Record<string, unknown>[] = [];
 const renderCalls: { children: { childPrompt: { prompt: { Name: string }; data: Record<string, unknown> }; parentPlaceholder: string }[] }[] = [];
 const decisionCalls: Record<string, unknown>[] = [];
@@ -15,8 +15,14 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         RunView: {
             FromMetadataProvider() {
                 return {
-                    async RunView(params: { EntityName: string; ExtraFilter?: string }) {
+                    async RunView(params: { EntityName: string; ExtraFilter?: string; OrderBy?: string }) {
                         viewCalls.push(params);
+                        if (params.EntityName === 'MJ: Conversations') {
+                            return { Success: true, Results: [{ ID: 'conv-1', Name: 'Standup', Description: 'Shipped' }] };
+                        }
+                        if (params.EntityName === 'MJ: Conversation Details') {
+                            return { Success: true, Results: [{ Role: 'User', Message: 'hello' }] };
+                        }
                         if (params.EntityName === 'MJ: AI Prompts') {
                             if (params.ExtraFilter?.includes('missing')) return { Success: true, Results: [] };
                             const key = params.ExtraFilter?.match(/='(.*)'$/)?.[1]?.replace(/''/g, "'") ?? '';
@@ -71,14 +77,19 @@ vi.mock('@memberjunction/ai-prompts', () => ({
         }
     },
 }));
-vi.mock('@memberjunction/ai-core-plus', () => ({
+vi.mock('@memberjunction/ai-core-plus', async () => ({
+    // The real picker: the scope tests below pin which fields it carries onto the evaluator's params.
+    PickPromptExecutionScope: (await vi.importActual<typeof import('@memberjunction/ai-core-plus')>('@memberjunction/ai-core-plus')).PickPromptExecutionScope,
     AIPromptParams: class AIPromptParams {},
     ChildPromptParam: class ChildPromptParam {
         constructor(public childPrompt: unknown, public parentPlaceholder: string) {}
     },
 }));
 
-import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService } from '../providerRecords.js';
+import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
+import type { EvaluationAgentRunner } from '../AgentRubricEvaluator.js';
+import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService, ProviderRecords, ProviderRubricEngine, RegisterRubricAgentRunner } from '../providerRecords.js';
+import { RubricEngine } from '../RubricEngine.js';
 
 describe('provider evaluator services', () => {
     beforeEach(() => {
@@ -162,6 +173,65 @@ describe('provider evaluator services', () => {
         expect(decisionCalls[0]).toMatchObject({ State: 'The text.', Questions: questions });
         expect(output.PromptRunID).toBe('decision-run');
         expect(output.Answers.clarity.Probabilities.High).toBe(0.8);
+    });
+});
+
+describe('provider evaluator services under a caller execution scope', () => {
+    beforeEach(() => {
+        viewCalls.length = 0;
+        promptCalls.length = 0;
+        decisionCalls.length = 0;
+    });
+
+    const data = {
+        Rubric: { Instructions: null, NotApplicablePolicy: 'NotAllowed' as const, PassThreshold: null },
+        Mode: 'SinglePass' as const,
+        Criteria: [],
+        Subject: { EntityName: 'MJ: Documents', RecordID: '1' },
+    };
+    const user = { ID: 'user' };
+    /** A customer run's scope. Its contextUser differs from the service's user, which must still win. */
+    const scope = {
+        contextUser: { ID: 'scope-user' },
+        configurationId: 'config-1',
+        apiKeys: [{ driverClass: 'AnthropicLLM', apiKey: 'customer-key' }],
+        CredentialScope: 'RuntimeOnly',
+    } as unknown as AIPromptExecutionScope;
+
+    it("runs the evaluator prompt on the scope's keys, configuration and CredentialScope", async () => {
+        await ProviderPromptService({}, user, scope).Run({ Prompt: { Name: 'Rubric Evaluator' }, Judge: { Name: 'Judge' }, Data: data, Subject: 's' });
+        expect(promptCalls[0]).toMatchObject({
+            apiKeys: [{ driverClass: 'AnthropicLLM', apiKey: 'customer-key' }],
+            configurationId: 'config-1',
+            CredentialScope: 'RuntimeOnly',
+        });
+    });
+
+    it("keeps the service's user as the evaluator prompt's contextUser under a scope", async () => {
+        await ProviderPromptService({}, user, scope).Run({ Prompt: { Name: 'Rubric Evaluator' }, Data: data, Subject: 's' });
+        expect((promptCalls[0] as { contextUser?: unknown }).contextUser).toBe(user);
+    });
+
+    it("asks the decision on the scope's keys, configuration and CredentialScope, as the service's user", async () => {
+        const questions = { clarity: { Kind: 'Score' as const, Instructions: 'Clear?', Levels: ['Low', 'High'] } };
+        await ProviderDecisionService({}, user, scope).Decide({ Prompt: { Name: 'Default Decision' }, State: 'The text.', Questions: questions });
+        expect(decisionCalls[0]).toMatchObject({
+            apiKeys: [{ driverClass: 'AnthropicLLM', apiKey: 'customer-key' }],
+            configurationId: 'config-1',
+            CredentialScope: 'RuntimeOnly',
+        });
+        expect((decisionCalls[0] as { contextUser?: unknown }).contextUser).toBe(user);
+    });
+
+    it('hands the execution scope to the registered agent-runner factory', () => {
+        const factory = vi.fn((_provider: unknown, _user: unknown, _scope?: AIPromptExecutionScope) => ({} as unknown as EvaluationAgentRunner));
+        RegisterRubricAgentRunner(factory);
+        const provider = {};
+        ProviderRubricEngine(provider, user, scope);
+        expect(factory).toHaveBeenCalledTimes(1);
+        expect(factory.mock.calls[0][0]).toBe(provider);
+        expect(factory.mock.calls[0][1]).toBe(user);
+        expect(factory.mock.calls[0][2]).toBe(scope);
     });
 });
 
@@ -269,5 +339,34 @@ describe('ProviderEvaluationStore.submit', () => {
             completeness: null,
             confidence: null,
         }]);
+    });
+});
+
+describe('conversation subject content', () => {
+    const provider = {
+        async GetEntityObject(): Promise<never> { throw new Error('this test does not create rows'); },
+    };
+    const user = { ID: 'user' };
+
+    beforeEach(() => {
+        viewCalls.length = 0;
+    });
+
+    function subjectContent() {
+        return new RubricEngine(undefined, ProviderRecords(provider, user)).SubjectContent({
+            subjectEntityName: 'MJ: Conversations',
+            subjectRecordId: 'conv-1',
+        });
+    }
+
+    function detailCall() {
+        return viewCalls.find(call => call.EntityName === 'MJ: Conversation Details');
+    }
+
+    it('reads the live Main details of a conversation subject, in Sequence order', async () => {
+        const content = await subjectContent();
+        expect(detailCall()?.ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL");
+        expect(detailCall()?.OrderBy).toBe('Sequence');
+        expect(content.data?.details).toEqual([{ Role: 'User', Message: 'hello' }]);
     });
 });

@@ -10,10 +10,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
+vi.mock('../install/template-user.js', () => ({
+    OfferTemplateUser: vi.fn(),
+    NamesFromEmail: vi.fn(),
+    TEMPLATE_USER_ENV: {},
+}));
 vi.mock('../github/github-client.js', () => ({
     FetchManifestFromGitHub: vi.fn(),
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
+    DescribeUnresolvedVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
     ParseGitHubUrl: (u: string) => {
         const m = u.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
@@ -39,7 +46,7 @@ vi.mock('../install/migration-runner.js', () => ({ RunAppMigrations: vi.fn() }))
 vi.mock('../install/package-manager.js', () => ({
     AddAppPackages: vi.fn(),
     RemoveAppPackages: vi.fn(),
-    RunPackageInstall: vi.fn(),
+    RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
 }));
 vi.mock('../install/config-manager.js', () => ({
@@ -78,10 +85,10 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp, RemoveApp, EnableApp, DisableApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
-import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies, RemoveAppPackages } from '../install/package-manager.js';
+import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, RemoveAppPackages } from '../install/package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveServerDynamicPackages } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
@@ -135,7 +142,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
     vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, Files: [] } as unknown as Awaited<ReturnType<typeof DownloadMigrations>>);
     vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-    vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+    vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
     vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
     vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
     vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -190,7 +197,7 @@ describe('InstallApp — resume after a crash mid-install', () => {
         expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
         expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
         // Phase 2 still runs to completion.
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
         // Checkpoint cleared on final success.
         expect(vi.mocked(SetAppStep)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', null);
     });
@@ -201,7 +208,7 @@ describe('InstallApp — resume after a crash mid-install', () => {
         const result = await InstallApp({ Source: 'https://github.com/test/app-x' }, context);
 
         expect(result.Success).toBe(true);
-        expect(vi.mocked(RunPackageInstall)).not.toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).not.toHaveBeenCalled();
         expect(vi.mocked(AddServerDynamicPackages)).toHaveBeenCalled();
     });
 
@@ -244,6 +251,29 @@ describe('InstallApp — resume after a crash mid-install', () => {
     });
 });
 
+describe('UpgradeApp — no resolvable latest version (#4505)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        baseHappyPathStubs();
+    });
+
+    it('reports why no version resolved, from the repository it could not read', async () => {
+        // A private repo with no credential: the release/tag listings 404 and come back empty, so
+        // GetLatestVersion is null. The failure must say why, not just "Could not determine".
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active', RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as never);
+        vi.mocked(GetLatestVersion).mockResolvedValueOnce(null);
+        vi.mocked(DescribeUnresolvedVersion).mockResolvedValueOnce('Cannot read test/app-x. (described)');
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe('Cannot read test/app-x. (described)');
+        expect(vi.mocked(DescribeUnresolvedVersion)).toHaveBeenCalledWith('https://github.com/test/app-x', context.GitHubOptions, undefined);
+    });
+});
+
 describe('UpgradeApp — resume after a crash mid-upgrade', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -258,7 +288,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
 
         expect(result.Success).toBe(true);
         expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
         expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Version: '2.0.0', Status: 'Active' }));
     });
 
@@ -275,7 +305,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         const attempt1 = await UpgradeApp({ AppName: 'app-x' }, context);
         expect(attempt1.Success).toBe(false);
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalledTimes(1); // Packages succeeded before Config threw
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalledTimes(1); // Packages succeeded before Config threw
 
         // Second attempt resumes past the checkpointed Packages step (row is Error, per the
         // mutex rule Error is still an allowed re-entry status for Upgrade — B21).
@@ -288,7 +318,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         expect(attempt2.Success).toBe(true);
         // Error-status re-entry reads the checkpoint too (not just 'Upgrading'), so the
         // already-completed Packages step is skipped on the retry — it is NOT re-run.
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalledTimes(1);
     });
 
     it('a checkpoint left by an interrupted upgrade to a DIFFERENT version is not trusted for this version (regression for the version-scoping gap)', async () => {
@@ -307,7 +337,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         expect(result.Success).toBe(true);
         // The mismatched checkpoint is ignored — migrations AND packages both actually run for 2.0.0.
         expect(vi.mocked(RunAppMigrations)).toHaveBeenCalled();
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
         expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Version: '2.0.0' }));
     });
 });
@@ -461,7 +491,7 @@ describe('Cross-operation checkpoint contamination — a checkpoint left by one 
         expect(migrationsIndex).toBeGreaterThan(clearIndex);
         // The mismatched checkpoint is not trusted — migrations AND packages both actually run.
         expect(vi.mocked(RunAppMigrations)).toHaveBeenCalled();
-        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
     });
 
     it("RemoveApp: a checkpoint left by an aborted Upgrade ('PackagesInstalled', foreign to Remove) is cleared before Remove starts its own DB cleanup — so a LATER upgrade to that same version cannot wrongly resume from it", async () => {

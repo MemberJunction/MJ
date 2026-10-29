@@ -1,5 +1,5 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { ComputeContentHash } from './ContentHash.js';
@@ -17,6 +17,7 @@ import type {
     SourceSchemaInfo,
     SourceObjectInfo,
     SourceRelationshipInfo,
+    IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
     DeleteRecordContext,
@@ -270,7 +271,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     public async IntrospectSchema(
         companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
+        _contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
     ): Promise<SourceSchemaInfo> {
         const integrationID = companyIntegration.IntegrationID;
         const objects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
@@ -278,11 +280,22 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // enumeration): NEVER authoritative for deactivation — it can only return what is already Active.
         // A REST connector doing genuine live full-gamut discovery must override IntrospectSchema +
         // DiscoveryIsAuthoritative itself.
-        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false };
+        //
+        // OnObject lets the CALLER take each object as it is built and this method then drop it, so
+        // peak memory is one object instead of the whole catalog. No handler → accumulate and return,
+        // exactly as before. This override used to declare no options parameter at all, so anything a
+        // caller passed was silently ignored.
+        const onObject = options?.OnObject;
+        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false, Streamed: !!onObject };
 
+        const objectsByID = IndexByUUID(objects);
         for (const obj of objects) {
             const fields = this.GetCachedFields(obj.ID);
-            const sourceObject = this.buildSourceObjectInfo(obj, fields, objects);
+            const sourceObject = this.buildSourceObjectInfo(obj, fields, objectsByID);
+            if (onObject) {
+                await onObject(sourceObject);
+                continue; // deliberately NOT retained — that is the entire point
+            }
             result.Objects.push(sourceObject);
         }
 
@@ -695,8 +708,27 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         deadlineMs?: number,
         watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
-        const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
-        if (this.detectTemplateVars(obj.APIPath).length === 0) {
+        // A RUNTIME-DISCOVERED object has NO IntegrationObject row yet — sampling is what decides
+        // the row's contents, so it necessarily runs BEFORE the row is persisted. `GetCachedObject`
+        // is documented to THROW when the object is not in the engine's cache, and that throw fired
+        // here, on the first line, before the connector was ever consulted.
+        //
+        // The blast radius is exactly the objects discovery exists to learn: the whole sampling
+        // chain ran with zero records for them, so no statistical primary key and no observed column
+        // widths — the object was then persisted from the catalog's guesses alone.
+        //
+        // A missing row only disqualifies the record-constrained sampler BELOW, which needs
+        // `obj.APIPath` to detect template vars and `obj.ID` to walk parents. The generic
+        // FetchChanges loop in the base needs neither: it hands routing to the connector, which owns
+        // first contact with an object the catalog has never seen. So a missing row routes to the
+        // fallback rather than aborting the sample.
+        let obj: MJIntegrationObjectEntity | null = null;
+        try {
+            obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
+        } catch {
+            /* Not persisted yet. Not an error here — the fallback below needs no row. */
+        }
+        if (!obj || this.detectTemplateVars(obj.APIPath).length === 0) {
             // FORWARD THE DEADLINE. Dropping it here silently un-bounds every REST connector that
             // lands on this fallback — which is every connector expressing parent scope as
             // CONFIGURATION rather than as URL template vars.
@@ -1639,9 +1671,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     private buildSourceObjectInfo(
         obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
-        allObjects: MJIntegrationObjectEntity[]
+        objectsByID: UUIDMap<MJIntegrationObjectEntity>
     ): SourceObjectInfo {
-        const relationships = this.buildRelationships(fields, allObjects);
+        const relationships = this.buildRelationships(fields, objectsByID);
 
         return {
             ExternalName: obj.Name,
@@ -1671,14 +1703,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     private buildRelationships(
         fields: MJIntegrationObjectFieldEntity[],
-        allObjects: MJIntegrationObjectEntity[]
+        objectsByID: UUIDMap<MJIntegrationObjectEntity>
     ): SourceRelationshipInfo[] {
         const relationships: SourceRelationshipInfo[] = [];
 
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
 
-            const targetObj = allObjects.find(o => UUIDsEqual(o.ID, field.RelatedIntegrationObjectID));
+            const targetObj = objectsByID.Get(field.RelatedIntegrationObjectID);
             if (!targetObj) continue;
 
             relationships.push({

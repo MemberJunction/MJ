@@ -1,5 +1,7 @@
 # MemberJunction Forms Architecture Guide
 
+> **Part of the UI guide set.** This guide is the reference for the forms stack, which lives in `packages/Angular/Generic` and works in any Angular app, not only Explorer. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 How MJ renders and edits entity records — as full-page tabs, modal dialogs, or
 slide-in panels — from **one** set of forms, with **no per-surface code** and
 **no regeneration**.
@@ -289,6 +291,9 @@ related-entity grids. At runtime, registered `BaseFormPanel`s can:
 - **claim a related-entity grid** (`relatedEntity`) so the baked grid hides and yours mounts
 - **fill in** a `DisplayInForm` relationship the template never baked (other OpenApp installed)
 - **replace a named field panel** (`replacesSectionKey`) — hide `details` / `personalIdentity` and mount a hero that is **not** a collapsible panel
+- **replace several field panels of one tab** (`replacesSectionKeys`) — the panel takes the place of the first
+- **replace some fields of one section** (`replacesFieldNames`) — at the top or bottom of that section (`sectionPosition`)
+- **sit inside a section** (`inSectionKey` + `sectionPosition`) — at its top or bottom, replacing nothing
 
 Discovery is `GetAllRegistrationsByMetadata`. Last-wins is ClassFactory `Priority` per `contributionKey`. Plan: [`/plans/form-contributions.md`](../plans/form-contributions.md). Authoring: [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
 
@@ -408,6 +413,116 @@ Extra pane. Does not replace anything. Generated subscription fields stay.
 
 Orders' full custom form already wraps `<mj-record-form-container>` and emits `before-fields`. A contribution registered for Order Headers still mounts there. You do **not** have to replace the whole form to get a hero — start with B, grow to a custom form only when the line editor / tab strip demand it.
 
+#### Scenario I — A contribution that is a database row (no Angular, no build)
+
+A contribution does not have to be compiled. A `MJ: Entity Form Contributions` row points a
+parent entity at a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) and
+carries the same registration bag as `@RegisterClassEx` — `Slot`, `SortKey`, `ContributionKey`,
+`RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`, `ReplacesSectionKeys`,
+`ReplacesFieldNames`, `InSectionKey` + `SectionPosition`, `Inclusion`, `ChromeGroup` — plus
+`Presentation` (`panel` | `bare`), `Title`, `Icon`, `Configuration`, `Precedence`, and User / Role /
+Global scope with `Active` / `Pending` / `Inactive` status. A row makes at most one claim (a grid,
+one or several sections, fields in one section, or a place in a section); a CHECK constraint
+enforces it.
+
+`CollectFormContributionRegistrations(entity, provider)` merges these rows (from
+`InteractiveFormsEngine`) with the ClassFactory registrations. The composer, the slot hosts and the
+chrome layers see **one** list and cannot tell the two sources apart. `<mj-form-panel-slot>` mounts
+a row through `InteractiveFormPanelComponent`, which renders the React component with
+`FormPanelHostProps` inside a collapsible panel — or bare, for a hero. In the browser the engine
+loads the shared rows and the signed-in user's own personal rows only, for contributions and full
+custom forms alike.
+
+**Precedence.** The form collapses the list once per resolve (`ResolveFormContributionWinners`):
+one winner per `contributionKey`. The higher rank wins — a row's `Precedence`, a compiled panel's
+ClassFactory `Priority`. **On a tie the compiled registration wins**, so an installed app's panel is
+not displaced by accident, and between two rows the narrower audience wins: `User`, then `Role`,
+then `Global` (`FormContributionOutranks` in `@memberjunction/core-entities`, which the server's
+`Get Form Composition For Entity` uses too). A row that deliberately replaces a compiled panel
+carries `Precedence = incumbent + 1`, which the apply flow sets only after the user confirms. A
+user's own row written at the same precedence as a shared row wins by the audience rule. Wildcard
+(`'*'`) registrations take part on every form, but their place claims are ignored: one that claims
+a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its
+slot. A wildcard field claim still acts on every form that draws the field.
+
+**Where rows come from.** An OpenApp without Angular ships them under
+`metadata/entity-form-contributions/` (its pull filter is `Scope <> 'User'`, so personal rows are
+never pulled into files). An agent writes them through `Create Form Contribution` /
+`Modify Form Contribution` / `Activate Form Contribution Version`, and
+`Get Form Contributions For Entity` reads back what a user already has. The actions change only the
+caller's own personal (`Scope='User'`) rows — of contributions and of full custom forms alike — and
+return `FORBIDDEN` for a `Role` or `Global` row, whoever the caller is. A spec that makes more than
+one claim returns `INVALID_CLAIM` before anything is written. The three contribution actions write
+the Component and the row in one transaction, and so do `Modify Interactive Form` and
+`Activate Interactive Form Version` for a full form's Component and override; `Create Interactive
+Form` and `Revert Interactive Form` do not. Both `Modify Interactive Form` and `Activate Interactive
+Form Version` set the prior version aside after that transaction; if Activate cannot, it returns
+`PERSIST_FAILED` with the new form already Active. `Modify Form Contribution` takes an optional
+`Precedence`. Sharing with a role or everyone is a human act in the form's Manage drawer or in Form
+Builder, and needs the `Manage Form Defaults` authorization.
+
+A panel's component is an `MJ: Components` row. The stock `UI` role can create and update that
+entity (not delete), and a form can also load a component by name, so the server checks component
+writes. Without `Manage Form Defaults`, the component must be the caller's own
+(`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal rows, or
+used by no row and created by the caller, as its Internal `Create` record in `MJ: Record Changes`
+shows (a caller cannot create an Internal `Create` record change through the API). That applies to
+any update or delete of the component, whatever columns it changes (`ComponentWriteRefusal`), to a
+row created or re-pointed at it (`FormRowComponentRefusal`), and to giving another component its
+name (`ComponentNameCollisionRefusal`). With the grant, only a delete or a change to a component's
+specification, status, name, namespace or type is checked, and it is refused only when another
+user's personal row uses the component; pointing a row at such a component is refused for
+everyone, and the name is not restricted. The reads run as the caller in one batch, the changed
+columns come from the stored row, and a failed read refuses the write. Any user can therefore
+author their own panel through the actions and turn it on, off or to a draft in the drawer.
+
+**Form context for agents.** Each record form publishes its composition snapshot (sections, related
+grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;
+the apply path reads it there to check what a panel replaces. The record tab, while it is the tab on
+screen, publishes a compact `FormAgentContext` as `AppContext.AdditionalContext.Form`: the entity,
+`RecordPrimaryKey` (a `CompositeKey.ToURLSegment()` string, or null for an unsaved record), the form
+choice, and each section's key, title, variant, hidden flag and the contribution that holds it. It
+publishes again when its tab is reattached and never while it is detached. On the server,
+`Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell —
+hidden panels, the identity rule below and the same collapse — and returns `QUERY_FAILED` when a
+query fails. Compiled panels exist only in the browser, so it does not list them, and it lists no
+row while the kill switch below is off. A generated panel may propose its placement in
+`formContribution` (slot, a section key, field names, a related entity, or a section to sit
+inside). The apply dialog starts from every claim the open form can honour and from its default for
+the rest; the user confirms placement. The dialog never reads a proposed `contributionKey` or
+`sortKey`: a key that matches an installed panel would read as replacing that panel, and the order
+among the panels in one position is the host's.
+
+**Two safety properties worth knowing.** Shared forms and panels do not render on identity,
+permission and form-metadata entities: on the 11 entities in `RESTRICTED_FORM_ENTITIES`
+(`MJ: Users`, `Roles`, `User Roles`, `Authorizations`, `Authorization Roles`, `Entity Permissions`,
+`Row Level Security Filters`, `API Keys`, `Entity Field Permissions`, `Entity Form Overrides`,
+`Entity Form Contributions`) only `User` rows and forms are used. The rule
+(`FormScopeAllowedOnEntity`) is applied where rows are read, whatever wrote the row, including
+`mj sync` and direct SQL. And a kill switch turns the whole source off: the engine loads nothing,
+the collector returns compiled registrations only, and forms render exactly as they did before the
+feature existed. The switch has two settings, because the browser has no process environment:
+
+- **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`. The engine
+  on that process loads no row.
+- **Explorer**: set the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` to
+  `false`. The shell applies it after `InstanceConfigEngine.Config()` has finished and before any
+  form opens. Another browser host calls
+  `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)`, or sets
+  `InteractiveFormsEngine.MetadataContributionsEnabled`, at the same point.
+
+In the browser the instance configuration can only turn the source off, never back on, and when
+Instance Config fails to load the source stays on. The seed row reaches a database through
+`mj sync push`. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no
+row when either setting is off (`MetadataContributionsEnabled: false` in their result). They read
+the instance configuration from the cached `InstanceConfigEngine`, which is refreshed after a save
+in the same process or by cross-server cache invalidation, so a change saved elsewhere counts once
+the cache has it. The write actions still write rows while the switch is off. The server variable
+does not reach the browser, so with only the Node setting off, Explorer still draws rows those two
+actions leave out.
+
+L3 `MJ: Form Chrome Rules` still suppresses any of them by `ContributionKey`.
+
 ### 7d. Form chrome — accordion, left-nav, and More
 
 Contributions decide *what* is on the form. Chrome decides *which of those
@@ -524,6 +639,29 @@ when present). Users reorder first-class items by dragging the rail grip
 (or Manage Sections / reset in the toolbar). The centered / full-width
 toolbar toggle still applies.
 
+#### Section counts and empty sections
+
+When a saved record opens, the container prefetches **every** related section's row count plus the
+tag / attachment / version toolbar badges in **one** `RunViews` call of `count_only` views. The
+database provider runs an all-`count_only` batch as a single `UNION ALL` statement, with each view
+still passing through the normal RunView security path (CanRead, RLS, saved-view filters). The call
+is fire-and-forget, so it lands alongside form render; unsaved records skip it. Grid loads — including
+a manual grid refresh — keep counts current afterwards.
+
+Two metadata keys drive it, resolved **relationship / contribution (L1) → entity default (L2) →
+built-in default**:
+
+| Key | Where | Default | Effect |
+|---|---|---|---|
+| `showCount` | `EntityRelationship.Configuration.UI`, contribution metadata; entity default `UI.Form.ShowRelatedCounts` | `true` | Prefetch + badge the count. `false` for known-expensive related entities |
+| `whenEmpty` | same; entity default `UI.Form.RelatedWhenEmpty` | `'show'` | `'hide'` — hidden at 0 rows. `'more'` — moved into More at 0 rows, back when it has rows |
+
+Rules: layout (accordion vs left-nav) is decided **before** empty sections are removed, so counts
+arriving never flip it. A `'hide'` section is held off the rail until counts arrive (no show-then-yank);
+a section that had rows this session, or the open rail item, is never hidden; a failed count fails
+open. The "show empty fields" toolbar toggle reveals everything. The collapsed More folder shows the
+sum of its children's counts.
+
 #### Section indicators — unsaved edits and invalid fields, per section
 
 A multi-section form says **which** section holds an edit or a failure, so a user does
@@ -634,6 +772,137 @@ Stored in `MJ: Entities.Configuration` (JSONType):
 - **Drag & Drop Upload**: Direct upload pipeline linked into `MJ: File Entity Record Links`.
 - **Cancelable Event Hooks**: Full Before/After lifecycle (`BeforeUpload`, `BeforeDelete`, `BeforeUnlink`, `BeforeDownload`, `BeforePreview`, `BeforeReplace`).
 
+### 7e. Pluggable Form Toolbar Actions (`BaseFormToolbarAction` & `@RegisterFormToolbarAction`)
+
+Toolbar buttons in `<mj-form-toolbar>` can be authored as self-contained, lifecycle-aware TypeScript classes that extend **`BaseFormToolbarAction`** and register via **`@RegisterFormToolbarAction(metadata, priority?)`**. The built-in **Record Links (`RecordLinksToolbarAction`)** button is implemented using this exact plugin architecture.
+
+#### Why Pluggable Toolbar Actions?
+Instead of hardcoding entity-specific buttons into `<mj-form-toolbar>` or overriding an entire form just to add a toolbar action, any package or vertical OpenApp can register a `BaseFormToolbarAction` class scoped to:
+- **All entities globally**: `EntityScope: '*'` (default)
+- **A single entity**: `EntityScope: 'MJ_BizApps_Common: People'`
+- **A glob pattern of entities**: `EntityScope: 'MJ_BizApps_Orders:*'` or `'*Invoice*'`
+- **A database schema**: `EntityScope: 'schema:common'`
+- **An array of patterns**: `EntityScope: ['MJ_BizApps_Common: People', 'MJ_BizApps_Common: Organizations']`
+
+#### Lifecycle Hooks & Pin-Aware Pre-Warming
+Every instantiated `BaseFormToolbarAction` receives a strongly-typed **`FormToolbarActionLifecycleContext`** (`Record`, `EntityInfo`, `Provider`, `EditMode`, `IsDirty`, `IsPinned`, `IsVisibleOnBar`, `FormComponent`, plus state mutators `SetBadge`, `SetLoading`, `SetDisabled`, `SetActive`, `RequestChangeDetection`):
+
+| Hook | When It Runs | Typical Use |
+|------|--------------|-------------|
+| `IsApplicable(ctx)` | Before render & pre-warm | Gate visibility by entity metadata, record state (`ctx.Record.IsSaved`), or user permissions |
+| `OnInit(ctx)` | When form mounts or switches record | Reset local state or initialize lightweight subscriptions |
+| `OnPrewarm(ctx)` | Fire-and-forget when a saved record opens | Prefetch badge counts or background summaries — **check `if (!ctx.IsPinned) return;` to avoid network queries when unpinned!** |
+| `OnPinStateChanged(ctx, isPinned)` | User pins/unpins button in toolbar overflow | Trigger lazy `OnPrewarm(ctx)` the moment the user pins the button to their primary bar |
+| `OnRecordSaved(ctx)` | After `Record.Save()` succeeds | Refresh badge counts or invalidate cached state |
+| `OnRecordRefreshed(ctx)` | After record reload | Re-run pre-warm or clear stale state |
+| `OnExecute(ctx, event)` | User clicks the button or overflow menu item | Open a drawer/modal, invoke an Action/Agent, or toggle state |
+| `OnDestroy()` | Form container unmounts | Clean up timers or subscriptions |
+
+#### Authoring a New Scoped Toolbar Action
+
+```typescript
+import {
+  BaseFormToolbarAction,
+  RegisterFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+} from '@memberjunction/ng-base-forms';
+
+@RegisterFormToolbarAction({
+  Key: 'verify-compliance',
+  MenuLabel: 'Verify Compliance',
+  Tooltip: 'Run compliance checks for this record',
+  Icon: 'fa-solid fa-shield-check',
+  EntityScope: ['MJ_BizApps_Common: People', 'MJ_BizApps_Common: Organizations'],
+  Order: 45,
+  Pinnable: true,
+  Mode: 'action',
+})
+export class VerifyComplianceToolbarAction extends BaseFormToolbarAction {
+  public override async OnPrewarm(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    // Only pre-warm over the network if the user has pinned this button onto their toolbar
+    if (!ctx.IsPinned) return;
+    const issueCount = await this.fetchOpenComplianceIssuesCount(ctx);
+    ctx.SetBadge(issueCount > 0 ? issueCount : null);
+    ctx.RequestChangeDetection();
+  }
+
+  public override async OnExecute(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    ctx.SetLoading(true);
+    ctx.RequestChangeDetection();
+    try {
+      await this.runComplianceCheck(ctx);
+    } finally {
+      ctx.SetLoading(false);
+      ctx.RequestChangeDetection();
+    }
+  }
+
+  private async fetchOpenComplianceIssuesCount(_ctx: FormToolbarActionLifecycleContext): Promise<number> {
+    return 0;
+  }
+
+  private async runComplianceCheck(_ctx: FormToolbarActionLifecycleContext): Promise<void> {}
+}
+```
+
+#### Subclassing & Overriding an Existing Toolbar Button (with Metadata Inheritance)
+You can **subclass** any existing toolbar action plugin (such as `RecordLinksToolbarAction`) and decorate your subclass with `@RegisterFormToolbarAction(...)` to customize or replace the superclass behavior—either globally (`EntityScope: '*'`) or for specific entities (`EntityScope: 'MJ_BizApps_Common: People'`).
+
+When you subclass a toolbar action:
+1. **Automatic Prototype-Chain Metadata Inheritance**: `ResolveFormToolbarActionsForEntity` walks the prototype chain and merges ancestor `@RegisterFormToolbarAction` metadata (`{ ...ancestorMetadata, ...childMetadata }`). You do **not** need to repeat `Key: 'links'`, `Icon`, `Order`, `Pinnable`, or `Mode`—only specify the properties you want to override (such as `EntityScope`, `MenuLabel`, or `Tooltip`).
+2. **3-Tier Winner Resolution per `Key`**:
+   - **Tier 1 (Subclass Override)**: A subclass (`Sub.prototype instanceof Super`) **always** wins over its superclass for matching entities, regardless of registration order.
+   - **Tier 2 (Entity Specificity)**: An entity-scoped registration (`EntityScope: 'MJ_BizApps_Common: People'`) overrides a global wildcard registration (`EntityScope: '*'`) of equal explicit priority.
+   - **Tier 3 (ClassFactory Priority)**: Higher `@RegisterFormToolbarAction(metadata, priority)` wins (auto-incremented in module import order when `priority` is omitted/`0`).
+
+```typescript
+import {
+  RecordLinksToolbarAction,
+  RegisterFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+} from '@memberjunction/ng-base-forms';
+
+// Inherits Key: 'links', Icon: 'fa-solid fa-diagram-project', Order: 40, Pinnable: true, Mode: 'toggle-drawer'
+// Overrides RecordLinksToolbarAction ONLY on 'MJ_BizApps_Common: People' forms:
+@RegisterFormToolbarAction({
+  EntityScope: 'MJ_BizApps_Common: People',
+  MenuLabel: 'Person Graph',
+  Tooltip: 'Explore Person relationships & organizational links',
+})
+export class PersonLinksToolbarAction extends RecordLinksToolbarAction {
+  public override async OnPrewarm(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    // Always pre-warm on People forms even when unpinned:
+    await super.OnPrewarm({ ...ctx, IsPinned: true });
+  }
+}
+
+export function LoadPersonLinksToolbarAction(): void {
+  // Tree-shaking prevention loader
+}
+```
+
+### 7f. Bidirectional Record Links (`<mj-record-links>`) & Hover Preview Cards (`<mj-record-preview-popover>`)
+
+Every entity form includes a **Bidirectional Record Links** drawer (`<mj-record-links>`) driven by `RecordLinksToolbarAction`:
+- **Three Discovery Channels in One Batched `RunViews` Call**:
+  1. **Outbound References (`↗`)**: Non-null foreign keys on the current record pointing to parent/referenced entities (`Record.EntityInfo.Fields` where `RelatedEntityID` is populated).
+  2. **Inbound References (`↙`)**: Child/referencing records across `EntityInfo.RelatedEntities` that point to the current record via standard foreign keys.
+  3. **Polymorphic Links (`↗` / `↙`)**: Polymorphic `EntityID` + `RecordID` pairs declared via `EntityField.EntityIDFieldName`.
+- **Direction Filter Pills & Badges**: Users can filter the links drawer by `All`, `Outbound ↗`, or `Inbound ↙`, search across linked records, and open any linked record in a tab or floating `<mj-form-window>`.
+- **Sage / AI Agent Context Integration**: When links are loaded or pre-warmed, `RecordLinksToolbarAction` publishes a compact `FormAgentLinksSummary` onto the form container's `FormCompositionSnapshot`, which flows automatically into `AppContext.AdditionalContext.Form.LinksSummary` so Sage and form-aware agents know the record's connected neighborhood without extra tool calls.
+- **Declarative Record Links (`[mjRecordLink]` & `<mj-record-link>`)**: Any custom form header, `BaseFormPanel`, or dashboard widget can attach MJ's full record-linking UX (hover-intent preview popover, inline Quick Edit with live propagation back to companion display fields on `Record`, standard + polymorphic FK resolution, and click/Ctrl+Click `FormNavigationEvent` navigation) via `[mjRecordLink]="Record" FieldName="..."` (field-driven) or `mjRecordLink [EntityName]="..." [RecordID]="..."` (direct). Note: When `FieldName` is a virtual view column without a physical SQL FK constraint (so `EntityFieldInfo.RelatedEntity` is empty), pass both `[mjRecordLink]="Record" FieldName="CurrentOrganizationID" EntityName="MJ_BizApps_Common: Organizations"`.
+- **Hover Preview Cards (`<mj-record-preview-popover>`) & `@RegisterClass` Pluggability**:
+  - `MjRecordPreviewPopoverService` mounts a single body-level `<mj-record-preview-popover>` using the **Option A** layout: top-right header micro-cluster (Copy ID pill, `[✎]` Quick Edit, `[↗]` New Tab), clickable record title link (`Mathieu Grantham →`), auto-spanning full-width rows for wide fields (`Email`, `URL`, `Title`), and a contextual `Cancel` / `Save` footer that appears only while editing (with cancellable `BeforeQuickEditSave` and `AfterQuickEditSaved` / `RecordUpdated` events).
+  - **Runtime ClassFactory Resolution**: Applications can subclass `MjRecordPreviewPopoverComponent` (overriding `protected` hooks like `selectPreviewFields`, `isFieldWide`, `buildSummaryFromRow`, or supplying a custom template) and register with `@RegisterClass(MjRecordPreviewPopoverComponent, key)` globally (`null` / `'*'`), by wildcard/schema (`'MJ_BizApps_Common:*'` / `'schema:mj_bizapps_common'`), or for a specific entity (`'MJ_BizApps_Common: People'`). `MjRecordPreviewPopoverService` calls `ResolveRecordPreviewPopoverType` via `MJGlobal.Instance.ClassFactory` before mounting the popover.
+
+### 7g. In-Form Time-Travel Version Preview & Record Changes Activity Sparkline
+
+The `<mj-record-changes>` history drawer and `<mj-record-form-container>` work together to let users inspect historical snapshots **directly inside the actual entity form** before deciding whether to restore:
+- **Single-Click `"Preview in Form"`**: Clicking `"Preview in Form"` on any version card in `<mj-record-changes>` automatically closes the slide-in drawer so the form is 100% bright and unobstructed, switches the form into read-only preview mode, and mounts a sticky **Time-Travel Scrubber Bar** at the top of the form.
+- **Full-Record + Calculated DisplayName Rehydration**: The container stashes the live field values (`liveRecordPreviewStash`) and rehydrates `Record.Fields` from the version's `FullRecordJSON` + `ChangesJSON` overlay without marking the record dirty (`Dirty === false`). If a read-only composite `DisplayName` / `FullName` field in `FullRecordJSON` was stale relative to changed name parts (`FirstName`, `MiddleName`, `LastName`), the container synthesizes the historical display name and broadcasts `FormSlotCoordinator.NotifyVersionPreviewChanged()` so custom `BaseFormPanel` headers and slots re-render immediately.
+- **Interactive Scrubber & Changed-Field Jump Chips**: The top scrubber bar provides `◀ Prev` / `Next ▶` version stepping, clickable changed-field diff chips (which scroll to and highlight the modified field in the form), a `"Timeline"` button to pop the `<mj-record-changes>` drawer back open with the active version highlighted, `"Restore This Version"`, and `"Exit Preview"`.
+- **Burst-Aware Cluster Strip (`<mj-burst-cluster-strip>`) & Multi-Year Semantic Zoom**: `<mj-record-changes>` embeds `<mj-burst-cluster-strip>` from `@memberjunction/ng-ui-components` to group irregular change histories into active editing sessions separated by non-linear quiet-gap connectors (`⋯ 11 mos quiet ⋯`), automatically coalescing multi-year histories into zoomable calendar eras (`Year` → `Month` → `Session Burst`).
+
 ---
 
 ## 8. Navigation from inside a dialog / slide-in
@@ -683,6 +952,8 @@ That keeps the Generic stack routing-free and lets each consumer pick the UX.
 | Keep a record open (non-modal) while working elsewhere | `<mj-form-window>` or `forms.Open({Presentation:'window'})` |
 | Edit just one section of a record in an overlay | `SectionName` on any shell / `forms.Open({SectionName})` |
 | Add a custom section into a generated form | `BaseFormPanel` + slot — [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md) (Content Sources is the example) |
+| Add or override a toolbar button on one, many, or all entity forms | `BaseFormToolbarAction` + `@RegisterFormToolbarAction` — [§7e](#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction) |
+| Subclass & customize an existing toolbar plugin (e.g. Links) | Extend `RecordLinksToolbarAction` + `@RegisterFormToolbarAction` (inherits metadata automatically) — [§7e](#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction) |
 | Replace a form's whole layout | Custom `*Extended` form — [Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) |
 | Build a brand-new bespoke editor dialog | **Stop** — first check if a `<mj-form-dialog>` covers it |
 
@@ -696,6 +967,8 @@ That keeps the Generic stack routing-free and lets each consumer pick the UX.
 - **Config:** `types/entity-form-config.ts`
 - **Resolver:** `resolver/form-resolver.service.ts`
 - **Container:** `container/record-form-container.component.ts`
+- **Toolbar Actions:** `toolbar/base-form-toolbar-action.ts`, `toolbar/actions/record-links-toolbar-action.ts`
+- **Record Links & Hover Previews:** `links/record-links.component.ts`, `preview-popover/record-preview-popover.component.ts`
 - **Panels:** [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md)
 - **Custom forms + toolbar pattern:** [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md)
 - **Slide-in primitive:** `MjSlidePanelComponent` in `@memberjunction/ng-ui-components`

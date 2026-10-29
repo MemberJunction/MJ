@@ -7,7 +7,7 @@
 
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { BaseReranker, BaseResult, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseReranker, BaseResult, BuildCancellationErrorInfo, ErrorAnalyzer } from '@memberjunction/ai';
 import type { AIErrorType, ModelUsage, RerankParams, RerankResponse } from '@memberjunction/ai';
 import { AIModelSelectionInfo, AIPromptParams } from '@memberjunction/ai-core-plus';
 import type {
@@ -16,7 +16,7 @@ import type {
     MJAIPromptRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { BaseModelRunner } from '@memberjunction/ai-prompts';
-import type { FailoverAttempt, ModelVendorCandidate } from '@memberjunction/ai-prompts';
+import type { ExecutionBound, FailoverAttempt, ModelVendorCandidate } from '@memberjunction/ai-prompts';
 import { IsPromptBackedReranker } from './prompt-backed-rerankers';
 import type { AIRerankParams, AIRerankRunResult } from './rerank-runner.types';
 import { BasePromptBackedReranker } from './BasePromptBackedReranker';
@@ -41,6 +41,9 @@ const LEGACY_LLM_RERANKER_MODEL_NAME = 'LLM Reranker';
 class RerankAttempt extends BaseResult {
     /** The driver's response, when the driver returned one. */
     public Response?: RerankResponse;
+
+    /** Whether the caller cancelled the call, which the run row records as cancelled rather than failed. */
+    public Cancelled = false;
 }
 
 /** The outcome of a rerank, and the candidate that produced it after any failover. */
@@ -78,6 +81,11 @@ interface DriverResolution {
  * Drivers are built through the ClassFactory with the same two branches as
  * `RerankerService.GetReranker`: the prompt-backed `LLMReranker` and `DecisionReranker`, and native
  * drivers such as `CohereReranker`.
+ *
+ * Each driver call is bounded by the caller's `TimeoutMS` and `CancellationToken`, composed as for a
+ * chat call, and the driver is handed the bound's signal so an abort tears its request down. A call
+ * that times out fails over; a call the caller cancelled does not, and its run row is recorded as
+ * `Cancelled`.
  */
 export class AIRerankerRunner extends BaseModelRunner {
     /** Reranks run only on `Reranker`-type models. */
@@ -200,6 +208,8 @@ export class AIRerankerRunner extends BaseModelRunner {
         promptParams.contextUser = params.ContextUser;
         promptParams.parentPromptRunId = params.ParentRunID;
         promptParams.provider = this._provider ?? undefined;
+        promptParams.timeoutMS = params.TimeoutMS;
+        promptParams.cancellationToken = params.CancellationToken;
         return { Params: params, Prompt: prompt, PromptParams: promptParams };
     }
 
@@ -214,7 +224,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         if (!params.documents || params.documents.length === 0) {
             return 'At least one document is required (params.documents)';
         }
-        return undefined;
+        return params.CancellationToken?.aborted ? 'The Reranker call was cancelled before it started' : undefined;
     }
 
     /** The caller's rerank prompt, or `Default Rerank`; otherwise the reason it was not found. */
@@ -271,17 +281,13 @@ export class AIRerankerRunner extends BaseModelRunner {
         return !hasActiveVendor && model.Name === LEGACY_LLM_RERANKER_MODEL_NAME;
     }
 
-    /** Selects the first candidate with credentials, or returns an error listing every candidate. */
+    /** Selects the candidate to run (see SelectCandidate), or returns an error listing every candidate. */
     private selectCandidate(request: RerankRequest, candidates: ModelVendorCandidate[]): RerankSelection | string {
-        const credentialAvailability = new Map<string, boolean>();
-        let selected: ModelVendorCandidate | undefined;
-        for (const candidate of candidates) {
-            const available = this.HasCredentialsAvailable(candidate.driverClass, request.Prompt.ID, candidate.model.ID, candidate.vendorId, request.PromptParams);
-            credentialAvailability.set(this.candidateKey(candidate), available);
-            if (available && !selected) {
-                selected = candidate;
-            }
-        }
+        const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+            candidates,
+            c => this.HasCredentialsAvailable(c.driverClass, request.Prompt.ID, c.model.ID, c.vendorId, request.PromptParams),
+            true
+        );
         if (!selected) {
             const summary = candidates
                 .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -322,12 +328,18 @@ export class AIRerankerRunner extends BaseModelRunner {
         return { Attempt: result, AnsweredBy: answeredBy };
     }
 
-    /** Reranks on one candidate: resolves its key when it needs one, builds its driver, and calls it. */
+    /**
+     * Reranks on one candidate: resolves its key when it needs one, builds its driver, and calls it. A
+     * caller that cancelled while an earlier candidate ran gets no further calls.
+     */
     private async executeOnCandidate(
         candidate: ModelVendorCandidate,
         request: RerankRequest,
         promptRun: MJAIPromptRunEntityExtended
     ): Promise<RerankAttempt> {
+        if (request.PromptParams.cancellationToken?.aborted) {
+            return this.cancelledAttempt();
+        }
         let apiKey = '';
         if (this.DriverRequiresCredentials(candidate.driverClass)) {
             try {
@@ -343,7 +355,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         if (this.driverRunsChildPrompt(candidate.driverClass)) {
             await this.linkChildRun(driver, promptRun);
         }
-        return this.callDriver(driver, candidate, request.Params);
+        return this.callDriver(driver, candidate, request);
     }
 
     /**
@@ -374,28 +386,76 @@ export class AIRerankerRunner extends BaseModelRunner {
         return resolution.Instance;
     }
 
-    /** Calls the driver with the rerank fields alone, and converts its response for the failover loop. */
-    private async callDriver(driver: BaseReranker, candidate: ModelVendorCandidate, params: AIRerankParams): Promise<RerankAttempt> {
+    /**
+     * Calls the driver with the rerank fields alone, within the call's bound: the caller's timeout and
+     * cancellation token, composed as for a chat call. The driver is handed the bound's signal, so an
+     * abort tears its request down. A call the caller cancelled is never failed over; one that timed
+     * out reads as a network error, so it fails over.
+     */
+    private async callDriver(driver: BaseReranker, candidate: ModelVendorCandidate, request: RerankRequest): Promise<RerankAttempt> {
         const startTime = new Date();
-        const driverParams: RerankParams = {
-            query: params.query,
-            documents: params.documents,
-            topK: params.topK,
-            options: params.options,
-        };
+        const bound = this.createExecutionBound(request.Prompt, request.PromptParams, request.PromptParams.cancellationToken);
         try {
-            const response = await driver.Rerank(driverParams);
+            const response = await this.RaceWithinBound(driver.Rerank(this.driverParams(request.Params, bound)), bound, request.Prompt);
             if (!response.success) {
-                const message = response.errorMessage || 'Reranking failed';
-                return this.failedAttempt(message, this.errorTypeOf(new Error(message), candidate), response);
+                return this.failedResponseAttempt(response, candidate, bound);
             }
             const succeeded = new RerankAttempt(true, startTime, new Date());
             succeeded.Response = response;
             return succeeded;
         } catch (err: unknown) {
+            if (this.callerCancelled(bound)) {
+                return this.cancelledAttempt();
+            }
             const error = err instanceof Error ? err : new Error(String(err));
             return this.failedAttempt(error.message, this.errorTypeOf(error, candidate));
+        } finally {
+            bound.Dispose();
         }
+    }
+
+    /** The driver's own params: the rerank fields, and the bound's signal as its cancellation token. */
+    private driverParams(params: AIRerankParams, bound: ExecutionBound): RerankParams {
+        return {
+            query: params.query,
+            documents: params.documents,
+            topK: params.topK,
+            options: params.options,
+            CancellationToken: bound.Signal,
+        };
+    }
+
+    /**
+     * Converts a failed driver response. A response the caller's cancellation ended, by the bound or
+     * by the driver's own classification, is recorded as cancelled and never failed over. Any other
+     * failure, a timeout included, may fail over.
+     */
+    private failedResponseAttempt(response: RerankResponse, candidate: ModelVendorCandidate, bound: ExecutionBound): RerankAttempt {
+        if (this.callerCancelled(bound) || this.IsCallerCancellation(response.errorInfo)) {
+            return this.cancelledAttempt(response);
+        }
+        const message = response.errorMessage || 'Reranking failed';
+        const errorType = bound.TimedOut() ? 'NetworkError' : this.errorTypeOf(new Error(message), candidate);
+        return this.failedAttempt(message, errorType, response);
+    }
+
+    /** Whether the bound's signal was aborted by the caller rather than by its timeout. */
+    private callerCancelled(bound: ExecutionBound): boolean {
+        return bound.Signal?.aborted === true && !bound.TimedOut();
+    }
+
+    /**
+     * A call the caller cancelled. It is not eligible for failover, so the failover loop returns it as
+     * it is, and the run row records it as cancelled.
+     */
+    private cancelledAttempt(response?: RerankResponse): RerankAttempt {
+        const now = new Date();
+        const cancelled = new RerankAttempt(false, now, now);
+        cancelled.errorMessage = 'The Reranker call was cancelled';
+        cancelled.errorInfo = BuildCancellationErrorInfo({ provider: 'AIRerankerRunner' });
+        cancelled.Response = response;
+        cancelled.Cancelled = true;
+        return cancelled;
     }
 
     /**
@@ -419,8 +479,14 @@ export class AIRerankerRunner extends BaseModelRunner {
         return failed;
     }
 
-    /** The result returned when every failover candidate has failed. */
+    /**
+     * The result returned when every failover candidate has failed, or when the caller cancelled and
+     * the failover loop stopped, which the run row records as cancelled.
+     */
     private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): RerankAttempt {
+        if (lastError && this.IsCallerCancellation(ErrorAnalyzer.AnalyzeError(lastError))) {
+            return this.cancelledAttempt();
+        }
         const now = new Date();
         const result = new RerankAttempt(false, now, now);
         result.errorMessage = lastError?.message || `Failover failed after ${failoverAttempts.length} attempts`;
@@ -454,6 +520,11 @@ export class AIRerankerRunner extends BaseModelRunner {
             }
             if (!attempt.success && attempt.errorMessage) {
                 run.ErrorMessage = attempt.errorMessage;
+            }
+            if (attempt.Cancelled) {
+                run.Status = 'Cancelled';
+                run.Cancelled = true;
+                run.CancellationReason = 'user_requested';
             }
         });
         if (usage && costIsDescendant) {
@@ -548,11 +619,6 @@ export class AIRerankerRunner extends BaseModelRunner {
         };
     }
 
-    /** The key format BaseModelRunner's failover credential cache uses. */
-    private candidateKey(candidate: ModelVendorCandidate): string {
-        return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-    }
-
     /** Records which candidate was chosen and why, for the run row. */
     private buildSelectionInfo(
         prompt: MJAIPromptEntityExtended,
@@ -567,7 +633,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         info.SelectionReason = 'First candidate with available credentials';
         info.FallbackUsed = false;
         info.ModelsConsidered = candidates.map(c => {
-            const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+            const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
             return {
                 model: c.model,
                 vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,

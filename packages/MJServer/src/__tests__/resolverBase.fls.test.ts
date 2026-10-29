@@ -1,17 +1,15 @@
 /**
- * Tests for ResolverBase.StripDeniedReadFieldsFromClientInput — the field-level-security
- * guard on the update path.
+ * Tests for ResolverBase.AssertClientInputFieldSecurity — the field-level-security gate on the
+ * update path — and MustLoadTruthFromDatabase.
  *
- * The hazard it closes: a read-denied field is stripped from every payload the client
- * receives, so the client's Save fabricates a value for it (default / 0 / '' / null) and sends
- * it back. Without the guard, UpdateRecord's SetMany applies the fabrication — silent data
- * loss when the user holds update access, and a spurious save failure on UNRELATED edits when
- * they don't. The guard strips denied-read keys from the client's new values and OldValues
- * before anything applies them, and its `true` return forces the caller onto the
- * load-truth-from-DB branch so denied fields hold real values a stripped SetMany never
- * touches.
+ * A read-denied field is absent from every payload the client receives, so a value coming back
+ * for it can only be fabricated. The gate REFUSES such a value (new values and OldValues alike)
+ * rather than dropping it, and refuses a key that names no field with the identical message, so
+ * the refusal cannot be used to learn which columns exist. Its `true` return (the caller is
+ * denied something) forces the caller onto the load-truth-from-DB branch, so denied fields keep
+ * the values the database holds.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────
 const { mockUserCacheUsers } = vi.hoisted(() => ({
@@ -116,7 +114,7 @@ vi.mock('@memberjunction/core-entities', () => ({}));
 
 // ─── Import after mocks ──────────────────────────────────────────────────
 import { ResolverBase } from '../generic/ResolverBase';
-import { EntityInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { EntityInfo, FieldSecurityClientInputMessage, IMetadataProvider, Metadata, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
 
 // ─── Metadata builders (mirrors MJCore's fieldSecurity.enforcement tests) ──
 
@@ -189,11 +187,12 @@ type ClientInput = { OldValues___?: Array<{ Key: string; Value: unknown }> } & R
 /** Subclass that exposes the protected guards for testing. */
 class TestResolver extends ResolverBase {
     public TestStrip(entityInfo: EntityInfo, userInfo: UserInfo, input: ClientInput, clientNewValues: Record<string, unknown>): boolean {
-        return this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+        return this.AssertClientInputFieldSecurity(entityInfo, userInfo, input, clientNewValues);
     }
 
-    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean): boolean {
-        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload);
+    /** The user defaults to HR, whose permission rows carry no row filter; pass null for a missing user. */
+    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean, user: UserInfo | null = buildUser([HR_ROLE_ID])): boolean {
+        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, user ?? undefined);
     }
 }
 
@@ -209,7 +208,10 @@ function makeClientPayload(fields: Record<string, unknown>, oldValues?: Array<{ 
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
-describe('ResolverBase.StripDeniedReadFieldsFromClientInput', () => {
+/** The refusal for `key` on Employees: one wording for a denied key and for a key that names no field. */
+const refusalFor = (key: string) => FieldSecurityClientInputMessage(key, 'Employees');
+
+describe('ResolverBase.AssertClientInputFieldSecurity', () => {
     let resolver: TestResolver;
     let flsEntity: EntityInfo;
     let noFlsEntity: EntityInfo;
@@ -220,93 +222,78 @@ describe('ResolverBase.StripDeniedReadFieldsFromClientInput', () => {
         noFlsEntity = new EntityInfo(employeeEntityInit(false));
     });
 
-    it('strips a denied-read field from clientNewValues AND input, and returns true', () => {
+    it('REGRESSION: refuses a value for a denied-read field instead of silently dropping it', () => {
         const { input, clientNewValues } = makeClientPayload({ ID: '1', Notes: 'edited', Salary: 0 });
-        const result = resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(true);
-        expect(clientNewValues).not.toHaveProperty('Salary');
-        expect(input).not.toHaveProperty('Salary');
-        expect(clientNewValues).toEqual({ ID: '1', Notes: 'edited' });
+        expect(() => resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues))
+            .toThrow(refusalFor('Salary'));
     });
 
-    it('removes denied-field entries from OldValues___ (fabricated old values must not drive conflict detection)', () => {
+    it('REGRESSION: refuses a key that names no field with the SAME message as a denied one', () => {
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Notes: 'edited', Bogus: 0 });
+        let denied = '';
+        let unknown = '';
+        try { resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), makeClientPayload({ ID: '1', Salary: 0 }).input, { ID: '1', Salary: 0 }); }
+        catch (e) { denied = (e as Error).message; }
+        try { resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues); }
+        catch (e) { unknown = (e as Error).message; }
+
+        expect(unknown).toBe(refusalFor('Bogus'));
+        expect(denied.replace("'Salary'", "'X'")).toBe(unknown.replace("'Bogus'", "'X'"));
+    });
+
+    it('REGRESSION: refuses a denied field named only in OldValues___', () => {
         const { input, clientNewValues } = makeClientPayload(
-            { ID: '1', Notes: 'edited', Salary: 0 },
+            { ID: '1', Notes: 'edited' },
             [{ Key: 'ID', Value: '1' }, { Key: 'Notes', Value: 'orig' }, { Key: 'Salary', Value: '0' }]
         );
-        resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(input.OldValues___).toEqual([{ Key: 'ID', Value: '1' }, { Key: 'Notes', Value: 'orig' }]);
+        expect(() => resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues))
+            .toThrow(refusalFor('Salary'));
     });
 
-    it('bridges Name → CodeName: a denied field with a space is stripped by its CodeName key', () => {
-        // 'Base Salary' arrives from the wire as its CodeName 'Base_Salary'
-        const { input, clientNewValues } = makeClientPayload(
-            { ID: '1', Notes: 'edited', Base_Salary: 100 },
-            [{ Key: 'Base_Salary', Value: '100' }]
-        );
-        const result = resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(true);
-        expect(clientNewValues).not.toHaveProperty('Base_Salary');
-        expect(input.OldValues___).toEqual([]);
+    it('matches the CodeName of a denied field with a space in its name', () => {
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Notes: 'edited', Base_Salary: 100 });
+        expect(() => resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues))
+            .toThrow(refusalFor('Base_Salary'));
     });
 
-    it('leaves permitted fields and metadata blobs untouched', () => {
+    it('matches input keys case-insensitively (wire casing must not defeat the gate)', () => {
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', SALARY: 0 });
+        expect(() => resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues))
+            .toThrow(refusalFor('SALARY'));
+    });
+
+    it('accepts permitted fields and metadata blobs untouched, and returns true', () => {
         const restore = { marker: true };
-        const { input, clientNewValues } = makeClientPayload({ ID: '1', Name: 'Ada', Notes: 'n', Salary: 5 });
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Name: 'Ada', Notes: 'n' }, [{ Key: 'Notes', Value: 'o' }]);
         (input as Record<string, unknown>)['RestoreContext___'] = restore;
-        resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
 
+        expect(resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues)).toBe(true);
         expect(clientNewValues).toEqual({ ID: '1', Name: 'Ada', Notes: 'n' });
         expect(input['RestoreContext___']).toBe(restore);
-        expect(input['Name']).toBe('Ada');
+        expect(input.OldValues___).toEqual([{ Key: 'Notes', Value: 'o' }]);
     });
 
-    it('returns true even when the client sent nothing for the denied field — the truth-load must still be forced', () => {
+    it('returns true when the caller is denied anything, so the truth-load is still forced', () => {
         const { input, clientNewValues } = makeClientPayload({ ID: '1', Notes: 'edited' });
-        const result = resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(true);
-        expect(clientNewValues).toEqual({ ID: '1', Notes: 'edited' });
+        expect(resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues)).toBe(true);
     });
 
     it('is a no-op returning false when the entity has no field security', () => {
-        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 12345 });
-        const result = resolver.TestStrip(noFlsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(false);
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 12345, Bogus: 1 });
+        expect(resolver.TestStrip(noFlsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues)).toBe(false);
         expect(clientNewValues['Salary']).toBe(12345);
-        expect(input['Salary']).toBe(12345);
     });
 
     it('is a no-op returning false for a user who HOLDS the granting role', () => {
-        const { input, clientNewValues } = makeClientPayload(
-            { ID: '1', Salary: 99000 },
-            [{ Key: 'Salary', Value: '85000' }]
-        );
-        const result = resolver.TestStrip(flsEntity, buildUser([HR_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(false);
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 99000 }, [{ Key: 'Salary', Value: '85000' }]);
+        expect(resolver.TestStrip(flsEntity, buildUser([HR_ROLE_ID]), input, clientNewValues)).toBe(false);
         expect(clientNewValues['Salary']).toBe(99000);
         expect(input.OldValues___).toHaveLength(1);
     });
 
     it('is a no-op returning false without a user', () => {
         const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 1 });
-        const result = resolver.TestStrip(flsEntity, undefined as unknown as UserInfo, input, clientNewValues);
-
-        expect(result).toBe(false);
-        expect(clientNewValues['Salary']).toBe(1);
-    });
-
-    it('matches input keys case-insensitively (wire casing must not defeat the strip)', () => {
-        const { input, clientNewValues } = makeClientPayload({ ID: '1', SALARY: 0 });
-        const result = resolver.TestStrip(flsEntity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(true);
-        expect(clientNewValues).not.toHaveProperty('SALARY');
+        expect(resolver.TestStrip(flsEntity, undefined as unknown as UserInfo, input, clientNewValues)).toBe(false);
     });
 });
 
@@ -317,7 +304,7 @@ describe('ResolverBase.StripDeniedReadFieldsFromClientInput', () => {
 // cannot see. These tests write the forbidden rows DIRECTLY into metadata, bypassing the
 // constraint, and assert the runtime still refuses to produce a write-only outcome.
 
-describe('write-only fields are unreachable, so every denied-read field is stripped', () => {
+describe('write-only fields are unreachable, so a value for any denied-read field is refused', () => {
     const resolver = new TestResolver();
 
     /**
@@ -344,37 +331,11 @@ describe('write-only fields are unreachable, so every denied-read field is strip
         expect(entity.GetDeniedUpdateFields(intern).has('salary')).toBe(true);
     });
 
-    it('strips the value anyway — a client cannot have a legitimate value for a field it never saw', () => {
+    it('refuses the value anyway — a client cannot have a legitimate value for a field it never saw', () => {
         const entity = forbiddenWriteOnlyEntity();
         const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 123456 });
-        const result = resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(result).toBe(true); // truth-load still forced — the denied-read set is non-empty
-        expect(clientNewValues).not.toHaveProperty('Salary');
-        expect(input).not.toHaveProperty('Salary');
-    });
-
-    it('removes the OldValues entry too (the client cannot know a true old value)', () => {
-        const entity = forbiddenWriteOnlyEntity();
-        const { input, clientNewValues } = makeClientPayload(
-            { ID: '1', Salary: 123456 },
-            [{ Key: 'ID', Value: '1' }, { Key: 'Salary', Value: '99' }]
-        );
-        resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(input.OldValues___).toEqual([{ Key: 'ID', Value: '1' }]);
-        expect(clientNewValues).not.toHaveProperty('Salary');
-    });
-
-    it('strips EVERY denied-read field, with no update-permission split', () => {
-        // Base Salary is denied read AND update; Salary carries the forbidden write-only row.
-        // Both are stripped, because denied-read ∩ denied-update is now just denied-read.
-        const entity = forbiddenWriteOnlyEntity();
-        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 123456, Base_Salary: 7 });
-        resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
-
-        expect(clientNewValues).not.toHaveProperty('Salary');
-        expect(clientNewValues).not.toHaveProperty('Base_Salary');
+        expect(() => resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues))
+            .toThrow(refusalFor('Salary'));
     });
 });
 
@@ -479,5 +440,176 @@ describe('ResolverBase.MustLoadTruthFromDatabase', () => {
         const tracked = employeeEntityInit(false);
         tracked['TrackRecordChanges'] = true;
         expect(resolver.TestMustLoadTruth(new EntityInfo(tracked), withOldValues(), false, false)).toBe(true);
+    });
+});
+
+/**
+ * #4919: a caller under an Update row filter must not be hydrated from its own OldValues.
+ *
+ * The save's post-image RLS check skips its query when no column the filter reads is dirty. Hydrated
+ * from OldValues, "dirty" is whatever the client claims: an Intern bound to `Status = 'Draft'` sends
+ * Status = 'Published' and claims 'Published' as the old value too, so Status is clean, the check is
+ * skipped, and the update moves the row out of the Intern's scope.
+ */
+describe('ResolverBase.MustLoadTruthFromDatabase: Update row filters (#4919)', () => {
+    const DRAFTS_ONLY = 'F0000000-0000-0000-0000-000000004919';
+    let resolver: TestResolver;
+    let savedProvider: typeof Metadata.Provider;
+
+    beforeAll(() => {
+        savedProvider = Metadata.Provider;
+        Metadata.Provider = {
+            Entities: [],
+            RowLevelSecurityFilters: [new RowLevelSecurityFilterInfo({ ID: DRAFTS_ONLY, Name: 'Drafts only', FilterText: "Status = 'Draft'" })],
+        } as unknown as typeof Metadata.Provider;
+    });
+    afterAll(() => {
+        Metadata.Provider = savedProvider;
+    });
+    beforeEach(() => {
+        resolver = new TestResolver();
+    });
+
+    /** Untracked, no field security: the OldValues shortcut is open unless the row filter closes it. */
+    function entityWithInternFilter(filter: { UpdateRLSFilterID?: string; ReadRLSFilterID?: string }): EntityInfo {
+        const init = employeeEntityInit(false);
+        init['TrackRecordChanges'] = false;
+        init['Permissions'] = [
+            { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
+            { EntityID: ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true, ...filter },
+        ];
+        return new EntityInfo(init);
+    }
+
+    const claimsNewStatusAsOld = (): ClientInput => ({
+        ID: '1',
+        Status: 'Published',
+        OldValues___: [
+            { Key: 'ID', Value: '1' },
+            { Key: 'Status', Value: 'Published' },
+        ],
+    });
+
+    it('loads the stored row for a caller under an Update row filter, whatever OldValues claim', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID]))).toBe(true);
+    });
+
+    it('keeps the shortcut for a caller with no Update row filter, on the same entity', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([HR_ROLE_ID]))).toBe(false);
+        // A role without the filter exempts the user from it (roles are additive).
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID, HR_ROLE_ID]))).toBe(false);
+    });
+
+    it('loads the stored row when the user is missing, instead of throwing or skipping the filter', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, null)).toBe(true);
+    });
+
+    it('loads the stored row under an API-key Update row filter, even for a role-exempt user', () => {
+        const entity = entityWithInternFilter({});
+        const keyBound = (permissionType: 'Read' | 'Update') => {
+            const user = buildUser([HR_ROLE_ID]); // no role filter: only the key binding narrows this caller
+            user.APIKeyRowFilters = [{ EntityID: ENTITY_ID, PermissionType: permissionType, FilterID: DRAFTS_ONLY }];
+            return user;
+        };
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([HR_ROLE_ID]))).toBe(false);
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, keyBound('Update'))).toBe(true);
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, keyBound('Read'))).toBe(false);
+    });
+
+    it('ignores a Read-only row filter: only the Update filter gates this save', () => {
+        const entity = entityWithInternFilter({ ReadRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID]))).toBe(false);
+    });
+});
+
+/**
+ * IS-A children. A child carries its parent's fields as mirror fields of its own and nearly never
+ * has its own `EnableFieldLevelSecurity` on, so both guards must ask whether field security
+ * applies through the chain (`FieldLevelSecurityApplies`), not the child's own flag.
+ */
+describe('ResolverBase field-security guards on an IS-A child', () => {
+    const CHILD_ID = 'entity-contractors';
+    let resolver: TestResolver;
+
+    /** A `Contractors` IS-A `Employees` child with its own flag OFF and a mirror of every parent field. */
+    function childOf(parentInit: Record<string, unknown>): EntityInfo {
+        const entities: EntityInfo[] = [];
+        const provider = {
+            EntityByID: (id: string) => entities.find((e) => e.ID === id),
+            Entities: entities,
+        } as unknown as IMetadataProvider;
+        const parentFields = parentInit['Fields'] as Array<Record<string, unknown>>;
+        const childInit: Record<string, unknown> = {
+            ...parentInit,
+            ID: CHILD_ID,
+            Name: 'Contractors',
+            BaseTable: 'Contractor',
+            BaseView: 'vwContractors',
+            ParentID: ENTITY_ID,
+            EnableFieldLevelSecurity: false,
+            Permissions: (parentInit['Permissions'] as Array<Record<string, unknown>>).map((p) => ({ ...p, EntityID: CHILD_ID })),
+            Fields: parentFields.map((f) => ({ ID: `c-${f['ID']}`, EntityID: CHILD_ID, Sequence: f['Sequence'], Name: f['Name'], Entity: 'Contractors', Type: f['Type'], IsPrimaryKey: f['IsPrimaryKey'] })),
+        };
+        entities.push(new EntityInfo(parentInit, provider), new EntityInfo(childInit, provider));
+        return entities[1];
+    }
+
+    beforeEach(() => {
+        resolver = new TestResolver();
+    });
+
+    it('REGRESSION: AssertClientInputFieldSecurity refuses a field the parent denies in the child\'s input', () => {
+        const child = childOf(employeeEntityInit(true));
+        expect(child.EnableFieldLevelSecurity).toBe(false);
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Notes: 'edited', Salary: 0 }, [{ Key: 'Salary', Value: '0' }]);
+
+        expect(() => resolver.TestStrip(child, buildUser([INTERN_ROLE_ID]), input, clientNewValues))
+            .toThrow(FieldSecurityClientInputMessage('Salary', 'Contractors'));
+        const allowed = makeClientPayload({ ID: '1', Notes: 'edited' });
+        expect(resolver.TestStrip(child, buildUser([INTERN_ROLE_ID]), allowed.input, allowed.clientNewValues)).toBe(true);
+    });
+
+    it('AssertClientInputFieldSecurity leaves the child\'s input alone when no ancestor has field security', () => {
+        const child = childOf(employeeEntityInit(false));
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 0 });
+        expect(resolver.TestStrip(child, buildUser([INTERN_ROLE_ID]), input, clientNewValues)).toBe(false);
+        expect(clientNewValues).toEqual({ ID: '1', Salary: 0 });
+    });
+
+    /** Employees where the intern may read every field but not update Salary, with tracking off. */
+    function readAllowUpdateDenyInit(withFls: boolean): Record<string, unknown> {
+        const init = employeeEntityInit(withFls);
+        init['TrackRecordChanges'] = false;
+        const fields = init['Fields'] as Array<Record<string, unknown>>;
+        for (const f of fields) {
+            if (f['ID'] !== 'f-id') f['EntityFieldPermissions'] = openTo(f['ID'] as string);
+        }
+        fields.find((f) => f['ID'] === 'f-salary')!['EntityFieldPermissions'] = [
+            ...openTo('f-salary', [HR_ROLE_ID]),
+            { ID: 'f-salary-intern', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: 'Deny', CreateAccess: 'Deny' },
+        ];
+        return init;
+    }
+
+    const pinnedOldValues = (): ClientInput => ({
+        ID: '1',
+        Notes: 'edited',
+        OldValues___: [{ Key: 'ID', Value: '1' }, { Key: 'Notes', Value: 'original' }, { Key: 'Salary', Value: '999999' }],
+    });
+
+    it('REGRESSION: MustLoadTruthFromDatabase forces the truth-load on a child whose parent has field security', () => {
+        const child = childOf(readAllowUpdateDenyInit(true));
+        child.TrackRecordChanges = false;
+        expect(child.GetDeniedReadFields(buildUser([INTERN_ROLE_ID])).size).toBe(0);
+        expect(resolver.TestMustLoadTruth(child, pinnedOldValues(), false, false)).toBe(true);
+    });
+
+    it('MustLoadTruthFromDatabase keeps the OldValues shortcut on a child when no ancestor has field security', () => {
+        const child = childOf(readAllowUpdateDenyInit(false));
+        child.TrackRecordChanges = false;
+        expect(resolver.TestMustLoadTruth(child, pinnedOldValues(), false, false)).toBe(false);
     });
 });

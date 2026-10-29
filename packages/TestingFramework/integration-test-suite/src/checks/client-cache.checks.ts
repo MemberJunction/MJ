@@ -1,5 +1,5 @@
 /**
- * client-cache.checks.ts — the 'client-cache' bundle (C1–C12).
+ * client-cache.checks.ts — the 'client-cache' bundle (C1–C14).
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/client-cache-tests.ts.
  * These run against a RUNNING MJAPI via GraphQLDataProvider (client transport,
@@ -12,19 +12,53 @@
  * rule: no dynamic import()). C10 carries `RequiresMutation: true` in place of the
  * original `if (process.env.RUN_MUTATION_TESTS === '1')` gate.
  */
-import { RunView, RunQuery, BaseEntity, Metadata } from '@memberjunction/core';
-import type { AggregateExpression } from '@memberjunction/core';
-import type { MJUserSettingEntity } from '@memberjunction/core-entities';
+import { RunView, RunQuery, BaseEntity, LocalCacheManager, Metadata, ProviderBase } from '@memberjunction/core';
+import type { AggregateExpression, RunViewParams } from '@memberjunction/core';
+import { uuidv4 } from '@memberjunction/global';
+import type { MJActionCategoryEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, AssertRowShape, RowKeys } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
-import { NamedCheck } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
 
+/**
+ * The client dedup linger window this bundle installs for its own duration (see the lifecycle at
+ * the bottom of this file). `ProviderBase.DedupLingerMs` ships at 5000ms, and seven checks here
+ * sleep past it so a later call truly revalidates rather than replaying the lingering result —
+ * 37s of a run spent waiting out a constant.
+ *
+ * NOT lowered to near-zero, for a specific reason: C7 ("linger-window callers with DIFFERENT
+ * Fields each get their own shape") asserts behaviour INSIDE the window, so a window shorter than
+ * its two back-to-back RunViews would change what that check tests rather than speed it up. Those
+ * calls are milliseconds apart, so 1500ms leaves roughly fifteen times the margin they need while
+ * still cutting each outlive-sleep from 5.2s to 2s.
+ */
+const BUNDLE_DEDUP_LINGER_MS = 1500;
+
+/**
+ * How long a check waits to be certain the linger window has passed. Derived from the window
+ * rather than hardcoded — when these were literal 5200s against a literal 5000 inside
+ * ProviderBase, nothing said the two had to move together.
+ */
+const OUTLIVE_LINGER_MS = BUNDLE_DEDUP_LINGER_MS + 500;
+
 function Sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** The entity C14 writes in one client transaction group. */
+const GROUP_ENTITY = 'MJ: Action Categories';
+
+/** How many rows C14 saves in one client transaction group. */
+const GROUP_ROWS = 3;
+
+/** Row IDs a client slot holds, upper-cased, or null when the slot is not stored. */
+async function clientSlotIds(ctx: IntegrationCheckContext, fingerprint: string): Promise<string[] | null> {
+    const stored = await ctx.Storage.GetItem<{ results: Array<{ ID: string }> }>(fingerprint, 'RunViewCache');
+    return stored ? stored.results.map(r => r.ID.toUpperCase()).sort() : null;
 }
 
 /** The ordered client-cache bundle. Numeric order is intentional and load-bearing (C3→C4→C5 share 'c3'). */
@@ -59,7 +93,7 @@ export const ClientCacheChecks: NamedCheck[] = [
             const first = await rv.RunView(params);
             // Outlive the client-side dedup linger window so the second call truly
             // round-trips to the server (exercising the server cache hit path).
-            await Sleep(5200);
+            await Sleep(OUTLIVE_LINGER_MS);
             const second = await rv.RunView(params);
             Assert(first.Success && second.Success, 'both calls must succeed');
             AssertRowShape(first.Results[0], ['ID', 'Name', 'BaseView'], 'first (server miss) shape');
@@ -86,7 +120,7 @@ export const ClientCacheChecks: NamedCheck[] = [
             await Sleep(300); // the stale-path client cache write is fire-and-forget
             Assert(ctx.Storage.SetItemCount > 0, 'first CacheLocal call must write a client cache slot');
 
-            await Sleep(5200); // outlive the dedup linger window
+            await Sleep(OUTLIVE_LINGER_MS); // outlive the dedup linger window
             const setsBefore = ctx.Storage.SetItemCount;
             ctx.Storage.GetItemsCount = 0;
             const second = await rv.RunView(params);
@@ -151,7 +185,7 @@ export const ClientCacheChecks: NamedCheck[] = [
             Assert(first.Results.length > 0, 'expected at least one query category');
             Assert(first.Results[0] instanceof BaseEntity, 'entity_object results must be BaseEntity instances');
 
-            await Sleep(5200); // outlive linger; second call validates the slot and re-materializes
+            await Sleep(OUTLIVE_LINGER_MS); // outlive linger; second call validates the slot and re-materializes
             const second = await rv.RunView<BaseEntity>(params);
             Assert(second.Success, `second call failed: ${second.ErrorMessage}`);
             Assert(second.Results[0] instanceof BaseEntity, 'cache-served entity_object results must re-materialize as BaseEntity');
@@ -227,7 +261,7 @@ export const ClientCacheChecks: NamedCheck[] = [
             setting.Value = 'integration-test';
             Assert(await setting.Save(), `client-side Save must succeed: ${setting.LatestResult?.CompleteMessage ?? ''}`);
             try {
-                await Sleep(5500); // outlive linger so the next call truly revalidates the slot
+                await Sleep(OUTLIVE_LINGER_MS); // outlive linger so the next call truly revalidates the slot
                 const after = await rv.RunView(makeParams());
                 Assert(after.Success, `post-save query failed: ${after.ErrorMessage}`);
                 AssertEqual(after.Results.length, 1, 'slot revalidation must surface the saved row');
@@ -235,7 +269,7 @@ export const ClientCacheChecks: NamedCheck[] = [
             } finally {
                 Assert(await setting.Delete(), `client-side Delete must succeed: ${setting.LatestResult?.CompleteMessage ?? ''}`);
             }
-            await Sleep(5500);
+            await Sleep(OUTLIVE_LINGER_MS);
             const final = await rv.RunView(makeParams());
             Assert(final.Success, `post-delete query failed: ${final.ErrorMessage}`);
             AssertEqual(final.Results.length, 0, 'slot revalidation must drop the deleted row');
@@ -290,46 +324,59 @@ export const ClientCacheChecks: NamedCheck[] = [
         Name: 'C12: Trust=0 entities — server never caches; client slots only when the result carries a validation timestamp',
         Fn: async (ctx): Promise<void> => {
             const rv = new RunView();
-            // 'MJ: Audit Logs' has TrustServerCacheCompletely=false: the server refuses to
-            // cache it (raw-SQL inserts make event invalidation untrustworthy). Because the
-            // entity is cache-INELIGIBLE, Fields are never widened — so the response only
-            // carries a maxUpdatedAt stamp when the caller requests __mj_UpdatedAt. The
+            // 'MJ: Audit Logs' ships TrustServerCacheCompletely=false, so the server refuses to
+            // cache it (event-driven invalidation is untrustworthy for it). It also ships
+            // AllowCaching=false, which would make the client refuse every slot before the
+            // behaviour under test is reached. This check therefore enables caching on the
+            // client's IN-MEMORY metadata only, for its own duration, and restores it; the
+            // server's metadata and the database are untouched. Because the entity is
+            // cache-INELIGIBLE on the server, Fields are never widened — so the response only
+            // carries a maxUpdatedAt stamp when the caller requests __mj_UpdatedAt, and the
             // client write gate correctly refuses to store unvalidatable (stamp-less) slots.
+            const info = new Metadata().EntityByName('MJ: Audit Logs'); // global-provider-ok: integration test script — single-provider process by design
+            Assert(!!info, 'MJ: Audit Logs must exist');
+            Assert(info!.TrustServerCacheCompletely === false,
+                `precondition: TrustServerCacheCompletely=false (got ${info!.TrustServerCacheCompletely})`);
+            const originalAllowCaching = info!.AllowCaching;
+            info!.AllowCaching = true;
+            try {
+                // Narrow request WITHOUT the timestamp → no slot (defensive gate)
+                ctx.Storage.ResetCounts();
+                const narrow = await rv.RunView({
+                    EntityName: 'MJ: Audit Logs',
+                    ExtraFilter: "'tag-c12a' <> 'never'",
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple' as const,
+                    CacheLocal: true
+                });
+                Assert(narrow.Success, `narrow failed: ${narrow.ErrorMessage}`);
+                await Sleep(300);
+                AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
+                    'a stamp-less response must NOT be cached (it could never validate later)');
 
-            // Narrow request WITHOUT the timestamp → no slot (defensive gate)
-            ctx.Storage.ResetCounts();
-            const narrow = await rv.RunView({
-                EntityName: 'MJ: Audit Logs',
-                ExtraFilter: "'tag-c12a' <> 'never'",
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple' as const,
-                CacheLocal: true
-            });
-            Assert(narrow.Success, `narrow failed: ${narrow.ErrorMessage}`);
-            await Sleep(300);
-            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
-                'a stamp-less response must NOT be cached (it could never validate later)');
+                // Request WITH the timestamp → slot written and revalidation works
+                const params = {
+                    EntityName: 'MJ: Audit Logs',
+                    ExtraFilter: "'tag-c12b' <> 'never'",
+                    Fields: ['ID', '__mj_UpdatedAt'],
+                    MaxRows: 5,
+                    ResultType: 'simple' as const,
+                    CacheLocal: true
+                };
+                const first = await rv.RunView({ ...params });
+                Assert(first.Success, `first failed: ${first.ErrorMessage}`);
+                await Sleep(300);
+                Assert(ctx.Storage.SetCount('RunViewCache') > 0,
+                    'a stamped response must be cached (client validation is DB-checked per request, independent of Trust)');
 
-            // Request WITH the timestamp → slot written and revalidation works
-            const params = {
-                EntityName: 'MJ: Audit Logs',
-                ExtraFilter: "'tag-c12b' <> 'never'",
-                Fields: ['ID', '__mj_UpdatedAt'],
-                MaxRows: 5,
-                ResultType: 'simple' as const,
-                CacheLocal: true
-            };
-            const first = await rv.RunView({ ...params });
-            Assert(first.Success, `first failed: ${first.ErrorMessage}`);
-            await Sleep(300);
-            Assert(ctx.Storage.SetCount('RunViewCache') > 0,
-                'a stamped response must be cached (client validation is DB-checked per request, independent of Trust)');
-
-            await Sleep(5200); // outlive linger so the second call truly revalidates
-            const second = await rv.RunView({ ...params });
-            Assert(second.Success, `second failed: ${second.ErrorMessage}`);
-            AssertEqual(second.Results.length, first.Results.length, 'revalidated results must match');
+                await Sleep(OUTLIVE_LINGER_MS); // outlive linger so the second call truly revalidates
+                const second = await rv.RunView({ ...params });
+                Assert(second.Success, `second failed: ${second.ErrorMessage}`);
+                AssertEqual(second.Results.length, first.Results.length, 'revalidated results must match');
+            } finally {
+                info!.AllowCaching = originalAllowCaching;
+            }
         }
     },
     {
@@ -347,7 +394,7 @@ export const ClientCacheChecks: NamedCheck[] = [
 
             const warm = await rv.RunView({ EntityName: SMALL_ENTITY, ExtraFilter: filter, Aggregates: [A, B], ResultType: 'simple', CacheLocal: true });
             Assert(warm.Success, `warm failed: ${warm.ErrorMessage}`);
-            await Sleep(5200); // outlive linger so the reversed read truly revalidates the slot
+            await Sleep(OUTLIVE_LINGER_MS); // outlive linger so the reversed read truly revalidates the slot
 
             const reversed = await rv.RunView({ EntityName: SMALL_ENTITY, ExtraFilter: filter, Aggregates: [B, A], ResultType: 'simple', CacheLocal: true });
             Assert(reversed.Success, `reversed failed: ${reversed.ErrorMessage}`);
@@ -355,9 +402,81 @@ export const ClientCacheChecks: NamedCheck[] = [
             AssertEqual(reversed.AggregateResults![0].alias, B.alias!, 'ORDER CONTRACT: AggregateResults[0] must be the caller\'s FIRST requested aggregate');
             AssertEqual(reversed.AggregateResults![1].alias, A.alias!, 'ORDER CONTRACT: AggregateResults[1] must be the caller\'s SECOND requested aggregate');
         }
+    },
+    {
+        Id: 'client-cache.C14',
+        Name: 'C14 (mutation): a transaction group submitted from the client rewrites the client\'s cached slot once',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const params: RunViewParams = { EntityName: GROUP_ENTITY, IgnoreMaxRows: true };
+            // A private, connection-shaped slot, stored empty, so only this check's rows reach it.
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, `it-c14://${uuidv4()}/`);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, [], '');
+            AssertEqual(JSON.stringify(await clientSlotIds(ctx, fingerprint)), '[]', 'precondition: the client slot is stored and empty');
+            const writesBefore = ctx.Storage.SetCountForKey(fingerprint);
+
+            const group = await md.CreateTransactionGroup();
+            const categories: MJActionCategoryEntity[] = [];
+            for (let i = 0; i < GROUP_ROWS; i++) {
+                const category = await md.GetEntityObject<MJActionCategoryEntity>(GROUP_ENTITY);
+                category.NewRecord();
+                category.Name = `C14 client group ${i} ${uuidv4()} (mj-integration-test — safe to delete)`;
+                category.Status = 'Active';
+                category.TransactionGroup = group;
+                Assert(await category.Save(), `queueing a category failed: ${category.LatestResult?.CompleteMessage ?? ''}`);
+                categories.push(category);
+            }
+            let submitted = false;
+            try {
+                Assert(await group.Submit(), 'the client transaction group failed to submit');
+                submitted = true;
+                const ids = categories.map(c => c.ID.toUpperCase()).sort();
+                let stored = await clientSlotIds(ctx, fingerprint);
+                for (let waited = 0; JSON.stringify(stored) !== JSON.stringify(ids) && waited < 5000; waited += 50) {
+                    await Sleep(50);
+                    stored = await clientSlotIds(ctx, fingerprint);
+                }
+                AssertEqual(JSON.stringify(stored), JSON.stringify(ids), 'the client slot holds every row the group saved');
+                await Sleep(1000); // count any write that lands a moment later as well
+                AssertEqual(ctx.Storage.SetCountForKey(fingerprint) - writesBefore, 1, `the client slot is written once for the group of ${GROUP_ROWS} rows`);
+            } finally {
+                if (submitted) {
+                    // Through a new group: each entity still points at the submitted one, which would take
+                    // a plain Delete() and never run it.
+                    const deletes = await md.CreateTransactionGroup();
+                    for (const category of categories) {
+                        category.TransactionGroup = deletes;
+                        Assert(await category.Delete(), `queueing a client-side delete failed: ${category.LatestResult?.CompleteMessage ?? ''}`);
+                    }
+                    Assert(await deletes.Submit(), 'the client group of deletes failed to submit');
+                }
+                await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+            }
+        }
     }
 ];
 
 for (const check of ClientCacheChecks) {
     IntegrationCheckRegistry.Instance.Register(check);
 }
+
+// Installs the shortened dedup linger window for this bundle only, and puts the shipped value
+// back afterwards: `ProviderBase.DedupLingerMs` is process-global, and the bundles that follow
+// must see shipped behaviour. The prior value is captured rather than assumed to be 5000, so a
+// harness that already changed it is not silently overwritten. Mirrors the runquery-cache
+// lifecycle, which does the same for QueryEngine's result-deletion window.
+let priorDedupLingerMs: number | undefined;
+
+IntegrationCheckRegistry.Instance.RegisterLifecycle('client-cache', {
+    Setup: async () => {
+        priorDedupLingerMs = ProviderBase.DedupLingerMs;
+        ProviderBase.DedupLingerMs = BUNDLE_DEDUP_LINGER_MS;
+    },
+    Teardown: async () => {
+        if (priorDedupLingerMs !== undefined) {
+            ProviderBase.DedupLingerMs = priorDedupLingerMs;
+            priorDedupLingerMs = undefined;
+        }
+    }
+});

@@ -125,6 +125,30 @@ const exampleMatches: ExampleMatchResult[] = await AIEngine.Instance.FindSimilar
 );
 ```
 
+#### Local Embeddings
+
+Every platform path that embeds locally (entity save hooks, agent memory, QueryGen, the semantic
+search fallback) uses one model, `DefaultLocalEmbeddingModel`: the active local embedding model named
+by the `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` environment variable, or the highest-PowerRank active one when
+it is unset. Every process that embeds (MJAPI, the `mj` CLI, MCP/A2A servers, workers) reads it, so
+they all judge stored vectors against the same model. A name that matches no active local model turns
+local embedding off with an error. The model is resolved once per process, so changing it takes a
+restart.
+
+```typescript
+const model = AIEngine.Instance.DefaultLocalEmbeddingModel;
+
+// Search text is a query; stored text is a document (the default).
+const query = await AIEngine.Instance.EmbedTextLocal('which charts does the user like?', { inputType: 'query' });
+const doc = await AIEngine.Instance.EmbedText(model!, 'User prefers bar charts.', undefined, { inputType: 'document', dimensions: 256 });
+```
+
+`EmbedText` prepends the model's catalog prefix for the input type (`ModelConfiguration.Embedding`
+`QueryPrefix` / `DocumentPrefix`, resolved through `GetEffectiveModelConfiguration`), passes the
+model-vendor row's `MaxInputTokens` as the input cap, and caches per model, input type, dimensions and
+prefixed text. A failed embed returns `null`. `PrepareEmbeddingInput` exposes the same shaping to
+`AIEmbeddingRunner`.
+
 ### Embedding Services
 
 | Class | Purpose |
@@ -145,7 +169,8 @@ const exampleMatches: ExampleMatchResult[] = await AIEngine.Instance.FindSimilar
 
 `AIEngine` exposes `FindSimilarAgentNotes` over the in-process `_noteVectorService`. Since v5.30.x the vector store is kept strictly in sync with the persisted note state:
 
-- **Invariant.** `_noteVectorService` contains an entry for an `AIAgentNote` if and only if its persisted `Status='Active'` AND its `EmbeddingVector` is non-null.
+- **Invariant.** `_noteVectorService` contains an entry for an `AIAgentNote` if and only if its persisted `Status='Active'`, it has a stored vector (`EmbeddingVectorBinary` or `EmbeddingVector`), AND that vector came from `DefaultLocalEmbeddingModel` (`EmbeddingModelID`). Vectors from another model can't share the index: the load leaves them out with one warning naming the count, and they rejoin when re-embedded (on their next save, or with the "Re-embed Local Vectors" action).
+- **Loading.** Notes and examples are hydrated with `ReadStoredVector(EmbeddingVectorBinary, EmbeddingVector)` from `@memberjunction/ai-vectors-memory` — the binary float32 column when valid, the JSON column as fallback. See the [Binary Fields Guide](../../../guides/BINARY_FIELDS_GUIDE.md).
 - **Write-side enforcement.** `MJAIAgentNoteEntityServer.Save()` and `.Delete()` (in [`@memberjunction/core-entities-server`](../../MJCoreEntitiesServer/README.md)) update the in-process vector store inline with each note write — adding entries when a note becomes Active with a non-null embedding, removing them when Status flips away from Active or when the note is deleted.
 - **What this fixes.** Before this change, revoking a note (e.g. during MemoryManagerAgent consolidation, or when a contradiction was resolved) would leave a stale entry in `_noteVectorService` until MJAPI was restarted. Subsequent calls to `FindSimilarAgentNotes` would surface revoked notes back to retrieval. The invariant now holds without a restart.
 

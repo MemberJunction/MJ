@@ -2,6 +2,7 @@
  * Pure view-model functions and types for ML Model detail and metrics rendering.
  * Framework-free, deterministic calculations over plain model entity data.
  */
+import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 export interface PSFeatureBar {
   name: string;
@@ -79,6 +80,12 @@ const METRIC_ALIASES: Record<string, PSMetricKey> = {
 
 export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
 
+/**
+ * The ML Model form's label for a feature column: drops a leading `Is` before a capital, splits camelCase, turns `_`
+ * into spaces and title-cases every word (`IsActive` → `Active`, `membership_type` → `Membership Type`). A published
+ * export whose output is fixed; the dashboards' at-risk drivers use `AtRiskRules.HumanizeFeatureName` (predictive-studio-core), which
+ * keeps an `Is` prefix and sentence-cases snake_case names.
+ */
 export function HumanizeFeatureName(name: string): string {
   if (!name) return '';
   return name
@@ -282,4 +289,12 @@ export function OverfitGap(model: { Metrics?: string | null; HoldoutMetrics?: st
 /** @deprecated Use {@link OverfitGap}. */
 export function overfitGap(model: { Metrics?: string | null; HoldoutMetrics?: string | null }): number | null {
   return OverfitGap(model);
+}
+
+/** The importance a model view may show. */
+export class ModelImportanceView {
+  /** The importance bars a person may see: coefficient models only (split / impurity counts are not comparable across features and read as importance they are not, so they are hidden). */
+  public static DisplayedFeatureImportance(lineageJSON: string | null | undefined, raw: string | null | undefined, topN: number = 6): PSFeatureBar[] {
+    return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseFeatureImportance(raw, topN) : [];
+  }
 }

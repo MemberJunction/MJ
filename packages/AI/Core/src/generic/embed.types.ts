@@ -1,6 +1,13 @@
 import { BaseParams, ModelUsage } from "./baseModel";
 import { ChatMessageContent } from "./chat.types";
 
+/**
+ * The retrieval role of a text. Asymmetric embedding models embed a search query differently from a
+ * stored document. When it is omitted, catalog prefixes treat the text as a document and a driver
+ * with a native parameter uses its own default.
+ */
+export type EmbeddingInputType = 'query' | 'document';
+
 export type EmbedTextParams = BaseParams & {
     text: string
     /**
@@ -11,6 +18,28 @@ export type EmbedTextParams = BaseParams & {
      * read it from there and pass it here.
      */
     dimensions?: number
+    /**
+     * Optional cap on the input length, in tokens. Drivers that tokenize locally (e.g.
+     * `LocalEmbedding`) truncate each text to it; hosted drivers ignore it. Callers pass the
+     * catalog limit, `MJ: AI Model Vendors.MaxInputTokens`. When omitted, the tokenizer's own
+     * limit applies, and some tokenizers declare none.
+     */
+    maxInputTokens?: number
+    /**
+     * Optional retrieval role of the text. Drivers with a native parameter (Cohere's `input_type`)
+     * map it; other drivers ignore it. Instruction prefixes for prefix-trained models come from the
+     * model's `ModelConfiguration.Embedding` section and are applied by the caller with
+     * `ApplyEmbeddingInputPrefix`, not by the driver.
+     */
+    inputType?: EmbeddingInputType
+    /**
+     * Optional signal for cancelling the request. Drivers whose SDK can abort a request forward it,
+     * so an abort tears the request down; drivers that call an in-process model check it between
+     * items and stop. A request that stops because the signal fired throws a cancellation error
+     * (classified `Cancelled`, or a retriable `NetworkError` when the signal was aborted by a
+     * timeout) rather than returning an empty result, and is never retried.
+     */
+    CancellationToken?: AbortSignal
 }
 
 export type EmbedTextsParams = BaseParams & {
@@ -19,6 +48,19 @@ export type EmbedTextsParams = BaseParams & {
      * Optional output dimension override. See `EmbedTextParams.dimensions`.
      */
     dimensions?: number
+    /**
+     * Optional input-length cap in tokens. See `EmbedTextParams.maxInputTokens`.
+     */
+    maxInputTokens?: number
+    /**
+     * Optional retrieval role of the texts. See `EmbedTextParams.inputType`.
+     */
+    inputType?: EmbeddingInputType
+    /**
+     * Optional signal for cancelling the request. See `EmbedTextParams.CancellationToken`. Once it
+     * fires, no further text or batch is sent.
+     */
+    CancellationToken?: AbortSignal
 }
 
 export type EmbedContentParams = BaseParams & {
@@ -27,6 +69,14 @@ export type EmbedContentParams = BaseParams & {
      * Optional output dimension override. See `EmbedTextParams.dimensions`.
      */
     dimensions?: number
+    /**
+     * Optional retrieval role of the texts. See `EmbedTextParams.inputType`.
+     */
+    inputType?: EmbeddingInputType
+    /**
+     * Optional signal for cancelling the request. See `EmbedTextParams.CancellationToken`.
+     */
+    CancellationToken?: AbortSignal
 }
 
 export type EmbedResult = {

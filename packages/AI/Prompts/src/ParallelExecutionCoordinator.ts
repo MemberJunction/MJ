@@ -16,7 +16,7 @@ import {
   JudgeRanking,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ResolvePromptRunUserID, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from './AIPromptRunner';
 
 /**
@@ -270,6 +270,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param results - Array of successful execution results to choose from
    * @param config - Configuration for result selection method
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
+   * @param executionScope - The parallel prompt's {@link AIPromptExecutionScope}; a `PromptSelector`
+   *   judge runs under it, so it spends the same credentials the candidates did
    * @returns Promise<ExecutionTaskResult | null> - The selected best result, or null if none suitable
    */
   public async selectBestResult(
@@ -278,6 +280,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     contextUser?: UserInfo,
+    executionScope?: AIPromptExecutionScope,
   ): Promise<ExecutionTaskResult | null> {
     if (results.length === 0) {
       return null;
@@ -297,7 +300,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         return this.selectRandomResult(results);
 
       case 'PromptSelector':
-        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken, contextUser);
+        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken, contextUser, executionScope);
 
       case 'Consensus':
         return this.selectConsensusResult(results);
@@ -760,6 +763,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     parentPromptRunId?: string,
     _cancellationToken?: AbortSignal,
     contextUser?: UserInfo,
+    executionScope?: AIPromptExecutionScope,
   ): Promise<ExecutionTaskResult> {
     try {
       const user = contextUser || results[0]?.task?.contextUser;
@@ -797,11 +801,12 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       const judgeStartTime = Date.now();
 
       const judgeResult = await judgeRunner.ExecutePrompt({
+        ...executionScope,
         prompt: judgePrompt,
         data: judgeData,
         conversationMessages,
         contextUser: user,
-        provider: this.Provider,
+        provider: this.Provider ?? executionScope?.provider,
         parentPromptRunId,
         RunType: 'ResultSelector',
         ExecutionOrder: results.length,
@@ -996,6 +1001,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    */
   private buildPerTaskParams(params: AIPromptParams, task: ExecutionTask): AIPromptParams {
     const perTaskParams: AIPromptParams = Object.assign(Object.create(Object.getPrototypeOf(params)), params);
+    // A failover inside the task re-renders the prompt for its own tool-calling path through this copy.
+    this.ShareNativeRerender(params, perTaskParams);
 
     if (task.modelParameters) {
       perTaskParams.additionalParameters = { ...(params.additionalParameters ?? {}), ...task.modelParameters };
@@ -1086,6 +1093,11 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Success = modelResult.success;
       promptRun.Status = modelResult.success ? 'Completed' : 'Failed';
+      // A task whose attempt re-rendered its prompt records what it actually sent.
+      const rerenderedMessages = this.RerenderedMessagesFor(modelResult);
+      if (rerenderedMessages) {
+        promptRun.Messages = rerenderedMessages;
+      }
 
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';

@@ -15,6 +15,7 @@ export * from './ThemeStudio/theme-studio-dashboard.component';
 export * from './ThemeStudio/theme-studio-resource.component';
 export * from './ThemeStudio/theme-manager-dashboard.component';
 export * from './ThemeStudio/theme-manager-resource.component';
+export * from './LoginStudio/login-studio-resource.component';
 export * from './DevTools';
 export * from './Admin';
 export * from './Lists';
@@ -166,6 +167,10 @@ export {
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
+// Dashboards app pages (the Library is DashboardBrowserResourceComponent above)
+export { DashboardsCategoriesResourceComponent, LoadDashboardsCategoriesResource } from './DashboardBrowser/dashboards-categories-resource.component';
+export * from './shared/dashboards-app.helpers';
+
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
@@ -244,5 +249,16 @@ export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } fro
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
 
+// Work Queue app — operator dashboard over the WorkQueue.* remote operations (spec 09b)
+export * from './work-queue-dashboards.module';
+export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.component';
+
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';
+
+// Chief of Staff Executive Cockpit
+export {
+    ChiefOfStaffDashboardComponent,
+    LoadChiefOfStaffDashboard,
+} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+export * from './ChiefOfStaff/chief-of-staff-agent-context';

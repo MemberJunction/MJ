@@ -40,7 +40,11 @@ describe('FormOverrideDialogComponent (DOM)', () => {
   });
 
   it('reveals the role picker with one option per provider role when Scope=Role', () => {
-    const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'Role' });
+    // The picker is offered only to someone who may publish; an Owner always may.
+    const fixture = render({
+      Visible: true, EntityName: 'Members', InitialScope: 'Role',
+      Provider: createFakeProvider({ roles: ROLES, currentUser: { Type: 'Owner' } }),
+    });
     const options = queryAll(fixture, 'select.role-picker option');
     // one placeholder + one per role
     expect(options.length).toBe(ROLES.length + 1);
@@ -72,4 +76,55 @@ describe('FormOverrideDialogComponent (DOM)', () => {
     expect(confirmed[0].Name).toBe('Nice Form');
     expect(confirmed[0].EntityName).toBe('Members');
   });
+
+  /**
+   * Showing a form to a role or to everyone is a grant. Without it the dialog shows the audience
+   * rather than offering controls that the server would refuse.
+   */
+  it('shows the audience as text, with no role or everyone option, to a user without the grant', () => {
+    const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'User' });
+    expect(queryAll(fixture, 'input[name="scope"]')).toHaveLength(0);
+    expect(text(fixture, '.scope-readonly')).toBe('Me only');
+  });
+
+  it('names the role a shared form is aimed at, for a user who cannot change it', () => {
+    const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'Role', InitialRoleID: 'r2' });
+    expect(text(fixture, '.scope-readonly')).toBe('Member role');
+  });
+
+  /** Reopening the dialog must not carry the last form's answers into the next one. */
+  it('starts a reopened dialog with no initial scope at Me only, with no role', () => {
+    const fixture = render({
+      Visible: true, EntityName: 'Members', EditMode: true,
+      InitialScope: 'Role', InitialRoleID: 'r2', InitialStatus: 'Active', InitialPriority: 5,
+    });
+    expect(fixture.componentInstance.Scope).toBe('Role');
+    reopen(fixture, { EditMode: false, InitialScope: null, InitialRoleID: undefined, InitialStatus: null, InitialPriority: undefined });
+    expect(fixture.componentInstance.Scope).toBe('User');
+    expect(fixture.componentInstance.RoleID).toBeNull();
+    expect(fixture.componentInstance.Status).toBe('Pending');
+    expect(fixture.componentInstance.Priority).toBe(0);
+    expect(text(fixture, '.scope-readonly')).toBe('Me only');
+  });
+
+  it('decides whether to offer publishing when it opens, not on every check', () => {
+    const user: { Type: string } = { Type: 'Owner' };
+    const provider = createFakeProvider({ roles: ROLES, currentUser: user });
+    const fixture = render({ Visible: true, EntityName: 'Members', Provider: provider });
+    expect(fixture.componentInstance.CanPublish).toBe(true);
+    (provider.CurrentUser as unknown as { Type: string }).Type = 'User';
+    fixture.detectChanges();
+    expect(fixture.componentInstance.CanPublish).toBe(true);
+    reopen(fixture, {});
+    expect(fixture.componentInstance.CanPublish).toBe(false);
+  });
 });
+
+/** Closes the dialog, applies new inputs, and opens it again. */
+function reopen(fixture: ReturnType<typeof render>, inputs: Record<string, unknown>): void {
+  fixture.componentRef.setInput('Visible', false);
+  fixture.detectChanges();
+  for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+  fixture.componentRef.setInput('Visible', true);
+  fixture.detectChanges();
+}

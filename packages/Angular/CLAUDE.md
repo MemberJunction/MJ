@@ -520,12 +520,9 @@ export class ConversationDataService {
 export class ChatAreaComponent {
   @Input() conversationId: string | null = null;
   @Input() conversation: ConversationEntity | null = null;
-  @Input() threadId: string | null = null;
   @Input() isNewConversation = false;
 
   @Output() conversationCreated = new EventEmitter<ConversationEntity>();
-  @Output() threadOpened = new EventEmitter<string>();
-  @Output() threadClosed = new EventEmitter<void>();
 
   constructor(private conversationData: ConversationDataService) {}
 
@@ -541,7 +538,6 @@ export class ChatAreaComponent {
 export class WorkspaceComponent {
   selectedConversationId: string | null = null;
   selectedConversation: ConversationEntity | null = null;
-  selectedThreadId: string | null = null;
   isNewUnsavedConversation = false;
 
   onConversationSelected(id: string) {
@@ -557,15 +553,12 @@ export class WorkspaceComponent {
 ```
 
 ```html
-<!-- Parent template passing state down -->
+<!-- Parent template passing state down. Which fork is open is the chat area's own state: it has no fork binding. -->
 <mj-conversation-chat-area
   [conversationId]="selectedConversationId"
   [conversation]="selectedConversation"
-  [threadId]="selectedThreadId"
   [isNewConversation]="isNewUnsavedConversation"
-  (conversationCreated)="onConversationCreated($event)"
-  (threadOpened)="onThreadOpened($event)"
-  (threadClosed)="onThreadClosed()">
+  (conversationCreated)="onConversationCreated($event)">
 </mj-conversation-chat-area>
 ```
 
@@ -606,7 +599,9 @@ MemberJunction has **two** patterns for extending generated entity forms. Both a
 
 Write a standalone Angular component that extends `BaseFormPanel`, decorate it with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare it in any module. The next time anyone opens that entity's edit form, the panel renders in your chosen slot via `<mj-form-panel-slot>`. No `*Extended` class. No restating every generated panel. No custom HTML for the existing form.
 
-To **replace** a related-entity grid (or supply one when another OpenApp's relationship was not baked into this form), add `relatedEntity` and optional `relatedJoinField` to the metadata bag. To **replace a field panel** (or drop a hero that is not a collapsible panel), set `slot: 'before-fields'` and `replacesSectionKey: 'details'` (the CodeGen `SectionKey`). The composer hides the baked panel and mounts yours. Highest ClassFactory `Priority` wins when two apps claim the same `contributionKey`. See [PANELS.md](Generic/base-forms/PANELS.md), [Forms Architecture §7c](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen), and [`/plans/form-contributions.md`](../../plans/form-contributions.md).
+To **replace** a related-entity grid (or supply one when another OpenApp's relationship was not baked into this form), add `relatedEntity` and optional `relatedJoinField` to the metadata bag. To **replace a field panel** (or drop a hero that is not a collapsible panel), set `slot: 'before-fields'` and `replacesSectionKey: 'details'` (the CodeGen `SectionKey`). The composer hides the baked panel and mounts yours. Highest ClassFactory `Priority` wins when two apps claim the same `contributionKey`.
+
+A contribution does not have to be compiled: a `MJ: Entity Form Contributions` row pointing at a `componentRole: 'form-panel'` Component mounts in the same slots, carries the same registration bag, and competes on the same `contributionKey` — with a compiled registration winning a tie. You do not need to do anything to support this; the collector merges both sources before the composer runs. See [PANELS.md](Generic/base-forms/PANELS.md), [Forms Architecture §7c](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen), and [`/plans/form-contributions.md`](../../plans/form-contributions.md).
 
 Related grids on a parent form follow the chrome stack in [Forms Architecture §7d](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more): L1 `EntityRelationship.Configuration.UI.inclusion` (`Primary` / `More` / `None`; omit = Auto), L2 ranker on Auto leftovers (`RelatedRolePolicy`, default `'smart'`), L3 `MJ: Form Chrome Rules` (admin, not app-synced; optional `Title` survives OpenApp upgrades), L4 user rail order. `None` is not a More item and never reaches the ranker. `BaseFormPolicy.DecorateChrome` is cosmetics only.
 
@@ -773,6 +768,15 @@ Lightweight scenarios where you genuinely don't need Record Changes / Tags / Lis
 
 #### Reference
 The canonical working example is `packages/Angular/Explorer/core-entity-forms/src/lib/custom/ContentSources/content-source-form.component.html`. The generated forms under `core-entity-forms/src/lib/generated/` also all follow this pattern — your custom form should too.
+
+### Extending or Overriding Form Toolbar Buttons (`BaseFormToolbarAction`)
+
+Instead of replacing an entire form or modifying `<mj-form-toolbar>` directly to add or customize a toolbar button, register a **`BaseFormToolbarAction`** plugin decorated with **`@RegisterFormToolbarAction(metadata, priority?)`** (from `@memberjunction/ng-base-forms`):
+
+- **Entity Scoping (`EntityScope`)**: Target `'*'` (global), an exact entity name (`'MJ_BizApps_Common: People'`), a glob pattern (`'MJ_BizApps_Orders:*'`), a schema (`'schema:common'`), or an array of patterns.
+- **Pin-Aware Lifecycle (`OnPrewarm`)**: Implement `OnPrewarm(ctx)` to prefetch badge counts, and check `if (!ctx.IsPinned) return;` so unpinned buttons in the overflow menu do not run background network queries until pinned (`OnPinStateChanged`) or clicked (`OnExecute`).
+- **Subclassing & Prototype Metadata Inheritance**: To customize an existing toolbar button (such as `RecordLinksToolbarAction`), subclass it and decorate with `@RegisterFormToolbarAction({ EntityScope: '...' })`. `ResolveFormToolbarActionsForEntity` automatically inherits `Key`, `Icon`, `Order`, `Pinnable`, and `Mode` from the superclass via the prototype chain and resolves the subclass as the winner for matching entities.
+- **Full guide & examples**: [Forms Architecture §7e](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction).
 
 ---
 

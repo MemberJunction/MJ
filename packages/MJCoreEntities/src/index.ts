@@ -13,7 +13,12 @@ export * from './custom/MJComponentEntityExtended';
 export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
+export * from './custom/ConversationWriteAccess';
+export * from './custom/ConversationForkAccess';
+export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
+export * from './custom/approvals';
+export * from './custom/MJThemeEntityExtended';
 export * from './custom/AIAgentNoteStatus';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';
@@ -48,6 +53,11 @@ export * from './engines/IdentityClaimEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
+export * from './custom/FormScope/FormScopeRules';
+export * from './custom/FormScope/FormContributionRow';
+export * from './custom/FormScope/FormContributionClaims';
+export * from './custom/FormScope/FormContributionLifecycle';
+export * from './custom/FormScope/FormPanelHides';
 export * from './custom/operations/EvaluateAuthorizationChecks';
 export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 

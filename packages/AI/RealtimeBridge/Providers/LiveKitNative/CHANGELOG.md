@@ -1,5 +1,182 @@
 # @memberjunction/ai-bridge-livekit-native
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 7873578: The meeting bot now stops reading a participant's audio when the track is unsubscribed, when the participant leaves, and when the bot leaves the room or the room disconnects. It read each track with `for await`, which locks rtc-node's `AudioStream` (a `ReadableStream` with no `close()`), and tried to stop it with `close?.()`, which did nothing, so each stream kept its native handle and a listener on rtc-node's process-wide event emitter until an end of stream that rtc-node 0.13.29 does not send in those cases. Each stream is now read through a reader the client keeps and cancels; a frame already read when the stream is cancelled is dropped, and no stream opens after the bot leaves. `RtcAudioStream` now describes that reader surface (`getReader()`), so a hand-built `RtcNodeModule`, such as a test fake, must return a stream that has it; rtc-node before 0.13.12, whose `AudioStream` was an async iterator, is no longer read (the client logs that it could not open the stream).
+- 1da00cb: An agent can now watch a LiveKit meeting. Set `realtime.video.watchMeetings: true` in the voiced agent's `TypeConfiguration`. When its realtime model takes video (Gemini 3.8 Live), the agent's bot joins with the `mj.agentWatches` attribute, so the room offers each person the choice, and reads the camera or shared screen of the people who allow it: one source at a time, at the model's frame rate, as JPEG (cameras scaled to 640 px on the longer side, screens to 1280 px). When a source whose frames reached the model ends (the person withdraws, leaves, stops sharing or turns the camera off), the model is told "[The agent can no longer see: Ada's camera]". In every meeting the bot now unsubscribes from video it does not read. The frame-rate and scaling math moves to `@memberjunction/ai` (`RealtimeVideoFrameIntervalMs`, `ScaleRealtimeVideoFrame`, `InboundVideoRateOf`), and the Gemini driver declares its video rate from the model's profile.
+- 567d5de: The meeting bot no longer hears a participant's screen-share audio as their speech. It read every audio track it was subscribed to, so the sound of a tab or screen shared from another LiveKit client reached the model, and the room's transcript, as that person's words. A track whose source is `SOURCE_SCREENSHARE_AUDIO` is now unsubscribed as it arrives, with one log line per participant. Microphones are heard as before, and so are tracks published without a source (`SOURCE_UNKNOWN`, which clients on LiveKit's Rust SDK, rtc-node and Python included, report unless they name one). `RtcNodeModule.TrackSource` gains `SOURCE_SCREENSHARE_AUDIO`; a hand-built module, such as a test fake, must now supply it.
+- 80ca198: The agent's bot now encodes the camera and screen frames it reads on a worker thread of its own, so a shared screen no longer blocks the thread that hosts the room (MJAPI's main loop by default) for each sampled frame. One encode worker serves every watching room on a thread, and each media worker (`MJ_LIVEKIT_WORKER_MEDIA=on`) gets its own; it starts with the first frame and stops after 60 s without frames. Each sampled frame is copied once, since the SDK's frame buffers can't be transferred. Consent is checked before a frame is sent to the worker and again when its JPEG returns. If the worker fails 3 times within 60 s, or its script is missing, frames are encoded in-process again for the rest of the process. `MJ_LIVEKIT_VIDEO_ENCODE_WORKER=off` (or the `VideoEncodeWorker` option) turns it off. Room telemetry gains where frames are encoded, the encode round trip, frames skipped or dropped around an encode, failures and worker restarts.
+- ad3f44f: The meeting bot's only video out is the agent's avatar. The native room client's `publishVideo` and `publishScreen` no-ops are removed, from `LiveKitRtcNodeRoomClient`, `LiveKitWorkerRoomClient`, the media worker protocol (`MediaWorkerCommand`) and session, and the `NativeRoomClient` interface; `ILiveKitRoomSdk` and `LiveKitNativeMeetingSdk` lose `publishVideoFrame` and `publishScreenFrame`, which only forwarded to them. `LiveKitBridge.SendMedia` sends `video/mp4` frames on `video-out` to the avatar publisher as before, and drops any other `video-out` frame and every `screen-out` frame, logging the first of each per session when the provider allows that track.
+- 1c76559: Fixes the Meet "could not load the native LiveKit room module at '@memberjunction/ai-bridge-livekit-native'" failure: `@memberjunction/ai-bridge-livekit` now keeps a process-wide registry of native room modules (`RegisterNativeRoomModule`) that `DefaultNativeLoader` checks before falling back to `import()`, and `@memberjunction/livekit-room-server`, which declares the native wrapper, registers it at load (no dependency cycle). `LIVEKIT_NATIVE_MODULE` overrides still go through `import()`. The native room client's `onDisconnected` callback now receives the LiveKit disconnect reason. The handoff offer registry no longer logs "User not found in metadata and no contextUser" every 15 seconds: the server now supplies the system user lazily, and queries are skipped (in-memory expiry still runs) when no user is available.
+- 97bbca4: The LiveKit worker media plane is experimental and opt-in, off by default (`MJ_LIVEKIT_WORKER_MEDIA=on|true|1` or `UseWorker: true` enables it) and, when enabled, falls back to the in-process client if the worker cannot start or join. Worker crashes now clear the connected flag at once, restart with bounded exponential backoff (the counter resets only after 60s healthy), refuse to rejoin with an old token, and raise the disconnected callback with a reason when recovery fails. The auto-running worker bootstrap moved to a separate entry that the package index no longer re-exports. Outbound audio is paced by duration against a monotonic clock, the roster is seeded from the room on join and rejoin, telemetry is polled and reports main-thread and worker event-loop p99 separately, and the message protocol is a typed discriminated union. The live benchmark moved into the package and measures two-participant inbound and outbound audio with no hard-coded results.
+
+  The README documents it, and moving the model transport into the worker is deferred (plans/realtime/livekit-worker-model-transport.md).
+
+- 08a4cfc: The meeting bot publishes an agent's avatar. Before an agent's meeting session opens, the room coordinator asks the native room module whether the bot can publish one (`describeAvatarVideo`: `@livekit/rtc-node` with video publishing, and ffmpeg 4.2 or later with the H.264 and AAC decoders, from `MJ_FFMPEG_PATH` or the `PATH`, probed once per thread); only then does the session ask for it (`RealtimeAvatarSettings.Delivery: 'room'`, threaded through the bridged session prep), and the Gemini driver grants it on an endpoint that renders avatars (VIDEO, the avatar at 2 Mbps), with the decision on `IRealtimeSession.AvatarStatus`. A granted bridged Gemini session sends the avatar's fragmented MP4 as typed frames through `IRealtimeSession.OnVideoFrame`, plays PCM only before a turn's first video, drops media from `interrupted` to that turn's `turnComplete`, and reports the avatar video it generated as `OutputTokenDetails.VideoSeconds` deltas through `OnUsage` (counted up to `generationComplete`). The engine sends the pieces on `video-out` with their MIME type; in a full-duplex multi-agent room each piece passes the floor gate by its audio's duration (`FullDuplexTurnGate.OnOutputDuration`). The LiveKit bridge routes `video/mp4` frames to the room client (`publishAvatarMedia`), which reads them with Core's fMP4 reader (`ReadFmp4Fragment`, `AvccToAnnexB`, `AdtsHeader`, and `Fmp4AudioSeconds` beside AV9's `Fmp4VideoSeconds`; `ReadFmp4Init` also reads a track's size, the trex sample size and flags, the H.264 parameter sets and the AAC config), decodes them in two long-lived ffmpeg child processes, queues the voice on the bot's audio track and shows each frame on a camera track (`agent-avatar`, LiveKit's default simulcast, published at the first frame) when the voice's playout reaches the frame's timestamp. A barge-in drops the queued frames and fences both decoders; the last frame stays on screen. A decoder that dies is restarted; three failures of one decoder within 60 s, or a refused camera track, take the avatar down: the track is unpublished, the bot sets `mj.agentAvatar` to `audio-only:<reason>` (agent bot tokens now carry `canUpdateOwnMetadata`), and the engine replaces the model session with an audio-only one (`StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar`). The bot's join token carries `mj.agentAvatar` (`on`, or `audio-only:<reason>` with `decoder-missing` when the host has no usable ffmpeg); Core adds the attribute helpers and the reasons `decoder-missing`, `decoder-failed` and `publish-failed`, which `ParseRealtimeAvatarStatus` reads and `REALTIME_AVATAR_UNAVAILABLE_REASONS` lists (from the same table); the call and mobile notices word them "Audio only for {Agent}: the avatar couldn't be shown in this meeting". `GeminiEnterpriseRealtime` renders a bridged session's avatar the same way. With the media worker on, the pieces are transferred to the worker, a restarted worker gets the stream's init again, and one restarted after a take-down joins audio only. Integration check RD17 (the LiveKit provider allows video out, and the native module answers the avatar probe). The MJAPI image can install a pinned LGPL static ffmpeg (BtbN) checked against its sha256; it is off by default (`INSTALL_FFMPEG=false`, so meetings stay audio only): fill in the pin values and build with `--build-arg INSTALL_FFMPEG=true` to turn it on.
+- b09fe34: The meeting room shows an agent's avatar. The room core maps the camera track an agent's bot publishes the avatar on (`REALTIME_AGENT_AVATAR_TRACK_NAME`, `agent-avatar`, now shared by the bot's publisher) to the participant's avatar instead of a camera, so its tile carries the "AI-generated video" label, and reads the bot's `mj.agentAvatar` attribute (`ReadAgentAvatarAttribute`) into `LiveKitParticipantView.AvatarAudioOnly`. `mj-media-tile` now shows an avatar whole, the full portrait with bars, in every tile: meeting tiles, and the call's avatar on the stage and in picture-in-picture. Its new `AvatarVideoFit` (default `'contain'`) lets a host fill the tile with `'cover'` instead; other video still fills its tile. When an agent's bot says audio only, the MJ room shows everyone one info notice per agent per join ("Audio only for Sage: the avatar can't be shown in this meeting"), dismissible and hiding itself after 10 seconds; `AvatarNoticeLabels` lets a host word it. Its words come from `ng-realtime-media`'s `AvatarNoticeText`, which gains an options argument (`{ NameAgent: true }` names the agent on a call's lines, for meetings; calls are unchanged) and takes `null` for a reason it doesn't know, giving the new `AVATAR_NOTICE_UNKNOWN_REASON_TEXT`.
+- 69bf67c: An agent that watches a LiveKit meeting now picks which camera or screen its model sees, instead of keeping the first one until it ends. A shared screen comes first (the most recent share). After that comes the camera of whoever leads LiveKit's active-speaker list, once they have led for 1.5 s, then the camera already in view, then the camera of whoever spoke last, then the first camera in the room. A camera stays in view for 4 s from its first frame before another camera replaces it. A shared screen, a withdrawn consent and an ended source never wait. The bot itself and other agents never count as speakers. Only the chosen source is subscribed and read: a switch drops the old one, then subscribes the new one. The model is told what it sees: "[You can now see: Ada's screen]" right before the first frame of each source new to its session, and "[You can no longer see: Bob's camera]" when a source it saw stops, including on a switch (the ended note used to read "[The agent can no longer see: …]"). The hold lengths can be overridden through the bridge's `Configuration` (`VideoSpeakerOnsetMs`, `VideoSpeakerHoldMs`). Room telemetry gains `sourceSwitches`, `switchesHeld`, `activeSpeakerUpdates` and `switchGapMsLast` / `switchGapMsMax`. The live check script gains a switch scenario (`VISION_SCENARIO=switch`).
+
+  A browser call's video notes use the same second-person set. `VideoSourceArbiter` now says "[You can now see: Camera]" when what the model sees changes (it said "[The agent is now viewing: Camera]"), "[You can no longer see: Whiteboard (the user turned it off)]" when a source is turned off (it said "[The user turned off the agent's view of: Whiteboard]"), and "[You can now see: Whiteboard (turned back on)]" when it is turned back on (it said "[The agent can see Whiteboard again]"). The notes are sent at the same moments as before, and `FormatSwitchNote`, `FormatDisabledNote` and `FormatEnabledNote` still override them.
+
+- aee2d53: Full-duplex realtime models improvements, speech-tuned Meet room options, audio telemetry, and disconnect reason handling:
+  - **FullDuplex metadata**: Added `FullDuplex?: boolean` to Realtime section of `IAIModelConfiguration` with cascaded metadata resolution and helper `ResolveIsModelFullDuplex`. Seeded metadata for full-duplex models (Gemini 3.8 Live family, GPT-Live 1).
+  - **Coordinator turn-taking tools & ResolveHostTools seam**: Withhold turn-taking tools (`turnTakingTools = []`) when model is full-duplex. Added `ResolveHostTools` callback seam to `PrepareClientSessionInput` allowing dynamic resolution of host tools based on resolved model/vendor/driver before session startup.
+  - **Energy gate bypass**: Bypassed `FullDuplexTurnGate` and `HumanSpeechDetector` for full-duplex models by default unless `MJ_REALTIME_MODERATOR_MODE=on`.
+  - **Speech-tuned Meet RoomOptions**: Configured speech defaults (`dtx: false`, `red: true`, `audioPreset: AudioPresets.speech`, `audioCaptureDefaults`) overridable via `RoomOptions` input.
+  - **Audio telemetry**: Added inbound inter-frame gap histogram per participant, outbound `queuedDuration` and underrun tracking, event-loop delay p99 (`perf_hooks.monitorEventLoopDelay`) with 30s rolling window, and speech-to-audio latency logging.
+  - **LiveKit disconnect reason**: Mapped `null`/`undefined` disconnect reason from `livekit-client` to `'connection-lost'` rather than `'client-initiated'`.
+  - **Interaction lifecycle**: Added optional `Status` override on `CloseInteractionParams`.
+
+- dfae333: `@livekit/rtc-node` is now declared as `^0.13.29` (it was `^0.13.0`), the release the lockfile installs and live meetings ran on; the installed version is unchanged. The meeting bot can't run on earlier 0.13.x releases: it reads participant video through `getReader()`, which rtc-node's streams have from 0.13.12, and it times the avatar's face against `AudioSource.queuedDuration`, which reads 0 after a pause in the voice before 0.13.19 and still counts the dropped audio after `clearQueue()` (a barge-in) before 0.13.20. A host whose package manager satisfied the old range with an earlier release, such as a copy already in its tree, now gets 0.13.29 or later.
+- d2cb42e: The rule that tells an agent's bot from a person in a meeting room now lives in one place, `@memberjunction/ai`: `AgentParticipantIdentity(agentSessionId)` gives a bot its participant identity (`agent-<agent session id>`), and `IsAgentParticipantIdentity(identity)` reads one back (any identity starting with `agent-`, in any case). The LiveKit room coordinator mints the bot's identity with it; the LiveKit bridge, the bot's video watcher and the bridge engine read identities with it, where the engine had three inline copies of the check. `IsAgentParticipantIdentity` in `@memberjunction/ai-bridge-livekit` is deprecated and calls the shared one, and the package now depends on `@memberjunction/ai`. The engine's verbose first-frame log says what arrived: "The agent can SEE your camera." or "...your screen." for video (it said "The agent is HEARING you." for every track); the line for audio is unchanged. Nothing else behaves differently.
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [acf0f5b]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [ad3f44f]
+- Updated dependencies [1c76559]
+- Updated dependencies [465c950]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [69bf67c]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [ff58383]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 54f4bc1: Wire `@memberjunction/ai-bridge-livekit-native` dependency so the native LiveKit room wrapper resolves cleanly in LiveKit providers, room servers, and runtime hosts.
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [54f4bc1]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

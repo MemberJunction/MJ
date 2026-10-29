@@ -50,15 +50,46 @@ const { mjCoreSchema } = configInfo;
 type DataSourceResult = ProviderDataSourceResult;
 
 /**
+ * Failure context for the SQL generation/execution pass. Named so the CRUD self-heal can clear
+ * exactly this entry when it repairs what the pass left missing.
+ */
+const SQL_PASS_FAILURE_CONTEXT = 'SQL_PASS';
+
+/**
  * Main orchestrator class for the MemberJunction code generation process.
  */
+/**
+ * Counts validators by identity (`entityName|functionName`, entity compared case-insensitively),
+ * so a validator regenerated or loaded twice is reported once.
+ */
+export function CountDistinctValidators(validators: ReadonlyArray<{ entityName: string; functionName: string }>): number {
+  return new Set(validators.map((v) => `${v.entityName.toLowerCase()}|${v.functionName}`)).size;
+}
+
 export class RunCodeGenBase {
   /**
-   * BEFORE/AFTER external command failures captured during a pipeline run, so the
-   * structured result can fail (success=false, non-zero exit) AND report which
-   * command failed — instead of the legacy log-only path that exited 0 regardless.
+   * Every step failure captured during a pipeline run: BEFORE/AFTER commands, SQL scripts,
+   * metadata management, the SQL pass, validators, file generation and integrity checks.
+   * The pipeline runs every step to the end, then fails (success=false, non-zero exit) with
+   * this full list, instead of stopping at the first failure or logging and reporting success.
    */
   protected commandFailures: Array<{ context: string; message: string }> = [];
+
+  /** Records a step failure for the end-of-run list, and logs it now. */
+  protected RecordStepFailure(context: string, message: string): void {
+    this.commandFailures.push({ context, message });
+    logError(`${context}: ${message}`);
+    CodeGenReporter.Instance.note(`${context}: ${message}`);
+  }
+
+  /**
+   * Formats the end-of-run failure list. Returns an empty string when there are none.
+   */
+  public static FormatStepFailures(failures: ReadonlyArray<{ context: string; message: string }>): string {
+    if (failures.length === 0) return '';
+    const lines = failures.map((f, i) => `  ${i + 1}. [${f.context}] ${f.message}`);
+    return `CodeGen finished with ${failures.length} failure${failures.length === 1 ? '' : 's'}:\n${lines.join('\n')}`;
+  }
 
   /**
    * Record any failed entries from a BEFORE/AFTER command batch, paired by index.
@@ -276,7 +307,10 @@ export class RunCodeGenBase {
         }
 
         UpdateSpinner('Executing before-all SQL Scripts...');
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'before-all'))) logError('ERROR running before-all SQL Scripts');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'before-all'))) {
+          this.RecordStepFailure('BEFORE_ALL_SQL', 'One or more before-all SQL scripts failed');
+          pipelineSuccess = false;
+        }
 
         const newUserSetup = configInfo.newUserSetup;
         if (newUserSetup) {
@@ -285,8 +319,8 @@ export class RunCodeGenBase {
           const result = await newUserObject.createNewUser(newUserSetup);
           if (!result.Success) {
             if (result.Severity === 'error') {
-              logError('ERROR creating new user');
-              logError('   ' + result.Message);
+              this.RecordStepFailure('NEW_USER_SETUP', result.Message);
+              pipelineSuccess = false;
             } else {
               LogWarning('Warning: (New User Setup) ' + result.Message);
             }
@@ -302,9 +336,10 @@ export class RunCodeGenBase {
         // rows for newly-discovered entities. Skipping Refresh here causes the SQL-gen entity
         // loop to use stale snapshots and silently drop CRUD for those entities — Bug 1 in the
         // 3-bug chain, observed first-run on PG for entities like SystemEvent.
-        await provider.Refresh();
+        await this.refreshMetadataAfterManageMetadata(provider);
         if (!metadataSuccess) {
           FailSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
+          this.RecordStepFailure('MANAGE_METADATA', 'Metadata management reported a failure; see the errors logged above');
           pipelineSuccess = false;
         } else {
           SucceedSpinner('Metadata management completed');
@@ -315,7 +350,11 @@ export class RunCodeGenBase {
         // FLS-enabled entity a field with no permission rows is DENIED, so a column added
         // without this step would be invisible to every user until something else reconciled.
         // It also removes rows orphaned by a dropped column or a revoked role.
-        await reporter.phase('reconcileFieldPermissions', () => ReconcileFieldLevelSecurity(provider, currentUser));
+        const flsOk = await reporter.phase('reconcileFieldPermissions', () => ReconcileFieldLevelSecurity(provider, currentUser));
+        if (flsOk === false) {
+          this.RecordStepFailure('FIELD_LEVEL_SECURITY', 'Field-level security reconciliation failed');
+          pipelineSuccess = false;
+        }
 
         const sqlOutputDir = OutputDir('SQL', true);
         let sqlGenerationSucceeded = true;
@@ -326,6 +365,7 @@ export class RunCodeGenBase {
           );
           if (!sqlSuccess) {
             FailSpinner('Error managing SQL scripts and execution');
+            this.RecordStepFailure(SQL_PASS_FAILURE_CONTEXT, 'SQL generation/execution reported a failure; see the errors logged above');
             sqlGenerationSucceeded = false;
             pipelineSuccess = false;
           } else {
@@ -392,6 +432,7 @@ export class RunCodeGenBase {
               missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
               if (missing.length === 0) {
                 logStatus('Self-heal succeeded — all expected CRUD routines now exist');
+                this.commandFailures = this.commandFailures.filter((f) => f.context !== SQL_PASS_FAILURE_CONTEXT);
                 // Self-heal closed the runtime gap that the upstream batch
                 // failure left behind. Clear the upstream failure flag so
                 // codegen reports success: every entity that runtime needs
@@ -423,14 +464,15 @@ export class RunCodeGenBase {
                   `  • Cascade-delete dependency analysis dropped entities silently\n` +
                   `Run codegen again on the same DB to see if the issue persists; if it does, this is a real generation bug.`
               );
-              return false;
+              this.commandFailures.push({ context: 'CRUD_VALIDATION', message: `${missing.length} expected CRUD routine(s) missing:\n${list}` });
+              pipelineSuccess = false;
             } else {
               SucceedSpinner(`Post-CodeGen CRUD validation passed (${md.Entities.length} entities checked)`);
             }
           } catch (e) {
             FailSpinner('Post-CodeGen CRUD validation errored');
-            logError(`CRUD validator threw: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            this.RecordStepFailure('CRUD_VALIDATION', `CRUD validator threw: ${e instanceof Error ? e.message : String(e)}`);
+            pipelineSuccess = false;
           }
         }
 
@@ -471,11 +513,12 @@ export class RunCodeGenBase {
               `CREATE OR REPLACE VIEW, so no DROP/CASCADE is required.`;
             if (strict) {
               FailSpinner(`Field-resolution validation FAILED: ${gaps.length} unreadable field(s)`);
-              logError(summary);
-              return false;
+              this.RecordStepFailure('FIELD_RESOLUTION', summary);
+              pipelineSuccess = false;
+            } else {
+              WarnSpinner(`Field-resolution validation found ${gaps.length} unreadable field(s)`);
+              LogWarning(summary);
             }
-            WarnSpinner(`Field-resolution validation found ${gaps.length} unreadable field(s)`);
-            LogWarning(summary);
           } else {
             SucceedSpinner('Entity fields all resolve against their base views');
           }
@@ -484,11 +527,12 @@ export class RunCodeGenBase {
           WarnSpinner('Field-resolution validation could not run');
           LogWarning(`Field-resolution validator threw: ${e instanceof Error ? e.message : String(e)}`);
         }
-        // Surface upstream SQL-pipeline failure even if validator passed: a
-        // green validator just means whatever DID get generated is consistent;
-        // it doesn't whitewash an upstream batch error.
+        // An upstream SQL-pipeline failure stays recorded (SQL_PASS_FAILURE_CONTEXT) even if the
+        // validators passed: a green validator just means whatever DID get generated is
+        // consistent; it doesn't whitewash an upstream batch error. The run continues so every
+        // later step's failures are reported too.
         if (!sqlGenerationSucceeded) {
-          return false;
+          pipelineSuccess = false;
         }
       } else {
         WarnSpinner('Skipping database generation (skip_database_generation = true)');
@@ -517,15 +561,17 @@ export class RunCodeGenBase {
       const metadataSuccess = await reporter.phase('loadGeneratedCode', () => manageMD.loadGeneratedCode(conn, currentUser));
       if (!metadataSuccess) {
         FailSpinner('ERROR checking/loading AI Generated Code from Metadata');
+        // File generation is skipped below: emitting without the loaded validators would delete
+        // every committed Validate() override (see above).
+        this.RecordStepFailure('LOAD_GENERATED_CODE', 'Loading AI generated code from metadata failed; file generation was skipped');
         pipelineSuccess = false;
-        return false;
       } else {
         // Report the COUNT, not just success. Loading zero validators is a legitimate state for a
         // database that has none, and an invisible catastrophe for one that has plenty: file
         // generation emits each entity as though it had no `Validate()` override, silently deleting
         // whatever was committed. Both times that regression shipped, the log said exactly this
         // line and nothing else. A number here makes the next one visible in CI output.
-        const loadedValidators = ManageMetadataBase.generatedValidators.length;
+        const loadedValidators = CountDistinctValidators(ManageMetadataBase.generatedValidators);
         SucceedSpinner(`AI Generated Code loaded from Metadata (${loadedValidators} validator${loadedValidators === 1 ? '' : 's'})`);
       }
 
@@ -533,9 +579,10 @@ export class RunCodeGenBase {
       if (skipFiles) {
         WarnSpinner('Skipping file generation (skip_file_generation = true)');
         SQLLogging.finishSQLLogging();
+      } else if (!metadataSuccess) {
+        SQLLogging.finishSQLLogging();
       } else if (!(await this.runFileGenerationPhase(conn, currentUser, md, skipDB))) {
         pipelineSuccess = false;
-        return false;
       }
 
       StartSpinner('Running system integrity checks...');
@@ -569,10 +616,7 @@ export class RunCodeGenBase {
           );
           pipelineSuccess = false;
           for (const failure of integrityOutcome.Failures) {
-            const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
-            logError(msg);
-            reporter.note(msg);
-            this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+            this.RecordStepFailure('INTEGRITY_CHECK', `Integrity check '${failure.Name}' failed: ${failure.Message}`);
           }
           break;
         }
@@ -601,8 +645,11 @@ export class RunCodeGenBase {
 
       if (!skipDB) {
         StartSpinner('Executing after-all SQL Scripts...');
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) FailSpinner('ERROR running after-all SQL Scripts');
-        else SucceedSpinner('After-all SQL Scripts completed');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) {
+          FailSpinner('ERROR running after-all SQL Scripts');
+          this.RecordStepFailure('AFTER_ALL_SQL', 'One or more after-all SQL scripts failed');
+          pipelineSuccess = false;
+        } else SucceedSpinner('After-all SQL Scripts completed');
       }
 
       const endTime = new Date();
@@ -610,11 +657,20 @@ export class RunCodeGenBase {
       // Visible final summary (succeedSpinner persists a ✔ line in both verbose and
       // non-verbose modes). The detailed/timestamped form stays on logStatus for the
       // verbose log + report.
-      SucceedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
-      logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
-      // A BEFORE/AFTER command failure fails the run (success=false, exit 1) so it
-      // isn't silently swallowed — details flow into the structured result below.
-      pipelineSuccess = pipelineSuccess && this.commandFailures.length === 0;
+      // Any recorded step failure fails the run (success=false, exit 1) so it isn't silently
+      // swallowed. A failure that set pipelineSuccess without recording a message still fails
+      // it, with a generic entry so the list is never empty on a failed run.
+      if (!pipelineSuccess && this.commandFailures.length === 0) {
+        this.commandFailures.push({ context: 'PIPELINE', message: 'CodeGen pipeline reported a failure — see the log output above for detail.' });
+      }
+      pipelineSuccess = this.commandFailures.length === 0;
+      if (pipelineSuccess) {
+        SucceedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
+        logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
+      } else {
+        FailSpinner(`MJ CodeGen finished with ${this.commandFailures.length} failure(s) — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
+        logError(RunCodeGenBase.FormatStepFailures(this.commandFailures));
+      }
       return pipelineSuccess;
      } catch (err) {
        pipelineSuccess = false;
@@ -638,6 +694,27 @@ export class RunCodeGenBase {
   }
 
   /**
+   * Refreshes every metadata provider the rest of the pipeline reads, once `manageMetadata` has written to
+   * the database.
+   *
+   * There can be two. `provider` is the one this pipeline was handed, but SQL generation reads entities
+   * through `new MJ.Metadata()` — the process's GLOBAL provider. The CLI creates one provider and makes it the
+   * global one, so they are the same object and one refresh covers both. In-process (`RunInProcess`, the
+   * runtime schema-update path) the host hands the pipeline a SEPARATE CodeGen-credential provider, and
+   * refreshing only that one left SQL generation on whatever snapshot the host's timed refresh last took. The
+   * entities `manageMetadata` had just given their soft primary keys still had none there, so every one of them
+   * was skipped as "no primary key field in metadata" — tables and entity rows, but no base view and no CRUD
+   * routines. Observed on a SQL Server tenant for 348 of 884 entities, on two consecutive runs.
+   */
+  private async refreshMetadataAfterManageMetadata(provider: MJ.IMetadataProvider): Promise<void> {
+    await provider.Refresh();
+    const hostProvider = MJ.Metadata.Provider; // global-provider-ok: SQL generation reads `new MJ.Metadata()`, which is this provider; in-process it is the host's, not `provider`
+    if (hostProvider && hostProvider !== provider) {
+      await hostProvider.Refresh();
+    }
+  }
+
+  /**
    * Resolve dirty-schema emit options for one generator call.
    * `--skipdb` (files only) and `fileEmit.dirtySchemaOnly === false` rebuild
    * every schema; write-if-changed still keeps mtimes stable. A full run with
@@ -649,7 +726,7 @@ export class RunCodeGenBase {
     return {
       dirtySchemas: ResolveDirtySchemasForEmit(
         entities,
-        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
+        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList, ...ManageMetadataBase.EntitiesWithNewJSONValidators],
         skipDB,
         fileEmit?.dirtySchemaOnly !== false,
         ManageMetadataBase.deletedEntitySchemaList,
@@ -673,6 +750,8 @@ export class RunCodeGenBase {
     skipDB: boolean,
   ): Promise<boolean> {
       const reporter = CodeGenReporter.Instance;
+      // Every generator runs even after one fails, so the run reports all failures at once.
+      let allSucceeded = true;
       EmitStats.Reset();
       const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
       const excludedSchemaNames = configInfo.excludeSchemas.map(s => SchemaKey(s));
@@ -730,7 +809,8 @@ export class RunCodeGenBase {
         );
         if (!ok) {
           FailSpinner('Error generating GraphQL server code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating CORE GraphQL server code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('CORE Entity GraphQL Resolver Code generated');
       }
 
@@ -764,7 +844,8 @@ export class RunCodeGenBase {
         });
         if (!ok) {
           FailSpinner('Error generating GraphQL Resolver code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating GraphQL Resolver code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('GraphQL Resolver Code generated');
       } else if (isVerbose) WarnSpinner('GraphQL server output directory NOT found in config file, skipping...');
 
@@ -783,7 +864,8 @@ export class RunCodeGenBase {
         );
         if (!ok) {
           FailSpinner('Error generating entity subclass code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating CORE entity subclass code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('CORE Entity Subclass Code generated');
       }
 
@@ -814,7 +896,8 @@ export class RunCodeGenBase {
         });
         if (!ok) {
           FailSpinner('Error generating entity subclass code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating entity subclass code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('Entity Subclass Code generated');
       } else if (isVerbose) WarnSpinner('Entity subclass output directory NOT found in config file, skipping...');
 
@@ -827,7 +910,8 @@ export class RunCodeGenBase {
         );
         if (!ok) {
           FailSpinner('Error generating Angular CORE Entities code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating Angular CORE Entities code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('Angular CORE Entities Code generated');
       }
 
@@ -852,7 +936,8 @@ export class RunCodeGenBase {
         });
         if (!ok) {
           FailSpinner('Error generating Angular code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating Angular code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('Angular Code generated');
       } else if (isVerbose) WarnSpinner('Angular output directory NOT found in config file, skipping...');
 
@@ -877,7 +962,8 @@ export class RunCodeGenBase {
         );
         if (!ok) {
           FailSpinner('Error generating CORE Actions code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating CORE Actions code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('CORE Actions Code generated');
       }
 
@@ -890,7 +976,8 @@ export class RunCodeGenBase {
         );
         if (!ok) {
           FailSpinner('Error generating Actions code');
-          return false;
+          this.RecordStepFailure('FILE_GENERATION', 'Error generating Actions code');
+          allSucceeded = false;
         } else if (isVerbose) SucceedSpinner('Actions Code generated');
       } else if (isVerbose) WarnSpinner('Actions output directory NOT found in config file, skipping...');
 
@@ -976,7 +1063,8 @@ export class RunCodeGenBase {
           );
           if (!ok) {
             FailSpinner(`Error generating ${target.label} code`);
-            return false;
+            this.RecordStepFailure('FILE_GENERATION', `Error generating ${target.label} code`);
+            allSucceeded = false;
           } else if (isVerbose) SucceedSpinner(`${target.label} typed bases generated`);
         }
       } else if (isVerbose) WarnSpinner('Remote Operations output directory NOT found in config file, skipping...');
@@ -994,8 +1082,11 @@ export class RunCodeGenBase {
       );
 
       SQLLogging.finishSQLLogging();
-      if (!isVerbose) SucceedSpinner('TypeScript code generation completed');
-      return true;
+      if (!isVerbose) {
+        if (allSucceeded) SucceedSpinner('TypeScript code generation completed');
+        else FailSpinner('TypeScript code generation finished with failures');
+      }
+      return allSucceeded;
   }
 }
 

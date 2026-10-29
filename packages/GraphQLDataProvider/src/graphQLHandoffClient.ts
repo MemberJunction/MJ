@@ -42,6 +42,8 @@ export interface HandoffOfferInfo {
   CreatedAt: string;
   /** ISO-8601 UTC; after this the offer can no longer be accepted. */
   ExpiresAt: string;
+  /** The MJ interaction ID associated with this conversation/room, if known. */
+  InteractionID?: string | null;
 }
 
 /** One change to an offer, pushed live. */
@@ -76,6 +78,7 @@ const OFFER_FIELDS = `
   Status
   CreatedAt
   ExpiresAt
+  InteractionID
 `;
 
 export class GraphQLHandoffClient {

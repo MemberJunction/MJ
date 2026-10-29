@@ -38,14 +38,17 @@
             "IsArray": false,
             "Description": "Maximum number of actions to return (default: 10)",
             "IsRequired": false,
-            "DefaultValue": "10"
+            "DefaultValue": "10",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "882FAB67-CCD5-459C-AD58-B4E6FFB6C73F"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:55.740Z",
-            "checksum": "fdbcb8187af69b7c657b437a3c4a998f98978711b0d8bcc716ff08571c2fd78b"
+            "lastModified": "2026-10-20T23:18:46.415Z",
+            "checksum": "effd18d16eb33a053aa32b6bd170c07bb48965c3f0215346ef0486a7f2f1e777"
           }
         },
         {
@@ -57,14 +60,17 @@
             "IsArray": false,
             "Description": "Minimum similarity score 0-1 (default: 0.5)",
             "IsRequired": false,
-            "DefaultValue": "0.5"
+            "DefaultValue": "0.5",
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "784BF34C-F075-4B51-A451-BF150F814512"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:55.741Z",
-            "checksum": "c34d011822f19ade382bc93c477a79d1ded03a3ded10b9d5e4f4378ed9cf735d"
+            "lastModified": "2026-10-20T23:18:46.420Z",
+            "checksum": "7c529e1ec5b0029cc88a8b6b9e63770585d968913e023bc3061ae4829b71dec2"
           }
         },
         {
@@ -76,14 +82,17 @@
             "IsArray": false,
             "Description": "Exclude agent management actions from results (default: true)",
             "IsRequired": false,
-            "DefaultValue": "true"
+            "DefaultValue": "true",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "F1A8EFF3-1B86-4313-B225-0A84A55144D2"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:55.743Z",
-            "checksum": "18a84e214feebf906a8e7e16d5471f643913870fd143a1016a73fcc9be5b614a"
+            "lastModified": "2026-10-20T23:18:46.426Z",
+            "checksum": "c60c17d03e899f6f70a7b802bc1d40f7917fbe91e7502e33c3db25ab43996173"
           }
         },
         {

@@ -43,6 +43,7 @@ import {
     IsEdgeFromRoot,
     type CloneFieldMappingContext,
     type UniqueKeyDefinition,
+    SplitPresetKey,
 } from '@memberjunction/record-cloning-base';
 import { EscapeSQLString } from '@memberjunction/global';
 import { CloneAuthorizer } from './CloneAuthorization';
@@ -62,7 +63,7 @@ interface CompositeKeyLike {
  * The mapper leaves them out, so a clone never copies a value its user couldn't see or set.
  */
 function fieldLevelDenials(entity: EntityInfo, user: UserInfo): { DeniedReadFields: string[]; DeniedCreateFields: string[] } | undefined {
-    if (!entity.EnableFieldLevelSecurity) return undefined;
+    if (!entity.FieldLevelSecurityApplies) return undefined;
     const deniedRead = entity.GetDeniedReadFields(user);
     const deniedCreate = entity.GetDeniedCreateFields(user);
     const names = (denied: Set<string>) => entity.Fields.filter((f) => denied.has(f.Name.toLowerCase())).map((f) => f.Name);
@@ -159,9 +160,10 @@ export class ClonePlanner {
         // A preset is configured by the entity's owner, so its options act as configuration (they may
         // widen scope for anyone); only the request's own options go through the override rules.
         const configWithPreset = preset?.Options ? { ...(rootConfig ?? {}), ...preset.Options } : rootConfig;
-        const presetEdgeOverrides: Array<{ ChildEntityName?: string; RelationshipID?: string; Policy: CloneEdgePolicy }> | undefined =
+        // Keys name a related entity ("MJ: Artifacts", every FK from it) or one FK of it ("MJ: Artifact Versions.ArtifactID").
+        const presetEdgeOverrides: Array<{ ChildEntityName?: string; JoinField?: string; RelationshipID?: string; Policy: CloneEdgePolicy }> | undefined =
             preset?.Relationships
-                ? Object.entries(preset.Relationships).map(([ChildEntityName, cfg]) => ({ ChildEntityName, Policy: cfg.Policy }))
+                ? Object.entries(preset.Relationships).map(([key, cfg]) => ({ ...SplitPresetKey(key, (name) => md.EntityByName(name) !== undefined), Policy: cfg.Policy }))
                 : undefined;
 
         // The entity's configuration supplies the defaults; UserEditable and the Fire Hooks
@@ -280,6 +282,23 @@ export class ClonePlanner {
             key.LoadFromEntityInfoAndRecord(rootEntityInfo, sourceRecordKey);
         }
 
+        // A template preset applies only to a record flagged as a template (plan §5.5): it may copy
+        // rows the configuration otherwise keeps private, so the flag is checked before anything is walked.
+        let templateMode = false;
+        if (preset?.TemplateSourceField) {
+            const flagged = await this.isTemplateSource(entityName, key, preset.TemplateSourceField, contextUser);
+            if (!flagged) {
+                warnings.push({
+                    Code: 'TEMPLATE_SOURCE_REQUIRED',
+                    Severity: 'Error',
+                    Field: preset.TemplateSourceField,
+                    Message: `Preset '${preset.Key}' copies a template, and this ${entityName} record is not one: its '${preset.TemplateSourceField}' is not set.`,
+                });
+                return refusedPlan();
+            }
+            templateMode = true;
+        }
+
         const walker = new DependencyGraphWalker(md);
         const candidateEdges: ClonePlanEdge[] = [];
         const excludedNodes: Array<{ EntityName: string; SourceKey: string; Reason: string }> = [];
@@ -349,7 +368,9 @@ export class ClonePlanner {
                             NotCloneable: targetConfig?.NotCloneable === true,
                             NotCloneableReason: targetConfig?.NotCloneableReason,
                             AllowCreateAPI: targetEntity?.AllowCreateAPI,
+                            CloneableFromTemplate: targetConfig?.CloneableFromTemplate === true,
                         },
+                        TemplateMode: templateMode,
                         IsHierarchyField: joinFieldInfo?.IsHierarchy === true,
                         RootEntityConfig: rootConfig ? {
                             Relationships: rootConfig.Relationships,
@@ -694,15 +715,21 @@ export class ClonePlanner {
                         ...(descConfig?.Fields?.PromptFor || []),
                     ];
 
+                    // The child entity's own JSON rules, then the root's for this descendant (both apply).
+                    const combinedJsonRemap = [
+                        ...(entConfig?.Fields?.JsonRemap || []),
+                        ...(descConfig?.Fields?.JsonRemap || []),
+                    ];
+
                     const hasRules =
+                        combinedJsonRemap.length > 0 ||
                         combinedOwnership.length > 0 ||
                         combinedExclude.length > 0 ||
                         Object.keys(combinedReset).length > 0 ||
                         combinedServerAllocated.length > 0 ||
                         combinedPromptFor.length > 0 ||
                         entConfig?.Fields?.Rules ||
-                        descConfig?.Fields?.Rules ||
-                        entConfig?.Fields?.JsonRemap;
+                        descConfig?.Fields?.Rules;
 
                     if (!hasRules) return undefined;
 
@@ -713,7 +740,7 @@ export class ClonePlanner {
                         ServerAllocated: combinedServerAllocated.length > 0 ? combinedServerAllocated : undefined,
                         PromptFor: combinedPromptFor.length > 0 ? combinedPromptFor : undefined,
                         Rules: (descConfig?.Fields?.Rules ?? entConfig?.Fields?.Rules) as CloneFieldMappingContext['FieldRules']['Rules'],
-                        JsonRemap: entConfig?.Fields?.JsonRemap,
+                        JsonRemap: combinedJsonRemap.length > 0 ? combinedJsonRemap : undefined,
                     };
                 })(),
                 RequestOverrides: isRoot ? { ...(request.FieldOverrides ?? request.Options?.FieldOverrides ?? {}), ...retargetOverrides } : undefined,
@@ -882,6 +909,19 @@ export class ClonePlanner {
             Overrides: resolved.Overrides,
             Reason: request.Options?.Reason,
         };
+    }
+
+    /**
+     * Whether the source record has its template flag (a template preset's `TemplateSourceField`) set.
+     * Read straight from the row, as the cloning user sees it: a row they can't read is not a template.
+     */
+    private async isTemplateSource(entityName: string, key: CompositeKey, field: string, contextUser: UserInfo): Promise<boolean> {
+        const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
+            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1 },
+            contextUser
+        );
+        const value = res?.Success ? res.Results?.[0]?.[field] : undefined;
+        return value === true || value === 1 || value === '1' || value === 'true';
     }
 
     /**

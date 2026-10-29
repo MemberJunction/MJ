@@ -196,13 +196,17 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  *   the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place;
  *   if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary, so
  *   deferring loses nothing. The prompt's bound models are deliberately not consulted: prompts
- *   commonly bind several vendors for failover.
+ *   commonly bind several vendors for failover. One case is decided by the driver, not the catalog:
+ *   a run that declares native tools to a driver whose replayed reasoning needs the history before
+ *   it unchanged (`BaseLLM.ReplayedReasoningRequiresStablePrefix`, true for Anthropic) is
+ *   append-only too, so a thinking block is never replayed behind a dropped fragment.
  * - `'appendOnly'`: always retain prior fragments. Use this for a serving path whose catalog rows
  *   carry no flag yet — an OpenAI-compatible gateway, say — until its metadata is filled in.
  * - `'replace'`: always replace. Use this to keep context compact on a run whose catalog rows say
  *   `true` but where context growth matters more than cache hits.
  *
- * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.resolvePrefixPromptCache`.
+ * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.ResolveAppendOnlyState`
+ * (the catalog through `resolvePrefixPromptCache`, the driver through `DriverRequiresStableReasoningPrefix`).
  */
 export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
 
@@ -576,6 +580,14 @@ export interface LoopAgentTypePromptParams {
     maxActionsInPrompt?: number;
 
     /**
+     * Character cap for one client tool result in the conversation. -1 (the default) or 0 keeps
+     * the whole result. A positive N keeps the first N characters and adds a note saying how much
+     * was cut. Compaction and expiration still apply either way.
+     * @default -1
+     */
+    clientToolResultMaxChars?: number;
+
+    /**
      * Decision discovery (plan Task 3.1): suggest the agent to delegate to before the first prompt.
      * When true, and the run answers its conversation's opening request (its messages hold one user
      * message) without @mentioning an agent, one decision call runs once per run, in parallel with the
@@ -664,5 +676,6 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1,
+    clientToolResultMaxChars: -1,
     decisionDiscovery: false
 };

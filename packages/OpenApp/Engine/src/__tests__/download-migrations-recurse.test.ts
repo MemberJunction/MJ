@@ -14,10 +14,12 @@ vi.mock('@octokit/rest', () => ({
     Octokit: class {
         public repos = { getContent };
         public git = { getBlob: vi.fn() };
+        public hook = { wrap: () => undefined };
     },
 }));
 
-import { DownloadMigrations } from '../github/github-client';
+import { DownloadMigrations, ExtractSqlFilesFromTarGz } from '../github/github-client';
+import { gzipSync } from 'node:zlib';
 
 const OPTIONS = {} as Parameters<typeof DownloadMigrations>[4];
 let dir: string;
@@ -91,5 +93,56 @@ describe('DownloadMigrations (#3858)', () => {
         const result = await DownloadMigrations('https://github.com/o/r', undefined, 'migrations', dir, OPTIONS);
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/nesting exceeds/);
+    });
+});
+
+function buildTarGz(entries: { path: string; content: string; usePax?: boolean }[]): Buffer {
+    const blocks: Buffer[] = [];
+    for (const entry of entries) {
+        const data = Buffer.from(entry.content, 'utf-8');
+        if (entry.usePax) {
+            const paxLineBody = ` path=${entry.path}\n`;
+            const bodyLen = Buffer.byteLength(paxLineBody, 'utf-8');
+            let totalLen = bodyLen + String(bodyLen).length;
+            totalLen = bodyLen + String(totalLen).length;
+            const paxRecord = `${totalLen}${paxLineBody}`;
+            const paxData = Buffer.from(paxRecord, 'utf-8');
+            const paxHeader = Buffer.alloc(512, 0);
+            paxHeader.write('PaxHeader/entry', 0, 'utf-8');
+            paxHeader.write(paxData.length.toString(8).padStart(11, '0') + '\0', 124, 'ascii');
+            paxHeader[156] = 'x'.charCodeAt(0);
+            blocks.push(paxHeader);
+            const paddedPax = Buffer.alloc(Math.ceil(paxData.length / 512) * 512, 0);
+            paxData.copy(paddedPax);
+            blocks.push(paddedPax);
+        }
+
+        const header = Buffer.alloc(512, 0);
+        header.write(entry.usePax ? 'truncated' : entry.path.slice(0, 100), 0, 'utf-8');
+        header.write(data.length.toString(8).padStart(11, '0') + '\0', 124, 'ascii');
+        header[156] = '0'.charCodeAt(0);
+        blocks.push(header);
+        const paddedData = Buffer.alloc(Math.ceil(data.length / 512) * 512, 0);
+        data.copy(paddedData);
+        blocks.push(paddedData);
+    }
+    blocks.push(Buffer.alloc(1024, 0));
+    return gzipSync(Buffer.concat(blocks));
+}
+
+describe('ExtractSqlFilesFromTarGz (single-tarball migration extraction)', () => {
+    it('extracts .sql files under cleanPath and strips the GitHub top-level directory prefix', () => {
+        const tarGz = buildTarGz([
+            { path: 'o-r-abc1234/migrations/V1__init.sql', content: 'CREATE TABLE T1 (ID INT);' },
+            { path: 'o-r-abc1234/migrations/nested/V2__seed.sql', content: 'INSERT INTO T1 VALUES (1);', usePax: true },
+            { path: 'o-r-abc1234/migrations/README.md', content: '# Ignore non-SQL' },
+            { path: 'o-r-abc1234/other/V3__ignore.sql', content: 'SELECT 1;' },
+        ]);
+
+        const files = ExtractSqlFilesFromTarGz(tarGz, 'migrations', dir);
+        expect(files.sort()).toEqual(['V1__init.sql', 'nested/V2__seed.sql']);
+        expect(readFileSync(join(dir, 'V1__init.sql'), 'utf-8')).toBe('CREATE TABLE T1 (ID INT);');
+        expect(readFileSync(join(dir, 'nested', 'V2__seed.sql'), 'utf-8')).toBe('INSERT INTO T1 VALUES (1);');
+        expect(existsSync(join(dir, 'README.md'))).toBe(false);
     });
 });

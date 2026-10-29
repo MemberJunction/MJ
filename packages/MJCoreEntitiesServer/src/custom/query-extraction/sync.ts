@@ -1,4 +1,4 @@
-import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, LogStatus, QUERY_CONTEXT_NAME, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
@@ -6,7 +6,7 @@ import {
     MJQueryDependencyEntity,
     QueryEngine,
 } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { IndexByUUID, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type {
     ExtractedField,
     ExtractedParameter,
@@ -106,8 +106,10 @@ export async function SyncParameters(
     runViewProvider: IRunViewProvider,
     isSaved: boolean
 ): Promise<void> {
-    // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens.
-    const filteredParams = extractedParams.filter(p => p.name !== 'query');
+    // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens, and
+    // the reserved Context object: `{{ Context.UserID }}` reads a server-set value, and a parameter
+    // named Context would shadow it.
+    const filteredParams = extractedParams.filter(p => p.name !== 'query' && !isReservedContextName(p.name));
 
     try {
         const existingParams = await loadExistingRecords<MJQueryParameterEntity>(
@@ -157,6 +159,18 @@ export async function SyncParameters(
         LogError(`Failed to sync parameters for query ${queryID}:`, e);
         throw e;
     }
+}
+
+/**
+ * True for the reserved `Context` object and its members (`Context.UserID`, as the parser reports a
+ * template's `{{ Context.UserID }}`). Extraction refuses them as parameters, and logs it.
+ */
+function isReservedContextName(name: string): boolean {
+    if (name !== QUERY_CONTEXT_NAME && !name.startsWith(`${QUERY_CONTEXT_NAME}.`)) {
+        return false;
+    }
+    LogStatus(`Query parameter extraction: '${name}' reads the server-set ${QUERY_CONTEXT_NAME} object; it is not a parameter, and no parameter row is kept for it.`);
+    return true;
 }
 
 /**
@@ -422,9 +436,100 @@ function updateFieldIfChanged(
 // SyncEntities
 // ---------------------------------------------------------------------------
 
+interface ResolvedQueryEntityMapping {
+    extracted: EntityMetadataEntry;
+    entityID: string;
+    entityName: string;
+    alternateBaseViewID: string | null;
+}
+
+function queryEntityPairKey(
+    entityID: string | null | undefined,
+    alternateBaseViewID: string | null | undefined
+): string {
+    return `${NormalizeUUID(entityID ?? '')}|${alternateBaseViewID ? NormalizeUUID(alternateBaseViewID) : ''}`;
+}
+
+function mapExtractedEntitiesToMetadata(
+    entityMetadata: EntityMetadataEntry[],
+    metadataProvider: IMetadataProvider
+): ResolvedQueryEntityMapping[] {
+    const rawMappings = entityMetadata
+        .map(extracted => {
+            const matchingEntity = metadataProvider.Entities.find(
+                e => e.Name === extracted.name &&
+                     (e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase() ||
+                      (extracted.AlternateBaseViewID != null &&
+                       IndexByUUID(e.AlternateBaseViews ?? []).Has(extracted.AlternateBaseViewID)))
+            );
+            return matchingEntity
+                ? {
+                      extracted,
+                      entityID: matchingEntity.ID,
+                      entityName: matchingEntity.Name,
+                      alternateBaseViewID: extracted.AlternateBaseViewID ?? null,
+                  }
+                : null;
+        })
+        .filter((m): m is ResolvedQueryEntityMapping => m !== null);
+
+    const seenPairKeys = new Set<string>();
+    return rawMappings.filter(m => {
+        const pairKey = queryEntityPairKey(m.entityID, m.alternateBaseViewID);
+        if (seenPairKeys.has(pairKey)) {
+            return false;
+        }
+        seenPairKeys.add(pairKey);
+        return true;
+    });
+}
+
+function partitionQueryEntityDiff(
+    entityMappings: ResolvedQueryEntityMapping[],
+    existingEntities: MJQueryEntityEntity[]
+): {
+    entitiesToAdd: ResolvedQueryEntityMapping[];
+    entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }>;
+    entitiesToRemove: MJQueryEntityEntity[];
+} {
+    const matchedExisting = new Set<MJQueryEntityEntity>();
+    const matchedMappings = new Set<ResolvedQueryEntityMapping>();
+
+    for (const mapping of entityMappings) {
+        const mappingKey = queryEntityPairKey(mapping.entityID, mapping.alternateBaseViewID);
+        const exact = existingEntities.find(
+            ee => !matchedExisting.has(ee) && queryEntityPairKey(ee.EntityID, ee.AlternateBaseViewID) === mappingKey
+        );
+        if (exact) {
+            matchedExisting.add(exact);
+            matchedMappings.add(mapping);
+        }
+    }
+
+    const entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }> = [];
+    for (const mapping of entityMappings) {
+        if (matchedMappings.has(mapping)) continue;
+        const normalizedEntityID = NormalizeUUID(mapping.entityID);
+        const sameEntityRecord = existingEntities.find(
+            ee => !matchedExisting.has(ee) && NormalizeUUID(ee.EntityID) === normalizedEntityID
+        );
+        if (sameEntityRecord) {
+            matchedExisting.add(sameEntityRecord);
+            matchedMappings.add(mapping);
+            entitiesToUpdate.push({ record: sameEntityRecord, alternateBaseViewID: mapping.alternateBaseViewID });
+        }
+    }
+
+    return {
+        entitiesToAdd: entityMappings.filter(m => !matchedMappings.has(m)),
+        entitiesToUpdate,
+        entitiesToRemove: existingEntities.filter(ee => !matchedExisting.has(ee)),
+    };
+}
+
 /**
  * Synchronizes extracted entity metadata entries with QueryEntity records in the database.
- * Matches by entity ID, handles add/remove.
+ * Matches by `(EntityID, AlternateBaseViewID)`, handling add, update, and remove.
  */
 export async function SyncEntities(
     queryID: string,
@@ -438,28 +543,11 @@ export async function SyncEntities(
         const existingEntities = await loadExistingRecords<MJQueryEntityEntity>(
             'MJ: Query Entities', queryID, runViewProvider, contextUser, isSaved
         );
-
-        // Map extracted entries to MJ entity IDs
-        const entityMappings = entityMetadata
-            .map(extracted => {
-                const matchingEntity = metadataProvider.Entities.find(
-                    e => e.Name === extracted.name &&
-                         e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase()
-                );
-                if (matchingEntity) {
-                    return { extracted, entityID: matchingEntity.ID, entityName: matchingEntity.Name };
-                }
-                return null;
-            })
-            .filter((m): m is NonNullable<typeof m> => m !== null);
-
-        const entitiesToAdd = entityMappings.filter(
-            mapping => !existingEntities.some(ee => UUIDsEqual(ee.EntityID, mapping.entityID))
+        const entityMappings = mapExtractedEntitiesToMetadata(entityMetadata, metadataProvider);
+        const { entitiesToAdd, entitiesToUpdate, entitiesToRemove } = partitionQueryEntityDiff(
+            entityMappings,
+            existingEntities
         );
-        const entitiesToRemove = existingEntities.filter(
-            ee => !entityMappings.some(mapping => UUIDsEqual(mapping.entityID, ee.EntityID))
-        );
-
         const factories: (() => Promise<boolean>)[] = [];
 
         for (const mapping of entitiesToAdd) {
@@ -468,11 +556,15 @@ export async function SyncEntities(
             );
             newEntity.QueryID = queryID;
             newEntity.EntityID = mapping.entityID;
+            newEntity.AlternateBaseViewID = mapping.alternateBaseViewID;
             newEntity.DetectionMethod = 'AI';
             newEntity.AutoDetectConfidenceScore = 1.0;
             factories.push(() => newEntity.Save());
         }
-
+        for (const updateItem of entitiesToUpdate) {
+            updateItem.record.AlternateBaseViewID = updateItem.alternateBaseViewID;
+            factories.push(() => updateItem.record.Save());
+        }
         for (const entityToRemove of entitiesToRemove) {
             factories.push(() => entityToRemove.Delete());
         }
@@ -505,8 +597,12 @@ export async function SyncDependencies(
         return;
     }
 
-    // Map resolved refs to the shape needed for sync
-    const extractedDeps = resolvedRefs.map(ref => ({
+    // Map resolved refs to the shape needed for sync. A query that references the same dependency
+    // more than once still has one dependency row for it, so keep the first reference.
+    const distinctRefs = resolvedRefs.filter((ref, i) => resolvedRefs.findIndex(
+        other => UUIDsEqual(other.DepQuery.ID, ref.DepQuery.ID) && other.ReferencePath === ref.ReferencePath
+    ) === i);
+    const extractedDeps = distinctRefs.map(ref => ({
         dependsOnQueryID: ref.DepQuery.ID,
         referencePath: ref.ReferencePath,
         alias: ref.Alias,

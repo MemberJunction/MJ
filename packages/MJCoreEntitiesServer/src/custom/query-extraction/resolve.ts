@@ -5,12 +5,19 @@
  * Every function is stateless: context is passed in as parameters rather than via `this`.
  */
 
-import { EntityInfo, IMetadataProvider, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import {
+    DatabasePlatform,
+    EntityAlternateBaseViewInfo,
+    EntityInfo,
+    FindAlternateBaseViewByPhysicalName,
+    IMetadataProvider,
+    TypeScriptTypeFromSQLType,
+} from "@memberjunction/core";
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, QueryEngine } from "@memberjunction/core-entities";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { SQLServerDialect } from "@memberjunction/sql-dialect";
+import { GetDialect } from "@memberjunction/sql-dialect";
 import type { MJParameterInfo, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
 import type {
@@ -526,29 +533,36 @@ export function ExpandWildcardFields(
 /**
  * Extracts entity metadata from the SQL to provide context for parameter type inference.
  * Uses SQLParser for robust SQL parsing with MJ template support.
+ *
+ * @param platform The platform the SQL is written for; selects the grammar used to read its
+ *   column references. Defaults to SQL Server.
  */
 export function ExtractEntityMetadataFromSQL(
     sql: string,
     tableRefs: SQLTableReference[],
-    md: IMetadataProvider
+    md: Pick<IMetadataProvider, 'Entities'>,
+    platform: DatabasePlatform = 'sqlserver'
 ): EntityMetadataEntry[] {
     const results: EntityMetadataEntry[] = [];
 
     try {
-        const columnRefs = SQLParser.ExtractColumnRefs(sql, new SQLServerDialect());
+        const columnRefs = SQLParser.ExtractColumnRefs(sql, GetDialect(platform));
 
         for (const tableRef of tableRefs) {
-            const matchingEntity = findEntityByTableRef(md, tableRef);
+            const match = findEntityAndAbvByTableRef(md, tableRef);
 
-            if (matchingEntity) {
+            if (match) {
+                const { entity: matchingEntity, alternateBaseView } = match;
                 const relevantFields = extractRelevantFields(matchingEntity, tableRef, columnRefs);
 
                 if (relevantFields.length > 0) {
                     results.push({
                         name: matchingEntity.Name,
                         SchemaName: matchingEntity.SchemaName,
-                        BaseView: matchingEntity.BaseView,
+                        BaseView: alternateBaseView ? alternateBaseView.ViewName : matchingEntity.BaseView,
                         Fields: relevantFields,
+                        AlternateBaseViewID: alternateBaseView ? alternateBaseView.ID : null,
+                        AlternateBaseViewName: alternateBaseView ? alternateBaseView.Name : null,
                     });
                 }
             }
@@ -960,14 +974,39 @@ function findEntityNameByID(md: IMetadataProvider, entityID: string): string | n
 }
 
 /**
- * Finds an entity by matching a SQL table reference against BaseView/BaseTable + SchemaName.
+ * Finds an entity (and optional registered alternate base view) by matching a SQL table reference
+ * against canonical BaseView/BaseTable + SchemaName first, then against registered EntityAlternateBaseViews.
  */
-function findEntityByTableRef(md: IMetadataProvider, tableRef: SQLTableReference): EntityInfo | undefined {
-    return md.Entities.find(e =>
+function findEntityAndAbvByTableRef(
+    md: Pick<IMetadataProvider, 'Entities'>,
+    tableRef: SQLTableReference
+): { entity: EntityInfo; alternateBaseView?: EntityAlternateBaseViewInfo } | undefined {
+    const canonicalEntity = md.Entities.find(e =>
         (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
          e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
         e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
     );
+    if (canonicalEntity) {
+        return { entity: canonicalEntity };
+    }
+
+    const abvMatch = FindAlternateBaseViewByPhysicalName(
+        md.Entities,
+        tableRef.TableName,
+        tableRef.SchemaName || undefined
+    );
+    if (abvMatch) {
+        return { entity: abvMatch.entity, alternateBaseView: abvMatch.alternateView };
+    }
+
+    return undefined;
+}
+
+/**
+ * Finds an entity by matching a SQL table reference against BaseView/BaseTable/AlternateBaseView + SchemaName.
+ */
+function findEntityByTableRef(md: Pick<IMetadataProvider, 'Entities'>, tableRef: SQLTableReference): EntityInfo | undefined {
+    return findEntityAndAbvByTableRef(md, tableRef)?.entity;
 }
 
 /**

@@ -12,13 +12,14 @@
  * - Config concurrency and loading state
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock external dependencies BEFORE importing source
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async () => {
+    const { ApplyEmbeddingInputPrefix } = await vi.importActual<typeof import('@memberjunction/ai')>('@memberjunction/ai');
     const ChatMessageRole = {
         system: 'system',
         user: 'user',
@@ -46,6 +47,7 @@ vi.mock('@memberjunction/ai', () => {
         ChatResult: class ChatResult {},
         createBase64DataUrl: vi.fn(),
         parseBase64DataUrl: vi.fn(),
+        ApplyEmbeddingInputPrefix,
     };
 });
 
@@ -78,6 +80,7 @@ vi.mock('@memberjunction/core', () => ({
         Set(_field: string, _val: unknown) {}
     },
     LogError: vi.fn(),
+    LogWarning: vi.fn(),
     Metadata: class Metadata {},
     UserInfo: class UserInfo {},
     IMetadataProvider: class IMetadataProvider {},
@@ -118,7 +121,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
+    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -194,6 +197,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
         // singletons this mock replaces are created lazily, so none are instantiated.
         ToEpochMs,
+        // Real binary-vector codecs — the stored-vector tests encode with one and
+        // ReadStoredVector (real, below) decodes with the other.
+        Float32VectorToBase64,
+        Base64ToFloat32Vector,
     };
 });
 
@@ -250,6 +257,8 @@ const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     AgentModalities: [],
     ModelModalities: [],
     GetModalityByName: vi.fn(),
+    GetEffectiveModelConfiguration: vi.fn().mockReturnValue(null),
+    IsInferenceProvider: vi.fn((mv: { TypeID?: string }) => mv.TypeID !== 'model-developer'),
     GetAgentModalities: vi.fn().mockReturnValue([]),
     GetModelModalities: vi.fn().mockReturnValue([]),
     AgentSupportsModality: vi.fn().mockReturnValue(false),
@@ -280,6 +289,8 @@ const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     CanUserDeleteAgent: vi.fn(),
     GetUserAgentPermissions: vi.fn(),
     GetAccessibleAgents: vi.fn(),
+    GetUserRunnableAgentDirectory: vi.fn().mockReturnValue([]),
+    ClearUserRunnableAgentDirectoryCache: vi.fn(),
     ClearAgentPermissionsCache: vi.fn(),
     RefreshAgentPermissionsCache: vi.fn(),
     GetCredentialBindingsForTarget: vi.fn().mockReturnValue([]),
@@ -294,17 +305,35 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     EffectiveAgentPermissions: class EffectiveAgentPermissions {},
 }));
 
-vi.mock('@memberjunction/ai-vectors-memory', () => ({
-    SimpleVectorService: class SimpleVectorService<T = unknown> {
-        LoadVectors = vi.fn();
-        AddOrUpdateVector = vi.fn();
-        FindNearest = vi.fn().mockReturnValue([]);
-        FindSimilar = vi.fn().mockReturnValue([]);
-        Similarity = vi.fn().mockReturnValue(0);
-        Has = vi.fn().mockReturnValue(false);
-    },
-    VectorEntry: class VectorEntry {},
+// Every SimpleVectorService the engine constructs is recorded here so tests can assert
+// on what RefreshNoteEmbeddings / RefreshExampleEmbeddings handed to LoadVectors.
+const { createdVectorServices } = vi.hoisted(() => ({
+    createdVectorServices: [] as Array<{
+        LoadVectors: ReturnType<typeof vi.fn>;
+        AddOrUpdateVector: ReturnType<typeof vi.fn>;
+        RemoveVector: ReturnType<typeof vi.fn>;
+    }>,
 }));
+
+vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
+    // ReadStoredVector is the real implementation: the point of the stored-vector tests is
+    // the engine's binary-first / JSON-fallback behaviour, which a stub would not exercise.
+    const { ReadStoredVector } = await importOriginal<typeof import('@memberjunction/ai-vectors-memory')>();
+    return {
+        ReadStoredVector,
+        SimpleVectorService: class SimpleVectorService<T = unknown> {
+            LoadVectors = vi.fn();
+            AddOrUpdateVector = vi.fn();
+            RemoveVector = vi.fn().mockReturnValue(true);
+            FindNearest = vi.fn().mockReturnValue([]);
+            FindSimilar = vi.fn().mockReturnValue([]);
+            Similarity = vi.fn().mockReturnValue(0);
+            Has = vi.fn().mockReturnValue(false);
+            constructor() { createdVectorServices.push(this); }
+        },
+        VectorEntry: class VectorEntry {},
+    };
+});
 
 vi.mock('@memberjunction/actions-base', () => ({
     ActionEngineBase: {
@@ -328,7 +357,11 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ---------------------------------------------------------------------------
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
+import { GetAIAPIKey } from '@memberjunction/ai';
+import { LogError, LogWarning } from '@memberjunction/core';
+import type { ChatMessageContent } from '@memberjunction/ai';
+import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 // Test-only handles exported from the @memberjunction/global mock above (see vi.mock).
 // Typed locally so we avoid `any` while reaching into the mocked module surface.
 import * as MockGlobal from '@memberjunction/global';
@@ -361,6 +394,7 @@ import { ChatMessageRole } from '@memberjunction/ai';
 // so we don't couple to SimpleVectorService's full generic signature.
 interface TestVectorService {
     RemoveVector(key: string): boolean;
+    AddOrUpdateVector?(key: string, vector: ArrayLike<number>, metadata: unknown): void;
 }
 
 // Subclass that exposes the protected filter composition methods for testing.
@@ -387,6 +421,11 @@ class TestableAIEngine extends AIEngine {
     // Test-only setters for the private vector service fields. Declared as `unknown`
     // assignment targets through a typed bracket access into `this` so unit tests can
     // inject a minimal mock without casting via `as unknown as`.
+    /** Builds an instance from inside the class, where the inherited protected constructor is accessible. */
+    public static CreateForTest(): TestableAIEngine {
+        return new TestableAIEngine();
+    }
+
     public setNoteVectorServiceForTest(service: TestVectorService | null): void {
         (this as unknown as { _noteVectorService: TestVectorService | null })._noteVectorService = service;
     }
@@ -763,10 +802,10 @@ describe('AIEngine', () => {
 
         it('should filter models by EmbeddingModelTypeName and LocalEmbeddingModelVendorName', () => {
             mockBaseInstance.Models = [
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 10, Name: 'Local-Embed-1' },
-                { AIModelType: 'LLM', Vendor: 'OpenAI', PowerRank: 50, Name: 'GPT-4' },
-                { AIModelType: 'Embeddings', Vendor: 'OpenAI', PowerRank: 20, Name: 'text-embed-3' },
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 5, Name: 'Local-Embed-2' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 10, Name: 'Local-Embed-1' },
+                { IsActive: true, AIModelType: 'LLM', Vendor: 'OpenAI', PowerRank: 50, Name: 'GPT-4' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'OpenAI', PowerRank: 20, Name: 'text-embed-3' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 5, Name: 'Local-Embed-2' },
             ] as never[];
 
             const models = engine.LocalEmbeddingModels;
@@ -777,9 +816,9 @@ describe('AIEngine', () => {
 
         it('should sort by PowerRank descending (highest first)', () => {
             mockBaseInstance.Models = [
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 3, Name: 'Low' },
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 100, Name: 'High' },
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 50, Name: 'Mid' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 3, Name: 'Low' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 100, Name: 'High' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 50, Name: 'Mid' },
             ] as never[];
 
             const models = engine.LocalEmbeddingModels;
@@ -788,8 +827,8 @@ describe('AIEngine', () => {
 
         it('should handle models with null/undefined PowerRank gracefully', () => {
             mockBaseInstance.Models = [
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: null, Name: 'NullRank' },
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 10, Name: 'Ranked' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: null, Name: 'NullRank' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 10, Name: 'Ranked' },
             ] as never[];
 
             const models = engine.LocalEmbeddingModels;
@@ -800,8 +839,8 @@ describe('AIEngine', () => {
 
         it('should be case-insensitive for AIModelType and Vendor', () => {
             mockBaseInstance.Models = [
-                { AIModelType: 'EMBEDDINGS', Vendor: 'LOCALEMBEDDINGS', PowerRank: 1, Name: 'Upper' },
-                { AIModelType: '  embeddings  ', Vendor: '  localembeddings  ', PowerRank: 2, Name: 'Trimmed' },
+                { IsActive: true, AIModelType: 'EMBEDDINGS', Vendor: 'LOCALEMBEDDINGS', PowerRank: 1, Name: 'Upper' },
+                { IsActive: true, AIModelType: '  embeddings  ', Vendor: '  localembeddings  ', PowerRank: 2, Name: 'Trimmed' },
             ] as never[];
 
             const models = engine.LocalEmbeddingModels;
@@ -810,9 +849,9 @@ describe('AIEngine', () => {
 
         it('should handle non-string AIModelType/Vendor defensively', () => {
             mockBaseInstance.Models = [
-                { AIModelType: undefined, Vendor: 'LocalEmbeddings', PowerRank: 1, Name: 'Bad1' },
-                { AIModelType: 'Embeddings', Vendor: null, PowerRank: 1, Name: 'Bad2' },
-                { AIModelType: 123, Vendor: 'LocalEmbeddings', PowerRank: 1, Name: 'Bad3' },
+                { IsActive: true, AIModelType: undefined, Vendor: 'LocalEmbeddings', PowerRank: 1, Name: 'Bad1' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: null, PowerRank: 1, Name: 'Bad2' },
+                { IsActive: true, AIModelType: 123, Vendor: 'LocalEmbeddings', PowerRank: 1, Name: 'Bad3' },
             ] as never[];
 
             const models = engine.LocalEmbeddingModels;
@@ -833,8 +872,8 @@ describe('AIEngine', () => {
 
         it('should return the model with highest PowerRank', () => {
             mockBaseInstance.Models = [
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 5, Name: 'Low' },
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 99, Name: 'High' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 5, Name: 'Low' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 99, Name: 'High' },
             ] as never[];
 
             expect(engine.HighestPowerLocalEmbeddingModel!.Name).toBe('High');
@@ -849,8 +888,8 @@ describe('AIEngine', () => {
 
         it('should return the model with lowest PowerRank', () => {
             mockBaseInstance.Models = [
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 5, Name: 'Low' },
-                { AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 99, Name: 'High' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 5, Name: 'Low' },
+                { IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 99, Name: 'High' },
             ] as never[];
 
             expect(engine.LowestPowerLocalEmbeddingModel!.Name).toBe('Low');
@@ -1535,10 +1574,10 @@ describe('AIEngine', () => {
         it('should evict failed embedding results from the cache so subsequent calls retry', async () => {
             const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
 
-            // First call: provider returns an empty vector (treated as failure)
+            // First call: provider returns an empty vector (a failure, returned as null)
             mockEmbeddingInstance.EmbedText.mockResolvedValueOnce({ success: false, vector: [] });
             const r1 = await engine.EmbedText(model, 'failtext');
-            expect(r1).toEqual({ success: false, vector: [] });
+            expect(r1).toBeNull();
 
             // Second call: provider returns a valid result; cache should not have
             // trapped the failure
@@ -1558,6 +1597,65 @@ describe('AIEngine', () => {
             await engine.EmbedText(model, longText);
 
             expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    // ======================================================================
+    // Embedding API key resolution (#5056)
+    // ======================================================================
+
+    /**
+     * A keyed embedding model (Gemini, OpenAI, ...) must be constructed with its provider key even
+     * when the caller passes none — the same fallback `PrepareLLMInstance` applies to chat models.
+     * `SearchEntity`'s semantic pass embeds the query with the EntityDocument's model and no key,
+     * so without the fallback the driver gets `undefined` and the provider rejects the call.
+     */
+    describe('Embedding API key resolution', () => {
+        const keyedModel = { ID: 'model-keyed', Name: 'Gemini Embedding 2', APIName: 'gemini-embedding-2', DriverClass: 'GeminiEmbedding' } as unknown as MJAIModelEntityExtended;
+        const mediaContent: ChatMessageContent = [
+            { type: 'text', content: 'a caption' },
+            { type: 'image_url', content: 'data:image/png;base64,AAAA' }
+        ];
+        let createInstanceMock: ReturnType<typeof vi.fn>;
+
+        beforeEach(() => {
+            vi.mocked(GetAIAPIKey).mockImplementation((driverClass: string) => `env-key-for-${driverClass}`);
+            createInstanceMock = MJGlobal.Instance.ClassFactory.CreateInstance as unknown as ReturnType<typeof vi.fn>;
+            createInstanceMock.mockReturnValue({
+                EmbedText: vi.fn().mockResolvedValue({ vector: [0.1, 0.2] }),
+                EmbedContent: vi.fn().mockResolvedValue({ vector: [0.3, 0.4] })
+            });
+            engine.ClearEmbeddingCache();
+        });
+
+        it('EmbedText resolves the driver key when the caller passes none', async () => {
+            await engine.EmbedText(keyedModel, 'find me an agent');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'env-key-for-GeminiEmbedding');
+        });
+
+        it('EmbedText uses the caller-supplied key instead of the resolved one', async () => {
+            await engine.EmbedText(keyedModel, 'find me an agent', 'caller-key');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'caller-key');
+        });
+
+        it('EmbedContent with text-only content resolves the driver key when the caller passes none', async () => {
+            await engine.EmbedContent(keyedModel, 'find me an agent');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'env-key-for-GeminiEmbedding');
+        });
+
+        it('EmbedContent with media content resolves the driver key when the caller passes none', async () => {
+            await engine.EmbedContent(keyedModel, mediaContent);
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'env-key-for-GeminiEmbedding');
+        });
+
+        it('EmbedContent with media content uses the caller-supplied key instead of the resolved one', async () => {
+            await engine.EmbedContent(keyedModel, mediaContent, 'caller-key');
+
+            expect(createInstanceMock).toHaveBeenCalledWith(expect.anything(), 'GeminiEmbedding', 'caller-key');
         });
     });
 
@@ -1649,8 +1747,331 @@ describe('AIEngine', () => {
     });
 
     // ======================================================================
+    // Stored vectors: binary column first, JSON column as the fallback
+    // ======================================================================
+
+    describe('stored embedding vectors (binary + JSON columns)', () => {
+        // Values chosen to be exact in float32, so a binary round-trip compares equal.
+        const BINARY_VEC = [0.5, 0.25, -1];
+        const JSON_VEC = [0.125, 2, 4];
+
+        interface StoredVectorRow {
+            ID: string;
+            Status: string;
+            EmbeddingVector: string | null;
+            EmbeddingVectorBinary: string | null;
+            EmbeddingModelID: string | null;
+            AgentID: string;
+            UserID: string | null;
+            CompanyID: string | null;
+            Type: string;
+            Note?: string;
+            ExampleInput?: string;
+            ExampleOutput?: string;
+            SuccessScore?: number;
+        }
+
+        const baseState = mockBaseInstance as unknown as { AgentNotes: StoredVectorRow[]; AgentExamples: StoredVectorRow[]; Models: unknown[] };
+        const LOCAL_MODEL = { ID: 'local-model', Name: 'Local', IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings', PowerRank: 9 };
+
+        function row(id: string, binary: string | null, json: string | null): StoredVectorRow {
+            return {
+                ID: id, Status: 'Active', EmbeddingVector: json, EmbeddingVectorBinary: binary, EmbeddingModelID: LOCAL_MODEL.ID,
+                AgentID: 'a1', UserID: null, CompanyID: null, Type: 'Preference',
+                Note: `note ${id}`, ExampleInput: 'in', ExampleOutput: 'out', SuccessScore: 1,
+            };
+        }
+
+        /** The entries the engine handed to the most recently constructed vector service. */
+        function loadedEntries(): Array<{ key: string; vector: ArrayLike<number> }> {
+            const service = createdVectorServices[createdVectorServices.length - 1];
+            expect(service).toBeDefined();
+            expect(service.LoadVectors).toHaveBeenCalledTimes(1);
+            return service.LoadVectors.mock.calls[0][0] as Array<{ key: string; vector: ArrayLike<number> }>;
+        }
+
+        function vectorOf(entries: Array<{ key: string; vector: ArrayLike<number> }>, key: string): number[] | undefined {
+            const entry = entries.find(e => e.key === key);
+            return entry ? Array.from(entry.vector) : undefined;
+        }
+
+        beforeEach(() => {
+            createdVectorServices.length = 0;
+            baseState.Models = [LOCAL_MODEL];
+        });
+
+        afterEach(() => {
+            baseState.AgentNotes = [];
+            baseState.AgentExamples = [];
+            baseState.Models = [];
+        });
+
+        const cases = [
+            { label: 'notes', set: (rows: StoredVectorRow[]) => { baseState.AgentNotes = rows; }, refresh: (e: AIEngine) => e.RefreshNoteEmbeddings() },
+            { label: 'examples', set: (rows: StoredVectorRow[]) => { baseState.AgentExamples = rows; }, refresh: (e: AIEngine) => e.RefreshExampleEmbeddings() },
+        ];
+
+        for (const c of cases) {
+            describe(`Refresh (${c.label})`, () => {
+                it('loads a record that has only the binary column', async () => {
+                    c.set([row('bin-only', Float32VectorToBase64(BINARY_VEC), null)]);
+                    await c.refresh(engine);
+                    expect(vectorOf(loadedEntries(), 'bin-only')).toEqual(BINARY_VEC);
+                });
+
+                it('prefers the binary column over a disagreeing JSON column', async () => {
+                    c.set([row('both', Float32VectorToBase64(BINARY_VEC), JSON.stringify(JSON_VEC))]);
+                    await c.refresh(engine);
+                    const entries = loadedEntries();
+                    expect(entries[0].vector).toBeInstanceOf(Float32Array);
+                    expect(vectorOf(entries, 'both')).toEqual(BINARY_VEC);
+                });
+
+                it('falls back to JSON when the binary column is invalid', async () => {
+                    // 3 bytes — not a whole number of float32 values
+                    const partialFloat = Buffer.from([1, 2, 3]).toString('base64');
+                    // a NaN — whole floats but not finite
+                    const nonFinite = Float32VectorToBase64([1, Number.NaN]);
+                    c.set([
+                        row('partial', partialFloat, JSON.stringify(JSON_VEC)),
+                        row('nan', nonFinite, JSON.stringify(JSON_VEC)),
+                        row('empty', '', JSON.stringify(JSON_VEC)),
+                    ]);
+                    await c.refresh(engine);
+                    const entries = loadedEntries();
+                    expect(vectorOf(entries, 'partial')).toEqual(JSON_VEC);
+                    expect(vectorOf(entries, 'nan')).toEqual(JSON_VEC);
+                    expect(vectorOf(entries, 'empty')).toEqual(JSON_VEC);
+                });
+
+                it('skips a record with neither column, and malformed JSON does not abort the refresh', async () => {
+                    c.set([
+                        row('none', null, null),
+                        row('bad-json', null, '{not json'),
+                        row('good', null, JSON.stringify(JSON_VEC)),
+                        row('good-bin', Float32VectorToBase64(BINARY_VEC), null),
+                    ]);
+                    await expect(c.refresh(engine)).resolves.toBeUndefined();
+                    const entries = loadedEntries();
+                    expect(entries.map(e => e.key).sort()).toEqual(['good', 'good-bin']);
+                    expect(vectorOf(entries, 'good')).toEqual(JSON_VEC);
+                    expect(vectorOf(entries, 'good-bin')).toEqual(BINARY_VEC);
+                });
+            });
+        }
+
+        describe('AddOrUpdateSingleNoteEmbedding', () => {
+            it('adds the binary vector in preference to the JSON one', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setNoteVectorServiceForTest(service);
+                engine2.AddOrUpdateSingleNoteEmbedding(row('n1', Float32VectorToBase64(BINARY_VEC), JSON.stringify(JSON_VEC)) as never);
+                expect(service.AddOrUpdateVector).toHaveBeenCalledTimes(1);
+                const [key, vector] = service.AddOrUpdateVector.mock.calls[0] as [string, ArrayLike<number>];
+                expect(key).toBe('n1');
+                expect(Array.from(vector)).toEqual(BINARY_VEC);
+                expect(service.RemoveVector).not.toHaveBeenCalled();
+            });
+
+            it('removes the note when it has no usable vector, instead of throwing', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setNoteVectorServiceForTest(service);
+                expect(() => engine2.AddOrUpdateSingleNoteEmbedding(row('n2', null, '{not json') as never)).not.toThrow();
+                engine2.AddOrUpdateSingleNoteEmbedding(row('n3', null, null) as never);
+                expect(service.AddOrUpdateVector).not.toHaveBeenCalled();
+                expect(service.RemoveVector.mock.calls).toEqual([['n2'], ['n3']]);
+            });
+        });
+
+        describe('AddOrUpdateSingleExampleEmbedding', () => {
+            it('falls back to JSON when the binary column is invalid', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setExampleVectorServiceForTest(service);
+                engine2.AddOrUpdateSingleExampleEmbedding(row('e1', Buffer.from([9]).toString('base64'), JSON.stringify(JSON_VEC)) as never);
+                const [key, vector] = service.AddOrUpdateVector.mock.calls[0] as [string, ArrayLike<number>];
+                expect(key).toBe('e1');
+                expect(Array.from(vector)).toEqual(JSON_VEC);
+            });
+
+            it('removes the example when it has no usable vector, instead of throwing', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setExampleVectorServiceForTest(service);
+                expect(() => engine2.AddOrUpdateSingleExampleEmbedding(row('e2', null, '[1, "x"]') as never)).not.toThrow();
+                expect(service.AddOrUpdateVector).not.toHaveBeenCalled();
+                expect(service.RemoveVector).toHaveBeenCalledWith('e2');
+            });
+        });
+    });
+
+    // ======================================================================
     // Startup Registration & delayed startup
     // ======================================================================
+    describe('default local embedding model and model-aware loading', () => {
+        const base = mockBaseInstance as unknown as { Models: unknown[]; AgentNotes: unknown[]; GetEffectiveModelConfiguration: ReturnType<typeof vi.fn> };
+        const local = (name: string, rank: number, extra: Record<string, unknown> = {}) => ({
+            ID: `id-${name}`, Name: name, IsActive: true, AIModelType: 'Embeddings', Vendor: 'LocalEmbeddings',
+            PowerRank: rank, APIName: `Xenova/${name}`, DriverClass: 'LocalEmbedding', ModelVendors: [], ...extra,
+        });
+        let driver: { EmbedText: ReturnType<typeof vi.fn> };
+
+        beforeEach(() => {
+            base.Models = [local('mpnet', 9), local('gte', 7), local('retired', 99, { IsActive: false })];
+            driver = { EmbedText: vi.fn().mockResolvedValue({ vector: [0.1, 0.2] }) };
+            (MJGlobal.Instance.ClassFactory.CreateInstance as unknown as ReturnType<typeof vi.fn>).mockReturnValue(driver);
+            engine.ClearEmbeddingCache();
+            resetDefault();
+        });
+
+        /** Forgets the default resolved for this process, as a restart does. */
+        const resetDefault = () => {
+            (engine as unknown as { _defaultLocalEmbeddingModelID: string | null | undefined })._defaultLocalEmbeddingModelID = undefined;
+        };
+
+        /** Resolves the default with MJ_DEFAULT_LOCAL_EMBEDDING_MODEL set to `name`. */
+        const withDefault = <T>(name: string, fn: () => T): T => {
+            process.env.MJ_DEFAULT_LOCAL_EMBEDDING_MODEL = name;
+            try {
+                resetDefault();
+                return fn();
+            } finally {
+                delete process.env.MJ_DEFAULT_LOCAL_EMBEDDING_MODEL;
+            }
+        };
+
+        afterEach(() => {
+            resetDefault();
+            base.Models = [];
+            base.AgentNotes = [];
+            base.GetEffectiveModelConfiguration.mockReturnValue(null);
+        });
+
+        it('breaks PowerRank ties by name, so every process picks the same default', () => {
+            base.Models = [local('zeta', 9), local('alpha', 9)];
+            expect(engine.DefaultLocalEmbeddingModel?.Name).toBe('alpha');
+        });
+
+        it('never picks an inactive model', () => {
+            expect(engine.LocalEmbeddingModels.map(m => m.Name)).toEqual(['mpnet', 'gte']);
+            expect(engine.DefaultLocalEmbeddingModel?.Name).toBe('mpnet');
+        });
+
+        it('reads the default from MJ_DEFAULT_LOCAL_EMBEDDING_MODEL, case-insensitively, over PowerRank', () => {
+            withDefault('GTE', () => expect(engine.DefaultLocalEmbeddingModel?.Name).toBe('gte'));
+        });
+
+        it('turns local embedding off, with an error, when the configured model is missing or inactive', () => {
+            withDefault('retired', () => {
+                expect(engine.DefaultLocalEmbeddingModel).toBeNull();
+                expect(engine.DefaultLocalEmbeddingModel).toBeNull();
+            });
+            expect(vi.mocked(LogError)).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the resolved default for the process, even if the catalog ranks change', () => {
+            expect(engine.DefaultLocalEmbeddingModel?.Name).toBe('mpnet');
+            base.Models = [local('mpnet', 9), local('gte', 70)];
+            expect(engine.DefaultLocalEmbeddingModel?.Name).toBe('mpnet');
+            resetDefault();
+            expect(engine.DefaultLocalEmbeddingModel?.Name).toBe('gte');
+        });
+
+        it('EmbedTextLocal embeds with the default model', async () => {
+            const result = await withDefault('gte', () => engine.EmbedTextLocal('hello'));
+            expect(result?.model.Name).toBe('gte');
+            expect(driver.EmbedText).toHaveBeenCalledWith(expect.objectContaining({ model: 'Xenova/gte' }));
+        });
+
+        it('returns null, and caches nothing, when the driver returns an empty vector', async () => {
+            driver.EmbedText.mockResolvedValue({ vector: [] });
+            // the second call shares the first one's in-flight inference
+            expect(await Promise.all([engine.EmbedTextLocal('hello'), engine.EmbedTextLocal('hello')])).toEqual([null, null]);
+            expect(driver.EmbedText).toHaveBeenCalledTimes(1);
+            driver.EmbedText.mockResolvedValue({ vector: [0.3] });
+            expect((await engine.EmbedTextLocal('hello'))?.result.vector).toEqual([0.3]);
+        });
+
+        it('applies the catalog prefix for the input type and passes the vendor row token cap', async () => {
+            const gemma = local('gemma', 10, {
+                ModelVendors: [{ ID: 'mv-1', VendorID: 'v-1', DriverClass: 'LocalEmbedding', APIName: 'Xenova/gemma', MaxInputTokens: 8192 }],
+            });
+            base.GetEffectiveModelConfiguration.mockReturnValue({ Embedding: { QueryPrefix: 'q: ', DocumentPrefix: 'd: ' } });
+
+            await engine.EmbedText(gemma as never, 'red planet', undefined, { inputType: 'query' });
+            await engine.EmbedText(gemma as never, 'Mars');
+
+            expect(base.GetEffectiveModelConfiguration).toHaveBeenCalledWith('id-gemma', 'mv-1');
+            expect(driver.EmbedText.mock.calls[0][0]).toMatchObject({ text: 'q: red planet', inputType: 'query', maxInputTokens: 8192 });
+            expect(driver.EmbedText.mock.calls[1][0]).toMatchObject({ text: 'd: Mars', maxInputTokens: 8192 });
+        });
+
+        it('reads prefixes and the token cap from the inference-provider row, not the model-developer row', async () => {
+            const gemini = local('gemini-like', 5, {
+                ModelVendors: [
+                    { ID: 'mv-dev', VendorID: 'v-1', TypeID: 'model-developer', DriverClass: 'LocalEmbedding', APIName: 'Xenova/gemini-like', MaxInputTokens: null },
+                    { ID: 'mv-inf', VendorID: 'v-1', TypeID: 'inference', DriverClass: 'LocalEmbedding', APIName: 'Xenova/gemini-like', MaxInputTokens: 2048 },
+                ],
+            });
+            expect(engine.PrepareEmbeddingInput(gemini as never, ['x'], 'query', 'v-1').maxInputTokens).toBe(2048);
+            expect(base.GetEffectiveModelConfiguration).toHaveBeenLastCalledWith('id-gemini-like', 'mv-inf');
+        });
+
+        it('keys the cache on the prefixed text, so a prefix edit is not served a stale vector', async () => {
+            const model = local('cached', 5);
+            await engine.EmbedText(model as never, 'same text');
+            await engine.EmbedText(model as never, 'same text');
+            expect(driver.EmbedText).toHaveBeenCalledTimes(1);
+            base.GetEffectiveModelConfiguration.mockReturnValue({ Embedding: { DocumentPrefix: 'd: ' } });
+            await engine.EmbedText(model as never, 'same text');
+            expect(driver.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('caches each input type, an omitted one included, and each dimension separately', async () => {
+            const model = local('cohere-like', 5);
+            await engine.EmbedText(model as never, 'same text', undefined, { inputType: 'query' });
+            await engine.EmbedText(model as never, 'same text', undefined, { inputType: 'document' });
+            await engine.EmbedText(model as never, 'same text', undefined, { inputType: 'document', dimensions: 256 });
+            await engine.EmbedText(model as never, 'same text');
+            expect(driver.EmbedText).toHaveBeenCalledTimes(4); // an omitted input type can map differently from 'document'
+        });
+
+        it('embeds the agent-memory search text as a query', async () => {
+            const engine2 = TestableAIEngine.CreateForTest();
+            engine2.setNoteVectorServiceForTest({ RemoveVector: vi.fn(), AddOrUpdateVector: vi.fn(), FindNearestAsync: vi.fn().mockResolvedValue([]) } as never);
+            const embedLocal = vi.spyOn(engine2, 'EmbedTextLocal').mockResolvedValue(null);
+            vi.spyOn(engine2 as unknown as { ensureEmbeddingsGenerated: () => Promise<void> }, 'ensureEmbeddingsGenerated').mockResolvedValue();
+            await engine2.FindSimilarAgentNotes('what charts does the user like?');
+            expect(embedLocal).toHaveBeenCalledWith('what charts does the user like?', { inputType: 'query' });
+        });
+
+        it('loads only notes embedded by the default model, and warns with the count left out', () => {
+            const vec = JSON.stringify([1, 0]);
+            const note = (id: string, modelID: string | null, json: string | null = vec) => ({
+                ID: id, Status: 'Active', EmbeddingVector: json, EmbeddingVectorBinary: null, EmbeddingModelID: modelID,
+                AgentID: 'a1', UserID: null, CompanyID: null, Type: 'Preference', Note: id,
+            });
+            base.AgentNotes = [note('current', 'id-mpnet'), note('stale', 'id-gte'), note('never-embedded', null, null), note('no-model', null)];
+            createdVectorServices.length = 0;
+
+            return engine.RefreshNoteEmbeddings().then(() => {
+                const loaded = createdVectorServices[0].LoadVectors.mock.calls[0][0] as Array<{ key: string }>;
+                expect(loaded.map(e => e.key)).toEqual(['current']);
+                expect(vi.mocked(LogWarning)).toHaveBeenCalledWith(expect.stringContaining('left out 2 agent note(s)'));
+            });
+        });
+
+        it('drops a saved note embedded by another model instead of adding it to the index', () => {
+            const engine2 = TestableAIEngine.CreateForTest();
+            const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+            engine2.setNoteVectorServiceForTest(service);
+            engine2.AddOrUpdateSingleNoteEmbedding({ ID: 'n1', EmbeddingModelID: 'id-gte', EmbeddingVector: '[1,0]', EmbeddingVectorBinary: null } as never);
+            expect(service.AddOrUpdateVector).not.toHaveBeenCalled();
+            expect(service.RemoveVector).toHaveBeenCalledWith('n1');
+        });
+    });
+
     describe('Startup Registration', () => {
         it('should be registered with StartupManager as a deferred engine with a 15s delay', () => {
             const registrations = mockStartupManagerInstance.GetRegistrations();

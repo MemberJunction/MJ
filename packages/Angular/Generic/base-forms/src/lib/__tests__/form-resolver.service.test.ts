@@ -19,7 +19,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // @memberjunction/core-entities.
 const settingsBacking: Record<string, string> = {};
 let overridesBacking: any[] = [];
-vi.mock('@memberjunction/core-entities', () => ({
+vi.mock('@memberjunction/core-entities', async () => ({
+    // The scope rules are pure, so the real ones decide. Loads from core-entities' dist.
+    ...(await vi.importActual<Record<string, unknown>>('@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')),
     UserInfoEngine: {
         Instance: {
             GetSetting: (key: string) => settingsBacking[key],
@@ -45,11 +47,16 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 // ClassFactory mock — controls what the fallback branch returns.
+// `allRegs` backs GetAllRegistrations, which the standard-form lookup scans.
 let classFactoryReg: { SubClass: any } | null = null;
+let allRegs: Array<{ SubClass: unknown; Priority: number }> = [];
 vi.mock('@memberjunction/global', () => ({
     MJGlobal: {
         Instance: {
-            ClassFactory: { GetRegistration: vi.fn(() => classFactoryReg) },
+            ClassFactory: {
+                GetRegistration: vi.fn(() => classFactoryReg),
+                GetAllRegistrations: vi.fn(() => allRegs),
+            },
         },
     },
     UUIDsEqual: (a: string, b: string) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
@@ -62,7 +69,7 @@ vi.mock('../base-form-component', () => ({
 
 // ----- Test setup ---------------------------------------------------------
 
-import type { FormResolverService } from '../resolver/form-resolver.service';
+import type { FormResolverService, HasStandardFormAlternative as HasStandardFormAlternativeFn } from '../resolver/form-resolver.service';
 import type { EntityInfo, UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 // Partial doubles seam-cast to the resolver's parameter types.
@@ -87,15 +94,18 @@ const overrideRow = (overrides: Partial<{
 });
 
 let service: FormResolverService;
+let hasStandardFormAlternative: typeof HasStandardFormAlternativeFn;
 
 beforeEach(async () => {
     overridesBacking = [];
     classFactoryReg = null;
+    allRegs = [];
     createdSeq = 0;
     for (const k of Object.keys(settingsBacking)) delete settingsBacking[k];
     vi.clearAllMocks();
     const mod = await import('../resolver/form-resolver.service');
     service = new mod.FormResolverService();
+    hasStandardFormAlternative = mod.HasStandardFormAlternative;
 });
 
 // ----- Tests --------------------------------------------------------------
@@ -248,5 +258,65 @@ describe('FormResolverService.ResolveFormForEntity — fallback behaviour', () =
         expect(result.kind).toBe('class');
         // ...but they still appear in the variant list for the picker
         expect(result.variants?.length).toBe(2);
+    });
+});
+
+describe('FormResolverService — standard form (CodeGen escape hatch)', () => {
+    class Gen {}
+    class Custom {}
+
+    it('ResolveStandardForm returns the lowest-priority registration', () => {
+        allRegs = [{ SubClass: Gen, Priority: 1 }, { SubClass: Custom, Priority: 10 }];
+        expect(service.ResolveStandardForm(entity)).toBe(Gen);
+    });
+
+    it('ResolveStandardForm takes the FIRST registered on a priority tie', () => {
+        class A {}
+        class B {}
+        allRegs = [{ SubClass: A, Priority: 5 }, { SubClass: B, Priority: 5 }];
+        expect(service.ResolveStandardForm(entity)).toBe(A);
+    });
+
+    it('ResolveStandardForm returns null when nothing is registered', () => {
+        allRegs = [];
+        expect(service.ResolveStandardForm(entity)).toBeNull();
+    });
+
+    it('a custom class form carries the standard form and reports an alternative', async () => {
+        classFactoryReg = { SubClass: Custom };
+        allRegs = [{ SubClass: Gen, Priority: 1 }, { SubClass: Custom, Priority: 10 }];
+        const result = await service.ResolveFormForEntity(entity, user({}), provider);
+        expect(result.kind).toBe('class');
+        if (result.kind === 'class') {
+            expect(result.subClass).toBe(Custom);
+        }
+        expect(result.standard).toBe(Gen);
+        expect(hasStandardFormAlternative(result)).toBe(true);
+    });
+
+    it('an entity with only the generated form has no alternative', async () => {
+        classFactoryReg = { SubClass: Gen };
+        allRegs = [{ SubClass: Gen, Priority: 1 }];
+        const result = await service.ResolveFormForEntity(entity, user({}), provider);
+        expect(result.kind).toBe('class');
+        expect(result.standard).toBe(Gen);
+        expect(hasStandardFormAlternative(result)).toBe(false);
+    });
+
+    it('an active interactive override still offers the standard class form', async () => {
+        overridesBacking = [overrideRow({})];
+        classFactoryReg = { SubClass: Gen };
+        allRegs = [{ SubClass: Gen, Priority: 1 }];
+        const result = await service.ResolveFormForEntity(entity, user({}), provider);
+        expect(result.kind).toBe('interactive');
+        expect(result.standard).toBe(Gen);
+        expect(hasStandardFormAlternative(result)).toBe(true);
+    });
+
+    it('kind=none has no alternative', async () => {
+        const result = await service.ResolveFormForEntity(entity, user({}), provider);
+        expect(result.kind).toBe('none');
+        expect(result.standard).toBeNull();
+        expect(hasStandardFormAlternative(result)).toBe(false);
     });
 });

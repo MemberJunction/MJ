@@ -1,0 +1,80 @@
+import { BaseEntity, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
+import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { FindProtectedSessionConfigChanges, IsTrustedSessionConfigWriteActive } from './sessionConfigGuard';
+import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
+
+/**
+ * Server-side `MJ: AI Agent Sessions` entity.
+ *
+ * It keeps the **server-authoritative keys** inside `Config` (the janitor's
+ * `maxSessionDeadlineIso`, the `identityVerification` state) out of the session owner's reach, and keeps an
+ * anonymous visitor from re-pointing an existing session's `ConversationID` (the anonymous ownership key —
+ * see `CheckAnonymousOwnershipKeyChange`). The
+ * owner can legitimately write the row — the `UI` and `Widget Guest` roles hold `CanUpdate` on their
+ * own sessions — so the protection has to live at the entity, where the generated CRUD mutations,
+ * `StartAgentSession(configJson)` and every other path converge on `Save`.
+ *
+ * The recording ledger's columns need no subclass: they are protected in metadata
+ * (`AllowUpdateAPI=false`, #6010), so an entity save cannot write them and only the ledger's stored
+ * procedures do.
+ *
+ * See {@link FindProtectedSessionConfigChanges} for what is protected and why, and
+ * `RunWithTrustedSessionConfigWrites` for how server code opts in.
+ *
+ * Uses the **synchronous** `Validate()` rather than `ValidateAsync()` on purpose: `Validate()` runs on
+ * every save, whereas async validation can be skipped by an option, and a guard that a caller can opt
+ * out of is not a guard.
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Sessions')
+export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        const violations = [
+            this.checkProtectedConfigKeys(),
+            CheckAnonymousOwnershipKeyChange(this, 'ConversationID'),
+        ].filter((v): v is ValidationErrorInfo => v !== null);
+        if (violations.length > 0) {
+            result.Errors.push(...violations);
+            result.Success = false;
+        }
+        return result;
+    }
+
+    /** Returns a refusal when an untrusted save changes a protected `Config` key, else null. */
+    private checkProtectedConfigKeys(): ValidationErrorInfo | null {
+        if (IsTrustedSessionConfigWriteActive()) {
+            return null;
+        }
+        const configField = this.GetFieldByName('Config');
+        if (!configField) {
+            return null;
+        }
+        // A 'Use' transaction variable writes its field at submit, after this comparison: on Config its value is unknown
+        // here, and on ID the update (and this Config) lands on another session than the one compared against.
+        if (IsSetByTransactionVariable(this, ['Config', 'ID'])) {
+            return new ValidationErrorInfo(
+                'Config',
+                'Config is server-managed in part, so neither it nor the row it is written to can come from a transaction variable.',
+                null,
+                ValidationErrorType.Failure,
+            );
+        }
+        // A saved record is compared against what was loaded; a new record against nothing. For a
+        // saved record whose Config was not touched there is nothing to compare.
+        if (this.IsSaved && !configField.Dirty) {
+            return null;
+        }
+        const previous = this.IsSaved && typeof configField.OldValue === 'string' ? configField.OldValue : null;
+        const changed = FindProtectedSessionConfigChanges(previous, this.Config_);
+        if (changed.length === 0) {
+            return null;
+        }
+        return new ValidationErrorInfo(
+            'Config',
+            `Config keys [${changed.join(', ')}] are server-managed and cannot be set by the session owner.`,
+            null,
+            ValidationErrorType.Failure,
+        );
+    }
+}

@@ -1,25 +1,81 @@
 <!--
-  IsFieldReadableByUser is FIRST deliberately. BaseEntity.Get() throws for a field the user
-  cannot read, so every expression below — Value, ShouldHideField, the FK resolution — is only
-  safe once this has short-circuited. A denied field renders nothing at all.
+  IsFieldReadableByUser comes before every expression that touches the record. BaseEntity.Get()
+  throws for a field the user cannot read, so Value, ShouldHideField and the FK resolution are
+  only safe once it has short-circuited. A denied field renders nothing at all.
+
+  IsClaimedByContribution may precede it because it reads only the form context: a field a
+  panel stands in for is not drawn, in either mode.
 -->
-@if (IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly) && !ShouldHideField) {
+@if (!IsClaimedByContribution && !IsFieldDeprecatedOrDisabled && IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly) && !ShouldHideField) {
   <!-- READ-ONLY MODE -->
   @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
-    <div class="mj-forms-field" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">
+    <div class="mj-forms-field" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--time-travel]="ActiveVersionPreview !== null" [class.mj-forms-field--time-travel-diff]="HasTimeTravelDiff">
       @if (ShowLabel) {
-        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+        <div class="mj-forms-field-label-row">
+          <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          @if (HasTimeTravelDiff) {
+            <span class="mj-forms-time-travel-badge" title="This field's value at the previewed historical version differs from the current live record">
+              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+              Changed
+            </span>
+          }
+        </div>
       }
       <div class="mj-forms-field-control">
-        <!-- FK fields with a mapped name field: show the name as a hyperlink -->
+        <!-- FK fields with a mapped or resolved name: show the name as a hyperlink -->
         @if (IsFKWithNameField) {
           <span class="mj-forms-field-value">
-            @if (RecordLinksEnabled) {
-              <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
-                {{ FKDisplayName }}
-              </a>
+            @if (IsPolymorphicFK) {
+              <span class="mj-forms-poly-fk-read">
+                @if (RecordLinksEnabled) {
+                  <a class="mj-forms-field-link mj-forms-field-link--fk mj-forms-field-link--poly"
+                     [mjRecordLink]="Record"
+                     [FieldName]="FieldName"
+                     [DisplayName]="FKDisplayName || FormatValue()"
+                     [RecordLinksEnabled]="RecordLinksEnabled"
+                     [Provider]="ProviderToUse"
+                     (Navigate)="Navigate.emit($event)"
+                     (RecordUpdated)="OnLinkedRecordQuickEdited($event)"
+                     [attr.aria-label]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + (FKDisplayName || FormatValue())">
+                    @if (EffectiveRelatedEntityIcon) {
+                      <i [class]="EffectiveRelatedEntityIcon + ' mj-forms-poly-entity-icon'"></i>
+                    }
+                    <span>{{ FKDisplayName || FormatValue() }}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                  </a>
+                } @else {
+                  <span>{{ FKDisplayName || FormatValue() }}</span>
+                }
+                @if (ShowPolymorphicRawIDBadge) {
+                  <button
+                    type="button"
+                    class="mj-forms-copy-id-btn"
+                    [class.is-copied]="CopiedRawID"
+                    (click)="OnCopyRawID($event)"
+                    aria-label="Copy Record ID">
+                    <i [class]="CopiedRawID ? 'fa-solid fa-check' : 'fa-regular fa-copy'" aria-hidden="true"></i>
+                    @if (CopiedRawID) {
+                      <span class="mj-forms-copy-id-btn__feedback">Copied ID</span>
+                    }
+                  </button>
+                }
+              </span>
             } @else {
-              {{ FKDisplayName }}
+              @if (RecordLinksEnabled) {
+                <a class="mj-forms-field-link mj-forms-field-link--fk"
+                   [mjRecordLink]="Record"
+                   [FieldName]="FieldName"
+                   [DisplayName]="FKDisplayName"
+                   [RecordLinksEnabled]="RecordLinksEnabled"
+                   [Provider]="ProviderToUse"
+                   (Navigate)="Navigate.emit($event)"
+                   (RecordUpdated)="OnLinkedRecordQuickEdited($event)"
+                   [attr.aria-label]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + FKDisplayName">
+                  {{ FKDisplayName }}
+                </a>
+              } @else {
+                {{ FKDisplayName }}
+              }
             }
           </span>
         }
@@ -70,7 +126,15 @@
             @case ('Record') {
               <span class="mj-forms-field-value">
                 @if (RecordLinksEnabled) {
-                  <a class="mj-forms-field-link" (click)="OnRecordLinkClick($event)" title="View related record">
+                  <a class="mj-forms-field-link"
+                     [mjRecordLink]="Record"
+                     [FieldName]="FieldName"
+                     [DisplayName]="FormatValue()"
+                     [RecordLinksEnabled]="RecordLinksEnabled"
+                     [Provider]="ProviderToUse"
+                     (Navigate)="Navigate.emit($event)"
+                     (RecordUpdated)="OnLinkedRecordQuickEdited($event)"
+                     title="View related record">
                     {{ FormatValue() }}
                     <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
                   </a>
@@ -114,17 +178,39 @@
             }
           }
         }
+        @if (HasTimeTravelDiff) {
+          <div class="mj-forms-time-travel-bar" role="status">
+            <span class="mj-forms-time-travel-current" [title]="'Current live value: ' + FormattedCurrentLiveValue">
+              <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+              <span>Current live: <strong>{{ FormattedCurrentLiveValue }}</strong></span>
+            </span>
+            <button
+              type="button"
+              class="mj-forms-time-travel-restore-btn"
+              (click)="OnRestoreSingleFieldFromPreview($event)"
+              title="Restore only this field to its value from this historical version">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+              <span>Restore this field</span>
+            </button>
+          </div>
+        }
       </div>
     </div>
   }
 
   <!-- EDIT MODE -->
   @if (EditMode && !IsFieldReadOnly) {
-    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
+    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--conflict]="ActiveConflict !== null" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
       @if (ShowLabel) {
-        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+        <div class="mj-forms-field-label-row">
+          <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          <ng-container *ngTemplateOutlet="fieldEditIndicatorsTpl"></ng-container>
+        </div>
       }
       <div class="mj-forms-field-control">
+        @if (!ShowLabel) {
+          <ng-container *ngTemplateOutlet="fieldEditIndicatorsTpl"></ng-container>
+        }
         <!-- Foreign Key fields get custom search autocomplete -->
         @if (HasRelatedEntity) {
           <div class="mj-fk-search"
@@ -529,6 +615,77 @@
           </div>
         </div>
       }
+      <!-- Inline Conflict Resolution Card -->
+      @if (ActiveConflict) {
+        <div class="mj-forms-field__conflict-card" role="alert">
+          <div class="mj-forms-field__conflict-header">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Updated in another session while you were editing</span>
+          </div>
+          <div class="mj-forms-field__conflict-comparison">
+            <div class="mj-forms-field__conflict-col mj-forms-field__conflict-col--local">
+              <span class="mj-forms-field__conflict-col-label">Your edit</span>
+              <span class="mj-forms-field__conflict-col-value">{{ FormatFieldValue(ActiveConflict.localEditedValue) }}</span>
+            </div>
+            <div class="mj-forms-field__conflict-col mj-forms-field__conflict-col--remote">
+              <span class="mj-forms-field__conflict-col-label">New value</span>
+              <span class="mj-forms-field__conflict-col-value">{{ FormatFieldValue(ActiveConflict.incomingServerValue) }}</span>
+            </div>
+          </div>
+          <div class="mj-forms-field__conflict-actions">
+            <button type="button"
+                    class="mj-forms-field__conflict-btn mj-forms-field__conflict-btn--keep"
+                    (click)="AcceptLocalConflictValue($event)">
+              <i class="fa-solid fa-check"></i>
+              <span>Keep mine</span>
+            </button>
+            <button type="button"
+                    class="mj-forms-field__conflict-btn mj-forms-field__conflict-btn--use-remote"
+                    (click)="AcceptRemoteConflictValue($event)">
+              <i class="fa-solid fa-arrow-down-long"></i>
+              <span>Use new value</span>
+            </button>
+          </div>
+        </div>
+      }
     </div>
   }
 }
+
+<!-- Shared template for edit-mode field indicators (Original Value Popover & Auto-Merged Badge) -->
+<ng-template #fieldEditIndicatorsTpl>
+  @if (EditMode && IsFieldDirty && !ActiveConflict) {
+    <div class="mj-forms-field__history-wrap"
+         (mouseenter)="ShowOriginalValuePopover = true"
+         (mouseleave)="ShowOriginalValuePopover = false">
+      <button type="button"
+              class="mj-forms-field__history-trigger"
+              title="Original value"
+              aria-label="Original value"
+              [attr.aria-expanded]="ShowOriginalValuePopover"
+              (click)="ToggleOriginalValuePopover($event)">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+      </button>
+      @if (ShowOriginalValuePopover) {
+        <div class="mj-forms-field__history-popover" role="dialog" aria-label="Original value">
+          <div class="mj-forms-field__history-popover-header">Original value</div>
+          <div class="mj-forms-field__history-popover-value">{{ FormattedOriginalValue }}</div>
+          <button type="button"
+                  class="mj-forms-field__restore-btn"
+                  (click)="RestoreOriginalValue($event)">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Restore</span>
+          </button>
+        </div>
+      }
+    </div>
+  }
+  @if (EditMode && AutoMergedPreviousValue !== undefined && !ActiveConflict) {
+    <span class="mj-forms-field__auto-merged-badge"
+          [title]="'Previously: ' + FormattedAutoMergedPreviousValue">
+      <i class="fa-solid fa-bolt"></i>
+      <span>Updated live</span>
+      <span class="mj-forms-field__auto-merged-tooltip">Previously: {{ FormattedAutoMergedPreviousValue }}</span>
+    </span>
+  }
+</ng-template>

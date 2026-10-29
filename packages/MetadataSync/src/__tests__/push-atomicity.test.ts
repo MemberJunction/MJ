@@ -136,7 +136,7 @@ vi.mock('../lib/sync-metadata-engine', () => ({
     },
 }));
 
-vi.mock('../lib/entity-subclass-guard', () => ({ describeMissingEntitySubclass: () => undefined }));
+vi.mock('../lib/entity-subclass-guard', () => ({ DescribeMissingEntitySubclass: () => undefined, describeMissingEntitySubclass: () => undefined }));
 
 // The audit itself is not under test here; what matters is that a file carrying a delete has its
 // write deferred to Phase 3. Phase 2 then has nothing to do.
@@ -292,6 +292,7 @@ function makeSyncEngine(): SyncEngine {
         setMetadataEngine: vi.fn(),
         getProvider: () => host,
         calculateChecksum: () => 'checksum',
+        CalculateChecksumWithFileContent: async () => 'checksum',
         WarningSink: undefined,
     };
     return stub as unknown as SyncEngine;

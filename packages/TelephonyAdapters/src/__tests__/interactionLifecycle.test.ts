@@ -267,6 +267,39 @@ describe('InteractionLifecycleService', () => {
             expect(mockRow.Status).toBe('Abandoned');
             expect(savedEvents.some((e) => e.EventType === 'Abandoned')).toBe(true);
         });
+
+        it('respects an explicit terminal Status override such as Failed', async () => {
+            const { provider, savedEvents } = createMockProvider();
+            const startedAt = new Date('2026-10-06T12:00:00.000Z');
+            const endedAt = new Date('2026-10-06T12:00:10.000Z');
+
+            const mockRow = {
+                ID: 'int-failed-1',
+                Status: 'Active',
+                StartedAt: startedAt,
+                AnsweredAt: null,
+                EndedAt: null,
+                DurationSeconds: null,
+                CostEstimate: null,
+                Load: vi.fn(async () => true),
+                Save: vi.fn(async () => true),
+            } as unknown as MJInteractionEntity;
+
+            (provider.GetEntityObject as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockRow);
+
+            const closed = await lifecycle.CloseInteraction({
+                InteractionID: 'int-failed-1',
+                EndedAt: endedAt,
+                EndReason: 'CarrierTransportError',
+                Status: 'Failed',
+                ContextUser: USER,
+                MetadataProvider: provider,
+            });
+
+            expect(closed).toBe(true);
+            expect(mockRow.Status).toBe('Failed');
+            expect(savedEvents.some((e) => e.EventType === 'Ended')).toBe(true);
+        });
     });
 
     describe('RecordRoomEvent', () => {
@@ -297,4 +330,50 @@ describe('InteractionLifecycleService', () => {
             expect(event).toBe(false);
         });
     });
+
+    describe('ResolveRoomInteractionID', () => {
+        it('resolves immediately from memory cache if previously remembered', async () => {
+            lifecycle.RememberRoomInteraction('room-cached', 'int-cached-1');
+            const runViewSpy = vi.fn();
+            const mockProvider = { RunView: runViewSpy } as unknown as IMetadataProvider;
+
+            const resolved = await lifecycle.ResolveRoomInteractionID('room-cached', USER, mockProvider);
+            expect(resolved).toBe('int-cached-1');
+            expect(runViewSpy).not.toHaveBeenCalled();
+        });
+
+        it('queries database with Status IN (\'Queued\',\'Active\') and ResultType simple when not in cache', async () => {
+            const runViewSpy = vi.fn(async (params) => {
+                expect(params.EntityName).toBe('MJ: Interactions');
+                expect(params.ExtraFilter).toContain("Status IN ('Queued','Active')");
+                expect(params.ExtraFilter).toContain("RoomName='room-queued-db'");
+                expect(params.ResultType).toBe('simple');
+                expect(params.Fields).toEqual(['ID']);
+                return {
+                    Success: true,
+                    Results: [{ ID: 'int-queued-456' }],
+                };
+            });
+            const mockProvider = { RunView: runViewSpy } as unknown as IMetadataProvider;
+
+            const resolved = await lifecycle.ResolveRoomInteractionID('room-queued-db', USER, mockProvider);
+            expect(resolved).toBe('int-queued-456');
+            expect(runViewSpy).toHaveBeenCalledTimes(1);
+
+            // Verify it was cached in memory
+            expect(lifecycle.GetRoomInteractionID('room-queued-db')).toBe('int-queued-456');
+        });
+
+        it('returns null when query returns no results', async () => {
+            const runViewSpy = vi.fn(async () => ({
+                Success: true,
+                Results: [],
+            }));
+            const mockProvider = { RunView: runViewSpy } as unknown as IMetadataProvider;
+
+            const resolved = await lifecycle.ResolveRoomInteractionID('room-not-found', USER, mockProvider);
+            expect(resolved).toBeNull();
+        });
+    });
 });
+

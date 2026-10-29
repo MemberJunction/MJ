@@ -1,5 +1,13 @@
 # @memberjunction/ng-explorer-service-worker
 
+## 6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+## 6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ## 6.2.0-edge.1

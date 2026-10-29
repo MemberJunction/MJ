@@ -66,7 +66,8 @@ describe('shipped rubric metadata', () => {
         for (const file of shipped) {
             const rubric = JSON.parse(readFileSync(join(root, 'rubrics', file), 'utf8'));
             for (const version of rubric.relatedEntities['MJ: Rubric Versions']) {
-                expect(version.fields.Status).toBe('Draft');
+                // Status is left to the column default ('Draft'); only the publication file sets it.
+                expect(version.fields.Status).toBeUndefined();
                 for (const field of ['MajorVersion', 'MinorVersion', 'PatchVersion', 'ContentHash', 'ScoringHash', 'AppliedBump', 'PublishedAt']) {
                     expect(version.fields[field]).toBeUndefined();
                 }
@@ -150,7 +151,6 @@ describe('shipped rubric metadata', () => {
         expect(new Set(names).size).toBe(names.length);
         for (const record of records) {
             expect(record.primaryKey.ID).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/);
-            expect(record.sync).toBeUndefined();
             const template = record.fields.TemplateText.replace('@file:', '');
             expect(readFileSync(join(root, 'prompts', template), 'utf8').length).toBeGreaterThan(0);
         }

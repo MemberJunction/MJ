@@ -14,6 +14,7 @@ import {
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { ArtifactPermissionService } from './artifact-permission.service';
+import { BuildConversationTasksFilter } from './conversation-tasks-filter';
 
 /**
  * Types of searchable content
@@ -41,7 +42,22 @@ export interface SearchResult {
   collectionName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   relevanceScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** A message hit's branch; null is the trunk. */
+  branchId?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** A message hit's position in its conversation. */
+  sequence?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
+
+/** The message columns a message hit reads. */
+type MessageSearchRow = Pick<
+  MJConversationDetailEntity,
+  'ID' | 'ConversationID' | 'Conversation' | 'Message' | 'BranchID' | 'Sequence' | '__mj_CreatedAt'
+>;
+
+/** Columns of {@link MessageSearchRow}, as the message query's `Fields`. */
+const MESSAGE_SEARCH_FIELDS: ReadonlyArray<keyof MessageSearchRow> = [
+  'ID', 'ConversationID', 'Conversation', 'Message', 'BranchID', 'Sequence', '__mj_CreatedAt'
+];
 
 /**
  * Search results grouped by type
@@ -281,7 +297,8 @@ export class SearchService {
   }
 
   /**
-   * Search message content inside the conversations the conversation list shows the user
+   * Search message content inside the conversations the conversation list shows the user,
+   * on every branch of each conversation
    */
   private async searchMessages(
     query: string,
@@ -310,13 +327,15 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<MJConversationDetailEntity>(
+    // conversation-scope: search spans every path on purpose; opening a hit switches to its branch
+    const result = await rv.RunView<MessageSearchRow>(
       {
         EntityName: 'MJ: Conversation Details',
         ExtraFilter: filter,
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object'
+        Fields: [...MESSAGE_SEARCH_FIELDS],
+        ResultType: 'simple'
       },
       currentUser
     );
@@ -491,24 +510,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // Build filter using same logic as TasksFullViewComponent
-    const md = this.Provider;
-    const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('MJ: Conversations');
-
-    if (!cd || !c) {
-      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      return [];
-    }
-
-    let filter = `ParentID IS NULL AND (UserID = '${currentUser.ID}' OR ConversationDetailID IN (
-      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}]
-      WHERE
-      UserID ='${currentUser.ID}' OR
-      ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${currentUser.ID}'
-      )
-    ))`;
+    // The same tasks the conversation workspace's tasks view shows.
+    let filter = await BuildConversationTasksFilter(this.Provider, currentUser);
 
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
@@ -571,9 +574,9 @@ export class SearchService {
   }
 
   /**
-   * Map message entity to search result
+   * Map a message row to a search result, with the branch and sequence that locate it
    */
-  private mapMessageToSearchResult(message: MJConversationDetailEntity, query: string): SearchResult {
+  private mapMessageToSearchResult(message: MessageSearchRow, query: string): SearchResult {
     const messageText = message.Message || '';
     const matchedText = this.extractMatchContext(messageText, query);
 
@@ -586,7 +589,9 @@ export class SearchService {
       conversationId: message.ConversationID,
       conversationName: message.Conversation || undefined,
       createdAt: message.__mj_CreatedAt,
-      relevanceScore: 5
+      relevanceScore: 5,
+      branchId: message.BranchID ?? null,
+      sequence: message.Sequence
     };
   }
 

@@ -14,6 +14,12 @@
       <i class="fa-solid fa-pen-to-square"></i>
       <span class="mj-forms-edit-banner-text">Editing: {{ RecordDisplayName }}</span>
     }
+    @if (EffectiveConflictCount > 0) {
+      <span class="mj-forms-edit-banner-conflicts" role="status">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>{{ EffectiveConflictCount }} {{ EffectiveConflictCount === 1 ? 'conflict needs' : 'conflicts need' }} review</span>
+      </span>
+    }
     <div class="mj-forms-toolbar-spacer"></div>
     <div class="mj-forms-edit-banner-actions">
       @for (item of ResolvedEditBeforeSaveItems; track item.Key) {
@@ -107,6 +113,9 @@
               @for (item of MoreMenuItems; track item.Key) {
                 <div class="mj-forms-menu-row" [class.disabled]="item.Disabled">
                   <button class="mj-forms-menu-item" type="button"
+                    [class.mj-forms-btn--links]="item.Key === 'links'"
+                    [class.mj-forms-btn--ask-ai]="item.Key === 'ask-ai'"
+                    [class.mj-forms-toolbar__btn--active]="item.Key === 'links' && LinksOpen"
                     [disabled]="item.Disabled || item.IsLoading" [title]="item.Description"
                     (click)="OnMenuItemClick(item, $event)">
                     <span class="mj-forms-menu-icon">
@@ -154,6 +163,41 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </span>
+    }
+
+    <!--
+      Right-placed registered items. They sit with the View menu rather than with the record
+      actions: an item placed here acts on the form's chrome, not on the record. Items
+      registered for the overflow group land here too — the More menu lists only `actions`
+      items, and an item that renders nowhere is worse than one in the wrong group.
+    -->
+    @if (ResolvedRightItems.length > 0) {
+      <div class="mj-forms-toolbar-group">
+        @for (item of ResolvedRightItems; track item.Key) {
+          <button class="mj-forms-btn"
+            [class.mj-forms-btn--primary]="item.Variant === 'primary'"
+            [class.mj-forms-btn--secondary]="item.Variant === 'secondary'"
+            [class.mj-forms-btn--accent]="item.Variant === 'accent'"
+            [class.mj-forms-btn--danger]="item.Variant === 'danger'"
+            [class.mj-forms-btn--ghost]="item.Variant === 'ghost'"
+            [class]="item.CssClass"
+            [disabled]="item.Disabled || item.IsLoading"
+            [title]="item.Description"
+            (click)="OnToolbarItemClick(item, $event)">
+            @if (item.IsLoading) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            } @else if (item.Icon) {
+              <i [class]="item.Icon"></i>
+            }
+            @if (item.Text) {
+              <span class="mj-forms-btn-text">{{ item.Text }}</span>
+            }
+            @if (item.Badge != null) {
+              <span class="mj-list-count-badge">{{ item.Badge }}</span>
+            }
+          </button>
+        }
+      </div>
     }
 
     @if (ShowViewMenu) {
@@ -301,6 +345,9 @@
     [class.mj-forms-btn--history]="item.Key === 'history'"
     [class.mj-forms-btn--list]="item.Key === 'list'"
     [class.mj-forms-btn--tags]="item.Key === 'tags'"
+    [class.mj-forms-btn--links]="item.Key === 'links'"
+    [class.mj-forms-btn--ask-ai]="item.Key === 'ask-ai'"
+    [class.mj-forms-toolbar__btn--active]="item.Key === 'links' && LinksOpen"
     [class.mj-forms-btn--attachments]="item.Key === 'attachments'"
     [class]="item.CssClass"
     [disabled]="item.Disabled || item.IsLoading"

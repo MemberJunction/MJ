@@ -16,6 +16,7 @@ import * as path from 'path';
 import { DatabaseProviderBase, Metadata, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { minimatch } from 'minimatch';
+import { IsIgnoredDirectoryName } from './ignore-directories';
 
 /** Global mssql ConnectionPool (SQL Server path only) */
 let globalPool: sql.ConnectionPool | null = null;
@@ -389,10 +390,7 @@ export function FindEntityDirectories(
   for (const entry of entries) {
     if (entry.isDirectory() && !entry.name.startsWith('.')) {
       // Check if this directory should be ignored
-      if (ignoreDirectories && ignoreDirectories.some(pattern => {
-        // Simple pattern matching: exact name or ends with pattern
-        return entry.name === pattern || entry.name.endsWith(pattern);
-      })) {
+      if (IsIgnoredDirectoryName(entry.name, ignoreDirectories)) {
         continue;
       }
       

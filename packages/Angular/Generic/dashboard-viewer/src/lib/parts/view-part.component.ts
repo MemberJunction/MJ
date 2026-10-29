@@ -2,9 +2,11 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy } from '@angular
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, PropertyValue } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
+import { PartInputProblemMessage, PartInputResolution, RECORD_SELECTED_EVENT } from '../models/dashboard-properties';
+import { ViewPartInterface } from '../models/dashboard-part-interfaces';
 
 /**
  * Runtime renderer for View dashboard parts.
@@ -40,15 +42,25 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
               class="part-placeholder"
               Icon="fa-solid fa-table"
               Title="No View Selected"
-              Message="Click the configure button to select a view for this part."
+              Message="Use Edit part to choose a view."
               Size="compact" />
           }
         
+          @if (HasActiveSelection && !IsLoading && !ErrorMessage) {
+            <div class="part-selection-bar">
+              <button type="button" class="part-clear-selection" (click)="ClearSelection()">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i> Clear selection
+              </button>
+            </div>
+          }
+
           <!-- Entity Viewer -->
           @if (!IsLoading && !ErrorMessage && hasView && entityInfo) {
             <mj-entity-viewer
+              [Provider]="Provider"
               [Entity]="entityInfo"
               [ViewEntity]="viewEntity"
+              [Properties]="ViewPropertyValues"
               (RecordSelected)="onRecordSelected($event)"
               (RecordOpened)="onRecordOpened($event)"
               (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)">
@@ -90,6 +102,31 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
             flex: 1;
             min-height: 0;
         }
+
+        .part-selection-bar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--mj-border-subtle);
+        }
+
+        .part-clear-selection {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 10px;
+            border: 1px solid var(--mj-border-default);
+            border-radius: 12px;
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .part-clear-selection:hover {
+            background: var(--mj-bg-surface-hover);
+            color: var(--mj-text-primary);
+        }
     `]
 })
 export class ViewPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
@@ -123,6 +160,15 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
     public set entityInfo(value: EntityInfo | null) {
       this.EntityInfo = value;
     }
+
+    /**
+     * Values for the view's properties from the part's input mappings, passed to the entity viewer's
+     * `Properties`. Null when the part has no mappings: the view runs exactly as before.
+     */
+    public ViewPropertyValues: Record<string, PropertyValue> | null = null;
+
+    /** True while the part shows a problem with its mappings rather than a load error. */
+    private showingInputProblem = false;
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
@@ -186,10 +232,43 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 this.ViewEntity = null;
             }
 
+            if (!this.applyViewInputs()) return;
             this.HasView = true;
             this.setLoading(false);
         } catch (error) {
+            this.showingInputProblem = false;
             this.setError(error instanceof Error ? error.message : 'Failed to load view');
+        }
+    }
+
+    /**
+     * Works out the view's property values from the part's mappings. Returns false, showing why, when a
+     * mapping is broken (a view property renamed since) or a required input has no value.
+     */
+    private applyViewInputs(): boolean {
+        const resolution = this.UpdateInputs(ViewPartInterface(this.ViewEntity, this.EntityInfo).Inputs);
+        return this.showInputs(resolution);
+    }
+
+    /** Shows the inputs' problem, or takes their values. Returns false when the part stops. */
+    private showInputs(resolution: PartInputResolution | null): boolean {
+        const problem = PartInputProblemMessage(resolution);
+        this.showingInputProblem = problem !== null;
+        if (problem) {
+            this.setError(problem);
+            return false;
+        }
+        this.ViewPropertyValues = resolution ? { ...resolution.Values } : null;
+        return true;
+    }
+
+    /** New input values: the entity viewer reruns the view with them; no reload of the view itself. */
+    protected override ApplyInputs(resolution: PartInputResolution | null): void {
+        if (this.ErrorMessage && !this.showingInputProblem) return; // a load error stays until the next load
+        if (this.showInputs(resolution)) {
+            this.ErrorMessage = null;
+            this.HasView = !!this.EntityInfo;
+            this.cdr.detectChanges();
         }
     }
 
@@ -200,6 +279,8 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
             record: event.record,
             primaryKey: event.record?.PrimaryKey
         });
+        // RecordSelected: the selected record's fields, for the dashboard's wires and the host
+        this.EmitPartEvent(RECORD_SELECTED_EVENT, event.record ? { ...event.record } : null);
     }
 
     /** @deprecated Use {@link OnRecordSelected}. */

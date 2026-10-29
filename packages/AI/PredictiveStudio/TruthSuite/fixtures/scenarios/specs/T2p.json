@@ -1,0 +1,30 @@
+{
+  "id": "T2p",
+  "namespace": "98adb2bb-6792-4dfd-be89-4565ae9150a5",
+  "seed": 2207,
+  "description": "Planted panel twin of T2: entity random intercept + within-entity AR(1) errors.",
+  "kind": "panel",
+  "nEntities": 2000,
+  "periodsPerEntity": 6,
+  "startYear": 2019,
+  "entitySd": 1.0,
+  "phi": 0.5,
+  "sigma": 1.0,
+  "features": {
+    "UsageZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "Discount": {
+      "dist": "bernoulli",
+      "p": 0.25
+    }
+  },
+  "betas": {
+    "UsageZ": 1.0,
+    "Discount": -0.5
+  },
+  "intercept": 5.0,
+  "sizingNote": "2,000 entities x 6 periods = 12,000 rows (Ruling Q9: >= 2,000 x 6). Grouped-vs-random split effects and interval coverage depend on the number of independent entities; 2,000 entities give entity-cluster bootstrap SEs of about 0.04 for the random-effect SD and 0.02 for phi."
+}

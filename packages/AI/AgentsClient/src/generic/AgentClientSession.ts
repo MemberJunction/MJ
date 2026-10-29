@@ -35,7 +35,7 @@ import {
     RunAgentFromConversationDetailParams,
     RunAgentResult,
 } from './AgentClientTypes';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatusEx } from '@memberjunction/core';
 
 /**
  * Manages a client session connected to an MJ agent.
@@ -282,7 +282,7 @@ export class AgentClientSession {
             }
         });
 
-        LogStatus(`AgentClientSession: session started for ${sessionId}`);
+        LogStatusEx({ message: `AgentClientSession: session started for ${sessionId}`, verboseOnly: true });
     }
 
     /**
@@ -294,7 +294,7 @@ export class AgentClientSession {
             this.subscription = null;
         }
         if (this._sessionId) {
-            LogStatus(`AgentClientSession: session stopped for ${this._sessionId}`);
+            LogStatusEx({ message: `AgentClientSession: session stopped for ${this._sessionId}`, verboseOnly: true });
         }
         this._sessionId = null;
         this._isActive = false;
@@ -334,7 +334,7 @@ export class AgentClientSession {
             // since ExecuteAgentParams requires a full MJAIAgentEntityExtended object
             // which we don't have on the client side.
             const gqlRunParams: GQLRunAgentFromDetailParams = {
-                conversationDetailId: params.ConversationDetailId ?? '',
+                userMessageId: params.UserMessageId ?? '',
                 agentId: params.AgentId,
                 data: params.Data,
                 payload: params.Payload,
@@ -395,7 +395,11 @@ export class AgentClientSession {
 
         try {
             const gqlParams: GQLRunAgentFromDetailParams = {
-                conversationDetailId: params.ConversationDetailId,
+                userMessageId: params.UserMessageId,
+                onAccepted: params.OnAccepted,
+                replyParentId: params.ReplyParentId,
+                announcedByAgentId: params.AnnouncedByAgentId,
+                replyBranchId: params.ReplyBranchId ?? undefined,
                 agentId: params.AgentId,
                 maxHistoryMessages: params.MaxHistoryMessages,
                 data: params.Data,
@@ -542,13 +546,15 @@ export class AgentClientSession {
                     $requestID: String!,
                     $success: Boolean!,
                     $result: String,
-                    $errorMessage: String
+                    $errorMessage: String,
+                    $media: String
                 ) {
                     RespondToClientToolRequest(
                         requestID: $requestID,
                         success: $success,
                         result: $result,
-                        errorMessage: $errorMessage
+                        errorMessage: $errorMessage,
+                        media: $media
                     )
                 }
             `;
@@ -557,7 +563,8 @@ export class AgentClientSession {
                 requestID,
                 success: result.Success,
                 result: result.Data != null ? JSON.stringify(result.Data) : undefined,
-                errorMessage: result.ErrorMessage
+                errorMessage: result.ErrorMessage,
+                media: result.Media?.length ? JSON.stringify(result.Media) : undefined
             });
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);

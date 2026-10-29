@@ -9,7 +9,8 @@ import { EvaluateWellFormed } from '../eval/wellFormed';
 const controlToolMap = {
     delegate_to_query_strategist: { kind: 'subAgent' as const, name: 'Query Strategist' },
     payload_change_request: { kind: 'payloadChange' as const },
-    ask_user: { kind: 'chat' as const }
+    ask_user: { kind: 'chat' as const },
+    complete_task: { kind: 'taskComplete' as const }
 };
 const toolNameMap = { run_ad_hoc_query: 'Run Ad-hoc Query' };
 const turn = (text: string, toolCalls: RawTurn['toolCalls']) => NormalizeDecision({ text, toolCalls, toolNameMap, controlToolMap, protocol: 'implicit' });
@@ -33,6 +34,15 @@ describe('normalizeDecision — implicit control flow', () => {
         expect(d.kind).toBe('action');
         expect(d.actions.map((a) => a.name)).toEqual(['Run Ad-hoc Query']);
         expect(d.payloadChange).toEqual({ updateElements: { iterations: 2 } });
+    });
+    it('complete_task → taskComplete, native, carrying its message and payload change', () => {
+        const d = turn('', [{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: { updateElements: { query: { sql: 'SELECT 1' } } } } }]);
+        expect(d).toMatchObject({ kind: 'taskComplete', encoding: 'native', taskComplete: true, message: 'Done.' });
+        expect(d.payloadChange).toEqual({ updateElements: { query: { sql: 'SELECT 1' } } });
+    });
+    it('complete_task with its payload change as a JSON string → decoded', () => {
+        const d = turn('', [{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: '{"updateElements":{"query":{"sql":"SELECT 1"}}}' } }]);
+        expect(d.payloadChange).toEqual({ updateElements: { query: { sql: 'SELECT 1' } } });
     });
     it('plain text with no call → taskComplete, encoding text', () => {
         expect(turn('Revenue grew 12%.', null)).toMatchObject({ kind: 'taskComplete', encoding: 'text', taskComplete: true, message: 'Revenue grew 12%.', envelopeParsed: null });
@@ -141,17 +151,18 @@ describe('encodeHistoryForArm', () => {
     it('passes tool-form history through for a native-results arm', () => {
         expect(EncodeHistoryForArm(history, true)).toEqual(history);
     });
-    it('renders the corpus prose form otherwise: the call turn is dropped, each result becomes an [Action Result] user message', () => {
+    it('renders the text form otherwise: the call as text on its turn, each result as an [Action Result] user message', () => {
         const out = EncodeHistoryForArm(history, false);
-        expect(out.map((m) => m.role)).toEqual(['user', 'user']);
-        expect(out[1].content).toBe('[Action Result] run_ad_hoc_query succeeded. | n |\n| 12 |');
+        expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+        expect(out[1]).toEqual({ role: 'assistant', content: '[Called run_ad_hoc_query({"Query":"SELECT COUNT(*) …"})]' });
+        expect(out[2].content).toBe('[Action Result] run_ad_hoc_query succeeded. | n |\n| 12 |');
     });
-    it('keeps an assistant turn that carried narration, minus its calls', () => {
+    it('keeps an assistant turn\'s narration ahead of its calls', () => {
         const out = EncodeHistoryForArm([{ ...(history[1] as object), content: 'Let me count.' }, history[2]] as never[], false);
-        expect(out[0]).toEqual({ role: 'assistant', content: 'Let me count.' });
+        expect(out[0]).toEqual({ role: 'assistant', content: 'Let me count.\n[Called run_ad_hoc_query({"Query":"SELECT COUNT(*) …"})]' });
     });
     it('marks a failed result', () => {
         const failed = [history[1], { role: 'tool', content: [{ type: 'tool_result', toolCallId: 'call_0', toolName: 'run_ad_hoc_query', content: 'Invalid column', isError: true }] }] as never[];
-        expect(EncodeHistoryForArm(failed, false)[0].content).toBe('[Action Result] run_ad_hoc_query failed. Invalid column');
+        expect(EncodeHistoryForArm(failed, false)[1].content).toBe('[Action Result] run_ad_hoc_query failed. Invalid column');
     });
 });

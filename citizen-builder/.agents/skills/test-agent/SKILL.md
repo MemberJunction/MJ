@@ -12,14 +12,17 @@ You can invoke the agent directly via the CLI to test basic functionality and in
 
 ```bash
 docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Prompt or Input>" --format json
+# Or pass a multi-line prompt file to avoid shell escaping issues:
+docker compose exec -T mj mj ai agents run -a "<Agent Name>" -f /work/prompt.txt --format json
 ```
 
 Options:
 - `--format json`: Machine-readable structured JSON result.
+- `-f` / `--prompt-file`: Path to a file containing the prompt text.
 - `-v` / `--verbose`: Detailed diagnostic logging.
 
 ## Method B: User Interactive Testing (Explorer UI)
-Instruct the user to open their browser at `http://localhost:4202` to test interactively.
+Instruct the user to open their browser at `http://localhost:4202` to test interactively (Zero-Config Local Dev Auth is enabled by default on localhost).
 
 ---
 

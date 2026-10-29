@@ -9,15 +9,16 @@
         "Clone": {
           "NotCloneable": true,
           "NotCloneableReason": "Clone audit logs cannot be cloned."
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.104Z",
-      "checksum": "a48ad55393953f06ca82bbac9f9c275cac0f14dfc31fc0871a98abe0cc33b26b"
+      "lastModified": "2026-10-20T23:17:42.554Z",
+      "checksum": "bbe06828dd382f9d6b21bc3a631db85eba2693dda3c9dd95158c546d6515b425"
     }
   },
   {
@@ -30,21 +31,24 @@
         "Clone": {
           "NotCloneable": true,
           "NotCloneableReason": "Clone audit log items cannot be cloned."
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Log Items"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.129Z",
-      "checksum": "5028358b4bf32274cd14b6ea0a9689c5c37dae8e0ecef57c6611ee901e11020f"
+      "lastModified": "2026-10-20T23:17:42.563Z",
+      "checksum": "8c4aedb62ae807e85378e423dd04dd245e87e02576a2c9a78db43cabc5f8cf4f"
     }
   },
   {
     "_comments": [
       "Cloning configuration for MJ: Users — Onboard a user like Alice with same roles, apps, and settings, inactive, owner-only.",
-      "User Settings are Skip by default (RK review): they hold push-device tokens, drafts and consent. The with-settings preset copies the rest."
+      "User Settings are Skip by default (RK review): they hold push-device tokens, drafts and consent. The with-settings preset copies the rest.",
+      "The 'template' preset copies a template user (IsTemplate) whole: dashboards, conversations and their artifacts included. It is refused for any other user, so one person's private work is never copied to another.",
+      "Dashboards and User Views keep their names: their names are unique per user, and a copy belongs to the new user, so the entities' own '(copy)' rename would only mislabel them."
     ],
     "fields": {
       "Name": "MJ: Users",
@@ -72,7 +76,8 @@
               "LinkedRecordType": "None",
               "EmployeeID": null,
               "UserImageURL": null,
-              "UserImageIconClass": null
+              "UserImageIconClass": null,
+              "IsTemplate": false
             },
             "Rules": {
               "Rules": [
@@ -197,11 +202,42 @@
             }
           },
           "Descendants": {
+            "MJ: Dashboards": {
+              "Naming": {
+                "Strategy": "none"
+              }
+            },
+            "MJ: User Views": {
+              "Naming": {
+                "Strategy": "none"
+              }
+            },
             "MJ: User Applications": {
               "Fields": {
                 "Copy": [
                   "Sequence",
                   "IsActive"
+                ]
+              }
+            },
+            "MJ: User Settings": {
+              "Fields": {
+                "JsonRemap": [
+                  {
+                    "Field": "Value",
+                    "Rules": [
+                      {
+                        "Path": "[*].Configuration.dashboardId",
+                        "Mode": "remap",
+                        "OnMissing": "reuse"
+                      },
+                      {
+                        "Path": "[*].Configuration.recordId",
+                        "Mode": "remap",
+                        "OnMissing": "reuse"
+                      }
+                    ]
+                  }
                 ]
               }
             }
@@ -231,6 +267,54 @@
                   "Policy": "Deep"
                 }
               }
+            },
+            {
+              "Key": "template",
+              "Label": "Copy this template user",
+              "Description": "For template users only: copies roles, pinned apps, saved views and personal settings, plus the template's dashboards, conversations and the artifacts in them, all owned by the new user. Pins that point at a copied dashboard point at the copy.",
+              "TemplateSourceField": "IsTemplate",
+              "Options": {
+                "MaxDepth": 4,
+                "MaxRecords": 5000
+              },
+              "Relationships": {
+                "MJ: User Views": {
+                  "Policy": "Deep"
+                },
+                "MJ: User Settings": {
+                  "Policy": "Deep"
+                },
+                "MJ: Dashboards.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Dashboard Categories.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Dashboard Category Links.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Conversations.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Conversation Details.ConversationID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Conversation Detail Artifacts.ConversationDetailID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Artifacts.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Artifact Versions.ArtifactID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Artifact Versions.ArtifactVersionID": {
+                  "Policy": "Skip"
+                },
+                "MJ: Artifacts.ArtifactID": {
+                  "Policy": "Skip"
+                }
+              }
             }
           ],
           "UI": {
@@ -245,8 +329,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Users"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.160Z",
-      "checksum": "e48ea3d7085311b94d636da2618aa28ec769d84d6cb8c5fe6883e989ca3538fc"
+      "lastModified": "2026-10-12T18:09:08.435Z",
+      "checksum": "b9bc2b46c30e537d0ff7a3d66aa38e655884804c5b0cf8e81a03f8b34a4885b2"
     }
   },
   {
@@ -598,15 +682,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.376Z",
-      "checksum": "020b4a5271f5bfdae2968c84bf106485c746c78d2ef7671c78a82ab24ff43454"
+      "lastModified": "2026-10-20T23:17:42.593Z",
+      "checksum": "129498e141545f8255f78c3962fc25e1d9ed17accd4318beacd322433ba73459"
     }
   },
   {
@@ -911,15 +996,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution logs"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.629Z",
-      "checksum": "614ef8f06894dfb862df3b5d21bb8ad3d1d286f48ac7905bd218c3afffb2fea8"
+      "lastModified": "2026-10-20T23:17:42.611Z",
+      "checksum": "5d684de95d0537b5dd75984a4695eda41126fafa576d3d09931e2eac45a0fdde"
     }
   },
   {
@@ -933,15 +1019,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.676Z",
-      "checksum": "c0768684eae6090f923c1fc5e33ae969fdba75c8ee4838e3e96213d5beaaa57d"
+      "lastModified": "2026-10-20T23:17:42.621Z",
+      "checksum": "b5f4b2dce5b9e22b8bff8aa8db4654098b85395219f13ec16b88b4a1dcf90134"
     }
   },
   {
@@ -1810,20 +1897,22 @@
     ],
     "fields": {
       "Name": "MJ: Process Run Details",
+      "TrackRecordChanges": false,
       "Configuration": {
         "Clone": {
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:43.437Z",
-      "checksum": "d9cc78cbdd8d1e01d526848941c60baf6efa58ee936e52c0d7a8bf99cd848f86"
+      "lastModified": "2026-10-20T23:17:42.665Z",
+      "checksum": "298a7128240ef7d94c288bf54bc486ab5d113b72eb44646a3d244a642dbacee4"
     }
   },
   {
@@ -2033,15 +2122,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable audit history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:43.834Z",
-      "checksum": "82fae40b7d6e27869f74c1f375289cd0696902e9916b0ec166b3eab4a73a1463"
+      "lastModified": "2026-10-20T23:17:42.696Z",
+      "checksum": "dea935777abc067d02386232b5e65d3f80f96c5ffbb679853cd21d3a0b6a8f22"
     }
   },
   {
@@ -2055,15 +2145,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable audit history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:43.883Z",
-      "checksum": "8ba2f71d3250b342cac19bb3befc237aab845574ee1dd5ae1347eaae36becfa5"
+      "lastModified": "2026-10-20T23:17:42.707Z",
+      "checksum": "86f08d310822cb096b2c76c05f3d586b474918663da511233128539676c0cc06"
     }
   },
   {
@@ -2077,15 +2168,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable diagnostic history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Error Logs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:43.934Z",
-      "checksum": "e708ca615b44817723bacfe7c1b00dc38b103a8a025180c6b45ab1df9b90f7a2"
+      "lastModified": "2026-10-20T23:17:42.717Z",
+      "checksum": "42992a6fecd30ffb58586b4ccd9486d764bc9fceed70cd1e147b4ebae979b1b3"
     }
   },
   {
@@ -2099,15 +2191,16 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable audit history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:43.984Z",
-      "checksum": "f9c48c3b2a5fbb2823bf19de0891a1cae24428e968a39a9cd1f8191d506fbbd5"
+      "lastModified": "2026-10-20T23:17:42.725Z",
+      "checksum": "18e39bc3ab7d40cf11fa1fc892a4326ddecf90ecbaeb68c598de54aef1c38c7a"
     }
   },
   {
@@ -2310,7 +2403,8 @@
   },
   {
     "_comments": [
-      "Negative catalog: MJ: Conversations is interactive user transcripts — not cloneable."
+      "Negative catalog: MJ: Conversations is interactive user transcripts — not cloneable.",
+      "CloneableFromTemplate: copied only under the MJ: Users 'template' preset, from a template user; never from an ordinary user."
     ],
     "fields": {
       "Name": "MJ: Conversations",
@@ -2318,7 +2412,8 @@
         "Clone": {
           "Enabled": false,
           "NotCloneable": true,
-          "NotCloneableReason": "Interactive transcripts"
+          "NotCloneableReason": "Interactive transcripts",
+          "CloneableFromTemplate": true
         }
       }
     },
@@ -2326,13 +2421,14 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:44.350Z",
-      "checksum": "2d26ba6d6fedc86b5e85559f2e2e9c6386c779564e4a42dd433d630c1982222d"
+      "lastModified": "2026-10-12T18:09:08.509Z",
+      "checksum": "47467696d8d5772ffb0f0071e292c04ca62bef8d65db1740d09213febbe35521"
     }
   },
   {
     "_comments": [
-      "Negative catalog: MJ: Conversation Details is interactive user transcripts — not cloneable."
+      "Negative catalog: MJ: Conversation Details is interactive user transcripts — not cloneable.",
+      "CloneableFromTemplate: copied only under the MJ: Users 'template' preset, from a template user; never from an ordinary user."
     ],
     "fields": {
       "Name": "MJ: Conversation Details",
@@ -2340,7 +2436,8 @@
         "Clone": {
           "Enabled": false,
           "NotCloneable": true,
-          "NotCloneableReason": "Interactive transcripts"
+          "NotCloneableReason": "Interactive transcripts",
+          "CloneableFromTemplate": true
         }
       }
     },
@@ -2348,8 +2445,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:44.382Z",
-      "checksum": "65a5a9ef92f85a2f3591b4d97bdc299e09f5e5318898f0fd0ff94f48989f8602"
+      "lastModified": "2026-10-12T18:09:08.512Z",
+      "checksum": "af351190496c619a56b728df676238b859e81b61ca8ca7e6104f70a7e404089f"
     }
   }
 ]

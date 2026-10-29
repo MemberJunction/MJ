@@ -48,9 +48,11 @@ vi.mock('@memberjunction/conversations-runtime', () => ({
                 parseMentions: () => state.parsedMentions,
             },
             AgentRunner: {
-                processMessage: async (input: unknown) => {
+                processMessage: async (input: { onReplyAccepted?: (reply: { ConversationDetailId: string; CreatedAt: Date }) => void }) => {
                     state.onProcessMessage?.();
                     state.lastProcessMessage = input;
+                    // The server accepts the run and names the reply row it created.
+                    input.onReplyAccepted?.({ ConversationDetailId: 'server-reply-1', CreatedAt: new Date('2026-10-12T10:00:00.000Z') });
                     return state.processMessageResult;
                 },
             },
@@ -220,40 +222,34 @@ describe('SendMessage', () => {
         state.saveResult = true;
     });
 
-    it('frames a turn as a user row plus an in-progress AI row', async () => {
+    it("saves only the user's row: the agent's reply row is the server's to write", async () => {
         const result = await SendMessage({ conversationId: 'conv-1', text: 'hello' });
         expect(result.success).toBe(true);
 
-        const [user, ai] = state.savedDetails;
-        expect(user).toMatchObject({ Role: 'User', Status: 'Complete', Message: 'hello', UserID: 'user-1' });
-        expect(ai).toMatchObject({ Role: 'AI', Status: 'In-Progress', Message: '', ParentID: user.ID });
+        expect(state.savedDetails).toHaveLength(1);
+        expect(state.savedDetails[0]).toMatchObject({ Role: 'User', Status: 'Complete', Message: 'hello', UserID: 'user-1' });
     });
 
-    it('hands the AI row — not the user row — to the runtime', async () => {
-        // The server writes the answer INTO the detail it is given. Passing the user row lands
-        // the reply on it as Role='User' and renders it as plain text in a user bubble.
+    it("hands the user's row to the runtime and no reply row", async () => {
         await SendMessage({ conversationId: 'conv-1', text: 'hi' });
-        const input = state.lastProcessMessage as { conversationDetailId: string; message: { ID: string } };
-        const [user, ai] = state.savedDetails;
-        expect(input.conversationDetailId).toBe(ai.ID);
-        expect(input.message.ID).toBe(user.ID);
+        const input = state.lastProcessMessage as Record<string, unknown> & { message: { ID: string } };
+        expect(input.message.ID).toBe(state.savedDetails[0].ID);
+        expect(input).not.toHaveProperty('conversationDetailId');
     });
 
     it('passes an explicit agent through, and leaves resolution to the runtime otherwise', async () => {
         await SendMessage({ conversationId: 'c', text: 'x', agentId: 'agent-7' });
         expect((state.lastProcessMessage as { explicitAgentId: string }).explicitAgentId).toBe('agent-7');
-        expect(state.savedDetails[1]).toMatchObject({ AgentID: 'agent-7' });
 
         state.savedDetails = [];
         await SendMessage({ conversationId: 'c', text: 'x' });
         expect((state.lastProcessMessage as { explicitAgentId: string | null }).explicitAgentId).toBeNull();
     });
 
-    it('reports both detail ids so a caller can attach files and track the reply', async () => {
+    it("reports the user's row and the reply row the server named, so a caller can attach files and track the reply", async () => {
         const result = await SendMessage({ conversationId: 'c', text: 'x' });
-        const [user, ai] = state.savedDetails;
-        expect(result.UserMessageId).toBe(user.ID);
-        expect(result.AiMessageId).toBe(ai.ID);
+        expect(result.UserMessageId).toBe(state.savedDetails[0].ID);
+        expect(result.AiMessageId).toBe('server-reply-1');
     });
 
     it('fails cleanly when the user message cannot be saved', async () => {

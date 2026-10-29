@@ -6,7 +6,9 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
+import { getEventListeners } from 'node:events';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
+import type { RealtimeAvatarResolution } from '../realtime/realtime-avatar-resolution';
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
@@ -19,7 +21,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 import * as coreModule from '@memberjunction/core';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionParamEntity, MJAIModalityEntity, MJAIModelModalityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
@@ -36,6 +38,7 @@ import {
 } from '../realtime/realtime-client-session-service';
 import { INVOKE_TARGET_AGENT_TOOL_NAME, INVOKE_TARGET_AGENT_DESCRIPTION, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
 import { BuildAppRealtimeOverridesJson, RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
 // `runAgentMock` is hoisted so the vi.mock factory can close over it.
@@ -188,6 +191,11 @@ class TestableService extends RealtimeClientSessionService {
 
 const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
 const provider = {} as unknown as IMetadataProvider;
+
+beforeEach(() => {
+    // The service logs each mint (`[RealtimeCoAgent] mint …`) and status line to the console; keep test output clean.
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+});
 
 function makeCoAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
     return { ID: 'co-1', Name: 'Realtime Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
@@ -673,6 +681,21 @@ describe('RealtimeClientSessionService.CancelInFlightDelegations', () => {
         expect(result.Success).toBe(false);
         expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'cancelled' });
     });
+
+    it('leaves no abort listener on a reused caller AbortSignal once ExecuteRelayedTool finishes', async () => {
+        const svc = new TestableService();
+        const callerController = new AbortController();
+
+        for (let i = 0; i < 5; i++) {
+            await svc.ExecuteRelayedTool(
+                makeToolInput(`c-${i}`, { AbortSignal: callerController.signal }),
+                contextUser,
+                provider
+            );
+        }
+
+        expect(getEventListeners(callerController.signal, 'abort')).toHaveLength(0);
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -854,6 +877,114 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(store.TokensCompletion).toBe(200);
         expect(store.TokensUsed).toBe(1000);
     });
+
+    it('does not overwrite Status/CompletedAt/Success when another host or janitor instance finalizes the run before a late usage flush', async () => {
+        const store = {
+            Status: 'Running',
+            CompletedAt: undefined as Date | undefined,
+            Success: undefined as boolean | undefined,
+            Messages: null as string | null,
+            TokensPrompt: 0,
+            TokensCompletion: 0,
+            TokensUsed: 0,
+        };
+        const crossHostProvider: IMetadataProvider = {
+            GetEntityObject: vi.fn(async () => {
+                const entity: Record<string, unknown> = {
+                    Load: async () => {
+                        entity.Status = store.Status;
+                        entity.CompletedAt = store.CompletedAt;
+                        entity.Success = store.Success;
+                        entity.Messages = store.Messages;
+                        entity.TokensPrompt = store.TokensPrompt;
+                        entity.TokensCompletion = store.TokensCompletion;
+                        entity.TokensUsed = store.TokensUsed;
+                        return true;
+                    },
+                    Save: async () => {
+                        store.Status = entity.Status as string;
+                        store.CompletedAt = entity.CompletedAt as Date | undefined;
+                        store.Success = entity.Success as boolean | undefined;
+                        store.Messages = entity.Messages as string | null;
+                        store.TokensPrompt = entity.TokensPrompt as number;
+                        store.TokensCompletion = entity.TokensCompletion as number;
+                        store.TokensUsed = entity.TokensUsed as number;
+                        return true;
+                    },
+                    LatestResult: { CompleteMessage: '' },
+                };
+                return entity;
+            }),
+        } as unknown as IMetadataProvider;
+
+        const hostA = new RealtimeClientSessionService();
+        const hostB = new RealtimeClientSessionService();
+
+        await hostA.AppendPromptRunMessage('pr-cross-host', 'user', 'hello', false, contextUser, crossHostProvider);
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 30, 15, contextUser, crossHostProvider);
+
+        // Host B (or SessionJanitor) reaps/finalizes the prompt run.
+        await hostB.FinalizeCoAgentRun(null, 'pr-cross-host', contextUser, crossHostProvider, true);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+
+        // A post-close usage flush arrives on Host A; it must accumulate tokens without reverting Status to 'Running'.
+        await hostA.AccumulatePromptRunUsage('pr-cross-host', 20, 10, contextUser, crossHostProvider);
+        expect(store.Status).toBe('Completed');
+        expect(store.Success).toBe(true);
+        expect(store.CompletedAt).toBeInstanceOf(Date);
+        expect(store.TokensPrompt).toBe(50);
+        expect(store.TokensCompletion).toBe(25);
+        expect(store.TokensUsed).toBe(75);
+    });
+
+    it('calls assembleMemoryContext once per PrepareRealtimeSessionParams and puts it in the system prompt', async () => {
+        class CountingPrepService extends TestableService {
+            public MemoryCalls = 0;
+            protected override async assembleMemoryContext(): Promise<string> {
+                this.MemoryCalls++;
+                return 'MEMORY_BLOCK';
+            }
+        }
+        const svc = new CountingPrepService();
+        const prep = await svc.PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(svc.MemoryCalls).toBe(1);
+        expect(prep.SessionParams?.InitialContext).toBe('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+    });
+
+    it('keeps an override written against the original signature working (bizapps-caliber appends a persona this way)', async () => {
+        // The shape of bizapps-caliber's CaliberPersonaClientSessionService override: the original five
+        // parameters, forwarded to super. A protected seam is published API, so this must keep compiling and
+        // receive the caller and provider under their own names.
+        const received: Array<{ ContextUser: unknown; Provider: unknown; EffectiveConfig: unknown }> = [];
+        class OriginalSignatureOverride extends TestableService {
+            protected override async assembleMemoryContext(): Promise<string> {
+                return 'MEMORY_BLOCK';
+            }
+            protected override async buildCompanionSystemPrompt(
+                input: PrepareClientSessionInput,
+                coAgent: MJAIAgentEntityExtended,
+                user: UserInfo,
+                prov: IMetadataProvider,
+                effectiveConfig?: RealtimeCoAgentConfig,
+            ): Promise<string> {
+                received.push({ ContextUser: user, Provider: prov, EffectiveConfig: effectiveConfig });
+                const base = await super.buildCompanionSystemPrompt(input, coAgent, user, prov, effectiveConfig);
+                return `${base}\n\nPERSONA_BLOCK`;
+            }
+        }
+        const prep = await new OriginalSignatureOverride().PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(received).toHaveLength(1);
+        expect(received[0].ContextUser).toBe(contextUser);
+        expect(received[0].Provider).toBe(provider);
+        expect(typeof received[0].EffectiveConfig).toBe('object');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('PERSONA_BLOCK');
+    });
 });
 
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
@@ -919,6 +1050,36 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
         expect(runStep.Success).toBe(false);
         expect(runStep.ErrorMessage).toContain('error state');
         expect(runStep.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it("stamps a failure's own error on the run, its prompt run and its step (a bridge start that failed)", async () => {
+        const startError = 'Failed to create AIAgentSessionBridge: the user may not create MJ: AI Agent Session Bridges';
+        const agentRun = makeRun({ ID: 'co-run-1' });
+        const promptRun = makeRun({ ID: 'prompt-run-1' });
+        const runStep = makeRun({ ID: 'run-step-1' });
+        const prov = makeRunProvider(name => {
+            if (name === 'MJ: AI Agent Runs') return agentRun;
+            if (name === 'MJ: AI Agent Run Steps') return runStep;
+            return promptRun;
+        });
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, false, 'run-step-1', startError);
+
+        for (const record of [agentRun, promptRun, runStep]) {
+            expect(record).toMatchObject({ Status: 'Failed', Success: false, ErrorMessage: startError });
+        }
+    });
+
+    it('stamps no error on a run that completed, whatever message comes with it', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1' });
+        const promptRun = makeRun({ ID: 'prompt-run-1' });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true, null, 'not a failure');
+
+        expect(agentRun).toMatchObject({ Status: 'Completed', Success: true });
+        expect(agentRun.ErrorMessage).toBeUndefined();
+        expect(promptRun.ErrorMessage).toBeUndefined();
     });
 
     it('is a no-op for an already-finalized (non-Running) run step', async () => {
@@ -1031,6 +1192,137 @@ function makeObsProvider(agentRun: FakeObsRun, promptRun: FakeObsRun, runStep: F
         return promptRun;
     });
 }
+
+// ════════════════════════════════════════════════════════════════════
+// The co-agent run: the voice model's cost, and liveness for the run watchdog
+// ════════════════════════════════════════════════════════════════════
+
+/** A provider the run watchdog accepts (a database provider), serving the given fakes. */
+function makeDatabaseProvider(byName: (entityName: string) => FakeRun): IMetadataProvider {
+    return Object.assign(Object.create(coreModule.DatabaseProviderBase.prototype), {
+        GetEntityObject: vi.fn(async (name: string) => byName(name)),
+    }) as IMetadataProvider;
+}
+
+describe('RealtimeClientSessionService — the co-agent run carries the voice model\'s cost', () => {
+    /** What a 17-minute Gemini Live call accumulated on its prompt run (prod, 2026-10-02). */
+    const callUsage = { TokensPrompt: 1_048_871, TokensCompletion: 5_879, TokensUsed: 1_054_750, Cost: 0.81310875, TotalCost: 0.81310875 };
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('copies the prompt run\'s tokens and cost onto the co-agent run when the session ends', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', ...callUsage });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        // Before: TotalCost stayed 0, so anything summing agent runs saw only the delegated runs.
+        expect(agentRun).toMatchObject({
+            TotalPromptTokensUsed: 1_048_871,
+            TotalCompletionTokensUsed: 5_879,
+            TotalTokensUsed: 1_054_750,
+            TotalCost: 0.81310875,
+        });
+        expect(agentRun.Save).toHaveBeenCalledTimes(2); // the finalize, then the totals
+    });
+
+    it('still charges a run the watchdog (or a shutdown) already ended', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Status: 'Failed', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', ...callUsage });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        expect(agentRun.Status).toBe('Failed'); // the status is not rewritten …
+        expect(agentRun.TotalCost).toBe(0.81310875); // … but the cost is owed all the same
+    });
+
+    it('falls back to the prompt run\'s own cost and summed tokens when the totals are missing', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 100, TokensCompletion: 20, TokensUsed: null, Cost: 0.5, TotalCost: null });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        expect(agentRun).toMatchObject({ TotalTokensUsed: 120, TotalCost: 0.5 });
+    });
+
+    it('leaves the run\'s totals alone when the session had no prompt run', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1' });
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', null, contextUser, makeRunProvider(() => agentRun), true);
+
+        expect(agentRun.TotalCost).toBeUndefined();
+    });
+});
+
+describe('RealtimeClientSessionService — the co-agent run stays alive for the run watchdog', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('registers a session\'s co-agent run — only with an id, and only on a database provider', () => {
+        const track = vi.spyOn(AgentRunWatchdog.Instance, 'Track').mockImplementation(() => undefined);
+        const svc = new RealtimeClientSessionService();
+        const dbProvider = makeDatabaseProvider(() => makeRun());
+
+        svc.KeepCoAgentRunAlive('co-run-1', dbProvider, contextUser);
+        svc.KeepCoAgentRunAlive(null, dbProvider, contextUser);
+        svc.KeepCoAgentRunAlive('co-run-1', makeRunProvider(() => makeRun()), contextUser); // can't stamp heartbeats
+
+        expect(track.mock.calls).toEqual([['co-run-1', dbProvider, contextUser]]);
+    });
+
+    it('registers the run the moment it is created, so a long call is never taken for a dead process', async () => {
+        const track = vi.spyOn(AgentRunWatchdog.Instance, 'Track').mockImplementation(() => undefined);
+        const agentRun = makeObsRun('co-run-real');
+        const prov = makeDatabaseProvider(name => {
+            if (name === 'MJ: AI Agent Runs') return agentRun;
+            return makeObsRun(name === 'MJ: AI Agent Run Steps' ? 'run-step-real' : 'prompt-run-real');
+        });
+
+        await new ObservabilityTestService().CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 'session-1', prov);
+
+        expect(track).toHaveBeenCalledWith('co-run-real', prov, contextUser);
+    });
+
+    it('unregisters it, and still charges it, even when finalizing the run throws', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+        let agentRunLoads = 0;
+        const agentRun = makeRun({
+            ID: 'co-run-1',
+            Dirty: true,
+            // The finalize's load fails hard; the cost copy's load (the second) succeeds.
+            Load: vi.fn(async () => {
+                agentRunLoads++;
+                if (agentRunLoads === 1) {
+                    throw new Error('connection reset');
+                }
+                return true;
+            }),
+        });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 10, TokensCompletion: 2, TokensUsed: 12, TotalCost: 0.25 });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await expect(
+            new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true)
+        ).rejects.toThrow('connection reset');
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+        expect(agentRun.TotalCost).toBe(0.25);
+    });
+
+    it('unregisters it when the session ends', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', null, contextUser, makeRunProvider(() => makeRun({ ID: 'co-run-1' })), true);
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+    });
+});
 
 describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)', () => {
     it('creates the co-agent AIAgentRun + linked AIPromptRun + single run step with full linkage stamping', async () => {
@@ -1248,6 +1540,42 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(runAgentMock.mock.calls[0][0].userId).toBeUndefined();
     });
 
+    it('threads the browser session id and app context into the delegated run', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const appContext: AppContextSnapshot = {
+            App: { Name: 'Dashboards', Description: '' },
+            ActiveNavItem: { Name: 'Sales Overview' },
+            OtherNavItems: [],
+            User: { Name: 'A', Roles: [] },
+            Capabilities: { Tools: [] },
+        };
+        const svc = new DelegateTestService();
+
+        await svc.ExecuteRelayedTool(
+            makeDelegateInput({ BrowserSessionID: 'browser-abc', AppContext: appContext }),
+            contextUser,
+            provider,
+        );
+
+        expect(runAgentMock).toHaveBeenCalledTimes(1);
+        const passed = runAgentMock.mock.calls[0][0];
+        // The client-tool request channel is keyed on the browser session id.
+        expect(passed.sessionID).toBe('browser-abc');
+        // `data.appContext` is where the run's prompt reads app context and surface tools.
+        expect(passed.data).toEqual({ appContext });
+    });
+
+    it('leaves sessionID and data unset when the relay carries no browser session or app context', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.sessionID).toBeUndefined();
+        expect(passed.data).toBeUndefined();
+    });
+
     it('returns the question + surfaces PausedRunID when the run is AwaitingFeedback', async () => {
         runAgentMock.mockResolvedValue({
             success: true,
@@ -1452,21 +1780,26 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(runAgentMock.mock.calls[0][0].cancellationToken).toBe(brokerSignal);
     });
 
-    it('combines the caller barge-in signal with the broker signal — either aborts the run', async () => {
-        let token: AbortSignal | undefined;
+    it('combines the caller barge-in signal with the broker signal — either aborts the run and detaches on completion', async () => {
+        const caller = new AbortController();
+        let tokenDuringRun: AbortSignal | undefined;
+        let abortedBeforeSignal = true;
+        let abortedAfterSignal = false;
         runAgentMock.mockImplementation(async (params: { cancellationToken?: AbortSignal }) => {
-            token = params.cancellationToken;
+            tokenDuringRun = params.cancellationToken;
+            abortedBeforeSignal = tokenDuringRun?.aborted ?? true;
+            caller.abort(); // caller-side barge-in flips the combined token while the run is in flight
+            abortedAfterSignal = tokenDuringRun?.aborted ?? false;
             return { success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } };
         });
-        const caller = new AbortController();
         const svc = new DelegateTestService();
 
         await svc.CallDelegate(makeDelegateInput({ AbortSignal: caller.signal }), makeDelegateRequest());
 
-        expect(token).toBeInstanceOf(AbortSignal);
-        expect(token!.aborted).toBe(false);
-        caller.abort(); // caller-side barge-in flips the combined token
-        expect(token!.aborted).toBe(true);
+        expect(tokenDuringRun).toBeInstanceOf(AbortSignal);
+        expect(abortedBeforeSignal).toBe(false);
+        expect(abortedAfterSignal).toBe(true);
+        expect(getEventListeners(caller.signal, 'abort')).toHaveLength(0);
     });
 
     it('hands RunAgent an already-aborted token when the caller signal was pre-aborted', async () => {
@@ -2049,6 +2382,69 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         }, 'OpenAIRealtime')).toHaveLength(0);
     });
 
+    it('carries the avatar the session asks for, pairs its voice, and names it in the mint log', async () => {
+        class AvatarService extends TestableService {
+            protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+                return { Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' }, Voice: 'Puck' };
+            }
+        }
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+            const service = new AvatarService();
+            const coAgent = makeCoAgent();
+            const params = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiRealtime');
+            expect(params.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' });
+            expect(params.Config?.['voice']).toBe('Puck');
+            expect(log.mock.calls.map((c) => String(c[0])).some((l) => l.includes('voice=Puck avatar=Ben '))).toBe(true);
+
+            // A voice picked in this call wins over the avatar persona's voice.
+            const picked = await service.ExposeBuildSessionParams(
+                makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1', ConfigOverridesJson: JSON.stringify({ realtime: { voice: { default: { voice: 'Kore' } } } }) }),
+                coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiRealtime');
+            expect(picked.Avatar?.AvatarID).toBe('Ben');
+            expect(picked.Config?.['voice']).not.toBe('Puck');
+        } finally {
+            log.mockRestore();
+        }
+    });
+
+    it("marks the avatar request for a room when the bridged host can publish it, and only then", async () => {
+        class AvatarService extends TestableService {
+            protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+                return { Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' }, Voice: 'Puck' };
+            }
+        }
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+            const service = new AvatarService();
+            const coAgent = makeCoAgent();
+            const inRoom = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1', AvatarDelivery: 'room' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiEnterpriseRealtime');
+            expect(inRoom.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona', Delivery: 'room' });
+            const plain = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiEnterpriseRealtime');
+            expect(plain.Avatar?.Delivery).toBeUndefined();
+        } finally {
+            log.mockRestore();
+        }
+    });
+
+    it('asks for no avatar when none resolves, and logs why', async () => {
+        class NoFaceService extends TestableService {
+            protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+                return { Reason: 'no-binding' };
+            }
+        }
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+            const service = new NoFaceService();
+            const coAgent = makeCoAgent();
+            const params = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiRealtime');
+            expect(params.Avatar).toBeUndefined();
+            expect(log.mock.calls.map((c) => String(c[0])).some((l) => l.includes('avatar=none(no-binding)'))).toBe(true);
+        } finally {
+            log.mockRestore();
+        }
+    });
+
     it('end-to-end buildSessionParams: ElevenLabs gets only invoke-target-agent while OpenAI gets direct actions', async () => {
         const service = new TestableService();
         service.TargetActions = [mockEmailAction];
@@ -2393,6 +2789,127 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             expect(runSpy).toHaveBeenCalled();
             expect(runSpy.mock.calls[0][0].Params).toEqual([]);
         });
+
+        // A relay's TargetAgentID comes from the session's owner-writable Config. Once the session
+        // has a start-time projection, only the actions in it may run, whatever target the relay names.
+        describe('a session with a start-time projection', () => {
+            const allowAll: RealtimeCoAgentConfig = {
+                realtime: { directActions: { enabled: true, actionNames: ['*'] } }
+            };
+
+            function projectSession(service: TestableService, sessionID: string): void {
+                service.TargetActions = [mockEmailAction];
+                const tools = service.BuildDirectActionTools('target-1', allowAll, 'OpenAIRealtime', sessionID);
+                expect(tools.map(t => t.Name)).toEqual(['SendEmail']);
+            }
+
+            function okResult(): ActionResult {
+                const result = new ActionResult();
+                result.Success = true;
+                result.Message = 'done';
+                return result;
+            }
+
+            it('refuses an action that was not projected for the session, even when the relayed target has it', async () => {
+                const service = new TestableService();
+                projectSession(service, 'sess-projected-1');
+                // The relay names another agent that also has CreateTask, as an edited session Config would.
+                service.TargetActions = [mockEmailAction, mockTaskAction];
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+
+                const call: RealtimeToolCall = { CallID: 'call-projected-1', ToolName: 'CreateTask', Arguments: JSON.stringify({ Title: 'x' }) };
+                const result = await service.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-projected-1', TargetAgentID: 'target-2', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(false);
+                expect(result.Output).toContain('not enabled for direct voice invocation');
+                expect(runSpy).not.toHaveBeenCalled();
+            });
+
+            it('runs no action for a session whose start projected none, even when the target allows it', async () => {
+                const service = new TestableService();
+                service.TargetActions = [mockEmailAction];
+                // The driver takes no dynamic tool set, so the start projects nothing for the session.
+                expect(service.BuildDirectActionTools('target-1', allowAll, 'ElevenLabsRealtime', 'sess-projected-3')).toEqual([]);
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(allowAll) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+
+                const call: RealtimeToolCall = { CallID: 'call-projected-3', ToolName: 'SendEmail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const result = await service.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-projected-3', TargetAgentID: 'target-1', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(false);
+                expect(result.Output).toContain('not enabled for direct voice invocation');
+                expect(runSpy).not.toHaveBeenCalled();
+            });
+
+            it('projects and runs no direct action for a session prepared with ExcludeDirectActions', async () => {
+                const svc = new TestableService();
+                svc.ResolveModelResult = { Model: svc.Model, ModelID: 'm1', VendorID: 'v1', APIName: 'gpt-realtime', DriverClass: 'OpenAIRealtime' };
+                svc.TargetActions = [mockEmailAction];
+                const coAgent = makeCoAgent({ TypeConfiguration: JSON.stringify(allowAll) });
+
+                const prep = await svc.PrepareClientSession(
+                    makePrepInput({ CoAgent: coAgent, AgentSessionID: 'sess-excluded', ExcludeDirectActions: true }),
+                    contextUser,
+                    provider
+                );
+
+                expect(prep.Success).toBe(true);
+                expect((prep.SessionParams?.Tools ?? []).some(t => t.Name === 'SendEmail')).toBe(false);
+                // The target's own metadata allows SendEmail, so only the recorded empty projection refuses it.
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(allowAll) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(svc as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+                const call: RealtimeToolCall = { CallID: 'call-excluded', ToolName: 'SendEmail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const result = await svc.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-excluded', TargetAgentID: 'target-1', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(false);
+                expect(runSpy).not.toHaveBeenCalled();
+            });
+
+            it('lets the target agent\'s own allowlist decide for a session this service never prepared', async () => {
+                // No projection is held after eviction, after a restart, on another server, or for a
+                // session row that was created without a start (for example through the entity API).
+                const service = new TestableService();
+                service.TargetActions = [mockEmailAction, mockTaskAction];
+                const onlyEmail: RealtimeCoAgentConfig = { realtime: { directActions: { enabled: true, actionNames: ['SendEmail'] } } };
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(onlyEmail) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+                const emailCall: RealtimeToolCall = { CallID: 'call-never-1', ToolName: 'SendEmail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const taskCall: RealtimeToolCall = { CallID: 'call-never-2', ToolName: 'CreateTask', Arguments: JSON.stringify({ Title: 'x' }) };
+                const relayInput = (call: RealtimeToolCall): ExecuteRelayedToolInput => ({ AgentSessionID: 'sess-never-prepared', TargetAgentID: 'target-1', Call: call });
+
+                const email = await service.ExposeExecuteNonTargetTool(emailCall, relayInput(emailCall), contextUser);
+                const task = await service.ExposeExecuteNonTargetTool(taskCall, relayInput(taskCall), contextUser);
+
+                expect(email.Success).toBe(true);
+                expect(task.Success).toBe(false);
+                expect(task.Output).toContain('not enabled for direct voice invocation');
+                expect(runSpy).toHaveBeenCalledTimes(1);
+            });
+
+            it('still runs an action that was projected for the session', async () => {
+                const service = new TestableService();
+                projectSession(service, 'sess-projected-2');
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
+
+                const call: RealtimeToolCall = { CallID: 'call-projected-2', ToolName: 'sendemail', Arguments: JSON.stringify({ To: 'a@example.com' }) };
+                const result = await service.ExposeExecuteNonTargetTool(
+                    call, { AgentSessionID: 'sess-projected-2', TargetAgentID: 'target-1', Call: call }, contextUser
+                );
+
+                expect(result.Success).toBe(true);
+                expect(runSpy).toHaveBeenCalledTimes(1);
+                expect(runSpy.mock.calls[0][0].Action.Name).toBe('SendEmail');
+            });
+        });
     });
 
     describe('parseActionParams', () => {
@@ -2713,5 +3230,271 @@ describe('RealtimeClientSessionService — session-scoped tool caches are bounde
         expect(service.ExposeSessionWireActionMaps().Get('session-0')).toBeUndefined();
         // A recently-projected session should still be present.
         expect(service.ExposeSessionWireActionMaps().Get(`session-${maxSize + 4}`)).toBeDefined();
+    });
+});
+
+describe('RealtimeClientSessionService.PrepareClientSession: the avatar status for the call', () => {
+    /** A model that renders avatars and grants every one it is asked for. */
+    class AvatarModel extends MockRealtimeModel {
+        public override SupportsAvatarOutput(model: string): boolean {
+            return model === 'mock-realtime';
+        }
+        public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+            const minted = await super.CreateClientSession(params);
+            return params.Avatar ? { ...minted, AvatarStatus: { Requested: true, Granted: true } } : minted;
+        }
+    }
+
+    /** A service whose avatar resolution the test sets, counting how often it runs. */
+    class StatusService extends TestableService {
+        public Resolution: RealtimeAvatarResolution = {};
+        public Resolutions = 0;
+        protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+            this.Resolutions++;
+            return this.Resolution;
+        }
+        public UseModel(model: MockRealtimeModel): void {
+            this.Model = model;
+            this.ResolveModelResult = { Model: model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime' };
+        }
+    }
+
+    const BEN = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' as const };
+    let log: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { log = vi.spyOn(console, 'log').mockImplementation(() => undefined); });
+    afterEach(() => log.mockRestore());
+    const avatarLines = (): string[] => log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('mint avatar '));
+
+    it('returns no status, and logs none, when the agent asked for no avatar', async () => {
+        const svc = new StatusService();
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.Success).toBe(true);
+        expect('AvatarStatus' in result).toBe(false);
+        expect(avatarLines()).toEqual([]);
+    });
+
+    it('says the voice model shows none when the model renders no avatar, though a face resolved', async () => {
+        const svc = new StatusService();
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+        expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=false reason=endpoint']);
+    });
+
+    it("passes the driver's grant through on a model that renders avatars", async () => {
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: true });
+        expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=true reason=none']);
+    });
+
+    it("gives the persona reason when no face resolved on a model that renders avatars", async () => {
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Reason: 'no-binding' };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'no-binding' });
+    });
+
+    it('resolves the avatar once per prepare, and the session params ask for the face it found', async () => {
+        const svc = new StatusService();
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(svc.Resolutions).toBe(1);
+        expect(result.SessionParams?.Avatar).toEqual(BEN);
+        expect(svc.Model.LastParams?.Avatar).toEqual(BEN);
+    });
+
+    it("says the voice model shows none when its Video/Output row turns video off, though its driver renders avatars", async () => {
+        cacheVideoOutputRow('m1', false);
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+        expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=false reason=endpoint']);
+    });
+
+    it("passes the driver's grant through when the model's Video/Output row allows video", async () => {
+        cacheVideoOutputRow('m1', true);
+        const svc = new StatusService();
+        svc.UseModel(new AvatarModel());
+        svc.Resolution = { Avatar: BEN };
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.AvatarStatus).toEqual({ Requested: true, Granted: true });
+    });
+
+    describe('a phone call (PhoneCall)', () => {
+        const phoneInput = (overrides: Partial<PrepareClientSessionInput> = {}): PrepareClientSessionInput =>
+            makePrepInput({ ServerSide: true, PhoneCall: true, ...overrides });
+
+        it("sends the driver no avatar request, keeps the persona's voice, and says why", async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const prep = await svc.PrepareRealtimeSessionParams(phoneInput(), contextUser, provider);
+            expect(prep.Success).toBe(true);
+            expect(prep.SessionParams?.Avatar).toBeUndefined();
+            expect(prep.SessionParams?.Config?.['voice']).toBe('Puck');
+            expect(prep.AvatarResolution).toEqual({ Voice: 'Puck', Reason: 'phone' });
+            await prep.Resolution!.Model.StartSession(prep.SessionParams!);
+            expect(svc.Model.LastParams?.Avatar).toBeUndefined();
+            expect(log.mock.calls.map((c) => String(c[0])).some((l) => l.includes('voice=Puck avatar=none(phone) '))).toBe(true);
+        });
+
+        it("asks for no avatar in a room that could show one: a SIP call's room delivery is ignored", async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const prep = await svc.PrepareRealtimeSessionParams(phoneInput({ AvatarDelivery: 'room' }), contextUser, provider);
+            expect(prep.SessionParams?.Avatar).toBeUndefined();
+            expect(prep.AvatarResolution?.Reason).toBe('phone');
+        });
+
+        it('asks for nothing, with no reason, when the agent asked for no avatar', async () => {
+            const svc = new StatusService();
+            const prep = await svc.PrepareRealtimeSessionParams(phoneInput(), contextUser, provider);
+            expect(prep.SessionParams?.Avatar).toBeUndefined();
+            expect(prep.AvatarResolution).toEqual({});
+        });
+
+        it('still asks for the avatar in a meeting room that publishes it (not a phone call)', async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const prep = await svc.PrepareRealtimeSessionParams(makePrepInput({ ServerSide: true, AvatarDelivery: 'room' }), contextUser, provider);
+            expect(prep.SessionParams?.Avatar).toEqual({ ...BEN, Delivery: 'room' });
+        });
+    });
+
+    describe('an app that shows no agent video (ShowsAgentVideo false: the widget, the mobile app)', () => {
+        it("mints no avatar request, keeps the persona's voice, and returns host as the status", async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: false }), contextUser, provider);
+            expect(result.Success).toBe(true);
+            expect(result.SessionParams?.Avatar).toBeUndefined();
+            expect(svc.Model.LastParams?.Avatar).toBeUndefined();
+            expect(result.SessionParams?.Config?.['voice']).toBe('Puck');
+            expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'host' });
+            expect(avatarLines()).toEqual(['[RealtimeCoAgent] mint avatar model=mock-realtime shown=false reason=host']);
+        });
+
+        it('says host on a model that renders no avatar too: the app is the reason first', async () => {
+            const svc = new StatusService();
+            svc.Resolution = { Avatar: BEN };
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: false }), contextUser, provider);
+            expect(result.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'host' });
+        });
+
+        it('mints the avatar as before for an app that may show it', async () => {
+            const svc = new StatusService();
+            svc.UseModel(new AvatarModel());
+            svc.Resolution = { Avatar: BEN, Voice: 'Puck' };
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: true }), contextUser, provider);
+            expect(svc.Model.LastParams?.Avatar).toEqual(BEN);
+            expect(result.AvatarStatus).toEqual({ Requested: true, Granted: true });
+        });
+
+        it('returns no status when the agent asked for no avatar', async () => {
+            const svc = new StatusService();
+            const result = await svc.PrepareClientSession(makePrepInput({ ShowsAgentVideo: false }), contextUser, provider);
+            expect('AvatarStatus' in result).toBe(false);
+        });
+    });
+});
+
+/** Makes the AI engine's cache hold one Video/Output row for a model (restored by `vi.restoreAllMocks`). */
+function cacheVideoOutputRow(modelID: string, isSupported: boolean): void {
+    vi.spyOn(AIEngine.Instance, 'GetModalityByName').mockImplementation((name: string) =>
+        name.toLowerCase() === 'video' ? ({ ID: 'modality-video', Name: 'Video' } as unknown as MJAIModalityEntity) : undefined);
+    vi.spyOn(AIEngine.Instance, 'ModelModalities', 'get').mockReturnValue([
+        { ModelID: modelID, ModalityID: 'modality-video', Direction: 'Output', IsSupported: isSupported } as unknown as MJAIModelModalityEntity,
+    ]);
+}
+
+describe("RealtimeClientSessionService.ResolveSessionAvatar: the model's Video/Output row", () => {
+    /** Exposes the real avatar resolution (the engine's persona metadata is empty here). */
+    class GateService extends TestableService {
+        public CallResolveSessionAvatar(config: RealtimeCoAgentConfig | undefined, configOverridesJson?: string): RealtimeAvatarResolution {
+            return this.ResolveSessionAvatar(makePrepInput({ ConfigOverridesJson: configOverridesJson }), makeCoAgent(), config, 'm1', undefined);
+        }
+    }
+    const VIDEO_ON: RealtimeCoAgentConfig = { realtime: { video: { enabled: true } } };
+    let log: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { log = vi.spyOn(console, 'log').mockImplementation(() => undefined); });
+    afterEach(() => vi.restoreAllMocks());
+    const vetoLines = (): string[] => log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('No avatar asked for'));
+
+    it('asks for no avatar when the row turns video off, with reason endpoint and one log line naming the model', () => {
+        cacheVideoOutputRow('m1', false);
+        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([{ ID: 'm1', Name: 'Gemini 3.8 Live' } as unknown as MJAIModelEntityExtended]);
+        expect(new GateService().CallResolveSessionAvatar(VIDEO_ON)).toEqual({ Reason: 'endpoint' });
+        expect(vetoLines()).toEqual([
+            "[RealtimeCoAgent] No avatar asked for: the Video/Output modality row of 'Gemini 3.8 Live' turns video off (IsSupported false). The call is audio only. Reason: endpoint.",
+        ]);
+    });
+
+    it('resolves the personas as before when the row allows video or the model has none', () => {
+        cacheVideoOutputRow('m1', true);
+        expect(new GateService().CallResolveSessionAvatar(VIDEO_ON)).toEqual({ Reason: 'no-binding' });
+        vi.restoreAllMocks();
+        log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        cacheVideoOutputRow('another-model', false);
+        expect(new GateService().CallResolveSessionAvatar(VIDEO_ON)).toEqual({ Reason: 'no-binding' });
+        expect(vetoLines()).toEqual([]);
+    });
+
+    it('reads nothing and logs nothing while the video setting is off', () => {
+        cacheVideoOutputRow('m1', false);
+        expect(new GateService().CallResolveSessionAvatar({})).toEqual({});
+        expect(vetoLines()).toEqual([]);
+    });
+
+    it("drops a call's avatar pick while the agent's video setting is off, saying why (video-off), and logs no veto", () => {
+        cacheVideoOutputRow('m1', false);
+        const pick = '{"realtime":{"video":{"avatarId":"Ben"}}}';
+        expect(new GateService().CallResolveSessionAvatar({ realtime: { video: { avatarId: 'Ben' } } }, pick)).toEqual({ Reason: 'video-off' });
+        expect(vetoLines()).toEqual([]);
+    });
+});
+
+describe('RealtimeClientSessionService: the deprecated realtime.video provider keys', () => {
+    let log: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { log = vi.spyOn(console, 'log').mockImplementation(() => undefined); });
+    afterEach(() => vi.restoreAllMocks());
+    const deprecationLines = (): string[] =>
+        log.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[RealtimeCoAgent] The realtime configuration for'));
+    /** A co-agent whose own configuration sets the given video block. Each test uses its own id: the line is once per process. */
+    const coAgentWithVideo = (id: string, video: JSONObject): MJAIAgentEntityExtended =>
+        makeCoAgent({ ID: id, TypeConfiguration: JSON.stringify({ realtime: { video } }) });
+
+    it('logs one line per agent naming the keys, the agent and what replaces them, however many sessions start', async () => {
+        const svc = new TestableService();
+        const coAgent = coAgentWithVideo('co-video-keys-1', { provider: 'Runway Avatar', providers: { runway: { quality: 'high' } } });
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgent }), contextUser, provider);
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgent }), contextUser, provider);
+        await new TestableService().PrepareClientSession(makePrepInput({ CoAgent: coAgent }), contextUser, provider);
+        expect(deprecationLines()).toEqual([
+            "[RealtimeCoAgent] The realtime configuration for 'Sales Agent' (co-agent 'Realtime Co-Agent') sets realtime.video.provider " +
+                "and realtime.video.providers, which are deprecated and do nothing. Choose the model with realtime.modelPreference, and " +
+                "set an avatar's settings on its persona's Video binding (VendorSettings.Avatar).",
+        ]);
+    });
+
+    it('names the voiced agent and the one key its configuration sets, and says nothing when it sets neither', async () => {
+        const svc = new TestableService();
+        svc.TargetAgentNames = { 'target-2': 'Support Agent' };
+        const coAgent = coAgentWithVideo('co-video-keys-2', { provider: 'Runway Avatar' });
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-2' }), contextUser, provider);
+        await svc.PrepareClientSession(makePrepInput({ CoAgent: coAgentWithVideo('co-video-keys-3', { avatarId: 'Ben' }) }), contextUser, provider);
+        expect(deprecationLines()).toEqual([
+            "[RealtimeCoAgent] The realtime configuration for 'Support Agent' (co-agent 'Realtime Co-Agent') sets realtime.video.provider, " +
+                "which is deprecated and does nothing. Choose the model with realtime.modelPreference, and set an avatar's settings on its " +
+                "persona's Video binding (VendorSettings.Avatar).",
+        ]);
     });
 });

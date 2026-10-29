@@ -1,5 +1,117 @@
 # @memberjunction/ng-whiteboard
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- dae1d31: Omnibus Core, AI/MCP/Agent & Angular Performance & Resource Optimization (Waves 1–3):
+  - **Wave 1 (Core Data Access, Server Resolvers & Caching)**:
+    - `MJ-CORE-6`: Collapse multi-query `RunView` execution (`viewSQL`, `countSQL`, `aggregateSQL`) into a single `ExecuteSQLBatch` call in `GenericDatabaseProvider`.
+    - `MJ-CORE-9`: Resolve `UserView` metadata through `UserViewEngine.Instance` in `ResolverBase` / `RunViewResolver`, pass pre-resolved `ViewEntity` into `RunViewParams`, and reuse a single `Metadata` instance across `ArrayFilterEncryptedFieldsForAPI`.
+    - `MJ-CORE-5`: Parallelize `BaseEngine` dataset item entity hydration (`Promise.all`), maintain `_datasetItemMappings` for in-place `AutoRefresh` on dataset-loaded configs, enable `AutoRefresh: true` on `TemplateEngineBase`, and validate Nunjucks compiled template cache against `sourceText`.
+  - **Wave 2 (AI, Agents, Prompts, Vectors, MCP & A2A)**:
+    - `MJ-AI-5` / `MJ-AI-6`: Replace dynamic `await import('stream')` with static `Readable` import in `MCPServer`, cache compiled `ToolConfig` entries and Zod schemas across sessions (`GetOrBuildCompiledToolConfigs` / `ClearCompiledToolCache`), and route tool handlers through the active request's `SessionContext`.
+    - `MJ-AI-7`: Default `EntityVectorSyncer` `delayTimeMS` to `0`, parallelize `saveEntityRecordDocument` with bounded concurrency (`10`), and use `SaveReturnMode: 'datestamps_only'`.
+    - `MJ-AI-8`: Thread `provider?: IMetadataProvider` through `RerankObservabilityOptions` and save observability PromptRuns with `SaveReturnMode: 'datestamps_only'`.
+    - `MJ-AI-9`: Support single-INSERT pre-completed `AIPromptRun` steps (`completed` option on `createStepEntity`) and coalesce streaming progress chunks at 35ms intervals.
+    - `MJ-AI-10` / `MJ-AI-11`: Parallelize `AgentPreExecutionRAG` scope searches (`Promise.all`), isolate `AgentRunWatchdog` sweeps per run (`{ provider, contextUser }`), and pause the watchdog interval when zero runs are active.
+    - `MJ-AI-12` / `MJ-AI-13`: Replace 500ms SSE polling in `A2AServer` with event-driven `TaskStore.Subscribe` / `Notify`, cache the discovery `AgentCard`, and wire `TaskStore.CancelTask` (`AbortController`) to `AgentOperations.executeAgent()`.
+    - `MJ-AI-14`: Short-circuit `ActionEngineServer.SnapshotInputParams` in $O(1)$ when execution logging is disabled and reuse a single `ClassFactory` action instance per `RunAction` lifecycle.
+  - **Wave 3 (Angular Change Detection, Leaks & Algorithmic Hotspots)**:
+    - `MJ-NG-4`: Add `ChangeDetectionStrategy.OnPush` and explicit `ChangeDetectorRef.markForCheck()` across `JoinGridComponent`, `SearchSuggestComponent`, `ArtifactTypePluginViewerComponent`, `ActionFormComponent`, `AIPromptFormComponent`, and Explorer AI/Communication dashboards (`AutotaggingPipelineResourceComponent`, `ExecutionMonitoringComponent`, `ModelPromptPriorityMatrixComponent`, `TagsResourceComponent`, `CommunicationMonitorResourceComponent`, `CommunicationLogsResourceComponent`, `CommunicationRunsResourceComponent`).
+    - `MJ-NG-5`: Fix timer/listener/subject leaks across `MJNotificationsService`, `MessageListComponent`, `UserNotificationsComponent`, `ActionFormComponent`, `AIPromptFormComponent`, `AutotaggingPipelineResourceComponent`, and `ExecutionMonitoringComponent`.
+    - `MJ-NG-6`: Pre-index and memoize hot template/filter/render paths in `ConversationChatAreaComponent`, `WhiteboardBoardComponent`, `EntityDataGridComponent`, `DataExplorerDashboardComponent`, and `MCPDashboardComponent`.
+
+- f125bb4: Whiteboard items gain an optional `Tag` (LXP P14.1). A host restyling the board from outside could only distinguish what the DOM distinguishes, and item KINDS were the only discriminator: one kind with two ROLES (a shape as a section head vs an empty "fill this in" slot, a sequence step done vs not yet reached) had no hook, so hosts resorted to content conventions like "a markdown item whose only child is a blockquote".
+  - `Tag?: string` on `WhiteboardItemBase`, persisted with the item and settable through an `UpdateItem` patch. No behavior attached.
+  - The board appends `wb-tag-<slug>` to every item wrapper (box kinds, ink paths, connector groups): lower-cased, runs of non-alphanumerics become one dash, capped at 32 characters, blank tags yield no class. The static-class wrappers became `[class]` bindings for it.
+  - Every `Whiteboard_Add*` tool takes an optional `tag`, a new `Whiteboard_SetTag` tool re-tags or clears an existing item of any kind (so the agent can mark a step done later), and the compact scene view carries `tag` so the agent can tell a slot from a heading without re-reading content. A blank tag is stored as no tag.
+
+- 4c34ab8: `PenPalette` / `PenColors` entries must now be hex colors (`#rgb` or `#rrggbb`); anything else is dropped like a blank entry. The guard is `IsWhiteboardHexColor`, exported from `whiteboard-state` and shared with the agent tools' text-color check. Closes the path where a non-hex entry such as `url(...)` reached the swatch `style.background`, which Angular does not sanitize. README documents the `PenPalette` input.
+- e600813: The whiteboard host gains a `PenPalette` input (LXP P14.3). The pen palette was a closed constant led by pale slate, tuned for MJ's dark canvas and near-invisible on a light host theme, and it was also the default pen; a host could remap the stroke with a CSS attribute selector on the hex, but the toolbar swatch still showed slate.
+  - `[PenPalette]` on `<mj-realtime-whiteboard-host>` (array of hexes; `null` keeps the five MJ colors) is threaded to the toolbar, whose `PenColors` is now an input. When a palette arrives that excludes the current pen color, the pen moves to the palette's first entry. A non-array reads as no palette, the same defensive rule as `ToolRoster`; blank and non-string entries are dropped and a palette with nothing usable reads as none. Membership is compared case-insensitively, so a host's `#1D4ED8` keeps a pen holding `#1d4ed8`.
+  - An input rather than CSS custom properties on purpose: ink items persist the chosen hex, so a `var()` palette would make saved boards theme-dependent. MJ's default palette is unchanged.
+
+- Updated dependencies [709de1a]
+- Updated dependencies [0581392]
+- Updated dependencies [914e6ff]
+- Updated dependencies [09c7d57]
+- Updated dependencies [db4e210]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [5b41d48]
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ng-markdown@6.2.0-edge.6
+  - @memberjunction/ng-code-editor@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 1aefcb4: `<mj-realtime-whiteboard-host>` gains a `ShowFocusToggle` input (default `true`). The header's Focus toggle ("Move to stage" / "Back to tab") only emits `FocusModeChange`; a host that composes the board into its own chrome has nothing to collapse, so the button was visible and did nothing, and could only be removed by `!important` CSS against an internal class name. Hosts without a stage now pass `[ShowFocusToggle]="false"`. `SetOnStage` and `FocusMode` keep working with the toggle hidden; the rest of the header is unchanged.
+
+  `<mj-livekit-whiteboard-surface>` passes it: the LiveKit room has no stage and never serviced `FocusModeChange`, so its board header no longer carries the inert button.
+
+- 2f9e209: Whiteboard: a resize gesture that doesn't move a markdown panel's top or bottom edge no longer changes its max-height cap. A click on a handle (including the pixel of travel a real mouse or trackpad adds, under the same 3px threshold as a move) commits nothing, and a corner dragged only sideways changes the width but keeps the cap. Before, both lowered the cap to the text's current height, so the agent's next, longer answer clipped there.
+- 382de4d: Trackpad zoom on the whiteboard now tracks the gesture. `OnWheel` read only the sign of `deltaY` and applied a fixed 10% step per event, so a macOS pinch (ctrl+wheel with small fractional deltas at the trackpad's sample rate) zoomed by event COUNT, not finger distance: about nine samples saturated the 25%–200% range, which is the "way too fast and abrupt, hard to fine-tune" report.
+  - **Magnitude-scaled factor.** The zoom factor is `exp(-delta * k)` with the delta capped at 50px per event and `k` tuned so one mouse notch is still exactly the familiar 10% step. A 5px trackpad sample moves ~1%, and ten small samples land where one sample of their sum lands.
+  - **`deltaMode` normalized.** Line and page deltas (Firefox mouse wheels) convert to pixels first instead of reading as a few pixels.
+  - **Only `ctrlKey` zooms.** `metaKey` used to zoom too, so Cmd+two-finger scroll zoomed and macOS momentum kept it zooming after the fingers lifted. Cmd-scroll now pans like a plain scroll.
+  - **Stepped zoom eases.** The zoom cluster's +/− buttons jump between presets (11%, then 25%, then 33%); the viewport now carries a 180ms transform transition for that button path only, honoring `prefers-reduced-motion`. The wheel and the hold-to-zoom tick path stay un-transitioned, since a transition on a continuous gesture lags it. New public `ViewportStepping` flag and `ZOOM_STEP_TRANSITION_MS` export on the board component.
+  - **Board CSS is token-clean.** The six hardcoded colors the hex gate flagged on first touch (sticky paper gradients, sticky ink, the Sage cursor ink, the text-label shadow, the widget frame's fixed white) now derive from the `--mj-color-warning-*` ramp, the neutral ramp, and the board's `--sage` accent, so re-tinting the agent accent re-tints its notes. No visual change intended.
+
+- 8576224: Three fixes in the HTML-widget input bridge's auto-submit fallback (the helper script every widget `srcdoc` carries).
+  - **A typeless `<button>` no longer auto-submits.** The submit-ish click test read the button's `type` PROPERTY, and a `<button>` with no type attribute reports `type === 'submit'`, so clicking "Show hint" or "Play" forwarded the form 150 ms later and told the agent the user had submitted. The test now reads the `type` attribute; a button is submit-ish by its label, or by an explicit `type="submit"`.
+  - **Checkbox groups keep every ticked value.** `collectFields` wrote `out[name] = 'checked'`, so two ticked boxes in a group collapsed to one `"checked"` with no record of which. Every ticked checkbox now lands in an array of its values under the group's label (`{ toppings: ["olives", "chili"] }`). A single ticked checkbox is a one-element array too, so the shape is stable whatever the count. Text, select and textarea values are unchanged.
+  - **A valueless box reports its label.** A ticked checkbox or radio with no `value` attribute used to serialize as the native `"on"`, so a group of valueless boxes still lost which ones were ticked. It now reports the box's own label text (`<label>` wrapper or `for=`), so `{ toppings: ["Olives", "Chili"] }` comes through from agent HTML that never set values. A non-blank `value` always wins (an empty or whitespace-only attribute counts as absent), and a box with neither keeps `"on"`.
+  - A new DOM spec executes the helper against a real document with `parent.postMessage` captured, so all three behaviours are pinned rather than the helper's source text.
+
+- Updated dependencies [81aea34]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [2274f42]
+- Updated dependencies [c271ddf]
+- Updated dependencies [17a4137]
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+  - @memberjunction/ng-code-editor@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 84fc9d4: The realtime overlay's channel surfaces can be moved. "Move to…", beside the active channel tab (and in the call pill while a surface is on the stage), puts a surface on the stage, back on its tab, or out of sight, and "Reset layout" puts every surface back. A surface on the stage is the focus layout: the call column folds away and the pill appears. A channel whose surface is elsewhere says where in its tab, with "Bring it here". Moves are saved per user (`mj.realtime.placement.v1`, through `UserInfoEngine`) and carry over to later sessions.
+
+  `BaseRealtimeChannelClient` gains an optional `OnSurfacePlacementChange(placement)` hook, called right after `BindSurface` with the surface's placement and then on every move. `mj-media-stage` gives each surface's template its `Placement`, and `mj-realtime-channel-pane` passes it on. The whiteboard's header button becomes "Move to stage", or "Back to tab" while the board is on the stage, kept true by the new hook.
+
+- 7d4906b: Whiteboard: markdown panels can be resized taller or shorter by dragging. Agents add panels with a max-height cap and the text beyond it was clipped with no way to reveal it, because the resize gesture never wrote the height. The drag now moves the cap (with a live preview) and is undoable like any resize.
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [490cd8d]
+- Updated dependencies [ae0a662]
+- Updated dependencies [5e1e343]
+- Updated dependencies [25f7b82]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-markdown@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-code-editor@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [60bd774]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-markdown@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

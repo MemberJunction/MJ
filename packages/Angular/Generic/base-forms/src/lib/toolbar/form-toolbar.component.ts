@@ -41,7 +41,9 @@ const STANDARD_MENU_LABELS: Record<string, string> = {
   history: 'History',
   list: 'Add to list',
   tags: 'Tags',
+  links: 'Links',
   attachments: 'Attachments',
+  'ask-ai': 'Ask AI',
 };
 
 /**
@@ -130,6 +132,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Whether the tags panel is currently open */
   @Input() IsTagsPanelOpen = false;
+
+  /** Whether the links drawer is currently open */
+  @Input() LinksOpen = false;
+
+  /** Number of linked records for this record */
+  @Input() LinkCount = 0;
+
+  /** Number of active field conflicts requiring review in edit mode */
+  @Input() ConflictCount = 0;
 
   /** Number of attachments linked to this record */
   @Input() AttachmentCount = 0;
@@ -255,6 +266,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Emitted when the Tags button is clicked */
   @Output() TagsPanelToggled = new EventEmitter<void>();
 
+  /** Emitted when the Links button is clicked */
+  @Output() LinksRequest = new EventEmitter<void>();
+
+  /** Emitted when the Ask AI button is clicked */
+  @Output() AskAIRequested = new EventEmitter<void>();
+
+  /** Emitted when the user pins or unpins a toolbar action in the More menu */
+  @Output() ActionPinChanged = new EventEmitter<{ Key: string; Pinned: boolean }>();
+
   /** Emitted when the Attachments button is clicked */
   @Output() AttachmentsPanelToggled = new EventEmitter<void>();
 
@@ -289,6 +309,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Internal state ----
   ShowDeleteDialog = false;
   ShowDiscardDialog = false;
+  private coordinatorConflictCount = 0;
+
+  /** Effective number of unresolved field conflicts (from explicit input or FormRecordRefreshCoordinator) */
+  get EffectiveConflictCount(): number {
+    return this.ConflictCount > 0 ? this.ConflictCount : this.coordinatorConflictCount;
+  }
 
   /** Computed descendant tree for breadcrumb display */
   DescendantTree: IsaRelatedItem[] = [];
@@ -301,6 +327,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.InvalidateHierarchy();
     });
+    if (this.recordRefresh) {
+      this.coordinatorConflictCount = this.recordRefresh.ActiveConflicts.size;
+      this.recordRefresh.ConflictsChanged$.pipe(takeUntil(this.destroy$)).subscribe(conflicts => {
+        this.coordinatorConflictCount = conflicts.size;
+        this.cdr.markForCheck();
+      });
+    }
   }
 
   ngOnDestroy(): void {
@@ -671,6 +704,16 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.TagsPanelToggled.emit();
   }
 
+  OnLinks(): void {
+    if (this.dispatchToFormRef('HandleLinksPanel')) return;
+    this.LinksRequest.emit();
+  }
+
+  OnAskAI(): void {
+    if (this.dispatchToFormRef('OnAskAIRequested')) return;
+    this.AskAIRequested.emit();
+  }
+
   OnAttachmentsPanel(): void {
     if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
@@ -804,6 +847,20 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Disabled: false,
       },
       {
+        Key: 'links',
+        Text: '',
+        Description: this.LinkCount > 0 ? `${this.LinkCount} linked record${this.LinkCount === 1 ? '' : 's'}` : 'Links',
+        Icon: 'fa-solid fa-link',
+        Badge: this.LinkCount > 0 ? this.LinkCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 65,
+        Visible: this.Config.ShowLinksButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
+        CssClass: this.LinksOpen ? 'mj-forms-toolbar__btn--active active' : '',
+      },
+      {
         Key: 'attachments',
         Text: '',
         Description: this.AttachmentCount > 0 ? `${this.AttachmentCount} attachment${this.AttachmentCount === 1 ? '' : 's'}` : 'Attachments',
@@ -816,6 +873,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Visible: this.Config.ShowAttachmentsButton && this.AttachmentsAvailable,
         Disabled: false,
         CssClass: this.IsAttachmentsPanelOpen ? 'active' : '',
+      },
+      {
+        Key: 'ask-ai',
+        Text: '',
+        Description: 'Ask AI about this record',
+        Icon: 'fa-solid fa-wand-magic-sparkles',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 75,
+        Visible: this.Config.ShowAskAIButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
       }
     );
 
@@ -854,7 +923,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments', 'ask-ai']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -965,8 +1034,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.ResolvedActionItems.filter(item => (item.Order ?? 100) >= 50);
   }
 
+  /**
+   * Items drawn on the right, beside the View menu.
+   *
+   * `overflow` is folded in: the placement is part of the public type but the More menu
+   * lists only `actions` items, so without this an item registered for `overflow` would
+   * render nowhere and the caller would have no way to tell.
+   */
   public get ResolvedRightItems(): ResolvedToolbarItem[] {
-    return this.ResolvedToolbarItems.filter(item => item.Placement === 'right');
+    return this.ResolvedToolbarItems.filter(
+      item => item.Placement === 'right' || item.Placement === 'overflow',
+    );
   }
 
   // ── Pinned actions and the More menu ────────────────────────────
@@ -1061,15 +1139,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public TogglePin(key: string): void {
     const pins = [...this.PinnedKeys];
+    let nowPinned = false;
     if (pins.includes(key)) {
       pins.splice(pins.indexOf(key), 1);
+      nowPinned = false;
     } else if (this.CanPinMore) {
       pins.push(key);
+      nowPinned = true;
     } else {
       return; // at the cap: the button stays focusable (aria-disabled) so its hint can be read
     }
     this.writePins(pins);
     this._pinnedItems = null;
+    this.ActionPinChanged.emit({ Key: key, Pinned: nowPinned });
     this.cdr.markForCheck();
   }
 
@@ -1273,8 +1355,16 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         case 'tags':
           this.OnTagsPanel();
           break;
+        case 'links':
+          if (!item.Config.OnClick) {
+            this.OnLinks();
+          }
+          break;
         case 'attachments':
           this.OnAttachmentsPanel();
+          break;
+        case 'ask-ai':
+          this.OnAskAI();
           break;
         case 'clone':
           this.OnClone();

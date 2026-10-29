@@ -1,5 +1,5 @@
 import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState } from './baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -53,6 +53,7 @@ export interface OAIProtocolFunctionCallArgumentsDone {
 /** The provider detected the user starting to speak (barge-in). */
 export interface OAIProtocolSpeechStarted {
     type: 'input_audio_buffer.speech_started';
+    item_id?: string;
 }
 
 /** A new response (turn) started — tracked so we never start a second overlapping response. */
@@ -296,8 +297,14 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * (Grok re-sends the full growing text each time) override to collapse the stream into a
      * single in-place-updating bubble.
      */
-    protected onUserTranscriptFrame(transcript: string): void {
-        this.emitTranscript({ Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal' });
+    protected onUserTranscriptFrame(transcript: string, itemId?: string): void {
+        this.emitTranscript({
+            Role: 'User',
+            Text: transcript,
+            IsFinal: true,
+            Kind: 'normal',
+            ...(itemId !== undefined ? { ItemId: itemId } : {}),
+        });
     }
 
     /**
@@ -435,15 +442,30 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * rule lives — see that method for why the caller's direction is never sent on its own.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same response.create as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: same skip rule, same
+     * frame. `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (!this.canSendEvents()) {
             return;
         }
         if (this.responseActive) {
-            console.debug(`[${this.providerDebugLabel}] RequestSpokenUpdate skipped — a response is already in flight (narration is disposable).`);
+            const method = kind === 'narration' ? 'RequestSpokenUpdate' : 'RequestSpokenTurn';
+            const why = kind === 'narration' ? ' (narration is disposable)' : '';
+            console.debug(`[${this.providerDebugLabel}] ${method} skipped — a response is already in flight${why}.`);
             return;
         }
         this.responseActive = true;
-        this.pendingNarrationKind = true;
+        this.pendingNarrationKind = kind === 'narration';
         this.pendingLocalResponseCreates++;
         this.sendEvent(this.buildSpokenUpdateEvent(instructions));
     }
@@ -585,13 +607,18 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'response.output_audio.delta':
                 this.onAudioDelta((event as OAIProtocolAudioDelta).delta);
                 break;
-            case 'conversation.item.input_audio_transcription.completed':
-                this.onUserTranscriptFrame((event as OAIProtocolInputTranscriptionCompleted).transcript);
+            case 'conversation.item.input_audio_transcription.completed': {
+                const completed = event as OAIProtocolInputTranscriptionCompleted;
+                this.onUserTranscriptFrame(completed.transcript, completed.item_id);
                 break;
+            }
             case 'response.function_call_arguments.done':
                 this.onToolCallFrame(event as OAIProtocolFunctionCallArgumentsDone);
                 break;
             case 'input_audio_buffer.speech_started':
+                // Raised here, not in onSpeechStartedFrame: the websocket base (HuggingFace, xAI)
+                // overrides that hook without super, and xAI overrides it again, so an override can't drop it.
+                this.emitUserSpeechStart((event as OAIProtocolSpeechStarted).item_id);
                 this.onSpeechStartedFrame();
                 break;
             case 'response.created': {
@@ -916,9 +943,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
     protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
-    /** Extracts the wire-shaped `session` object from the server pact. Default: the pact itself. */
+    /**
+     * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
+     * client-only hints ({@link ToProviderSessionConfig}).
+     */
     protected resolveSessionObject(config: ClientRealtimeSessionConfig): JSONObject {
-        return config.SessionConfig ?? {};
+        return ToProviderSessionConfig(config.SessionConfig ?? {});
     }
     /** Resolves the PCM sample rate for the audio plane (both directions). */
     protected abstract resolveSampleRate(config: ClientRealtimeSessionConfig): number;
@@ -949,6 +979,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionObject = this.resolveSessionObject(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
@@ -1035,6 +1066,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
         const sampleRate = this.resolveSampleRate(config);
         this.playback = this.createPlayback(sampleRate);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, sampleRate, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
         // Audio-activity capability (base obligation #9): agent side taps the playout engine's
         // master gain; user side meters the mic stream. Null-safe — test fakes / no-WebAudio
@@ -1042,6 +1076,16 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
         this.setState('listening');
+    }
+
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     /**
@@ -1064,6 +1108,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.close();

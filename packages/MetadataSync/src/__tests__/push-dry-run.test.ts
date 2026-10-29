@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { FlattenedRecord, RecordData, BatchContext } from '../lib/sync-engine';
+import type { RecordData, BatchContext } from '../lib/sync-engine';
+import type { FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { PushOptions } from '../services/PushService';
 import type { BaseEntity, UserInfo, EntityInfo } from '@memberjunction/core';
 
@@ -40,8 +41,9 @@ class MockBaseEntity {
     return changes;
   }
 
+  /** Like BaseEntity, assigns a fresh UUID to a single uniqueidentifier key. */
   NewRecord(): void {
-    this.data = {};
+    this.data = { ID: crypto.randomUUID() };
     this.original = {};
   }
 
@@ -94,12 +96,11 @@ function flatten(record: RecordData): FlattenedRecord {
     id: 'rec-1',
     record,
     entityName: 'TestEntity',
-    parentContext: null,
-    dependencies: new Set(),
-    isCircular: false,
-    dependencyLevel: 0,
+    depth: 0,
     path: 'test/path.json',
-    subDirectory: '',
+    dependencies: new Set(),
+    originalIndex: 0,
+    graphId: 'rec-1',
   };
 }
 
@@ -192,6 +193,22 @@ describe('push --dry-run reports what a real push would do (#4529)', () => {
 
     expect(dry.status).toBe('created');
     expect(logs).toContain('[DRY RUN] Would create TestEntity record');
+    expect(service.Changes).toEqual([
+      { entityName: 'TestEntity', primaryKey: 'new', Operation: 'created', fields: [] },
+    ]);
     expect(mockEntityInstance.saveCalls).toBe(0);
+  });
+
+  it('shows a create key the record declares', async () => {
+    mockEntityInstance = new MockBaseEntity({});
+    vi.mocked(syncEngine.loadEntity).mockResolvedValue(null);
+    (service as unknown as { syncConfig: unknown }).syncConfig = { push: { autoCreateMissingRecords: true } };
+    const record: RecordData = { primaryKey: { ID: 'declared-id' }, fields: { Name: 'Brand New' } };
+
+    await service.process(flatten(record), { dryRun: true }, []);
+
+    expect(service.Changes).toEqual([
+      { entityName: 'TestEntity', primaryKey: 'ID: declared-id', Operation: 'created', fields: [] },
+    ]);
   });
 });

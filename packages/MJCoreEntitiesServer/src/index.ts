@@ -10,9 +10,12 @@ export * from './custom/MJTemplateContentEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJListEntityServer.server';
 export * from './custom/MJListDetailEntityServer.server';
+export * from './custom/MJDataContextItemEntityServer.server';
 export * from './custom/MJActionEntityServer.server';
 export * from './custom/MJApplicationEntityServer.server';
 export * from './custom/MJComponentEntityServer.server';
+export * from './custom/MJDashboardEntityServer.server';
+export * from './custom/approvalStamp';
 export * from './custom/MJArtifactVersionEntityServer.server';
 export * from './custom/MJAIAgentNoteEntityServer.server';
 export * from './custom/MJAIAgentExampleEntityServer.server';
@@ -29,6 +32,10 @@ export * from './custom/MJAIBridgeProviderEntityServer.server';
 export * from './custom/MJAIBridgeAgentIdentityEntityServer.server';
 export * from './custom/MJAIBridgeProviderChannelEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeEntityServer.server';
+export * from './custom/sessionConfigGuard';
+export * from './custom/MJAIAgentSessionEntityServer.server';
+export * from './custom/anonymousOwnershipKeyGuard';
+export * from './custom/MJConversationEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
 export * from './custom/MJMaterializedResultEntityServer.server';
@@ -45,6 +52,7 @@ export * from './custom/MJAPIApplicationScopeEntityServer.server';
 export * from './custom/MJRowLevelSecurityFilterEntityServer.server';
 export * from './custom/MJEntityFieldPermissionEntityServer.server';
 export * from './custom/MJEntityEntityServer.server';
+export * from './custom/MJEntityAlternateBaseViewEntityServer.server';
 export * from './custom/fieldPermissionDelta';
 export * from './custom/fieldPermissionReconciler';
 export * from './custom/rowFilterValidation';
@@ -57,6 +65,15 @@ export * from './engines/QueryMatchResult';
 export * from './engines/ComponentMetadataEngineServer';
 export * from './engines/IdentityClaimEngineServer';
 export * from './custom/MJRemoteOperationEntityServer.server';
+export {
+    ApplyFormScopeValidation,
+    FormScopeDeleteRefusal,
+    FormScopeRefusalResult,
+    FormScopeReplayRefusal,
+    type GuardedFormScopeRow,
+} from './custom/FormScopeGuard';
+export * from './custom/MJEntityFormOverrideEntityServer.server';
+export * from './custom/MJEntityFormContributionEntityServer.server';
 export * from './custom/MJRecordChangeEntityServer.server';
 export * from './custom/MJRubricVersionEntityServer.server';
 export * from './custom/MJRubricCriterionEntityServer.server';
@@ -70,3 +87,4 @@ export * from './custom/rubrics/versionPublish';
 export * from './custom/rubrics/evaluationSubmit';
 export * from './custom/rubrics/scaleFreeze';
 export * from './custom/MJInteractionEventEntityServer.server';
+export * from './custom/MJFileEntityServer.server';

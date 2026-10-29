@@ -1,8 +1,12 @@
-import { Component, EventEmitter, inject, Input, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
-import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
+import { EntityFormMode, FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent, MjRecordPreviewPopoverService } from '@memberjunction/ng-base-forms';
+import type { BaseFormComponent, FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
+import { Subscription } from 'rxjs';
+import { GetDeletedRecordFromEvent, NavigationService, RecentAccessService, RecordIdentityMatches, SafeDetectChanges, SharedService } from '@memberjunction/ng-shared';
+import { MJEvent, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 
 /**
  * Explorer-side host for a single entity record in the main tab area.
@@ -24,10 +28,23 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent extends BaseAngularComponent {
+export class SingleRecordComponent extends BaseAngularComponent implements OnDestroy {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
+  /**
+   * `'standard'` asks the host for the CodeGen form even when a custom form is
+   * registered (MJ#4755). The mount-time mode; later changes go through
+   * {@link SwitchFormMode} so the host's unsaved-work guard applies.
+   */
+  @Input() public FormMode: EntityFormMode = 'default';
+
+  /**
+   * Re-emitted host `FormModeChange`: the mode changed inside the host — the
+   * strip, a {@link SwitchFormMode} call, or an interactive-variant pick
+   * (which returns to `'default'`).
+   */
+  @Output() public FormModeChange: EventEmitter<EntityFormMode> = new EventEmitter<EntityFormMode>();
 
   /** @deprecated Use {@link NewRecordValues}. */
   @Input() public set newRecordValues(value: string | Record<string, unknown> | null) {
@@ -70,7 +87,38 @@ export class SingleRecordComponent extends BaseAngularComponent {
    */
   @Output() public recordDismissed = this.RecordDismissed;
 
+  /**
+   * Edit mode of the hosted form started (true) or ended (false). Relayed from
+   * `<mj-entity-form-host>` so the resource wrapper can tell the shell to
+   * promote this tab. {@link IsEditing} remains as the synchronous fallback.
+   */
+  @Output() public EditModeChanged: EventEmitter<boolean> = new EventEmitter<boolean>();
+
+  /**
+   * The live form's composition — sections, related grids, contributions, and the slots
+   * the form actually emits. Re-emitted on every chrome resolve.
+   *
+   * The form is created dynamically inside `<mj-entity-form-host>`, so this relay is the
+   * only route the snapshot has out to Explorer.
+   */
+  @Output() public CompositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
+
+  /**
+   * Emitted when the user clicks "Ask AI" in the record form toolbar.
+   * Also requests expansion of the floating chat overlay via ConversationsRuntime.
+   */
+  @Output() public AskAIRequested: EventEmitter<void> = new EventEmitter<void>();
+
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
+
+  /**
+   * Switch the mounted form between custom and standard (MJ#4755) through the
+   * host's guarded switch. False when refused (unsaved work — the host has
+   * already raised a warning) or when no host is mounted yet.
+   */
+  public SwitchFormMode(mode: EntityFormMode): boolean {
+    return this.formHost?.SwitchFormMode(mode) ?? false;
+  }
 
   /**
    * True while the hosted form is in edit mode. The host already exposes the
@@ -88,6 +136,48 @@ export class SingleRecordComponent extends BaseAngularComponent {
   private sharedService = inject(SharedService);
   private formPresenter = inject(MJFormPresenterService);
   private recentAccessService = new RecentAccessService();
+  private cdr = inject(ChangeDetectorRef);
+
+  constructor() {
+    super();
+    if (!MjRecordPreviewPopoverService.FallbackNavigationHandler) {
+      MjRecordPreviewPopoverService.FallbackNavigationHandler = (event: FormNavigationEvent) => {
+        if (event.Kind === 'record') {
+          this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
+        }
+      };
+    }
+  }
+
+  /**
+   * True once another user (another session) has deleted the record shown here.
+   * The tab is NOT closed under the user — they may be reading it — so a banner
+   * says so and offers to close it. Deletes in this session are handled by the
+   * shell, which closes the tab outright.
+   */
+  public DeletedRemotely = false;
+
+  private remoteDeleteSub: Subscription | null = MJGlobal.Instance.GetEventListener()
+    .subscribe((event: MJEvent) => this.onGlobalEvent(event));
+
+  /** Close this record's tab (the remote-delete banner's Close button). */
+  OnCloseDeletedRecord(): void {
+    this.RecordDismissed.emit();
+  }
+
+  private onGlobalEvent(event: MJEvent): void {
+    if (this.DeletedRemotely) {
+      return;
+    }
+    const deleted = GetDeletedRecordFromEvent(event);
+    if (!deleted?.Remote || !this.PrimaryKey?.HasValue) {
+      return;
+    }
+    if (RecordIdentityMatches(this.entityName, this.PrimaryKey.ToURLSegment(), deleted)) {
+      this.DeletedRemotely = true;
+      SafeDetectChanges(this.cdr);
+    }
+  }
 
   /** Unblock the shell's first-resource-load gate (success or error). */
   OnLoadComplete(): void {
@@ -97,6 +187,32 @@ export class SingleRecordComponent extends BaseAngularComponent {
   /** @deprecated Use {@link OnLoadComplete}. */
   onLoadComplete(): void {
     return this.OnLoadComplete();
+  }
+
+  private compositionSub: Subscription | null = null;
+
+  /**
+   * Bind to the newly created form's composition stream.
+   *
+   * The previous subscription is dropped first: the host re-creates the form when the
+   * user switches variants, and a retained subscription would let the replaced form
+   * keep publishing over the live one.
+   */
+  onFormCreated(form: BaseFormComponent): void {
+    this.compositionSub?.unsubscribe();
+    this.compositionSub = form.CompositionChanged.subscribe((snapshot: FormCompositionSnapshot) =>
+      this.CompositionChanged.emit(snapshot),
+    );
+    if (form.CompositionSnapshot) {
+      this.CompositionChanged.emit(form.CompositionSnapshot);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.compositionSub?.unsubscribe();
+    this.compositionSub = null;
+    this.remoteDeleteSub?.unsubscribe();
+    this.remoteDeleteSub = null;
   }
 
   /** Log access for existing records once the form's record is ready. */
@@ -118,6 +234,15 @@ export class SingleRecordComponent extends BaseAngularComponent {
   /** @deprecated Use {@link OnSaved}. */
   onSaved(record: BaseEntity): void {
     return this.OnSaved(record);
+  }
+
+  OnEditModeChanged(editing: boolean): void {
+    this.EditModeChanged.emit(editing);
+  }
+
+  OnAskAIRequested(): void {
+    this.AskAIRequested.emit();
+    ConversationsRuntime.Instance.Bridge.RequestExpandOverlay();
   }
 
   OnNotification(event: FormNotificationEvent): void {

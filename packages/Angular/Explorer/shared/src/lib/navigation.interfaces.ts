@@ -49,4 +49,37 @@ export interface NavigationOptions {
    * Use null values to remove a query param.
    */
   queryParams?: Record<string, string | null>;
+
+  /**
+   * Open the record in the CodeGen standard form even when a custom form is
+   * registered (MJ#4755). Applied as the tab's `form=standard` query param —
+   * on a new tab or on the existing tab the open focused — which the record
+   * resource hands to the form host. Omit to leave the tab's mode unchanged.
+   */
+  formMode?: 'standard';
+
+  /**
+   * Optional semantic name (`EntityAlternateBaseView.Name`) of an alternate base view
+   * to use when opening a dynamic view via `OpenDynamicView`.
+   */
+  alternateBaseView?: string;
+}
+
+/**
+ * Options for NavigationService.OpenDashboard
+ */
+export interface DashboardNavigationOptions extends NavigationOptions {
+  /**
+   * The application the dashboard's tab belongs to. When omitted, or when that application is not
+   * loaded, the tab belongs to the default application (the Home app when it exists).
+   */
+  applicationId?: string;
+
+  /**
+   * Open the dashboard in edit mode, if the user can edit it. The open takes the usual tab path: a
+   * tab already open for the dashboard in that application is focused and enters edit mode, and
+   * otherwise the dashboard starts in edit mode in the tab it opens in (the replaced preview tab,
+   * or a separate tab for a Shift-click).
+   */
+  openInEditMode?: boolean;
 }

@@ -49,6 +49,7 @@ import { ClassifySeedTaxonomyComponent } from './AI/components/autotagging/compo
 import { ClassifySetupWizardComponent } from './AI/components/autotagging/dialogs/classify-setup-wizard.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
+import { CompareValueComponent } from './AI/components/duplicates/compare-value.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 import { AIAnalyticsResourceComponent, LoadAIAnalyticsResource } from './AI/components/analytics/ai-analytics-resource.component';
@@ -68,6 +69,10 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
+import {
+  ChiefOfStaffDashboardComponent,
+  LoadChiefOfStaffDashboard
+} from './ChiefOfStaff/chief-of-staff-dashboard.component';
 
 // Knowledge Hub components
 import {
@@ -164,9 +169,11 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
-    AIOverviewHubComponent
+    AIOverviewHubComponent,
+    ChiefOfStaffDashboardComponent
   ],
   imports: [
+    CompareValueComponent,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -252,6 +259,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
+    ChiefOfStaffDashboardComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -278,5 +286,6 @@ export class AIDashboardsModule {
         LoadRealtimeManagement();
         LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
+        LoadChiefOfStaffDashboard();
     }
 }

@@ -7,8 +7,9 @@ import {
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -246,14 +247,16 @@ export class ResourceResolver implements Resolve<void> {
     const KNOWN_RESOURCE_TYPES = ['dashboard', 'record', 'view', 'query', 'report', 'artifact', 'search'];
 
     // Handle app-scoped resource navigation: /app/:appName/:resourceType/:param1/:param2?
-    // This pattern supports resources opened within an app context (e.g., /app/home/dashboard/abc123)
-    // Only handle if the second path segment is a known resource type
+    // This pattern supports resources opened within an app context (e.g., /app/home/dashboard/abc123).
+    // Routes like `app/:appName/record/:param1/:param2` and `app/:appName/view/dynamic/:param2` store
+    // `resourceType` in `route.data['resourceType']` rather than `route.params['resourceType']`.
+    const rawResourceType = (route.params['resourceType'] ?? route.data?.['resourceType']) as string | undefined;
     if (route.params['appName'] !== undefined &&
-        route.params['resourceType'] !== undefined &&
-        KNOWN_RESOURCE_TYPES.includes(route.params['resourceType'].toLowerCase())) {
+        rawResourceType !== undefined &&
+        KNOWN_RESOURCE_TYPES.includes(rawResourceType.toLowerCase())) {
       const appName = decodeURIComponent(route.params['appName']);
-      const resourceType = route.params['resourceType'].toLowerCase();
-      const param1 = route.params['param1'];
+      const resourceType = rawResourceType.toLowerCase();
+      const param1 = route.params['param1'] ?? (resourceType === 'view' && route.params['param2'] !== undefined ? 'dynamic' : undefined);
       const param2 = route.params['param2'];
 
       // Check app access
@@ -322,6 +325,7 @@ export class ResourceResolver implements Resolve<void> {
               recordId: isNew ? '' : recordId,
               isNew: isNew || undefined,
               NewRecordValues: newRecordValues,
+              ...RecordTabQueryParams(route.queryParams),
               appName: appName,
               appId: app.ID
             },
@@ -337,7 +341,9 @@ export class ResourceResolver implements Resolve<void> {
             // Dynamic view: /app/:appName/view/dynamic/:entityName
             const entityName = decodeURIComponent(param2);
             const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
-            const filterSuffix = extraFilter ? ' (Filtered)' : '';
+            const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+            const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
+            const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
             this.tabService.OpenTab({
               ApplicationId: app.ID,
@@ -346,6 +352,7 @@ export class ResourceResolver implements Resolve<void> {
                 resourceType: 'MJ: User Views',
                 Entity: entityName,
                 ExtraFilter: extraFilter,
+                AlternateBaseView: alternateBaseView,
                 isDynamic: true,
                 recordId: 'dynamic',
                 appName: appName,
@@ -581,7 +588,8 @@ export class ResourceResolver implements Resolve<void> {
           Entity: entityName,
           recordId: isNew ? '' : recordId,
           isNew: isNew || undefined,
-          NewRecordValues: newRecordValues
+          NewRecordValues: newRecordValues,
+          ...RecordTabQueryParams(route.queryParams)
         },
         ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false
@@ -612,8 +620,10 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/view/dynamic/:entityName
       const entityName = decodeURIComponent(route.params['entityName']);
       const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+      const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+      const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
 
-      const filterSuffix = extraFilter ? ' (Filtered)' : '';
+      const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
       // Queue tab request via TabService
       this.tabService.OpenTab({
@@ -623,6 +633,7 @@ export class ResourceResolver implements Resolve<void> {
           resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
+          AlternateBaseView: alternateBaseView,
           isDynamic: true,
           recordId: 'dynamic'
         },
@@ -763,6 +774,10 @@ const routes: Routes = [
     canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
+  // A link to Data Explorer's Dashboards page opens the Library of the Dashboards app, with the link's query params,
+  // when Data Explorer no longer has that nav item and the user has the Dashboards app (NavigationService applies
+  // the same rule to pins and saved tabs)
+  DATA_EXPLORER_DASHBOARDS_ROUTE,
   // App navigation routes
   {
     path: 'app/:appName/:navItemName',

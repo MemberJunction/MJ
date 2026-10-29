@@ -92,6 +92,8 @@ export interface TelemetryRunViewParams {
     ViewID?: string;
     /** View name if running a saved view */
     ViewName?: string;
+    /** Effective semantic AlternateBaseView name (explicit or pinned on ViewEntity) */
+    AlternateBaseView?: string;
     /** SQL WHERE clause filter */
     ExtraFilter?: string;
     /** SQL ORDER BY clause */
@@ -158,6 +160,13 @@ export interface TelemetryRunViewsBatchParams {
      * (one entry per view, same order). See {@link StartRows}.
      */
     AfterKeys?: (string | undefined)[];
+    /**
+     * Per-view effective semantic `AlternateBaseView` names, parallel to {@link Entities}
+     * (one entry per view, same order). Keeps reads of the same entity over different
+     * alternate base views on distinct telemetry fingerprints so the Duplicate analyzer
+     * does not falsely flag them as redundant.
+     */
+    AlternateBaseViews?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
     /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
@@ -1685,7 +1694,10 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                     const rawStartRow = params.StartRows?.[index];
                     const startRow = rawStartRow ? String(rawStartRow) : '';
                     const afterKey = params.AfterKeys?.[index]?.trim() ?? '';
-                    return `${e}\x1f${filter}\x1f${orderBy}\x1f${startRow}\x1f${afterKey}`;
+                    const abv = params.AlternateBaseViews?.[index]?.toLowerCase().trim() ?? '';
+                    return abv
+                        ? `${e}\x1f${filter}\x1f${orderBy}\x1f${startRow}\x1f${afterKey}\x1f${abv}`
+                        : `${e}\x1f${filter}\x1f${orderBy}\x1f${startRow}\x1f${afterKey}`;
                 })
                 .filter((t): t is string => Boolean(t))
                 .sort();
@@ -1707,6 +1719,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             // duplicated first-page read is still detected.
             return {
                 entity: params.EntityName?.toLowerCase().trim(),
+                alternateBaseView: params.AlternateBaseView?.toLowerCase().trim() || undefined,
                 filter: params.ExtraFilter?.toLowerCase().trim(),
                 orderBy: params.OrderBy?.toLowerCase().trim(),
                 resultType: params.ResultType,
@@ -1901,9 +1914,12 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                     }
                 }
             }
+            // Dedupe keys are stamped with wall-clock time (see the dedupe check), not the
+            // performance clock `now` reads, so they must age against the same clock.
             const dedupeWindowMs = this._settings.analyzers?.dedupeWindowMs ?? 30000;
+            const wallNow = Date.now();
             for (const [key, seenAt] of this._insightDedupeWindow) {
-                if (now - seenAt > dedupeWindowMs) {
+                if (wallNow - seenAt > dedupeWindowMs) {
                     this._insightDedupeWindow.delete(key);
                 }
             }
