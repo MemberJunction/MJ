@@ -2,15 +2,29 @@
  * Temporal column values in entity documents: the text a `date` or timestamp column takes in the
  * template data an embedding is rendered from and in the vector's metadata (#6055).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
 import { NormalizeTemporalFields, NormalizeTemporalValue } from '../generic/temporalValues';
 
 describe('NormalizeTemporalValue', () => {
-    it('gives a date-only Date its stored calendar day, whatever the server time zone', () => {
-        // Drivers return `date` at UTC midnight; toString() west of Greenwich lands on the day before.
+    it('gives a date-only Date at UTC midnight its stored calendar day', () => {
         expect(NormalizeTemporalValue('date', new Date('1984-05-07T00:00:00.000Z'))).toBe('1984-05-07');
         expect(NormalizeTemporalValue('date', new Date('1991-01-02T00:00:00.000Z'))).toBe('1991-01-02');
+    });
+
+    // Drivers return `date` at UTC midnight; read in local time west of Greenwich that is the day
+    // before. CI runs in UTC, where a local-time read would also pass, so pin a western zone.
+    describe('on a server west of UTC', () => {
+        const originalTZ = process.env.TZ;
+        beforeAll(() => { process.env.TZ = 'America/Chicago'; });
+        afterAll(() => { process.env.TZ = originalTZ; });
+
+        it('still gives the stored day, on the edges of the year and on DST days', () => {
+            for (const day of ['2026-01-01', '2025-12-31', '2026-03-08', '2026-11-01', '2024-02-29', '1960-07-04']) {
+                expect(NormalizeTemporalValue('date', new Date(`${day}T00:00:00.000Z`))).toBe(day);
+            }
+            expect(new Date('2026-01-01T00:00:00.000Z').getDate()).toBe(31); // the zone really is in effect
+        });
     });
 
     it('matches the date-only type case-insensitively', () => {

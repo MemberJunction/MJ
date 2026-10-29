@@ -70,7 +70,7 @@ export class EntityDocumentTemplateDataBuilder {
       }, this.contextUser);
 
       if (result && result.Success) {
-        relatedData.push({ ParamName: templateParam.Name, Data: this.withoutRestrictedRelatedValues(templateParam, template, result.Results) });
+        relatedData.push({ ParamName: templateParam.Name, Data: this.indexableRelatedRows(templateParam, template, result.Results) });
       } else {
         LogError(`Error getting related data for entity ${templateParam.Entity} with filter ${finalFilter}`, undefined, result?.ErrorMessage);
       }
@@ -131,11 +131,13 @@ export class EntityDocumentTemplateDataBuilder {
   }
 
   /**
-   * A related param's rows without the fields its entity restricts for any role. The param's
-   * `LinkedParameterField` is kept even when restricted: its value is the parent record's own key,
-   * which the document already identifies, and the rows cannot be matched to their parent without it.
+   * A related param's rows as the template renders them: without the fields its entity restricts for
+   * any role, and with temporal fields normalized as the main record's are ({@link NormalizeTemporalFields}),
+   * so a date on a related row renders as its stored day too. The param's `LinkedParameterField` is
+   * kept even when restricted: its value is the parent record's own key, which the document already
+   * identifies, and the rows cannot be matched to their parent without it.
    */
-  private withoutRestrictedRelatedValues(
+  private indexableRelatedRows(
     templateParam: MJTemplateParamEntity,
     template: MJTemplateEntityExtended,
     rows: Record<string, unknown>[]
@@ -146,11 +148,10 @@ export class EntityDocumentTemplateDataBuilder {
     }
     const restricted = GetIndexRestrictedFieldNames(relatedEntity);
     restricted.delete((templateParam.LinkedParameterField ?? '').trim().toLowerCase());
-    if (restricted.size === 0) {
-      return rows;
+    if (restricted.size > 0) {
+      WarnOnTemplateRestrictedFieldReferences(template.ID ?? template.Name, templateTextOf(template), relatedEntity.Name, restricted);
     }
-    WarnOnTemplateRestrictedFieldReferences(template.ID ?? template.Name, templateTextOf(template), relatedEntity.Name, restricted);
-    return rows.map((row) => OmitRestrictedValues(row, restricted));
+    return rows.map((row) => NormalizeTemporalFields(relatedEntity, OmitRestrictedValues(row, restricted)));
   }
 
   /** The related entity's metadata, or undefined when this provider does not know it. */

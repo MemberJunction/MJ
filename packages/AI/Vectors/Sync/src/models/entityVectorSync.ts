@@ -4,7 +4,7 @@ import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompt
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, TypeScriptTypeFromSQLType, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -875,6 +875,18 @@ export class EntityVectorSyncer extends VectorBase {
    * numeric, date fields can convert to epoch seconds/milliseconds via `storeAs`,
    * uniqueidentifier values are lowercase-normalized, and long strings are truncated.
    */
+  /**
+   * A display field's value as a number. A temporal field arrives as normalized text (`YYYY-MM-DD`
+   * or ISO 8601, see {@link NormalizeTemporalValue}), which `Number()` turns into NaN, so it is read
+   * back as epoch milliseconds, the documented meaning of `storeAs: 'number'` for a date.
+   */
+  private metadataNumber(field: EntityFieldInfo, val: unknown): number {
+    if (TypeScriptTypeFromSQLType(field.Type ?? '') === 'Date') {
+      return val instanceof Date ? val.getTime() : Date.parse(String(val));
+    }
+    return Number(val);
+  }
+
   protected addDisplayFieldsMetadata(
     metadata: Record<string, string | number | boolean>,
     record: Record<string, unknown>,
@@ -896,7 +908,7 @@ export class EntityVectorSyncer extends VectorBase {
           metadata[field.Name] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
         }
       } else if (storeAs === 'number' || (storeAs == null && isNumericType)) {
-        const n = Number(val);
+        const n = this.metadataNumber(field, val);
         if (!Number.isNaN(n)) metadata[field.Name] = n;
       } else if (storeAs === 'boolean') {
         metadata[field.Name] = Boolean(val);

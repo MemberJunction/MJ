@@ -472,6 +472,20 @@ describe('EntityDocumentConfiguration', () => {
       expect(metadata['__mj_UpdatedAt']).toBe('2026-10-22T18:53:06.123Z');
     });
 
+    it('stores a temporal field configured storeAs "number" as epoch milliseconds, not dropping it', () => {
+      // The normalized text ("1964-04-24", ISO) is NaN to Number(); the field used to vanish.
+      const displayFields = [makeField({ Name: 'DateOfBirth', Type: 'date' }), makeField({ Name: 'LastSeenAt', Type: 'datetime2' })];
+      const item = makeEmbeddingItem({
+        DateOfBirth: new Date('1964-04-24T00:00:00.000Z'),
+        LastSeenAt: new Date('2026-10-22T18:53:06.123Z'),
+      });
+      const config = { fields: { DateOfBirth: { storeAs: 'number' }, LastSeenAt: { storeAs: 'number' } } } as EntityDocumentMetadataConfig;
+      const metadata = syncer.testBuildVectorMetadata(item, entityDocument, templateContent, entityInfo, displayFields, config);
+
+      expect(metadata['DateOfBirth']).toBe(Date.UTC(1964, 3, 24));
+      expect(metadata['LastSeenAt']).toBe(Date.UTC(2026, 9, 22, 18, 53, 6, 123));
+    });
+
     it('should keep system keys under "include" strategy (back-compat)', () => {
       const config: EntityDocumentMetadataConfig = {
         fieldStrategy: 'include',
