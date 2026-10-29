@@ -567,11 +567,16 @@ export class ClassFactory {
     }
 
     /**
-     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
-     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
-     * factory actually knows about.
+     * Describes a key that has no registration for `baseClass`, listing every key that IS
+     * registered for it. Callers that look a class up with `GetRegistration`/`GetRegistrationAsync`
+     * and get nothing back can use this to build an error that shows the known keys next to the
+     * requested one, so a typo or a missing (uninstalled or tree-shaken) class is visible.
+     *
+     * @param baseClass - the base class that was looked up
+     * @param key - the key that was requested
+     * @returns e.g. `ClassFactory: no registration found for base class 'X' with key 'Y'. Registered keys for 'X': 'A', 'B'.`
      */
-    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+    public DescribeMissingRegistration(baseClass: unknown, key: string | null | undefined): string {
         const baseClassName = (baseClass as NamedClass).name;
         const known = this.GetAllRegistrations(baseClass)
             .map(r => r.Key)
@@ -581,7 +586,19 @@ export class ClassFactory {
 
         return (
             `ClassFactory: no registration found for base class '${baseClassName}' with key '${key ?? '(null)'}'. ` +
-            `Registered keys for '${baseClassName}': ${knownText}. ` +
+            `Registered keys for '${baseClassName}': ${knownText}.`
+        );
+    }
+
+    /**
+     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
+     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
+     * factory actually knows about.
+     */
+    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+        const baseClassName = (baseClass as NamedClass).name;
+        return (
+            this.DescribeMissingRegistration(baseClass, key) + ' ' +
             `RequiresSubclass=${requiresSubclass}. ` +
             (requiresSubclass
                 ? `'${baseClassName}' is marked '@RequiresSubclass()', so it CANNOT be used as a fallback — ` +
