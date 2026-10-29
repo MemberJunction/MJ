@@ -426,22 +426,46 @@ export function decodeMessages(messagesJson: string | null): DecodedMessage[] {
     return DecodeMessages(messagesJson);
 }
 
-/** The chat messages of a run's FIRST Prompt step (via its TargetLogID → AIPromptRun.Messages). */
-export async function FirstPromptMessages(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<DecodedMessage[]> {
-    const steps = await GetRunSteps(runId, user, provider);
+/**
+ * The TargetLogID (AIPromptRun ID) of a run's first Prompt step. Throws, naming the run, when the
+ * run has no Prompt step with a TargetLogID: callers read the first prompt's messages, and an
+ * empty list would be indistinguishable from "the prompt run had no messages".
+ */
+export function FirstPromptRunId(steps: ReadonlyArray<Pick<StepRow, 'StepType' | 'TargetLogID'>>, runId: string): string {
     const firstPrompt = steps.find(s => s.StepType === 'Prompt' && s.TargetLogID);
     if (!firstPrompt?.TargetLogID) {
-        return [];
+        throw new Error(`agent run ${runId} has no Prompt step with a TargetLogID (${steps.length} step(s) read), so it has no first prompt messages`);
     }
+    return firstPrompt.TargetLogID;
+}
+
+/**
+ * The decoded Messages of the prompt run a RunView read returned. Throws, naming the agent run and
+ * prompt run, when the read failed or returned no row.
+ */
+export function PromptRunMessagesFromResult(
+    result: RunViewResult<{ Messages: string | null }>,
+    runId: string,
+    promptRunId: string
+): DecodedMessage[] {
+    const rows = RequireRows(result, `prompt-run read ${promptRunId} for agent run ${runId}`);
+    if (rows.length === 0) {
+        throw new Error(`prompt run ${promptRunId} (first Prompt step of agent run ${runId}) was not found`);
+    }
+    return DecodeMessages(rows[0].Messages);
+}
+
+/** The chat messages of a run's FIRST Prompt step (via its TargetLogID → AIPromptRun.Messages). */
+export async function FirstPromptMessages(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<DecodedMessage[]> {
+    const promptRunId = FirstPromptRunId(await GetRunSteps(runId, user, provider), runId);
     const r = await runViewFor(provider).RunView<{ Messages: string | null }>({
         EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `ID='${firstPrompt.TargetLogID}'`,
+        ExtraFilter: `ID='${promptRunId}'`,
         Fields: ['Messages'],
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    const row = r.Success ? r.Results?.[0] : undefined;
-    return DecodeMessages(row?.Messages ?? null);
+    return PromptRunMessagesFromResult(r, runId, promptRunId);
 }
 
 /** @deprecated Use {@link FirstPromptMessages}. */
