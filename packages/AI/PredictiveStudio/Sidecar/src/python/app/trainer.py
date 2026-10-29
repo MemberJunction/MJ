@@ -5,7 +5,8 @@ in-fold encoding + estimator, see encoding.py), scores each fold with the protoc
 finalist by the one-standard-error rule (selection.py), and refits it on all development rows. It never reads a
 locked-holdout row: the caller takes the development index from the row manifest before anything is fitted, and
 `_assert_dev_only` re-checks that index and every fold (fold positions index the development rows and are mapped back
-to snapshot rows through it). The holdout is scored later, once, by the evaluation stage.
+to snapshot rows through it). The holdout is scored later, once, by the evaluation stage. `cross_validate` re-scores one
+candidate on a finished selection's folds with another column set (the drop-column trials of the implausible-gain rule).
 
 Class rebalancing (`resampling: in-fold`) is applied to each fit's training rows only, after the fold split, so a
 validation or holdout row is never duplicated, dropped or reweighted.
@@ -254,8 +255,7 @@ def select_finalist(protocol: EvaluationProtocol, snap: Snapshot, columns: Seque
         raise TrainerFailure("inner-cv", str(exc)) from exc
     for fold in folds:
         _assert_dev_only(fold, dev, snap.roles)
-    X = snap.frame.iloc[dev].reset_index(drop=True)
-    dev_enc = EncodedLabel(np.asarray(enc.y)[dev], enc.family, enc.class_order, enc.tweedie_power)
+    X, dev_enc = _development_view(snap, enc, dev)
     validated = np.unique(np.concatenate([f.valid for f in folds])).astype(np.int64)
     cv = {spec.name: _cross_validate(spec, columns, X, dev_enc, folds, validated, primary, protocol, threads, clock)
           for spec in candidates}
@@ -272,6 +272,28 @@ def select_finalist(protocol: EvaluationProtocol, snap: Snapshot, columns: Seque
         raise TrainerFailure("inner-cv", f"refit of finalist '{spec.name}': {exc}") from exc
     clock.check("finalist refit")
     return SelectionOutcome(cv, sel, finalist, folds, validated)
+
+
+def _development_view(snap: Snapshot, enc: EncodedLabel, dev: IntArr) -> tuple[pd.DataFrame, EncodedLabel]:
+    """The development rows' feature frame and label, positions 0..len(dev)-1 (the positions folds index)."""
+    X = snap.frame.iloc[dev].reset_index(drop=True)
+    return X, EncodedLabel(np.asarray(enc.y)[dev], enc.family, enc.class_order, enc.tweedie_power)
+
+
+def cross_validate(protocol: EvaluationProtocol, snap: Snapshot, columns: Sequence[encoding.ColumnSpec],
+                   enc: EncodedLabel, dev: IntArr, spec: CandidateSpec, threads: int, clock: RunClock,
+                   outcome: SelectionOutcome) -> CandidateCV:
+    """One candidate on a finished selection's folds and validated rows, with no finalist refit: a trial with another
+    column set whose out-of-fold predictions line up row for row with `outcome`'s.
+
+    Raises:
+        TrainerFailure: Stage `inner-cv` when the candidate cannot be fitted; `timeout`/`budget-exceeded` from the
+            run clock.
+    """
+    primary = scores.primary_score(protocol.primaryScore.metric, enc.tweedie_power)
+    X, dev_enc = _development_view(snap, enc, dev)
+    return _cross_validate(spec, columns, X, dev_enc, outcome.folds, outcome.validated, primary, protocol, threads,
+                           clock)
 
 
 def _cross_validate(spec: CandidateSpec, columns: Sequence[encoding.ColumnSpec], X: pd.DataFrame,

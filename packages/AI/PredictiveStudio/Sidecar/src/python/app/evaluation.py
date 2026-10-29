@@ -1,11 +1,13 @@
 """The holdout stage: one scoring of the locked holdout for one finalist, baselines, paired comparisons, the publishing
-gate, calibration, slices, the operating point, prediction-interval coverage, the incumbent diff and the artifacts.
+gate, calibration, slices, the operating point, prediction-interval coverage, held-out permutation importance, the
+incumbent diff and the artifacts.
 
 Order matters and is fixed: (1) the calibration decision uses only out-of-fold development predictions; (2) the
 finalist (calibrated or not) and every baseline are fitted on development rows; (3) the holdout is read ONCE, here,
 through a reader that counts the access, and `holdoutAccess` is stamped at that moment; (4) everything after uses only
-those predictions. Every holdout statistic is computed before the run clock's last check and before `computeSeconds`
-is stamped, so the reported cost is the whole run's.
+those predictions, except permutation importance, which re-predicts the same holdout rows (already read) with the
+finalist after permuting each source column's features. Every holdout statistic, importance included, is computed
+before the run clock's last check and before `computeSeconds` is stamped, so the reported cost is the whole run's.
 
 A number that is undefined on these rows never reaches the wire as NaN (JSON cannot carry it): a holdout without
 every declared class fails the stage, an undefined secondary metric is left out (the contract lists the secondary
@@ -18,14 +20,14 @@ from __future__ import annotations
 import datetime as dt
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Dict, List, Literal, Optional, Protocol, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
 from . import artifacts, artifacts_v2, baselines as BL, calibration as CAL, encoding, intervals as IV, scores
-from . import snapshot as SN, trainer as TR
+from . import importance as IM, snapshot as SN, trainer as TR
 from .array_types import FArr, IntArr
 from .failures import RunClock, TrainerFailure
 from .folds import Fold, grouped, repeated_stratified
@@ -38,10 +40,22 @@ from .trainer_schemas import (
     GateModel, GateNoSignal, HoldoutAccess, HoldoutScores, IncumbentDiff, IncumbentRef, Interval, IsotonicCalibration,
     LeakageFlag, MetricKey, MetricWithInterval, NoCalibration, OperatingPoint, OutOfTimeSlice, PairedComparison,
     PlattCalibration, PredictionIntervalCoverage, ReliabilityRow, ReturnedArtifact, RunCost, SliceResult,
-    SubgroupSlice, TrainerCompleted, TrainerRequest,
+    SourceColumnImportance, SubgroupSlice, TrainerCompleted, TrainerRequest,
 )
 
 ReportedCalibration = Literal["platt", "isotonic", "auto", "not-applicable"]
+# Row permutations per source column in held-out permutation importance (the reference pipeline's count).
+PERMUTATION_REPEATS = 5
+
+
+class _Bounds(Protocol):
+    """An interval's bounds: a bootstrap interval, a paired bootstrap or a column importance."""
+
+    @property
+    def lower(self) -> float: ...
+
+    @property
+    def upper(self) -> float: ...
 
 
 def _groups(req: TrainerRequest, snap: Snapshot, rows: IntArr, ordinals: IntArr) -> Optional[List[str]]:
@@ -54,7 +68,7 @@ def _groups(req: TrainerRequest, snap: Snapshot, rows: IntArr, ordinals: IntArr)
     return None
 
 
-def _mwi(metric: MetricKey, value: float, ci: IV.BootstrapInterval, n: int, level: float) -> MetricWithInterval:
+def _mwi(metric: MetricKey, value: float, ci: _Bounds, n: int, level: float) -> MetricWithInterval:
     return MetricWithInterval(metric=metric, value=float(value),
                               interval=Interval(level=level, lower=float(ci.lower), upper=float(ci.upper)), n=n)
 
@@ -507,6 +521,30 @@ def refuse_non_finite(result: TrainerCompleted) -> TrainerCompleted:
     return result
 
 
+def held_out_importance(req: TrainerRequest, finalist: TrainedPredictor, X_hold: pd.DataFrame, y_hold: FArr,
+                        primary: scores.PrimaryScore, columns: Sequence[encoding.ColumnSpec],
+                        groups: Optional[Sequence[str]]) -> List[SourceColumnImportance]:
+    """Held-out permutation importance of every source column the finalist uses, on the holdout rows: the increase
+    of the primary score when the source's feature columns are permuted together, with the protocol's resamples,
+    level and resampling units. It describes the finalist, as `holdout.primary` does, even when the gate ships a
+    simple baseline instead.
+
+    Raises:
+        TrainerFailure: Stage `holdout`, when the finalist cannot predict a permuted frame.
+    """
+    p = req.protocol
+    level = p.intervals.level
+    try:
+        found = IM.permutation_importance(finalist.predict, X_hold, y_hold, primary.aggregate,
+                                          encoding.source_map(columns), PERMUTATION_REPEATS, p.seed,
+                                          p.intervals.resamples, groups, level)
+    except ValueError as exc:
+        raise TrainerFailure("holdout", f"permutation importance: {exc}") from exc
+    return [SourceColumnImportance(sourceColumn=c.source_column,
+                                   permutationImportance=_mwi(p.primaryScore.metric, c.drop, c, len(y_hold), level))
+            for c in found]
+
+
 def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, hold: IntArr,
              out: SelectionOutcome, columns: Sequence[encoding.ColumnSpec], code: CodeVersion, clock: RunClock,
              leakage_flags: Sequence[LeakageFlag], incumbent_artifact: Optional[bytes]) -> TrainerCompleted:
@@ -556,6 +594,7 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
     op = operating_point(req, snap, hold, ordinals, h.y, h.pred, g)
     coverage = interval_coverage(req, enc, r_oof, h.y, h.pred)
     sl = slice_results(req, snap, hold, ordinals, h.y, h.pred, primary, g)
+    imp = held_out_importance(req, finalist, h.X, h.y, primary, columns, g)
     clock.check("holdout statistics")
     budget = p.holdoutAccessBudget
     if reader.accesses != budget:
@@ -569,6 +608,6 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
         holdout=HoldoutScores(primary=prim, secondary=secondary), baselines=base_results, comparisons=comparisons,
         gate=gate_model(d), artifacts=arts, incumbentDiff=inc_diff, calibration=calibration, slices=sl,
         operatingPoint=op, cost=RunCost(computeSeconds=cost, tokens=0, usd=0.0, budget=p.budgets, stoppedByBudget=False),
-        importance=[], leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage, residualDiagnostics=None,
+        importance=imp, leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage, residualDiagnostics=None,
         forecast=None, innerSplitContrast=None,
     ))

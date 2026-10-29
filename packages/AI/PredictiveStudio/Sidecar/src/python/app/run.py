@@ -1,19 +1,26 @@
 """`run_trainer`: one TrainerRequest -> one TrainerResult. Refusals that mean "this request must not run" raise
 RequestRefused (HTTP 400, nothing fitted); every failure after that returns `failed` with its stage and the compute
 spent, never partial metrics. One run clock measures the whole run and enforces the timeout and the compute budget.
+
+The run, in order: load and verify the snapshot; audit the development rows for leakage (audit.py) and remove every
+flagged source column from every candidate and baseline; select the finalist on the remaining columns; when the
+snapshot carries a planted reference score (test fixtures only), apply the implausible-gain rule; then the holdout
+stage (evaluation.py), which reports the audit's flags.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 from threadpoolctl import threadpool_limits
 
-from . import baselines as BL, code_version, encoding, evaluation as EV, scores, snapshot as SN, trainer as TR
+from . import audit as AU, baselines as BL, code_version, encoding, evaluation as EV, scores, snapshot as SN
+from . import trainer as TR
+from .array_types import FArr, IntArr
 from .failures import RequestRefused, RunClock, TrainerFailure
-from .trainer_schemas import TrainerCompleted, TrainerFailed, TrainerRequest
+from .trainer_schemas import CandidateSpec, DropColumnFlag, LeakageFlag, TrainerCompleted, TrainerFailed, TrainerRequest
 
 TrainerOutcome = Union[TrainerCompleted, TrainerFailed]
 
@@ -80,6 +87,87 @@ def _run(req: TrainerRequest, clock: RunClock) -> TrainerCompleted:
     periods = SN.period_ordinals(snap)
     code = code_version.code_version(req.threads, p.seed)
     clock.check("snapshot load")
-    columns: List[encoding.ColumnSpec] = list(snap.columns)
+    columns, flags = _audited_columns(req, snap, enc, dev, periods)
+    clock.check("leakage audit")
     out = TR.select_finalist(p, snap, columns, enc, dev, req.candidates, req.threads, clock, periods)
-    return EV.evaluate(req, snap, enc, dev, hold, out, columns, code, clock, [], incumbent)
+    if snap.reference_score is not None and enc.family == "binary":
+        columns, out, dropped = _reference_rule(req, snap, enc, dev, columns, out, clock, periods)
+        flags.extend(dropped)
+    return EV.evaluate(req, snap, enc, dev, hold, out, columns, code, clock, flags, incumbent)
+
+
+def _audited_columns(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
+                     periods: IntArr) -> Tuple[List[encoding.ColumnSpec], List[LeakageFlag]]:
+    """The snapshot's feature columns without the source columns the leakage audit flags on the development rows,
+    and the audit's flags. The development rows have time when they span more than one decision period."""
+    p = req.protocol
+    dev_periods = periods[dev]
+    audit = AU.run_audit(
+        snap.frame.iloc[dev].reset_index(drop=True), snap.columns, np.asarray(enc.y)[dev],
+        [snap.entity_keys[int(i)] for i in dev], dev_periods, len(set(dev_periods.tolist())) > 1, enc.family,
+        p.leakageAudit.singleFeatureHeldOutAucMax, p.seed, len(enc.class_order or []))
+    excluded = set(audit.excluded_sources)
+    return [c for c in snap.columns if c.source_column not in excluded], list(audit.flags)
+
+
+def _most_implausible(y_dev: FArr, ref_dev: FArr, out: TR.SelectionOutcome,
+                      candidates: List[CandidateSpec]) -> Optional[CandidateSpec]:
+    """The candidate whose out-of-fold predictions beat the reference by the most implausible margin (smallest
+    one-sided p; request order on a tie), or None when no candidate beats it."""
+    y_val, ref_val = y_dev[out.validated], ref_dev[out.validated]
+    beaten: List[Tuple[float, int, CandidateSpec]] = []
+    for i, c in enumerate(candidates):
+        leaky, p_value = AU.beats_reference(y_val, out.cv[c.name].oof, ref_val)
+        if leaky:
+            beaten.append((p_value, i, c))
+    return min(beaten, key=lambda t: (t[0], t[1]))[2] if beaten else None
+
+
+def _explaining_columns(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
+                        columns: List[encoding.ColumnSpec], out: TR.SelectionOutcome, spec: CandidateSpec,
+                        ref_dev: FArr, clock: RunClock) -> List[DropColumnFlag]:
+    """Drop-column trials: `spec` cross-validated on `out`'s folds without each source column in turn (no refit);
+    a source whose removal alone makes it plausible is flagged with the loss increase its removal causes."""
+    y_val = np.asarray(enc.y, dtype=np.float64)[dev][out.validated]
+    ref_val = ref_dev[out.validated]
+    base_loss = float(np.mean(out.cv[spec.name].row_loss))
+    flags: List[DropColumnFlag] = []
+    for src in sorted(encoding.source_map(columns)):
+        kept = [c for c in columns if c.source_column != src]
+        if not encoding.source_map(kept):
+            continue   # no feature column would remain: removing the only source explains nothing
+        trial = TR.cross_validate(req.protocol, snap, kept, enc, dev, spec, req.threads, clock, out)
+        if not AU.beats_reference(y_val, trial.oof, ref_val)[0]:
+            flags.append(DropColumnFlag(kind="drop-column", sourceColumn=src,
+                                        scoreDrop=float(np.mean(trial.row_loss)) - base_loss))
+    return flags
+
+
+def _reference_rule(req: TrainerRequest, snap: SN.Snapshot, enc: TR.EncodedLabel, dev: IntArr,
+                    columns: List[encoding.ColumnSpec], out: TR.SelectionOutcome, clock: RunClock,
+                    periods: IntArr) -> Tuple[List[encoding.ColumnSpec], TR.SelectionOutcome, List[LeakageFlag]]:
+    """The implausible-gain rule. When a candidate's out-of-fold predictions beat the planted reference score by an
+    implausible margin (`audit.beats_reference`), the source columns whose removal alone makes that candidate
+    plausible again are flagged (`drop-column`) and excluded, and selection runs again. If no single column explains
+    the gain, or a candidate still beats the reference after the exclusion, the run fails.
+
+    Raises:
+        TrainerFailure: Stage `inner-cv` when the gain is not explained by single columns, or from selection.
+    """
+    y_dev = np.asarray(enc.y, dtype=np.float64)[dev]
+    ref_dev = np.asarray(snap.reference_score, dtype=np.float64)[dev]
+    spec = _most_implausible(y_dev, ref_dev, out, list(req.candidates))
+    if spec is None:
+        return columns, out, []
+    explaining = _explaining_columns(req, snap, enc, dev, columns, out, spec, ref_dev, clock)
+    if not explaining:
+        raise TrainerFailure("inner-cv", f"candidate '{spec.name}' beats the reference score by an implausible margin "
+                                         f"(paired DeLong p < {AU.REFERENCE_P}) and no single source column explains it")
+    gone = sorted(f.sourceColumn for f in explaining)
+    columns = [c for c in columns if c.source_column not in gone]
+    out = TR.select_finalist(req.protocol, snap, columns, enc, dev, req.candidates, req.threads, clock, periods)
+    still = _most_implausible(y_dev, ref_dev, out, list(req.candidates))
+    if still is not None:
+        raise TrainerFailure("inner-cv", f"candidate '{still.name}' still beats the reference score by an implausible "
+                                         f"margin after excluding {gone}")
+    return columns, out, list(explaining)
