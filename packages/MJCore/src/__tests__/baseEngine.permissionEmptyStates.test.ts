@@ -210,5 +210,36 @@ describe('BaseEngine loaded-empty permission states', () => {
 
             expect(engine.EntryFor('_datasetMeta')?.loadedSuccessfully).toBe(false);
         });
+
+        it('LoadSingleDatasetConfig classifies a server read refusal as loaded-empty for a dataset config with no Entities, by the Status text alone', async () => {
+            // No `Entities` on the config and a provider that says the user CAN read, so the local
+            // metadata check cannot classify the failure. Only the server's status message can.
+            const unannotatedConfig = new BaseEnginePropertyConfig({
+                Type: 'dataset',
+                DatasetName: 'Template_Metadata',
+                DatasetResultHandling: 'single_property',
+                PropertyName: '_datasetMeta',
+            });
+            const serverRefusal: DatasetResultType = {
+                DatasetID: '',
+                DatasetName: 'Template_Metadata',
+                Success: false,
+                Status: 'User restricted@example.com does not have read permissions on MJ: Template Contents',
+                LatestUpdateDate: null as unknown as Date,
+                Results: [],
+            };
+            const providerWithDataset = {
+                ...makeProvider({ readable: true }),
+                GetAndCacheDatasetByName: vi.fn().mockResolvedValue(serverRefusal),
+            } as unknown as IMetadataProvider;
+            engine.Prepare(providerWithDataset, [unannotatedConfig]);
+
+            await engine.LoadDatasetForTest(unannotatedConfig);
+
+            expect(engine.EntryFor('_datasetMeta')).toMatchObject({
+                loadedSuccessfully: true,
+                readDenied: true,
+            });
+        });
     });
 });

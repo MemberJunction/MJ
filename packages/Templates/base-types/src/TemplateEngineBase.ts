@@ -79,6 +79,11 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         this._indexedTemplatesRef = undefined;
     }
 
+    // The getters below return an empty array by design for a restricted role: `_metadata` is one
+    // `single_property` dataset, so `GetConfigData` has no per-array slot to consult, and
+    // `AdditionalLoading` reads these getters during `BaseEngine.Load`, where a throw would stop
+    // boot. Callers that must distinguish "no templates" from "not readable" check
+    // `IsPermissionConstrained` first. Same shape as `ResourcePermissionEngine.ResourceTypes`.
     public get Templates(): MJTemplateEntityExtended[] {
         return this._metadata?.Templates ?? [];
     }

@@ -2042,7 +2042,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const missingEntities = this.findMissingEntities(configs);
         if (missingEntities.length > 0) {
             LogStatusEx({
-                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                message: `${this.constructor.name}: Skipping ${configs.length} config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
                 verboseOnly: true,
                 category: 'Cache',
             });
@@ -2067,7 +2067,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const deniedEntities = this.findUnreadableEntities(configs, user);
 
         if (deniedEntities.length > 0) {
-            LogWarning(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
+            LogWarning(`${this.constructor.name}: Skipping ${configs.length} config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
 
             // Mark all configs as successfully loaded with empty data.
             // This is not a failure — it's expected behavior for limited-permission users.
@@ -2371,7 +2371,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * (`config.Entities` / `config.EntityName`) or per the server's dataset status message
      * (`does not have read permissions on ...`).
      */
-    protected isDatasetReadDenied(
+    protected IsDatasetReadDenied(
         config: BaseEnginePropertyConfig,
         result: DatasetResultType,
         contextUser: UserInfo | undefined
@@ -2529,7 +2529,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
         if (!result.Success) {
-            if (this.isDatasetReadDenied(config, result, contextUser)) {
+            if (this.IsDatasetReadDenied(config, result, contextUser)) {
                 this.MarkDatasetConfigEmptyLoaded(config);
                 LogWarning(
                     `BaseEngine: Dataset ${config.DatasetName} not readable by current role — loaded empty (restricted-role degradation).`,
