@@ -147,8 +147,9 @@ export interface UnitAssemblyInputs {
   readonly DataAccess: ICountingDataAccess;
   readonly Metadata: IAssemblyMetadata;
   /**
-   * The bound protocol's slice fields. Each must be a resolved feature column or a field of every unit row; one that
-   * is neither is refused (`unresolved-column`) before the as-of assembly reads anything.
+   * The bound protocol's slice fields. Each must be a column the assembly will write (a feature column, or one of a
+   * date column's parts) or a field of every unit row; one that is neither is refused (`unresolved-column`) before the
+   * as-of assembly reads anything.
    */
   readonly SliceFields?: readonly string[];
 }
@@ -613,9 +614,10 @@ export class TrainingEngine {
     const exclusions = { denyFields: resolved.leakageGuard.DenyFields || [], denySources: resolved.leakageGuard.DenySources || [] };
     const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions);
     if (resolution.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: resolution };
-    const featureNames = new Set(resolution.Columns.map((c) => c.name));
+    // The names the assembly will write (date parts included), so this check accepts exactly what the builder does.
+    const columnNames = new Set(AsOfFeatureAssembler.ColumnNamesOf(resolution.Columns));
     const sources = unitRead.Rows.map((r) => r.Source);
-    const unresolvedSlice = (inputs.SliceFields || []).find((field) => !TrainingSnapshotBuilder.SliceFieldResolves(field, featureNames, sources));
+    const unresolvedSlice = (inputs.SliceFields || []).find((field) => !TrainingSnapshotBuilder.SliceFieldResolves(field, columnNames, sources));
     if (unresolvedSlice !== undefined) {
       return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: unit.name, field: unresolvedSlice } } };
     }

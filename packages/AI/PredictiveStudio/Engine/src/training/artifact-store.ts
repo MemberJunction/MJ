@@ -150,6 +150,10 @@ export class MJFilesArtifactStore implements IArtifactStore {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       LogError(`MJFilesArtifactStore: persisted File row '${file.ID}' but failed to write bytes under '${this.baseDir}': ${message}`);
+      // The row records bytes that were never written: remove it, so a failed save leaves nothing behind.
+      if (!(await file.Delete())) {
+        LogError(`MJFilesArtifactStore: could not delete File row '${file.ID}' after the failed byte write: ${file.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
       throw new Error(`Failed to persist model artifact bytes: ${message}`);
     }
 

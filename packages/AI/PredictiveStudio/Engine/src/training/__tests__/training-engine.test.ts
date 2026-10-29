@@ -631,8 +631,9 @@ function protocolHarness(
   answer: ConstructorParameters<typeof FakeTrainer>[0],
   protocolRow = ProtocolRowFixture.Row(),
   artifacts: InMemoryArtifactStore = new InMemoryArtifactStore(),
+  featureSteps?: FeatureStepGraph,
 ): ReturnType<typeof unitHarness> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
-  const harness = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), undefined, TRAINER_RUN_ID);
+  const harness = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), featureSteps, TRAINER_RUN_ID);
   harness.pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
   const trainer = new FakeTrainer(answer);
   harness.deps.protocols = new FakeEvaluationProtocolStore([protocolRow]);
@@ -740,6 +741,16 @@ describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol tra
     expect([snapshots.length, files.Saved.size, trainer.Requests.length]).toEqual([0, 0, 0]);
     expect(runs[0].Status).toBe('Failed');
     assemble.mockRestore();
+  });
+
+  it('slices by an assembled date-part column, named as the assembler names it, and completes', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'StartDate'] }] };
+    const row = ProtocolRowFixture.Row({ Slices: JSON.stringify({ outOfTime: true, subgroups: ['StartDate__days_since_decision'] }) });
+    const { engine, deps, pipeline, files, snapshots } = protocolHarness(cannedFor, row, new InMemoryArtifactStore(), steps);
+    const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(run.Status).toBe('Completed');
+    const content = await storedContent(files, snapshots[0]);
+    expect(content.Header.sliceColumns).toEqual({ StartDate__days_since_decision: '__ps_slice:StartDate__days_since_decision' });
   });
 
   it('refuses a slice field that is neither a feature column nor a unit-row field before any assembly or snapshot write', async () => {

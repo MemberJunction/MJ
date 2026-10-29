@@ -202,7 +202,7 @@ export class AsOfFeatureAssembler {
   private async assemble(input: AsOfAssemblyInput): Promise<AsOfAssemblyResult> {
     const state: AssemblyState = { Coverage: new Map(), Histories: new Map(), LateEntered: new Map() };
     const readers = await this.buildReaders(input, state);
-    const columns = readers.flatMap((r) => this.columnsFor(r.Spec));
+    const columns = readers.flatMap((r) => AsOfFeatureAssembler.ColumnsFor(r.Spec));
     const assembled = this.assembleRows(input, readers);
     const first = assembled.Uncovered[0];
     if (input.Unit.history.onUncoveredRow === 'refuse' && first) {
@@ -286,7 +286,7 @@ export class AsOfFeatureAssembler {
   private async buildReaders(input: AsOfAssemblyInput, state: AssemblyState): Promise<ColumnReader[]> {
     const readers: ColumnReader[] = [];
     for (const spec of input.Features) {
-      if (spec.encoding.kind === 'identifier') continue;
+      if (!AsOfFeatureAssembler.isAssembled(spec)) continue;
       AsOfFeatureAssembler.assertEncodable(spec);
       readers.push({ Spec: spec, Read: await this.readerFor(spec, input, state) });
     }
@@ -342,7 +342,23 @@ export class AsOfFeatureAssembler {
     ordered.push(created);
   }
 
-  private columnsFor(spec: FeatureColumnSpec): AssembledColumn[] {
+  /**
+   * The names of the matrix columns the assembly writes for these feature columns, in order: one per column, one per
+   * date part of a date column (`<name>__<part>`), none for an identifier. The assembler names its columns with
+   * {@link ColumnsFor}, so a caller that needs the names before assembling (training checks a protocol's slice fields
+   * against them) gets exactly the assembled names.
+   */
+  public static ColumnNamesOf(features: readonly FeatureColumnSpec[]): string[] {
+    return features.filter((spec) => AsOfFeatureAssembler.isAssembled(spec)).flatMap((spec) => AsOfFeatureAssembler.ColumnsFor(spec).map((c) => c.Name));
+  }
+
+  /** An identifier column is excluded from the matrix; every other feature column is assembled. */
+  private static isAssembled(spec: FeatureColumnSpec): boolean {
+    return spec.encoding.kind !== 'identifier';
+  }
+
+  /** The matrix columns one feature column is written as (its date parts for a date column). */
+  public static ColumnsFor(spec: FeatureColumnSpec): AssembledColumn[] {
     const source = AsOfFeatureAssembler.describeSource(spec);
     if (spec.encoding.kind === 'date-parts') {
       return spec.encoding.parts.map((p) => ({ Name: `${spec.name}__${p.replace(/-/g, '_')}`, Encoding: 'numeric', SourceColumn: source, FeatureName: spec.name }));

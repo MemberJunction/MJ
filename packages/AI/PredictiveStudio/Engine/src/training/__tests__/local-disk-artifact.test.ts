@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, rm, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, rm, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -39,9 +39,16 @@ class FakeFile {
     this.saveOk = saveOk;
   }
 
+  public Deleted = false;
+
   public async Save(): Promise<boolean> {
     this.LatestResult = { CompleteMessage: this.saveOk ? '' : 'forced save failure' };
     return this.saveOk;
+  }
+
+  public async Delete(): Promise<boolean> {
+    this.Deleted = true;
+    return true;
   }
 }
 
@@ -144,6 +151,18 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
     await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact file/i);
     const files = await readdir(baseDir).catch(() => [] as string[]);
     expect(files).toEqual([]);
+  });
+
+  it('deletes its own File row when the bytes cannot be written, then throws', async () => {
+    const parent = await makeScratchDir();
+    const blocker = join(parent, 'not-a-directory');
+    await writeFile(blocker, 'x');   // the base directory's parent is a file, so the bytes cannot be written
+    const factory = new FakeFileFactory(() => new FakeFile(randomUUID()));
+    const store = new MJFilesArtifactStore(factory, { providerId: 'prov-1', baseDir: join(blocker, 'artifacts') });
+
+    await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact bytes/i);
+    expect(factory.Created).toHaveLength(1);
+    expect(factory.Created[0].Deleted).toBe(true);
   });
 
   it('keeps the fake-file cast honest (the stand-in satisfies the store contract)', () => {
