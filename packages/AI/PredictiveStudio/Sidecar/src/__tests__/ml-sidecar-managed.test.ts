@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
+// Both `vi.mock` calls below are hoisted above every import, so this module binds the mocked transport and spawn.
+import { MLSidecar } from '../ml-sidecar.js';
 
 /**
  * Managed-mode unit tests for {@link MLSidecar}. `node:child_process` is mocked so
@@ -88,8 +90,6 @@ vi.mock('node:child_process', () => ({
   spawn: () => spawnMock(),
 }));
 
-// Import AFTER both mocks are registered.
-const { MLSidecar } = await import('../ml-sidecar.js');
 
 /** Simulate the sidecar announcing its listening port on stdout, one tick later. */
 function announcePort(proc: MockChildProcess, port: number) {
@@ -101,10 +101,13 @@ describe('MLSidecar (managed mode)', () => {
     responseQueue.length = 0;
     spawnedProcesses.length = 0;
     spawnMock.mockClear();
+    // A sidecar URL in the shell (a developer's or a runner's) would put every client below in remote mode.
+    vi.stubEnv('PREDICTIVE_STUDIO_SIDECAR_URL', '');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('Start() spawns exactly one child process and resolves once the port is announced and healthy', async () => {
