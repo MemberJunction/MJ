@@ -136,6 +136,8 @@ interface MockSqlOptions {
     currentDatabase?: string;
     /** The target's `create_date` in UTC the drop guard sees (default 2026-10-28T12:00Z); null means absent. */
     createdAtUtc?: Date | null;
+    /** The server's UTC clock the restore start is read from (default 2026-10-28T11:59:00Z, just before `createdAtUtc`). */
+    serverUtcNow?: Date;
 }
 
 /** SQL text of every call, in order. */
@@ -159,6 +161,9 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): DatabaseProviderBa
         }
         if (sql.includes('AS DatabaseId')) {
             return Promise.resolve([{ DatabaseId: options.stagingDbExists ? 7 : null }]);
+        }
+        if (sql.includes('AS ServerUtcNow')) {
+            return Promise.resolve([{ ServerUtcNow: options.serverUtcNow ?? new Date('2026-10-28T11:59:00.000Z') }]);
         }
         if (sql.includes('AS CurrentDatabase')) {
             return Promise.resolve([{ CurrentDatabase: options.currentDatabase ?? 'MJ_Main', CreatedAtUtc: options.createdAtUtc === undefined ? new Date('2026-10-28T12:00:00.000Z') : options.createdAtUtc }]);
@@ -406,9 +411,10 @@ describe('LoadSQLServerIntegrationFromStagingAction', () => {
 
     it('Load action reports DROP_REFUSED when the drop-on-complete targets the server database', async () => {
         load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true, currentDatabase: 'Payroll' });
-        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true, AllowAnyName: true }));
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'Payroll', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true, AllowAnyName: true, CreatedAfter: '2026-10-28T11:00:00.000Z' }));
 
         expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.Message).toContain('database this server runs on');
         expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
     });
 
@@ -506,7 +512,7 @@ describe('DropSQLServerStagingDatabaseAction', () => {
 
     it('Drop action always refuses the database the server runs on', async () => {
         drop.CustomDatabaseProvider = createMockSqlExecutor({ currentDatabase: 'mj_main' });
-        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Main', AllowAnyName: 'true' }));
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Main', AllowAnyName: 'true', CreatedAfter: '2026-10-28T11:00:00.000Z' }));
 
         expect(r.ResultCode).toBe('DROP_REFUSED');
         expect(r.Message).toContain('[MJ_Main]');
@@ -519,7 +525,7 @@ describe('DropSQLServerStagingDatabaseAction', () => {
         expect(refused.Message).toContain("'MJ_Staging_'");
         expect(sqlCalls).toHaveLength(0);
 
-        const allowed = await drop.Run(makeParams({ StagingDatabaseName: 'Payroll', AllowAnyName: 'true' }));
+        const allowed = await drop.Run(makeParams({ StagingDatabaseName: 'Payroll', AllowAnyName: 'true', CreatedAfter: '2026-10-28T11:00:00.000Z' }));
         expect(allowed.Success).toBe(true);
         expect(sqlCalls.some(s => s.includes('DROP DATABASE [Payroll]'))).toBe(true);
     });
@@ -554,5 +560,135 @@ describe('DropSQLServerStagingDatabaseAction', () => {
         expect(progressCalls.find(c => c.Method === 'StageError')?.Args[2]).toEqual({ code: 'MISSING_PARAMETER' });
         expect(progressMethods()).not.toContain('Fail');
         expect(progressMethods()).not.toContain('Complete');
+    });
+});
+
+describe('Backup actions called directly with hostile parameters', () => {
+    const injection = 'x]; END; DECLARE @s nvarchar(max)=0x41; EXEC(@s); IF 1=0 BEGIN DROP CREDENTIAL [y';
+
+    beforeEach(() => {
+        resetMocks();
+    });
+
+    it('Drop action refuses a ContainerUrl that would break out of the credential identifier, before any SQL', async () => {
+        const drop = new DropSQLServerStagingDatabaseAction();
+        drop.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true });
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', ContainerUrl: injection, DropDatabase: 'false' }));
+
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('INVALID_PARAMETER');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Drop action refuses a ContainerUrl that is not an Azure Blob container', async () => {
+        const drop = new DropSQLServerStagingDatabaseAction();
+        drop.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true });
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'MJ_Staging_X', ContainerUrl: 'https://attacker.example/c' }));
+
+        expect(r.ResultCode).toBe('INVALID_PARAMETER');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Load action refuses a hostile ContainerUrl before loading anything', async () => {
+        const load = new LoadSQLServerIntegrationFromStagingAction();
+        load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true });
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z', ContainerUrl: injection, DropStagingDbOnComplete: true }));
+
+        expect(r.ResultCode).toBe('INVALID_PARAMETER');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('the credential drop itself refuses an unvalidated container URL (defense in depth)', async () => {
+        const drop = new DropSQLServerStagingDatabaseAction();
+        const executor = createMockSqlExecutor();
+        await expect(drop['DropStorageCredential'](executor, injection, makeUser())).rejects.toThrow(/ContainerUrl/);
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Drop action refuses AllowAnyName without CreatedAfter', async () => {
+        const drop = new DropSQLServerStagingDatabaseAction();
+        drop.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true });
+        const r = await drop.Run(makeParams({ StagingDatabaseName: 'OtherTenantDb', AllowAnyName: 'true' }));
+
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.Message).toContain('CreatedAfter');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Load action refuses AllowAnyName for its drop-on-complete without CreatedAfter', async () => {
+        const load = new LoadSQLServerIntegrationFromStagingAction();
+        load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true });
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'OtherDb', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true, AllowAnyName: true }));
+
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(r.Message).toContain('CreatedAfter');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Load action passes CreatedAfter to its drop-on-complete, so an older database is kept', async () => {
+        const load = new LoadSQLServerIntegrationFromStagingAction();
+        load.CustomDatabaseProvider = createMockSqlExecutor({ stagingDbExists: true, createdAtUtc: new Date('2026-01-01T00:00:00.000Z') });
+        const r = await load.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', BackupStartDate: '2026-10-01T00:00:00.000Z', DropStagingDbOnComplete: true, CreatedAfter: '2026-10-28T11:00:00.000Z' }));
+
+        expect(r.ResultCode).toBe('DROP_REFUSED');
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it('Restore action cleanup never drops a database created before its restore started', async () => {
+        const restore = new RestoreSQLServerBackupToStagingAction();
+        // The restore fails, and the database carrying the staging name predates the restore start.
+        restore.CustomDatabaseProvider = createMockSqlExecutor({ failOnRestore: true, createdAtUtc: new Date('2026-01-01T00:00:00.000Z') });
+        const r = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', StagingDatabaseName: 'MJ_Staging_X' }));
+
+        expect(r.ResultCode).toBe('RESTORE_FAILED');
+        expect(sqlCalls.some(s => s.includes('AS ServerUtcNow'))).toBe(true);
+        expect(sqlCalls.some(s => s.includes('DROP DATABASE'))).toBe(false);
+    });
+
+    it.each([
+        ['a UNC backup path', { BackupUrls: '\\\\attacker.example\\s\\x.bak' }],
+        ['a .. backup path', { BackupUrls: '/var/opt/mssql/backup/../../x.bak' }],
+        ['a non-Azure backup URL', { BackupUrls: 'https://attacker.example/c/x.bak', SasToken: 't' }],
+        ['a UNC data directory', { BackupUrls: '/var/opt/mssql/backup/x.bak', TargetDataFileDirectory: '\\\\attacker.example\\share' }],
+        ['a UNC log directory', { BackupUrls: '/var/opt/mssql/backup/x.bak', TargetLogFileDirectory: '//attacker.example/share' }],
+    ])('Restore action refuses %s with INVALID_PARAMETER before any SQL', async (_label, extra) => {
+        const restore = new RestoreSQLServerBackupToStagingAction();
+        restore.CustomDatabaseProvider = createMockSqlExecutor();
+        const r = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', StagingDatabaseName: 'MJ_Staging_X', ...extra }));
+
+        expect(r.ResultCode).toBe('INVALID_PARAMETER');
+        expect(sqlCalls).toHaveLength(0);
+    });
+
+    it('Restore action requires a disk source under MJ_BACKUP_DISK_ROOTS when it is set', async () => {
+        const saved = process.env.MJ_BACKUP_DISK_ROOTS;
+        process.env.MJ_BACKUP_DISK_ROOTS = '/var/opt/mssql/backup';
+        try {
+            const restore = new RestoreSQLServerBackupToStagingAction();
+            restore.CustomDatabaseProvider = createMockSqlExecutor();
+            const refused = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: 'D:\\Backups\\Payroll_full.bak', StagingDatabaseName: 'MJ_Staging_X' }));
+            expect(refused.ResultCode).toBe('INVALID_PARAMETER');
+            expect(sqlCalls).toHaveLength(0);
+
+            const allowed = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', StagingDatabaseName: 'MJ_Staging_X' }));
+            expect(allowed.Success).toBe(true);
+        } finally {
+            if (saved === undefined) delete process.env.MJ_BACKUP_DISK_ROOTS; else process.env.MJ_BACKUP_DISK_ROOTS = saved;
+        }
+    });
+
+    it('Restore action requires staging directories under MJ_STAGING_FILE_ROOTS when it is set', async () => {
+        const saved = process.env.MJ_STAGING_FILE_ROOTS;
+        process.env.MJ_STAGING_FILE_ROOTS = '/var/opt/mssql/staging';
+        try {
+            const restore = new RestoreSQLServerBackupToStagingAction();
+            restore.CustomDatabaseProvider = createMockSqlExecutor();
+            const r = await restore.Run(makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: '/var/opt/mssql/backup/x.bak', StagingDatabaseName: 'MJ_Staging_X', TargetDataFileDirectory: '/var/www/html' }));
+            expect(r.ResultCode).toBe('INVALID_PARAMETER');
+            expect(r.Message).toContain('MJ_STAGING_FILE_ROOTS');
+            expect(sqlCalls).toHaveLength(0);
+        } finally {
+            if (saved === undefined) delete process.env.MJ_STAGING_FILE_ROOTS; else process.env.MJ_STAGING_FILE_ROOTS = saved;
+        }
     });
 });

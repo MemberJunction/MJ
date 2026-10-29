@@ -26,6 +26,10 @@ type RestoreInput =
  *   - StagingDatabaseName (required): the database to restore into; it must not already exist
  *   - SasToken / StorageCredentialID (optional): storage access for URL sources
  *   - TargetDataFileDirectory / TargetLogFileDirectory (optional): where the staging files go
+ *
+ * Every backup source and directory is validated before any SQL (`INVALID_PARAMETER`): see
+ * {@link BaseIntegrationAction.BackupInputProblem}. A failed restore drops only a staging database created
+ * after the restore started.
  *   - ProgressRunID (optional): the integration progress run to report the stages to
  *
  * Parameters (Output):
@@ -41,17 +45,17 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
     protected override readonly TerminatesProgressRun = false;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
+        const progress = new BootstrapProgress(this.GetStringParam(params, 'ProgressRunID'), this.GetStringParam(params, 'CompanyIntegrationID') ?? '');
         let ctx: BootstrapRunContext | undefined;
         try {
             const input = this.readRestoreInput(params);
             if ('ResultCode' in input) {
-                return await this.rejectInput(params, progress, input.ResultCode, input.Message);
+                return await this.RejectInput(params, progress, input.ResultCode, input.Message);
             }
             ctx = {
                 Params: params,
                 Progress: progress,
-                Executor: this.getDatabaseProvider(params),
+                Executor: this.GetDatabaseProvider(params),
                 CompanyIntegrationID: input.CompanyIntegrationID,
                 StagingDatabaseName: input.StagingDatabaseName,
                 ContainerUrl: '',
@@ -68,9 +72,9 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
     }
 
     private readRestoreInput(params: RunActionParams): RestoreInput {
-        const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
-        const backupUrlsRaw = this.getStringParam(params, 'BackupUrls');
-        const stagingDatabaseName = this.getStringParam(params, 'StagingDatabaseName');
+        const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
+        const backupUrlsRaw = this.GetStringParam(params, 'BackupUrls');
+        const stagingDatabaseName = this.GetStringParam(params, 'StagingDatabaseName');
         if (!companyIntegrationID) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'CompanyIntegrationID' is required." };
         }
@@ -84,16 +88,20 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
         if (backupUrls.length === 0) {
             return { ResultCode: 'INVALID_PARAMETER', Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path." };
         }
+        const problem = this.BackupInputProblem(params, backupUrls);
+        if (problem) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: problem };
+        }
         ValidateIdentifier(stagingDatabaseName, 'database');
         return { CompanyIntegrationID: companyIntegrationID, StagingDatabaseName: stagingDatabaseName, BackupUrls: backupUrls };
     }
 
     private restoreSucceeded(params: RunActionParams, ctx: BootstrapRunContext): ActionResultSimple {
         const backupStartDate = ctx.BackupStartDate!.toISOString();
-        this.addOutputParam(params, 'BackupStartDate', backupStartDate);
-        this.addOutputParam(params, 'BackupDatabaseName', ctx.BackupDatabaseName ?? '');
-        this.addOutputParam(params, 'StagingDatabaseName', ctx.StagingDatabaseName);
-        this.addOutputParam(params, 'ContainerUrl', ctx.ContainerUrl);
+        this.AddOutputParam(params, 'BackupStartDate', backupStartDate);
+        this.AddOutputParam(params, 'BackupDatabaseName', ctx.BackupDatabaseName ?? '');
+        this.AddOutputParam(params, 'StagingDatabaseName', ctx.StagingDatabaseName);
+        this.AddOutputParam(params, 'ContainerUrl', ctx.ContainerUrl);
         return {
             Success: true,
             ResultCode: 'SUCCESS',
@@ -114,7 +122,7 @@ export class RestoreSQLServerBackupToStagingAction extends BootstrapSQLServerInt
         LogError(`[RestoreSQLServerBackupToStagingAction] Failure: ${message}`);
         await this.ReportFailure(progress, message, resultCode);
         if (ctx) {
-            await this.cleanUpAfterFailure(ctx.Executor, ctx.StagingDbCreated ? ctx.StagingDatabaseName : '', ctx.ContainerUrl, params.ContextUser);
+            await this.CleanUpAfterFailure(ctx);
         }
         return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
     }

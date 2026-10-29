@@ -28,7 +28,7 @@ export class RunSyncAction extends BaseIntegrationAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
+            const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
             if (!companyIntegrationID) {
                 return {
                     Success: false,
@@ -37,7 +37,7 @@ export class RunSyncAction extends BaseIntegrationAction {
                 };
             }
 
-            const triggerType = this.parseTriggerType(this.getStringParam(params, 'TriggerType'));
+            const triggerType = this.parseTriggerType(this.GetStringParam(params, 'TriggerType'));
             const options = this.buildSyncOptions(params);
             const result = await IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
@@ -70,12 +70,12 @@ export class RunSyncAction extends BaseIntegrationAction {
     private buildSyncOptions(params: RunActionParams): IntegrationSyncOptions {
         const options: IntegrationSyncOptions = {};
 
-        const fullSyncRaw = this.getStringParam(params, 'FullSync');
+        const fullSyncRaw = this.GetStringParam(params, 'FullSync');
         if (fullSyncRaw?.toLowerCase() === 'true') {
             options.FullSync = true;
         }
 
-        const entityMapIDsRaw = this.getStringParam(params, 'EntityMapIDs');
+        const entityMapIDsRaw = this.GetStringParam(params, 'EntityMapIDs');
         if (entityMapIDsRaw) {
             options.EntityMapIDs = entityMapIDsRaw.split(',').map(id => id.trim()).filter(id => id.length > 0);
         }
@@ -110,10 +110,10 @@ export class RunSyncAction extends BaseIntegrationAction {
             { name: 'RecordsSkipped', value: result.RecordsSkipped },
         ];
         for (const { name, value } of outputs) {
-            this.addOutputParam(params, name, value);
+            this.AddOutputParam(params, name, value);
         }
         if (result.Errors.length > 0) {
-            this.addOutputParam(
+            this.AddOutputParam(
                 params,
                 'ErrorSummary',
                 JSON.stringify(result.Errors.slice(0, 10))

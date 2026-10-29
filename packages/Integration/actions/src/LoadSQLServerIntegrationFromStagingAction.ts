@@ -6,14 +6,26 @@ import { ValidateIdentifier } from '@memberjunction/schema-engine';
 import {
     BootstrapProgress,
     BootstrapSQLServerIntegrationFromBackupAction,
+    type BootstrapLoadOptions,
     type BootstrapRunContext
 } from './BootstrapSQLServerIntegrationFromBackupAction.js';
 import { AssertStagingDatabaseName, StagingDropRefusedError } from './StagingDropGuard.js';
+import { StorageContainerUrlProblem } from './BackupSourceGuard.js';
+
+/** The validated inputs of a load. */
+interface ValidLoadInput {
+    CompanyIntegrationID: string;
+    StagingDatabaseName: string;
+    BackupStartDate: Date;
+    ContainerUrl: string;
+    CreatedAfter?: Date;
+}
 
 /** The validated inputs of a load, or the reason the action cannot run. */
-type LoadInput =
-    | { CompanyIntegrationID: string; StagingDatabaseName: string; BackupStartDate: Date; ContainerUrl: string }
-    | { ResultCode: string; Message: string };
+type LoadInput = ValidLoadInput | { ResultCode: string; Message: string };
+
+/** A refused input: its result code and message. */
+type InputRefusal = { ResultCode: string; Message: string };
 
 /**
  * Second phase of seeding an integration from a SQL Server backup archive: loads every active entity
@@ -25,13 +37,16 @@ type LoadInput =
  *   - StagingDatabaseName (required): the restored staging database; it must exist
  *   - BackupStartDate (required): when the backup began (ISO UTC), as the restore phase reported it
  *   - BatchSize (optional): chunk size for large tables (default 500,000; 0 for unchunked)
- *   - TruncateTargetBeforeLoad (optional): 'true' to empty each target first (default 'false')
+ *   - TruncateTargetBeforeLoad (optional): 'true' to empty each target first (default 'false'); each target
+ *     entity must sanction direct SQL delete (`AllowDirectSQLDelete`)
  *   - EntityMapIDs (optional): comma-separated entity map IDs to restrict the load to
  *   - DropStagingDbOnComplete (optional): 'true' to drop the staging database afterwards (default 'false'). The
- *     drop refuses a system database, the server's own database and — unless AllowAnyName is 'true' — a name
- *     that does not start with `MJ_Staging_` (`DROP_REFUSED`, checked before anything loads)
- *   - AllowAnyName (optional): 'true' to let DropStagingDbOnComplete drop a name outside `MJ_Staging_` (default 'false')
- *   - ContainerUrl (optional): the container whose SQL Server credential is dropped with the staging database
+ *     drop refuses a system database, the server's own database, a database created before CreatedAfter and —
+ *     unless AllowAnyName is 'true' with CreatedAfter — a name that does not start with `MJ_Staging_`
+ *     (`DROP_REFUSED`, the name rule checked before anything loads)
+ *   - AllowAnyName (optional): 'true' to let DropStagingDbOnComplete drop a name outside `MJ_Staging_` (default 'false'); requires CreatedAfter
+ *   - CreatedAfter (optional): ISO timestamp; the drop-on-complete refuses a database created before it
+ *   - ContainerUrl (optional): the Azure Blob container whose SQL Server credential is dropped with the staging database
  *   - ProgressRunID (optional): the integration progress run to report the stages to
  *
  * Parameters (Output): BackupStartDate, StagingDatabaseName, TablesProcessed, TotalRowsTransferred,
@@ -45,16 +60,16 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
     protected override readonly TerminatesProgressRun = false;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
+        const progress = new BootstrapProgress(this.GetStringParam(params, 'ProgressRunID'), this.GetStringParam(params, 'CompanyIntegrationID') ?? '');
         let ctx: BootstrapRunContext | undefined;
         try {
             const input = this.readLoadInput(params);
             if ('ResultCode' in input) {
-                return await this.rejectInput(params, progress, input.ResultCode, input.Message);
+                return await this.RejectInput(params, progress, input.ResultCode, input.Message);
             }
-            const executor = this.getDatabaseProvider(params);
+            const executor = this.GetDatabaseProvider(params);
             if (!(await this.stagingDatabaseExists(executor, input.StagingDatabaseName, params.ContextUser))) {
-                return await this.rejectInput(params, progress, 'STAGING_NOT_FOUND', `Staging database [${input.StagingDatabaseName}] does not exist on this instance.`);
+                return await this.RejectInput(params, progress, 'STAGING_NOT_FOUND', `Staging database [${input.StagingDatabaseName}] does not exist on this instance.`);
             }
             ctx = this.buildLoadContext(params, progress, executor, input);
             const outputs = await this.RunLoadPhase(ctx, this.readLoadOptions(params, input.BackupStartDate));
@@ -68,9 +83,9 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
     }
 
     private readLoadInput(params: RunActionParams): LoadInput {
-        const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
-        const stagingDatabaseName = this.getStringParam(params, 'StagingDatabaseName');
-        const backupStartDateRaw = this.getStringParam(params, 'BackupStartDate');
+        const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
+        const stagingDatabaseName = this.GetStringParam(params, 'StagingDatabaseName');
+        const backupStartDateRaw = this.GetStringParam(params, 'BackupStartDate');
         if (!companyIntegrationID) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'CompanyIntegrationID' is required." };
         }
@@ -80,42 +95,62 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
         if (!backupStartDateRaw) {
             return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'BackupStartDate' is required." };
         }
+        ValidateIdentifier(stagingDatabaseName, 'database');
+        const dates = this.readDates(params, backupStartDateRaw);
+        if ('ResultCode' in dates) {
+            return dates;
+        }
+        const containerUrl = this.GetStringParam(params, 'ContainerUrl') ?? '';
+        const refusal = this.inputRefusal(params, stagingDatabaseName, containerUrl, dates.CreatedAfter);
+        if (refusal) {
+            return refusal;
+        }
+        return { CompanyIntegrationID: companyIntegrationID, StagingDatabaseName: stagingDatabaseName, ContainerUrl: containerUrl, ...dates };
+    }
+
+    /** `BackupStartDate` and the optional `CreatedAfter` as dates, or the refusal of one that is not a date. */
+    private readDates(params: RunActionParams, backupStartDateRaw: string): { BackupStartDate: Date; CreatedAfter?: Date } | InputRefusal {
         const backupStartDate = new Date(backupStartDateRaw);
         if (isNaN(backupStartDate.getTime())) {
             return { ResultCode: 'INVALID_PARAMETER', Message: `Parameter 'BackupStartDate' is not a valid date: '${backupStartDateRaw}'.` };
         }
-        ValidateIdentifier(stagingDatabaseName, 'database');
-        const refusal = this.dropRefusal(params, stagingDatabaseName);
-        if (refusal) {
-            return { ResultCode: 'DROP_REFUSED', Message: refusal };
+        const createdAfterRaw = this.GetStringParam(params, 'CreatedAfter');
+        const createdAfter = createdAfterRaw ? new Date(createdAfterRaw) : undefined;
+        if (createdAfter && isNaN(createdAfter.getTime())) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: `Parameter 'CreatedAfter' is not a valid date: '${createdAfterRaw}'.` };
         }
-        return {
-            CompanyIntegrationID: companyIntegrationID,
-            StagingDatabaseName: stagingDatabaseName,
-            BackupStartDate: backupStartDate,
-            ContainerUrl: this.getStringParam(params, 'ContainerUrl') ?? '',
-        };
+        return { BackupStartDate: backupStartDate, CreatedAfter: createdAfter };
+    }
+
+    /** The refusal of an invalid container URL or a disallowed drop-on-complete, or undefined. */
+    private inputRefusal(params: RunActionParams, stagingDatabaseName: string, containerUrl: string, createdAfter: Date | undefined): InputRefusal | undefined {
+        const urlProblem = containerUrl ? StorageContainerUrlProblem(containerUrl) : undefined;
+        if (urlProblem) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: urlProblem };
+        }
+        const dropRefusal = this.dropRefusal(params, stagingDatabaseName, createdAfter);
+        return dropRefusal ? { ResultCode: 'DROP_REFUSED', Message: dropRefusal } : undefined;
     }
 
     /** Why the requested drop-on-complete is refused, or undefined when it is allowed (or not requested). */
-    private dropRefusal(params: RunActionParams, stagingDatabaseName: string): string | undefined {
-        if (!this.getBoolParam(params, 'DropStagingDbOnComplete', false)) {
+    private dropRefusal(params: RunActionParams, stagingDatabaseName: string, createdAfter: Date | undefined): string | undefined {
+        if (!this.GetBoolParam(params, 'DropStagingDbOnComplete', false)) {
             return undefined;
         }
         try {
-            AssertStagingDatabaseName(stagingDatabaseName, this.getBoolParam(params, 'AllowAnyName', false));
+            AssertStagingDatabaseName(stagingDatabaseName, this.GetBoolParam(params, 'AllowAnyName', false), createdAfter);
             return undefined;
         } catch (error) {
             return error instanceof Error ? error.message : String(error);
         }
     }
 
-    private readLoadOptions(params: RunActionParams, backupStartDate: Date) {
+    private readLoadOptions(params: RunActionParams, backupStartDate: Date): BootstrapLoadOptions {
         return {
-            BatchSize: this.getNumberParam(params, 'BatchSize', 500000),
-            TruncateTargetBeforeLoad: this.getBoolParam(params, 'TruncateTargetBeforeLoad', false),
-            EntityMapIDs: this.getStringListParam(params, 'EntityMapIDs'),
-            DropStagingDbOnComplete: this.getBoolParam(params, 'DropStagingDbOnComplete', false),
+            BatchSize: this.GetNumberParam(params, 'BatchSize', 500000),
+            TruncateTargetBeforeLoad: this.GetBoolParam(params, 'TruncateTargetBeforeLoad', false),
+            EntityMapIDs: this.GetStringListParam(params, 'EntityMapIDs'),
+            DropStagingDbOnComplete: this.GetBoolParam(params, 'DropStagingDbOnComplete', false),
             BackupStartDate: backupStartDate,
         };
     }
@@ -124,7 +159,7 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
         params: RunActionParams,
         progress: BootstrapProgress,
         executor: DatabaseProviderBase,
-        input: Exclude<LoadInput, { ResultCode: string }>
+        input: ValidLoadInput
     ): BootstrapRunContext {
         return {
             Params: params,
@@ -134,6 +169,8 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
             StagingDatabaseName: input.StagingDatabaseName,
             ContainerUrl: input.ContainerUrl,
             StagingDbCreated: true,
+            // The drop-on-complete refuses a database created before this instant.
+            RestoreStartedAt: input.CreatedAfter,
         };
     }
 
@@ -146,7 +183,7 @@ export class LoadSQLServerIntegrationFromStagingAction extends BootstrapSQLServe
 
     private loadSucceeded(params: RunActionParams, outputs: Record<string, string | number | boolean>): ActionResultSimple {
         for (const [name, value] of Object.entries(outputs)) {
-            this.addOutputParam(params, name, value);
+            this.AddOutputParam(params, name, value);
         }
         return {
             Success: true,

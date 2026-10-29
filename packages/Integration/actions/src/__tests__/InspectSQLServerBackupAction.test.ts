@@ -222,4 +222,19 @@ describe('InspectSQLServerBackupAction', () => {
             expect(mockSql.executedSql.some(s => s.includes('DROP CREDENTIAL'))).toBe(true);
         });
     });
+
+    describe('Direct-call guards', () => {
+        it.each([
+            ['a UNC share (NTLM coercion)', '\\\\attacker.example\\s\\x.bak'],
+            ['a forward-slash UNC share', '//attacker.example/s/x.bak'],
+            ['a non-Azure URL', 'https://attacker.example/c/x.bak'],
+            ['a container break-out', "https://acct.blob.core.windows.net/c]';--/x.bak"],
+        ])('refuses %s with INVALID_PARAMETER before any SQL', async (_label, backupUrls) => {
+            const result = await action['InternalRunAction'](makeParams({ BackupUrls: backupUrls, SasToken: 'token123' }));
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAMETER');
+            expect(mockSql.executedSql).toHaveLength(0);
+        });
+    });
 });

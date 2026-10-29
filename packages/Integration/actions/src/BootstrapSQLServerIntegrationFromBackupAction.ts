@@ -22,6 +22,7 @@ import {
     type StagingDropOptions
 } from './StagingDropGuard.js';
 import { StagingNotAccessibleError, StagingNotAccessibleMessage } from './StagingAccessGuard.js';
+import { InvalidBackupParameterError } from './BackupSourceGuard.js';
 
 /**
  * Reports the bootstrap's stages onto an integration run's progress artifact stream when the caller
@@ -155,6 +156,56 @@ interface TableLoadBatchSpec {
     EntityID: string;
 }
 
+/** One entity map's table load: where it reads, where it writes, and how. */
+export interface TableEtlRequest {
+    Executor: DatabaseProviderBase;
+    Runner: LongRunningSqlRunner;
+    CompanyIntegrationID: string;
+    EntityMap: MJCompanyIntegrationEntityMapEntity;
+    /** The target entity; its opt-ins sanction the direct insert and (for a truncate) the direct delete. */
+    EntityInfo: EntityInfo;
+    StagingDbName: string;
+    TargetPkCols: string[];
+    BatchSize: number;
+    RestoreTimestamp: Date;
+    TruncateTargetBeforeLoad: boolean;
+    RecordMaps: RecordMapTarget;
+    ContextUser?: UserInfo;
+}
+
+/** The staged source table of a load and what is known about it. */
+interface StagedSourceFacts {
+    SourceSchema: string;
+    SourceTable: string;
+    SourceColumns: SqlColumnInfo[];
+    SourceColSet: Set<string>;
+    TargetColMap: Map<string, string>;
+    PkColumns: string[];
+}
+
+/** Options of the load phase. */
+export interface BootstrapLoadOptions {
+    BatchSize: number;
+    TruncateTargetBeforeLoad: boolean;
+    EntityMapIDs?: string[];
+    DropStagingDbOnComplete: boolean;
+    BackupStartDate: Date;
+}
+
+/** The validated inputs of a standalone bootstrap. */
+interface BootstrapInput {
+    CompanyIntegrationID: string;
+    BackupUrls: string[];
+    StagingDatabaseName: string;
+    LoadOptions: Omit<BootstrapLoadOptions, 'BackupStartDate'>;
+}
+
+/** A refused input: its result code and message. */
+interface BootstrapInputRefusal {
+    ResultCode: string;
+    Message: string;
+}
+
 /**
  * State shared by the bootstrap's restore and load phases. The restore phase fills in the backup's
  * identity, the long-running runner and what it created (staging database, storage credential) as it
@@ -171,9 +222,21 @@ export interface BootstrapRunContext {
     ContainerUrl: string;
     /** True from the moment the restore starts until the staging database is dropped. */
     StagingDbCreated: boolean;
+    /**
+     * The server's UTC clock just before RESTORE began (less a small margin). Every staging drop passes it
+     * as `CreatedAfter`, so a database that already carried the staging name is never dropped. For the
+     * load action it is the caller's `CreatedAfter`.
+     */
+    RestoreStartedAt?: Date;
     BackupStartDate?: Date;
     BackupDatabaseName?: string;
 }
+
+/**
+ * Subtracted from the server's clock reading for {@link BootstrapRunContext.RestoreStartedAt}. The drop
+ * guard converts `create_date` to UTC with a whole-second offset, which can land a second early.
+ */
+const RESTORE_START_CLOCK_MARGIN_MS = 2000;
 
 /**
  * Action that performs a high-speed initial bootstrap of external SQL Server tables
@@ -182,17 +245,22 @@ export interface BootstrapRunContext {
  * Parameters (Input):
  *   - CompanyIntegrationID (required): ID of the CompanyIntegration being bootstrapped
  *   - BackupUrls (required): Single Azure Blob URL or comma-separated list of URLs (for striped backups)
- *   - StorageCredentialID (optional): ID of the MJ: Credentials record storing the SAS token
+ *   - StorageCredentialID (optional): ID of the MJ: Credentials record storing the SAS token (the caller must be able to read it)
  *   - SasToken (optional): Direct Shared Access Signature token for the Azure Blob container
  *   - StagingDatabaseName (optional): Name for the temporary staging database (default: auto-generated)
  *   - DropStagingDbOnComplete (optional): 'true' or 'false' (default: 'true') to reclaim staging disk space
  *   - BatchSize (optional): Chunk batch size for large table transfers (default: 500,000; 0 for unchunked)
- *   - TruncateTargetBeforeLoad (optional): 'true' or 'false' (default: 'false') to truncate target before load
+ *   - TruncateTargetBeforeLoad (optional): 'true' or 'false' (default: 'false') to truncate target before load;
+ *     each target entity must sanction direct SQL delete (`AllowDirectSQLDelete`)
  *   - TargetDataFileDirectory (optional): Custom file path for staging database .mdf file
  *   - TargetLogFileDirectory (optional): Custom file path for staging database .ldf file
  *   - EntityMapIDs (optional): Comma-separated list of specific EntityMapIDs to restrict the bootstrap
  *   - ProgressRunID (optional): The integration progress run to report stages to, when launched detached
  *     by the `IntegrationStartBootstrap` mutation; the client tails that run instead of awaiting the action
+ *
+ * Every backup source and directory is validated before any SQL (`INVALID_PARAMETER`): a URL must be a
+ * blob in an Azure Blob Storage container; a disk path must be local, free of `..` and inside
+ * `MJ_BACKUP_DISK_ROOTS` when that is set; a directory must be inside `MJ_STAGING_FILE_ROOTS` when set.
  *
  * Parameters (Output):
  *   - BackupStartDate: Point-in-time timestamp (ISO UTC) when the backup began (used as the watermark)
@@ -203,7 +271,7 @@ export interface BootstrapRunContext {
  *   - StagingDatabaseDropped: 1 if staging database was dropped, 0 if retained
  *
  * The restore and the per-table loads run for hours on a multi-terabyte backup, so they execute on a
- * dedicated connection with no request timeout (see {@link BaseIntegrationAction.createLongRunningRunner})
+ * dedicated connection with no request timeout (see {@link BaseIntegrationAction.CreateLongRunningRunner})
  * rather than on the API's shared pool. Each table load is one T-SQL batch that opens, commits or rolls
  * back its own transaction, so the statements are guaranteed to share a connection.
  */
@@ -214,93 +282,19 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         const startTime = Date.now();
         let ctx: BootstrapRunContext | undefined;
         // Opened before any validation so a detached caller sees even a parameter failure on its run.
-        const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
+        const progress = new BootstrapProgress(this.GetStringParam(params, 'ProgressRunID'), this.GetStringParam(params, 'CompanyIntegrationID') ?? '');
 
         try {
-            // 1. Parameter Validation
-            const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
-            if (!companyIntegrationID) {
-                return await this.rejectInput(params, progress, 'MISSING_PARAMETER', "Parameter 'CompanyIntegrationID' is required.");
+            const input = this.readBootstrapInput(params);
+            if ('ResultCode' in input) {
+                return await this.RejectInput(params, progress, input.ResultCode, input.Message);
             }
-
-            const backupUrlsRaw = this.getStringParam(params, 'BackupUrls');
-            if (!backupUrlsRaw) {
-                return await this.rejectInput(params, progress, 'MISSING_PARAMETER', "Parameter 'BackupUrls' is required.");
-            }
-
-            const backupUrls = backupUrlsRaw.split(',').map(u => u.trim()).filter(u => u.length > 0);
-            if (backupUrls.length === 0) {
-                return await this.rejectInput(params, progress, 'INVALID_PARAMETER', "Parameter 'BackupUrls' must contain at least one valid URL or file path.");
-            }
-
-            const stagingDbName = this.getStringParam(params, 'StagingDatabaseName') ??
-                `MJ_Staging_${companyIntegrationID.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12)}_${Date.now()}`;
-            ValidateIdentifier(stagingDbName, 'database');
-
-            const dropStagingOnComplete = this.getBoolParam(params, 'DropStagingDbOnComplete', true);
-            const truncateTargetBeforeLoad = this.getBoolParam(params, 'TruncateTargetBeforeLoad', false);
-            const batchSize = this.getNumberParam(params, 'BatchSize', 500000);
-            const entityMapIDs = this.getStringListParam(params, 'EntityMapIDs');
-
-            // 2. Resolve SQL Execution Provider (MultiProvider compliant). The record-map target is
-            //    resolved here as well so a metadata problem fails before an hours-long restore.
-            const sqlExecutor = this.getDatabaseProvider(params);
-            this.resolveRecordMapTarget(sqlExecutor);
-            ctx = {
-                Params: params,
-                Progress: progress,
-                Executor: sqlExecutor,
-                CompanyIntegrationID: companyIntegrationID,
-                StagingDatabaseName: stagingDbName,
-                ContainerUrl: '',
-                StagingDbCreated: false,
-            };
-
-            // 3-5. Credential, Inspect, Restore
-            await this.RunRestorePhase(ctx, backupUrls);
-
-            // 6-9. Load, Watermarks, Cleanup
-            const outputs = await this.RunLoadPhase(ctx, {
-                BatchSize: batchSize,
-                TruncateTargetBeforeLoad: truncateTargetBeforeLoad,
-                EntityMapIDs: entityMapIDs,
-                DropStagingDbOnComplete: dropStagingOnComplete,
-                BackupStartDate: ctx.BackupStartDate!,
-            });
-            // The load phase times only itself; this run's duration also covers the restore.
-            const durationSec = Math.round((Date.now() - startTime) / 1000);
-            outputs.DurationSeconds = durationSec;
-            for (const [name, value] of Object.entries(outputs)) {
-                this.addOutputParam(params, name, value);
-            }
-
-            const message = `Successfully bootstrapped ${outputs.TablesProcessed} table(s) (${Number(outputs.TotalRowsTransferred).toLocaleString()} rows) in ${durationSec}s. Watermark seeded to ${outputs.BackupStartDate}.`;
-            await progress.Complete(message, outputs);
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: message,
-                Params: params.Params,
-            };
-
+            ctx = this.createRunContext(params, progress, input);
+            await this.RunRestorePhase(ctx, input.BackupUrls);
+            const outputs = await this.RunLoadPhase(ctx, { ...input.LoadOptions, BackupStartDate: ctx.BackupStartDate! });
+            return await this.bootstrapSucceeded(params, progress, outputs, startTime);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Failure: ${message}`);
-            await progress.Fail(message);
-
-            // Automated fail-safe cleanup: the staging database if the restore was started (a restore that
-            // failed midway leaves it in RESTORING state), and the storage credential whenever it was
-            // created, including a failure before the restore (a bad SAS token fails at HEADERONLY).
-            if (ctx) {
-                await this.cleanUpAfterFailure(ctx.Executor, ctx.StagingDbCreated ? ctx.StagingDatabaseName : '', ctx.ContainerUrl, params.ContextUser);
-            }
-
-            return {
-                Success: false,
-                ResultCode: 'BOOTSTRAP_FAILED',
-                Message: message,
-                Params: params.Params,
-            };
+            return await this.bootstrapFailed(params, progress, ctx, error);
         } finally {
             if (ctx?.Runner) {
                 await ctx.Runner.Dispose();
@@ -308,52 +302,171 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         }
     }
 
+    /** The validated inputs, or the refusal of a missing or invalid one. Runs before any SQL. */
+    private readBootstrapInput(params: RunActionParams): BootstrapInput | BootstrapInputRefusal {
+        const companyIntegrationID = this.GetStringParam(params, 'CompanyIntegrationID');
+        if (!companyIntegrationID) {
+            return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'CompanyIntegrationID' is required." };
+        }
+        const backupUrlsRaw = this.GetStringParam(params, 'BackupUrls');
+        if (!backupUrlsRaw) {
+            return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'BackupUrls' is required." };
+        }
+        const backupUrls = backupUrlsRaw.split(',').map(u => u.trim()).filter(u => u.length > 0);
+        if (backupUrls.length === 0) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path." };
+        }
+        const problem = this.BackupInputProblem(params, backupUrls);
+        if (problem) {
+            return { ResultCode: 'INVALID_PARAMETER', Message: problem };
+        }
+        const stagingDbName = this.GetStringParam(params, 'StagingDatabaseName') ??
+            `MJ_Staging_${companyIntegrationID.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12)}_${Date.now()}`;
+        ValidateIdentifier(stagingDbName, 'database');
+        return { CompanyIntegrationID: companyIntegrationID, BackupUrls: backupUrls, StagingDatabaseName: stagingDbName, LoadOptions: this.readBootstrapLoadOptions(params) };
+    }
+
+    private readBootstrapLoadOptions(params: RunActionParams): Omit<BootstrapLoadOptions, 'BackupStartDate'> {
+        return {
+            DropStagingDbOnComplete: this.GetBoolParam(params, 'DropStagingDbOnComplete', true),
+            TruncateTargetBeforeLoad: this.GetBoolParam(params, 'TruncateTargetBeforeLoad', false),
+            BatchSize: this.GetNumberParam(params, 'BatchSize', 500000),
+            EntityMapIDs: this.GetStringListParam(params, 'EntityMapIDs'),
+        };
+    }
+
+    /**
+     * The run's context on the action's provider (MultiProvider compliant). The record-map target is
+     * resolved here as well so a metadata problem fails before an hours-long restore.
+     */
+    private createRunContext(params: RunActionParams, progress: BootstrapProgress, input: BootstrapInput): BootstrapRunContext {
+        const sqlExecutor = this.GetDatabaseProvider(params);
+        this.ResolveRecordMapTarget(sqlExecutor);
+        return {
+            Params: params,
+            Progress: progress,
+            Executor: sqlExecutor,
+            CompanyIntegrationID: input.CompanyIntegrationID,
+            StagingDatabaseName: input.StagingDatabaseName,
+            ContainerUrl: '',
+            StagingDbCreated: false,
+        };
+    }
+
+    private async bootstrapSucceeded(
+        params: RunActionParams,
+        progress: BootstrapProgress,
+        outputs: Record<string, string | number | boolean>,
+        startTime: number
+    ): Promise<ActionResultSimple> {
+        // The load phase times only itself; this run's duration also covers the restore.
+        const durationSec = Math.round((Date.now() - startTime) / 1000);
+        outputs.DurationSeconds = durationSec;
+        for (const [name, value] of Object.entries(outputs)) {
+            this.AddOutputParam(params, name, value);
+        }
+        const message = `Successfully bootstrapped ${outputs.TablesProcessed} table(s) (${Number(outputs.TotalRowsTransferred).toLocaleString()} rows) in ${durationSec}s. Watermark seeded to ${outputs.BackupStartDate}.`;
+        await progress.Complete(message, outputs);
+        return { Success: true, ResultCode: 'SUCCESS', Message: message, Params: params.Params };
+    }
+
+    /**
+     * Fails the run, then the automated fail-safe cleanup: the staging database if the restore was started
+     * (a restore that failed midway leaves it in RESTORING state), and the storage credential whenever it
+     * was created, including a failure before the restore (a bad SAS token fails at HEADERONLY).
+     */
+    private async bootstrapFailed(
+        params: RunActionParams,
+        progress: BootstrapProgress,
+        ctx: BootstrapRunContext | undefined,
+        error: unknown
+    ): Promise<ActionResultSimple> {
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Failure: ${message}`);
+        await progress.Fail(message);
+        if (ctx) {
+            await this.CleanUpAfterFailure(ctx);
+        }
+        const resultCode = error instanceof InvalidBackupParameterError ? error.ResultCode : 'BOOTSTRAP_FAILED';
+        return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
+    }
+
     /**
      * Credential, Inspect and Restore stages: registers the storage credential for URL sources, reads the
      * backup header and file list across every stripe, and restores into the staging database. Sets
-     * `ContainerUrl`, `BackupStartDate`, `BackupDatabaseName`, `Runner` and `StagingDbCreated` on `ctx`
-     * as each becomes known, so the caller's failure cleanup and disposal see exactly what was created.
+     * `ContainerUrl`, `BackupStartDate`, `BackupDatabaseName`, `Runner`, `RestoreStartedAt` and
+     * `StagingDbCreated` on `ctx` as each becomes known, so the caller's failure cleanup and disposal see
+     * exactly what was created.
      */
     protected async RunRestorePhase(ctx: BootstrapRunContext, backupUrls: string[]): Promise<void> {
-        const { Params: params, Progress: progress, Executor: sqlExecutor, StagingDatabaseName: stagingDbName } = ctx;
-
-        // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
-        const hasUrl = backupUrls.some(u => this.IsUrl(u));
-        if (hasUrl) {
-            progress.StageStart('Credential', 'Resolving the storage token and registering the SQL Server credential');
-            const sasToken = await this.resolveSasToken(params);
-            const firstUrl = backupUrls.find(u => this.IsUrl(u))!;
-            ctx.ContainerUrl = this.extractContainerUrl(firstUrl);
-
-            // Create SQL Server Storage Credential
-            LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${ctx.ContainerUrl}'...`);
-            await this.ensureStorageCredential(sqlExecutor, ctx.ContainerUrl, sasToken, params.ContextUser);
-            progress.StageComplete('Credential');
+        if (backupUrls.some(u => this.IsUrl(u))) {
+            await this.registerStorageCredential(ctx, backupUrls);
         }
+        const header = await this.inspectBackup(ctx, backupUrls);
+        const moveClauses = await this.BuildMoveClauses(ctx.Executor, ctx.StagingDatabaseName, header.FileList, ctx.Params);
+        ctx.Progress.StageComplete('Inspect');
+        await this.restoreIntoStaging(ctx, backupUrls, moveClauses, header.Info);
+    }
 
-        // 4. Inspect Backup Header & Filelist across ALL stripes (Msg 3132 prevention)
-        progress.StageStart('Inspect', `Reading the backup header and file list across ${backupUrls.length} stripe(s)`);
+    /** Credential stage: resolves the storage token and registers the SQL Server credential for the container. */
+    private async registerStorageCredential(ctx: BootstrapRunContext, backupUrls: string[]): Promise<void> {
+        ctx.Progress.StageStart('Credential', 'Resolving the storage token and registering the SQL Server credential');
+        const sasToken = await this.ResolveSasToken(ctx.Params);
+        const firstUrl = backupUrls.find(u => this.IsUrl(u))!;
+        ctx.ContainerUrl = this.ExtractContainerUrl(firstUrl);
+        LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${ctx.ContainerUrl}'...`);
+        await this.EnsureStorageCredential(ctx.Executor, ctx.ContainerUrl, sasToken, ctx.Params.ContextUser);
+        ctx.Progress.StageComplete('Credential');
+    }
+
+    /** Inspect stage: the header and file list across ALL stripes (Msg 3132 prevention). Leaves the stage open. */
+    private async inspectBackup(ctx: BootstrapRunContext, backupUrls: string[]): Promise<{ Info: SqlBackupHeaderInfo; FileList: SqlBackupFileListEntry[] }> {
+        ctx.Progress.StageStart('Inspect', `Reading the backup header and file list across ${backupUrls.length} stripe(s)`);
         LogStatus(`[BootstrapSQLServer] Reading backup header from ${backupUrls.length} stripe(s)...`);
-        const headerInfo = await this.inspectBackupHeader(sqlExecutor, backupUrls, params.ContextUser);
-        LogStatus(`[BootstrapSQLServer] Backup Header: SourceDB='${headerInfo.DatabaseName}', BackupStartDate=${headerInfo.BackupStartDate.toISOString()}`);
-        ctx.BackupStartDate = headerInfo.BackupStartDate;
-        ctx.BackupDatabaseName = headerInfo.DatabaseName;
+        const info = await this.InspectBackupHeader(ctx.Executor, backupUrls, ctx.Params.ContextUser);
+        LogStatus(`[BootstrapSQLServer] Backup Header: SourceDB='${info.DatabaseName}', BackupStartDate=${info.BackupStartDate.toISOString()}`);
+        ctx.BackupStartDate = info.BackupStartDate;
+        ctx.BackupDatabaseName = info.DatabaseName;
+        const fileList = await this.InspectBackupFileList(ctx.Executor, backupUrls, ctx.Params.ContextUser);
+        return { Info: info, FileList: fileList };
+    }
 
-        const fileList = await this.inspectBackupFileList(sqlExecutor, backupUrls, params.ContextUser);
-        const moveClauses = await this.buildMoveClauses(sqlExecutor, stagingDbName, fileList, params);
-        progress.StageComplete('Inspect');
-
-        // 5. Restore into a staging database that must not already exist: a restore WITH REPLACE over
-        //    a user-typed name could otherwise overwrite a live database.
-        progress.StageStart('Restore', `Restoring '${headerInfo.DatabaseName}' (backup of ${headerInfo.BackupStartDate.toISOString()}) into staging database [${stagingDbName}]`);
-        await this.assertStagingDatabaseAbsent(sqlExecutor, stagingDbName, params.ContextUser);
-        const runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
-        ctx.Runner = runner;
+    /**
+     * Restore stage, into a staging database that must not already exist: a restore WITH REPLACE over a
+     * user-typed name could otherwise overwrite a live database. The restore start is read from the
+     * server right before RESTORE, so the cleanup never drops a database created before it.
+     */
+    private async restoreIntoStaging(ctx: BootstrapRunContext, backupUrls: string[], moveClauses: string[], header: SqlBackupHeaderInfo): Promise<void> {
+        const { Executor: sqlExecutor, StagingDatabaseName: stagingDbName, Params: params } = ctx;
+        ctx.Progress.StageStart('Restore', `Restoring '${header.DatabaseName}' (backup of ${header.BackupStartDate.toISOString()}) into staging database [${stagingDbName}]`);
+        await this.AssertStagingDatabaseAbsent(sqlExecutor, stagingDbName, params.ContextUser);
+        ctx.Runner = await this.CreateLongRunningRunner(sqlExecutor, params.ContextUser);
+        ctx.RestoreStartedAt = await this.ReadRestoreStartTime(sqlExecutor, params.ContextUser);
         LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
         ctx.StagingDbCreated = true;
-        await this.executeDatabaseRestore(runner, stagingDbName, backupUrls, moveClauses);
-        await this.assertStagingAccessible(sqlExecutor, stagingDbName, params.ContextUser);
-        progress.StageComplete('Restore');
+        await this.ExecuteDatabaseRestore(ctx.Runner, stagingDbName, backupUrls, moveClauses);
+        await this.AssertStagingAccessible(sqlExecutor, stagingDbName, params.ContextUser);
+        ctx.Progress.StageComplete('Restore');
+    }
+
+    /**
+     * The instant a restore starts, on the server's clock and in the same UTC conversion the drop guard
+     * applies to `create_date` (see {@link QueryStagingDropFacts}), less {@link RESTORE_START_CLOCK_MARGIN_MS}.
+     * Reading MJAPI's own clock instead would let clock skew between the two hosts refuse (or allow) a drop.
+     */
+    protected async ReadRestoreStartTime(executor: DatabaseProviderBase, contextUser?: UserInfo): Promise<Date> {
+        const rows = await executor.ExecuteSQL<{ ServerUtcNow: Date | string | null }>(
+            'SELECT DATEADD(second, DATEDIFF(second, GETDATE(), GETUTCDATE()), GETDATE()) AS ServerUtcNow;',
+            undefined,
+            { description: 'Read the restore start time' },
+            contextUser
+        );
+        const raw = rows?.[0]?.ServerUtcNow;
+        const serverNow = raw == null ? undefined : new Date(raw);
+        if (!serverNow || isNaN(serverNow.getTime())) {
+            throw new Error('The server did not report its current time, so the restore start cannot be recorded.');
+        }
+        return new Date(serverNow.getTime() - RESTORE_START_CLOCK_MARGIN_MS);
     }
 
     /**
@@ -362,7 +475,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * right after the restore so the failure names the remedy, instead of the discover phase failing
      * with a bare "Login failed".
      */
-    protected async assertStagingAccessible(executor: DatabaseProviderBase, stagingDbName: string, contextUser?: UserInfo): Promise<void> {
+    protected async AssertStagingAccessible(executor: DatabaseProviderBase, stagingDbName: string, contextUser?: UserInfo): Promise<void> {
         ValidateIdentifier(stagingDbName, 'database');
         try {
             await executor.ExecuteSQL<{ TableCount: number }>(
@@ -383,110 +496,122 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * `ctx.Runner`, opening one onto `ctx` when the restore ran elsewhere. Returns the action's outputs;
      * their `DurationSeconds` covers this phase only.
      */
-    protected async RunLoadPhase(
-        ctx: BootstrapRunContext,
-        options: { BatchSize: number; TruncateTargetBeforeLoad: boolean; EntityMapIDs?: string[]; DropStagingDbOnComplete: boolean; BackupStartDate: Date }
-    ): Promise<Record<string, string | number | boolean>> {
+    protected async RunLoadPhase(ctx: BootstrapRunContext, options: BootstrapLoadOptions): Promise<Record<string, string | number | boolean>> {
         const startTime = Date.now();
-        const { Params: params, Progress: progress, Executor: sqlExecutor, CompanyIntegrationID: companyIntegrationID, StagingDatabaseName: stagingDbName } = ctx;
-        const backupStartDate = options.BackupStartDate;
-        const recordMaps = this.resolveRecordMapTarget(sqlExecutor);
+        const recordMaps = this.ResolveRecordMapTarget(ctx.Executor);
         if (!ctx.Runner) {
-            ctx.Runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
+            ctx.Runner = await this.CreateLongRunningRunner(ctx.Executor, ctx.Params.ContextUser);
         }
-        const runner = ctx.Runner;
 
         // 6. Load Active Entity Maps for Company Integration
-        const entityMaps = await this.loadEntityMaps(sqlExecutor, companyIntegrationID, options.EntityMapIDs, params.ContextUser);
+        const entityMaps = await this.LoadEntityMaps(ctx.Executor, ctx.CompanyIntegrationID, options.EntityMapIDs, ctx.Params.ContextUser);
         if (entityMaps.length === 0) {
-            LogStatus(`[BootstrapSQLServer] Warning: No active entity maps found for CompanyIntegrationID=${companyIntegrationID}.`);
+            LogStatus(`[BootstrapSQLServer] Warning: No active entity maps found for CompanyIntegrationID=${ctx.CompanyIntegrationID}.`);
         }
 
-        // 7. Execute Local In-Engine Minimally-Logged ETL
-        let totalRowsInserted = 0;
-        const tableResults: TableEtlResult[] = [];
-        const loadedMaps: MJCompanyIntegrationEntityMapEntity[] = [];
+        // 7-9. Local in-engine ETL, watermarks, cleanup
+        const loaded = await this.loadEntityMapTables(ctx, ctx.Runner, entityMaps, options, recordMaps);
+        await this.seedWatermarks(ctx, loaded.Maps, options.BackupStartDate);
+        if (options.DropStagingDbOnComplete) {
+            await this.cleanUpAfterLoad(ctx);
+        }
 
+        return {
+            BackupStartDate: options.BackupStartDate.toISOString(),
+            StagingDatabaseName: ctx.StagingDatabaseName,
+            TablesProcessed: loaded.Results.length,
+            TotalRowsTransferred: loaded.Results.reduce((sum, r) => sum + r.RowsTransferred, 0),
+            DurationSeconds: Math.round((Date.now() - startTime) / 1000),
+            StagingDatabaseDropped: options.DropStagingDbOnComplete ? 1 : 0,
+        };
+    }
+
+    /** Loads each entity map's table in order; a map whose target entity is missing from metadata is skipped. */
+    private async loadEntityMapTables(
+        ctx: BootstrapRunContext,
+        runner: LongRunningSqlRunner,
+        entityMaps: MJCompanyIntegrationEntityMapEntity[],
+        options: BootstrapLoadOptions,
+        recordMaps: RecordMapTarget
+    ): Promise<{ Results: TableEtlResult[]; Maps: MJCompanyIntegrationEntityMapEntity[] }> {
+        const results: TableEtlResult[] = [];
+        const maps: MJCompanyIntegrationEntityMapEntity[] = [];
         for (const map of entityMaps) {
-            const entityInfo = sqlExecutor.EntityByID(map.EntityID);
+            const entityInfo = ctx.Executor.EntityByID(map.EntityID);
             if (!entityInfo) {
                 LogError(`[BootstrapSQLServer] Skipping EntityMap ${map.ID}: Target EntityID '${map.EntityID}' not found in metadata.`);
                 continue;
             }
-
-            // Direct DML against an entity's base table is sanctioned only by the entity's own opt-in.
-            if (!entityInfo.AllowDirectSQLInsert) {
-                throw new Error(`Target entity '${entityInfo.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL ETL is prohibited.`);
-            }
-
-            const targetPkCols = this.resolveTargetPrimaryKeys(entityInfo);
-
-            const loadStage = `Load ${entityInfo.Name}`;
-            progress.StageStart(loadStage, `Loading ${map.ExternalObjectName} into ${entityInfo.SchemaName}.${entityInfo.BaseTable}`);
-            const result = await this.executeTableEtl(
-                sqlExecutor,
-                runner,
-                companyIntegrationID,
-                map,
-                stagingDbName,
-                map.ExternalObjectName,
-                entityInfo.SchemaName,
-                entityInfo.BaseTable,
-                targetPkCols,
-                options.BatchSize,
-                backupStartDate,
-                options.TruncateTargetBeforeLoad,
-                recordMaps,
-                params.ContextUser
-            );
-
-            // After successful table load and commit, invalidate RunView server cache for the entity (Task 7)
-            await LocalCacheManager.Instance.InvalidateEntityCaches(entityInfo.Name);
-
-            totalRowsInserted += result.RowsTransferred;
-            tableResults.push(result);
-            loadedMaps.push(map);
-            progress.StageComplete(loadStage, result.RowsTransferred);
+            results.push(await this.loadEntityMapTable(ctx, runner, map, entityInfo, options, recordMaps));
+            maps.push(map);
         }
+        return { Results: results, Maps: maps };
+    }
 
-        // 8. Seed Watermark via WatermarkService (Zero-Gap Invariant). Only a map whose table was
-        //    actually loaded is seeded: seeding a skipped map would make its next incremental sync
-        //    start after the backup date and lose every pre-backup row for good.
+    /** One entity map's load stage: the opt-in check, the table load, and the entity's cache invalidation. */
+    private async loadEntityMapTable(
+        ctx: BootstrapRunContext,
+        runner: LongRunningSqlRunner,
+        map: MJCompanyIntegrationEntityMapEntity,
+        entityInfo: EntityInfo,
+        options: BootstrapLoadOptions,
+        recordMaps: RecordMapTarget
+    ): Promise<TableEtlResult> {
+        // Direct DML against an entity's base table is sanctioned only by the entity's own opt-in.
+        if (!entityInfo.AllowDirectSQLInsert) {
+            throw new Error(`Target entity '${entityInfo.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL ETL is prohibited.`);
+        }
+        const targetPkCols = this.ResolveTargetPrimaryKeys(entityInfo);
+        const loadStage = `Load ${entityInfo.Name}`;
+        ctx.Progress.StageStart(loadStage, `Loading ${map.ExternalObjectName} into ${entityInfo.SchemaName}.${entityInfo.BaseTable}`);
+        const result = await this.ExecuteTableEtl({
+            Executor: ctx.Executor,
+            Runner: runner,
+            CompanyIntegrationID: ctx.CompanyIntegrationID,
+            EntityMap: map,
+            EntityInfo: entityInfo,
+            StagingDbName: ctx.StagingDatabaseName,
+            TargetPkCols: targetPkCols,
+            BatchSize: options.BatchSize,
+            RestoreTimestamp: options.BackupStartDate,
+            TruncateTargetBeforeLoad: options.TruncateTargetBeforeLoad,
+            RecordMaps: recordMaps,
+            ContextUser: ctx.Params.ContextUser,
+        });
+        // After successful table load and commit, invalidate RunView server cache for the entity
+        await LocalCacheManager.Instance.InvalidateEntityCaches(entityInfo.Name);
+        ctx.Progress.StageComplete(loadStage, result.RowsTransferred);
+        return result;
+    }
+
+    /**
+     * Watermarks stage, via WatermarkService (Zero-Gap Invariant). Only a map whose table was actually
+     * loaded is seeded: seeding a skipped map would make its next incremental sync start after the backup
+     * date and lose every pre-backup row for good.
+     */
+    private async seedWatermarks(ctx: BootstrapRunContext, loadedMaps: MJCompanyIntegrationEntityMapEntity[], backupStartDate: Date): Promise<void> {
         LogStatus(`[BootstrapSQLServer] Seeding sync watermarks with BackupStartDate: ${backupStartDate.toISOString()}...`);
-        progress.StageStart('Watermarks', `Seeding ${loadedMaps.length} sync watermark(s) to ${backupStartDate.toISOString()}`);
+        ctx.Progress.StageStart('Watermarks', `Seeding ${loadedMaps.length} sync watermark(s) to ${backupStartDate.toISOString()}`);
         const watermarkService = new WatermarkService();
         for (const map of loadedMaps) {
-            await watermarkService.Update(
-                map.ID,
-                backupStartDate.toISOString(),
-                params.ContextUser,
-                'Pull'
-            );
+            await watermarkService.Update(map.ID, backupStartDate.toISOString(), ctx.Params.ContextUser, 'Pull');
         }
-        progress.StageComplete('Watermarks');
+        ctx.Progress.StageComplete('Watermarks');
+    }
 
-        // 9. Post-Restore Cleanup
-        if (options.DropStagingDbOnComplete) {
-            progress.StageStart('Cleanup', `Dropping staging database [${stagingDbName}] and the storage credential`);
-            LogStatus(`[BootstrapSQLServer] Cleaning up staging database [${stagingDbName}]...`);
-            await this.dropStagingDatabase(sqlExecutor, stagingDbName, params.ContextUser);
-            ctx.StagingDbCreated = false;
+    /** Cleanup stage after a successful load: the staging database (never one created before the restore) and the credential. */
+    private async cleanUpAfterLoad(ctx: BootstrapRunContext): Promise<void> {
+        const { StagingDatabaseName: stagingDbName, Params: params } = ctx;
+        ctx.Progress.StageStart('Cleanup', `Dropping staging database [${stagingDbName}] and the storage credential`);
+        LogStatus(`[BootstrapSQLServer] Cleaning up staging database [${stagingDbName}]...`);
+        await this.DropStagingDatabase(ctx.Executor, stagingDbName, params.ContextUser, { CreatedAfter: ctx.RestoreStartedAt });
+        ctx.StagingDbCreated = false;
 
-            if (ctx.ContainerUrl) {
-                LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${ctx.ContainerUrl}'...`);
-                await this.dropStorageCredential(sqlExecutor, ctx.ContainerUrl, params.ContextUser);
-            }
-            progress.StageComplete('Cleanup');
+        if (ctx.ContainerUrl) {
+            LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${ctx.ContainerUrl}'...`);
+            await this.DropStorageCredential(ctx.Executor, ctx.ContainerUrl, params.ContextUser);
         }
-
-        return {
-            BackupStartDate: backupStartDate.toISOString(),
-            StagingDatabaseName: stagingDbName,
-            TablesProcessed: tableResults.length,
-            TotalRowsTransferred: totalRowsInserted,
-            DurationSeconds: Math.round((Date.now() - startTime) / 1000),
-            StagingDatabaseDropped: options.DropStagingDbOnComplete ? 1 : 0,
-        };
+        ctx.Progress.StageComplete('Cleanup');
     }
 
     /**
@@ -496,7 +621,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     protected readonly TerminatesProgressRun: boolean = true;
 
     /** The result for an input the action cannot run with; the reason is reported on the run. */
-    protected async rejectInput(params: RunActionParams, progress: BootstrapProgress, resultCode: string, message: string): Promise<ActionResultSimple> {
+    protected async RejectInput(params: RunActionParams, progress: BootstrapProgress, resultCode: string, message: string): Promise<ActionResultSimple> {
         await this.ReportFailure(progress, message, resultCode);
         return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
     }
@@ -514,25 +639,25 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         await progress.Flush();
     }
 
-    /** Best-effort teardown after a failure; each step is attempted even if the previous one failed. */
-    protected async cleanUpAfterFailure(
-        executor: DatabaseProviderBase,
-        stagingDbName: string,
-        containerUrl: string,
-        contextUser?: UserInfo
-    ): Promise<void> {
-        if (stagingDbName) {
+    /**
+     * Best-effort teardown after a failure; each step is attempted even if the previous one failed. The
+     * staging database is dropped only when this run started a restore into it, and only if it was created
+     * after `ctx.RestoreStartedAt`.
+     */
+    protected async CleanUpAfterFailure(ctx: BootstrapRunContext): Promise<void> {
+        const contextUser = ctx.Params.ContextUser;
+        if (ctx.StagingDbCreated) {
             try {
-                await this.dropStagingDatabase(executor, stagingDbName, contextUser);
+                await this.DropStagingDatabase(ctx.Executor, ctx.StagingDatabaseName, contextUser, { CreatedAfter: ctx.RestoreStartedAt });
             } catch (cleanupErr) {
-                LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure drop of [${stagingDbName}] failed: ${cleanupErr}`);
+                LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure drop of [${ctx.StagingDatabaseName}] failed: ${cleanupErr}`);
             }
         }
-        if (containerUrl) {
+        if (ctx.ContainerUrl) {
             try {
-                await this.dropStorageCredential(executor, containerUrl, contextUser);
+                await this.DropStorageCredential(ctx.Executor, ctx.ContainerUrl, contextUser);
             } catch (cleanupErr) {
-                LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure drop of credential '${containerUrl}' failed: ${cleanupErr}`);
+                LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Post-failure drop of credential '${ctx.ContainerUrl}' failed: ${cleanupErr}`);
             }
         }
     }
@@ -542,9 +667,9 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * source's own key columns as a soft (unenforced, nullable) primary key, single or composite; the load
      * copies them from the source row and the record map stores them `|`-joined, exactly as the sync
      * engine composes an entity record ID. A target whose key column has no source counterpart (a
-     * surrogate key) gets a generated value instead; see {@link buildColumnMappings}.
+     * surrogate key) gets a generated value instead; see {@link BuildColumnMappings}.
      */
-    protected resolveTargetPrimaryKeys(entityInfo: EntityInfo): string[] {
+    protected ResolveTargetPrimaryKeys(entityInfo: EntityInfo): string[] {
         if (entityInfo.PrimaryKeys.length === 0) {
             throw new Error(`Target entity '${entityInfo.Name}' has no primary key in metadata; the load cannot seed its record maps.`);
         }
@@ -555,7 +680,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * Resolves where record maps are seeded from the `MJ: Company Integration Record Maps` entity so the
      * core schema name and base table come from metadata, and checks the entity sanctions direct SQL.
      */
-    protected resolveRecordMapTarget(provider: DatabaseProviderBase): RecordMapTarget {
+    protected ResolveRecordMapTarget(provider: DatabaseProviderBase): RecordMapTarget {
         const entity = provider.EntityByName('MJ: Company Integration Record Maps');
         if (!entity) {
             throw new Error("Entity 'MJ: Company Integration Record Maps' was not found in metadata.");
@@ -575,7 +700,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
      * Refuses to restore over a database that already exists. `RESTORE ... WITH REPLACE` would silently
      * overwrite it, and a staging name is user-supplied.
      */
-    protected async assertStagingDatabaseAbsent(
+    protected async AssertStagingDatabaseAbsent(
         executor: DatabaseProviderBase,
         stagingDbName: string,
         contextUser?: UserInfo
@@ -589,19 +714,24 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     }
 
     /**
-     * Constructs the MOVE clauses for data and log files.
+     * Constructs the MOVE clauses for data and log files. A caller-supplied directory has already passed
+     * {@link BaseIntegrationAction.BackupInputProblem}; it is checked again here as defense in depth.
      */
-    protected async buildMoveClauses(
+    protected async BuildMoveClauses(
         executor: DatabaseProviderBase,
         stagingDbName: string,
         fileList: SqlBackupFileListEntry[],
         params: RunActionParams
     ): Promise<string[]> {
-        let customDataDir = this.getStringParam(params, 'TargetDataFileDirectory');
-        let customLogDir = this.getStringParam(params, 'TargetLogFileDirectory');
+        const problem = this.BackupInputProblem(params, []);
+        if (problem) {
+            throw new InvalidBackupParameterError(problem);
+        }
+        let customDataDir = this.GetStringParam(params, 'TargetDataFileDirectory');
+        let customLogDir = this.GetStringParam(params, 'TargetLogFileDirectory');
 
         if (!customDataDir || !customLogDir) {
-            const defaultPaths = await this.queryInstanceDefaultPaths(executor, params.ContextUser);
+            const defaultPaths = await this.QueryInstanceDefaultPaths(executor, params.ContextUser);
             if (!customDataDir) customDataDir = defaultPaths.DataPath;
             if (!customLogDir) customLogDir = defaultPaths.LogPath;
         }
@@ -633,7 +763,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     /**
      * Resolves default SQL Server instance paths for data and log files.
      */
-    protected async queryInstanceDefaultPaths(
+    protected async QueryInstanceDefaultPaths(
         executor: DatabaseProviderBase,
         contextUser?: UserInfo
     ): Promise<{ DataPath: string; LogPath: string }> {
@@ -677,16 +807,16 @@ SELECT
     /**
      * Executes the RESTORE DATABASE command formatting each stripe as URL = N'...' or DISK = N'...'.
      * Runs on the long-running connection: a multi-terabyte restore takes hours. Never `WITH REPLACE`;
-     * {@link assertStagingDatabaseAbsent} has already established the name is free.
+     * {@link AssertStagingDatabaseAbsent} has already established the name is free.
      */
-    protected async executeDatabaseRestore(
+    protected async ExecuteDatabaseRestore(
         runner: LongRunningSqlRunner,
         stagingDbName: string,
         backupUrls: string[],
         moveClauses: string[]
     ): Promise<void> {
         ValidateIdentifier(stagingDbName, 'database');
-        const fromSources = this.buildFromSourcesClause(backupUrls);
+        const fromSources = this.BuildFromSourcesClause(backupUrls);
         const moves = moveClauses.join(',\n    ');
 
         const sql = `
@@ -707,7 +837,7 @@ WITH
      * before that instant, so a name that collides with an existing database can never drop it. A
      * database that does not exist is a no-op.
      */
-    protected async dropStagingDatabase(
+    protected async DropStagingDatabase(
         executor: DatabaseProviderBase,
         stagingDbName: string,
         contextUser?: UserInfo,
@@ -715,7 +845,7 @@ WITH
     ): Promise<void> {
         ValidateIdentifier(stagingDbName, 'database');
         AssertNotSystemDatabase(stagingDbName);
-        const facts = await this.queryStagingDropFacts(executor, stagingDbName, contextUser);
+        const facts = await this.QueryStagingDropFacts(executor, stagingDbName, contextUser);
         AssertDropAllowedByFacts(stagingDbName, facts, options);
         if (!facts.CreatedAtUtc) {
             return;
@@ -736,7 +866,7 @@ END`;
      * The current database and the target's creation time in UTC (`create_date` is server-local, so it is
      * shifted by the server's current UTC offset). Fails closed: no row back is a refusal.
      */
-    protected async queryStagingDropFacts(executor: DatabaseProviderBase, stagingDbName: string, contextUser?: UserInfo): Promise<StagingDropFacts> {
+    protected async QueryStagingDropFacts(executor: DatabaseProviderBase, stagingDbName: string, contextUser?: UserInfo): Promise<StagingDropFacts> {
         const sql = `
 SELECT DB_NAME() AS CurrentDatabase,
        (SELECT DATEADD(second, DATEDIFF(second, GETDATE(), GETUTCDATE()), create_date)
@@ -755,7 +885,7 @@ SELECT DB_NAME() AS CurrentDatabase,
     /**
      * Loads active CompanyIntegrationEntityMap records for the integration.
      */
-    protected async loadEntityMaps(
+    protected async LoadEntityMaps(
         provider: DatabaseProviderBase,
         companyIntegrationID: string,
         filterEntityMapIDs: string[] | undefined,
@@ -785,7 +915,7 @@ SELECT DB_NAME() AS CurrentDatabase,
     /**
      * Checks if a target table currently contains any rows.
      */
-    protected async targetTableHasRows(
+    protected async TargetTableHasRows(
         executor: DatabaseProviderBase,
         schema: string,
         table: string,
@@ -803,7 +933,7 @@ SELECT DB_NAME() AS CurrentDatabase,
      * place the external-data-source connector reads it when it syncs deltas — when the staged table
      * carries that column.
      */
-    protected async resolveWatermarkColumn(
+    protected async ResolveWatermarkColumn(
         companyIntegrationID: string,
         externalObjectName: string,
         sourceColSet: Set<string>,
@@ -827,89 +957,99 @@ SELECT DB_NAME() AS CurrentDatabase,
     /**
      * Loads one entity map's staging table into its target table and seeds the record maps that let the
      * engine match later deltas to the bootstrapped rows. Metadata lookups run on the provider; the load
-     * itself is a single T-SQL batch on the long-running connection (see {@link buildTableLoadBatch}).
+     * itself is a single T-SQL batch on the long-running connection (see {@link BuildTableLoadBatch}).
      */
-    protected async executeTableEtl(
-        executor: DatabaseProviderBase,
-        runner: LongRunningSqlRunner,
-        companyIntegrationID: string,
-        entityMap: MJCompanyIntegrationEntityMapEntity,
-        stagingDbName: string,
-        externalObjectName: string,
-        targetSchema: string,
-        targetTable: string,
-        targetPkCols: string[],
-        batchSize: number,
-        restoreTimestamp: Date,
-        truncateTargetBeforeLoad: boolean,
-        recordMaps: RecordMapTarget,
-        contextUser?: UserInfo
-    ): Promise<TableEtlResult> {
-        const { schema: sourceSchema, table: sourceTable } = this.parseObjectIdentifier(externalObjectName);
+    protected async ExecuteTableEtl(request: TableEtlRequest): Promise<TableEtlResult> {
+        const targetSchema = request.EntityInfo.SchemaName;
+        const targetTable = request.EntityInfo.BaseTable;
+        const source = await this.readStagedSourceFacts(request);
+        const truncateTarget = await this.decideTruncate(request);
+
+        const watermarkSourceCol = await this.ResolveWatermarkColumn(request.CompanyIntegrationID, request.EntityMap.ExternalObjectName, source.SourceColSet, request.ContextUser);
+        const totalRows = await this.QueryTableRowCount(request.Executor, request.StagingDbName, source.SourceSchema, source.SourceTable, request.ContextUser);
+        const batchSql = this.BuildTableLoadBatch({
+            StagingDbName: request.StagingDbName,
+            SourceSchema: source.SourceSchema,
+            SourceTable: source.SourceTable,
+            TargetSchema: targetSchema,
+            TargetTable: targetTable,
+            TargetPkCols: request.TargetPkCols,
+            Mappings: this.BuildColumnMappings(source.SourceColumns, source.TargetColMap, request.TargetPkCols, watermarkSourceCol),
+            ExternalIdExpr: this.BuildExternalIdExpression(source.PkColumns, source.SourceColSet),
+            RestoreTimestampIso: request.RestoreTimestamp.toISOString(),
+            ChunkPkCol: this.ResolveChunkColumn(source.PkColumns, source.SourceColumns, totalRows, request.BatchSize),
+            BatchSize: request.BatchSize,
+            TruncateTarget: truncateTarget,
+            RecordMaps: request.RecordMaps,
+            CompanyIntegrationID: request.CompanyIntegrationID,
+            EntityID: request.EntityMap.EntityID,
+        });
+
+        const rows = await request.Runner.ExecuteSQL<{ RowsInserted: number | string }>(batchSql, `ETL Transfer ${source.SourceTable} -> ${targetTable}`);
+        const rowsInserted = rows && rows.length > 0 ? Number(rows[0].RowsInserted) : 0;
+        LogStatus(`[BootstrapSQLServer] Transferred ${source.SourceTable} -> ${targetTable}: ${rowsInserted.toLocaleString()} rows.`);
+
+        return {
+            SourceTable: `[${source.SourceSchema}].[${source.SourceTable}]`,
+            TargetTable: `[${targetSchema}].[${targetTable}]`,
+            RowsTransferred: rowsInserted,
+        };
+    }
+
+    /** Validates every identifier of the load and reads the staged source's and the target's columns and keys. */
+    private async readStagedSourceFacts(request: TableEtlRequest): Promise<StagedSourceFacts> {
+        const { Executor: executor, StagingDbName: stagingDbName, ContextUser: contextUser } = request;
+        const { SchemaName: targetSchema, BaseTable: targetTable } = request.EntityInfo;
+        const { schema: sourceSchema, table: sourceTable } = this.ParseObjectIdentifier(request.EntityMap.ExternalObjectName);
         ValidateIdentifier(stagingDbName, 'database');
         ValidateIdentifier(sourceSchema, 'schema');
         ValidateIdentifier(sourceTable, 'table');
         ValidateIdentifier(targetSchema, 'schema');
         ValidateIdentifier(targetTable, 'table');
-        targetPkCols.forEach(c => ValidateIdentifier(c, 'column'));
+        request.TargetPkCols.forEach(c => ValidateIdentifier(c, 'column'));
 
-        const sourceColumns = await this.queryTableColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
+        const sourceColumns = await this.QueryTableColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         if (sourceColumns.length === 0) {
             throw new Error(`Source table '[${stagingDbName}].[${sourceSchema}].[${sourceTable}]' does not exist or has no columns.`);
         }
-
-        const targetColumns = await this.queryTableColumns(executor, undefined, targetSchema, targetTable, contextUser);
+        const targetColumns = await this.QueryTableColumns(executor, undefined, targetSchema, targetTable, contextUser);
         if (targetColumns.length === 0) {
             throw new Error(`Target table '[${targetSchema}].[${targetTable}]' does not exist in target database.`);
         }
-
-        const sourceColSet = new Set(sourceColumns.map(c => c.COLUMN_NAME.toLowerCase()));
-        const targetColMap = new Map(targetColumns.map(c => [c.COLUMN_NAME.toLowerCase(), c.COLUMN_NAME]));
-
-        const pkColumns = await this.queryPrimaryKeyColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
+        const pkColumns = await this.QueryPrimaryKeyColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         pkColumns.forEach(c => ValidateIdentifier(c, 'column'));
 
-        const hasRows = await this.targetTableHasRows(executor, targetSchema, targetTable, contextUser);
-        if (hasRows && !truncateTargetBeforeLoad) {
-            throw new Error(`Target table '[${targetSchema}].[${targetTable}]' already contains data and 'TruncateTargetBeforeLoad' is false. Set TruncateTargetBeforeLoad to 'true' to allow replacing existing data, or clear target table before running.`);
-        }
-        const truncateTarget = truncateTargetBeforeLoad && hasRows;
-        if (truncateTarget && !recordMaps.AllowDirectSQLDelete) {
-            throw new Error("Entity 'MJ: Company Integration Record Maps' does not have AllowDirectSQLDelete enabled, so existing record maps cannot be cleared for a re-run.");
-        }
-
-        const watermarkSourceCol = await this.resolveWatermarkColumn(companyIntegrationID, externalObjectName, sourceColSet, contextUser);
-        const mappings = this.buildColumnMappings(sourceColumns, targetColMap, targetPkCols, watermarkSourceCol);
-        const totalRows = await this.queryTableRowCount(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
-        const chunkPkCol = this.resolveChunkColumn(pkColumns, sourceColumns, totalRows, batchSize);
-
-        const batchSql = this.buildTableLoadBatch({
-            StagingDbName: stagingDbName,
+        return {
             SourceSchema: sourceSchema,
             SourceTable: sourceTable,
-            TargetSchema: targetSchema,
-            TargetTable: targetTable,
-            TargetPkCols: targetPkCols,
-            Mappings: mappings,
-            ExternalIdExpr: this.buildExternalIdExpression(pkColumns, sourceColSet),
-            RestoreTimestampIso: restoreTimestamp.toISOString(),
-            ChunkPkCol: chunkPkCol,
-            BatchSize: batchSize,
-            TruncateTarget: truncateTarget,
-            RecordMaps: recordMaps,
-            CompanyIntegrationID: companyIntegrationID,
-            EntityID: entityMap.EntityID,
-        });
-
-        const rows = await runner.ExecuteSQL<{ RowsInserted: number | string }>(batchSql, `ETL Transfer ${sourceTable} -> ${targetTable}`);
-        const rowsInserted = rows && rows.length > 0 ? Number(rows[0].RowsInserted) : 0;
-        LogStatus(`[BootstrapSQLServer] Transferred ${sourceTable} -> ${targetTable}: ${rowsInserted.toLocaleString()} rows.`);
-
-        return {
-            SourceTable: `[${sourceSchema}].[${sourceTable}]`,
-            TargetTable: `[${targetSchema}].[${targetTable}]`,
-            RowsTransferred: rowsInserted,
+            SourceColumns: sourceColumns,
+            SourceColSet: new Set(sourceColumns.map(c => c.COLUMN_NAME.toLowerCase())),
+            TargetColMap: new Map(targetColumns.map(c => [c.COLUMN_NAME.toLowerCase(), c.COLUMN_NAME])),
+            PkColumns: pkColumns,
         };
+    }
+
+    /**
+     * Whether the load must first empty the target. A target with rows is refused unless the caller asked
+     * for the truncate, and the truncate (TRUNCATE, or DELETE when a foreign key blocks it) is direct SQL
+     * delete: both the target entity and the record maps must sanction it.
+     */
+    private async decideTruncate(request: TableEtlRequest): Promise<boolean> {
+        const { SchemaName: targetSchema, BaseTable: targetTable, Name: entityName } = request.EntityInfo;
+        const hasRows = await this.TargetTableHasRows(request.Executor, targetSchema, targetTable, request.ContextUser);
+        if (!hasRows) {
+            return false;
+        }
+        if (!request.TruncateTargetBeforeLoad) {
+            throw new Error(`Target table '[${targetSchema}].[${targetTable}]' already contains data and 'TruncateTargetBeforeLoad' is false. Set TruncateTargetBeforeLoad to 'true' to allow replacing existing data, or clear target table before running.`);
+        }
+        if (!request.EntityInfo.AllowDirectSQLDelete) {
+            throw new Error(`Target entity '${entityName}' does not have AllowDirectSQLDelete enabled, so 'TruncateTargetBeforeLoad' cannot empty [${targetSchema}].[${targetTable}]. Clear the table through the entity, or enable the opt-in.`);
+        }
+        if (!request.RecordMaps.AllowDirectSQLDelete) {
+            throw new Error("Entity 'MJ: Company Integration Record Maps' does not have AllowDirectSQLDelete enabled, so existing record maps cannot be cleared for a re-run.");
+        }
+        return true;
     }
 
     /**
@@ -919,16 +1059,24 @@ SELECT DB_NAME() AS CurrentDatabase,
      * source counterpart is a surrogate and gets a generated value. Source columns that collide with the
      * bookkeeping columns are skipped — the bookkeeping is set here.
      */
-    protected buildColumnMappings(
+    protected BuildColumnMappings(
         sourceColumns: SqlColumnInfo[],
         targetColMap: Map<string, string>,
         targetPkCols: string[],
         watermarkSourceCol: string | undefined
     ): ColumnMapping[] {
-        const mappings: ColumnMapping[] = [];
-        const sourceByLower = new Map(sourceColumns.map(c => [c.COLUMN_NAME.toLowerCase(), c.COLUMN_NAME]));
         const targetPkLowers = new Set(targetPkCols.map(c => c.toLowerCase()));
+        return [
+            ...this.buildKeyMappings(sourceColumns, targetColMap, targetPkLowers),
+            ...this.buildBookkeepingMappings(targetColMap, watermarkSourceCol),
+            ...this.buildDomainMappings(sourceColumns, targetColMap, targetPkLowers),
+        ];
+    }
 
+    /** The target key columns: copied from a same-named source column, otherwise a generated surrogate. */
+    private buildKeyMappings(sourceColumns: SqlColumnInfo[], targetColMap: Map<string, string>, targetPkLowers: Set<string>): ColumnMapping[] {
+        const sourceByLower = new Map(sourceColumns.map(c => [c.COLUMN_NAME.toLowerCase(), c.COLUMN_NAME]));
+        const mappings: ColumnMapping[] = [];
         for (const pkLower of targetPkLowers) {
             const targetName = targetColMap.get(pkLower);
             if (!targetName) {
@@ -943,24 +1091,37 @@ SELECT DB_NAME() AS CurrentDatabase,
                 mappings.push({ Target: targetName, Expr: 'NEWID()' });
             }
         }
-        if (targetColMap.has('__mj_integration_syncstatus')) {
-            mappings.push({ Target: targetColMap.get('__mj_integration_syncstatus')!, Expr: `N'Active'` });
-        }
-        if (targetColMap.has('__mj_integration_lastsyncedat')) {
-            mappings.push({ Target: targetColMap.get('__mj_integration_lastsyncedat')!, Expr: '@RestoreTimestamp' });
-        }
-        if (targetColMap.has('__mj_integration_lastseenmodifiedvalue') && watermarkSourceCol) {
-            mappings.push({ Target: targetColMap.get('__mj_integration_lastseenmodifiedvalue')!, Expr: `CAST(s.[${watermarkSourceCol}] AS NVARCHAR(255))` });
-        }
+        return mappings;
+    }
 
+    /** The engine's integration bookkeeping columns the target carries. */
+    private buildBookkeepingMappings(targetColMap: Map<string, string>, watermarkSourceCol: string | undefined): ColumnMapping[] {
+        const mappings: ColumnMapping[] = [];
+        const syncStatus = targetColMap.get('__mj_integration_syncstatus');
+        if (syncStatus) {
+            mappings.push({ Target: syncStatus, Expr: `N'Active'` });
+        }
+        const lastSyncedAt = targetColMap.get('__mj_integration_lastsyncedat');
+        if (lastSyncedAt) {
+            mappings.push({ Target: lastSyncedAt, Expr: '@RestoreTimestamp' });
+        }
+        const lastSeen = targetColMap.get('__mj_integration_lastseenmodifiedvalue');
+        if (lastSeen && watermarkSourceCol) {
+            mappings.push({ Target: lastSeen, Expr: `CAST(s.[${watermarkSourceCol}] AS NVARCHAR(255))` });
+        }
+        return mappings;
+    }
+
+    /** Every other source column with a same-named target column. */
+    private buildDomainMappings(sourceColumns: SqlColumnInfo[], targetColMap: Map<string, string>, targetPkLowers: Set<string>): ColumnMapping[] {
         const reserved = new Set([...targetPkLowers, 'sourcerecordid', 'sourceobject', 'syncedat',
             '__mj_integration_syncstatus', '__mj_integration_lastsyncedat', '__mj_integration_lastseenmodifiedvalue']);
+        const mappings: ColumnMapping[] = [];
         for (const sCol of sourceColumns) {
-            const sNameLower = sCol.COLUMN_NAME.toLowerCase();
-            if (reserved.has(sNameLower) || !targetColMap.has(sNameLower)) {
+            const targetExactName = targetColMap.get(sCol.COLUMN_NAME.toLowerCase());
+            if (reserved.has(sCol.COLUMN_NAME.toLowerCase()) || !targetExactName) {
                 continue;
             }
-            const targetExactName = targetColMap.get(sNameLower)!;
             ValidateIdentifier(targetExactName, 'column');
             ValidateIdentifier(sCol.COLUMN_NAME, 'column');
             mappings.push({ Target: targetExactName, Expr: `s.[${sCol.COLUMN_NAME}]` });
@@ -973,7 +1134,7 @@ SELECT DB_NAME() AS CurrentDatabase,
      * parts of a composite key joined by `|` exactly as the external-data-source connector's `BuildRecord`
      * joins them. Falls back to a column named `id`, then to a random key for a key-less source.
      */
-    protected buildExternalIdExpression(pkColumns: string[], sourceColSet: Set<string>): string {
+    protected BuildExternalIdExpression(pkColumns: string[], sourceColSet: Set<string>): string {
         if (pkColumns.length > 0) {
             return pkColumns.map(c => `ISNULL(CAST(s.[${c}] AS NVARCHAR(450)), N'')`).join(" + N'|' + ");
         }
@@ -985,7 +1146,7 @@ SELECT DB_NAME() AS CurrentDatabase,
      * key the values `|`-joined in metadata order with NULL as '' — the same composition the sync engine
      * uses (`composeEntityRecordID`), so later deltas match the bootstrapped rows.
      */
-    protected buildEntityRecordIDExpression(targetPkCols: string[]): string {
+    protected BuildEntityRecordIDExpression(targetPkCols: string[]): string {
         if (targetPkCols.length === 1) {
             return `CAST(inserted.[${targetPkCols[0]}] AS NVARCHAR(750))`;
         }
@@ -993,7 +1154,7 @@ SELECT DB_NAME() AS CurrentDatabase,
     }
 
     /** The key column to chunk a large load by, or undefined: only a single-column integer key qualifies. */
-    protected resolveChunkColumn(pkColumns: string[], sourceColumns: SqlColumnInfo[], totalRows: number, batchSize: number): string | undefined {
+    protected ResolveChunkColumn(pkColumns: string[], sourceColumns: SqlColumnInfo[], totalRows: number, batchSize: number): string | undefined {
         if (batchSize <= 0 || totalRows <= batchSize || pkColumns.length !== 1) {
             return undefined;
         }
@@ -1009,7 +1170,7 @@ SELECT DB_NAME() AS CurrentDatabase,
      * captures the generated target key next to the external key of the same source row, which is the
      * only way to build the record map: an `INSERT ... SELECT` cannot output source columns.
      */
-    protected buildTableLoadBatch(spec: TableLoadBatchSpec): string {
+    protected BuildTableLoadBatch(spec: TableLoadBatchSpec): string {
         const stagingSource = `[${spec.StagingDbName}].[${spec.SourceSchema}].[${spec.SourceTable}]`;
         const load = spec.ChunkPkCol
             ? this.buildChunkedLoad(spec, stagingSource)
@@ -1048,7 +1209,10 @@ SELECT COUNT_BIG(*) AS RowsInserted FROM #MJRecordMap;
 DROP TABLE #MJRecordMap;`;
     }
 
-    /** Clear the target table (DELETE when a foreign key blocks TRUNCATE) and its record maps for a re-run. */
+    /**
+     * Clear the target table (DELETE when a foreign key blocks TRUNCATE) and its record maps for a re-run.
+     * Reached only after {@link decideTruncate} found both opt-ins (`AllowDirectSQLDelete`) set.
+     */
     private buildTruncateStatements(spec: TableLoadBatchSpec): string {
         const target = `[${spec.TargetSchema}].[${spec.TargetTable}]`;
         const cleanCI = EscapeSQLString(spec.CompanyIntegrationID);
@@ -1078,7 +1242,7 @@ DROP TABLE #MJRecordMap;`;
     WHEN NOT MATCHED THEN
         INSERT (${insertCols})
         VALUES (${insertVals})
-    OUTPUT ${this.buildEntityRecordIDExpression(spec.TargetPkCols)}, src.[__MJExternalID]
+    OUTPUT ${this.BuildEntityRecordIDExpression(spec.TargetPkCols)}, src.[__MJExternalID]
     INTO #MJRecordMap ([EntityRecordID], [ExternalSystemRecordID]);
 `;
     }
@@ -1108,7 +1272,7 @@ ${merge}        SET @LastID = @NextID;
     /**
      * Queries column metadata from INFORMATION_SCHEMA.COLUMNS.
      */
-    protected async queryTableColumns(
+    protected async QueryTableColumns(
         executor: DatabaseProviderBase,
         databaseName: string | undefined,
         schema: string,
@@ -1137,7 +1301,7 @@ ORDER BY ORDINAL_POSITION;`;
     /**
      * Queries the primary key column names of a table.
      */
-    protected async queryPrimaryKeyColumns(
+    protected async QueryPrimaryKeyColumns(
         executor: DatabaseProviderBase,
         databaseName: string,
         schema: string,
@@ -1173,7 +1337,7 @@ ORDER BY col.ORDINAL_POSITION;`;
     /**
      * Queries total row count from sys.partitions for rapid set estimation.
      */
-    protected async queryTableRowCount(
+    protected async QueryTableRowCount(
         executor: DatabaseProviderBase,
         databaseName: string | undefined,
         schema: string,
@@ -1208,7 +1372,7 @@ WHERE s.name = N'${EscapeSQLString(schema)}'
      * e.g. "sales.Customer" -> { schema: "sales", table: "Customer" }
      * e.g. "Customer" -> { schema: "dbo", table: "Customer" }
      */
-    protected parseObjectIdentifier(identifier: string): { schema: string; table: string } {
+    protected ParseObjectIdentifier(identifier: string): { schema: string; table: string } {
         const clean = identifier.replace(/[\[\]]/g, '').trim();
         const parts = clean.split('.');
         if (parts.length >= 2) {

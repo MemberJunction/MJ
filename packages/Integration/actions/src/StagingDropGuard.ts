@@ -44,15 +44,25 @@ export function AssertNotSystemDatabase(name: string): void {
 
 /**
  * Throws unless `name` starts with {@link STAGING_DATABASE_PREFIX} (case-insensitively). `allowAnyName`
- * lifts the rule for an operator who deliberately drops another name; the archive seed job never sets it.
+ * lifts the rule for an operator who deliberately drops another name, but only together with
+ * `createdAfter`: without it, a caller could drop any database the server's login may drop. The archive
+ * seed job never sets `allowAnyName`. A system database is refused first, whatever the flags.
  */
-export function AssertStagingDatabaseName(name: string, allowAnyName: boolean): void {
-    if (allowAnyName || name.toLowerCase().startsWith(STAGING_DATABASE_PREFIX.toLowerCase())) {
+export function AssertStagingDatabaseName(name: string, allowAnyName: boolean, createdAfter?: Date): void {
+    AssertNotSystemDatabase(name);
+    if (name.toLowerCase().startsWith(STAGING_DATABASE_PREFIX.toLowerCase())) {
         return;
     }
-    throw new StagingDropRefusedError(
-        `Refusing to drop [${name}]: a staging database name starts with '${STAGING_DATABASE_PREFIX}'. Pass AllowAnyName='true' to drop another database.`
-    );
+    if (!allowAnyName) {
+        throw new StagingDropRefusedError(
+            `Refusing to drop [${name}]: a staging database name starts with '${STAGING_DATABASE_PREFIX}'. Pass AllowAnyName='true' with CreatedAfter to drop another database.`
+        );
+    }
+    if (!createdAfter) {
+        throw new StagingDropRefusedError(
+            `Refusing to drop [${name}]: AllowAnyName requires CreatedAfter, so only a database created after that instant can be dropped.`
+        );
+    }
 }
 
 /**

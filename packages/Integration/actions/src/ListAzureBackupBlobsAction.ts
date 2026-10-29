@@ -3,6 +3,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseIntegrationAction, TrimTrailingChars } from './BaseIntegrationAction.js';
+import { StorageContainerUrlProblem } from './BackupSourceGuard.js';
 
 export interface AzureBlobItem {
     Name: string;
@@ -94,120 +95,137 @@ function parseBlobElement(blobXml: string, cleanBaseUrl: string): AzureBlobItem 
     };
 }
 
+
+/** Pages followed at most for one listing (a safety cap). */
+const MAX_LIST_PAGES = 50;
+
+/** Characters of an upstream error body kept in the server log. */
+const MAX_LOGGED_ERROR_BODY = 500;
+
+/** One listing request: the validated container and how to authenticate and filter. */
+interface BlobListingRequest {
+    ContainerUrl: string;
+    Sas: string;
+    Prefix?: string;
+}
+
+/** A listing that failed upstream: the HTTP status the storage service answered with. */
+class BlobListingHttpError extends Error {
+    constructor(public readonly Status: number, statusText: string) {
+        super(`Azure Storage API error (${Status}${statusText ? ` ${statusText}` : ''}).`);
+        this.name = 'BlobListingHttpError';
+    }
+}
+
 /**
  * Action that queries an Azure Blob Storage container via the Azure Storage REST API
  * to list available backup blobs.
  *
  * Parameters (Input):
- *   - ContainerUrl (required): Azure Blob Storage container URL (e.g. https://storage.blob.core.windows.net/backups)
+ *   - ContainerUrl (required): Azure Blob Storage container URL (e.g. https://storage.blob.core.windows.net/backups).
+ *     Only an https Azure Blob endpoint naming one container is fetched (`INVALID_PARAMETER` otherwise).
  *   - SasToken (optional): Shared Access Signature token for container access
- *   - StorageCredentialID (optional): MJ Credentials record ID storing the SAS token
+ *   - StorageCredentialID (optional): MJ Credentials record ID storing the SAS token (the caller must be able to read it)
  *   - Prefix (optional): Optional prefix to filter blob names (e.g. "mydb_backup_")
  *
  * Parameters (Output):
  *   - Blobs: JSON-serialized array of { Name, Url, SizeBytes, LastModified }
  *   - BlobCount: Total number of blobs found
+ *
+ * An upstream error is reported by its HTTP status only; the response body is never returned.
  */
 @RegisterClass(BaseAction, 'List Azure Backup Blobs')
 export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const containerUrl = this.getStringParam(params, 'ContainerUrl');
-            if (!containerUrl) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_PARAMETER',
-                    Message: "Parameter 'ContainerUrl' is required.",
-                    Params: params.Params,
-                };
+            const containerUrl = this.readContainerUrl(params);
+            if (typeof containerUrl !== 'string') {
+                return { Success: false, ResultCode: containerUrl.ResultCode, Message: containerUrl.Message, Params: params.Params };
             }
-
-            if (!this.IsUrl(containerUrl)) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_PARAMETER',
-                    Message: "Parameter 'ContainerUrl' must be a valid HTTP/HTTPS URL.",
-                    Params: params.Params,
-                };
-            }
-
-            // A container that allows anonymous listing needs no token, so the token is optional — but a
-            // token or credential the caller DID supply must resolve, or a wrong credential ID would
-            // surface as a baffling Azure 403/404 instead of "credential not found".
-            const credentialSupplied = this.getStringParam(params, 'SasToken') !== undefined
-                || this.getStringParam(params, 'StorageCredentialID') !== undefined;
-            const sasToken = credentialSupplied ? await this.resolveSasToken(params) : '';
-
-            const prefix = this.getStringParam(params, 'Prefix');
-            const cleanSas = sasToken.replace(/^\?/, '').trim();
-            const cleanContainerUrl = TrimTrailingChars(containerUrl, '/');
-
-            LogStatus(`[ListAzureBackupBlobsAction] Querying container '${cleanContainerUrl}' with prefix '${prefix ?? ''}'...`);
-
-            const allBlobs: AzureBlobItem[] = [];
-            let currentMarker: string | undefined = undefined;
-            const maxPages = 50; // Safety cap
-            let pageCount = 0;
-
-            do {
-                pageCount++;
-                let apiUrl = `${cleanContainerUrl}?restype=container&comp=list`;
-                if (prefix) {
-                    apiUrl += `&prefix=${encodeURIComponent(prefix)}`;
-                }
-                if (currentMarker) {
-                    apiUrl += `&marker=${encodeURIComponent(currentMarker)}`;
-                }
-                if (cleanSas) {
-                    apiUrl += `&${cleanSas}`;
-                }
-
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'x-ms-version': '2021-08-06',
-                    },
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    LogError(`[ListAzureBackupBlobsAction] Azure REST API error (${response.status} ${response.statusText}): ${errorText}`);
-                    return {
-                        Success: false,
-                        ResultCode: 'LIST_BLOBS_FAILED',
-                        Message: `Azure Storage API error (${response.status} ${response.statusText}): ${errorText}`,
-                        Params: params.Params,
-                    };
-                }
-
-                const responseXml = await response.text();
-                const parseResult = ParseAzureListBlobsXml(responseXml, cleanContainerUrl);
-                allBlobs.push(...parseResult.blobs);
-                currentMarker = parseResult.nextMarker;
-
-            } while (currentMarker && pageCount < maxPages);
-
-            const blobsJson = JSON.stringify(allBlobs);
-            this.addOutputParam(params, 'Blobs', blobsJson);
-            this.addOutputParam(params, 'BlobCount', allBlobs.length);
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: `Found ${allBlobs.length} blob(s) in container '${cleanContainerUrl}'.`,
-                Params: params.Params,
+            const request: BlobListingRequest = {
+                ContainerUrl: containerUrl,
+                Sas: await this.resolveOptionalSas(params),
+                Prefix: this.GetStringParam(params, 'Prefix'),
             };
-
+            LogStatus(`[ListAzureBackupBlobsAction] Querying container '${containerUrl}' with prefix '${request.Prefix ?? ''}'...`);
+            const blobs = await this.listAllBlobs(request);
+            this.AddOutputParam(params, 'Blobs', JSON.stringify(blobs));
+            this.AddOutputParam(params, 'BlobCount', blobs.length);
+            return { Success: true, ResultCode: 'SUCCESS', Message: `Found ${blobs.length} blob(s) in container '${containerUrl}'.`, Params: params.Params };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            LogError(`[ListAzureBackupBlobsAction] Unexpected error: ${message}`);
-            return {
-                Success: false,
-                ResultCode: 'LIST_BLOBS_FAILED',
-                Message: message,
-                Params: params.Params,
-            };
+            LogError(`[ListAzureBackupBlobsAction] Listing failed: ${message}`);
+            return { Success: false, ResultCode: 'LIST_BLOBS_FAILED', Message: message, Params: params.Params };
         }
+    }
+
+    /**
+     * The container URL without a trailing slash, or the refusal of a missing or invalid one. Only an
+     * https Azure Blob container is accepted, so the action never fetches another host (no SSRF).
+     */
+    private readContainerUrl(params: RunActionParams): string | { ResultCode: string; Message: string } {
+        const raw = this.GetStringParam(params, 'ContainerUrl');
+        if (!raw) {
+            return { ResultCode: 'MISSING_PARAMETER', Message: "Parameter 'ContainerUrl' is required." };
+        }
+        const containerUrl = TrimTrailingChars(raw, '/');
+        const problem = StorageContainerUrlProblem(containerUrl);
+        return problem ? { ResultCode: 'INVALID_PARAMETER', Message: problem } : containerUrl;
+    }
+
+    /**
+     * The SAS token, or '' for an anonymous listing. A container that allows anonymous listing needs no
+     * token, so the token is optional — but a token or credential the caller DID supply must resolve, or a
+     * wrong credential ID would surface as a baffling Azure 403/404 instead of "credential not found".
+     */
+    private async resolveOptionalSas(params: RunActionParams): Promise<string> {
+        const credentialSupplied = this.GetStringParam(params, 'SasToken') !== undefined
+            || this.GetStringParam(params, 'StorageCredentialID') !== undefined;
+        const sasToken = credentialSupplied ? await this.ResolveSasToken(params) : '';
+        return sasToken.replace(/^\?/, '').trim();
+    }
+
+    /** Every blob in the container, following `NextMarker` pagination up to {@link MAX_LIST_PAGES} pages. */
+    private async listAllBlobs(request: BlobListingRequest): Promise<AzureBlobItem[]> {
+        const allBlobs: AzureBlobItem[] = [];
+        let marker: string | undefined = undefined;
+        let pageCount = 0;
+        do {
+            pageCount++;
+            const page = await this.fetchBlobPage(request, marker);
+            allBlobs.push(...page.blobs);
+            marker = page.nextMarker;
+        } while (marker && pageCount < MAX_LIST_PAGES);
+        return allBlobs;
+    }
+
+    /** One List Blobs page. A non-2xx answer throws {@link BlobListingHttpError}; its body is only logged. */
+    private async fetchBlobPage(request: BlobListingRequest, marker: string | undefined): Promise<{ blobs: AzureBlobItem[]; nextMarker?: string }> {
+        const response = await fetch(this.buildListUrl(request, marker), {
+            method: 'GET',
+            headers: { 'x-ms-version': '2021-08-06' },
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            LogError(`[ListAzureBackupBlobsAction] Azure REST API error (${response.status} ${response.statusText}): ${errorText.slice(0, MAX_LOGGED_ERROR_BODY)}`);
+            throw new BlobListingHttpError(response.status, response.statusText);
+        }
+        return ParseAzureListBlobsXml(await response.text(), request.ContainerUrl);
+    }
+
+    /** The List Blobs request URL for one page. */
+    private buildListUrl(request: BlobListingRequest, marker: string | undefined): string {
+        let apiUrl = `${request.ContainerUrl}?restype=container&comp=list`;
+        if (request.Prefix) {
+            apiUrl += `&prefix=${encodeURIComponent(request.Prefix)}`;
+        }
+        if (marker) {
+            apiUrl += `&marker=${encodeURIComponent(marker)}`;
+        }
+        if (request.Sas) {
+            apiUrl += `&${request.Sas}`;
+        }
+        return apiUrl;
     }
 }

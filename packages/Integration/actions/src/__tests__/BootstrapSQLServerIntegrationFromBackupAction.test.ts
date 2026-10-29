@@ -131,6 +131,8 @@ interface MockSqlOptions {
     compositePk?: boolean;
     stagingDbExists?: boolean;
     failOnHeader?: boolean;
+    /** The staging database's `create_date` in UTC the drop guard sees (default 2026-10-28T12:00Z). */
+    createdAtUtc?: Date;
 }
 
 function createMockSqlExecutor(options: MockSqlOptions = {}): {
@@ -154,8 +156,12 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
             return Promise.resolve([{ DatabaseId: options.stagingDbExists ? 7 : null }]);
         }
 
+        if (sql.includes('AS ServerUtcNow')) {
+            return Promise.resolve([{ ServerUtcNow: new Date('2026-10-28T11:59:00.000Z') }]);
+        }
+
         if (sql.includes('AS CurrentDatabase')) {
-            return Promise.resolve([{ CurrentDatabase: 'MJ_Main', CreatedAtUtc: new Date('2026-10-28T12:00:00.000Z') }]);
+            return Promise.resolve([{ CurrentDatabase: 'MJ_Main', CreatedAtUtc: options.createdAtUtc ?? new Date('2026-10-28T12:00:00.000Z') }]);
         }
 
         if (sql.includes('COUNT_BIG(*) AS RowsInserted')) {
@@ -759,6 +765,10 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         it('truncates target table and clears record maps when TruncateTargetBeforeLoad is true and target has rows', async () => {
             mockSql = createMockSqlExecutor({ targetHasRows: true });
             action.CustomDatabaseProvider = mockSql.executor;
+            mockEntityByIDFn = vi.fn().mockReturnValue({
+                ID: 'entity-cust-001', Name: 'Customer', SchemaName: 'raw_erp', BaseTable: 'Customer',
+                AllowDirectSQLInsert: true, AllowDirectSQLDelete: true, PrimaryKeys: [{ Name: 'ID' }],
+            });
 
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',
@@ -1059,13 +1069,13 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('executes RESTORE HEADERONLY and FILELISTONLY using FROM DISK for local files', async () => {
-            const header = await action['inspectBackupHeader'](mockSql.executor, ['/var/opt/mssql/backup/mydb.bak'], makeUser());
+            const header = await action['InspectBackupHeader'](mockSql.executor, ['/var/opt/mssql/backup/mydb.bak'], makeUser());
             expect(header.DatabaseName).toBe('AdventureWorks_Prod');
 
             const headerSql = mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'));
             expect(headerSql).toContain("FROM\n    DISK = N'/var/opt/mssql/backup/mydb.bak';");
 
-            const fileList = await action['inspectBackupFileList'](mockSql.executor, ['/var/opt/mssql/backup/mydb.bak'], makeUser());
+            const fileList = await action['InspectBackupFileList'](mockSql.executor, ['/var/opt/mssql/backup/mydb.bak'], makeUser());
             expect(fileList).toHaveLength(2);
 
             const fileListSql = mockSql.executedSql.find(s => s.includes('RESTORE FILELISTONLY'));
@@ -1073,8 +1083,8 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('formats multi-stripe local restores using DISK clause', async () => {
-            const runner = await action['createLongRunningRunner'](mockSql.executor, makeUser());
-            await action['executeDatabaseRestore'](
+            const runner = await action['CreateLongRunningRunner'](mockSql.executor, makeUser());
+            await action['ExecuteDatabaseRestore'](
                 runner,
                 'StagingDb',
                 ['C:\\backups\\part1.bak', 'C:\\backups\\part2.bak'],
@@ -1089,8 +1099,8 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('formats mixed stripe restores correctly', async () => {
-            const runner = await action['createLongRunningRunner'](mockSql.executor, makeUser());
-            await action['executeDatabaseRestore'](
+            const runner = await action['CreateLongRunningRunner'](mockSql.executor, makeUser());
+            await action['ExecuteDatabaseRestore'](
                 runner,
                 'StagingDb',
                 ['https://blob.core.windows.net/b/part1.bak', 'C:\\backups\\part2.bak'],
@@ -1157,6 +1167,105 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             // Verify fail-safe drop was invoked
             const dropDbSql = mockSql.executedSql.find(s => s.includes('DROP DATABASE [MJ_Staging_FailDb]'));
             expect(dropDbSql).toBeDefined();
+        });
+
+        it('never drops a database created before its restore started (the failure cleanup passes CreatedAfter)', async () => {
+            mockSql = createMockSqlExecutor({ failOnInsert: true, createdAtUtc: new Date('2026-01-01T00:00:00.000Z') });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Staging_FailDb',
+            }));
+
+            expect(result.Success).toBe(false);
+            const restoreAt = mockSql.executedSql.findIndex(s => s.includes('RESTORE DATABASE'));
+            const clockAt = mockSql.executedSql.findIndex(s => s.includes('AS ServerUtcNow'));
+            expect(clockAt).toBeGreaterThanOrEqual(0);
+            expect(clockAt).toBeLessThan(restoreAt);
+            expect(mockSql.executedSql.some(s => s.includes('DROP DATABASE'))).toBe(false);
+        });
+
+        it('never drops a database created before its restore started on the drop-on-complete path', async () => {
+            mockSql = createMockSqlExecutor({ createdAtUtc: new Date('2026-01-01T00:00:00.000Z') });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            }));
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('before the restore');
+            expect(mockSql.executedSql.some(s => s.includes('DROP DATABASE'))).toBe(false);
+        });
+    });
+
+    describe('Direct-call guards', () => {
+        it('refuses to truncate a target entity that does not sanction direct SQL delete', async () => {
+            mockSql = createMockSqlExecutor({ targetHasRows: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+            mockEntityByIDFn = vi.fn().mockReturnValue({
+                ID: 'entity-cust-001', Name: 'Customer', SchemaName: 'raw_erp', BaseTable: 'Customer',
+                AllowDirectSQLInsert: true, AllowDirectSQLDelete: false, PrimaryKeys: [{ Name: 'ID' }],
+            });
+
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                TruncateTargetBeforeLoad: true,
+            }));
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain("Target entity 'Customer' does not have AllowDirectSQLDelete enabled");
+            expect(mockSql.executedSql.some(s => s.includes('TRUNCATE TABLE'))).toBe(false);
+            expect(mockSql.executedSql.some(s => s.includes('DELETE FROM [raw_erp]'))).toBe(false);
+        });
+
+        it('refuses a StorageCredentialID the caller cannot read, without decrypting it', async () => {
+            mockGetCredentialByIdFn.mockReturnValue({ ID: 'cred-other', Name: 'Vendor API Key' });
+            mockGetCredentialFn.mockResolvedValue({ values: { Secret: 'top-secret' } });
+            // Row-level security / entity permissions hide the credential from this caller.
+            mockRunViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [] });
+
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                StorageCredentialID: 'cred-other',
+            }));
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain("'cred-other'");
+            expect(mockGetCredentialFn).not.toHaveBeenCalled();
+            expect(mockSql.executedSql.some(s => s.includes('CREDENTIAL'))).toBe(false);
+            const credentialCheck = mockRunViewFn.mock.calls.find(c => (c[0] as { EntityName: string }).EntityName === 'MJ: Credentials');
+            expect(credentialCheck?.[0]).toMatchObject({ ResultType: 'simple', Fields: ['ID'], ExtraFilter: "ID='cred-other'" });
+            expect((credentialCheck?.[1] as UserInfo).ID).toBe('user-1');
+        });
+
+        it.each([
+            ['a non-Azure backup URL', 'https://attacker.example/c/x.bak'],
+            ['a UNC disk source', '\\\\attacker.example\\s\\x.bak'],
+        ])('refuses %s with INVALID_PARAMETER before any SQL', async (_label, backupUrls) => {
+            const result = await action['InternalRunAction'](makeParams({ CompanyIntegrationID: 'ci-001', BackupUrls: backupUrls, SasToken: 't' }));
+
+            expect(result.ResultCode).toBe('INVALID_PARAMETER');
+            expect(mockSql.executedSql).toHaveLength(0);
+        });
+
+        it('refuses a UNC target data directory with INVALID_PARAMETER before any SQL', async () => {
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: '/var/opt/mssql/backup/x.bak',
+                TargetDataFileDirectory: '\\\\attacker.example\\share',
+            }));
+
+            expect(result.ResultCode).toBe('INVALID_PARAMETER');
+            expect(mockSql.executedSql).toHaveLength(0);
         });
     });
 });

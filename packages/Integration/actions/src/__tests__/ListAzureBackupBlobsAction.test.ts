@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import {
     ListAzureBackupBlobsAction,
@@ -23,12 +23,22 @@ vi.mock('@memberjunction/credentials', () => {
     };
 });
 
+let mockRunViewFn: ReturnType<typeof vi.fn>;
+
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
         LogError: vi.fn(),
         LogStatus: vi.fn(),
+        RunView: class {
+            public static FromMetadataProvider() {
+                return new this();
+            }
+            public RunView(...args: unknown[]) {
+                return mockRunViewFn(...args);
+            }
+        },
     };
 });
 
@@ -104,6 +114,9 @@ describe('ListAzureBackupBlobsAction', () => {
 
     beforeEach(() => {
         action = new ListAzureBackupBlobsAction();
+        action.CustomDatabaseProvider = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
+        mockRunViewFn = vi.fn().mockImplementation((p: { ExtraFilter: string }) =>
+            Promise.resolve({ Success: true, Results: p.ExtraFilter.includes('cred-readable') ? [{ ID: 'cred-readable' }] : [] }));
         mockCredentialConfigFn = vi.fn().mockResolvedValue(undefined);
         mockGetCredentialByIdFn = vi.fn();
         mockGetCredentialFn = vi.fn();
@@ -271,7 +284,75 @@ describe('ListAzureBackupBlobsAction', () => {
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('LIST_BLOBS_FAILED');
             expect(result.Message).toContain('403');
+            // The upstream body is never reflected to the caller.
+            expect(result.Message).not.toContain('AuthenticationFailed');
 
+            vi.unstubAllGlobals();
+        });
+    });
+
+    describe('Direct-call guards', () => {
+        it.each([
+            ['an attacker host', 'https://attacker.example/c'],
+            ['an internal address', 'http://10.0.0.5:8080/admin'],
+            ['a metadata endpoint', 'http://169.254.169.254/latest'],
+            ['a lookalike host', 'https://acct.blob.core.windows.net.attacker.example/c'],
+            ['a blob rather than a container', 'https://myaccount.blob.core.windows.net/sql-backups/x.bak'],
+        ])('refuses %s with INVALID_PARAMETER and never fetches it', async (_label, containerUrl) => {
+            const fetchMock = vi.fn();
+            vi.stubGlobal('fetch', fetchMock);
+
+            const result = await action['InternalRunAction'](makeParams({ ContainerUrl: containerUrl, SasToken: 'sig=x' }));
+
+            expect(result.ResultCode).toBe('INVALID_PARAMETER');
+            expect(fetchMock).not.toHaveBeenCalled();
+            expect(mockGetCredentialFn).not.toHaveBeenCalled();
+            vi.unstubAllGlobals();
+        });
+
+        it('accepts a container URL with a trailing slash', async () => {
+            const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => SAMPLE_AZURE_XML });
+            vi.stubGlobal('fetch', fetchMock);
+
+            const result = await action['InternalRunAction'](makeParams({ ContainerUrl: 'https://myaccount.blob.core.windows.net/sql-backups/' }));
+
+            expect(result.Success).toBe(true);
+            vi.unstubAllGlobals();
+        });
+
+        it('refuses a StorageCredentialID the caller cannot read and never decrypts it', async () => {
+            const fetchMock = vi.fn();
+            vi.stubGlobal('fetch', fetchMock);
+            mockGetCredentialByIdFn.mockReturnValue({ ID: 'cred-hidden', Name: 'Vendor API Key' });
+            mockGetCredentialFn.mockResolvedValue({ values: { Secret: 'top-secret' } });
+
+            const result = await action['InternalRunAction'](makeParams({
+                ContainerUrl: 'https://myaccount.blob.core.windows.net/sql-backups',
+                StorageCredentialID: 'cred-hidden',
+            }));
+
+            expect(result.Success).toBe(false);
+            expect(mockGetCredentialFn).not.toHaveBeenCalled();
+            expect(fetchMock).not.toHaveBeenCalled();
+            vi.unstubAllGlobals();
+        });
+
+        it('uses a StorageCredentialID the caller can read', async () => {
+            const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => SAMPLE_AZURE_XML });
+            vi.stubGlobal('fetch', fetchMock);
+            mockGetCredentialByIdFn.mockReturnValue({ ID: 'cred-readable', Name: 'Backup SAS' });
+            mockGetCredentialFn.mockResolvedValue({ values: { SasToken: 'sp=r&sig=ok' } });
+
+            const result = await action['InternalRunAction'](makeParams({
+                ContainerUrl: 'https://myaccount.blob.core.windows.net/sql-backups',
+                StorageCredentialID: 'cred-readable',
+            }));
+
+            expect(result.Success).toBe(true);
+            expect(fetchMock.mock.calls[0][0]).toContain('sp=r&sig=ok');
+            const check = mockRunViewFn.mock.calls[0];
+            expect(check[0]).toMatchObject({ EntityName: 'MJ: Credentials', ResultType: 'simple', Fields: ['ID'], ExtraFilter: "ID='cred-readable'" });
+            expect((check[1] as UserInfo).ID).toBe('user-1');
             vi.unstubAllGlobals();
         });
     });

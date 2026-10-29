@@ -930,11 +930,25 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "'true' to let DropStagingDbOnComplete drop a staging database whose name does not start with 'MJ_Staging_' (default 'false')",
+            "Description": "'true' to let DropStagingDbOnComplete drop a staging database whose name does not start with 'MJ_Staging_' (default 'false'); refused (DROP_REFUSED) unless CreatedAfter is also given",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "E1655E6F-8485-48ED-82FB-AA7756FCF135"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedAfter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO UTC timestamp; DropStagingDbOnComplete refuses (DROP_REFUSED) a database created before it. Required with AllowAnyName",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9DA26BB5-1CBC-456D-833F-01A5A477B7AF"
           }
         },
         {
@@ -1211,7 +1225,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "'true' to drop a database whose name does not start with 'MJ_Staging_' (default 'false'); system databases and the server's own database are refused regardless",
+            "Description": "'true' to drop a database whose name does not start with 'MJ_Staging_' (default 'false'); requires CreatedAfter (DROP_REFUSED otherwise). System databases and the server's own database are refused regardless",
             "IsRequired": false
           },
           "primaryKey": {

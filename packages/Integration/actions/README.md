@@ -55,7 +55,7 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
 | `StagingDatabaseName` | Both | string | No | Temporary staging database name (default: auto-generated); returned with the name actually used |
 | `DropStagingDbOnComplete`| Input | string | No | `'true'` or `'false'` (default: `'true'`) to drop staging DB on completion |
-| `TruncateTargetBeforeLoad`| Input | string | No | `'true'` or `'false'` (default: `'false'`) to truncate target tables before load for safe re-runs |
+| `TruncateTargetBeforeLoad`| Input | string | No | `'true'` or `'false'` (default: `'false'`) to truncate target tables before load for safe re-runs; each target entity must have `AllowDirectSQLDelete` |
 | `BatchSize` | Input | number | No | Chunk batch size for large table transfers (default: 500,000; 0 for unchunked) |
 | `TargetDataFileDirectory` | Input | string | No | Custom directory for staging database .mdf file |
 | `TargetLogFileDirectory` | Input | string | No | Custom directory for staging database .ldf file |
@@ -161,10 +161,11 @@ Loads every active entity map's table from the staging database into the target 
 | `StagingDatabaseName` | Both | string | Yes | The restored staging database; it must exist. Echoed back on success |
 | `BackupStartDate` | Both | string | Yes | ISO UTC backup start, as the restore phase reported it; the date the watermarks were seeded to |
 | `BatchSize` | Input | number | No | Chunk size for large tables (default 500,000; 0 for unchunked) |
-| `TruncateTargetBeforeLoad` | Input | string | No | `'true'` empties each target first (default `'false'`) |
+| `TruncateTargetBeforeLoad` | Input | string | No | `'true'` empties each target first (default `'false'`); each target entity must have `AllowDirectSQLDelete` |
 | `EntityMapIDs` | Input | string | No | Entity map IDs to restrict the load to |
 | `DropStagingDbOnComplete` | Input | string | No | `'true'` drops the staging database afterwards (default `'false'`); refused as for the drop action below, checked before anything loads |
-| `AllowAnyName` | Input | string | No | `'true'` lets `DropStagingDbOnComplete` drop a name outside `MJ_Staging_` (default `'false'`) |
+| `AllowAnyName` | Input | string | No | `'true'` lets `DropStagingDbOnComplete` drop a name outside `MJ_Staging_` (default `'false'`); requires `CreatedAfter` |
+| `CreatedAfter` | Input | string | No | ISO UTC time; `DropStagingDbOnComplete` refuses a database created before it |
 | `ContainerUrl` | Input | string | No | Container whose SQL Server credential is dropped with the staging database |
 | `ProgressRunID` | Input | string | No | Integration progress run to report stages to |
 | `TablesProcessed` | Output | number | — | Entity map tables loaded |
@@ -180,7 +181,7 @@ Loads every active entity map's table from the staging database into the target 
 
 Drops the staging database and, when the restore read from storage, its SQL Server storage credential; with `DropDatabase` `'false'` it drops only the credential and keeps the database. Dropping a database that no longer exists succeeds, so the job can always run this phase.
 
-Every drop is guarded, here and in the load's `DropStagingDbOnComplete`: a system database (`master`, `model`, `msdb`, `tempdb`) and the database the server itself runs on (`DB_NAME()`) are always refused; a name that does not start with `MJ_Staging_` is refused unless `AllowAnyName` is `'true'`; and with `CreatedAfter`, a database whose `create_date` is earlier is refused, so a staging name that collides with an existing database never drops it. The archive seed job passes `CreatedAfter` (the moment its restore started) on every drop and never passes `AllowAnyName`.
+Every drop is guarded, here and in the load's `DropStagingDbOnComplete`: a system database (`master`, `model`, `msdb`, `tempdb`) and the database the server itself runs on (`DB_NAME()`) are always refused; a name that does not start with `MJ_Staging_` is refused unless `AllowAnyName` is `'true'` and `CreatedAfter` is given; and with `CreatedAfter`, a database whose `create_date` is earlier is refused, so a staging name that collides with an existing database never drops it. The archive seed job passes `CreatedAfter` (the moment its restore started) on every drop and never passes `AllowAnyName`.
 
 | Parameter | Direction | Type | Required | Description |
 |-----------|-----------|------|----------|-------------|
@@ -188,12 +189,12 @@ Every drop is guarded, here and in the load's `DropStagingDbOnComplete`: a syste
 | `ContainerUrl` | Input | string | When `DropDatabase` is `'false'` | Container whose SQL Server credential is dropped too |
 | `DropDatabase` | Input | string | No | `'false'` drops only the storage credential (default `'true'`) |
 | `CreatedAfter` | Input | string | No | ISO UTC time; refuse a database created before it |
-| `AllowAnyName` | Input | string | No | `'true'` allows a name outside `MJ_Staging_` (default `'false'`) |
+| `AllowAnyName` | Input | string | No | `'true'` allows a name outside `MJ_Staging_` (default `'false'`); requires `CreatedAfter` |
 | `CompanyIntegrationID` | Input | string | No | Recorded on the progress run's manifest only |
 | `ProgressRunID` | Input | string | No | Integration progress run to report the stage to |
 | `StagingDatabaseDropped` | Output | number | — | `1` once the database is gone, `0` when it was kept (`DropDatabase` `'false'`) |
 
-**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (CreatedAfter is not a valid date), `DROP_REFUSED`, `DROP_FAILED`
+**Result Codes**: `SUCCESS`, `MISSING_PARAMETER`, `INVALID_PARAMETER` (CreatedAfter is not a valid date, or ContainerUrl is not an Azure Blob container URL), `DROP_REFUSED`, `DROP_FAILED`
 
 ### Product decisions
 
@@ -232,6 +233,14 @@ Why the last two: a database restored from another server keeps that server's `d
 **2. The staging database lives on the MJ database's own SQL Server instance.** The restore needs disk for the full database (the backup is compressed; `RESTORE HEADERONLY` reports the size, and the Inspect step shows it), and the default data and log directories, or `TargetDataFileDirectory` / `TargetLogFileDirectory` on the Restore action.
 
 **3. The backup must be readable by the SQL Server service**, not by MJAPI: a path on the SQL Server host (inside the container, for a containerized server), or an Azure Blob URL with a SAS token or a stored storage credential. Reading a storage credential needs `MJ_BASE_ENCRYPTION_KEY` to be configured.
+
+**3a. Where backups and staging files may live.** The backup actions are callable directly (`RunAction`) by any holder of the authorization in item 6, so every location is validated in the actions before any SQL runs, and a bad one is refused with `INVALID_PARAMETER`:
+
+- A URL source must be `https://<account>.blob.core.windows.net/<container>/<blob>` (or the `.blob.core.usgovcloudapi.net` / `.blob.core.chinacloudapi.cn` equivalents), with no query string: pass the SAS token as `SasToken` or `StorageCredentialID`, never inside the URL. A `ContainerUrl` must name exactly one container. `List Azure Backup Blobs` fetches nothing else.
+- A disk source and `TargetDataFileDirectory` / `TargetLogFileDirectory` must be local paths: a UNC share (`\\host\share`, `//host/share`), a `..` segment, and the characters `'`, `"`, `]` and NUL are refused.
+- `MJ_BACKUP_DISK_ROOTS` (optional, MJAPI's environment): comma-separated absolute directories on the SQL Server host, such as `/var/opt/mssql/backup,D:\Backups`. When set, a disk source must be inside one of them. Set it on any instance where the SQL Server service account can read backups that its MJ users should not restore.
+- `MJ_STAGING_FILE_ROOTS` (optional, MJAPI's environment): comma-separated absolute directories on the SQL Server host. When set, `TargetDataFileDirectory` and `TargetLogFileDirectory` must be one of them or inside one. Without it, any local directory the service account can write to is accepted.
+- A `StorageCredentialID` is used only when the caller can read that `MJ: Credentials` row.
 
 **4. The runtime schema pipeline must be enabled and MJAPI restartable by the job.** The build step runs MJ's Runtime Schema Update pipeline, which is off by default: set `ALLOW_RUNTIME_SCHEMA_UPDATE=1` in MJAPI's environment, or the job fails at once with "Runtime Schema Update is disabled". The pipeline creates the entities, runs CodeGen and compiles, then restarts the API so the new entities load. CodeGen runs against `RSU_WORK_DIR` (default: MJAPI's working directory): point it at the directory `mj codegen` is normally run from, the one holding `mj.config.cjs` with the CodeGen `output` paths, or the generated files land relative to the wrong folder. Run MJAPI under PM2 (process name `mjapi`, or set `RSU_PM2_PROCESS_NAME`) or set `RSU_RESTART_COMMAND` to a command that recycles the API process (for example, under a supervisor that restarts on exit: `kill -TERM $PPID`). Without either, the job fails at once with "The API did not restart after creating tables; configure RSU_RESTART_COMMAND or run MJAPI under PM2". The RSU pipeline's own requirements apply: CodeGen credentials (`CODEGEN_DB_USERNAME` / `CODEGEN_DB_PASSWORD`) with DDL rights on the MJ database, and a working directory where CodeGen and the compile can run (`RSU_WORK_DIR`, `RSU_CODEGEN_DIR`).
 
