@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import nunjucks from 'nunjucks';
-import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed, AttachIndexesToTables } from '../utils/index-hints';
+import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed, AttachIndexesToTables, PrepareIndexesForRun } from '../utils/index-hints';
 import { Introspector } from '../database/Database';
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver';
 import { AUTODOC_EXPRESSION_KEY_PART, type AutoDocIndex } from '../types/driver';
@@ -72,6 +72,28 @@ describe('AttachIndexesToTables', () => {
     const tables = [table('Orders'), table('customers'), table('Empty')];
     AttachIndexesToTables(tables, [index('Orders', 'pk', ['ID']), index('Customers', 'pk2', ['ID']), index('NotInState', 'x', ['a'])]);
     expect(tables.map((t) => t.indexes?.map((i) => i.IndexName))).toEqual([['pk'], ['pk2'], []]);
+  });
+});
+
+describe('PrepareIndexesForRun', () => {
+  const schemas = (): SchemaDefinition[] => [
+    { name: 'dbo', tables: [table('Loaded', [index('Loaded', 'pk', ['ID'])]), table('NotYet')], descriptionIterations: [] },
+    { name: 'done', tables: [table('AlsoLoaded', [])], descriptionIterations: [] }
+  ];
+
+  it('drops indexes left by an earlier run and loads nothing when useExistingIndexes is false', () => {
+    const s = schemas();
+    expect(PrepareIndexesForRun(s, false)).toEqual([]);
+    expect(s.flatMap((x) => x.tables).map((t) => t.indexes)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('returns only schemas with a table whose indexes were never read, keeping loaded ones (default on)', () => {
+    for (const setting of [true, undefined]) {
+      const s = schemas();
+      expect(PrepareIndexesForRun(s, setting).map((x) => x.name)).toEqual(['dbo']);
+      expect(s[0].tables[0].indexes?.map((i) => i.IndexName)).toEqual(['pk']);
+      expect(s[1].tables[0].indexes).toEqual([]);
+    }
   });
 });
 

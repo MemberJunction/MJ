@@ -166,9 +166,11 @@ interface ResolvedScalarInferenceParams {
 }
 
 export class AIPromptRunner extends BaseModelRunner {
-  /** The render options a prompt asks for: a raw render when `templateAutoescape` is false, else the engine's default. */
-  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions | undefined {
-    return params.templateAutoescape === false ? { autoescape: false } : undefined;
+  /** The render options a prompt asks for: the prompt caller as the render user, and a raw render when `templateAutoescape` is false. */
+  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions {
+    return params.templateAutoescape === false
+      ? { autoescape: false, ContextUser: params.contextUser }
+      : { ContextUser: params.contextUser };
   }
 
   /**
@@ -745,9 +747,8 @@ export class AIPromptRunner extends BaseModelRunner {
       const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
 
       // Get prompt-specific model associations using the model selection prompt
-      const promptModels = AIEngine.Instance.PromptModels.filter(
+      const promptModels = this.getPromptModelsForPromptId(modelSelectionPrompt.ID).filter(
         (pm) =>
-          UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
           (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)) &&
           UUIDsEqual(AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID))?.AIModelTypeID, requiredTypeId),

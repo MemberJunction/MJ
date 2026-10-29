@@ -7,7 +7,7 @@ import { EntityFieldTSType } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJBurstClusterStripComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, text, click, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { RecordChangesComponent, RestoreVersionEvent } from './ng-record-changes.component';
 
@@ -141,7 +141,7 @@ function provider(changes = CHANGES) {
 
 async function render(inputs: Record<string, unknown>): Promise<ComponentFixture<RecordChangesComponent>> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule, MJEmptyStateComponent, StubLoadingComponent],
+    imports: [CommonModule, FormsModule, MJEmptyStateComponent, MJBurstClusterStripComponent, StubLoadingComponent],
     declarations: [RecordChangesComponent, StubSlidePanel, StubRestorePreview, StubLabelCreate],
     providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } }],
   });
@@ -368,10 +368,15 @@ describe('RecordChangesComponent (DOM) — date fields', () => {
     expect(queryAll(f, '.rc-preview-form-btn')).toHaveLength(1);
   });
 
-  it('renders the activity over time spark-bar chart when multiple changes exist and filters by bucket click', async () => {
+  it('renders the burst-aware cluster strip with compressed quiet gaps and filters by burst click', async () => {
     const f = await renderExpanded([
       change({
-        ID: 'c-recent',
+        ID: 'c-recent-2',
+        ChangedAt: new Date('2026-10-15T14:10:00.000Z'),
+        User: 'Alice Smith',
+      }),
+      change({
+        ID: 'c-recent-1',
         ChangedAt: new Date('2026-10-15T14:00:00.000Z'),
         User: 'Alice Smith',
       }),
@@ -383,13 +388,82 @@ describe('RecordChangesComponent (DOM) — date fields', () => {
       }),
     ]);
     expect(query(f, '.rc-activity-chart')).not.toBeNull();
-    expect(f.componentInstance.ActivityBuckets).toHaveLength(12);
-    const nonEmptyBucket = f.componentInstance.ActivityBuckets.find((b) => b.TotalCount > 0)!;
-    f.componentInstance.ToggleBucketFilter(nonEmptyBucket.Key);
+    expect(queryAll(f, '.rc-burst-node')).toHaveLength(2);
+    expect(queryAll(f, '.rc-gap-connector')).toHaveLength(1);
+    expect(f.componentInstance.ActivityBuckets).toHaveLength(2);
+    expect(f.componentInstance.ActivityBuckets[0].GapAfterLabel).not.toBeNull();
+    expect(f.componentInstance.ActivityBuckets[1].TotalCount).toBe(2);
+    expect(f.componentInstance.ActivityBuckets[1].Pips).toHaveLength(2);
+
+    const recentBurst = f.componentInstance.ActivityBuckets[1];
+    f.componentInstance.ToggleBucketFilter(recentBurst.Key);
     f.detectChanges();
-    expect(f.componentInstance.SelectedBucketKey).toBe(nonEmptyBucket.Key);
-    expect(f.componentInstance.FilteredData.length).toBe(nonEmptyBucket.TotalCount);
-    f.componentInstance.ClearBucketFilter();
+    expect(f.componentInstance.SelectedBucketKey).toBe(recentBurst.Key);
     expect(f.componentInstance.FilteredData.length).toBe(2);
+    f.componentInstance.ClearBucketFilter();
+    expect(f.componentInstance.FilteredData.length).toBe(3);
+  });
+
+  it('compares any two arbitrary historical snapshots (vA ↔ vB) and supports comparing against live Current Record', async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'v3',
+        ChangedAt: new Date('2026-10-15T14:00:00.000Z'),
+        User: 'Alice',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-15T00:00:00.000Z', ApprovedAt: '2026-10-15T14:00:00.000Z' }),
+      }),
+      change({
+        ID: 'v2',
+        ChangedAt: new Date('2026-10-10T12:00:00.000Z'),
+        User: 'Bob',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-10T00:00:00.000Z', ApprovedAt: '2026-10-10T12:00:00.000Z' }),
+      }),
+      change({
+        ID: 'v1',
+        Type: 'Create',
+        ChangedAt: new Date('2026-10-01T09:00:00.000Z'),
+        User: 'Carol',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-01T00:00:00.000Z', ApprovedAt: null }),
+      }),
+    ]);
+
+    const comp = f.componentInstance;
+    expect(comp.CompareMode).toBe(false);
+
+    comp.ToggleCompareMode();
+    f.detectChanges();
+
+    expect(comp.CompareMode).toBe(true);
+    expect(query(f, '.rc-compare-panel')).not.toBeNull();
+    // Defaults to previous version (v2) as Base A and newest (v3) as Target B
+    expect(comp.CompareBaseChangeID).toBe('v2');
+    expect(comp.CompareTargetChangeID).toBe('v3');
+
+    // Select oldest version (v1) as Base A to compare non-adjacent versions (v1 ↔ v3)
+    comp.SelectForComparison('base', 'v1');
+    f.detectChanges();
+    expect(comp.CompareBaseChangeID).toBe('v1');
+
+    const diffsV1ToV3 = comp.GetComparisonDiffs();
+    expect(diffsV1ToV3.length).toBe(2);
+    const dueDateDiff = diffsV1ToV3.find((d) => d.field === 'DueDate')!;
+    expect(dueDateDiff.oldValue).toBe('Oct 1, 2026');
+    expect(dueDateDiff.newValue).toBe('Oct 15, 2026');
+    const approvedDiff = diffsV1ToV3.find((d) => d.field === 'ApprovedAt')!;
+    expect(approvedDiff.oldValue).toBe('');
+    expect(approvedDiff.newValue).toBe('Oct 15, 2026, 9:00 AM');
+
+    // Select v2 as Target B via timeline pill
+    comp.SelectForComparison('target', 'v2');
+    f.detectChanges();
+    expect(comp.CompareTargetChangeID).toBe('v2');
+    const diffsV1ToV2 = comp.GetComparisonDiffs();
+    expect(diffsV1ToV2.find((d) => d.field === 'DueDate')!.newValue).toBe('Oct 10, 2026');
+
+    // Swap A and B
+    comp.SwapComparisonVersions();
+    f.detectChanges();
+    expect(comp.CompareBaseChangeID).toBe('v2');
+    expect(comp.CompareTargetChangeID).toBe('v1');
   });
 });

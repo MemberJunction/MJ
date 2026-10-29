@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S9.4",
+    "Description": "Gate G0.4 (owner PR 2, phase 0, dataset W1, criterion S9.4): every row of the W1-signal s42 record-process scoring (NA, 2024) whose top per-record driver is Auto Renew lowers the displayed risk: AtRiskRules.DriverRaisesRisk is false, which the drawer renders as the green \"Lowers Risk\" badge. The seeded scoring has exactly 488 such rows, and all 488 must lower the risk (488 of 488).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.4\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S9.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "488 of 488 Auto Renew top-driver rows lower the displayed risk (\"Lowers Risk\")."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s9-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "3D95FC6B-F12C-4D4B-8A9D-7D03E1082146"
+  }
+}

@@ -7,6 +7,7 @@ import { RSSItem } from './RSS.types';
 import { HttpGet, HttpHead } from '@memberjunction/network-utils';
 import crypto from 'crypto';
 import Parser from 'rss-parser';
+import { AccessArtifact, ConfidenceScale, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
 
 /**
  * Autotag provider for RSS and Atom feeds. Parses feed items, follows article
@@ -21,6 +22,8 @@ import Parser from 'rss-parser';
  */
 @RegisterClass(AutotagBase, 'AutotagRSSFeed')
 export class AutotagRSSFeed extends AutotagBase {
+    public override readonly SupportsExhaustiveWalk = false;
+
     private contextUser!: UserInfo;
     private engine!: AutotagBaseEngine;
     protected contentSourceTypeID!: string;
@@ -241,42 +244,17 @@ export class AutotagRSSFeed extends AutotagBase {
     }
 
     /**
-     * Parse an RSS/Atom feed URL and return structured items.
+     * Parse an RSS/Atom feed URL and return structured items, or none on any failure.
      * The content field is HTML-stripped via the engine's parseHTML.
      */
-    public async ParseRSSFeed(url: string): Promise<RSSItem[]> {
-        if (!await this.urlIsValid(url)) {
+    public async ParseRSSFeed(url: string, access?: AccessArtifact | null, options?: { ValidateUrl?: boolean }): Promise<RSSItem[]> {
+        const validateUrl = options?.ValidateUrl ?? false;
+        if (!await this.urlIsValid(url, validateUrl)) {
             LogError(`AutotagRSSFeed: invalid feed URL: ${url}`);
             return [];
         }
-
         try {
-            const parser = new Parser();
-            const feed = await parser.parseURL(url);
-
-            const items: RSSItem[] = [];
-            for (const item of feed.items) {
-                const rssItem = new RSSItem();
-                rssItem.title = item.title ?? '';
-                rssItem.link = item.link ?? '';
-                rssItem.description = item.contentSnippet ?? item.description ?? '';
-                rssItem.pubDate = item.pubDate ?? '';
-                rssItem.guid = item.guid ?? '';
-                rssItem.category = item.categories?.join(', ') ?? '';
-                rssItem.author = item.creator ?? item.author ?? '';
-                rssItem.comments = (item as Record<string, unknown>)['comments'] as string ?? '';
-                rssItem.source = (item as Record<string, unknown>)['source'] as string ?? '';
-
-                // Parse inline content (content:encoded or content)
-                const rawContent = item['content:encoded'] ?? item.content ?? '';
-                if (rawContent) {
-                    rssItem.content = await this.engine.parseHTML(rawContent);
-                }
-
-                items.push(rssItem);
-            }
-
-            return items;
+            return await this.readFeed(url, access, undefined, validateUrl);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`AutotagRSSFeed: error parsing feed "${url}": ${msg}`);
@@ -284,17 +262,101 @@ export class AutotagRSSFeed extends AutotagBase {
         }
     }
 
+    /** List the feed's entries for the pipeline. Throws on an unreadable feed so the walk stays due. */
+    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        const confidence = request.Confidence ?? ConfidenceScale;
+        const validateUrl = !this.allowInternalHosts(request);
+        for (const entry of await this.readFeed(request.URL, request.Access, request.Signal, validateUrl, false)) {
+            if (request.Signal.aborted) {
+                return;
+            }
+            if (!entry.link) {
+                LogError(`AutotagRSSFeed: skipping an entry with no link in '${request.URL}'`);
+                continue;
+            }
+            const published = entry.pubDate ? new Date(entry.pubDate) : undefined;
+            const validPublished = published && !Number.isNaN(published.getTime()) ? published : undefined;
+            if (request.Since && validPublished && validPublished <= request.Since) {
+                continue;
+            }
+            yield {
+                URL: entry.link,
+                Fields: [
+                    ...(entry.title ? [{ Field: 'Title' as const, Value: entry.title, Confidence: confidence.DiscoveredTitle }] : []),
+                    ...(validPublished
+                        ? [{ Field: 'Date' as const, Value: validPublished, Confidence: confidence.DiscoveredDate }]
+                        : []),
+                ],
+            };
+        }
+    }
+
+    /** Fetch and parse a feed, applying the session if there is one. Throws on failure. */
+    private async readFeed(
+        url: string,
+        access?: AccessArtifact | null,
+        signal?: AbortSignal,
+        validateUrl = true,
+        parseInlineHtml = true,
+    ): Promise<RSSItem[]> {
+        const { Data } = await HttpGet<string>(url, {
+            ResponseType: 'text',
+            ValidateUrl: validateUrl,
+            StripHeadersOnCrossOriginRedirect: true,
+            Signal: signal,
+            Headers: access?.Headers ? { ...access.Headers } : undefined,
+            Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
+        });
+        const feed = await new Parser().parseString(Data);
+        const items: RSSItem[] = [];
+        for (const item of feed.items) {
+            const rssItem = new RSSItem();
+            rssItem.title = item.title ?? '';
+            rssItem.link = item.link ?? '';
+            rssItem.description = item.contentSnippet ?? item.description ?? '';
+            rssItem.pubDate = item.pubDate ?? (item as { isoDate?: string }).isoDate ?? '';
+            rssItem.guid = item.guid ?? '';
+            rssItem.category = item.categories?.join(', ') ?? '';
+            rssItem.author = item.creator ?? item.author ?? '';
+            rssItem.comments = (item as Record<string, unknown>)['comments'] as string ?? '';
+            rssItem.source = (item as Record<string, unknown>)['source'] as string ?? '';
+
+            // Parse inline content (content:encoded or content) when requested
+            const rawContent = item['content:encoded'] ?? item.content ?? '';
+            if (rawContent && parseInlineHtml) {
+                rssItem.content = await this.engine.parseHTML(rawContent);
+            }
+            items.push(rssItem);
+        }
+        return items;
+    }
+
     /**
      * Check if a URL is reachable via HTTP HEAD request.
      */
-    private async urlIsValid(url: string): Promise<boolean> {
+    private async urlIsValid(url: string, validateUrl = false): Promise<boolean> {
         try {
             // ThrowOnError off so a 3xx/4xx is reported by status rather than as a throw.
-            const response = await HttpHead(url, { Timeout: 10000, ThrowOnError: false });
+            const response = await HttpHead(url, { Timeout: 10000, ThrowOnError: false, ValidateUrl: validateUrl });
             return response.Status >= 200 && response.Status < 400;
-        } catch {
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`AutotagRSSFeed: feed URL check failed for "${url}": ${msg}`);
             return false;
         }
+    }
+
+    /** True when the source explicitly opts in to private/loopback feed URLs (`AllowInternalHosts`). */
+    private allowInternalHosts(request: DiscoverRequest): boolean {
+        const raw = request.Parameters['AllowInternalHosts'] ?? request.Configuration['AllowInternalHosts'];
+        if (typeof raw === 'boolean') {
+            return raw;
+        }
+        if (typeof raw === 'string') {
+            const normalized = raw.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1' || normalized === 'yes';
+        }
+        return false;
     }
 
     /**

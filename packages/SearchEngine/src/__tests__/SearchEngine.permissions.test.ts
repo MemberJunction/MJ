@@ -95,6 +95,10 @@ class TestSearchEngine extends SearchEngine {
     ): Promise<SearchResultItem[]> {
         return this.filterByPermissions(results, contextUser);
     }
+
+    public async TestFilterForAudience(results: SearchResultItem[], readers: UserInfo[], contextUser: UserInfo): Promise<SearchResultItem[]> {
+        return this.FilterForAudience(results, { Query: 'q', Audience: { Readers: readers } }, contextUser);
+    }
     // Stub IMetadataProvider that delegates to the existing mocks. The merged
     // multi-provider refactor reads `this.Base.ProviderToUse` which isn't
     // initialized when tests bypass Config().
@@ -153,6 +157,7 @@ interface MockEntity {
     FirstPrimaryKey: { Name: string };
     PrimaryKeys: Array<{ Name: string }>;
     GetUserPermisions: (u: UserInfo) => { CanRead: boolean } | null;
+    GetDeniedReadFields: (u: UserInfo) => Set<string>;
     UserExemptFromRowLevelSecurity: (u: UserInfo, _t: number) => boolean;
     GetEffectiveRowFilterWhereClause: (u: UserInfo, _t: number, _prefix: string) => string;
 }
@@ -164,6 +169,8 @@ function makeEntity(opts: {
     RlsClause: string;
     /** Primary key column name(s); defaults to a single `ID`. Pass several for a composite key. */
     PrimaryKeyNames?: string[];
+    /** Lowercased fields the given user may not read (field-level security); none by default. */
+    DeniedReadFields?: (u: UserInfo) => Set<string>;
 }): MockEntity {
     const keys = (opts.PrimaryKeyNames ?? ['ID']).map((Name) => ({ Name }));
     return {
@@ -171,6 +178,7 @@ function makeEntity(opts: {
         FirstPrimaryKey: keys[0],
         PrimaryKeys: keys,
         GetUserPermisions: () => ({ CanRead: opts.CanRead }),
+        GetDeniedReadFields: (u: UserInfo) => opts.DeniedReadFields?.(u) ?? new Set<string>(),
         UserExemptFromRowLevelSecurity: () => opts.Exempt,
         GetEffectiveRowFilterWhereClause: () => opts.RlsClause,
     };
@@ -193,6 +201,91 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             [PROVIDER.OpenSearch, new OpenSearchSearchProvider()],
             [PROVIDER.SelfLabelledEntity, new SelfLabelledEntityProvider()],
         ]);
+    });
+
+    describe('field-level security: denied values never leave in metadata, snippets or titles', () => {
+        const withRole = (u: UserInfo) => ({ ...u, UserRoles: [{ RoleID: 'role-1' }] }) as unknown as UserInfo;
+        const restricted = withRole(createUser('00000000-0000-0000-0000-0000000000a1'));
+        const unrestricted = withRole(createUser('00000000-0000-0000-0000-0000000000a2'));
+        const longNotes = 'Performance concerns raised in confidential review. '.repeat(8);
+        const deniedFor = (u: UserInfo) => (u.ID === restricted.ID ? new Set(['salary', 'notes']) : new Set<string>());
+
+        /** A vector-lane hit as VectorSearchProvider builds it from metadata holding a restricted field. */
+        function vectorHit(overrides: Partial<SearchResultItem> = {}): SearchResultItem {
+            const meta = { Entity: 'Employees', RecordID: 'aaa', Name: 'Ada Lovelace', Salary: 250000, Notes: longNotes };
+            return {
+                ...makeResult('aaa', 'Employees', 'entity-record', 'vector', PROVIDER.Vector),
+                Title: 'Ada Lovelace',
+                RecordName: 'Ada Lovelace',
+                Snippet: `${longNotes.substring(0, 200)}...`,
+                RawMetadata: JSON.stringify(meta),
+                ...overrides,
+            };
+        }
+
+        beforeEach(() => {
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Employees', CanRead: true, Exempt: true, RlsClause: '', DeniedReadFields: deniedFor,
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'aaa' }] });
+        });
+
+        it('strips denied keys from RawMetadata and blanks a snippet cut from a denied field', async () => {
+            const [out] = await engine.TestFilterByPermissions([vectorHit()], restricted);
+
+            const meta = JSON.parse(out.RawMetadata ?? '{}') as Record<string, unknown>;
+            expect(meta).toEqual({ Entity: 'Employees', RecordID: 'aaa', Name: 'Ada Lovelace' });
+            expect(out.Snippet).toBe('');
+            expect(out.Title).toBe('Ada Lovelace');
+            expect(JSON.stringify(out)).not.toContain('250000');
+            expect(JSON.stringify(out)).not.toContain('confidential');
+        });
+
+        it('leaves results untouched for a reader denied nothing', async () => {
+            const hit = vectorHit();
+            const [out] = await engine.TestFilterByPermissions([hit], unrestricted);
+
+            expect(out).toEqual(hit);
+        });
+
+        it('blanks a snippet of `key: value` parts that includes a denied value', async () => {
+            const [out] = await engine.TestFilterByPermissions([vectorHit({ Snippet: 'Name: Ada Lovelace · Salary: 250000' })], restricted);
+            expect(out.Snippet).toBe('');
+        });
+
+        it('replaces a title taken from a denied field with the placeholder the enricher resolves for the reader', async () => {
+            const meta = { Entity: 'Employees', RecordID: 'aaa', Salary: 250000 };
+            const [out] = await engine.TestFilterByPermissions([
+                vectorHit({ Title: '250000', RecordName: '250000', Snippet: 'x', RawMetadata: JSON.stringify(meta) }),
+            ], restricted);
+
+            expect(out.Title).toBe('Employees Record');
+            expect(out.RecordName).toBe('Employees Record');
+        });
+
+        it('clears the text of a non-RunView hit that carries no metadata to check it against', async () => {
+            const [out] = await engine.TestFilterByPermissions([vectorHit({ RawMetadata: undefined })], restricted);
+
+            expect(out.Snippet).toBe('');
+            expect(out.Title).toBe('Employees Record');
+        });
+
+        it('keeps the text of an entity-lane hit, which its provider read through RunView as this reader', async () => {
+            const hit = entityLaneHit('aaa', 'Employees');
+            const [out] = await engine.TestFilterByPermissions([hit], restricted);
+
+            expect(out.Snippet).toBe(hit.Snippet);
+            expect(out.Title).toBe(hit.Title);
+        });
+
+        it('projects a shared audience result for every reader, not only the caller', async () => {
+            const [callerView] = await engine.TestFilterByPermissions([vectorHit()], unrestricted);
+            const out = await engine.TestFilterForAudience([callerView], [restricted], unrestricted);
+
+            expect(out).toHaveLength(1);
+            expect(JSON.parse(out[0].RawMetadata ?? '{}')).not.toHaveProperty('Salary');
+            expect(out[0].Snippet).toBe('');
+        });
     });
 
     describe('PM-10: RLS-blocked records never appear in results', () => {

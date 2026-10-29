@@ -263,6 +263,34 @@ describe('createUnifiedAuthMiddleware', () => {
     });
   });
 
+  describe('x-mj-timezone header', () => {
+    beforeEach(() => {
+      setupSuccessfulAuth();
+    });
+
+    async function payloadFor(headers: Record<string, string>) {
+      const req = makeMockReq({ headers: { authorization: 'Bearer valid-token', ...headers } });
+      await middleware(req, makeMockRes(), vi.fn());
+      return req.userPayload!;
+    }
+
+    it('carries a valid IANA zone on the user payload', async () => {
+      expect((await payloadFor({ 'x-mj-timezone': 'Pacific/Auckland' })).TimeZone).toBe('Pacific/Auckland');
+    });
+
+    it('drops an invalid zone, so callers fall back to UTC', async () => {
+      expect((await payloadFor({ 'x-mj-timezone': 'Mars/Olympus_Mons' })).TimeZone).toBeUndefined();
+      expect((await payloadFor({ 'x-mj-timezone': "UTC'; DROP TABLE x;--" })).TimeZone).toBeUndefined();
+      expect((await payloadFor({ 'x-mj-timezone': '' })).TimeZone).toBeUndefined();
+    });
+
+    it('leaves the payload exactly as before when the header is absent', async () => {
+      const payload = await payloadFor({});
+      expect(payload.TimeZone).toBeUndefined();
+      expect(Object.keys(payload)).not.toContain('TimeZone');
+    });
+  });
+
   describe('Authentication failures', () => {
     it('should return 401 when no authorization header is provided, quietly (no stack-trace log)', async () => {
       mockGetReadOnlyDS.mockReturnValue(MOCK_POOL);

@@ -499,7 +499,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
       home: 'Start a new prediction from your data, a template, or the agent.',
       pipelines: 'Assemble features and train from the algorithm catalog.',
       catalog: 'Browse algorithms with a fit guide for your use case.',
-      experiments: 'Run and track model experiments.',
+      experiments: 'Review earlier model experiment sessions.',
       compare: 'Compare runs on the honest holdout score.',
     };
     return map[this.ActiveSection] ?? '';

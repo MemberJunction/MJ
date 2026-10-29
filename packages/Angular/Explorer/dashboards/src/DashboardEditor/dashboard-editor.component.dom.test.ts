@@ -20,9 +20,11 @@ import {
   MJStatBadgeComponent,
 } from '@memberjunction/ng-ui-components';
 import type { MJConfirmOptions } from '@memberjunction/ng-ui-components';
-import { DashboardPartDialogComponent, RemovePartConfirmOptions } from '@memberjunction/ng-dashboard-viewer';
+import { DashboardPartDialogComponent, DashboardPropertiesDialogComponent, PropertyDefaultEditorComponent, RemovePartConfirmOptions } from '@memberjunction/ng-dashboard-viewer';
 import type {
   DashboardConfigChangedEvent,
+  DashboardProperty,
+  DashboardWire,
   DashboardNavRequestEvent,
   DashboardPanel,
   PanelConfig,
@@ -188,6 +190,17 @@ function createViewer(initialPanels: DashboardPanel[]) {
     HasUnsavedChanges: false,
     getConfig: () => ({ layout: layoutOf(panels) }),
     GetPartTypes: (): MJDashboardPartTypeEntity[] => partTypes,
+    /** The dashboard's properties and wires, which the part dialog and the Properties dialog read. */
+    Properties: [] as DashboardProperty[],
+    Wires: [] as DashboardWire[],
+    GetDashboardProperties: (): DashboardProperty[] => viewer.Properties,
+    GetWires: (): DashboardWire[] => viewer.Wires,
+    SetPropertiesAndWires: vi.fn(async (properties: DashboardProperty[], wires: DashboardWire[]): Promise<void> => {
+      viewer.Properties = properties;
+      viewer.Wires = wires;
+    }),
+    /** Why the viewer refused its last save, as the real viewer reports a broken mapping or wire. */
+    LastSaveError: null as string | null,
     GetPanel: (panelId: string): DashboardPanel | null => panels.find((p) => p.id === panelId) ?? null,
     GetPartTypeForPanel: (panelId: string): MJDashboardPartTypeEntity | null => {
       const panel = panels.find((p) => p.id === panelId);
@@ -316,7 +329,7 @@ function editorModule(viewers: ViewerDouble[], capture: CaptureScreenshot = asyn
     create,
     module: {
       imports: [CommonModule, FormsModule, MJButtonDirective, MJStatBadgeComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, StubLoadingComponent],
-      declarations: [DashboardEditorComponent, DashboardPartDialogComponent],
+      declarations: [DashboardEditorComponent, DashboardPartDialogComponent, DashboardPropertiesDialogComponent, PropertyDefaultEditorComponent],
       providers: [
         { provide: DashboardViewerFactory, useValue: { Create: create } },
         { provide: DashboardFavoritesService, useValue: favorites },
@@ -448,17 +461,17 @@ describe('DashboardEditorComponent header (DOM)', () => {
     await startEditing(fixture);
     expect(Text(fixture, 'mj-stat-badge.dashboard-editor-badge')).toBe('Editing');
     expect(nameField(fixture)).toBe('Revenue Board');
-    expect(QueryAll(fixture, '.dashboard-editor-actions > button').map((b) => b.textContent?.trim())).toEqual(['Add part', 'Save', 'Cancel']);
+    expect(QueryAll(fixture, '.dashboard-editor-actions > button').map((b) => b.textContent?.trim())).toEqual(['Add part', 'Properties', 'Save', 'Cancel']);
     expect(Query(fixture, '.dashboard-editor-actions > .dashboard-editor-divider')).not.toBeNull();
     expect(viewer.IsEditing).toBe(true);
     expect(editing).toEqual([true]);
   });
 
-  it('orders the edit actions Add part, divider, Save (primary, check icon), Cancel (flat)', async () => {
+  it('orders the edit actions Add part, Properties, divider, Save (primary, check icon), Cancel (flat)', async () => {
     const { fixture } = await renderEditor();
     await startEditing(fixture);
     const order = QueryAll(fixture, '.dashboard-editor-actions > *').map((e) => (e.classList.contains('dashboard-editor-divider') ? '|' : e.textContent?.trim()));
-    expect(order).toEqual(['Add part', '|', 'Save', 'Cancel']);
+    expect(order).toEqual(['Add part', 'Properties', '|', 'Save', 'Cancel']);
     expect(HasClass(fixture, SAVE, 'mj-btn--primary')).toBe(true);
     expect(Query(fixture, `${SAVE} i.fa-solid.fa-check`)).not.toBeNull();
     expect(HasClass(fixture, CANCEL, 'mj-btn--flat')).toBe(true);
@@ -2352,5 +2365,51 @@ describe('DashboardEditorComponent slots (DOM)', () => {
 
     expect(Query(fixture, '.dashboard-editor-actions .host-tool')).not.toBeNull();
     expect(Query(fixture, '.dashboard-editor-actions .host-view-action')).toBeNull();
+  });
+});
+
+describe('DashboardEditorComponent properties and wires (DOM)', () => {
+  const PROPERTIES = '.dashboard-editor-properties';
+
+  it('opens the Properties and wires dialog from the header and applies its properties and wires to the viewer', async () => {
+    const { fixture, editor, viewer } = await renderEditor();
+    const changes = Capture(editor.ConfigChanged);
+    await startEditing(fixture);
+    Click(fixture, PROPERTIES);
+    await settle(fixture);
+    await settle(fixture);
+    const dialog = fixture.debugElement.query(By.directive(DashboardPropertiesDialogComponent)).componentInstance as DashboardPropertiesDialogComponent;
+    expect(dialog.Panels.map((p) => p.id)).toEqual(['panel-1']);
+
+    dialog.AddProperty();
+    dialog.Apply();
+    await settle(fixture);
+
+    expect(viewer.SetPropertiesAndWires).toHaveBeenCalledWith([{ Name: 'Property1', Type: 'string' }], []);
+    expect(Query(fixture, 'mj-dashboard-properties-dialog')).toBeNull();
+    expect(changes).toHaveLength(1);
+  });
+
+  it("gives the part dialog the dashboard's properties", async () => {
+    const { fixture, viewer } = await renderEditor();
+    viewer.Properties = [{ Name: 'Chapter', Type: 'uuid' }];
+    await startEditing(fixture);
+    Click(fixture, ADD_PART);
+    await settle(fixture);
+    const dialog = fixture.debugElement.query(By.directive(DashboardPartDialogComponent)).componentInstance as DashboardPartDialogComponent;
+    expect(dialog.DashboardProperties).toEqual([{ Name: 'Chapter', Type: 'uuid' }]);
+  });
+
+  it("tells the user why the viewer refused the save (a broken mapping or wire) and stays in edit mode", async () => {
+    const { fixture, editor, viewer, notify } = await renderEditor();
+    viewer.save.mockImplementation(async () => {
+      viewer.LastSaveError = 'Part "Members": Input "ChapterID" is mapped from "Gone", which the dashboard doesn\'t have.';
+      return false;
+    });
+    await startEditing(fixture);
+    const result = await editor.Save();
+    expect(result).toContain('"Gone"');
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('"Gone"'), 'error', 5000);
+    expect(editor.IsEditing).toBe(true);
   });
 });

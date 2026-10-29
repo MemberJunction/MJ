@@ -528,6 +528,11 @@ Databases often have indexes where no key is declared: developers index the colu
 
 They are hints, not proof, and are weighed with names, statistics and value overlap. Turn this off with `"analysis": { "useExistingIndexes": false }`. A resumed run reads indexes for any table whose state has none yet. If a schema's catalog can't be read, the run continues without its indexes.
 
+Unique indexes also feed deterministic PK detection (`relationshipDiscovery.indexBackedCandidates`, default true). This matters for tables with no declared primary key; tables that have one skip PK discovery entirely.
+- a unique index on NOT NULL columns becomes a candidate even when the statistics can't show uniqueness (an empty table, for example), scored with an index boost, so naming, type, the name blacklist and column position still decide between several unique columns;
+- a unique index on a nullable column only boosts a column that already passes the statistical checks;
+- multi-column unique indexes are considered as composite keys when no single column qualifies (junction tables, for example); next to a qualifying single-column key they are alternate keys and are not added.
+
 ### Organic Key Detection (Optional)
 
 Foreign keys require **shared exact values**. Organic keys (MemberJunction [PR #2193](https://github.com/MemberJunction/MJ/pull/2193)) capture the weaker-but-broader condition of **shared identity**: two columns refer to the same real-world thing once each is canonicalized through its own transformation. That joins far more cross-system data than exact-match FKs -- e.g. the same phone number stored as `+1 (555) 123-4567`, `5551234567`, and `555.123.4567` across HubSpot, Zendesk, and QuickBooks.
