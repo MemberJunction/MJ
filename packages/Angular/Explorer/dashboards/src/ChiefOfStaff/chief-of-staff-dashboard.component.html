@@ -215,8 +215,60 @@
                         }
                     </section>
 
-                    <!-- Column 2: Pending Approvals & Wake Schedule -->
+                    <!-- Column 2: To-dos, Pending Approvals & Wake Schedule -->
                     <div class="cos-stack">
+                        <section class="cos-panel">
+                            <div class="cos-panel__header">
+                                <div>
+                                    <h3 class="cos-panel__title">
+                                        <i class="fa-solid fa-list-check"></i> To-dos & Reminders
+                                    </h3>
+                                    <p class="cos-panel__subtitle">
+                                        Personal tasks and dated reminders your Chief of Staff keeps for you
+                                    </p>
+                                </div>
+                                <span class="cos-meta-badge">{{ Metrics.OpenTodoCount }} open</span>
+                            </div>
+                            @if (Metrics.TodoItems.length === 0) {
+                                <div class="cos-inline-empty">
+                                    <i class="fa-solid fa-list-check"></i>
+                                    <p>Nothing pending. Tell your Chief of Staff in chat, for example "remind me to call Mom on Wednesday", and it appears here.</p>
+                                </div>
+                            } @else {
+                                <div class="cos-todo-list">
+                                    @for (item of Metrics.TodoItems.slice(0, 8); track item.Task.ID) {
+                                        <div class="cos-todo-row" [class.cos-todo-row--overdue]="item.IsOverdue" (click)="OpenTaskRecord(item.Task.ID, $event)">
+                                            <button type="button" class="cos-todo-row__done"
+                                                    [disabled]="BusyTodoID === item.Task.ID"
+                                                    [title]="'Mark \'' + item.Task.Name + '\' done'"
+                                                    [attr.aria-label]="'Mark ' + item.Task.Name + ' done'"
+                                                    (click)="MarkTodoDone(item.Task, $event)">
+                                                <i class="fa-regular" [class.fa-circle]="BusyTodoID !== item.Task.ID" [class.fa-circle-check]="BusyTodoID === item.Task.ID"></i>
+                                            </button>
+                                            <div class="cos-todo-row__main">
+                                                <div class="cos-todo-row__name">{{ item.Task.Name }}</div>
+                                                <div class="cos-todo-row__meta">
+                                                    @if (item.Task.Type) {
+                                                        <span class="cos-meta-badge">{{ item.Task.Type }}</span>
+                                                    }
+                                                    @if (item.Task.DueAt) {
+                                                        <span [class.cos-overdue-text]="item.IsOverdue">
+                                                            <i class="fa-regular fa-calendar"></i>
+                                                            @if (item.IsDueToday) { Today } @else { {{ item.Task.DueAt | date:'MMM d, h:mm a' }} }
+                                                            @if (item.IsOverdue) { (overdue) }
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <i class="fa-solid fa-chevron-right cos-subtask-row__chevron"></i>
+                                        </div>
+                                    }
+                                    @if (Metrics.TodoItems.length > 8) {
+                                        <div class="cos-todo-list__more">and {{ Metrics.TodoItems.length - 8 }} more</div>
+                                    }
+                                </div>
+                            }
+                        </section>
                         <section class="cos-panel">
                             <div class="cos-panel__header">
                                 <div>

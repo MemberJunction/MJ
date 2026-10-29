@@ -23,7 +23,7 @@ import {
     ValidateSearchQueryParam,
 } from '../ChiefOfStaff/chief-of-staff-agent-context';
 import { AGENT_CONTEXT_NAME_LIST_CAP } from '../shared/agent-tool-validation';
-import { BuildScopeRootTasksFilter, LoadTaskAssignees, type TaskAssignee } from '../ChiefOfStaff/chief-of-staff-agent-context';
+import { BuildScopeRootTasksFilter, BuildTodoItems, IsTodoTask, LoadTaskAssignees, type TaskAssignee } from '../ChiefOfStaff/chief-of-staff-agent-context';
 import { UUIDMap } from '@memberjunction/global';
 
 function makeBaseTask(overrides: Partial<BizAppsTaskRecordLike>): BizAppsTaskRecordLike {
@@ -794,5 +794,50 @@ describe('CalculateChiefOfStaffMetrics — the objective names its owner', () =>
         const card = CalculateChiefOfStaffMetrics([root], [], []).PriorityCards[0];
         expect(card.Owner).toBeNull();
         expect(card.OwnedByMe).toBe(false);
+    });
+});
+
+describe('To-dos and reminders', () => {
+    const now = new Date('2026-10-28T18:00:00.000Z');
+    const todo = (over: Partial<BizAppsTaskRecordLike>) => makeBaseTask({
+        ID: 'T-' + (over.Name ?? 'x'), Type: 'General', IsPriority: false, HealthStatus: null, PlanningPeriod: null,
+        TargetValue: null, CurrentValue: null, BaselineValue: null, Status: 'Open', ...over,
+    });
+
+    it('a root task of a to-do type that is not an objective is a to-do', () => {
+        expect(IsTodoTask(todo({ Name: 'Call Mom', Type: 'General' }))).toBe(true);
+        expect(IsTodoTask(todo({ Name: 'Send notes', Type: 'Action Item' }))).toBe(true);
+        expect(IsTodoTask(todo({ Name: 'Ping vendor', Type: 'follow-up' }))).toBe(true);
+        expect(IsTodoTask(todo({ Name: 'Birthday', Type: 'Reminder' }))).toBe(true);
+    });
+
+    it('objectives, milestones, key results and typeless tasks are not to-dos', () => {
+        expect(IsTodoTask(makeBaseTask({ Name: 'Launch' }))).toBe(false);
+        expect(IsTodoTask(todo({ Name: 'Step', ParentID: 'R1' }))).toBe(false);
+        expect(IsTodoTask(todo({ Name: 'KR', Type: 'Key Result' }))).toBe(false);
+        expect(IsTodoTask(todo({ Name: 'Untyped', Type: null }))).toBe(false);
+        expect(IsTodoTask(todo({ Name: 'Objective-ish', Type: 'General', HealthStatus: 'OnTrack' }))).toBe(false);
+    });
+
+    it('lists open to-dos by due date, undated last, and flags overdue and due-today ones', () => {
+        const items = BuildTodoItems([
+            todo({ Name: 'Undated' , DueAt: null }),
+            todo({ Name: 'Tomorrow', DueAt: '2026-10-29T15:00:00.000Z' }),
+            todo({ Name: 'Yesterday', DueAt: '2026-10-27T15:00:00.000Z' }),
+            todo({ Name: 'Today', DueAt: '2026-10-28T22:00:00.000Z' }),
+            todo({ Name: 'Done', DueAt: '2026-10-26T15:00:00.000Z', Status: 'Completed' }),
+            todo({ Name: 'Dropped', DueAt: '2026-10-26T15:00:00.000Z', Status: 'Cancelled' }),
+            makeBaseTask({ Name: 'Launch' }),
+        ], now);
+        expect(items.map((i) => i.Task.Name)).toEqual(['Yesterday', 'Today', 'Tomorrow', 'Undated']);
+        expect(items.map((i) => i.IsOverdue)).toEqual([true, false, false, false]);
+        expect(items.map((i) => i.IsDueToday)).toEqual([false, true, false, false]);
+    });
+
+    it('the metrics carry the to-dos and their open count', () => {
+        const metrics = CalculateChiefOfStaffMetrics([todo({ Name: 'Call Mom' }), todo({ Name: 'Done', Status: 'Completed' }), makeBaseTask({ Name: 'Launch' })], [], [], now);
+        expect(metrics.TodoItems.map((i) => i.Task.Name)).toEqual(['Call Mom']);
+        expect(metrics.OpenTodoCount).toBe(1);
+        expect(metrics.PriorityCards.map((c) => c.Task.Name)).toEqual(['Launch']);
     });
 });

@@ -1142,3 +1142,70 @@
 .cos-assignee-chip--owner {
     border: 1px solid var(--mj-border-default);
 }
+
+/* To-dos & reminders */
+.cos-todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cos-todo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.cos-todo-row:hover {
+    background: var(--mj-bg-subtle);
+}
+
+.cos-todo-row--overdue {
+    border-left: 3px solid var(--mj-status-error);
+}
+
+.cos-todo-row__done {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.cos-todo-row__done:hover:not(:disabled) {
+    color: var(--mj-color-primary);
+}
+
+.cos-todo-row__main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cos-todo-row__name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+}
+
+.cos-todo-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+}
+
+.cos-todo-list__more {
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    padding: 2px 10px;
+}

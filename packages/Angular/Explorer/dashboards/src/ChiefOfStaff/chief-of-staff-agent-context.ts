@@ -204,6 +204,16 @@ export interface ChiefOfStaffMetrics {
     ActiveWakeRoutineCount: number;
     NextScheduledWakeAt: Date | null;
     PriorityCards: PriorityObjectiveCardViewModel[];
+    /** Open to-dos and reminders, soonest due first; see {@link BuildTodoItems}. */
+    TodoItems: TodoItemViewModel[];
+    OpenTodoCount: number;
+}
+
+/** A personal to-do or reminder row: a root task of a to-do type that is not an objective. */
+export interface TodoItemViewModel {
+    Task: BizAppsTaskRecordLike;
+    IsOverdue: boolean;
+    IsDueToday: boolean;
 }
 
 export interface ChiefOfStaffAgentContextInput {
@@ -254,6 +264,52 @@ export function ParseOptionalDate(val: Date | string | null | undefined): Date |
  */
 export function BuildTaskRecordKey(entityInfo: EntityInfo, task: BizAppsTaskRecordLike): CompositeKey {
     return CompositeKey.FromEntityRecord(entityInfo, { ...task });
+}
+
+/** Task type names (lower-case) that make a root task a personal to-do or reminder rather than an objective. */
+const TODO_TYPE_LABELS: ReadonlySet<string> = new Set(['general', 'action item', 'follow-up', 'followup', 'follow up', 'to-do', 'todo', 'reminder']);
+
+/**
+ * True for a root task whose type says to-do (General, Action Item, Follow-up, Reminder) and that
+ * is not a priority objective. Milestones (tasks with a parent), key results and typeless tasks
+ * are not to-dos.
+ */
+export function IsTodoTask(task: BizAppsTaskRecordLike): boolean {
+    if (task.ParentID != null || IsTaskPriorityObjective(task)) {
+        return false;
+    }
+    const typeLabel = (task.Type ?? task.TaskType ?? '').trim().toLowerCase();
+    return TODO_TYPE_LABELS.has(typeLabel);
+}
+
+const CLOSED_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'done', 'cancelled', 'canceled']);
+
+/**
+ * The open to-dos among `tasks`, soonest due first and undated last, each flagged overdue (due
+ * before `now`) or due today (same calendar day as `now`, local time).
+ */
+export function BuildTodoItems(tasks: readonly BizAppsTaskRecordLike[], now: Date = new Date()): TodoItemViewModel[] {
+    const open = tasks.filter((t) => IsTodoTask(t) && !CLOSED_TASK_STATUSES.has((t.Status ?? '').trim().toLowerCase()));
+    const items = open.map((task) => {
+        const due = ParseOptionalDate(task.DueAt);
+        return {
+            Task: task,
+            IsOverdue: due !== null && due.getTime() < now.getTime(),
+            IsDueToday: due !== null && isSameLocalDay(due, now),
+        };
+    });
+    return items.sort((a, b) => {
+        const da = ParseOptionalDate(a.Task.DueAt);
+        const db = ParseOptionalDate(b.Task.DueAt);
+        if (da && db) return da.getTime() - db.getTime();
+        if (da) return -1;
+        if (db) return 1;
+        return a.Task.Name.localeCompare(b.Task.Name);
+    });
+}
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 export function IsTaskPriorityObjective(task: BizAppsTaskRecordLike): boolean {
@@ -700,6 +756,7 @@ export function CalculateChiefOfStaffMetrics(
     }
 
     const totalSubtasks = tasks.filter((t) => !!t.ParentID).length;
+    const todoItems = BuildTodoItems(tasks, now);
 
     return {
         TotalTaskCount: tasks.length,
@@ -718,6 +775,8 @@ export function CalculateChiefOfStaffMetrics(
         ActiveWakeRoutineCount: activeWakeRoutines.length,
         NextScheduledWakeAt: nextScheduledWakeAt,
         PriorityCards: priorityCards,
+        TodoItems: todoItems,
+        OpenTodoCount: todoItems.length,
     };
 }
 

@@ -116,6 +116,8 @@ export class ChiefOfStaffDashboardComponent
     public IsSavingPolicy = false;
     public BusyRequestID: string | null = null;
     public BusyRoutineID: string | null = null;
+    /** The to-do being marked done, while its update is in flight. */
+    public BusyTodoID: string | null = null;
 
     // ── Briefing reader: a wake routine's conversation, read inside the cockpit ──────────
     /** The routine whose briefings the reader shows; null while the reader is closed. */
@@ -926,6 +928,52 @@ export class ChiefOfStaffDashboardComponent
             this.showBanner('error', `Failed to update task: ${msg}`);
         } finally {
             this.IsSavingTask = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Marks a to-do or reminder done: Status Completed and CompletedAt now, through the same
+     * `Update Record` action the task drawer uses, then reloads so the row leaves the list.
+     */
+    public async MarkTodoDone(task: BizAppsTaskRecordLike, event?: Event): Promise<void> {
+        event?.stopPropagation();
+        if (this.BusyTodoID) {
+            return;
+        }
+        const key = this.taskRecordKey(task);
+        if (!key) {
+            return;
+        }
+        this.BusyTodoID = task.ID;
+        this.cdr.markForCheck();
+        try {
+            const actionId = await this.resolveUpdateRecordActionId();
+            if (!actionId) {
+                throw new Error("Action 'Update Record' not found in metadata.");
+            }
+            const primaryKeyObj: Record<string, unknown> = {};
+            for (const kvp of key.KeyValuePairs) {
+                primaryKeyObj[kvp.FieldName] = kvp.Value;
+            }
+            const updates: Record<string, string | Date> = { Status: 'Completed', CompletedAt: new Date() };
+            const actionClient = new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider);
+            const result = await actionClient.RunAction(actionId, [
+                { Name: 'EntityName', Value: BIZAPPS_TASKS_ENTITY_NAME, Type: 'Input' } as ActionParam,
+                { Name: 'PrimaryKey', Value: primaryKeyObj, Type: 'Input' } as ActionParam,
+                { Name: 'Fields', Value: updates, Type: 'Input' } as ActionParam,
+            ]);
+            if (result.Success) {
+                this.showBanner('success', `Done: "${task.Name}".`);
+                await this.LoadCockpitData();
+            } else {
+                this.showBanner('error', result.Message || `Could not mark "${task.Name}" done.`);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.showBanner('error', `Could not mark "${task.Name}" done: ${msg}`);
+        } finally {
+            this.BusyTodoID = null;
             this.cdr.markForCheck();
         }
     }
