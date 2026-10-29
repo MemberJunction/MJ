@@ -1,0 +1,6 @@
+---
+"@memberjunction/ai-realtime-client": patch
+"@memberjunction/ai-elevenlabs": patch
+---
+
+Two ElevenLabs realtime fixes. The client driver now sends a tool's result to ElevenLabs as the JSON string `SendToolResult` was given, instead of parsing it into an object first; the platform takes `client_tool_result.result` as a string and closed the conversation about 0.1 to 1 s after every object-shaped result, so any client tool call (whiteboard, remote browser, hub tools) ended a live ElevenLabs voice session (MJ#4806). The server-bridged `ElevenLabsRealtimeSession` had the same defect and is fixed the same way; both `ParseToolOutput` helpers are removed. The provider's managed-agent ensure cache now lives in a process-wide `ElevenLabsManagedAgentCache` (a `BaseSingleton`, one map per API key) instead of on the driver instance: the session service builds a new driver for every session, so the instance cache never hit and every voice session start made the list → get (→ PATCH) → signed-URL round-trips, about 3.8 s, before it could connect (MJ#4803). After the first session per agent in a process, a start fetches only the signed URL for ten minutes; after that the next start re-verifies the agent, so drift made elsewhere is repaired. The fingerprint, in-flight-promise sharing and failure-eviction semantics are unchanged.

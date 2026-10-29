@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/rubrics",
   "type": "module",
-  "version": "6.2.0-edge.4",
+  "version": "6.2.0-edge.6",
   "description": "Server rubric evaluators. AI and human evaluators produce answers; RubricScoring is the only math.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,15 +19,15 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/actions": "6.2.0-edge.4",
-    "@memberjunction/ai": "6.2.0-edge.4",
-    "@memberjunction/ai-core-plus": "6.2.0-edge.4",
-    "@memberjunction/ai-prompts": "6.2.0-edge.4",
-    "@memberjunction/actions-base": "6.2.0-edge.4",
-    "@memberjunction/core": "6.2.0-edge.4",
-    "@memberjunction/core-entities": "6.2.0-edge.4",
-    "@memberjunction/global": "6.2.0-edge.4",
-    "@memberjunction/rubrics-base": "6.2.0-edge.4"
+    "@memberjunction/actions": "6.2.0-edge.6",
+    "@memberjunction/ai": "6.2.0-edge.6",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.6",
+    "@memberjunction/ai-prompts": "6.2.0-edge.6",
+    "@memberjunction/actions-base": "6.2.0-edge.6",
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
+    "@memberjunction/rubrics-base": "6.2.0-edge.6"
   },
   "devDependencies": {
     "nunjucks": "3.2.4",

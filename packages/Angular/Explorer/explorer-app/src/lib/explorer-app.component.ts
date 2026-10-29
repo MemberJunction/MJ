@@ -26,8 +26,8 @@ import {
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
-import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
+import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -312,9 +312,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     return flags;
   }
 
-  /** Instance Config gate for the floating chat overlay bubble. */
+  /**
+   * Gate for the floating chat overlay bubble. With the shell rendered this is the shell's
+   * RESOLVED answer — Instance Config narrowed by the host's chrome policy (LXP P4: a learner
+   * portal that owns its own AI surface hides the bubble per audience, not with CSS). The shell
+   * marks for check when its policy changes, and that marks this parent dirty too, so the bubble
+   * follows.
+   *
+   * The Instance Config fallback is live in exactly one state: the shell is gone (`HasError`, or
+   * a pre-shell guard) while `IsChatOverlayReady` is already true — the error screen after a
+   * workspace that had loaded. There it keeps the pre-policy behaviour (the key alone decides),
+   * which is what shipped before the overlay followed the policy. On a normal load the overlay
+   * is gated on workspace init, which comes after the shell, so the shell always answers.
+   */
   public get ShowChatOverlay(): boolean {
-    return this.chromeFlags.chatOverlay;
+    return this.shellRef()?.ChromeFlags.chatOverlay ?? this.chromeFlags.chatOverlay;
   }
 
   /** Instance Config gate for the service-worker update toast. */
@@ -344,6 +356,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** The offline banner above the shell header; absent until the shell renders. */
   private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+  /** The shell, when rendered — the source of the resolved chrome flags (see {@link ShowChatOverlay}). */
+  private readonly shellRef = viewChild(ShellComponent);
 
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
@@ -389,8 +403,13 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private environmentInjector: EnvironmentInjector,
     private viewContainerRef: ViewContainerRef,
     @Optional() @Inject(MJ_AUTH_PROVIDER_RESOLUTION) private authResolution: AuthProviderResolution | null,
+    private themeService: ThemeService,
   ) {
     super();
+    // Before anything renders: put the persisted org brand overlay back so the sign-in page and
+    // the shell's loading screen paint branded on a cold load, instead of waiting for workspace
+    // bootstrap to re-emit the overlay (which is a session Blob and does not survive a reload).
+    this.themeService.RestorePersistedBrandOverlay();
     this.registerClientTools();
   }
 
@@ -545,7 +564,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Navigate to the initial route. A deep link is replayed through the router;
         // a bare '/' is left to the router's default route (the Home app).
         if (this.initialPath !== '/') {
-          this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
+          this.router.navigateByUrl(this.initialPath, { replaceUrl: true })?.catch(() => {
+            void this.router.navigateByUrl('/', { replaceUrl: true });
+          });
         }
       } else if (result.error) {
         // Handle errors based on type

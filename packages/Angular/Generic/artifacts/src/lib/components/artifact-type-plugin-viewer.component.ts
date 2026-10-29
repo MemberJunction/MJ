@@ -12,6 +12,7 @@ import {
   Type
 } from '@angular/core';
 import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -216,6 +217,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   }
 
   private componentRef: ComponentRef<any> | null = null;
+  private pluginSubscriptions: Subscription[] = [];
 
   /**
    * Get the loaded plugin instance (if available)
@@ -363,33 +365,41 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       // Subscribe to openEntityRecord event if the plugin emits it
       const componentInstance = this.componentRef.instance;
       if (componentInstance.openEntityRecord) {
-        componentInstance.openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
-          this.OpenEntityRecord.emit(event);
-        });
+        this.pluginSubscriptions.push(
+          componentInstance.openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
+            this.OpenEntityRecord.emit(event);
+          })
+        );
       }
 
       // Subscribe to navigationRequest event if the plugin emits it
       if (componentInstance.navigationRequest) {
-        componentInstance.navigationRequest.subscribe((event: NavigationRequest) => {
-          this.navigationRequest.emit(event);
-        });
+        this.pluginSubscriptions.push(
+          componentInstance.navigationRequest.subscribe((event: NavigationRequest) => {
+            this.navigationRequest.emit(event);
+          })
+        );
       }
 
       // Subscribe to tabsChanged event if the plugin emits it (e.g., after async spec loading)
       if (componentInstance.tabsChanged) {
-        componentInstance.tabsChanged.subscribe(() => {
-          this.tabsChanged.emit();
-        });
+        this.pluginSubscriptions.push(
+          componentInstance.tabsChanged.subscribe(() => {
+            this.tabsChanged.emit();
+          })
+        );
       }
 
       // Subscribe to the form-aware "Apply to my form" event when the
       // underlying plugin is a component-artifact-viewer rendering a
       // form-role spec. Other plugin types don't have this output.
       if (componentInstance.applyFormRequested) {
-        componentInstance.applyFormRequested.subscribe(
-          (event: { spec: unknown; entityName: string }) => {
-            this.ApplyFormRequested.emit(event);
-          }
+        this.pluginSubscriptions.push(
+          componentInstance.applyFormRequested.subscribe(
+            (event: { spec: unknown; entityName: string }) => {
+              this.ApplyFormRequested.emit(event);
+            }
+          )
         );
       }
 
@@ -510,13 +520,17 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   }
 
   /**
-   * Destroy the current viewer component
+   * Destroy the current viewer component and unsubscribe all dynamic plugin EventEmitter listeners.
    */
   private destroyCurrentViewer(): void {
+    for (const sub of this.pluginSubscriptions) {
+      sub.unsubscribe();
+    }
+    this.pluginSubscriptions = [];
     if (this.componentRef) {
       this.componentRef.destroy();
       this.componentRef = null;
     }
-    this.ViewerContainer.clear();
+    this.ViewerContainer?.clear();
   }
 }

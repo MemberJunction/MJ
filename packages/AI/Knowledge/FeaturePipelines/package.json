@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/feature-pipelines",
   "type": "module",
-  "version": "6.2.0-edge.4",
+  "version": "6.2.0-edge.6",
   "description": "MemberJunction: Feature Pipelines - Knowledge Hub derived feature specifications, constraints, caching, and execution engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,13 +17,13 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.4",
-    "@memberjunction/core-entities": "6.2.0-edge.4",
-    "@memberjunction/global": "6.2.0-edge.4",
-    "@memberjunction/record-set-processor-base": "6.2.0-edge.4"
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.6"
   },
   "devDependencies": {
-    "@memberjunction/unit-testing": "6.2.0-edge.4",
+    "@memberjunction/unit-testing": "6.2.0-edge.6",
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

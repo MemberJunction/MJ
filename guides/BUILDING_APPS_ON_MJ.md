@@ -613,6 +613,7 @@ And of course, because MJ's source is fully public, you can always **read, fork,
 These apply no matter which layer you're working in. The **[guides/ index](README.md)** is the full list; the essentials:
 
 - **[UUID Comparison Guide](UUID_COMPARISON_GUIDE.md)** — Always use `UUIDsEqual()`; SQL Server and PostgreSQL case UUIDs differently.
+- **[Alternate Base Views Guide](ALTERNATE_BASE_VIEWS_GUIDE.md)** — Expose multiple governed SQL views (`Active`, `OpenBalance`, `OpenPipeline`, `DueNow`) on an entity with 100% column parity across `RunView`, `BaseEngine`, User Views, Stored Queries, and AI Agents.
 - **[Caching & Real-Time Synchronization Guide](CACHING_AND_PUBSUB_GUIDE.md)** — Server cache + reactive `BaseEngine` patterns for live UIs.
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — The right way to extend entities on the server.
 - The foundational **[CLAUDE.md](../CLAUDE.md)** at the repo root — coding standards, type-safety rules, naming conventions, and the architectural guardrails that keep an MJ app maintainable.

@@ -2,13 +2,13 @@
  * Pure view-model derivations for the **business-user Predictions catalog** — the home surface that
  * reframes published ML models as plain-language "predictions" a non-technical Outcome Owner can browse,
  * trust, and act on. Each published model becomes a catalog card carrying the shared trust verdict
- * (the SAME `deriveTrustVerdict` rule the agent's publish gate uses), so a Poor / unmeasured model is
+ * (the SAME `TrustVerdicts.DeriveTrustVerdict` rule the agent's publish gate uses), so a Poor / unmeasured model is
  * visibly flagged and blocked from being opened — never silently presented as usable.
  *
  * Framework-free + deterministic (like `predictive-studio.view-models.ts`) → unit-tested with no Angular.
  */
 
-import { deriveTrustVerdict, type TrustVerdict, type TrustModelInput } from '@memberjunction/predictive-studio-core';
+import { TrustVerdicts, type TrustVerdict, type TrustModelInput } from '@memberjunction/predictive-studio-core';
 
 /** The minimal published-model slice the catalog needs (a structural superset of the engine's model row). */
 export interface BusinessPredictionInput extends TrustModelInput {
@@ -36,7 +36,7 @@ export interface BusinessPredictionCard {
 
 /** Map a published model into a business catalog card, applying the trust gate. */
 export function ToBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
-  const trust = deriveTrustVerdict(input);
+  const trust = TrustVerdicts.DeriveTrustVerdict(input);
   return {
     modelId: input.modelId,
     title: input.name?.trim() || 'Untitled prediction',

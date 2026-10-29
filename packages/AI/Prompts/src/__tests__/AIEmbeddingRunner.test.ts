@@ -80,6 +80,15 @@ const h = vi.hoisted(() => {
     return map;
   };
 
+  const byPromptID = <T extends { PromptID: string }>(rows: T[]): Map<string, T[]> => {
+    const map = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = norm(row.PromptID);
+      map.set(key, [...(map.get(key) ?? []), row]);
+    }
+    return map;
+  };
+
   const engine = {
     Config: vi.fn().mockResolvedValue(undefined),
     get VendorTypeDefinitions() { return state.vendorTypeDefinitions; },
@@ -98,9 +107,12 @@ const h = vi.hoisted(() => {
     get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
     get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
     get ModelVendorsByModelID() { return byModelID(state.modelVendors); },
+    get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
     GetConfigurationChain() { return []; },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
+    // The real one prefixes texts from the model's catalog config; AIEngine's own tests cover that.
+    PrepareEmbeddingInput: vi.fn((_model: unknown, texts: string[]) => ({ texts, maxInputTokens: undefined as number | undefined })),
   };
 
   let runSeq = 0;
@@ -424,6 +436,19 @@ describe('AIEmbeddingRunner', () => {
     expect(parsedResult.dimensions).toBe(3);
   });
 
+  it('runs the prompt-model row\'s vendor, not its model\'s top vendor, with failover off', async () => {
+    const mv1b = addSecondVendorToModel1(); // Bedrock (driver 1B, priority 8) below OpenAI (priority 10)
+    h.state.prompts[0].SelectionStrategy = 'Default';
+    setFailoverStrategy('None');
+    h.state.promptModels[0] = MakePromptModel({ ID: 'pm-001', PromptID: PROMPT_ID, ModelID: MODEL_1_ID, VendorID: mv1b.VendorID, Priority: 10 });
+
+    const result = await runner.RunEmbedding({ Texts: ['row vendor'], ContextUser: mockUser, PromptID: PROMPT_ID });
+
+    expect(result.Success).toBe(true);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+  });
+
   it('ModelID pinning passes through to BuildModelVendorCandidates', async () => {
     const result = await runner.RunEmbedding({
       Texts: ['pinned model test'],
@@ -577,6 +602,27 @@ describe('AIEmbeddingRunner', () => {
     expect(run?.Success).toBe(false);
     expect(run?.Status).toBe('Failed');
     expect(run?.ErrorMessage).toContain('Fatal unrecoverable network crash');
+  });
+
+  it('sends the texts AIEngine prepared, with the input type and the catalog token cap', async () => {
+    h.engine.PrepareEmbeddingInput.mockImplementationOnce((_model: unknown, texts: string[]) => ({
+      texts: texts.map(t => `task: search result | query: ${t}`),
+      maxInputTokens: 8192,
+    }));
+    const result = await runner.RunEmbedding({
+      Texts: ['red planet'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      InputType: 'query',
+    });
+
+    expect(result.Success).toBe(true);
+    expect(h.engine.PrepareEmbeddingInput).toHaveBeenCalledWith(expect.objectContaining({ ID: expect.any(String) }), ['red planet'], 'query', expect.anything());
+    expect(scriptFor(DRIVER_1).Calls[0]).toMatchObject({
+      texts: ['task: search result | query: red planet'],
+      inputType: 'query',
+      maxInputTokens: 8192,
+    });
   });
 
   it('Dimensions are forwarded to the driver', async () => {

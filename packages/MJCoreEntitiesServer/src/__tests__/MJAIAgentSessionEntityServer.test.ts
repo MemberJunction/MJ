@@ -27,18 +27,12 @@ interface StubConfigField {
     OldValue: unknown;
 }
 
-/** The slice of an entity field the ledger-column rule reads and marks. */
-interface StubLedgerField {
-    Dirty: boolean;
-    NotLoaded: boolean;
-    MarkNotLoaded(): void;
-}
-
 // Declared INSIDE the factory because `vi.mock` is hoisted above every top-level declaration here.
 vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJAIAgentSessionEntity. */
     class StubSessionEntity {
         public IsSaved = true;
+        public ContextCurrentUser: unknown = null;
         public Config_: string | null = null;
         public ConfigField: StubConfigField | null = { Dirty: true, OldValue: null };
 
@@ -46,18 +40,11 @@ vi.mock('@memberjunction/core-entities', () => {
             return { Success: true, Errors: [] };
         }
 
-        /** Ledger-owned fields by name; a test fills it. */
-        public LedgerFields = new Map<string, { Dirty: boolean; NotLoaded: boolean; MarkNotLoaded(): void }>();
-        /** NotLoaded state of every ledger field at the moment the base Save ran. */
-        public NotLoadedAtSave: Record<string, boolean> | null = null;
+        /** Fields other than Config, by name; a test fills it. */
+        public Fields = new Map<string, { Dirty: boolean }>();
 
         public GetFieldByName(name: string): unknown {
-            return name === 'Config' ? this.ConfigField : (this.LedgerFields.get(name) ?? null);
-        }
-
-        public async Save(): Promise<boolean> {
-            this.NotLoadedAtSave = Object.fromEntries([...this.LedgerFields].map(([name, f]) => [name, f.NotLoaded]));
-            return true;
+            return name === 'Config' ? this.ConfigField : (this.Fields.get(name) ?? null);
         }
     }
     return { MJAIAgentSessionEntity: StubSessionEntity };
@@ -255,44 +242,63 @@ describe('MJAIAgentSessionEntityServer.Validate', () => {
     });
 });
 
-describe('MJAIAgentSessionEntityServer.Save leaves the recording ledger\'s columns alone (#5294)', () => {
-    const LEDGER = [
-        'RecordingStatus', 'RecordingExpectedShards', 'RecordingCapturedSamples', 'RecordingGaps',
-        'RecordingAssemblyVersion', 'RecordingFileID', 'RecordingMedia',
-    ];
-
-    function withLedgerFields(saved: boolean, dirty: string[] = []): MJAIAgentSessionEntityServer {
-        const entity = session({ saved, previous: null, next: null, dirty: false });
-        const stub = entity as unknown as { LedgerFields: Map<string, StubLedgerField> };
-        for (const name of LEDGER) {
-            const field: StubLedgerField = { Dirty: dirty.includes(name), NotLoaded: false, MarkNotLoaded: () => { field.NotLoaded = true; } };
-            stub.LedgerFields.set(name, field);
-        }
+describe('MJAIAgentSessionEntityServer.Validate — ConversationID is not rewritable by an anonymous caller (#4931)', () => {
+    /** A session whose Config is untouched, so only the ConversationID rule can refuse. */
+    function sessionWithConversationEdit(opts: { saved: boolean; conversationIdDirty: boolean; anonymous: boolean }): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: opts.saved, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; Fields: Map<string, { Dirty: boolean }> };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: opts.anonymous };
+        stub.Fields.set('ConversationID', { Dirty: opts.conversationIdDirty });
         return entity;
     }
 
-    function notLoadedAtSave(entity: MJAIAgentSessionEntityServer): Record<string, boolean> | null {
-        return (entity as unknown as { NotLoadedAtSave: Record<string, boolean> | null }).NotLoadedAtSave;
+    it('refuses an anonymous caller re-pointing an existing session at another conversation', () => {
+        const result = sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: true }).Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('ConversationID');
+    });
+
+    it('allows an anonymous caller to set ConversationID when it creates the session (SessionManager.persistNewSession)', () => {
+        expect(sessionWithConversationEdit({ saved: false, conversationIdDirty: true, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows an anonymous caller saving other fields (heartbeat, close)', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: false, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows a named caller changing ConversationID', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: false }).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJAIAgentSessionEntityServer.Validate — a transaction variable cannot set a guarded field after the check (#4931)', () => {
+    type GroupVar = { EntityObject: unknown; Type: 'Define' | 'Use'; FieldName: string };
+    /** A saved session with untouched fields, enrolled in a group with these variables. */
+    function inGroup(anonymous: boolean, variables: (self: unknown) => GroupVar[]): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: true, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; TransactionGroup?: unknown };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: anonymous };
+        stub.TransactionGroup = { Variables: variables(entity) };
+        return entity;
     }
 
-    it('omits every ledger column the caller did not change from an update (a stale copy would rewind the ledger)', async () => {
-        const entity = withLedgerFields(true);
-        expect(await entity.Save()).toBe(true);
-        expect(notLoadedAtSave(entity)).toEqual(Object.fromEntries(LEDGER.map(name => [name, true])));
+    it("refuses an anonymous caller whose 'Use' variable will set ConversationID or ID at submit", () => {
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(false);
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'id' }]).Validate().Success).toBe(false);
     });
 
-    it('still saves a ledger column the caller set explicitly (the legacy upload stamps RecordingFileID)', async () => {
-        const entity = withLedgerFields(true, ['RecordingFileID', 'RecordingMedia']);
-        await entity.Save();
-        const state = notLoadedAtSave(entity);
-        expect(state?.['RecordingFileID']).toBe(false);
-        expect(state?.['RecordingMedia']).toBe(false);
-        expect(state?.['RecordingStatus']).toBe(true);
+    it("refuses an untrusted 'Use' variable on Config, whose protected keys are compared only at Validate", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(false);
     });
 
-    it('leaves a new record alone: an insert takes every column', async () => {
-        const entity = withLedgerFields(false);
-        await entity.Save();
-        expect(Object.values(notLoadedAtSave(entity) ?? {}).every(v => v === false)).toBe(true);
+    it("refuses an untrusted 'Use' variable on ID, which re-points the update (and its Config) at another user's session", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ID' }]).Validate().Success).toBe(false);
+    });
+
+    it("allows a 'Use' variable on Config inside a trusted scope, and a 'Use' variable on another row", async () => {
+        await RunWithTrustedSessionConfigWrites(async () => {
+            expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(true);
+        });
+        expect(inGroup(true, () => [{ EntityObject: {}, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(true);
     });
 });

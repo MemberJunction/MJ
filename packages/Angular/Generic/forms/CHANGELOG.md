@@ -1,5 +1,44 @@
 # @memberjunction/ng-forms
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [622f166]
+- Updated dependencies [0581392]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [09c7d57]
+- Updated dependencies [1141164]
+- Updated dependencies [db4e210]
+- Updated dependencies [5931f0d]
+- Updated dependencies [5b41d48]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ng-markdown@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [b14c72f]
+- Updated dependencies [81aea34]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [5fed75a]
+- Updated dependencies [c271ddf]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [1d29837]
+- Updated dependencies [0cc6b08]
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes
