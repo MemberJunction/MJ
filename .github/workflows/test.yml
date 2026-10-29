@@ -347,6 +347,18 @@ jobs:
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
 
+      # The primary-key scanner is the same kind of repo-wide scan, hosted in MJCore. In MJCore's
+      # per-package `test` task it ran only when a PR touched MJCore (core sits at the bottom of the
+      # dependency graph, so the affected-package filter never selects it from a leaf change), and it
+      # ships with no baseline, so every violation it would have caught merged and failed on `next`.
+      # MJCore's own config, as in check-guards.sh: the shared one finds no project from inside MJCore.
+      - name: Repo-wide compliance scan (primary keys)
+        if: ${{ !cancelled() }}
+        run: >-
+          pnpm --filter @memberjunction/core exec vitest run
+          --passWithNoTests=false
+          src/__tests__/PrimaryKeyCompliance.test.ts
+
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
         run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134

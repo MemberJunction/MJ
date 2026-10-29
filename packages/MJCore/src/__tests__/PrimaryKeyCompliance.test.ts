@@ -54,6 +54,14 @@ import * as path from 'path';
 
 const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
 
+/**
+ * Floor on how many files the scan must read. `findTsFiles` returns [] for a missing root, and a
+ * test moved one directory deeper resolves SCAN_ROOT to a single package: either way the gate
+ * would pass while scanning almost nothing. The repo has ~7000 scannable files and no single
+ * top-level folder under packages/ has more than ~2600, so this floor sits between the two.
+ */
+const MIN_SCANNED_FILES = 3000;
+
 /** Gate 1 — a key constructed with a literal `ID` field name. */
 const LITERAL_ID_KEY_PATTERNS = [
     /FieldName:\s*['"]ID['"]/,
@@ -157,6 +165,7 @@ interface ScanResult {
     indexAccess: Violation[];
     singleKey: Violation[];
     idPredicates: Violation[];
+    scannedFiles: number;
 }
 
 function scanFile(filePath: string): ScanResult {
@@ -221,8 +230,9 @@ function report(violations: Violation[], max = 60): string {
 }
 
 function scanAll(): ScanResult {
-    const all: ScanResult = { literalIdKeys: [], indexAccess: [], singleKey: [], idPredicates: [] };
-    for (const file of findTsFiles(SCAN_ROOT)) {
+    const files = findTsFiles(SCAN_ROOT);
+    const all: ScanResult = { literalIdKeys: [], indexAccess: [], singleKey: [], idPredicates: [], scannedFiles: files.length };
+    for (const file of files) {
         const r = scanFile(file);
         all.literalIdKeys.push(...r.literalIdKeys);
         all.indexAccess.push(...r.indexAccess);
@@ -235,6 +245,10 @@ function scanAll(): ScanResult {
 const RESULTS = scanAll();
 
 describe('Primary Key Compliance', () => {
+    it('scans the whole packages/ tree', () => {
+        expect(RESULTS.scannedFiles).toBeGreaterThan(MIN_SCANNED_FILES);
+    });
+
     it('gate 1: never constructs a key with a literal `ID` field name', () => {
         const v = RESULTS.literalIdKeys;
         if (v.length === 0) return;

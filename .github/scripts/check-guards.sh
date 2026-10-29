@@ -3,7 +3,7 @@
 #
 #   UUIDCompliance + MultiProviderCompliance
 #     + FieldSecurityEgressCompliance         (packages/MJGlobal; the "Source guards" job)
-#   PrimaryKeyCompliance                      (packages/MJCore; runs in CI only when a PR touches MJCore)
+#   PrimaryKeyCompliance                      (packages/MJCore; the "Source guards" job)
 #   check:manifest-registrations              (an entity subclass missing from the committed manifests)
 #
 # All of them read source text off disk: no build, no database. Each is run even if an earlier one
