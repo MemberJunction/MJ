@@ -67,7 +67,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # workflow_call without a branch input → validate the CALLING commit
           # (publish gates the exact sha being released). Dispatch → the chosen
@@ -167,7 +167,7 @@ jobs:
 
       - name: Checkout repo
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.branch || github.sha }}
           persist-credentials: false

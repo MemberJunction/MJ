@@ -366,7 +366,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate migration filenames
         run: ./.github/scripts/validate-migration-filenames.sh
@@ -447,7 +447,7 @@ jobs:
       BRANCH: ${{ github.base_ref || github.ref_name }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -1013,7 +1013,7 @@ jobs:
       # A line branch that does not exist fails here, loudly, before anything
       # else runs: "couldn't find remote ref refs/heads/<line>".
       - name: Checkout the line branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.line_branch }}
           fetch-depth: 0
@@ -1666,7 +1666,7 @@ jobs:
           echo "::notice::Cutting candidate line $CUT from next (workflow file from ${{ github.ref_name }})"
 
       - name: Checkout next
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: next
           fetch-depth: 0

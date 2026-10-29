@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -238,7 +238,7 @@ jobs:
     steps:
       # `next` is the base: notes land there and reach the line by backport label.
       - name: Checkout next
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: next
           fetch-depth: 0

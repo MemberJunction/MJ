@@ -75,7 +75,7 @@ jobs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: blob:none
@@ -219,7 +219,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Full history is needed for the base-ref diffs below, but the blobless partial clone
@@ -504,7 +504,7 @@ jobs:
       has_tests: ${{ steps.plan.outputs.has_tests }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -817,7 +817,7 @@ jobs:
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -933,7 +933,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -1067,7 +1067,7 @@ jobs:
       # comment on it nor close it. A red line push still shows as a red run, and line PRs gate first.
       - name: Checkout repo
         if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -1206,7 +1206,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           filter: blob:none

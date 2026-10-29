@@ -45,7 +45,7 @@ jobs:
       BRANCH: chore/bizapps-guide-refresh
     steps:
       - name: Checkout next
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: next
           fetch-depth: 1

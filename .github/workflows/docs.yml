@@ -99,7 +99,7 @@ jobs:
       # merging). Note for workflow_run this is next's head, NOT the released
       # commit — the ref each version's CONTENT comes from is the matrix below.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -184,7 +184,7 @@ jobs:
       # reach it. Now that no content ref is ever `next`, that second need is the
       # only reason next appears in this job at all — do not narrow the fetch.
       - name: Checkout content ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ matrix.ref }}

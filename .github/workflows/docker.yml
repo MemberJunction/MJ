@@ -69,7 +69,7 @@ jobs:
       #     (its payload carries the tag) or have publish.yml expose the pushed release
       #     commit/tag as a workflow output, and checkout that.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
@@ -111,7 +111,7 @@ jobs:
       # Same head-SHA pin as the channel job: the image content (MJAPI source,
       # migrations, Dockerfile) must come from the released commit, not next's tip.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 

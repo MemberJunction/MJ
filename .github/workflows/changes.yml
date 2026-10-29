@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Self-test migration ID determinism detector
         # Runs on EVERY PR (even those with no migrations, like the one that introduced
