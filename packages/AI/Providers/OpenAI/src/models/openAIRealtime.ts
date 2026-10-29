@@ -272,7 +272,14 @@ export function MapNormalizedTurnDetection(
     return undefined;
 }
 
-/** The OpenAI provider profile — the defaults every OpenAI-compatible subclass overrides from. */
+/**
+ * The OpenAI provider profile — the defaults every OpenAI-compatible subclass overrides from.
+ *
+ * A raw `audio` key in the Config bag merges into the built audio block (see `MergeAudioOverride`),
+ * so these native keys are reachable: `audio.input.turn_detection.{ prefix_padding_ms,
+ * idle_timeout_ms, interrupt_response, create_response }`. `create_response` only takes effect
+ * outside meeting mode (`disableAutoResponse`), where the floor `create_response: false` always wins.
+ */
 export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'openai',
     inputTranscriptionModel: OPENAI_INPUT_TRANSCRIPTION_MODEL,

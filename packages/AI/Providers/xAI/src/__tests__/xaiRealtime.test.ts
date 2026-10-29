@@ -322,6 +322,24 @@ describe('xAIRealtime', () => {
             }
         });
 
+        it('a raw audio override merges into the required explicit server_vad block', async () => {
+            await driver.StartSession({
+                Model: 'grok-voice',
+                SystemPrompt: 'sys',
+                Config: { audio: { input: { turn_detection: { idle_timeout_ms: 5000 } } } },
+            });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                expect(update.session.audio).toMatchObject({
+                    input: {
+                        turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true, idle_timeout_ms: 5000 },
+                    },
+                });
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
         it('merges Config bag into the session.update', async () => {
             await driver.StartSession({
                 Model: 'grok-voice',
