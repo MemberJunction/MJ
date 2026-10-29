@@ -13,6 +13,7 @@
 import { readFile, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import v8 from 'node:v8';
+import { PressureBytes, resolveThresholds, SHED_ABOVE_FRACTION } from './MemoryGovernor.js';
 
 export interface ResourcePressureReading {
     /** V8 heap in use, bytes. */
@@ -134,31 +135,39 @@ export const DISK_WARN_FREE_BYTES = 500 * 1024 * 1024;
  * Lower than the heap threshold on purpose. The heap ceiling is a wall V8 enforces, so 0.85 of it
  * still leaves the process alive to checkpoint. The host has no such wall — crossing it is a
  * SIGKILL with no stack, no run record and no chance to save a watermark, so the warning has to
- * arrive with enough headroom left to actually shed load. At 0.70 of a 3,830 MB box that is ~1.1 GB
- * of room, which is several batches' worth of time to halve concurrency and drain.
+ * arrive with enough headroom left to actually shed load.
+ *
+ * It is the governor's line (`SHED_ABOVE_FRACTION`, or the operator override), judged on the same
+ * reading — memory in use on the host. It used to be 0.70 of this process's RSS, which a workspace
+ * whose heap is sized at (RAM - 1 GB) x 0.70 crosses just by booting.
  */
-export const RESIDENT_WARN_FRACTION = 0.70;
+export const RESIDENT_WARN_FRACTION = SHED_ABOVE_FRACTION;
 
 export function EvaluatePressure(
     r: ResourcePressureReading,
     heapWarnFraction = HEAP_WARN_FRACTION,
     diskWarnFreeBytes = DISK_WARN_FREE_BYTES,
-    residentWarnFraction = RESIDENT_WARN_FRACTION,
+    residentWarnFraction = resolveThresholds().ShedAbove,
 ): PressureFinding[] {
     const out: PressureFinding[] = [];
     // Two independent ways to run out of memory, and the RSS one is the one that kills. Report the
     // WORSE of the two under a single code so a caller has one number to act on: heap exhaustion is
     // a V8 abort the process can sometimes survive, while crossing the host's limit is a SIGKILL.
     const heapFrac = r.HeapLimitBytes > 0 ? r.HeapUsedFraction : 0;
-    const rssFrac = r.ResidentFraction ?? 0;
-    const worst = Math.max(heapFrac >= heapWarnFraction ? heapFrac : 0, rssFrac >= residentWarnFraction ? rssFrac : 0);
+    // The governor's reading and line: memory in use on the HOST, not this process's RSS. The engine
+    // halves its in-flight cap whenever this fires, after every map, so a second, stricter line here
+    // undid what the governor had just released.
+    const hostFrac = r.HostMemTotalBytes && r.HostMemTotalBytes > 0
+        ? PressureBytes({ ResidentBytes: r.ResidentBytes, HostTotalBytes: r.HostMemTotalBytes, HostAvailableBytes: r.HostMemAvailableBytes }) / r.HostMemTotalBytes
+        : (r.ResidentFraction ?? 0);
+    const worst = Math.max(heapFrac >= heapWarnFraction ? heapFrac : 0, hostFrac >= residentWarnFraction ? hostFrac : 0);
     if (worst > 0) {
-        const hostBound = rssFrac >= residentWarnFraction && rssFrac >= heapFrac;
+        const hostBound = hostFrac >= residentWarnFraction && hostFrac >= heapFrac;
         out.push({
             Code: 'HOST_MEMORY_PRESSURE',
             Fraction: worst,
             Message: hostBound
-                ? `This workspace is using ${Math.round(rssFrac * 100)}% of its machine's memory. Syncing fewer tables at once will help; if it keeps happening on a normal sync, this workspace needs a larger size.`
+                ? `This workspace is using ${Math.round(hostFrac * 100)}% of its machine's memory. Syncing fewer tables at once will help; if it keeps happening on a normal sync, this workspace needs a larger size.`
                 : `This workspace is using ${Math.round(heapFrac * 100)}% of the memory available to it. A large sync may not finish; running fewer at once, or a smaller batch size, will help.`,
         });
     }

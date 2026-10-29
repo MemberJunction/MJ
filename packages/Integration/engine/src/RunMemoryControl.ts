@@ -16,7 +16,7 @@
  */
 import { ReadResourcePressure } from './ResourcePressure.js';
 import {
-    planShedding, calibrate, estimateEntityMapBytes, batchSizeLever, resolveThresholds,
+    planShedding, calibrate, estimateEntityMapBytes, batchSizeLever, resolveThresholds, PressureBytes,
     type Contributor, type Lever, type SheddingPlan, type GovernorReading
 } from './MemoryGovernor.js';
 
@@ -32,8 +32,12 @@ export interface RunMemoryControlHooks {
      * a value captured when the batch started would be stale by the time the next decision uses it.
      */
     CurrentInFlight(): number;
-    /** Report what was done, once per run. */
+    /** Report what was done, once per pressure episode. */
     Report(plan: SheddingPlan): void;
+    /** Let the in-flight cap grow again once the host has recovered. Optional: without it the hold stands. */
+    ReleaseAdmissions?(): void;
+    /** The clock decisions are paced by. `Date.now` when absent; a test supplies its own. */
+    Now?(): number;
 }
 
 /** Below this a batch is too small to be worth sampling, and the estimate would be noise. */
@@ -47,6 +51,16 @@ const MIN_SAMPLE_RECORDS = 1;
  * enough that the request overhead still amortises.
  */
 export const MIN_BATCH_SIZE = 25;
+
+/**
+ * The shortest gap between two decisions in one run.
+ *
+ * Every in-flight map calls NoteBatch after every page, so without a gap one pressure reading was acted
+ * on once per map per page: five maps took the in-flight cap to 1 and the page from 200 to 25 within
+ * seconds, before the first cut could free anything. One step, then wait long enough for it to show in
+ * the reading. The same gap paces the release, one step at a time.
+ */
+export const DECISION_INTERVAL_MS = 10_000;
 
 /**
  * Bytes per record, from one sample.
@@ -70,8 +84,12 @@ export function estimateBytesPerRecord(sample: unknown): number {
 export class RunMemoryControl {
     private calibration = 1;
     private pendingProjection = 0;
-    private residentAtDecision: number | null = null;
+    private pressureAtDecision: number | null = null;
     private reported = false;
+    private lastDecisionAt: number | null = null;
+    /** Whether anything taken is still outstanding — the hold, or a page below the configured size. */
+    private shedding = false;
+    private readonly initialBatchSize: number;
 
     private batchSize: number;
     /**
@@ -89,6 +107,7 @@ export class RunMemoryControl {
         initialBatchSize: number
     ) {
         this.batchSize = initialBatchSize;
+        this.initialBatchSize = initialBatchSize;
         this.floor = Math.max(1, Math.min(MIN_BATCH_SIZE, initialBatchSize));
     }
 
@@ -121,29 +140,41 @@ export class RunMemoryControl {
         HonoursBatchSize: boolean;
     }): Promise<SheddingPlan | null> {
         try {
+            // One decision per window, whichever map asks.
+            const now = this.hooks.Now ? this.hooks.Now() : Date.now();
+            if (this.lastDecisionAt !== null && now - this.lastDecisionAt < DECISION_INTERVAL_MS) return null;
+
             const reading = await this.read();
             if (!reading) return null;
+            const pressure = PressureBytes(reading);
 
             // Close the loop on the PREVIOUS decision before making a new one: how much did the
             // last shed actually free? Done first so this batch's plan uses a corrected model.
-            if (this.pendingProjection > 0 && this.residentAtDecision !== null) {
+            if (this.pendingProjection > 0 && this.pressureAtDecision !== null) {
                 this.calibration = calibrate(
                     this.calibration,
                     this.pendingProjection,
-                    this.residentAtDecision - reading.ResidentBytes
+                    this.pressureAtDecision - pressure
                 );
                 this.pendingProjection = 0;
-                this.residentAtDecision = null;
+                this.pressureAtDecision = null;
             }
 
             const t = resolveThresholds();
             const plan = planShedding(reading, this.inventory(opts), this.calibration, t.ShedAbove, t.ShedDownTo);
-            if (plan.Levers.length === 0 && !plan.Exhausted) return plan;
+            if (plan.Levers.length === 0 && !plan.Exhausted) {
+                if (this.shedding && reading.HostTotalBytes && pressure / reading.HostTotalBytes < t.ShedDownTo) {
+                    this.recover(now);
+                }
+                return plan;
+            }
 
             this.apply(plan);
+            this.lastDecisionAt = now;
+            this.shedding = true;
             if (plan.ProjectedFreedBytes > 0) {
                 this.pendingProjection = plan.ProjectedFreedBytes;
-                this.residentAtDecision = reading.ResidentBytes;
+                this.pressureAtDecision = pressure;
             }
             if (!this.reported) {
                 this.reported = true;
@@ -152,6 +183,25 @@ export class RunMemoryControl {
             return plan;
         } catch {
             return null;
+        }
+    }
+
+    /**
+     * Give back one step of what was taken, once the host is under the release line.
+     *
+     * Every lever is marked Reversible, and nothing used to reverse any of them: the hold stopped the
+     * cap growing for the rest of the run and the page stayed at its floor — 25 records a page for 75
+     * minutes while 711 maps never got a slot. Releasing the hold lets the concurrency controller ramp
+     * again on clean maps; the page doubles back towards what was configured. Fully restored, the next
+     * episode is a new one and is reported again.
+     */
+    private recover(now: number): void {
+        this.hooks.ReleaseAdmissions?.();
+        this.batchSize = Math.min(this.initialBatchSize, this.batchSize * 2);
+        this.lastDecisionAt = now;
+        if (this.batchSize >= this.initialBatchSize) {
+            this.shedding = false;
+            this.reported = false;
         }
     }
 

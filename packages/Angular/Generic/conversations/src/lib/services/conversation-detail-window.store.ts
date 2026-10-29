@@ -115,6 +115,8 @@ export class ConversationDetailWindowStore {
     private loadFailed = false;
     /** The newest `Sequence` the window may hold; null for no bound. */
     private upToSequence: number | null = null;
+    /** IDs of persisted rows that the loader returned with `Sequence === 0` (legacy rows). */
+    private serverAssignedZeroSequenceIds = new Set<string>();
 
     constructor(loader: DetailWindowLoader) {
         this.loader = loader;
@@ -137,6 +139,7 @@ export class ConversationDetailWindowStore {
         this.isLoadingOlder = false;
         this.loadFailed = false;
         this.upToSequence = null;
+        this.serverAssignedZeroSequenceIds.clear();
     }
 
     /**
@@ -238,6 +241,7 @@ export class ConversationDetailWindowStore {
             const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
             const droppedOlderRows = page.Page.length < result.Details.length;
 
+            this.recordServerZeroSequences(page.Page);
             this.mergeDetails(page.Page);
             this.peripherals = peripheralsFrom(result);
             // A failed first read leaves the window empty. `LoadFailed` is what stops that
@@ -304,13 +308,14 @@ export class ConversationDetailWindowStore {
             const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
             const droppedOlderRows = page.Page.length < result.Details.length;
 
+            this.recordServerZeroSequences(page.Page);
             this.mergeDetails(page.Page);
             // Older pages bring their OWN artifacts/ratings/runs — merge, never replace,
             // or paging up would strip the peripherals off the rows already on screen.
             this.mergePeripherals(result);
             // Only the upward bound moves — the tail is whatever we already had.
             this.cursor = {
-                OldestSequence: this.loadedDetails[0]?.Sequence ?? this.cursor.OldestSequence,
+                OldestSequence: oldestAssignedSequence(this.loadedDetails, this.serverAssignedZeroSequenceIds) ?? this.cursor.OldestSequence,
                 NewestSequence: this.cursor.NewestSequence,
                 HasMoreAbove: result.HasMoreAbove || droppedOlderRows
             };
@@ -441,14 +446,15 @@ export class ConversationDetailWindowStore {
         previousNewest: number | null
     ): void {
         const fetched = tail.Results.flatMap(result => result.Details);
+        this.recordServerZeroSequences(fetched);
         const hasMoreAbove = this.mergeRefreshedRows(tail, fetched, previousOldest, previousNewest);
 
         for (const result of tail.Results) {
             this.mergePeripherals(result);
         }
         this.cursor = {
-            OldestSequence: this.loadedDetails[0]?.Sequence ?? null,
-            NewestSequence: this.loadedDetails[this.loadedDetails.length - 1]?.Sequence ?? null,
+            OldestSequence: oldestAssignedSequence(this.loadedDetails, this.serverAssignedZeroSequenceIds),
+            NewestSequence: newestAssignedSequence(this.loadedDetails, this.serverAssignedZeroSequenceIds),
             HasMoreAbove: hasMoreAbove
         };
     }
@@ -548,7 +554,7 @@ export class ConversationDetailWindowStore {
      */
     public ApplyLocalDetail(detail: MJConversationDetailEntity): void {
         this.mergeDetails([detail]);
-        const newest = this.loadedDetails[this.loadedDetails.length - 1]?.Sequence ?? null;
+        const newest = newestAssignedSequence(this.loadedDetails, this.serverAssignedZeroSequenceIds) ?? this.cursor.NewestSequence;
         this.cursor = { ...this.cursor, NewestSequence: newest };
     }
 
@@ -654,9 +660,19 @@ export class ConversationDetailWindowStore {
         }
     }
 
+    private recordServerZeroSequences(rows: readonly MJConversationDetailEntity[]): void {
+        for (const row of rows) {
+            if (row.Sequence === 0) {
+                this.serverAssignedZeroSequenceIds.add(NormalizeUUID(row.ID));
+            }
+        }
+    }
+
     /**
      * Union-merges rows into the loaded set: replace-by-ID, then sort by `Sequence`.
      * Dedupe is required because session expansion can re-return rows a prior page held.
+     * Unsaved local placeholders (`Sequence === 0`) have no sequence yet and stay at the tail
+     * in insertion order instead of sorting ahead of `Sequence >= 1` rows.
      */
     private mergeDetails(incoming: MJConversationDetailEntity[]): void {
         const byId = new Map<string, MJConversationDetailEntity>();
@@ -666,8 +682,45 @@ export class ConversationDetailWindowStore {
         for (const detail of incoming) {
             byId.set(NormalizeUUID(detail.ID), detail);
         }
-        this.loadedDetails = [...byId.values()].sort((a, b) => a.Sequence - b.Sequence);
+        this.loadedDetails = [...byId.values()].sort((a, b) => {
+            const aAssigned = hasAssignedSequence(a, this.serverAssignedZeroSequenceIds);
+            const bAssigned = hasAssignedSequence(b, this.serverAssignedZeroSequenceIds);
+            if (aAssigned && bAssigned) {
+                return a.Sequence - b.Sequence;
+            }
+            if (aAssigned !== bAssigned) {
+                return aAssigned ? -1 : 1;
+            }
+            return 0;
+        });
     }
+}
+
+/** True when a row has a persisted `Sequence` (unsaved local placeholders have `Sequence === 0` and are not in `serverZeroIds`). */
+function hasAssignedSequence(detail: MJConversationDetailEntity, serverZeroIds: ReadonlySet<string>): boolean {
+    return typeof detail.Sequence === 'number' && (
+        detail.Sequence > 0 || (detail.Sequence === 0 && serverZeroIds.has(NormalizeUUID(detail.ID)))
+    );
+}
+
+/** The smallest assigned `Sequence` in a sorted loaded-details slice, or `null` when none is assigned. */
+function oldestAssignedSequence(details: readonly MJConversationDetailEntity[], serverZeroIds: ReadonlySet<string>): number | null {
+    for (let i = 0; i < details.length; i++) {
+        if (hasAssignedSequence(details[i], serverZeroIds)) {
+            return details[i].Sequence;
+        }
+    }
+    return null;
+}
+
+/** The largest assigned `Sequence` in a sorted loaded-details slice, or `null` when none is assigned. */
+function newestAssignedSequence(details: readonly MJConversationDetailEntity[], serverZeroIds: ReadonlySet<string>): number | null {
+    for (let i = details.length - 1; i >= 0; i--) {
+        if (hasAssignedSequence(details[i], serverZeroIds)) {
+            return details[i].Sequence;
+        }
+    }
+    return null;
 }
 
 /** Empty peripheral maps — the reset / no-window state. */

@@ -3,7 +3,9 @@
  * @module LoginStudio
  */
 
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnInit, inject } from '@angular/core';
+import {
+  AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject,
+} from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { CdkDrag, CdkDropList, CdkDropListGroup, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { takeUntil } from 'rxjs';
@@ -32,6 +34,8 @@ const COALESCE_MS = 800;
 const HISTORY_CAP = 60;
 /** The click a browser fires as a drag ends; ignored so a drop keeps its selection. */
 const DROP_CLICK_MS = 400;
+/** The desktop preview lays the page out this wide, as on a 1440 x 900 screen (the CSS on .lp), and scales it to the frame. */
+const DESKTOP_WIDTH = 1440;
 const SURFACE_LABEL: Record<LoginSurface, string> = { Banner: 'Story panel', Panel: 'Sign-in column' };
 const SURFACE_ICON: Record<LoginSurface, string> = { Banner: 'fa-solid fa-image', Panel: 'fa-solid fa-right-to-bracket' };
 
@@ -58,7 +62,7 @@ const SURFACE_ICON: Record<LoginSurface, string> = { Banner: 'fa-solid fa-image'
   styleUrls: ['./login-studio-resource.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class LoginStudioResourceComponent extends BaseResourceComponent implements OnInit, AfterViewInit {
+export class LoginStudioResourceComponent extends BaseResourceComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly confirm = inject(MJConfirmService);
   private readonly themeService = inject(ThemeService);
@@ -89,6 +93,8 @@ export class LoginStudioResourceComponent extends BaseResourceComponent implemen
   public Logos: ThemeLogos = {};
   /** The default theme's look, as custom properties on the preview frame. */
   public FrameStyle: Record<string, string> = {};
+  /** The desktop preview's scale: the frame's width over DESKTOP_WIDTH. */
+  public DesktopScale = 1;
 
   /** The problems that stopped the last save; re-checked as you edit, so the alert goes once they are fixed. */
   private problems: string[] = [];
@@ -103,6 +109,14 @@ export class LoginStudioResourceComponent extends BaseResourceComponent implemen
   private lastEdit: { key: string; at: number } | null = null;
   private droppedAt = 0;
   private reportedEditing = false;
+  private readonly frameObserver =
+    typeof ResizeObserver === 'undefined' ? null : new ResizeObserver((entries) => this.fitDesktop(entries[0].contentRect.width));
+
+  /** The preview frame, there once the theme has loaded: its width sets the desktop preview's scale. */
+  @ViewChild('frame') private set frameRef(el: ElementRef<HTMLElement> | undefined) {
+    this.frameObserver?.disconnect();
+    if (el) this.frameObserver?.observe(el.nativeElement);
+  }
 
   public override ngOnInit(): void {
     super.ngOnInit();
@@ -113,6 +127,11 @@ export class LoginStudioResourceComponent extends BaseResourceComponent implemen
 
   public ngAfterViewInit(): void {
     this.registerAgentTools();
+  }
+
+  public override ngOnDestroy(): void {
+    this.frameObserver?.disconnect();
+    super.ngOnDestroy();
   }
 
   public async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -576,6 +595,14 @@ export class LoginStudioResourceComponent extends BaseResourceComponent implemen
   }
 
   // ── Preview, agent, shell ───────────────────────────────────────────────────────────────────
+
+  /** Fit the desktop page to the frame. A hidden tab's frame measures 0, so it keeps its last fit. */
+  private fitDesktop(width: number): void {
+    if (!width) return;
+    this.DesktopScale = width / DESKTOP_WIDTH;
+    // The observer runs outside Angular's zone, so check the view now rather than mark it.
+    this.cdr.detectChanges();
+  }
 
   /** After any change: the problems alert, the preview, the agent's view, the shell's edit state, and the view. */
   private changed(): void {

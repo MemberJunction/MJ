@@ -43,7 +43,10 @@ describe('GetStatus().Running covers the whole pipeline', () => {
       seen.push({ running: rsm.GetStatus().Running, mutex: rsm.IsRunning });
       return true;
     });
-    vi.spyOn(p, 'compileTypeScript').mockResolvedValue(true);
+    // RunCodeGen also verifies each affected table got an entity (#5858); unstubbed, that needs a live
+    // provider, throws, and the run takes the failed-CodeGen path instead of the whole pipeline.
+    vi.spyOn(p, 'verifyEntitiesExist').mockResolvedValue(undefined);
+    const compile = vi.spyOn(p, 'compileTypeScript').mockResolvedValue(true);
     vi.spyOn(p, 'gitCommitAndPRForCycle').mockResolvedValue('https://example.test/pr/1');
     vi.spyOn(p, 'restartMJAPI').mockResolvedValue(true);
 
@@ -52,6 +55,8 @@ describe('GetStatus().Running covers the whole pipeline', () => {
     ]);
 
     expect(seen).toHaveLength(1);
+    // The run went past CodeGen, so the flag was observed on the full pipeline, not a failed-CodeGen exit.
+    expect(compile).toHaveBeenCalledTimes(1);
     // The mutex is (correctly) already released by the time CodeGen runs…
     expect(seen[0].mutex).toBe(false);
     // …and the status must still say the pipeline is running.

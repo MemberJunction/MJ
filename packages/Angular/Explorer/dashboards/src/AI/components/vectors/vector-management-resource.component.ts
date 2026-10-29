@@ -1355,8 +1355,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.vectorIndexes = [...AIEngineBase.Instance.VectorIndexes];
 
         // Build per-EntityDocument aggregate stats (vector count + last synced).
-        // Each query fetches only the most recent row (MaxRows: 1) and uses
-        // TotalRowCount for the actual vector count — avoids loading all rows.
+        // Each query fetches the two most recent rows and uses TotalRowCount for the
+        // vector count, which avoids loading all rows. MaxRows is 2, not 1: a full
+        // `MaxRows: 1` read skips the total count (#4450), so TotalRowCount would be 1.
+        // With 2, a full page triggers the count, and a short page is itself the total.
         // AI Models come from a different domain — fetched in the same batch.
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const erdQueries = this.entityDocuments.map(doc => ({
@@ -1365,7 +1367,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             ResultType: 'simple' as const,
             Fields: ['__mj_UpdatedAt'],
             OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 1,
+            MaxRows: 2,
             BypassCache: forceRefresh,
         }));
         const allQueries = [

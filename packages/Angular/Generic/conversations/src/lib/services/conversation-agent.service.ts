@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { LogStatusEx, Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -77,6 +77,25 @@ export interface IntentCheckResult {
   decision: 'YES' | 'NO' | 'UNSURE';
   reasoning: string;
   targetArtifactVersionId?: string;
+}
+
+/**
+ * Where a sub-agent's reply sits in the conversation. The server sets it (only the server writes agent replies), from
+ * these checked inputs.
+ */
+export interface SubAgentThreading {
+  /** The message the reply threads under, when not the user's message (a delegate's reply sits under the manager's). */
+  ReplyParentId?: string | null;
+  /**
+   * An agent (the conversation manager) whose line "Continuing with **{agent}** for refinement..." the server posts
+   * before the reply; the reply threads under it.
+   */
+  AnnouncedByAgentId?: string | null;
+  /**
+   * The branch the turn runs on when it forks off an earlier message on another branch (such as Regenerate, which
+   * creates a new fork before running the agent while the user's message stays on its original branch).
+   */
+  ReplyBranchId?: string | null;
 }
 
 /**
@@ -230,17 +249,17 @@ export class ConversationAgentService {
    * Process a message through the conversation manager agent. Delegates to
    * `ConversationsRuntime.Instance.AgentRunner.processMessage(...)`.
    *
-   * Signature is preserved verbatim from the original service so existing
-   * call sites continue to compile. The unused `conversationHistory`
-   * parameter is kept for backwards compatibility (it was already
-   * documented as "kept for backwards compatibility but not used" in the
-   * original).
+   * The unused `conversationHistory` parameter is kept for backwards compatibility (it was already
+   * documented as "kept for backwards compatibility but not used" in the original).
+   *
+   * @param onReplyAccepted Called with the reply row the server creates for the turn (only the server
+   *   writes agent replies), before any progress: key the turn's task and completion by its ID.
    */
   async ProcessMessage(
     conversationId: string,
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
@@ -248,7 +267,9 @@ export class ConversationAgentService {
     /** The agents the conversation manager may delegate to. Null or omitted allows every agent. */
     allowedAgentIDs?: readonly string[] | null,
     /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    /** The branch the turn runs on when it forks off an earlier message on another branch. */
+    replyBranchId?: string | null
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
@@ -258,13 +279,14 @@ export class ConversationAgentService {
     return ConversationsRuntime.Instance.AgentRunner.processMessage({
       conversationId,
       message,
-      conversationDetailId,
+      onReplyAccepted,
       appContext,
       onProgress,
       ...(planMode ? { planMode: true } : {}),
       ...(requestedSkillIDs?.length ? { requestedSkillIDs } : {}),
       ...(allowedAgentIDs != null ? { AllowedAgentIDs: allowedAgentIDs } : {}),
       ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
+      ...(replyBranchId ? { ReplyBranchID: replyBranchId } : {}),
     });
   }
 
@@ -273,15 +295,16 @@ export class ConversationAgentService {
     conversationId: string,
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
     requestedSkillIDs?: string[],
     allowedAgentIDs?: readonly string[] | null,
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    replyBranchId?: string | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.ProcessMessage(conversationId, message, conversationHistory, conversationDetailId, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom);
+    return this.ProcessMessage(conversationId, message, conversationHistory, onReplyAccepted, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom, replyBranchId);
   }
 
   /**
@@ -393,6 +416,9 @@ export class ConversationAgentService {
    *
    * Stays on the Angular shim because it directly uses AgentClientService.
    * Could move to the runtime in a follow-up if needed.
+   *
+   * @param onReplyAccepted Called with the reply row the server creates for the run (only the server
+   *   writes agent replies), before any progress: key the run's task and completion by its ID.
    */
   async InvokeSubAgent(
     agentName: string,
@@ -400,7 +426,7 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     payload?: Record<string, unknown> | null,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
@@ -410,7 +436,9 @@ export class ConversationAgentService {
     planMode?: boolean,
     requestedSkillIDs?: string[],
     /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    /** Where the reply sits in the conversation. Omitted, it answers `message` directly. */
+    threading?: SubAgentThreading | null
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -451,7 +479,11 @@ export class ConversationAgentService {
       }
 
       const agentParams: RunAgentFromConversationDetailParams = {
-        ConversationDetailId: conversationDetailId,
+        UserMessageId: message.ID,
+        OnAccepted: onReplyAccepted,
+        ...(threading?.ReplyParentId ? { ReplyParentId: threading.ReplyParentId } : {}),
+        ...(threading?.AnnouncedByAgentId ? { AnnouncedByAgentId: threading.AnnouncedByAgentId } : {}),
+        ...(threading?.ReplyBranchId ? { ReplyBranchId: threading.ReplyBranchId } : {}),
         AgentId: agent.ID,
         MaxHistoryMessages: 20,
         Data: {
@@ -508,7 +540,7 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     payload?: Record<string, unknown> | null,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
@@ -517,9 +549,10 @@ export class ConversationAgentService {
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
     requestedSkillIDs?: string[],
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    threading?: SubAgentThreading | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, conversationDetailId, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs, agentHistoryFrom);
+    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, onReplyAccepted, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs, agentHistoryFrom, threading);
   }
 
   /**
