@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BaseEntityResult } from '@memberjunction/core';
+import { TRAINING_RUN_RESULTS_SCHEMA, type MetricWithInterval, type StoredTrainerResult, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import {
   HarnessCleanup, RunRecords, type CleanupFileRow, type CleanupModelRow, type CleanupPredictionUnitRow, type CleanupRecordProcessRow, type CleanupRow,
   type CleanupSnapshotRow, type CleanupStore, type CleanupTrainingRunRow,
@@ -19,10 +20,37 @@ const U3 = '11111111-0000-0000-0000-000000000003'; // its Version 3
 const TS1 = '22222222-0000-0000-0000-000000000001'; // the snapshot RUN-1 trained on
 const TS2 = '22222222-0000-0000-0000-000000000002'; // a snapshot of P1 no remaining run references
 const fileOf = (snapshot: string, n: number): string => `${snapshot}-file-${n}`; // each snapshot's three file IDs
+const EP1 = '33333333-0000-0000-0000-000000000001'; // an Evaluation Protocol the run saved
+const TF_GLM = '44444444-0000-0000-0000-000000000001'; // a trainer run's member artifact file (not a model's)
+const RUN_UUID = '55555555-0000-0000-0000-000000000001';
+
+/** A completed protocol-bound run's stored results naming its finalist's file (F1, also the model's) and a member's. */
+function trainerResults(): string {
+  const mwi = (metric: MetricWithInterval['metric'], value: number): MetricWithInterval => ({ metric, value, interval: { level: 0.95, lower: value - 0.01, upper: value + 0.01 }, n: 100 });
+  const artifact = (candidate: string, fileId: string) => ({ candidate, sha256: 'a'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: ['0', '1'], fileId });
+  const trainer: StoredTrainerResult = {
+    status: 'completed', trainingRunId: RUN_UUID, computeSeconds: 1,
+    codeVersion: { psGitSha: 'abc', sidecarVersion: '6.2.0', libraryVersions: { python: '3.11' }, threads: 1, seed: 0 },
+    innerScores: [], finalist: 'xgb', holdoutAccess: { accessedAt: '2026-10-12T00:00:00.000Z', count: 1, finalist: 'xgb' },
+    holdout: { primary: mwi('log-loss', 0.45), secondary: [] }, baselines: [], comparisons: {},
+    gate: { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null },
+    artifacts: [artifact('xgb', F1), artifact('glm', TF_GLM)],
+    incumbentDiff: null, calibration: null, slices: [], operatingPoint: null,
+    cost: { computeSeconds: 1, tokens: 0, usd: 0, budget: { maxComputeSeconds: 60, maxTokens: 0, maxCandidates: 1, hardStop: true }, stoppedByBudget: false },
+    importance: [], leakageFlags: [], predictionIntervalCoverage: [], residualDiagnostics: null, forecast: null, innerSplitContrast: null,
+  };
+  const results: TrainingRunResults = {
+    schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+    unitResolution: { rowsRead: 1, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1, dataCutoff: '2026-01-01' },
+    legacy: null, legacyRequest: null, trainer, trainerRequest: null,
+  };
+  return JSON.stringify(results);
+}
 
 /** What the fake store holds besides the fixed rows: RUN-1's snapshot, the snapshots it answers, failing object deletes. */
 interface FakeStoreOptions {
   readonly RunSnapshotID?: string | null;
+  readonly RunValidationResults?: string | null;
   readonly Snapshots?: readonly string[];
   readonly FailObjects?: ReadonlySet<string>;
   readonly ThrowObjects?: ReadonlySet<string>;
@@ -65,7 +93,7 @@ class FakeStore implements CleanupStore {
   }
   public async TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]> {
     this.Filters.push(`MJ: ML Training Runs | ${filter}`);
-    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID ?? null }];
+    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID ?? null, ValidationResults: this.options.RunValidationResults ?? null }];
   }
   public async TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]> {
     this.Filters.push(`MJ: Training Snapshots | ${filter}`);
@@ -88,7 +116,8 @@ class FakeStore implements CleanupStore {
     if (entityName === 'MJ: Process Runs') return [this.row(entityName, PR1)];
     if (entityName === 'MJ: Process Run Details') return [this.row(entityName, 'DETAIL-1')];
     if (entityName === 'MJ: Record Process Watermarks') return [];
-    if (entityName === 'MJ: Files') return [this.row(entityName, F1)];
+    if (entityName === 'MJ: Files') return [...filter.matchAll(/'([^']+)'/g)].map((m) => this.row(entityName, m[1]));
+    if (entityName === 'MJ: Evaluation Protocols') return [this.row(entityName, EP1)];
     return [this.row(entityName, 'BINDING-1')];
   }
 }
@@ -172,6 +201,31 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(store.Filters[store.Filters.length - 1]).toBe(`MJ: Prediction Units | ID IN ('${U1}','${U2}','${U3}')`);
     expect(store.Deleted.slice(-4)).toEqual([`MJ: ML Training Pipelines:${AGENT_P}`, `MJ: Prediction Units:${U3}`, `MJ: Prediction Units:${U2}`, `MJ: Prediction Units:${U1}`]);
     expect(records.PredictionUnitIDs.Size).toBe(0);
+  });
+
+  it("deletes every artifact file a run's stored trainer result names, the model's and its members'", async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { RunValidationResults: trainerResults() });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Filters).toContain(`MJ: Files | ID IN ('${F1}','${TF_GLM}')`);
+    expect(store.Deleted).toContain(`MJ: Files:${TF_GLM}`);
+    expect(store.Deleted.indexOf('MJ: ML Training Runs:RUN-1')).toBeLessThan(store.Deleted.indexOf(`MJ: Files:${TF_GLM}`));
+  });
+
+  it('deletes recorded Evaluation Protocols after the pipelines and before the Prediction Units', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordPredictionUnit(U1);
+    records.RecordEvaluationProtocol(EP1);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Filters).toContain(`MJ: Evaluation Protocols | ID IN ('${EP1}')`);
+    const at = (entry: string): number => store.Deleted.indexOf(entry);
+    expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: Evaluation Protocols:${EP1}`));
+    expect(at(`MJ: Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: Prediction Units:${U1}`));
+    expect(records.EvaluationProtocolIDs.Size).toBe(0);
   });
 
   it('reports every failed delete and keeps its ID recorded', async () => {

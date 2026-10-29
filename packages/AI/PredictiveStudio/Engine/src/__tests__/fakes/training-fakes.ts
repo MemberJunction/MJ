@@ -19,10 +19,14 @@ import type {
   LeakageGuard,
   ValidationStrategy,
   PredictionUnitColumns,
+  EvaluationProtocolColumns,
+  TrainerRequest,
+  TrainerResult,
 } from '@memberjunction/predictive-studio-core';
 import { TrainingEngine } from '../../training/training-engine';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
-import type { IEntityFactory, IRecordLoader, ISidecarTrainer, TrainingDeps } from '../../training/types';
+import type { IEntityFactory, IRecordLoader, ISidecarTrainer, ITrainerEvaluator, TrainingDeps } from '../../training/types';
+import type { IEvaluationProtocolStore } from '../../training/evaluation-protocol-store';
 import type { SourceRow } from '../../feature-assembly';
 import { InMemorySnapshotFileStore } from '../../snapshot/snapshot-file-store';
 import type { ITrainingSnapshotStore } from '../../snapshot/training-snapshot-store';
@@ -276,12 +280,35 @@ export function buildDeps(overrides?: Partial<TrainingDeps> & { pipeline?: FakeM
   return { deps, factory, sidecar, store };
 }
 
+/** Trainer fake: records every request and answers with the given function of it. */
+export class FakeTrainer implements ITrainerEvaluator {
+  public readonly Requests: TrainerRequest[] = [];
+  constructor(private readonly answer: (req: TrainerRequest) => TrainerResult) {}
+  public async RunTrainer(req: TrainerRequest): Promise<TrainerResult> {
+    this.Requests.push(req);
+    return this.answer(req);
+  }
+}
+
+/** Serves the given Evaluation Protocol rows by ID. */
+export class FakeEvaluationProtocolStore implements IEvaluationProtocolStore {
+  constructor(private readonly rows: readonly EvaluationProtocolColumns[]) {}
+  public async Load(protocolId: string): Promise<EvaluationProtocolColumns | null> {
+    return this.rows.find((r) => r.ID === protocolId) || null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Prediction Unit pipelines: the unit store, the assembly metadata and a counting data access over the unit world.
 // ---------------------------------------------------------------------------
 
-/** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows. */
-export function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns, featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] }): {
+/** A TrainingEngine plus deps for a pipeline that points at Prediction Unit `U-1` over the `Years` rows; every run row gets `runId`. */
+export function unitHarness(
+  rows: SourceRow[],
+  unitColumns: PredictionUnitColumns,
+  featureSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] },
+  runId = 'run-1',
+): {
   engine: TrainingEngine;
   deps: TrainingDeps;
   sidecar: FakeSidecar;
@@ -297,7 +324,7 @@ export function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumn
   pipeline.TargetEntity = 'Years';
   pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
   pipeline.FeatureSteps = JSON.stringify(featureSteps);
-  const { deps, factory, sidecar } = buildDeps({ pipeline });
+  const { deps, factory, sidecar } = buildDeps({ pipeline, entityFactory: new FakeEntityFactory(undefined, () => new FakeMLRun(runId)) });
   deps.predictionUnits = new FakePredictionUnitStore(unitColumns);
   deps.assemblyMetadata = UnitYearsWorld.Metadata();
   deps.dataAccess = new TableDataAccess(UnitYearsWorld.Tables(rows));

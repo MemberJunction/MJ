@@ -22,6 +22,17 @@ describe('TrainingRunResultsParser', () => {
     const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ ...legacyRequest, problemType: 'sequence' }));
     expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/legacyRequest\.problemType/);
   });
+  it('reads an envelope written before trainer results were stored with trainer and trainerRequest as null', () => {
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, legacy: null, legacyRequest: null }));
+    expect(r.Ok && r.Value.status === 'completed' ? [r.Value.trainer, r.Value.trainerRequest] : 'not read').toEqual([null, null]);
+  });
+  it('reads a trainer refusal and refuses one at an unknown trainer stage', () => {
+    const envelope = (stage: string) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'trainer', reason: { kind: 'trainer-failed', stage, message: 'one class in a fold', computeSeconds: 3.25 } } });
+    const ok = TrainingRunResultsParser.ParseTrainingRunResults(envelope('inner-cv'));
+    expect(ok.Ok && ok.Value.status === 'refused' ? ok.Value.refusal : null).toEqual({ stage: 'trainer', reason: { kind: 'trainer-failed', stage: 'inner-cv', message: 'one class in a fold', computeSeconds: 3.25 } });
+    const bad = TrainingRunResultsParser.ParseTrainingRunResults(envelope('warm-up'));
+    expect(bad.Ok ? null : bad.Errors.join('\n')).toMatch(/refusal\.reason\.stage/);
+  });
   it('reports a pre-v2 blob as not an envelope', () => {
     expect(TrainingRunResultsParser.ParseTrainingRunResults('{"accuracy":0.9}')).toEqual({ Ok: false, Errors: ['ValidationResults is not a ps-run-results/v2 envelope'] });
   });

@@ -25,11 +25,16 @@
  * environment configuration; a driver that is not configured on this server is refused. Predictive Studio has no
  * storage accounts, so the driver is used directly, as the conversation-attachment blob store does for a provider
  * without an account.
+ *
+ * A stored file is handed to the sidecar as a pre-authorised download issued by the file's own provider's driver. The
+ * download states how long its URL lives ({@link PreAuthDownloads.LifetimeSecondsOf}): the sidecar refuses an expired
+ * URL only when the download states an expiry, so a driver whose URLs do not expire states none.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import type { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, IsSafeStorageObjectKey, ResolveStorageDriver, type FileStorageBase } from '@memberjunction/storage';
+import type { PreAuthDownload } from '@memberjunction/predictive-studio-core';
 import { SnapshotHash } from './snapshot-hash';
 import type { IEntityFactory } from '../training/types';
 
@@ -52,6 +57,48 @@ export interface ISnapshotFileStore {
   Get(fileId: string): Promise<Uint8Array>;
   /** The provider the files are stored with (`MJ: File Storage Providers.ID`). */
   ProviderID(): Promise<string>;
+  /**
+   * A download of the stored file the stateless sidecar can open: a URL issued by the file's own provider, the file's
+   * stored SHA-256 (`sha256`, which the sidecar verifies before parsing) and the URL's lifetime. `now` is the issue
+   * time (default: the current time).
+   */
+  CreatePreAuthDownload(fileId: string, sha256: string, now?: Date): Promise<PreAuthDownload>;
+}
+
+/**
+ * Builds pre-authorised downloads (static members on one owner). `FileStorageBase.CreatePreAuthDownloadUrl` states no
+ * lifetime, so the lifetime of each driver's URLs is recorded here, keyed by the provider's `ServerDriverKey`, from
+ * what each driver's code fixes: the local file-system driver returns `file://` URLs that do not expire; the AWS S3,
+ * Azure Blob, Google Cloud Storage and SharePoint drivers sign their URLs for 10 minutes. Any other driver states no
+ * lifetime in its code (Dropbox, Box and Google Drive URLs expire on the service's own terms), so its downloads state
+ * none and the sidecar does not refuse them as expired; such a URL that has expired fails as a download instead.
+ */
+export class PreAuthDownloads {
+  private static readonly lifetimeSecondsByDriverKey: ReadonlyMap<string, number | null> = new Map<string, number | null>([
+    ['local file system storage', null],
+    ['aws s3 storage', 600],
+    ['azure blob storage', 600],
+    ['google cloud storage', 600],
+    ['sharepoint storage', 600],
+  ]);
+
+  /** The URL lifetime in seconds of a driver's downloads; null when its URLs do not expire or it states no lifetime. */
+  public static LifetimeSecondsOf(serverDriverKey: MJFileStorageProviderEntity['ServerDriverKey']): number | null {
+    const lifetime = PreAuthDownloads.lifetimeSecondsByDriverKey.get(serverDriverKey.trim().toLowerCase());
+    return lifetime === undefined ? null : lifetime;
+  }
+
+  /** A download issued at `now`: it expires `lifetimeSeconds` later, or never (null expiry) when the lifetime is null. */
+  public static IssuedDownload(fileId: string, url: string, sha256: string, lifetimeSeconds: number | null, now: Date = new Date()): PreAuthDownload {
+    return {
+      fileId,
+      url,
+      issuedAt: now.toISOString(),
+      driverLifetimeSeconds: lifetimeSeconds,
+      expiresAt: lifetimeSeconds === null ? null : new Date(now.getTime() + lifetimeSeconds * 1000).toISOString(),
+      sha256,
+    };
+  }
 }
 
 /** A stored in-memory snapshot file: its object key and bytes. */
@@ -60,11 +107,19 @@ export interface InMemorySnapshotFile {
   readonly Bytes: Uint8Array;
 }
 
-/** An in-process snapshot file store, for tests and tools: the same write-once rule, no storage provider. */
+/**
+ * An in-process snapshot file store, for tests: the same write-once rule, no storage provider. Its downloads are
+ * `data:` URLs carrying the bytes, which only test trainers read: the sidecar opens `http`, `https` and `file` URLs
+ * and refuses a `data:` URL.
+ */
 export class InMemorySnapshotFileStore implements ISnapshotFileStore {
   /** The stored files, by file ID. */
   public readonly Saved = new Map<string, InMemorySnapshotFile>();
-  constructor(private readonly providerId: string) {}
+  /**
+   * @param providerId the provider ID the stored files report
+   * @param downloadLifetimeSeconds the lifetime its downloads state; null (the default) for downloads that do not expire
+   */
+  constructor(private readonly providerId: string, private readonly downloadLifetimeSeconds: number | null = null) {}
 
   public async Put(objectKey: string, _name: string, bytes: Uint8Array): Promise<StoredSnapshotFile> {
     SnapshotObjectKeys.AssertSafe(objectKey);
@@ -83,6 +138,13 @@ export class InMemorySnapshotFileStore implements ISnapshotFileStore {
 
   public async ProviderID(): Promise<string> {
     return this.providerId;
+  }
+
+  public async CreatePreAuthDownload(fileId: string, sha256: string, now?: Date): Promise<PreAuthDownload> {
+    const f = this.Saved.get(fileId);
+    if (!f) throw new Error(`Training snapshots: snapshot file ${fileId} not found`);
+    const url = `data:application/x-ndjson;base64,${Buffer.from(f.Bytes).toString('base64')}`;
+    return PreAuthDownloads.IssuedDownload(fileId, url, sha256, this.downloadLifetimeSeconds, now);
   }
 }
 
@@ -141,8 +203,8 @@ export interface SnapshotStorageDriver {
 /** Snapshot files in an MJ storage provider, each recorded as an `MJ: Files` row. */
 export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
   private driverPromise: Promise<SnapshotStorageDriver> | null = null;
-  /** Drivers for the providers stored files name (by provider ID), resolved once each. */
-  private readonly readDrivers = new UUIDMap<Promise<FileStorageBase>>();
+  /** Drivers (and their provider rows) for the providers stored files name, by provider ID, resolved once each. */
+  private readonly readDrivers = new UUIDMap<Promise<SnapshotStorageDriver>>();
 
   constructor(
     private readonly entityFactory: IEntityFactory,
@@ -176,8 +238,20 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
   public async Get(fileId: string): Promise<Uint8Array> {
     const location = await this.fileLocationOf(fileId);
     SnapshotObjectKeys.AssertSafe(location.ProviderKey);
-    const driver = await this.readDriver(location.ProviderID);
-    return new Uint8Array(await driver.GetObject({ fullPath: location.ProviderKey }));
+    const { Driver } = await this.readDriver(location.ProviderID);
+    return new Uint8Array(await Driver.GetObject({ fullPath: location.ProviderKey }));
+  }
+
+  /**
+   * A download issued by the provider the file's `MJ: Files` row names (as `Get` reads it, never the configured
+   * provider), stating that provider's URL lifetime.
+   */
+  public async CreatePreAuthDownload(fileId: string, sha256: string, now?: Date): Promise<PreAuthDownload> {
+    const location = await this.fileLocationOf(fileId);
+    SnapshotObjectKeys.AssertSafe(location.ProviderKey);
+    const { Driver, Provider } = await this.readDriver(location.ProviderID);
+    const url = await Driver.CreatePreAuthDownloadUrl(location.ProviderKey);
+    return PreAuthDownloads.IssuedDownload(fileId, url, sha256, PreAuthDownloads.LifetimeSecondsOf(Provider.ServerDriverKey), now);
   }
 
   /** The provider row and its initialised driver, resolved once per store (a lazy promise, so concurrent Puts share it). */
@@ -195,8 +269,8 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return { Driver: await StorageProviderSnapshotFileStore.initializedDriver(row), Provider: row };
   }
 
-  /** The driver of the provider a stored file names, resolved once per provider ID. */
-  private readDriver(providerId: string): Promise<FileStorageBase> {
+  /** The provider row and driver a stored file names, resolved once per provider ID. */
+  private readDriver(providerId: string): Promise<SnapshotStorageDriver> {
     let driver = this.readDrivers.Get(providerId);
     if (!driver) {
       driver = this.resolveReadDriver(providerId);
@@ -205,12 +279,12 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     return driver;
   }
 
-  private async resolveReadDriver(providerId: string): Promise<FileStorageBase> {
+  private async resolveReadDriver(providerId: string): Promise<SnapshotStorageDriver> {
     const engine = FileStorageEngine.Instance;
     await engine.Config(false, this.contextUser, this.provider);
     const row = engine.GetProviderById(providerId);
     if (!row) throw new Error(`Training snapshots: no File Storage Provider with ID ${providerId}`);
-    return StorageProviderSnapshotFileStore.initializedDriver(row);
+    return { Driver: await StorageProviderSnapshotFileStore.initializedDriver(row), Provider: row };
   }
 
   /** The provider's driver, initialised from this server's environment; a driver not configured here is refused. */

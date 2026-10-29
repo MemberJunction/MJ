@@ -4,20 +4,32 @@
  * Training from a Training Snapshot: the rows the trainer sees are the snapshot's rows, split by the roles its row
  * manifest records, so what was frozen is exactly what was trained on. Retraining a completed run reads its snapshot
  * files back, verifies them against the hashes on the snapshot row, calls the trainer with the request the run logged
- * and compares the holdout metrics, so a run can be shown to reproduce from what it stored.
+ * and compares the holdout metrics, so a run can be shown to reproduce from what it stored. A run trained under an
+ * Evaluation Protocol is retrained through the protocol trainer with its logged request settings and new downloads of
+ * the same snapshot files; any other unit run through the legacy trainer with its logged request.
  */
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import {
+  PredictionUnit,
+  TrainerContract,
   TrainingRunResultsParser,
   type LegacyRequestConfig,
   type LegacyTrainerMetrics,
   type MatrixData,
+  type EvaluationProtocolSpec,
+  type PredictionUnitSpec,
+  type StoredTrainerResult,
+  type TrainerRequestConfig,
+  type TrainingRunResults,
   type TrainResponse,
 } from '@memberjunction/predictive-studio-core';
 import { LockedHoldoutSplitter, type LockedHoldoutSplit } from '../training/locked-holdout';
 import { TrainRequestBuilder } from '../training/train-request';
 import { UtcDay } from '../prediction-unit/utc-day';
 import type { ISidecarTrainer, TrainingDeps } from '../training/types';
+import { TrainerRequestBuilder } from '../training/trainer-request';
+import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore } from '../training/evaluation-protocol-store';
+import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { SnapshotFiles, type SnapshotContent } from './snapshot-serialization';
 import { SnapshotHash } from './snapshot-hash';
 import { StorageProviderSnapshotFileStore, type ISnapshotFileStore } from './snapshot-file-store';
@@ -74,6 +86,12 @@ interface LoggedTraining {
   readonly Request: LegacyRequestConfig;
 }
 
+/** What a completed protocol-bound run logged: the trainer's stored result and the request settings it was called with. */
+export interface LoggedTrainerRun {
+  readonly Result: StoredTrainerResult;
+  readonly Request: TrainerRequestConfig;
+}
+
 /** A snapshot column the trainer is sent that is not one of the matrix columns. */
 export class SnapshotColumnMissingError extends Error {
   constructor(public readonly Column: string) {
@@ -112,12 +130,63 @@ export class SnapshotRetrainer {
     const run = await store.LoadRun(trainingRunId);
     if (!run) throw new Error(`Training run ${trainingRunId} not found`);
     if (!run.TrainingSnapshotID) throw new Error(`Training run ${trainingRunId} has no Training Snapshot`);
-    const logged = this.LoggedTrainingOf(run);
+    const results = this.StoredResultsOf(run);
     const snapshot = await store.LoadSnapshot(run.TrainingSnapshotID);
     if (!snapshot) throw new Error(`Training Snapshot ${run.TrainingSnapshotID} of run ${trainingRunId} not found`);
-    const content = await this.ReadVerifiedContent(snapshot, this.FileStore(deps));
+    const files = this.FileStore(deps);
+    const content = await this.ReadVerifiedContent(snapshot, files);
+    const trainerRun = SnapshotRetrainer.loggedTrainerRunOf(results);
+    if (trainerRun) {
+      const retrained = await this.RetrainThroughTrainer(run, snapshot, files, trainerRun, deps);
+      return SnapshotRetrainer.compared(run, snapshot, TrainerContract.HoldoutMetricsOf(trainerRun.Result.holdout), retrained, tolerance);
+    }
+    const logged = this.LoggedTrainingOf(run, results);
     const retrained = (await SnapshotRetrainer.TrainOnSnapshot(content, logged.Request, deps.sidecar)).Response.holdout_metrics || {};
-    const original = logged.Legacy.holdoutMetrics || {};
+    return SnapshotRetrainer.compared(run, snapshot, logged.Legacy.holdoutMetrics || {}, retrained, tolerance);
+  }
+
+  /**
+   * Sends a protocol-bound run's logged request settings to the trainer again, with new downloads of the verified
+   * snapshot files, under the protocol and unit the run was trained with; the retraining's holdout metrics.
+   *
+   * @throws Error when the deps have no trainer, the protocol or unit row is missing or does not parse, or the
+   * retraining does not complete
+   */
+  protected async RetrainThroughTrainer(
+    run: MJMLTrainingRunEntity, snapshot: MJTrainingSnapshotEntity, files: ISnapshotFileStore, logged: LoggedTrainerRun, deps: TrainingDeps,
+  ): Promise<Record<string, number>> {
+    if (!deps.trainer) throw new Error(`Training run ${run.ID} was trained under an Evaluation Protocol; retraining it needs the trainer (deps.trainer)`);
+    const [protocol, unit] = await Promise.all([this.LoadProtocolSpec(logged.Request.evaluationProtocolId, deps), this.LoadUnitSpec(snapshot.PredictionUnitID, deps)]);
+    const request = await TrainerRequestBuilder.BuildTrainerRequest({
+      TrainingRunID: run.ID, Snapshot: snapshot, Files: files, Protocol: protocol, Unit: unit, Task: unit.label.outcome,
+      Candidates: logged.Request.candidates, Seed: logged.Request.seed, Threads: logged.Request.threads,
+      TimeoutSeconds: logged.Request.timeoutSeconds, MaxRetries: logged.Request.maxRetries,
+    });
+    const again = await deps.trainer.RunTrainer(request);
+    if (again.status === 'failed') throw new Error(`Retraining run ${run.ID} failed at stage ${again.stage}: ${again.message}`);
+    return TrainerContract.HoldoutMetricsOf(again.holdout);
+  }
+
+  /** The Evaluation Protocol a run was trained under, read through `deps.protocols` (default: RunView on `deps.provider`). */
+  protected async LoadProtocolSpec(protocolId: string, deps: TrainingDeps): Promise<EvaluationProtocolSpec> {
+    const spec = await EvaluationProtocolSpecs.LoadSpec(deps.protocols || new RunViewEvaluationProtocolStore(deps.provider, deps.contextUser), protocolId);
+    if (!spec) throw new Error(`Evaluation Protocol ${protocolId} not found`);
+    return spec;
+  }
+
+  /** The Prediction Unit version a snapshot was built from, read through `deps.predictionUnits` (default: RunView on `deps.provider`). */
+  protected async LoadUnitSpec(unitId: string, deps: TrainingDeps): Promise<PredictionUnitSpec> {
+    const row = await (deps.predictionUnits || new RunViewPredictionUnitStore(deps.provider, deps.contextUser)).Load(unitId);
+    if (!row) throw new Error(`Prediction Unit ${unitId} not found`);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) throw new Error(`Prediction Unit ${unitId} does not parse: ${parsed.Errors.join('; ')}`);
+    return parsed.Value;
+  }
+
+  /** Both metric sets of a retraining, their largest difference and whether the run reproduced. */
+  private static compared(
+    run: MJMLTrainingRunEntity, snapshot: MJTrainingSnapshotEntity, original: Readonly<Record<string, number>>, retrained: Readonly<Record<string, number>>, tolerance: number,
+  ): RetrainResult {
     const diff = SnapshotRetrainer.MaxAbsDiff(original, retrained);
     return {
       TrainingRunID: run.ID,
@@ -129,6 +198,12 @@ export class SnapshotRetrainer {
       MaxAbsDiff: diff.Value,
       Reproduced: diff.Keys > 0 && diff.Value <= tolerance,
     };
+  }
+
+  /** The trainer result and request a completed protocol-bound run stored, or null for any other run. */
+  private static loggedTrainerRunOf(results: TrainingRunResults): LoggedTrainerRun | null {
+    if (results.status !== 'completed' || !results.trainer || !results.trainerRequest) return null;
+    return { Result: results.trainer, Request: results.trainerRequest };
   }
 
   /**
@@ -178,18 +253,22 @@ export class SnapshotRetrainer {
     return SnapshotFiles.ParseSnapshotFiles(matrix, manifest, provenance);
   }
 
+  /** The run's results envelope, parsed once; a run without a readable envelope is refused, naming it. */
+  protected StoredResultsOf(run: MJMLTrainingRunEntity): TrainingRunResults {
+    const results = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+    if (results.Ok === false) throw new Error(`Training run ${run.ID} has no readable results: ${results.Errors.join('; ')}`);
+    return results.Value;
+  }
+
   /**
    * The run's logged trainer metrics and request. Only a completed unit run's results envelope carries them; any other
    * run is refused, naming it.
    */
-  protected LoggedTrainingOf(run: MJMLTrainingRunEntity): LoggedTraining {
-    const results = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
-    if (results.Ok === false) throw new Error(`Training run ${run.ID} has no readable results: ${results.Errors.join('; ')}`);
-    const v = results.Value;
-    if (v.status !== 'completed' || !v.legacy || !v.legacyRequest) {
+  protected LoggedTrainingOf(run: MJMLTrainingRunEntity, results: TrainingRunResults): LoggedTraining {
+    if (results.status !== 'completed' || !results.legacy || !results.legacyRequest) {
       throw new Error(`Training run ${run.ID} is not a completed run with logged trainer metrics and request`);
     }
-    return { Legacy: v.legacy, Request: v.legacyRequest };
+    return { Legacy: results.legacy, Request: results.legacyRequest };
   }
 
   /** Where the run and its snapshot are read: `deps.snapshots`, or the RunView store on the request's provider. */

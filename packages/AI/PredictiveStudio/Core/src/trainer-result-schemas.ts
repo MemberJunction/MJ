@@ -13,7 +13,15 @@
 import { z } from 'zod';
 import type { BaselineSpec, Budgets, CalibrationMethod, MetricKey, MetricWithInterval } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
-import type { LeakageFlag, SliceResult, TrainerFailureStage, TrainerResult } from './trainer-contract';
+import type {
+  CandidateSpec,
+  LeakageFlag,
+  SliceResult,
+  StoredTrainerResult,
+  TrainerFailureStage,
+  TrainerRequestConfig,
+  TrainerResult,
+} from './trainer-contract';
 
 /** `true` only when the list names every member of the union; otherwise `never`, and assigning `true` fails to compile. */
 type ListsEveryMember<Union, Listed> = [Exclude<Union, Listed>] extends [never] ? true : never;
@@ -178,6 +186,26 @@ const trainerFailed = z.object({
   computeSeconds: z.number(),
 }).strict();
 
+// The stored forms (`ValidationResults.trainer` and `.trainerRequest`) are defined from the wire schemas above, so the
+// stored result and the sidecar's answer cannot drift apart: the stored result is the completed answer with each
+// artifact's bytes replaced by the file it was stored as.
+const storedArtifactRef = returnedArtifact.omit({ bytesBase64: true }).extend({ fileId: nonEmpty });
+const storedTrainerResult = trainerCompleted.omit({ artifacts: true }).extend({ artifacts: z.array(storedArtifactRef) });
+const candidateSpec = z.object({
+  name: nonEmpty,
+  algorithmId: nonEmpty,
+  driverKey: nonEmpty,
+  hyperparameters: z.record(z.union([z.number(), z.string(), z.boolean(), z.null()])),
+}).strict();
+const trainerRequestConfig = z.object({
+  evaluationProtocolId: nonEmpty,
+  candidates: z.array(candidateSpec),
+  seed: int,
+  threads: int.min(1),
+  timeoutSeconds: z.number().positive(),
+  maxRetries: int.min(0),
+}).strict();
+
 /** Each object schema under the name of the pydantic model it mirrors. */
 const MODEL_OBJECTS = {
   Interval: interval, MetricWithInterval: metricWithInterval,
@@ -212,6 +240,15 @@ export class TrainerResultSchemas {
   public static readonly LeakageFlag: z.ZodType<LeakageFlag> = leakageFlag;
   /** The primary score on one slice. */
   public static readonly SliceResult: z.ZodType<SliceResult> = sliceResult;
+
+  /** A stage a trainer run can fail at. */
+  public static readonly TrainerFailureStage: z.ZodType<TrainerFailureStage> = z.enum(FAILURE_STAGES);
+  /** A completed answer as a run stores it: every artifact replaced by its stored `MJ: Files` row. */
+  public static readonly StoredTrainerResult: z.ZodType<StoredTrainerResult> = storedTrainerResult;
+  /** One candidate of a request. */
+  public static readonly CandidateSpec: z.ZodType<CandidateSpec> = candidateSpec;
+  /** The request settings a run stores so a retrain sends the same request with new downloads. */
+  public static readonly TrainerRequestConfig: z.ZodType<TrainerRequestConfig> = trainerRequestConfig;
 
   /** Each object's member names, keyed by the name of the pydantic model it mirrors (for the parity test). */
   public static readonly ModelFields: Readonly<Record<string, readonly string[]>> = Object.fromEntries(

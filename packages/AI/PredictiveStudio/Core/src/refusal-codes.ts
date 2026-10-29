@@ -18,6 +18,10 @@ const REFUSAL_CODES = [
   'UNIT_REQUIRED',
   /** A feature's source cannot be read as of a decision date: its change history does not cover the date, or it changed after it. */
   'AS_OF_SOURCE_UNDATED',
+  /** A pipeline names an Evaluation Protocol that cannot be found; training is judged only under its protocol. */
+  'PROTOCOL_REQUIRED',
+  /** The trainer stopped because the run reached its protocol's compute budget. */
+  'BUDGET_EXCEEDED',
 ] as const;
 
 /** Why a Train or Score request was refused. */

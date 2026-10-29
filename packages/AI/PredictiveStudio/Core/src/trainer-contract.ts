@@ -267,6 +267,32 @@ export type TrainerCompleted = Extract<TrainerResult, { readonly status: 'comple
 /** The failed variant of {@link TrainerResult}. */
 export type TrainerFailed = Extract<TrainerResult, { readonly status: 'failed' }>;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
+/** An artifact the engine stored in `MJ: Files`; a run's stored results keep this reference, never the bytes. */
+export interface StoredArtifactRef {
+  readonly candidate: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly sha256: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly featureSchemaHash: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly classOrder: readonly string[] | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The `MJ: Files` row the artifact's bytes were stored as. */
+  readonly fileId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+}
+
+/** A completed {@link TrainerResult} as a run stores it (`ValidationResults.trainer`): every artifact replaced by its stored file. */
+export type StoredTrainerResult = Omit<TrainerCompleted, 'artifacts'> & { readonly artifacts: readonly StoredArtifactRef[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+
+/**
+ * What a retrain needs to send the same request again (`ValidationResults.trainerRequest`). The downloads are not kept:
+ * they expire, so a retrain issues new ones for the same snapshot files.
+ */
+export interface TrainerRequestConfig {
+  readonly evaluationProtocolId: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly candidates: readonly CandidateSpec[];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly seed: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly threads: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly timeoutSeconds: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  readonly maxRetries: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+}
+
 /**
  * `true` only when `Listed` names every key of `Shape` and nothing else; otherwise `never`, and assigning `true` fails
  * to compile. The member lists below are what the sidecar's pydantic mirror is checked against.
@@ -300,6 +326,9 @@ void trainerCompletedKeysExact;
 void trainerFailedKeysExact;
 void trainerRequestKeysExact;
 
+/** The format of the artifact envelope the trainer returns (each returned artifact's decoded bytes). */
+export const PREDICTOR_ARTIFACT_FORMAT = 'ps-predictor/v2';
+
 /** Libraries every run's CodeVersion must name: a lineage without them cannot be reproduced and is refused. */
 export const REQUIRED_LIBRARIES = ['python', 'numpy', 'scikit-learn', 'xgboost', 'lightgbm'] as const;
 
@@ -327,6 +356,33 @@ export class TrainerContract {
    */
   public static ParseTrainerResult(value: JsonValue): ParseResult<TrainerResult> {
     return StoreSchemas.Validate(TrainerResultSchemas.TrainerResult, value);
+  }
+
+  /**
+   * The result with every returned artifact replaced by the `MJ: Files` row it was stored as (`fileIds` maps candidate
+   * to file ID), so the stored result carries no artifact bytes. Generic over the result shape, so a
+   * {@link TrainerCompleted} becomes a {@link StoredTrainerResult}.
+   *
+   * @throws Error naming the candidate when an artifact has no stored file
+   */
+  public static ToStoredTrainerResult<T extends { readonly artifacts: readonly ReturnedArtifact[] }>(
+    result: T,
+    fileIds: ReadonlyMap<string, string>,
+  ): Omit<T, 'artifacts'> & { readonly artifacts: readonly StoredArtifactRef[] } {
+    const { artifacts, ...rest } = result;
+    return {
+      ...rest,
+      artifacts: artifacts.map((a): StoredArtifactRef => {
+        const fileId = fileIds.get(a.candidate);
+        if (fileId === undefined) throw new Error(`artifact '${a.candidate}' has no stored file`);
+        return { candidate: a.candidate, sha256: a.sha256, featureSchemaHash: a.featureSchemaHash, classOrder: a.classOrder, fileId };
+      }),
+    };
+  }
+
+  /** A completed run's holdout scores by metric: the primary score and every secondary one. */
+  public static HoldoutMetricsOf(holdout: TrainerCompleted['holdout']): Record<string, number> {
+    return Object.fromEntries([holdout.primary, ...holdout.secondary].map((m): [string, number] => [m.metric, m.value]));
   }
 
   /**

@@ -3,14 +3,19 @@
  *
  * What a unit-based training run stores in `MJ: ML Training Runs.ValidationResults` (schema `ps-run-results/v2`).
  * The `refused` variant carries the refusal (its stage and reason); the `completed` variant carries the unit resolution
- * counts, the trainer's metrics and row counts (`legacy`) and the request settings the trainer was called with
- * (`legacyRequest`), so a later training of the same snapshot can call the trainer the same way.
+ * counts and one of two records of the training, so a later training of the same snapshot can call the trainer the
+ * same way: a run trained under an Evaluation Protocol stores the trainer's result (`trainer`, artifacts as stored file
+ * references, never bytes) and the request settings (`trainerRequest`); any other unit run stores the trainer's
+ * metrics and row counts (`legacy`) and the request settings (`legacyRequest`). An envelope written before trainer
+ * results were stored has no `trainer`/`trainerRequest` members and reads them as null.
  */
 import { z } from 'zod';
 import type { AssemblyRefusal } from './assembly-contract';
 import type { UnitRefusal } from './prediction-unit';
 import { TASK_KINDS } from './task-type';
 import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
+import type { StoredTrainerResult, TrainerFailureStage, TrainerRequestConfig } from './trainer-contract';
+import { TrainerResultSchemas } from './trainer-result-schemas';
 
 export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
 
@@ -20,10 +25,16 @@ export type PipelineRefusal =
   | { readonly kind: 'input-not-accepted'; readonly input: 'asOf' | 'labelEventDates' | 'maxRows'; readonly why: string }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly kind: 'unit-invalid'; readonly unitId: string; readonly errors: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
+/** A trainer run that did not complete: the stage it failed at, or a lineage the run cannot record. */
+export type TrainerRefusal =
+  | { readonly kind: 'trainer-failed'; readonly stage: TrainerFailureStage; readonly message: string; readonly computeSeconds: number }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly kind: 'lineage-incomplete'; readonly gaps: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+
 export type TrainingRefusal =
   | { readonly stage: 'pipeline'; readonly reason: PipelineRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   | { readonly stage: 'unit'; readonly reason: UnitRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly stage: 'assembly'; readonly reason: AssemblyRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'assembly'; readonly reason: AssemblyRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | { readonly stage: 'trainer'; readonly reason: TrainerRefusal };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 
 export interface UnitResolutionCounts {
   readonly rowsRead: number;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
@@ -61,7 +72,15 @@ export interface LegacyRequestConfig {
 
 export type TrainingRunResults =
   | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'refused'; readonly refusal: TrainingRefusal }  // case-violation-ok-legacy-back-compat: contracts.ts wire name
-  | { readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA; readonly status: 'completed'; readonly unitResolution: UnitResolutionCounts; readonly legacy: LegacyTrainerMetrics | null; readonly legacyRequest: LegacyRequestConfig | null };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  | {  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly schema: typeof TRAINING_RUN_RESULTS_SCHEMA;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly status: 'completed';  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly unitResolution: UnitResolutionCounts;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly legacy: LegacyTrainerMetrics | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly legacyRequest: LegacyRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly trainer: StoredTrainerResult | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+      readonly trainerRequest: TrainerRequestConfig | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+    };
 
 // The stored envelope is parsed with zod, never `JSON.parse(...) as T`: the column is text any writer
 // (a migration, a hand edit, an older build) can change, so every member is checked before the type is trusted.
@@ -94,10 +113,15 @@ const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('
   z.object({ kind: z.literal('unresolved-column'), entity: z.string(), field: z.string() }),
   z.object({ kind: z.literal('unsupported-step-kind'), stepId: z.string(), stepKind: z.string() }),
 ]);
+const trainerRefusalSchema: z.ZodType<TrainerRefusal> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('trainer-failed'), stage: TrainerResultSchemas.TrainerFailureStage, message: z.string(), computeSeconds: z.number().nonnegative() }),
+  z.object({ kind: z.literal('lineage-incomplete'), gaps: z.array(z.string()) }),
+]);
 const trainingRefusalSchema: z.ZodType<TrainingRefusal> = z.discriminatedUnion('stage', [
   z.object({ stage: z.literal('pipeline'), reason: pipelineRefusalSchema }),
   z.object({ stage: z.literal('unit'), reason: unitRefusalSchema }),
   z.object({ stage: z.literal('assembly'), reason: assemblyRefusalSchema }),
+  z.object({ stage: z.literal('trainer'), reason: trainerRefusalSchema }),
 ]);
 const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
   rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
@@ -121,9 +145,19 @@ const legacyRequestConfigSchema: z.ZodType<LegacyRequestConfig> = z.object({
     random_state: z.number().int().optional(),
   }),
 });
-const trainingRunResultsSchema: z.ZodType<TrainingRunResults> = z.discriminatedUnion('status', [
+// The input type is left open (`unknown`) because `trainer` and `trainerRequest` may be absent on read (an envelope
+// written before they existed) while the parsed value always has them (absent reads as null).
+const trainingRunResultsSchema: z.ZodType<TrainingRunResults, z.ZodTypeDef, unknown> = z.discriminatedUnion('status', [
   z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('refused'), refusal: trainingRefusalSchema }),
-  z.object({ schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA), status: z.literal('completed'), unitResolution: unitResolutionCountsSchema, legacy: legacyTrainerMetricsSchema.nullable(), legacyRequest: legacyRequestConfigSchema.nullable() }),
+  z.object({
+    schema: z.literal(TRAINING_RUN_RESULTS_SCHEMA),
+    status: z.literal('completed'),
+    unitResolution: unitResolutionCountsSchema,
+    legacy: legacyTrainerMetricsSchema.nullable(),
+    legacyRequest: legacyRequestConfigSchema.nullable(),
+    trainer: TrainerResultSchemas.StoredTrainerResult.nullable().default(null),
+    trainerRequest: TrainerResultSchemas.TrainerRequestConfig.nullable().default(null),
+  }),
 ]);
 
 /** Reads the ValidationResults envelope of a unit-based run (static member on one owner). */

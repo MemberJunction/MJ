@@ -37,6 +37,8 @@ export class TrainingRefusedError extends Error {
       case 'scope-entity-mismatch': return `Refused (scope-entity-mismatch): the model scores ${reason.modelEntity} records but the scope holds ${reason.scopeEntity} records.`;
       case 'unresolved-column': return `Refused (unresolved-column): ${reason.entity}.${reason.field} is not a field the pipeline can read.`;
       case 'unsupported-step-kind': return `Refused (unsupported-step-kind): step ${reason.stepId} is a ${reason.stepKind} step, which has no as-of reading.`;
+      case 'trainer-failed': return `Refused (trainer-failed): the trainer stopped at stage ${reason.stage} after ${reason.computeSeconds}s: ${reason.message}`;
+      case 'lineage-incomplete': return `Refused (lineage-incomplete): the trainer's CodeVersion lacks ${reason.gaps.join(', ')}.`;
     }
   }
 }

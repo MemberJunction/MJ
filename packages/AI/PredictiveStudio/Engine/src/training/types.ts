@@ -26,6 +26,7 @@ import type {
   EvaluationRecord,
   TrainerRequest,
   TrainerResult,
+  PREDICTOR_ARTIFACT_FORMAT,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -39,6 +40,7 @@ import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-hist
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import type { IHoldoutCarver } from '../snapshot/holdout-carver';
 import type { ITrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import type { IEvaluationProtocolStore } from './evaluation-protocol-store';
 
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
@@ -228,6 +230,14 @@ export interface TrainingDeps {
   holdoutCarver?: IHoldoutCarver;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */
   snapshots?: ITrainingSnapshotStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * The trainer a pipeline bound to an Evaluation Protocol trains through. Required on that path: a protocol-bound run
+   * without one fails before anything is read. Production wiring passes the same `MJSidecarTrainer` it uses for
+   * `sidecar`, so both reach one sidecar process.
+   */
+  trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */
+  protocols?: IEvaluationProtocolStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 /**
@@ -268,6 +278,15 @@ export interface ModelTrainingLineage {
   assembledAt: string;
   /** How the stored metrics were measured (`EvaluationLineage.Key`). */
   evaluation: EvaluationRecord;
+}
+
+/**
+ * What the Lineage of a model trained under an Evaluation Protocol adds: the protocol it was judged under and the
+ * format of its artifact (the trainer's envelope, which carries its own in-fold encoding).
+ */
+export interface TrainerModelLineage {
+  evaluationProtocolId: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  artifactFormat: typeof PREDICTOR_ARTIFACT_FORMAT;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

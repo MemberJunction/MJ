@@ -169,3 +169,19 @@ describe('TrainerContract.CalibrationHidesFamily (a family is offered only with 
     expect([Number(match?.[1]), Number(match?.[2])]).toEqual([...CALIBRATION_SLOPE_RANGE]);
   });
 });
+
+describe('TrainerContract.ToStoredTrainerResult (artifact bytes are never stored in ValidationResults)', () => {
+  const art = (candidate: string) => ({ candidate, bytesBase64: 'AAAA', sha256: 'a'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: null });
+  const result = { status: 'completed', finalist: 'xgb', artifacts: [art('xgb'), art('glm')] };
+  it('replaces each artifact by its stored file reference', () => {
+    const stored = TrainerContract.ToStoredTrainerResult(result, new Map([['xgb', 'F1'], ['glm', 'F2']]));
+    expect(stored.artifacts).toEqual([
+      { candidate: 'xgb', sha256: 'a'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: null, fileId: 'F1' },
+      { candidate: 'glm', sha256: 'a'.repeat(64), featureSchemaHash: 'f'.repeat(64), classOrder: null, fileId: 'F2' },
+    ]);
+    expect(JSON.stringify(stored)).not.toContain('bytesBase64');
+  });
+  it('refuses an artifact that was not stored', () => {
+    expect(() => TrainerContract.ToStoredTrainerResult(result, new Map([['xgb', 'F1']]))).toThrow("artifact 'glm' has no stored file");
+  });
+});

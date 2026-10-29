@@ -18,3 +18,5 @@ export * from './train-request';
 export * from './training-engine';
 export * from './compute-cost';
 export * from './trainer-result';
+export * from './trainer-request';
+export * from './evaluation-protocol-store';

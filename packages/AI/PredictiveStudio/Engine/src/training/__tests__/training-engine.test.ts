@@ -2,8 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
   EvaluationLineage,
+  EvaluationProtocol,
   InvalidMajorityBaselineRuleError,
+  TrainingRunResultsParser,
   TrustVerdicts,
+  type EvaluationProtocolSpec,
+  type TrainingRunResults,
   type TrainResponse,
   type MatrixData,
   type FeatureStepGraph,
@@ -11,7 +15,13 @@ import {
   type ValidationStrategy,
 } from '@memberjunction/predictive-studio-core';
 
+import { TrainerResultMalformedError } from '@memberjunction/predictive-studio-sidecar';
 import { TrainingEngine } from '../training-engine';
+import { TrainingRefusedError } from '../training-refusal';
+import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
+import { InMemoryArtifactStore } from '../artifact-store';
+import { ProtocolRowFixture } from './fixtures/protocol-row';
+import { TrainerResultFixtures } from './fixtures/trainer-result';
 import { DEFAULT_SPLIT_SEED } from '../locked-holdout';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type {
@@ -27,9 +37,11 @@ import type { RecordProcessorContext } from '@memberjunction/record-set-processo
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import {
   FakeEntityFactory,
+  FakeEvaluationProtocolStore,
   FakeMLModel,
   FakeMLPipeline,
   FakeSidecar,
+  FakeTrainer,
   FakeTrainingSnapshot,
   buildDeps,
   cleanResponse,
@@ -517,11 +529,11 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(run.ComputeCost).toBeNull();
   });
 
-  it("copies the pipeline's EvaluationProtocolID onto the run", async () => {
-    const { engine, deps, pipeline, runs } = unitHarness(years, unitColumns);
-    pipeline.EvaluationProtocolID = 'EP-1';
+  it("copies the pipeline's EvaluationProtocolID onto the run and trains it through the trainer", async () => {
+    const { engine, deps, sidecar, pipeline, runs } = protocolHarness((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec()));
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
-    expect(runs[0].EvaluationProtocolID).toBe('EP-1');
+    expect(runs[0].EvaluationProtocolID).toBe(ProtocolRowFixture.ID);
+    expect(sidecar.CallCount).toBe(0);
   });
 
   it('freezes the unit rows into one Training Snapshot and trains from its development and locked-holdout rows', async () => {
@@ -579,6 +591,111 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   it('refuses labelEventDates for a unit pipeline (decision dates come from the unit)', async () => {
     const { engine, deps, pipeline } = unitHarness(years, unitColumns);
     await expect(engine.trainModel({ pipelineId: pipeline.ID, labelEventDates: { p0: new Date('2024-01-01T00:00:00Z') } }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'labelEventDates' } } });
+  });
+});
+
+/** A 36-character run ID: the trainer contract's run IDs are database UUIDs. */
+const TRAINER_RUN_ID = '00000000-0000-0000-0000-0000000000a1';
+
+/** The parsed protocol row the protocol harness serves. */
+function protocolSpec(): EvaluationProtocolSpec {
+  const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(ProtocolRowFixture.Row());
+  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+  return parsed.Value;
+}
+
+/** The unit harness with its pipeline bound to the protocol row, the protocol store serving it and a fake trainer. */
+function protocolHarness(answer: ConstructorParameters<typeof FakeTrainer>[0]): ReturnType<typeof unitHarness> & { trainer: FakeTrainer; artifacts: InMemoryArtifactStore } {
+  const harness = unitHarness(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns(), undefined, TRAINER_RUN_ID);
+  harness.pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
+  const trainer = new FakeTrainer(answer);
+  const artifacts = new InMemoryArtifactStore();
+  harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row()]);
+  harness.deps.trainer = trainer;
+  harness.deps.artifactStore = artifacts;
+  return { ...harness, trainer, artifacts };
+}
+
+/** The run's stored envelope, parsed through its schema. */
+function storedResults(validationResults: string | null): TrainingRunResults {
+  const parsed = TrainingRunResultsParser.ParseTrainingRunResults(validationResults);
+  if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+  return parsed.Value;
+}
+
+describe('TrainingEngine — a unit pipeline bound to an Evaluation Protocol trains through the trainer', () => {
+  it('trains a protocol-bound unit pipeline through /trainer', async () => {
+    const { engine, deps, sidecar, pipeline, trainer, artifacts } = protocolHarness((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec()));
+    const { model, run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(trainer.Requests).toHaveLength(1);
+    const request = trainer.Requests[0];
+    expect(request.snapshot.id).toBe(run.TrainingSnapshotID);
+    expect(request.protocol.id).toBe(ProtocolRowFixture.ID);
+    expect([run.Status, run.EvaluationProtocolID, run.ComputeSeconds, run.ComputeCost]).toEqual(['Completed', ProtocolRowFixture.ID, 12.5, null]);
+    const results = storedResults(run.ValidationResults);
+    expect(results.status).toBe('completed');
+    if (results.status !== 'completed') return;
+    expect(results.trainer?.finalist).toBe('xgb');
+    expect(results.trainer?.artifacts.map((a) => a.fileId).every((id) => id.length > 0)).toBe(true);
+    expect(run.ValidationResults).not.toContain('bytesBase64');
+    expect(results.trainerRequest?.evaluationProtocolId).toBe(ProtocolRowFixture.ID);
+    expect(results.legacy).toBeNull();
+    expect(artifacts.Saved.size).toBe(3);
+    const xgbFile = results.trainer?.artifacts.find((a) => a.candidate === 'xgb')?.fileId;
+    expect(model.ArtifactFileID).toBe(xgbFile);
+    expect(JSON.parse(model.Lineage || '{}')).toMatchObject({ evaluationProtocolId: ProtocolRowFixture.ID, artifactFormat: 'ps-predictor/v2', trainingSnapshotId: run.TrainingSnapshotID });
+    expect(sidecar.CallCount).toBe(0);
+  });
+
+  it('stores a failed trainer result as a trainer refusal', async () => {
+    const { engine, deps, pipeline, runs, models } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
+    const training = engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    await expect(training).rejects.toBeInstanceOf(TrainingRefusedError);
+    await expect(training).rejects.toThrow(/trainer-failed.*inner-cv/);
+    expect([runs[0].Status, runs[0].ComputeSeconds]).toEqual(['Failed', 3.25]);
+    expect(storedResults(runs[0].ValidationResults)).toEqual({
+      schema: 'ps-run-results/v2', status: 'refused',
+      refusal: { stage: 'trainer', reason: { kind: 'trainer-failed', stage: 'inner-cv', message: "candidate 'xgb': only one class in a fold", computeSeconds: 3.25 } },
+    });
+    expect(models).toHaveLength(0);
+  });
+
+  it('retrains a trainer run from its snapshot and reproduces the holdout metrics', async () => {
+    const { engine, deps, pipeline, trainer } = protocolHarness((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, protocolSpec()));
+    const { run } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const retrained = await new SnapshotRetrainer().Retrain(run.ID, deps);
+    expect(retrained).toMatchObject({ FilesVerified: true, ContentHashVerified: true, MaxAbsDiff: 0, Reproduced: true });
+    expect(retrained.Original).toEqual({ 'log-loss': 0.452, auc: 0.67, brier: 0.15 });
+    expect(retrained.Retrained).toEqual({ 'log-loss': 0.452, auc: 0.67, brier: 0.15 });
+    expect(trainer.Requests).toHaveLength(2);
+    const [first, second] = trainer.Requests;
+    expect([second.candidates, second.seed, second.threads, second.timeoutSeconds, second.maxRetries]).toEqual([first.candidates, first.seed, first.threads, first.timeoutSeconds, first.maxRetries]);
+    expect(second.snapshot.matrix).not.toBe(first.snapshot.matrix);
+    expect([second.snapshot.matrix.fileId, second.snapshot.rowManifest.fileId]).toEqual([first.snapshot.matrix.fileId, first.snapshot.rowManifest.fileId]);
+  });
+
+  it('records a malformed trainer answer as a failed run naming the mismatch, with no model', async () => {
+    const { engine, deps, pipeline, runs, models } = protocolHarness(() => { throw new TrainerResultMalformedError(['holdout.primary.metric: Invalid enum value']); });
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toBeInstanceOf(TrainerResultMalformedError);
+    expect(runs[0].Status).toBe('Failed');
+    expect(runs[0].Notes).toBe("Training failed: The sidecar's /trainer answer is not a TrainerResult: holdout.primary.metric: Invalid enum value");
+    expect(models).toHaveLength(0);
+  });
+
+  it('refuses a pipeline whose Evaluation Protocol row does not exist (protocol-required), before calling the trainer', async () => {
+    const { engine, deps, pipeline, trainer, runs } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
+    deps.protocols = new FakeEvaluationProtocolStore([]);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: pipeline.ID } } });
+    expect(trainer.Requests).toHaveLength(0);
+    expect(runs[0].Status).toBe('Failed');
+  });
+
+  it('fails a protocol-bound run whose deps carry no trainer, before any snapshot is written', async () => {
+    const { engine, deps, pipeline, runs, snapshots } = protocolHarness((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId));
+    delete deps.trainer;
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/no trainer \(trainer\) was supplied/);
+    expect(snapshots).toHaveLength(0);
+    expect(runs[0].Status).toBe('Failed');
   });
 });
 

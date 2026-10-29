@@ -29,6 +29,7 @@ import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata'
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { StorageProviderSnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
+import { RunViewEvaluationProtocolStore } from '../training/evaluation-protocol-store';
 import { SnapshotRetrainer, type RetrainResult } from '../snapshot/snapshot-retrainer';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
@@ -79,7 +80,9 @@ export class TrainingDelegation {
    * `RunViewRecordHistoryReader` over the same `dataAccess`; so is the holdout carver (the trailing
    * `LockedHoldoutFraction`). A unit run's Training Snapshot files go to the storage provider
    * `PS_SNAPSHOT_STORAGE_PROVIDER` names, recorded as `MJ: Files` rows, and snapshots are found by content hash
-   * through the same provider and user.
+   * through the same provider and user. A pipeline bound to an Evaluation Protocol reads its protocol through the
+   * same provider and user and trains through the trainer, which is the same `MJSidecarTrainer` as `sidecar`, so both
+   * reach one sidecar process.
    *
    * @param provider the owning provider for data access / multi-provider correctness
    * @param user the acting user threaded through every entity op for isolation/audit
@@ -87,10 +90,13 @@ export class TrainingDelegation {
   public static async BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
     const entityFactory = new MetadataEntityFactory(provider);
     const providerId = await ResolveActiveFileStorageProviderId(user, provider);
+    // One trainer serves both seams, so the legacy train call and the protocol trainer reach the same sidecar process.
+    const trainer = new MJSidecarTrainer();
     return {
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
-      sidecar: new MJSidecarTrainer(),
+      sidecar: trainer,
+      trainer,
       artifactStore: BuildArtifactStore(providerId, entityFactory),
       contextUser: user,
       provider,
@@ -100,6 +106,7 @@ export class TrainingDelegation {
       dataAccess: new RunViewDataAccess(user, provider),
       snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, provider, user),
       snapshots: new RunViewTrainingSnapshotStore(provider, user),
+      protocols: new RunViewEvaluationProtocolStore(provider, user),
     };
   }
 

@@ -5,19 +5,21 @@ import type {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
+import { TrainingRunResultsParser } from '@memberjunction/predictive-studio-core';
 import { HarnessAgent } from './agent';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
 /**
- * The pipelines, models and Prediction Units one harness created, by ID: the pipelines it created, the models its
- * trainings produced, the unit versions its fixtures saved, and the pipelines (found by exact name) and models of its
- * agent runs. Cleanup deletes exactly these. A read by name
+ * The pipelines, models, Prediction Units and Evaluation Protocols one harness created, by ID: the pipelines it created,
+ * the models its trainings produced, the unit and protocol versions its fixtures saved, and the pipelines (found by
+ * exact name) and models of its agent runs. Cleanup deletes exactly these. A read by name
  * prefix (`LIKE`) only observes: it never adds a pipeline, and adds a model only when its pipeline is already recorded.
  */
 export class RunRecords {
   public readonly PipelineIDs = new UUIDSet();
   public readonly ModelIDs = new UUIDSet();
   public readonly PredictionUnitIDs = new UUIDSet();
+  public readonly EvaluationProtocolIDs = new UUIDSet();
   private readonly agentPipelineNames = new Set<string>();
 
   /** The exact pipeline names of every builder-agent run the harness started (cleanup looks them up again). */
@@ -43,6 +45,11 @@ export class RunRecords {
   /** Record a Prediction Unit version the run saved (every version, not only the lineage root). */
   public RecordPredictionUnit(id: string): void {
     this.PredictionUnitIDs.Add(id);
+  }
+
+  /** Record an Evaluation Protocol version the run saved. */
+  public RecordEvaluationProtocol(id: string): void {
+    this.EvaluationProtocolIDs.Add(id);
   }
 
   /** Record what a builder-agent run created: its pipelines (a failed run's too) and the model it built, if any. */
@@ -103,8 +110,8 @@ export type CleanupRecordProcessRow = CleanupRow & Pick<MJRecordProcessEntity, '
 /** A Prediction Unit row: a cleanup row with its version (later versions are deleted before their lineage root). */
 export type CleanupPredictionUnitRow = CleanupRow & Pick<MJPredictionUnitEntity, 'Version'>;
 
-/** A training run row: a cleanup row with the Training Snapshot it trained on. */
-export type CleanupTrainingRunRow = CleanupRow & Pick<MJMLTrainingRunEntity, 'TrainingSnapshotID'>;
+/** A training run row: a cleanup row with the Training Snapshot it trained on and its stored results (which name the trainer's artifact files). */
+export type CleanupTrainingRunRow = CleanupRow & Pick<MJMLTrainingRunEntity, 'TrainingSnapshotID' | 'ValidationResults'>;
 
 /** A Training Snapshot row: a cleanup row with its three stored files. */
 export type CleanupSnapshotRow = CleanupRow & Pick<MJTrainingSnapshotEntity, 'MatrixFileID' | 'RowManifestFileID' | 'ProvenanceFileID'>;
@@ -146,7 +153,9 @@ export class HarnessCleanup {
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
    * runs, run details and watermarks; training runs; then models, the Training Snapshots the runs trained on and the
    * recorded pipelines' snapshots, each deleted snapshot's three files (stored object, then `MJ: Files` row), the models'
-   * artifact files, pipelines, and last the recorded Prediction Unit versions (pipelines and snapshots reference them).
+   * artifact files and every artifact file a run's stored trainer result names, pipelines, the recorded Evaluation
+   * Protocol versions (pipelines, runs and snapshots reference them), and last the recorded Prediction Unit versions
+   * (pipelines and snapshots reference them).
    * Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed and per stored
    * object that could not be deleted.
    */
@@ -155,7 +164,7 @@ export class HarnessCleanup {
     const models = modelFilter ? await store.Models(modelFilter) : [];
     const modelIds = new UUIDSet(models.map((m) => m.ID));
     const pipelineIds = new UUIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
-    const fileIds = new UUIDSet(models.flatMap((m) => (m.ArtifactFileID ? [m.ArtifactFileID] : [])));
+    const modelFileIds = models.flatMap((m) => (m.ArtifactFileID ? [m.ArtifactFileID] : []));
     const processes = modelIds.Size > 0 ? await HarnessCleanup.scoringProcesses(store, modelIds) : [];
     const processIds = new UUIDSet(processes.map((p) => p.ID));
     const processFilter = HarnessCleanup.anyIn([['RecordProcessID', processIds]]);
@@ -165,7 +174,6 @@ export class HarnessCleanup {
     const runFilter = HarnessCleanup.anyIn([['PipelineID', pipelineIds], ['ResultingModelID', modelIds]]);
     const pipelineFilter = HarnessCleanup.anyIn([['ID', pipelineIds]]);
     const detailFilter = HarnessCleanup.anyIn([['ProcessRunID', processRunIds]]);
-    const fileFilter = HarnessCleanup.anyIn([['ID', fileIds]]);
     const bindings = bindingFilter ? await store.Rows('MJ: ML Model Scoring Bindings', bindingFilter) : [];
     const details = detailFilter ? await store.Rows('MJ: Process Run Details', detailFilter) : [];
     const watermarks = processFilter ? await store.Rows('MJ: Record Process Watermarks', processFilter) : [];
@@ -173,8 +181,10 @@ export class HarnessCleanup {
     const snapshotIds = new UUIDSet(runs.flatMap((r) => (r.TrainingSnapshotID ? [r.TrainingSnapshotID] : [])));
     const snapshotFilter = HarnessCleanup.anyIn([['ID', snapshotIds], ['PipelineID', pipelineIds]]);
     const snapshots = snapshotFilter ? await store.TrainingSnapshots(snapshotFilter) : [];
+    const fileFilter = HarnessCleanup.anyIn([['ID', new UUIDSet([...modelFileIds, ...runs.flatMap((r) => HarnessCleanup.trainerArtifactFileIds(r))])]]);
     const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
+    const protocolFilter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs]]);
     const failures = [
       ...(await HarnessCleanup.deleteAll('MJ: ML Model Scoring Bindings', bindings)),
       ...(await HarnessCleanup.deleteAll('MJ: Process Run Details', details)),
@@ -186,6 +196,7 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteSnapshots(store, snapshots)),
       ...(await HarnessCleanup.deleteAll('MJ: Files', files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', pipelines, (id) => records.PipelineIDs.Delete(id))),
+      ...(protocolFilter ? await HarnessCleanup.deleteAll('MJ: Evaluation Protocols', await store.Rows('MJ: Evaluation Protocols', protocolFilter), (id) => records.EvaluationProtocolIDs.Delete(id)) : []),
       ...(await HarnessCleanup.deletePredictionUnits(store, records)),
     ];
     return failures;
@@ -236,6 +247,16 @@ export class HarnessCleanup {
     await driver.initialize();
     if (!driver.IsConfigured) return `storage provider "${row.Name}" is not configured in this process`;
     return (await driver.DeleteObject(file.ProviderKey)) ? null : `${row.Name} refused to delete it`;
+  }
+
+  /**
+   * The `MJ: Files` rows a run's stored trainer result names (one per returned artifact; the finalist's is also its
+   * model's). A run whose results are not a completed trainer envelope (a legacy run, a refusal) names none.
+   */
+  private static trainerArtifactFileIds(run: CleanupTrainingRunRow): string[] {
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+    if (parsed.Ok === false || parsed.Value.status !== 'completed' || !parsed.Value.trainer) return [];
+    return parsed.Value.trainer.artifacts.map((a) => a.fileId);
   }
 
   /**

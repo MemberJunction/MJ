@@ -28,6 +28,17 @@ describe('PredictiveStudioRefusals', () => {
     expect(codeOf({ stage: 'unit', reason: { kind: 'single-valued-target', value: '1', rows: 4 } })).toBeNull();
   });
 
+  it('maps a pipeline without its Evaluation Protocol to PROTOCOL_REQUIRED', () => {
+    expect(PredictiveStudioRefusals.CodeOf(new TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'protocol-required', pipelineId: 'p1' } }))).toBe('PROTOCOL_REQUIRED');
+  });
+
+  it('maps a trainer stopped by its budget to BUDGET_EXCEEDED and leaves every other trainer stage to the generic code', () => {
+    const trainerFailed = (stage: 'budget-exceeded' | 'inner-cv') => new TrainingRefusedError({ stage: 'trainer', reason: { kind: 'trainer-failed', stage, message: 'stopped', computeSeconds: 600 } });
+    expect(PredictiveStudioRefusals.CodeOf(trainerFailed('budget-exceeded'))).toBe('BUDGET_EXCEEDED');
+    expect(PredictiveStudioRefusals.CodeOf(trainerFailed('inner-cv'))).toBeNull();
+    expect(PredictiveStudioRefusals.CodeOf(new TrainingRefusedError({ stage: 'trainer', reason: { kind: 'lineage-incomplete', gaps: ['threads'] } }))).toBeNull();
+  });
+
   it('EXECUTION_ERROR is not a refusal: a plain error keeps the generic code', async () => {
     const r = await PredictiveStudioRefusals.ExecuteServer(async () => true, async () => { throw new Error('sidecar unreachable'); }, 'K');
     expect(r).toEqual({ Success: false, ResultCode: 'EXECUTION_ERROR', ErrorMessage: 'sidecar unreachable' });
