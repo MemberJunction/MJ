@@ -2911,5 +2911,175 @@ describe('ConversationEngine', () => {
             expect(ShouldReplaceDetailAgentRun(retriedPrimaryRun, primaryRun)).toBe(false);
         });
     });
+
+    describe('Shared folder automatic conversation sharing (View-only)', () => {
+        function createSharedOrPersonalProject(overrides: Record<string, unknown> = {}) {
+            return {
+                ID: overrides['ID'] ?? 'proj-shared-1',
+                Name: overrides['Name'] ?? 'Team Shared Folder',
+                EnvironmentID: overrides['EnvironmentID'] ?? 'env-1',
+                ParentID: overrides['ParentID'] ?? null,
+                OwnerUserID: overrides['OwnerUserID'] ?? null,
+                IsArchived: overrides['IsArchived'] ?? false,
+                Save: vi.fn().mockResolvedValue(true),
+                Delete: vi.fn().mockResolvedValue(true),
+                GetAll: vi.fn().mockReturnValue({}),
+                LatestResult: { Success: true, CompleteMessage: '' },
+                ...overrides,
+            };
+        }
+
+        it('includes shared folder IDs in GetVisibleConversationsFilter and excludes personal folders', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null }),
+                    createSharedOrPersonalProject({ ID: 'proj-personal-1', OwnerUserID: 'user-1' }),
+                    createSharedOrPersonalProject({ ID: 'proj-archived', OwnerUserID: null, IsArchived: true }),
+                ],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
+            expect(filter).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ProjectID IN ('proj-shared-1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+
+        it('automatically loads conversations in shared folders and marks non-owned ones as View-only', async () => {
+            const ownConvoInSharedFolder = createMockConversation({
+                ID: 'c-own',
+                UserID: 'user-1',
+                ProjectID: 'proj-shared-1',
+            });
+            const colleagueConvoInSharedFolder = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+            });
+
+            // 1. Initial MJ: Conversations query (before LoadProjects runs)
+            runViewResultQueue.push({ Success: true, Results: [ownConvoInSharedFolder] });
+            // 2. LoadProjects discovers a shared folder (OwnerUserID: null)
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            // 3. Re-query MJ: Conversations including OR ProjectID IN ('proj-shared-1')
+            runViewResultQueue.push({
+                Success: true,
+                Results: [ownConvoInSharedFolder, colleagueConvoInSharedFolder],
+            });
+            // 4. rebuildSharedByMap resolves grantor email from MJ: Users
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{ ID: 'user-2', Email: 'colleague@example.com' }],
+            });
+
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            expect(engine.Conversations).toHaveLength(2);
+
+            const updatedConvoQuery = runViewParamsLog
+                .filter((p) => p['EntityName'] === 'MJ: Conversations')
+                .at(-1)!;
+            expect(String(updatedConvoQuery['ExtraFilter'])).toContain("OR ProjectID IN ('proj-shared-1')");
+
+            // Colleague's conversation in the shared folder gets View-only access automatically
+            const sharedInfo = engine.GetSharedByInfo('c-colleague');
+            expect(sharedInfo).toEqual({
+                UserID: 'user-2',
+                Name: 'Colleague Two',
+                Email: 'colleague@example.com',
+                Level: 'View',
+            });
+            expect(engine.CanEditConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(false);
+            expect(engine.CanShareConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(false);
+
+            // Current user's own conversation in the shared folder stays editable and owned
+            expect(engine.GetSharedByInfo('c-own')).toBeNull();
+            expect(engine.CanEditConversation(ownConvoInSharedFolder as never, 'user-1')).toBe(true);
+            expect(engine.CanShareConversation(ownConvoInSharedFolder as never, 'user-1')).toBe(true);
+        });
+
+        it('preserves explicit Edit or Owner resource permission grants on conversations inside a shared folder', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce([
+                {
+                    ResourceRecordID: 'c-colleague',
+                    SharedByUserID: 'user-2',
+                    SharedByUser: 'Colleague Two',
+                    PermissionLevel: 'Edit',
+                },
+            ] as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{ ID: 'user-2', Email: 'colleague@example.com' }],
+            });
+
+            await engine.LoadConversations('env-1', contextUser);
+
+            expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('Edit');
+            expect(engine.CanEditConversation(colleagueConvo as never, 'user-1')).toBe(true);
+        });
+
+        it('drops another user\'s folder-shared conversation when it is moved out of the shared folder', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+            expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('View');
+
+            // Remote event: colleague moves their conversation out of the shared folder (ProjectID -> null)
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                entityName: 'MJ: Conversations',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'c-colleague' }]),
+                    recordData: JSON.stringify({
+                        ID: 'c-colleague',
+                        UserID: 'user-2',
+                        ProjectID: null,
+                        EnvironmentID: 'env-1',
+                        IsArchived: false,
+                    }),
+                },
+            });
+
+            expect(engine.Conversations).toHaveLength(0);
+            expect(engine.GetSharedByInfo('c-colleague')).toBeNull();
+        });
+    });
 });
+
 

@@ -865,6 +865,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /** Track the environment ID used for the last load */
     private _lastEnvironmentId: string | null = null;
 
+    /** Track the user ID used for the last conversations load */
+    private _lastConversationsUserId: string | null = null;
+
+    /** Conversation IDs shared with the current user via explicit MJ: Resource Permissions grants */
+    private _explicitSharedConversationIds = new Set<string>();
+
     /** Track the environment ID used for the last projects (folders) load */
     private _lastProjectsEnvironmentId: string | null = null;
     /**
@@ -892,7 +898,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * For conversations the current user *received* via sharing, this map goes
      * from `conversationId` to the grantor's display info. Populated by
      * {@link LoadConversations} using the `SharedByUserID` column on the
-     * `MJ: Resource Permissions` row. Used by the chat UI to render
+     * `MJ: Resource Permissions` row or the conversation owner for conversations
+     * inside a shared folder. Used by the chat UI to render
      * "Shared by {email}" next to the title and a share icon in the sidebar.
      */
     private _sharedByByConversationId = new Map<string, SharedByInfo>();
@@ -987,21 +994,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
 
         this._lastEnvironmentId = environmentId;
+        this._lastConversationsUserId = contextUser?.ID ?? null;
 
         // Claim a ticket for this load. Anything published below is gated on still holding
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const initialSharedProjectIds = this.getSharedProjectIds(environmentId);
         const filter = this.buildVisibleConversationsFilter(
             environmentId,
             contextUser.ID,
             sharedPermissions.map((p) => p.ResourceRecordID),
-            options
+            options,
+            initialSharedProjectIds
         );
 
         const rv = new RunView();
-        const result = await rv.RunView<MJConversationEntity>(
+        let result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
                 ExtraFilter: filter,
@@ -1033,34 +1043,138 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             this._conversations$.next([]);
         }
 
-        // Build the "shared by" map AFTER fetching conversations so we can
-        // exclude permissions on conversations the user owns. A role-inherited
-        // grant on the user's own conversation (e.g. they're in a role that
-        // got View access via a feedback workflow) must NOT appear as
-        // "shared with me at View level" — otherwise the chat UI would treat
-        // their own conversation as read-only. See isReadOnlyView in
-        // conversation-chat-area.component.
-        const ownedConversationIds = new Set(
-            (result.Results ?? [])
-                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
-                .map((c) => NormalizeUUID(c.ID))
+        await this.applyConversationSharingMetadata(
+            rv,
+            result.Results ?? [],
+            sharedPermissions,
+            initialSharedProjectIds,
+            contextUser
         );
-        const trulySharedPermissions = sharedPermissions.filter(
-            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
-        );
-        await this.rebuildSharedByMap(rv, trulySharedPermissions, contextUser);
 
         // Load the folder (project) list so the sidebar can group conversations
         // under their folder. Done after the conversation query (so it isn't
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+
+        if (generation !== this._conversationsLoadGeneration) {
+            return;
+        }
+
+        // If LoadProjects discovered shared folders that were not yet in _projects$ when
+        // the initial conversation query ran, re-query MJ: Conversations so conversations
+        // inside those shared folders are automatically included and marked View-only.
+        const currentSharedProjectIds = this.getSharedProjectIds(environmentId);
+        if (!this.sameIdSet(initialSharedProjectIds, currentSharedProjectIds)) {
+            const updatedFilter = this.buildVisibleConversationsFilter(
+                environmentId,
+                contextUser.ID,
+                sharedPermissions.map((p) => p.ResourceRecordID),
+                options,
+                currentSharedProjectIds
+            );
+            result = await rv.RunView<MJConversationEntity>(
+                {
+                    EntityName: 'MJ: Conversations',
+                    ExtraFilter: updatedFilter,
+                    OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
+                    MaxRows: 1000,
+                    ResultType: 'entity_object',
+                    BypassCache: forceRefresh
+                },
+                contextUser
+            );
+
+            if (generation !== this._conversationsLoadGeneration) {
+                return;
+            }
+
+            if (result.Success) {
+                this._conversations$.next(result.Results || []);
+            } else {
+                console.error('[ConversationEngine] Failed to load conversations:', result.ErrorMessage);
+                this._conversations$.next([]);
+            }
+
+            await this.applyConversationSharingMetadata(
+                rv,
+                result.Results ?? [],
+                sharedPermissions,
+                currentSharedProjectIds,
+                contextUser
+            );
+        }
+    }
+
+    /**
+     * Populates {@link _explicitSharedConversationIds} and {@link _sharedByByConversationId}
+     * from both explicit `MJ: Resource Permissions` grants and implicit View-only folder
+     * sharing on conversations inside shared folders (`OwnerUserID IS NULL`).
+     *
+     * Explicit grants take precedence over folder-level View access so a user who holds an
+     * `Edit` or `Owner` grant on a conversation inside a shared folder keeps write access.
+     */
+    private async applyConversationSharingMetadata(
+        rv: RunView,
+        conversations: MJConversationEntity[],
+        sharedPermissions: MJResourcePermissionEntity[],
+        sharedProjectIds: string[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Exclude permissions on conversations the user owns. A role-inherited
+        // grant on the user's own conversation (e.g. they're in a role that
+        // got View access via a feedback workflow) must NOT appear as
+        // "shared with me at View level" — otherwise the chat UI would treat
+        // their own conversation as read-only. See isReadOnlyView in
+        // conversation-chat-area.component.
+        const ownedConversationIds = new Set(
+            conversations
+                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
+                .map((c) => NormalizeUUID(c.ID))
+        );
+        const trulySharedPermissions = sharedPermissions.filter(
+            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
+        );
+        this._explicitSharedConversationIds = new Set(
+            trulySharedPermissions.map((p) => NormalizeUUID(p.ResourceRecordID))
+        );
+
+        const sharedProjectIdSet = new Set(sharedProjectIds.map((id) => NormalizeUUID(id)));
+        const folderSharedPermissions: Array<{
+            ResourceRecordID: string;
+            SharedByUserID: string | null;
+            SharedByUser: string | null;
+            PermissionLevel: 'View' | 'Edit' | 'Owner' | null;
+        }> = [];
+
+        for (const conv of conversations) {
+            const normId = NormalizeUUID(conv.ID);
+            if (ownedConversationIds.has(normId) || this._explicitSharedConversationIds.has(normId)) {
+                continue;
+            }
+            if (conv.ProjectID && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))) {
+                const convWithUser = conv as MJConversationEntity & { User?: string | null };
+                folderSharedPermissions.push({
+                    ResourceRecordID: conv.ID,
+                    SharedByUserID: conv.UserID ?? null,
+                    SharedByUser: convWithUser.User ?? null,
+                    PermissionLevel: 'View'
+                });
+            }
+        }
+
+        await this.rebuildSharedByMap(
+            rv,
+            [...trulySharedPermissions, ...folderSharedPermissions],
+            contextUser
+        );
     }
 
     /**
      * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
-     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
-     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     * {@link LoadConversations} shows the user: owned by the user, explicitly shared with them,
+     * or inside a visible shared folder, not archived, and (unless `includeApplicationScoped`)
+     * Global or Both scope.
      *
      * Use it anywhere that reads conversations for display (search, pickers) so those reads
      * cannot show more than the conversation list does. It is not capped, unlike the list load.
@@ -1075,12 +1189,35 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         options?: { includeApplicationScoped?: boolean }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const sharedProjectIds = this.getSharedProjectIds(environmentId);
         return this.buildVisibleConversationsFilter(
             environmentId,
             contextUser.ID,
             sharedPermissions.map((p) => p.ResourceRecordID),
-            options
+            options,
+            sharedProjectIds
         );
+    }
+
+    /**
+     * IDs of loaded shared folders (`OwnerUserID IS NULL` and not archived) in the environment.
+     */
+    private getSharedProjectIds(environmentId: string): string[] {
+        return this._projects$.value
+            .filter(
+                (p) =>
+                    !p.OwnerUserID &&
+                    !p.IsArchived &&
+                    (!p.EnvironmentID || UUIDsEqual(p.EnvironmentID, environmentId))
+            )
+            .map((p) => p.ID)
+            .filter((id): id is string => !!id);
+    }
+
+    private sameIdSet(a: string[], b: string[]): boolean {
+        if (a.length !== b.length) return false;
+        const setA = new Set(a.map((id) => NormalizeUUID(id)));
+        return b.every((id) => setA.has(NormalizeUUID(id)));
     }
 
     /**
@@ -1096,19 +1233,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean },
+        sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
         const sharedClause =
             sharedConversationIds.length > 0
                 ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
                 : '';
+        const sharedFolderClause =
+            sharedProjectIds.length > 0
+                ? ` OR ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`
+                : '';
         // The main chat view shows Global and Both. App-scoped conversations live inside
         // their owning Application's embedded surface.
         const scopeClause = options?.includeApplicationScoped
             ? ''
             : ` AND ApplicationScope IN ('Global', 'Both')`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
     }
 
     /**
@@ -1344,12 +1486,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
         const newParentId = project.ParentID ?? null;
 
-        // 1. Unassign conversations directly in this folder
+        // 1. Unassign conversations directly in this folder that the caller can edit.
+        // View-only conversations owned by other users in a shared folder cannot be edited
+        // by this caller; if any still exist in the DB, the delete below will surface
+        // FK_Conversation_Project via ExplainProjectDeleteFailure.
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
         );
         for (const conv of directConversations) {
-            await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+            if (!contextUser?.ID || !conv.UserID || this.CanEditConversation(conv, contextUser.ID)) {
+                await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+            }
         }
 
         // 2. Reparent direct child folders one level up.
@@ -1413,6 +1560,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             throw new Error(ExplainProjectDeleteFailure(project.LatestResult?.CompleteMessage));
         }
 
+        this.reconcileFolderSharedConversations();
         return true;
     }
 
@@ -3542,7 +3690,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._conversations$.next([]);
         this._projects$.next([]);
         this._detailCache.clear();
+        this._sharedByByConversationId.clear();
+        this._explicitSharedConversationIds.clear();
         this._lastEnvironmentId = null;
+        this._lastConversationsUserId = null;
         this._lastProjectsEnvironmentId = null;
         this._lastProjectsUserId = null;
     }
@@ -3864,6 +4015,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
+                this.reconcileFolderSharedConversations();
             } else if (event.baseEntity) {
                 // A conversation created OUTSIDE this engine (local save event) that we don't
                 // yet hold — append it so the list updates reactively. Only fold in the
@@ -3878,11 +4030,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
                 if (scope !== 'Application' && !isArchived && inLoadedEnvironment) {
                     this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
+                    this.reconcileFolderSharedConversations();
                 }
             }
         } else if (action === 'delete') {
             const existing = this.GetConversation(id);
             if (existing) {
+                this._sharedByByConversationId.delete(NormalizeUUID(id));
                 this.removeFromList(id);
                 this.removeDetailCache(id);
             }
@@ -3948,6 +4102,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (action === 'delete') {
             if (existingIdx >= 0) {
                 this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
+                this.reconcileFolderSharedConversations();
             }
             return true;
         }
@@ -4008,12 +4163,73 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 this.mergeDataOntoRecord(current[existingIdx], data);
                 this._projects$.next([...current]);
             }
+            this.reconcileFolderSharedConversations();
         } else if (event.baseEntity && belongsInList) {
             // New folder from a local event — append the entity object
             this._projects$.next([...current, event.baseEntity as MJProjectEntity]);
+            this.reconcileFolderSharedConversations();
         }
 
         return true;
+    }
+
+    /**
+     * Keeps folder-shared conversations in `_conversations$` and `_sharedByByConversationId`
+     * aligned with the currently loaded shared folders:
+     * - Non-owned conversations without an explicit `MJ: Resource Permissions` grant that sit
+     *   inside a visible shared folder get a View-level `SharedByInfo` entry.
+     * - Non-owned conversations without an explicit grant whose folder is no longer a visible
+     *   shared folder (moved out, folder deleted, or folder made private) are dropped from
+     *   `_conversations$` and `_sharedByByConversationId`.
+     */
+    private reconcileFolderSharedConversations(): void {
+        const viewerUserId = this._lastConversationsUserId ?? this._lastProjectsUserId;
+        if (!viewerUserId) {
+            return;
+        }
+
+        const envId = this._lastEnvironmentId ?? this._lastProjectsEnvironmentId ?? '';
+        const sharedProjectIdSet = new Set(
+            this.getSharedProjectIds(envId).map((id) => NormalizeUUID(id))
+        );
+
+        const currentConversations = this._conversations$.value;
+        const keptConversations: MJConversationEntity[] = [];
+        let listChanged = false;
+
+        for (const conv of currentConversations) {
+            const normId = NormalizeUUID(conv.ID);
+            const isOwned = !conv.UserID || UUIDsEqual(conv.UserID, viewerUserId);
+            const isExplicitlyShared = this._explicitSharedConversationIds.has(normId);
+
+            if (isOwned || isExplicitlyShared) {
+                keptConversations.push(conv);
+                continue;
+            }
+
+            const inSharedFolder =
+                !!conv.ProjectID && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID));
+            if (inSharedFolder) {
+                keptConversations.push(conv);
+                if (!this._sharedByByConversationId.has(normId)) {
+                    const convWithUser = conv as MJConversationEntity & { User?: string | null };
+                    this._sharedByByConversationId.set(normId, {
+                        UserID: conv.UserID ?? null,
+                        Name: convWithUser.User ?? null,
+                        Email: null,
+                        Level: 'View'
+                    });
+                }
+            } else {
+                listChanged = true;
+                this._sharedByByConversationId.delete(normId);
+                this.removeDetailCache(conv.ID);
+            }
+        }
+
+        if (listChanged) {
+            this._conversations$.next(keptConversations);
+        }
     }
 
     /**

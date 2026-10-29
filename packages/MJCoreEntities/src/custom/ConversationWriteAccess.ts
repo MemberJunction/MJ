@@ -1,6 +1,6 @@
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJConversationEntity, MJResourcePermissionEntity } from '../generated/entity_subclasses';
+import { MJConversationEntity, MJProjectEntity, MJResourcePermissionEntity } from '../generated/entity_subclasses';
 import { ResourcePermissionEngine } from './ResourcePermissions/ResourcePermissionEngine';
 
 /** Resource type ID for conversations in the resource permission system. */
@@ -20,8 +20,9 @@ export interface ConversationWriteDecision {
 
 /**
  * Whether a user may write rows that belong to a conversation: the owner, or a user with
- * an Edit or Owner grant. Server-side only; a non-database provider trusts the enforcement
- * that already ran upstream.
+ * an Edit or Owner grant. Conversations inside a shared folder (`Project.OwnerUserID IS NULL`)
+ * are shared with View-only access unless an explicit Edit/Owner grant says otherwise.
+ * Server-side only; a non-database provider trusts the enforcement that already ran upstream.
  */
 export async function UserMayWriteConversation(
     provider: IMetadataProvider,
@@ -44,6 +45,12 @@ export async function UserMayWriteConversation(
         .GetUserAvailableResources(user, CONVERSATIONS_RESOURCE_TYPE_ID)
         .find((p: MJResourcePermissionEntity) => UUIDsEqual(p.ResourceRecordID, conversationId));
     if (!grant) {
+        if (conversation.ProjectID) {
+            const project = await provider.GetEntityObject<MJProjectEntity>('MJ: Projects', user);
+            if ((await project.Load(conversation.ProjectID)) && !project.OwnerUserID) {
+                return { Allowed: false, Reason: 'You have view-only access to this conversation.', IsOwner: false, Loaded: true };
+            }
+        }
         return { Allowed: false, Reason: 'You do not have access to this conversation.', IsOwner: false, Loaded: true };
     }
     if (grant.PermissionLevel === 'Edit' || grant.PermissionLevel === 'Owner') {

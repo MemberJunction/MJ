@@ -150,7 +150,7 @@ const DEFAULT_PROJECT_ICONS = [
               <p class="visibility-hint" id="projectVisibilityHint">
                 {{ FormData.isPersonal
                     ? 'Only you can see this folder.'
-                    : "Everyone can see this folder and its name. They will not see the conversations you keep in it. Once shared, a folder can't be made private again." }}
+                    : "Everyone can see this folder and view the conversations in it. Once shared, a folder can't be made private again." }}
               </p>
             </fieldset>
           }

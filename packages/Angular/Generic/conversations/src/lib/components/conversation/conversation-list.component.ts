@@ -319,7 +319,7 @@ interface ListContextMenu {
                role, an aria-label is not reliably exposed, and the <i> carrying the glyph
                is aria-hidden. -->
           <span class="folder-shared" role="img"
-                title="Shared — everyone can see this folder and its name, but not the conversations in it"
+                title="Shared — everyone can see this folder and view the conversations in it"
                 aria-label="Shared folder">
             <i class="fas fa-users" aria-hidden="true"></i>
           </span>

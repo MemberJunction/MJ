@@ -245,7 +245,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (459 classes)
+// @memberjunction/core-entities (460 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -570,6 +570,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -2147,13 +2148,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
-    MJQueryDependencyEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
@@ -2353,11 +2355,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
-    MergeContactsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MergeContactsAction,
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
@@ -2557,11 +2559,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GetRubricConsensusAction,
     GetRubricSubjectAction,
     HumanRubricEvaluator,
-    LLMRubricEvaluator,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    LLMRubricEvaluator,
     SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
@@ -2761,11 +2763,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJVectorIndexEntityServer,
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
-    PostgreSQLCodeGenProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
     CreateScheduledJobAction,
@@ -2965,11 +2967,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
     WorkQueueDiscardDeliveryServerOperation,
-    WorkQueueGetBacklogServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
@@ -3001,7 +3003,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1214;
+export const CLASS_REGISTRATIONS_COUNT = 1215;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

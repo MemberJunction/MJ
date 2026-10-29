@@ -222,7 +222,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (459 classes)
+// @memberjunction/core-entities (460 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -547,6 +547,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1841,6 +1842,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1854,11 +1856,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
-    MJRSUPendingWorkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -2058,11 +2060,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
-    GetTypeformFileContentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
     GetTypeformStatisticsAction,
@@ -2262,11 +2264,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
-    MLModelScoreEnricher,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
@@ -2466,11 +2468,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
-    ListStorageAccountsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
@@ -2586,7 +2588,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1099;
+export const CLASS_REGISTRATIONS_COUNT = 1100;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

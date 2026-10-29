@@ -13,10 +13,26 @@ let grants: Array<{ ResourceRecordID: string; PermissionLevel: string }> = [];
 
 import { UserMayWriteConversation } from '../custom/ConversationWriteAccess';
 
-function provider(ownerId: string | null, loadOk = true) {
+function provider(
+    ownerId: string | null,
+    loadOk = true,
+    folder?: { projectId: string; ownerUserId: string | null; projectLoadOk?: boolean }
+) {
     return {
         ProviderType: 'Database',
-        GetEntityObject: async () => ({ UserID: ownerId, Load: async () => loadOk }),
+        GetEntityObject: async (entityName: string) => {
+            if (entityName === 'MJ: Projects') {
+                return {
+                    OwnerUserID: folder?.ownerUserId ?? null,
+                    Load: async () => folder?.projectLoadOk ?? true,
+                };
+            }
+            return {
+                UserID: ownerId,
+                ProjectID: folder?.projectId ?? null,
+                Load: async () => loadOk,
+            };
+        },
     } as never;
 }
 const user = { ID: 'u1' } as never;
@@ -36,6 +52,26 @@ describe('UserMayWriteConversation', () => {
     it('denies with no grant', async () => {
         grants = [];
         expect((await UserMayWriteConversation(provider('other'), user, 'c1')).Allowed).toBe(false);
+    });
+    it('denies with view-only reason when conversation is inside a shared folder and user has no explicit grant', async () => {
+        grants = [];
+        const denied = await UserMayWriteConversation(
+            provider('other', true, { projectId: 'proj-shared', ownerUserId: null }),
+            user,
+            'c1'
+        );
+        expect(denied.Allowed).toBe(false);
+        expect(denied.Reason).toBe('You have view-only access to this conversation.');
+    });
+    it('denies with no-access reason when conversation is inside a personal folder and user has no grant', async () => {
+        grants = [];
+        const denied = await UserMayWriteConversation(
+            provider('other', true, { projectId: 'proj-private', ownerUserId: 'other' }),
+            user,
+            'c1'
+        );
+        expect(denied.Allowed).toBe(false);
+        expect(denied.Reason).toBe('You do not have access to this conversation.');
     });
     it('allows a non-database provider (client side) without a lookup', async () => {
         const client = { ProviderType: 'Network', GetEntityObject: vi.fn() } as never;
