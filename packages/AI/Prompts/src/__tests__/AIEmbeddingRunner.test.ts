@@ -436,6 +436,19 @@ describe('AIEmbeddingRunner', () => {
     expect(parsedResult.dimensions).toBe(3);
   });
 
+  it('runs the prompt-model row\'s vendor, not its model\'s top vendor, with failover off', async () => {
+    const mv1b = addSecondVendorToModel1(); // Bedrock (driver 1B, priority 8) below OpenAI (priority 10)
+    h.state.prompts[0].SelectionStrategy = 'Default';
+    setFailoverStrategy('None');
+    h.state.promptModels[0] = MakePromptModel({ ID: 'pm-001', PromptID: PROMPT_ID, ModelID: MODEL_1_ID, VendorID: mv1b.VendorID, Priority: 10 });
+
+    const result = await runner.RunEmbedding({ Texts: ['row vendor'], ContextUser: mockUser, PromptID: PROMPT_ID });
+
+    expect(result.Success).toBe(true);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+  });
+
   it('ModelID pinning passes through to BuildModelVendorCandidates', async () => {
     const result = await runner.RunEmbedding({
       Texts: ['pinned model test'],
