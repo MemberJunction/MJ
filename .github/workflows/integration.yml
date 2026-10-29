@@ -301,7 +301,7 @@ jobs:
         id: dbcache
         # The nightly provisions cold on purpose — see the block comment above.
         if: github.event_name != 'schedule'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
@@ -466,7 +466,7 @@ jobs:
       - name: Save the provisioned-DB snapshot
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true'
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}

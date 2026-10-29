@@ -100,7 +100,7 @@ jobs:
         run: node .github/scripts/check-turbo-cache-env.mjs
 
       - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -195,7 +195,7 @@ jobs:
 
       - name: Restore turbo build cache
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
