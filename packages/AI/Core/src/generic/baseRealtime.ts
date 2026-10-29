@@ -132,28 +132,29 @@ export interface RealtimeDriverFacts {
  * The ONE place a driver instance's static {@link BaseRealtimeModel.DriverFacts} is read.
  * Runtime reads go through here so a subclass's own static wins over the base default.
  */
-export function RealtimeDriverFactsOf(driver: BaseRealtimeModel): RealtimeDriverFacts {
+export function RealtimeDriverFactsOf(driver: BaseRealtimeModel): Readonly<RealtimeDriverFacts> {
     return (driver.constructor as typeof BaseRealtimeModel).DriverFacts;
 }
 
 export abstract class BaseRealtimeModel extends BaseModel {
     /**
      * Static facts about this driver, readable before a session instance exists.
-     * Default `{}` (everything unknown). Subclasses declare `public static override readonly DriverFacts = { ... }`.
+     * Default is a frozen `{}` (everything unknown), shared by every driver without an override, so it must never be mutated.
+     * Subclasses declare `public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ... }`.
      * Read at runtime via {@link RealtimeDriverFactsOf}, not directly, so subclass statics win.
      */
-    public static readonly DriverFacts: RealtimeDriverFacts = {};
+    public static readonly DriverFacts: Readonly<RealtimeDriverFacts> = Object.freeze({});
 
     /**
-     * Returns the smallest candidate that is a finite number greater than zero; ignores `undefined`,
-     * `0`, negatives, `NaN`, `Infinity` and non-numbers. `undefined` when none qualifies.
+     * Returns the smallest candidate that is a positive integer; ignores `undefined`,
+     * `0`, negatives, fractions (rejected, never floored: no guessing), `NaN`, `Infinity` and non-numbers. `undefined` when none qualifies.
      * The rule "the caller's bag wins only if smaller" is written once, here: pass the provider
      * cap and the bag cap together.
      */
     protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
         let smallest: number | undefined;
         for (const c of candidates) {
-            if (typeof c !== 'number' || !Number.isFinite(c) || c <= 0) continue;
+            if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
             if (smallest === undefined || c < smallest) smallest = c;
         }
         return smallest;
@@ -388,12 +389,6 @@ export function ParseRealtimeClientTransport(value: unknown): RealtimeClientTran
  */
 export interface ClientRealtimeSessionConfig {
     /**
-     * The effective, clamped session cap in seconds for this minted session. Read-only
-     * information: changing it in the browser changes nothing on the wire. `undefined` when unknown.
-     */
-    MaxSessionSeconds?: number;
-
-    /**
      * The provider that minted the credential (e.g. `'openai'`). Lets the browser select the
      * correct provider-direct client implementation.
      */
@@ -447,6 +442,12 @@ export interface ClientRealtimeSessionConfig {
      * it to the call. Absent when the session asked for no avatar, and from drivers that render none.
      */
     AvatarStatus?: RealtimeAvatarStatus;
+
+    /**
+     * The effective, clamped session cap in seconds for this minted session. Read-only
+     * information: changing it in the browser changes nothing on the wire. `undefined` when unknown.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**
@@ -957,8 +958,7 @@ export interface RealtimeSessionParams {
      * Set for abuse-sensitive deployments (e.g. a public web-widget guest's `VoiceMaxSessionMinutes`).
      * Drivers that support a provider-side session-duration / token-expiry bound SHOULD apply
      * `min(providerDefault, MaxSessionSeconds)` so the provider drops the connection at the cap;
-     * drivers that don't simply ignore it. Honoured today by: the Vertex relay (ElevenRealtime and
-     * ElevenLabsRealtime follow in a later task on this branch). Independently, the server stamps the absolute deadline on
+     * drivers that don't simply ignore it. Independently, the server stamps the absolute deadline on
      * the session and the session janitor hard-closes (finalizing runs) at the cap regardless of
      * driver support, so this is enforced server-side even when the provider can't be told.
      *
@@ -966,6 +966,9 @@ export interface RealtimeSessionParams {
      * bound and the janitor stamps no extra deadline, so the session runs under the provider's own
      * default session/token limits and MJ's normal session lifecycle (manual end, disconnect, idle
      * cleanup). This is the default for authenticated/internal sessions, which don't need an abuse cap.
+     *
+     * Honoured by: the Vertex relay (it hands the cap to the relay ticket, which bounds the relayed
+     * session), ElevenRealtime and ElevenLabsRealtime.
      */
     MaxSessionSeconds?: number;
 
