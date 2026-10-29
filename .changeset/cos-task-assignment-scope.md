@@ -5,6 +5,7 @@
 "@memberjunction/scheduling-engine": patch
 "@memberjunction/core-entities-server": patch
 "@memberjunction/core-actions": patch
+"@memberjunction/ai-core-plus": patch
 "@memberjunction/ai-agents": minor
 ---
 
@@ -37,3 +38,5 @@ Chief of Staff email: a new outbound email could never become an approval. `Mana
 Chief of Staff cockpit: an approval request that carries an outbound email can be opened on its card. "View draft" shows To, CC, From, Subject and the body inline, read from the request's `Comments` JSON, and "Copy" puts the draft on the clipboard as plain text (headers, a blank line, the body) for pasting into a mail client. Requests that are not emails are unchanged.
 
 Chief of Staff email: the provider chooser took the first Active provider named Gmail or Microsoft Graph and gave up when that provider's class was not loaded in the server, so a database with Gmail Active but only Graph and SendGrid installed could never draft or send ("No active communication provider is configured"). Active providers are now tried in preference order, skipping those this server cannot load, and the failure message names what was tried.
+
+Agent user policies: the `AgentUserPolicyEngine` cache now follows the entity layer. A policy saved anywhere in the process (the cockpit's Governance tab through GraphQL, a script) replaces the cached copy, a delete evicts it, and a remote invalidation from another server clears the cache. Before this the agent kept running on the policy it first loaded until the API restarted, so a Governance edit (DraftOnly to Send on Behalf of User, say) showed on the page but never reached the agent.
