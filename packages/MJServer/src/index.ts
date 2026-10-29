@@ -613,10 +613,16 @@ const setupComplete$ = new ReplaySubject(1);
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenPgProvider.Refresh() after DDL still reloads from the DB.
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
           codegenPgConnectionConfig,
           mj_core_schema,
-          cacheRefreshInterval / 1000, // ms → seconds
+          0,
+          undefined,
+          undefined,
+          false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
         await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
@@ -764,8 +770,17 @@ const setupComplete$ = new ReplaySubject(1);
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+        // Adopt the already-loaded global Metadata.Provider catalog (ignoreExistingMetadata = false)
+        // and disable a duplicate background refresh timer (0): avoids a second full metadata load
+        // on boot while explicit codegenProvider.Refresh() after DDL still reloads from the DB.
+        const codegenConfig = new SQLServerProviderConfigData(
+          codegenPool,
+          mj_core_schema,
+          0,
+          undefined,
+          undefined,
+          false,
+        );
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -1322,7 +1337,7 @@ const setupComplete$ = new ReplaySubject(1);
     },
     // High compression level (good balance between CPU and compression ratio)
     level: 6
-  }));
+  }) as object as express.RequestHandler);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).

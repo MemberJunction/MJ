@@ -142,4 +142,44 @@ describe('SQLServerDataProvider - per-pool view column order cache', () => {
     expect(a2.executeSpy).toHaveBeenCalledTimes(1); // invalidated → rescanned
     expect(b2.executeSpy).not.toHaveBeenCalled(); // untouched pool → shared cache hit
   });
+
+  it('shares one sys.columns scan across RW, RO, and CodeGen pools targeting the same database and propagates invalidation', async () => {
+    const rwPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd' } };
+    const roPool = { config: { server: 'SQL.MJ.INTERNAL', port: 1433, database: 'mjprod' } };
+    const codegenPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJProd' } };
+    const otherDbPool = { config: { server: 'sql.mj.internal', port: 1433, database: 'MJTenantB' } };
+
+    // Clean any prior DB-keyed entries for these synthetic hosts
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(rwPool as object as sql.ConnectionPool);
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(otherDbPool as object as sql.ConnectionPool);
+
+    const rw = makeProvider(rwPool, SAMPLE_ROWS);
+    const ro = makeProvider(roPool, SAMPLE_ROWS);
+    const cg = makeProvider(codegenPool, SAMPLE_ROWS);
+    const other = makeProvider(otherDbPool, [{ SchemaName: '__mj', ViewName: 'vwUsers', ColumnName: 'Email' }]);
+
+    await Promise.all([
+      rw.provider.loadViewColumnOrderCache(),
+      ro.provider.loadViewColumnOrderCache(),
+      cg.provider.loadViewColumnOrderCache(),
+    ]);
+    await other.provider.loadViewColumnOrderCache();
+
+    // All 3 pools on MJProd shared ONE sys.columns scan; MJTenantB ran its own isolated scan
+    expect(rw.executeSpy.mock.calls.length + ro.executeSpy.mock.calls.length + cg.executeSpy.mock.calls.length).toBe(1);
+    expect(other.executeSpy).toHaveBeenCalledTimes(1);
+    expect(ro.provider._viewColumnOrderCache.get('__mj.vwusers')).toEqual(['ID', 'Name', 'Email']);
+    expect(other.provider._viewColumnOrderCache.get('__mj.vwusers')).toEqual(['Email']);
+
+    // Invalidating via codegenPool (e.g. RSU DDL refresh) invalidates RW/RO on MJProd without touching MJTenantB
+    SQLServerDataProvider.InvalidateViewColumnOrderCache(codegenPool as object as sql.ConnectionPool);
+
+    const rwAfter = makeProvider(rwPool, SAMPLE_ROWS);
+    const otherAfter = makeProvider(otherDbPool, SAMPLE_ROWS);
+    await rwAfter.provider.loadViewColumnOrderCache();
+    await otherAfter.provider.loadViewColumnOrderCache();
+
+    expect(rwAfter.executeSpy).toHaveBeenCalledTimes(1);
+    expect(otherAfter.executeSpy).not.toHaveBeenCalled();
+  });
 });

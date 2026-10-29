@@ -1,6 +1,6 @@
 import type { BaseEntity } from "./baseEntity";
 import type { EntityInfo } from "./entityInfo";
-import type { IEntityDataProvider, IMetadataProvider } from "./interfaces";
+import type { IEntityDataProvider, IMetadataProvider, IRunViewProvider } from "./interfaces";
 import { LogError } from "./logging";
 import type { UserInfo } from "./securityInfo";
 import {
@@ -573,9 +573,47 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
         return results;
     }
 
-    // Slow / correct path: IS-A entities (need parent/child chain built) and
-    // mocks that don't implement EntityByName. Per-row async — preserves the
-    // original semantics exactly.
+    // Batched IS-A parent hydration: when the provider implements batched `RunViews`
+    // (DatabaseProviderBase / GraphQLDataProvider), hydrate all N parent records and
+    // resolve/load their child hierarchy level-by-level in O(depth) queries instead of O(2N).
+    // Minimal test providers without `RunViews` (e.g. LoadHintTestProvider) fall through
+    // to the per-row path below.
+    if (
+        entityInfo?.IsParentType &&
+        items.length > 0 &&
+        typeof (md as Partial<IRunViewProvider>).RunViews === 'function'
+    ) {
+        type PlainRow = Record<string, string | number | boolean | Date | object | null | undefined>;
+        const results: T[] = new Array(items.length);
+        const pendingPeers: Array<{ entity: BaseEntity; data: PlainRow }> = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (typeof (item as { Save?: () => Promise<boolean> }).Save === 'function') {
+                results[i] = item as T;
+                continue;
+            }
+            const entity = await md.GetEntityObject<T>(entityName, contextUser);
+            if (!entity) {
+                throw new Error(`TransformSimpleObjectToEntityObject: could not instantiate an entity object for '${entityName}' — GetEntityObject returned null.`);
+            }
+            results[i] = entity;
+            pendingPeers.push({ entity, data: item as PlainRow });
+        }
+
+        if (pendingPeers.length > 0) {
+            const coordinator = pendingPeers[0].entity;
+            if (typeof coordinator.LoadFromDataBatchAsISAParent === 'function') {
+                await coordinator.LoadFromDataBatchAsISAParent(pendingPeers, md, contextUser);
+            } else {
+                await Promise.all(pendingPeers.map(p => p.entity.LoadFromData(p.data)));
+            }
+        }
+        return results;
+    }
+
+    // Slow / correct path: IS-A child entities, minimal providers without RunViews, and
+    // mocks that don't implement EntityByName. Per-row async — preserves original semantics.
     const entityPromises = items.map(async (item) => {
         if (typeof (item as { Save?: unknown }).Save === 'function') {
             return item as unknown as T;

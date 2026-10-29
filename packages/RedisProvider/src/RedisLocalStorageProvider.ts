@@ -1039,8 +1039,16 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             }
             this.logPipelineErrors(await pipeline.exec(), `SetItem "${key}"`);
 
-            // Publish cache change event for cross-server invalidation
-            this.publishChange(key, cat, 'set', serialized);
+            // Publish cache change event for cross-server invalidation. When the caller supplied
+            // a compact row-delta override (`pubSubAction: 'row_delta'`), Redis still stores the
+            // full serialized snapshot at `redisKey`, while pub/sub broadcasts only the delta.
+            const writeOpts = typeof options === 'object' && options !== null ? options : undefined;
+            const pubAction: CacheChangedEvent['Action'] = writeOpts?.pubSubAction ?? 'set';
+            const pubPayload =
+                pubAction === 'row_delta' && writeOpts?.pubSubData !== undefined
+                    ? writeOpts.pubSubData
+                    : serialized;
+            this.publishChange(key, cat, pubAction, pubPayload);
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis SetItem failed for key "${key}": ${(err as Error).message}`);
@@ -1753,14 +1761,18 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (mode === 'none') {
             return;
         }
+        let effectiveAction: CacheChangedEvent['Action'] = action;
         if (mode === 'notice') {
             data = undefined;
+            if (effectiveAction === 'row_delta') {
+                effectiveAction = 'set';
+            }
         }
 
         const event: CacheChangedEvent = {
             CacheKey: cacheKey,
             Category: category,
-            Action: action,
+            Action: effectiveAction,
             Timestamp: Date.now(),
             SourceServerId: MJGlobal.Instance.ProcessUUID,
             Data: data,

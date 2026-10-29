@@ -161,6 +161,25 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return unionParts.join(' UNION ALL ');
     }
 
+    protected override BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const inList = recordPKValues.map(v => pgDialect.QuoteStringLiteral(v)).join(', ');
+        const aliasEntityName = pgDialect.QuoteColumnAlias('EntityName');
+        const aliasRecordPK = pgDialect.QuoteColumnAlias('RecordPK');
+        const aliasPriority = pgDialect.QuoteColumnAlias('Priority');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || '__mj';
+                const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
+                const nameLit = pgDialect.QuoteStringLiteral(child.Name);
+                return `SELECT ${nameLit} AS ${aliasEntityName}, CAST(${pkRef} AS TEXT) AS ${aliasRecordPK}, ${idx + 1} AS ${aliasPriority} FROM ${sourceRef} WHERE ${pkRef} IN (${inList})`;
+            });
+        if (unionParts.length === 0) return '';
+        return unionParts.join(' UNION ALL ');
+    }
+
     protected override BuildHardLinkDependencySQL(
         entityDependenciesOrName: EntityDependency[] | string,
         compositeKey: CompositeKey,

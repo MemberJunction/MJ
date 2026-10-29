@@ -1947,6 +1947,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return false;
         }
         return !param.BypassCache &&
+            param.CacheLocal !== false &&
             !param.AfterKey &&
             !IsMaterializedDataSource(param.DataSource) &&
             !this.isAlternateBaseViewCacheBypassed(param) &&
@@ -1955,6 +1956,33 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.IsServerCacheAllowedForEntity(param);
         // Deliberately not user-dependent: field security changes which slot a request uses
         // (the fls: segment), never whether it is cacheable.
+    }
+
+    /**
+     * True when the caller explicitly requested a non-empty `Fields` projection on a plain-object
+     * (`ResultType !== 'entity_object'`) read.
+     */
+    protected hasNarrowFieldsOverride(param: RunViewParams): boolean {
+        return Boolean(param.Fields && param.Fields.length > 0 && param.ResultType !== 'entity_object');
+    }
+
+    /**
+     * True when a cache-miss read should widen `Fields` to the full entity superset AND populate
+     * `LocalCacheManager` with that superset.
+     *
+     * Ad-hoc narrow `Fields` reads that do not explicitly opt into cache population (`CacheLocal: true`)
+     * preserve their narrow SQL `SELECT` projection on a cache miss instead of widening to every entity
+     * column and writing megabytes of unneeded columns into cache. When a superset slot is ALREADY warm,
+     * `PreRunView` / `PreRunViews` still serve narrow reads from cache in 0 SQL round-trips.
+     */
+    protected shouldWidenAndPopulateCache(param: RunViewParams): boolean {
+        if (!this.runViewCacheEligible(param)) {
+            return false;
+        }
+        if (this.hasNarrowFieldsOverride(param) && param.CacheLocal !== true) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -2987,6 +3015,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * to project cache-miss DB results back down to the requested shape.
          */
         callerRequestedFields?: string[] | null;
+        /**
+         * True when PreRunView determined that a cache-miss result holds a full superset
+         * projection eligible to populate the Fields-agnostic cache slot in PostRunView.
+         */
+        populateCache?: boolean;
     };
 
     /**
@@ -3015,6 +3048,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * fingerprint string for every batch item.
          */
         fingerprintMap?: Map<number, string>;
+        /**
+         * Param indexes whose cache-miss result holds a full superset projection eligible to
+         * populate the Fields-agnostic cache slot in PostRunViews.
+         */
+        populateCacheSet?: Set<number>;
         /**
          * Pre-resolved local cache entries keyed by client cache fingerprint, populated
          * during prepareSmartCacheCheckParams so executeSmartCacheCheck can reuse the
@@ -3658,42 +3696,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entityCheckTime = performance.now() - entityCheckStart;
 
         // Save the caller's original Fields request for post-cache filtering.
-        // We fetch every field this user's permission class may read, so the cache entry is a
-        // superset for that class: it satisfies any later query for the same entity+filter, by
-        // any user of the same class, regardless of field subset. Slots are keyed per class (the
-        // fls: segment), so no slot is shared between classes at different widths.
+        // When widening happens (full-row read, explicit CacheLocal: true, or entity_object),
+        // we fetch every field this user's permission class may read so the cache entry is a
+        // superset for that class. For ad-hoc narrow Fields reads without CacheLocal: true,
+        // we check any already-warm superset slot first (0-SQL hit), and on a miss preserve
+        // the caller's narrow SQL projection without writing partial rows into the cache.
         const entityLookupStart = performance.now();
-        let callerRequestedFields = params.Fields && params.Fields.length > 0
+        const rawCallerRequestedFields = params.Fields && params.Fields.length > 0
             ? params.Fields.map(f => f.trim().toLowerCase())
             : null; // null = caller wants all fields
 
-        // Only override Fields to the widened fetch set when caching will actually happen
-        // for this call. For non-cached calls we respect the caller's narrow Fields
-        // end-to-end — there's no cache-coherence concern to preserve. The widened set is
-        // ALL entity fields; a database provider then leaves out the columns this user may
-        // not read, and the slot is keyed by the user's permission class (fls: segment).
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
-        const willCache = this.runViewCacheEligible(params);
-        // entity_object ALWAYS widens, cache-eligible or not: a BaseEntity must hydrate from
-        // every column it is entitled to, or it round-trips partial state into a save. This
-        // must happen here rather than only in the server's PreProcessRunView, which is not on
-        // the client's path — a client entity_object request without CacheLocal would otherwise
-        // ship the caller's narrow Fields over the wire and materialize partial entities. What a
-        // field-restricted user RECEIVES is still their allowed set: the server strips denied
-        // columns on the wire, and the missing keys mark those fields not-loaded.
-        const widenForEntityObject = params.ResultType === 'entity_object';
         if (entity) this.ResolveIncludeBinaryFields(params, entity);
-        if (entity && (willCache || widenForEntityObject)) {
-            params.Fields = this.ComputeRunViewFetchFields(entity, params);
-            // Platform contract: explicit Fields always include the primary key(s) —
-            // project back down to requested ∪ PK, matching the direct SQL path.
-            if (callerRequestedFields) {
-                callerRequestedFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerRequestedFields, entity);
-            }
-        }
+        const projectedCallerFields = (rawCallerRequestedFields && entity)
+            ? ProviderBase.UnionFieldsWithPrimaryKeys(rawCallerRequestedFields, entity)
+            : rawCallerRequestedFields;
+        const canReadFromCache = this.runViewCacheEligible(params);
+        const willPopulateCache = this.shouldWidenAndPopulateCache(params) && (!this.hasNarrowFieldsOverride(params) || Boolean(entity));
+        // entity_object ALWAYS widens, cache-eligible or not: a BaseEntity must hydrate from
+        // every column it is entitled to, or it round-trips partial state into a save.
+        const widenForEntityObject = params.ResultType === 'entity_object';
         const entityLookupTime = performance.now() - entityLookupStart;
 
-        // Check local cache if enabled
+        // Check local cache FIRST if enabled (before any cache-miss Fields widening)
         const cacheCheckStart = performance.now();
         let cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired' = 'disabled';
         let cachedResult: RunViewResult | undefined;
@@ -3712,7 +3737,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             (!!entity && !!contextUser && !(entity.GetUserPermisions(contextUser)?.CanRead ?? false)) ||
             this.cacheDeniedForViewOnlyRequest(params, contextUser);
 
-        if (willCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
+        if (canReadFromCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
             fingerprint = this.ComputeRunViewCacheFingerprint(params, contextUser);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
@@ -3720,8 +3745,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // what stops a consumer from corrupting the cache. Anything that needs to
                 // transform them must map onto copies.
                 let results = cached.results;
-                if (callerRequestedFields && params.ResultType !== 'entity_object') {
-                    results = ProjectRowsToFields(results, callerRequestedFields);
+                if (projectedCallerFields && params.ResultType !== 'entity_object') {
+                    results = ProjectRowsToFields(results, projectedCallerFields);
                 }
 
                 // Field-level security MUST be applied here, not only in PostRunView: this path
@@ -3757,6 +3782,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 cacheStatus = 'miss';
             }
         }
+
+        // On cache MISS (or uninitialized cache), widen Fields ONLY when populating a superset
+        // cache slot or materializing full BaseEntity objects.
+        let callerRequestedFieldsForPost: string[] | null = null;
+        if (cacheStatus !== 'hit' && entity && (willPopulateCache || widenForEntityObject)) {
+            params.Fields = this.ComputeRunViewFetchFields(entity, params);
+            if (willPopulateCache && projectedCallerFields) {
+                callerRequestedFieldsForPost = projectedCallerFields;
+            }
+        }
         const cacheCheckTime = performance.now() - cacheCheckStart;
 
         const totalPreTime = performance.now() - preViewStart;
@@ -3769,9 +3804,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             cacheStatus,
             cachedResult,
             fingerprint,
-            // Only non-null when params.Fields was actually widened above — tells
+            // Only non-null when params.Fields was actually widened for cache population — tells
             // PostRunView to project cache-miss DB results back to the caller's shape
-            callerRequestedFields: (entity && willCache) ? callerRequestedFields : null
+            callerRequestedFields: callerRequestedFieldsForPost,
+            populateCache: willPopulateCache,
         };
     }
 
@@ -3905,6 +3941,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
         const callerFieldsMap = new Map<number, string[]>();
         const fingerprintMap = new Map<number, string>();
+        const populateCacheSet = new Set<number>();
         const uncachedParams: RunViewParams[] = [];
         const cachedResults: (RunViewResult | null)[] = [];
         let allCached = true;
@@ -3915,31 +3952,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Entity status check
             await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
-            // Save caller's original Fields, then always fetch all fields from DB.
-            // One cache entry per entity+filter satisfies all field subsets.
-            let callerFields = param.Fields && param.Fields.length > 0
+            // Save caller's original Fields. Consult warm superset cache slots first (0-SQL hit),
+            // and on cache miss widen Fields ONLY when populating a superset cache slot or
+            // materializing BaseEntity instances.
+            const rawCallerFields = param.Fields && param.Fields.length > 0
                 ? param.Fields.map(f => f.trim().toLowerCase())
                 : null;
 
-            // Only override Fields to the widened fetch set when caching will actually happen
-            // for this call. For non-cached calls we respect the caller's narrow Fields
-            // end-to-end — there's no cache-coherence concern to preserve. Widened = ALL
-            // fields (see PreRunView).
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
-            const batchWillCache = this.runViewCacheEligible(param);
+            if (batchEntity) this.ResolveIncludeBinaryFields(param, batchEntity);
+            const projectedCallerFields = (rawCallerFields && batchEntity)
+                ? ProviderBase.UnionFieldsWithPrimaryKeys(rawCallerFields, batchEntity)
+                : rawCallerFields;
+            const batchCanReadCache = this.runViewCacheEligible(param);
+            const batchWillPopulateCache = this.shouldWidenAndPopulateCache(param) && (!this.hasNarrowFieldsOverride(param) || Boolean(batchEntity));
             // Same entity_object-always-widens rule as the single-view path above.
             const batchWidenForEntityObject = param.ResultType === 'entity_object';
-            if (batchEntity) this.ResolveIncludeBinaryFields(param, batchEntity);
-            if (batchEntity && (batchWillCache || batchWidenForEntityObject)) {
-                param.Fields = this.ComputeRunViewFetchFields(batchEntity, param);
-                // Platform contract: explicit Fields always include the primary key(s)
-                if (callerFields) {
-                    callerFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerFields, batchEntity);
-                    // Remember the caller's original shape so PostRunViews can project
-                    // cache-miss DB results back down to it
-                    callerFieldsMap.set(i, callerFields);
-                }
-            }
 
             // Check local cache if enabled or if server trusts its cache completely
             // BypassCache skips cache entirely — used by maintenance actions querying for
@@ -3952,15 +3980,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 (!!batchEntity && !!contextUser && !(batchEntity.GetUserPermisions(contextUser)?.CanRead ?? false)) ||
                 this.cacheDeniedForViewOnlyRequest(param, contextUser);
 
-            if (batchWillCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
+            if (batchCanReadCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = this.ComputeRunViewCacheFingerprint(param, contextUser);
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
                     // Shared, deep-frozen cache rows — same contract as the single-view hit path.
                     let results = cached.results;
-                    if (callerFields && param.ResultType !== 'entity_object') {
-                        results = ProjectRowsToFields(results, callerFields);
+                    if (projectedCallerFields && param.ResultType !== 'entity_object') {
+                        results = ProjectRowsToFields(results, projectedCallerFields);
                     }
 
                     // Field-level security on the batch cache-hit path — same reasoning as the
@@ -3999,6 +4027,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 cacheStatusMap.set(i, { status: 'disabled' });
             }
 
+            if (batchWillPopulateCache) {
+                populateCacheSet.add(i);
+            }
+            if (batchEntity && (batchWillPopulateCache || batchWidenForEntityObject)) {
+                param.Fields = this.ComputeRunViewFetchFields(batchEntity, param);
+                if (batchWillPopulateCache && projectedCallerFields) {
+                    callerFieldsMap.set(i, projectedCallerFields);
+                }
+            }
+
             allCached = false;
             uncachedParams.push(param);
             cachedResults.push(null); // Placeholder for uncached
@@ -4014,7 +4052,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             uncachedParams: allCached ? undefined : uncachedParams,
             cacheStatusMap,
             callerFieldsMap: callerFieldsMap.size > 0 ? callerFieldsMap : undefined,
-            fingerprintMap: fingerprintMap.size > 0 ? fingerprintMap : undefined
+            fingerprintMap: fingerprintMap.size > 0 ? fingerprintMap : undefined,
+            populateCacheSet,
         };
     }
 
@@ -4473,10 +4512,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // with circular subscriber references that break JSON.stringify.
         // On cache read, TransformSimpleObjectToEntityObject is called to restore
         // entity objects when ResultType === 'entity_object'.
-        // runViewCacheEligible is the same predicate PreRunView used to decide whether to
-        // widen Fields — only widened (superset) results may be written to the cache.
-        // preResult.fingerprint doubles as a guard (only computed when eligible).
-        if (this.runViewCacheEligible(params) && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+        // preResult.populateCache records PreRunView's widening decision so narrow Fields
+        // queries (without CacheLocal: true) never poison the Fields-agnostic superset slot.
+        const shouldPopulateSlot = preResult.populateCache ?? this.shouldWidenAndPopulateCache(params);
+        if (shouldPopulateSlot && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
@@ -4593,11 +4632,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // was disabled for them but auto-cache/OnDataChanged may still need it).
             const fingerprint = preResult.fingerprintMap?.get(i)
                 ?? this.ComputeRunViewCacheFingerprint(params[i], contextUser);
-            // CRITICAL: must be the SAME eligibility predicate PreRunViews used to decide
+            // CRITICAL: must reflect the SAME widening predicate PreRunViews used to decide
             // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
-            // result here poisons the Fields-agnostic superset slot — this exact gate
-            // previously omitted BypassCache/AfterKey and cached narrow BypassCache rows.
-            if (this.runViewCacheEligible(params[i]) && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+            // result here poisons the Fields-agnostic superset slot.
+            const shouldPopulateBatchSlot = preResult.populateCacheSet
+                ? preResult.populateCacheSet.has(i)
+                : this.shouldWidenAndPopulateCache(params[i]);
+            if (shouldPopulateBatchSlot && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -4915,6 +4956,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // count_only result would poison the entity+filter slot just like the
         // main-path variants of those bugs.
         if (!this.runViewCacheEligible(params)) return false;
+        if (this.hasNarrowFieldsOverride(params)) return false;
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;
         if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
@@ -6013,6 +6055,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(`Failed to copy metadata from global provider: ${e.message}`);
             return false; // if we fail to copy the metadata, we will return false
         }
+    }
+
+    /**
+     * Re-adopts the immutable read-only metadata catalog shell and lookup maps from
+     * `Metadata.Provider` after the global provider completes a metadata refresh.
+     */
+    public SyncMetadataFromGlobalProvider(): boolean {
+        return this.CopyMetadataFromGlobalProvider();
     }
 
     /**
