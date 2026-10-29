@@ -10,7 +10,7 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter — it
  * carries no promotion logic. The leakage detection + state-machine transition live
  * in {@link ProductionModelPromotionGate}, shared with the Promote action via
- * {@link promoteModelViaGate}. The gate touches ONLY the `Status` (the model is
+ * {@link PromoteModelViaGate}. The gate touches ONLY the `Status` (the model is
  * immutable, §6.4).
  *
  * Non-promoted outcomes (leakage refusal, missing reason, invalid transition, not

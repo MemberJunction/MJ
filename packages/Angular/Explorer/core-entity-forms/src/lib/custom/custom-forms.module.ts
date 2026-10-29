@@ -43,6 +43,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { MJAIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
+import { PromptRunDataCaptureNoteComponent } from "./AIPromptRuns/prompt-run-data-capture-note.component";
 import { MJActionFormComponentExtended } from "./Actions/action-form.component";
 import { MJActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionsModule } from "@memberjunction/ng-actions";
@@ -97,6 +98,7 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
 // self-hides unless that entity has an active MJ: ML Model Scoring Binding.
 // Imported here so the @RegisterClassEx decorator runs at module load.
 import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
+import { FeatureValuesPanel } from "../panels/feature-values/feature-values.panel";
 // AI Skills sharing/portability panel (Pattern 1 — BaseFormPanel slot): Share
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
@@ -136,6 +138,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         EntitySelectorDialogComponent,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -174,6 +177,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         WebsiteCrawlerSettingsPanel,
         // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
@@ -263,6 +267,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJAIAgentFormComponentExtended,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -282,6 +287,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,

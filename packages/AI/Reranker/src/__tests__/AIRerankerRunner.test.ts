@@ -47,6 +47,15 @@ const h = vi.hoisted(() => {
         keyedDrivers: new Set<string>(),
     };
 
+    const byPromptID = <T extends { PromptID?: unknown }>(rows: T[]): Map<string, T[]> => {
+        const map = new Map<string, T[]>();
+        for (const row of rows) {
+            const key = norm(row.PromptID);
+            map.set(key, [...(map.get(key) ?? []), row]);
+        }
+        return map;
+    };
+
     const engine = {
         get VendorTypeDefinitions() { return [{ ID: inferenceTypeId, Name: 'Inference Provider' }]; },
         get Vendors() { return state.vendors; },
@@ -63,6 +72,7 @@ const h = vi.hoisted(() => {
         get ModelVendorsByModelID() {
             return new Map(state.models.map(m => [norm(m.ID), m.ModelVendors as Array<Record<string, unknown>>]));
         },
+        get PromptModelsByPromptID() { return byPromptID(state.promptModels); },
         GetConfigurationChain() { return []; },
         GetEffectiveModelConfiguration() { return undefined; },
         HasCredentialBindings() { return false; },
@@ -103,6 +113,10 @@ class MockReranker extends BaseReranker {
     public static Calls: string[] = [];
     public static FailingModels = new Set<string>();
     public static Usage: ModelUsage | undefined;
+    /** Models whose request stays open until its signal aborts, as a hung provider call does. */
+    public static HangingModels = new Set<string>();
+    /** The cancellation signal each call was handed, in call order. */
+    public static Signals: Array<AbortSignal | undefined> = [];
 
     public override async Rerank(params: RerankParams): Promise<RerankResponse> {
         const response = await super.Rerank(params);
@@ -114,6 +128,10 @@ class MockReranker extends BaseReranker {
 
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
         MockReranker.Calls.push(this.ModelName);
+        MockReranker.Signals.push(params.CancellationToken);
+        if (MockReranker.HangingModels.has(this.ModelName)) {
+            return this.waitForAbort(params.CancellationToken);
+        }
         if (MockReranker.FailingModels.has(this.ModelName)) {
             throw new Error(`${this.ModelName} is unavailable`);
         }
@@ -124,6 +142,17 @@ class MockReranker extends BaseReranker {
             document,
             rank: index,
         }));
+    }
+
+    /** Never answers; rejects as an aborted fetch does once the signal fires. */
+    private waitForAbort(signal: AbortSignal | undefined): Promise<RerankResult[]> {
+        return new Promise<RerankResult[]>((_, reject) => {
+            signal?.addEventListener('abort', () => {
+                const error = new Error('This operation was aborted');
+                error.name = 'AbortError';
+                reject(error);
+            }, { once: true });
+        });
     }
 }
 
@@ -292,6 +321,8 @@ beforeEach(() => {
     MockReranker.Calls = [];
     MockReranker.FailingModels = new Set();
     MockReranker.Usage = undefined;
+    MockReranker.HangingModels = new Set();
+    MockReranker.Signals = [];
     FakePromptRun.FailSaves = false;
     stubDriverFactory();
     // BaseReranker logs a driver's exception to console.error; keep the test output clean.
@@ -386,6 +417,62 @@ describe('AIRerankerRunner', () => {
         expect(result.ModelName).toBe('Secondary Reranker');
         expect(result.DriverClass).toBe(NATIVE_DRIVER);
         expect(promptRuns[0].ModelID).toBe(SECONDARY_MODEL_ID);
+    });
+
+    describe('timeout and cancellation', () => {
+        it('refuses a call whose token is already aborted, before a run row exists', async () => {
+            const caller = new AbortController();
+            caller.abort('user stopped it');
+
+            const result = await newRunner().RunRerank(rerankParams({ CancellationToken: caller.signal }));
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('cancelled before it started');
+            expect(result.PromptRunID).toBeUndefined();
+            expect(promptRuns).toHaveLength(0);
+            expect(MockReranker.Calls).toEqual([]);
+        });
+
+        it('ends a call the caller cancels mid-flight without failing over, and records the run as Cancelled', async () => {
+            MockReranker.HangingModels.add('primary-v1');
+            const caller = new AbortController();
+            const runner = newRunner();
+
+            const pending = runner.RunRerank(rerankParams({ CancellationToken: caller.signal }));
+            await vi.waitFor(() => expect(MockReranker.Calls).toHaveLength(1));
+            caller.abort('user stopped it');
+            const result = await pending;
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.Success).toBe(false);
+            expect(MockReranker.Calls).toEqual(['primary-v1']);
+            expect(MockReranker.Signals[0]?.aborted).toBe(true);
+            const row = promptRuns[0];
+            expect(row.Status).toBe('Cancelled');
+            expect(row.Cancelled).toBe(true);
+            expect(row.CancellationReason).toBe('user_requested');
+        });
+
+        it('fails over a call that exceeds TimeoutMS, aborting the timed-out request', async () => {
+            MockReranker.HangingModels.add('primary-v1');
+
+            const result = await newRunner().RunRerank(rerankParams({ TimeoutMS: 30 }));
+
+            expect(result.Success).toBe(true);
+            expect(MockReranker.Calls).toEqual(['primary-v1', 'secondary-v1']);
+            expect(result.ModelID).toBe(SECONDARY_MODEL_ID);
+            expect(MockReranker.Signals[0]?.aborted).toBe(true);
+        });
+
+        it("hands the driver the bound's signal: the caller's token alone, or one composed with the timeout", async () => {
+            const caller = new AbortController();
+            await newRunner().RunRerank(rerankParams({ CancellationToken: caller.signal }));
+            await newRunner().RunRerank(rerankParams({ CancellationToken: caller.signal, TimeoutMS: 5_000 }));
+
+            expect(MockReranker.Signals[0]).toBe(caller.signal);
+            expect(MockReranker.Signals[1]).toBeInstanceOf(AbortSignal);
+            expect(MockReranker.Signals[1]).not.toBe(caller.signal);
+        });
     });
 
     it('fails over past an unregistered driver class', async () => {

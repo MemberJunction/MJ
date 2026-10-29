@@ -6,6 +6,16 @@
 
 ---
 
+## 📋 Before You Start (Prerequisites)
+
+1. **Docker Desktop** installed and running ([Download Docker Desktop](https://www.docker.com/products/docker-desktop)):
+   - Allocate at least **8–12 GB of RAM** to Docker Desktop in **Settings → Resources** (SQL Server + MJAPI + MJExplorer run together inside the container stack).
+2. **Node.js 20+** installed on your machine ([Download Node.js](https://nodejs.org/)) — required only if you run `npx @memberjunction/cli agent init` directly on your host machine.
+3. **One LLM API Key** (OpenAI, Anthropic, Google Gemini, Groq, or Mistral).
+4. **Windows / PowerShell Note**: When running headless test prompts with quotes or multiple lines on Windows PowerShell, pass `-f /work/<prompt-file.txt>` (`--prompt-file`) to `mj ai agents run` instead of inline `-p "..."` strings to avoid PowerShell quote stripping.
+
+---
+
 ## ⚡ Getting Started (Choose Your Path)
 
 ### Option A: The Agent-Driven Path (Recommended — Zero Manual Setup)
@@ -63,8 +73,8 @@ The **Citizen Agent Builder** provides an isolated, local MemberJunction environ
 * **`sqlserver` (Port 1433)**: Microsoft SQL Server 2022.
 * **`mj` (Ports 4000 & 4202)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
   * **MJAPI** at `http://localhost:4000` (GraphQL API and agent execution engine).
-  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; port 4202 is an authorized redirect URI for Auth0/MSAL).
-* **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`).
+  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; zero-config Local Dev Auth is enabled by default on localhost, and port 4202 is also an authorized redirect URI for Auth0/MSAL).
+* **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`, which runs `mj sync push --dir /work/metadata`).
 
 ### Available Agent Tools & CLI Commands
 
@@ -151,7 +161,8 @@ Always enforce these constraints when authoring agents:
 1. **`ModelSelectionMode: "Agent Type"`**: Never hardcode specific provider models (`gpt-4o`, `claude-3-5-sonnet`). The destination environment maps models to Agent Types.
 2. **`ExposeAsAction: false`**: Do not set `true` unless the user explicitly wants other agents to call this agent as an action.
 3. **Dynamic Record Resolution**: Never hardcode record IDs or personal names. Use queries, parameters, or lookup actions.
-4. **Prefer `Flow` Agents**: Use `Flow` agents for predictable step-by-step tasks. Use `Loop` only for dynamic problem-solving with open-ended tool calling.
+4. **Prefer `Loop` Agents by Default**: Use `Loop` agents (`@lookup:MJ: AI Agent Types.Name=Loop`) for interactive, conversational, and exploratory Citizen Builder agents where the agent calls actions/tools and responds to the user. Use `Flow` agents (`@lookup:MJ: AI Agent Types.Name=Flow`) only when you want a fixed, non-interactive deterministic step graph.
+5. **`ArtifactCreationMode: "Never"`**: Valid values are `"Never"`, `"Always"`, or `"System Only"` (never `"None"`).
 
 ---
 
@@ -165,7 +176,7 @@ Always enforce these constraints when authoring agents:
    * **No `sync` Blocks**: Do not author `sync` blocks (`lastModified`, `checksum`). `mj sync push` manages these automatically.
    * **Assign Deterministic UUIDs**: Assign a fresh uppercase UUID for `primaryKey` (e.g. via CLI `uuidgen | tr '[:lower:]' '[:upper:]'`).
    * **Use Dynamic References**:
-     - `@lookup:<EntityName>.<FieldName>=<Value>` for foreign keys (e.g. `@lookup:MJ: AI Agent Types.Name=Flow`).
+     - `@lookup:<EntityName>.<FieldName>=<Value>` for foreign keys (e.g. `@lookup:MJ: AI Agent Types.Name=Loop`).
      - `@file:<relativePath>` for external template files (e.g. `@file:templates/<slug>.template.md`). Note that `@file:` paths are resolved at push time; running `./scripts/sync-metadata.sh` updates the database.
      - `@parent:ID` for linking child records to parent records in nested structures.
 
@@ -173,7 +184,7 @@ Always enforce these constraints when authoring agents:
    * Prompt Markdown template: `metadata/prompts/templates/<slug>.template.md`
    * Prompt metadata JSON: `metadata/prompts/.<slug>-prompt.json`
    * Agent metadata JSON: `metadata/agents/.<slug>-agent.json`
-   *(See `metadata/agents/.customer-insight-agent.json` for a reference Flow agent).*
+   *(See `metadata/agents/.customer-insight-agent.json` for a reference Loop agent).*
 
 4. **Push to Local Database**:
    ```bash
@@ -191,6 +202,8 @@ Always enforce these constraints when authoring agents:
    You can trigger test runs directly via CLI with structured output:
    ```bash
    docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>" --format json
+   # On Windows PowerShell or with multi-line inputs, pass a file via -f (--prompt-file):
+   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -f /work/test-input.txt --format json
    ```
 
 3. **Diagnosing Errors & Auditing Execution Traces**:

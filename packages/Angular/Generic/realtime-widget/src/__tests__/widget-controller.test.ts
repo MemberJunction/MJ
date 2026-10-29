@@ -356,13 +356,16 @@ describe('WidgetController', () => {
       }
     });
 
-    it('gives the provider a renewer that asks the server\'s refresh path and holds the new token', async () => {
+    it('gives the provider a renewer that asks the server\'s refresh path with the current token and holds the new token', async () => {
       const h = buildHarness(base);
+      const initial = guestSession({ token: makeJwt(9_999_999_998), expiresAtMs: Date.now() + 3_600_000 });
+      h.guest.Next = initial;
       await h.controller.Start();
       const renewed = guestSession({ token: makeJwt(9_999_999_999), expiresAtMs: Date.now() + 7_200_000 });
       h.guest.Next = renewed;
       expect(await h.authProvider.Refreshers[0]()).toBe(renewed.token);
       expect(h.guest.Refreshes).toBe(1);
+      expect(h.guest.RefreshTokens).toEqual([initial.token]);
     });
   });
 

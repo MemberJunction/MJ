@@ -102,7 +102,7 @@ interface AgentSpec {
     Name: string;                   // Step name (REQUIRED)
     Description?: string;           // What the step does
     StepType: 'Prompt' | 'Action' | 'Sub-Agent' | 'ForEach' | 'While' | 'Decision';  // REQUIRED
-    StartingStep: boolean;          // Is this the first step? (REQUIRED)
+    StartingStep: boolean;          // Is this an entry-point step? Multiple steps may set true for parallel wave-1 roots (REQUIRED)
     ActionID?: string;              // For Action type steps
     SubAgentID?: string;            // For Sub-Agent type steps
     PromptID?: string;              // For Prompt type steps (can use existing prompt); for Decision steps, optional (empty = Default Decision)
@@ -468,7 +468,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 6. **Validate Flow agent fields** (if TypeID is Flow):
    - `Steps` array must exist with at least one step
    - Each step needs Name, StepType, StartingStep
-   - At least ONE step must have `StartingStep: true`
+   - At least ONE step must have `StartingStep: true` (multiple steps may have `StartingStep: true` when the workflow starts with parallel wave-1 branches)
    - `Paths` array must exist
    - Each path needs OriginStepID, DestinationStepID, Priority
    - **Loop steps** (`ForEach` / `While`) additionally need `LoopBodyType`, a body ID in the field

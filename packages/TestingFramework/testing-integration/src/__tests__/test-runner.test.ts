@@ -3,7 +3,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-    TestRunner, EmitOutcomes, Assert, AssertEqual, AssertRowShape, AssertKeysInclude, AssertKeysExclude, RowKeys
+    TestRunner, EmitOutcomes, Assert, AssertEqual, AssertDeepEqual, AssertRowShape, AssertKeysInclude, AssertKeysExclude, RowKeys
 } from '../test-runner';
 
 describe('TestRunner', () => {
@@ -67,6 +67,12 @@ describe('assertion helpers', () => {
 
     it('AssertEqual includes both values in the message on mismatch', () => {
         expect(() => AssertEqual(1, 2, 'not equal')).toThrow(/not equal.*expected 2.*got 1/);
+    });
+
+    it('AssertDeepEqual compares objects and arrays by structure, not identity', () => {
+        expect(() => AssertDeepEqual({ A: 1, B: [1, 2] }, { B: [1, 2], A: 1 }, 'm')).not.toThrow();
+        expect(() => AssertDeepEqual({ FV: 0, Cache: 1 }, { FV: 0, Cache: 0 }, 'nothing stored')).toThrow(/nothing stored.*expected \{"Cache":0,"FV":0\}.*got \{"Cache":1,"FV":0\}/);
+        expect(() => AssertDeepEqual([1, 2], [2, 1], 'order')).toThrow(/order/);
     });
 
     it('RowKeys lowercases and sorts keys', () => {

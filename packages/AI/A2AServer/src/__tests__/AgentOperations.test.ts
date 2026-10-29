@@ -165,6 +165,16 @@ describe('AgentOperations', () => {
         })
       );
     });
+
+    it('should forward cancellationToken (AbortSignal) to AgentRunner.RunAgent when provided', async () => {
+      const controller = new AbortController();
+      await ops.processOperation('executeAgent', { agentId: 'agent-1' }, controller.signal);
+      expect(mockRunAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancellationToken: controller.signal,
+        })
+      );
+    });
   });
 
   describe('getAgentRunStatus', () => {

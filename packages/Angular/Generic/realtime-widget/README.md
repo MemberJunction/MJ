@@ -55,6 +55,8 @@ The widget decides how to authenticate from the attributes you give it. Exactly 
 
 The key identifies a `ConversationWidgetInstance` on your server. The instance decides the agent, the application, whether voice is enabled, the longest call, and which channels the visitor's session may use. If voice is not enabled for the instance the widget says so instead of failing silently. A rejected key gets the same answer whether it never existed or was revoked, so keys cannot be probed.
 
+Widget-key mode needs a page served over HTTPS (or from `localhost`). The widget binds the guest session to a Web Crypto key and signs each refresh with it, and browsers expose Web Crypto (`crypto.subtle`) only in a secure context, so on a plain `http://` page the session does not start. The refresh proof is signed on the server's clock, learned from each token's `iat`, so a visitor whose device clock is off can still renew.
+
 ### invite-token
 
 ```html

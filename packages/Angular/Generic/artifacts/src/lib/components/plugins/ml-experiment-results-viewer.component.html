@@ -80,7 +80,6 @@
                     <th>Algorithm</th>
                     <th>Feature set</th>
                     <th class="num">{{ TargetMetricLabel }}</th>
-                    <th class="num">CV</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -110,7 +109,6 @@
                           {{ formatScore(row.score) }}
                         }
                       </td>
-                      <td class="num muted">{{ formatScore(row.cvScore) }}</td>
                     </tr>
                   }
                 </tbody>

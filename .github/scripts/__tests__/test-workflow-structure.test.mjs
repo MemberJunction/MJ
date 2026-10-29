@@ -12,7 +12,9 @@ import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/wo
 const WORKFLOW_TEXT = readWorkflow();
 
 /** The lanes whose outcome the gate must consume. */
-const LANES = ['guards', 'build', 'test', 'esm-guard'];
+// `changes` is a lane too: when it fails, build/test/esm-guard skip, and only its own result
+// keeps the gate from reading those skips as a pass.
+const LANES = ['changes', 'guards', 'build', 'test', 'esm-guard'];
 
 describe('test.yml — job graph', () => {
     const jobs = readJobNames();
@@ -57,6 +59,14 @@ describe('test.yml — job graph', () => {
         // every PR restores from, so cleanup must run on failure and cancellation too.
         const cleanupBlock = WORKFLOW_TEXT.split(/^ {2}cleanup:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
         expect(cleanupBlock).toMatch(/if: always\(\)/);
+    });
+
+    it('the cleanup job runs whenever build ran, since build is what saves the run cache', () => {
+        // cleanup skips only when build was skipped (nothing was saved). If it stopped depending
+        // on build, `needs.build.result` would be empty and it would never run at all.
+        expect(readJobNeeds('cleanup')).toContain('build');
+        const cleanupBlock = WORKFLOW_TEXT.split(/^ {2}cleanup:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(cleanupBlock).toMatch(/if: always\(\) && needs\.build\.result != 'skipped'/);
     });
 });
 
@@ -230,10 +240,30 @@ describe('test.yml — backstop integrity', () => {
         const steps = readJobSteps('esm-guard');
         const guard = steps.find((s) => s.name === 'Native-ESM import guard');
         const body = guard.body.join('\n');
-        // Scoping is gated on BOTH being a PR and having a narrowed turbo filter; anything
-        // else falls through to the unscoped sweep.
-        expect(body).toMatch(/pull_request.*&&.*-n "\$TURBO_FILTER"/s);
+        // A pull_request scopes to its own diff; everything else — the push and nightly
+        // backstops — falls through to the unscoped sweep. That sweep is what covers the
+        // residue a scoped scan cannot see (a tsconfig or build-tool change that shifts emit
+        // repo-wide), so it is the part worth pinning.
+        //
+        // This asserts the BEHAVIOUR, not the exact boolean. It previously pinned
+        // `-n "$TURBO_FILTER"`, which made scoping conditional on the build job's filter: any
+        // PR touching a root path (package.json, turbo.json, a root tsconfig, or this workflow)
+        // swept all ~220 type:module packages at ~3s each for no coverage gain. Pinning the
+        // expression rather than the behaviour made removing that look like a regression.
+        expect(body).toMatch(/"pull_request"/);
+        expect(body).toMatch(/--changed-since "origin\/\$PR_BASE_REF"/);
         expect(body).toMatch(/node \.github\/scripts\/check-esm-imports\.mjs packages\s*$/m);
+    });
+
+    it('still sweeps everything when the guard script itself is what changed', () => {
+        const steps = readJobSteps('esm-guard');
+        const guard = steps.find((s) => s.name === 'Native-ESM import guard');
+        const body = guard.body.join('\n');
+        // The one change that most needs the real sweep rather than a narrowed subset — the
+        // same reasoning the `changes` job applies when it lists gate scripts in its paths
+        // filter. Without this, editing the guard would scope the guard to whatever unrelated
+        // packages the PR happened to touch, which on a script-only PR is nothing at all.
+        expect(body).toMatch(/grep -qx '\.github\/scripts\/check-esm-imports\.mjs'/);
     });
 
     it('still files and resolves the backstop alarm', () => {

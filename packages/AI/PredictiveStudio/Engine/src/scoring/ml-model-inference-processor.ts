@@ -70,7 +70,13 @@ import {
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
 import type { SourceRow } from '../feature-assembly';
-import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage, ModelArtifactMissingMessage, ModelNeedsTrainingError } from './model-readiness';
+import {
+  ModelHasTrainedArtifact,
+  ModelNeedsTrainingMessage,
+  ModelArtifactMissingMessage,
+  ModelNeedsTrainingError,
+  ModelNotScorableError,
+} from './model-readiness';
 import type {
   IModelAutoTrainer,
   MLAutoTrainConfig,
@@ -126,6 +132,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * the error-rate circuit breaker. The loaded model is the same warm cache every
    * record then reuses, so this costs no extra load.
    *
+   * A dry run (`context.DryRun`) never auto-trains: training creates and publishes a model, repoints the
+   * Record Process and archives the old model, none of which a compute-only run may do. It reports the
+   * {@link ModelNeedsTrainingError} instead.
+   *
    * @param context the run-level execution context (user + provider)
    * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
    */
@@ -136,7 +146,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
-      if (!(err instanceof ModelNeedsTrainingError) || !this.autoTrain || !this.autoTrainer) {
+      if (!(err instanceof ModelNeedsTrainingError) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
         throw err;
       }
     }
@@ -145,11 +155,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       {
         pipelineId: this.autoTrain.pipelineId,
         currentModelId: this.modelId || null,
-        recordProcessId: context.recordProcessID ?? null,
+        recordProcessId: context.RecordProcessID ?? null,
         binding: this.autoTrain.binding,
       },
-      context.contextUser,
-      context.provider,
+      context.ContextUser,
+      context.Provider,
     );
     try {
       await this.ensureModel(context);
@@ -248,18 +258,44 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!this.modelId) {
       throw new ModelNeedsTrainingError('MLModelInferenceProcessor: no ML Model is configured yet — the model needs training.');
     }
-    const model = await this.deps.modelLoader.loadModel(this.modelId, context.contextUser, context.provider);
+    const model = await this.deps.modelLoader.loadModel(this.modelId, context.ContextUser, context.Provider);
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
-    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
-      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
-    }
-    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.contextUser);
+    this.assertStatusCanScore(model);
+    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
     if (!bytes) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
     }
     return this.buildLoadedModel(model, bytes, context);
+  }
+
+  /**
+   * Refuse a model whose lifecycle status or missing artifact forbids scoring, in this order: a Draft with no artifact
+   * needs training (the opt-in auto-train path reacts to that, D2-C3) and a trained Draft is not scorable; Validated and
+   * Published score once they have an artifact; any other status (Archived, or a value CodeGen adds later) is refused
+   * before the artifact is looked at.
+   */
+  private assertStatusCanScore(model: MJMLModelEntity): void {
+    const status: MJMLModelEntity['Status'] = model.Status;
+    switch (status) {
+      case 'Draft':
+        this.assertHasArtifact(model);
+        throw new ModelNotScorableError(this.modelId, status);
+      case 'Validated':
+      case 'Published':
+        this.assertHasArtifact(model);
+        return;
+      default:
+        throw new ModelNotScorableError(this.modelId, status);
+    }
+  }
+
+  /** Throw "needs training" when the model has no trained artifact reference. */
+  private assertHasArtifact(model: MJMLModelEntity): void {
+    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
+    }
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
@@ -294,7 +330,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     context: RecordProcessorContext,
   ): Promise<ResolvedScoringPipeline> {
     try {
-      const rv = context.provider ? RunView.FromMetadataProvider(context.provider) : new RunView();
+      const rv = RunView.FromMetadataProvider(context.Provider);
       interface PipelineViewRow {
         TargetEntityID?: string;
         TargetEntity?: string;
@@ -309,14 +345,14 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           ResultType: 'simple',
           MaxRows: 1,
         },
-        context.contextUser,
+        context.ContextUser,
       );
       if (res.Success && res.Results.length > 0) {
         const row = res.Results[0];
         const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
         const targetEntity =
           row.TargetEntity ||
-          (row.TargetEntityID && context.provider ? context.provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          (row.TargetEntityID ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
           existing.targetEntityName;
 
         return {
@@ -380,8 +416,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       primaryKeyField: this.primaryKeyField,
       // No targetVariable at score time — the label is what we're predicting.
       context: 'on-demand',
-      contextUser: context.contextUser,
-      provider: context.provider,
+      contextUser: context.ContextUser,
+      provider: context.Provider,
     });
 
     if (assembly.matrix.columns.length === 0 && model.featureSchema.length > 0) {

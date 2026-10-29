@@ -2270,15 +2270,17 @@ export class RealtimeClientSessionService {
         // CancelRealtimeSessionTool mutation) can abort it mid-flight. The registry controller's
         // signal is combined with any caller-supplied signal — either source cancels the run.
         const controller = this.registerInFlightDelegation(input.AgentSessionID, input.Call.CallID);
+        const combined = this.combineSignals(controller.signal, input.AbortSignal);
         const effectiveInput: ExecuteRelayedToolInput = {
             ...input,
-            AbortSignal: input.AbortSignal ? this.combineSignals(controller.signal, input.AbortSignal) : controller.signal
+            AbortSignal: combined.Signal
         };
         try {
             const broker = this.buildToolBroker(effectiveInput, contextUser, provider);
             const result = await broker.ExecuteToolCall(effectiveInput.Call);
             return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID, Artifacts: result.Artifacts };
         } finally {
+            combined.Dispose();
             this.unregisterInFlightDelegation(input.AgentSessionID, input.Call.CallID, controller);
         }
     }
@@ -2844,8 +2846,8 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const directTools = this.projectDirectActions(input, effectiveConfig, driverClass);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools, memoryContext);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -3011,6 +3013,10 @@ export class RealtimeClientSessionService {
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona source).
+     * @param hasDirectTools Whether direct action/channel tools are projected onto the session.
+     * @param memoryContext The memory/context block when the caller already assembled it (as
+     *   {@link buildSessionParams} does); omitted, it is assembled here. Last and optional so overrides
+     *   written against the earlier signature (bizapps-caliber's persona seam) keep working.
      * @returns The concatenated system prompt (never empty — the framing is always present).
      */
     protected async buildCompanionSystemPrompt(
@@ -3019,7 +3025,8 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
-        hasDirectTools = false
+        hasDirectTools = false,
+        memoryContext?: string
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -3039,9 +3046,9 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        const memory = memoryContext ?? await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memory]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
@@ -3678,24 +3685,29 @@ export class RealtimeClientSessionService {
         const requestText = this.parseDelegateRequestText(request.Arguments);
         const parentRun = await this.loadParentRun(input.ParentRunID, contextUser, provider);
         const runner = new AgentRunner(provider);
-        return runner.RunAgent({
-            agent: target,
-            conversationMessages: [{ role: 'user', content: requestText }],
-            contextUser,
-            // Attribution and context-memory scope follow the PERSON, not the executing principal —
-            // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
-            // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
-            userId: input.AttributionUserID,
-            provider,
-            cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
-            parentRun: parentRun ?? undefined,
-            agentSessionID: input.AgentSessionID,
-            sessionID: input.BrowserSessionID,
-            data: input.AppContext ? { appContext: input.AppContext } : undefined,
-            onProgress: input.OnProgress,
-            lastRunId: input.ResumeRunID,
-            autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
-        });
+        const combined = this.combineSignals(request.AbortSignal, input.AbortSignal);
+        try {
+            return await runner.RunAgent({
+                agent: target,
+                conversationMessages: [{ role: 'user', content: requestText }],
+                contextUser,
+                // Attribution and context-memory scope follow the PERSON, not the executing principal —
+                // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
+                // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
+                userId: input.AttributionUserID,
+                provider,
+                cancellationToken: combined.Signal,
+                parentRun: parentRun ?? undefined,
+                agentSessionID: input.AgentSessionID,
+                sessionID: input.BrowserSessionID,
+                data: input.AppContext ? { appContext: input.AppContext } : undefined,
+                onProgress: input.OnProgress,
+                lastRunId: input.ResumeRunID,
+                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
+            });
+        } finally {
+            combined.Dispose();
+        }
     }
 
     /**
@@ -3782,11 +3794,17 @@ export class RealtimeClientSessionService {
      * @returns The active action entities assigned to the agent.
      */
     protected getTargetAgentActions(targetAgentID: string): MJActionEntityExtended[] {
-        const agentActions = (AIEngine.Instance.AgentActions ?? []).filter(
-            aa => UUIDsEqual(aa.AgentID, targetAgentID) && aa.Status === 'Active'
-        );
-        return (ActionEngineServer.Instance.Actions ?? []).filter(a =>
-            agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
+        const activeActionIds = new Set<string>();
+        for (const aa of AIEngine.Instance.AgentActions ?? []) {
+            if (aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID) && aa.ActionID) {
+                activeActionIds.add(NormalizeUUID(aa.ActionID));
+            }
+        }
+        if (activeActionIds.size === 0) {
+            return [];
+        }
+        return (ActionEngineServer.Instance.Actions ?? []).filter(
+            a => a.Status === 'Active' && activeActionIds.has(NormalizeUUID(a.ID))
         );
     }
 
@@ -3965,8 +3983,8 @@ export class RealtimeClientSessionService {
         }
 
         const projection = input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID) : undefined;
-        const candidateWireMap = this.BuildWireActionMap(this.getTargetAgentActions(target.ID));
-        const action = this.findWireAction(projection, call.ToolName) ?? this.findWireAction(candidateWireMap, call.ToolName);
+        const action = this.findWireAction(projection, call.ToolName)
+            ?? this.findWireAction(this.BuildWireActionMap(this.getTargetAgentActions(target.ID)), call.ToolName);
 
         if (!action) {
             return {
@@ -4060,8 +4078,17 @@ export class RealtimeClientSessionService {
         if (!wireMap) {
             return undefined;
         }
+        const exact = wireMap.get(toolName);
+        if (exact) {
+            return exact;
+        }
         const wanted = toolName.trim().toLowerCase();
-        return wireMap.get(toolName) ?? Array.from(wireMap.entries()).find(([wireName]) => wireName.toLowerCase() === wanted)?.[1];
+        for (const [wireName, action] of wireMap.entries()) {
+            if (wireName.toLowerCase() === wanted) {
+                return action;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -4072,7 +4099,15 @@ export class RealtimeClientSessionService {
         projection: Map<string, MJActionEntityExtended> | undefined,
         action: MJActionEntityExtended
     ): boolean {
-        return !projection || Array.from(projection.values()).some(projected => UUIDsEqual(projected.ID, action.ID));
+        if (!projection) {
+            return true;
+        }
+        for (const projected of projection.values()) {
+            if (UUIDsEqual(projected.ID, action.ID)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -4121,26 +4156,34 @@ export class RealtimeClientSessionService {
 
     /**
      * Combines the broker's per-call abort signal with an optional caller-supplied signal so either
-     * source can cancel the delegated run. Returns the broker signal alone when no caller signal is
-     * present (the common case), avoiding an unnecessary controller.
+     * source can cancel the delegated run, paired with a `Dispose` callback that removes the
+     * forwarding listeners when the call finishes so a long-lived caller signal does not retain one
+     * closure per relayed tool call. Short-circuits when no distinct caller signal is present.
      *
      * @param brokerSignal The broker-owned per-call abort signal (always present).
-     * @param callerSignal An optional caller signal (e.g. a request-scoped barge-in).
-     * @returns A single abort signal that fires when either source aborts.
+     * @param callerSignal An optional caller signal (e.g. a request-scoped or session-scoped barge-in).
+     * @returns The combined abort signal and a disposer that removes its forwarding listeners.
      */
-    private combineSignals(brokerSignal: AbortSignal, callerSignal?: AbortSignal): AbortSignal {
-        if (!callerSignal) {
-            return brokerSignal;
+    private combineSignals(
+        brokerSignal: AbortSignal,
+        callerSignal?: AbortSignal
+    ): { Signal: AbortSignal; Dispose: () => void } {
+        if (!callerSignal || callerSignal === brokerSignal) {
+            return { Signal: brokerSignal, Dispose: () => undefined };
         }
         const controller = new AbortController();
         const abort = () => controller.abort();
         if (brokerSignal.aborted || callerSignal.aborted) {
             controller.abort();
-        } else {
-            brokerSignal.addEventListener('abort', abort, { once: true });
-            callerSignal.addEventListener('abort', abort, { once: true });
+            return { Signal: controller.signal, Dispose: () => undefined };
         }
-        return controller.signal;
+        brokerSignal.addEventListener('abort', abort, { once: true });
+        callerSignal.addEventListener('abort', abort, { once: true });
+        const dispose = () => {
+            brokerSignal.removeEventListener('abort', abort);
+            callerSignal.removeEventListener('abort', abort);
+        };
+        return { Signal: controller.signal, Dispose: dispose };
     }
 
     /**

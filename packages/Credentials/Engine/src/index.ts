@@ -1,6 +1,25 @@
 // Core engine
 export { CredentialEngine } from './CredentialEngine';
 
+// Expiration policy, evaluation, and typed resolution errors
+export {
+    EvaluateExpiration,
+    IsExpired,
+    DEFAULT_EXPIRATION_CONFIG,
+    DEFAULT_EXPIRATION_WARNING_WINDOW_MS,
+    CredentialResolutionError,
+    CredentialExpiredError,
+    CredentialNotFoundError,
+    CredentialOwnerMismatchError
+} from './expiration';
+
+export type {
+    CredentialExpirationPolicy,
+    CredentialExpirationStatus,
+    CredentialExpirationConfig,
+    CredentialExpirationEvaluation
+} from './expiration';
+
 // Types
 export {
     CredentialResolutionOptions,
@@ -16,7 +35,9 @@ export {
     AzureServicePrincipalCredentialValues,
     AWSIAMCredentialValues,
     DatabaseConnectionCredentialValues,
-    TwilioCredentialValues
+    TwilioCredentialValues,
+    UserDelegatedOAuthCredentialValues,
+    StoreUserDelegatedCredentialOptions
 } from './types';
 
 // Re-export entity types for convenience

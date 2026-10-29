@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
-import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended, type TemplateDataCaptureMode, type TemplateDataShape } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
@@ -29,6 +29,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
 
     /** Custom-layout AI Prompt Run form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
 
     // Related entities
     public Prompt: MJAIPromptEntityExtended | null = null;
@@ -285,7 +288,14 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public set inputData(value: any) {
       this.InputData = value;
     }
-    
+
+    /** Template-data capture mode stored with this run; null for runs saved before capture modes existed. */
+    public DataCapture: TemplateDataCaptureMode | null = null;
+    /** Key sizes of the template inputs, stored in `None` mode. */
+    public DataShape: TemplateDataShape | null = null;
+    /** Why a `Referenced` run stored `Full`. */
+    public DataCaptureNote: string | null = null;
+
     // Validation data
     public ValidationAttempts: any[] = [];
 
@@ -491,6 +501,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         this.InputData = messageData.inputData;
         this.FormattedMessages = messageData.formattedMessages;
         this.FormattedData = messageData.formattedData;
+        this.DataCapture = messageData.dataCapture;
+        this.DataShape = messageData.dataShape;
+        this.DataCaptureNote = messageData.dataCaptureNote;
         console.log('📄 Input data formatted. Chat messages:', this.ChatMessages.length, 'Input data exists:', !!this.InputData);
         
         console.log('📊 Formatting result data...');

@@ -25,6 +25,8 @@ import {
 
 /** An in-memory MJ: Record Processes double capturing the fields the helper sets. */
 class FakeRecordProcess {
+  /** The id the saved Record Process carries; the helper copies it onto the scoring binding. */
+  public ID = 'rp-1';
   // Strongly-typed columns the helper sets directly.
   public Name = '';
   public EntityID = '';

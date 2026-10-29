@@ -1,5 +1,38 @@
 # @memberjunction/esignature-pandadoc
 
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [709de1a]
+- Updated dependencies [914e6ff]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [5b41d48]
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/esignature@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [17a4137]
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/esignature@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [25f7b82]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/esignature@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

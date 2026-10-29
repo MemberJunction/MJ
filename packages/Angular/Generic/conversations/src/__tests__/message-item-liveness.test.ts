@@ -426,3 +426,154 @@ describe('MessageItemComponent elapsed timer shutdown', () => {
     expect(viewUpdatesOver(h, 5_000)).toBe(0);
   });
 });
+
+describe('MessageItemComponent — the reply timer starts when the server created the row', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function itemShowing(message: Record<string, unknown>, loadTime: number): MessageItemComponent {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open.message = message;
+    open._loadTime = loadTime;
+    return component;
+  }
+
+  it('counts from when it was first shown while the placeholder has no server row yet', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:10.000Z'));
+    const item = itemShowing({ ID: 'local-1', Role: 'AI', Status: 'In-Progress' }, Date.parse('2026-10-12T10:00:07.000Z'));
+
+    expect(item.ElapsedTimeSinceLoad).toBe(3_000);
+  });
+
+  it("switches to the server row's creation time once the acknowledgement brings it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:10.000Z'));
+    const message: Record<string, unknown> = { ID: 'local-1', Role: 'AI', Status: 'In-Progress' };
+    const item = itemShowing(message, Date.parse('2026-10-12T10:00:07.000Z'));
+
+    message.ID = 'server-reply-1';
+    message.__mj_CreatedAt = new Date('2026-10-12T10:00:06.500Z');
+
+    expect(item.ElapsedTimeSinceLoad).toBe(3_500);
+  });
+
+  it("never goes negative when the server's clock is ahead of the browser's", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:10.000Z'));
+    const item = itemShowing(
+      { ID: 'server-reply-1', Role: 'AI', Status: 'In-Progress', __mj_CreatedAt: new Date('2026-10-12T10:00:12.000Z') },
+      Date.parse('2026-10-12T10:00:07.000Z')
+    );
+
+    expect(item.ElapsedTimeSinceLoad).toBe(0);
+  });
+});
+
+describe('MessageItemComponent — a failed agent reply reads as it always has', () => {
+  function source(message: Record<string, unknown>): string {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open.message = message;
+    open.AssistantDisplayName = null;
+    return (component as unknown as { displaySourceText(): string }).displaySourceText();
+  }
+
+  it("formats the server's error text with the chat's failure header, without touching the entity", () => {
+    const message = { ID: 'R-1', Role: 'AI', Status: 'Error', Message: 'Rate limit reached', AgentID: null };
+
+    expect(source(message)).toBe('❌ **AI Assistant** failed\n\nRate limit reached');
+    expect(message.Message).toBe('Rate limit reached');
+  });
+
+  it('leaves replies that did not fail, and people\'s messages, as stored', () => {
+    expect(source({ ID: 'R-2', Role: 'AI', Status: 'Complete', Message: 'Done' })).toBe('Done');
+    expect(source({ ID: 'U-1', Role: 'User', Status: 'Error', Message: 'hello' })).toBe('hello');
+  });
+});
+
+describe('MessageItemComponent artifact and workflow memoization', () => {
+  it('returns referentially stable DisplayArtifacts and SupportingArtifacts across change-detection reads', () => {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open._lastArtifactsInput = null;
+    open._sortedDisplayArtifactsCache = [];
+    open._supportingArtifactsCache = [];
+    open.Artifacts = [
+      {
+        artifact: { ID: 'a-2', __mj_CreatedAt: new Date('2026-01-01T10:02:00Z') },
+        version: { ID: 'v-2', __mj_CreatedAt: new Date('2026-01-01T10:02:00Z') },
+      },
+      {
+        artifact: { ID: 'a-1', __mj_CreatedAt: new Date('2026-01-01T10:01:00Z') },
+        version: { ID: 'v-1', __mj_CreatedAt: new Date('2026-01-01T10:01:00Z') },
+      },
+    ];
+
+    const firstDisplay = component.DisplayArtifacts;
+    const secondDisplay = component.DisplayArtifacts;
+    expect(firstDisplay).toBe(secondDisplay);
+    expect(firstDisplay.map((x) => x.artifact.ID)).toEqual(['a-1', 'a-2']);
+
+    const firstSupporting = component.SupportingArtifacts;
+    const secondSupporting = component.SupportingArtifacts;
+    expect(firstSupporting).toBe(secondSupporting);
+    expect(firstSupporting.map((x) => x.artifact.ID)).toEqual(['a-1']);
+  });
+
+  it('memoizes WorkflowSteps, counts, and single-pass step summaries with upstream delta deduplication', () => {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open._workflowCacheFingerprint = null;
+    open._workflowStepSummariesCache = new Map();
+    const step1 = {
+      ID: 'step-1',
+      ParentID: 'parent-1',
+      Name: 'Step 1',
+      Status: 'Complete',
+      __mj_CreatedAt: new Date('2026-01-01T10:00:00Z'),
+      OutputPayload: JSON.stringify({ sharedKey: 'unchanged', summary: 'Step 1 output' }),
+    };
+    const step2 = {
+      ID: 'step-2',
+      ParentID: 'parent-1',
+      Name: 'Step 2',
+      Status: 'Complete',
+      __mj_CreatedAt: new Date('2026-01-01T10:01:00Z'),
+      OutputPayload: JSON.stringify({ sharedKey: 'unchanged', explanation: 'Step 2 delta' }),
+    };
+    const parent = {
+      ID: 'parent-1',
+      ParentID: null,
+      Name: 'My Workflow',
+      Status: 'Complete',
+      __mj_CreatedAt: new Date('2026-01-01T09:59:00Z'),
+    };
+    open.DetailTasks = [parent, step2, step1];
+
+    const stepsA = component.WorkflowSteps;
+    const stepsB = component.WorkflowSteps;
+    expect(stepsA).toBe(stepsB);
+    expect(stepsA.map((s) => s.ID)).toEqual(['step-1', 'step-2']);
+    expect(component.WorkflowTitle).toBe('My Workflow');
+    expect(component.WorkflowStatus).toBe('Complete');
+    expect(component.WorkflowCompletedStepCount).toBe(2);
+    expect(component.WorkflowProgressPercent).toBe(100);
+    expect(component.GetWorkflowStepSummary(step1 as never)).toBe('Step 1 output');
+    expect(component.GetWorkflowStepSummary(step2 as never)).toBe('Step 2 delta');
+  });
+
+  it('emits ScrollToMessageRequested when observed on ScrollToOriginatingWorkflow', () => {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    const emitted: string[] = [];
+    open.message = { ID: 'child-msg', ParentID: 'origin-msg' };
+    open.ScrollToMessageRequested = {
+      observed: true,
+      emit: (id: string) => emitted.push(id),
+    };
+
+    component.ScrollToOriginatingWorkflow({ stopPropagation: vi.fn() } as unknown as MouseEvent);
+    expect(emitted).toEqual(['origin-msg']);
+  });
+});

@@ -89,6 +89,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
     // Same story for OptionalKeyedSpecialization (baseEntity.ts marks EntityField with it, B47).
     OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
+    // Real UUIDSet — actions-base's audience helpers (ActionAudienceReaders) dedupe readers with it.
+    UUIDSet: (await importOriginal<typeof import('@memberjunction/global')>()).UUIDSet,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -123,7 +125,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
 }));
 
 // Mock @memberjunction/actions-base
-vi.mock('@memberjunction/actions-base', () => {
+vi.mock('@memberjunction/actions-base', async (importOriginal) => {
+    // The audience helpers are the real ones: the gate under test is the engine's use of them.
+    const actual = await importOriginal<typeof import('@memberjunction/actions-base')>();
     class MockActionEngineBase {
         private _Actions: Array<Record<string, unknown>> = [];
         private _ActionCategories: Array<Record<string, unknown>> = [];
@@ -171,6 +175,9 @@ vi.mock('@memberjunction/actions-base', () => {
 
     return {
         ActionEngineBase: MockActionEngineBase,
+        // The real schema and builder token: RunRuntimeAction validates the configuration before building handlers.
+        RuntimeActionConfigurationSchema: actual.RuntimeActionConfigurationSchema,
+        RuntimeActionBridgeBuilder: actual.RuntimeActionBridgeBuilder,
         MJActionEntityExtended: class {
             Params: Array<Record<string, unknown>> = [];
             Name = '';
@@ -203,6 +210,12 @@ vi.mock('@memberjunction/actions-base', () => {
         // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
         // LoggingMode — is covered in ActionEngine.logging.test.ts.
         RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
+        // The real field-security projection the engine applies before redaction; its behaviour is
+        // covered in actions-base/ActionParamFieldSecurity.test.ts and ActionEngine.logging.test.ts.
+        ProjectActionParamValuesForUser: actual.ProjectActionParamValuesForUser,
+        ActionAudienceReaders: actual.ActionAudienceReaders,
+        ActionAudienceAddsReader: actual.ActionAudienceAddsReader,
+        AUDIENCE_UNSUPPORTED_RESULT_CODE: actual.AUDIENCE_UNSUPPORTED_RESULT_CODE,
     };
 });
 
@@ -213,6 +226,7 @@ import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer } from '../gener
 import { BaseAction } from '../generic/BaseAction';
 import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
+import type { RunActionParams } from '@memberjunction/actions-base';
 
 // ============================================================================
 // Create a concrete subclass of BaseAction for testing
@@ -227,6 +241,18 @@ class TestAction extends BaseAction {
 class FailingAction extends BaseAction {
     protected async InternalRunAction(): Promise<never> {
         throw new Error('Action blew up');
+    }
+}
+
+/** An action that declares it can honour an audience, and records the params it ran with. */
+class AudienceAwareAction extends BaseAction {
+    public ranWith: Array<Record<string, unknown>> = [];
+    public override get SupportsAudience(): boolean {
+        return true;
+    }
+    protected async InternalRunAction(params: unknown): Promise<{ Success: boolean; ResultCode: string; Message: string }> {
+        this.ranWith.push(params as Record<string, unknown>);
+        return { Success: true, ResultCode: 'SUCCESS', Message: 'ran' };
     }
 }
 
@@ -372,6 +398,138 @@ describe('ActionEngineServer', () => {
 
             await engine.RunAction(params as unknown as Record<string, Function>);
             expect(defer).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('audience gate (RunActionParams.Audience)', () => {
+        const caller = { ID: 'USER-1', Name: 'Caller' };
+        const reader = { ID: 'reader-2', Name: 'Reader', UserRoles: [] };
+        type GateParams = Record<string, unknown> & { Audience?: { Readers: Array<Record<string, unknown>> } };
+        const paramsFor = (audience: unknown, extra: Record<string, unknown> = {}): GateParams => ({
+            Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestAction', Type: 'Custom' },
+            ContextUser: caller,
+            Filters: [],
+            Params: [],
+            SkipActionLog: false,
+            Audience: audience,
+            ...extra,
+        }) as GateParams;
+        const run = (params: GateParams) => engine.RunAction(params as unknown as RunActionParams);
+
+        it('refuses a class-based action that does not declare SupportsAudience: AUDIENCE_UNSUPPORTED, not run, no log row', async () => {
+            const action = new TestAction();
+            const runSpy = vi.spyOn(action, 'Run');
+            mockClassFactory.CreateInstance.mockReturnValue(action);
+            const validateSpy = vi.spyOn(engine as never, 'ValidateInputs' as never);
+            const startLogSpy = vi.spyOn(engine as never, 'StartActionLog' as never);
+            const startAndEndSpy = vi.spyOn(engine as never, 'StartAndEndActionLog' as never);
+
+            const result = await run(paramsFor({ Readers: [reader] }));
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+            expect(result.Message).toMatch(/Test Action.*not available/);
+            expect(result.LogEntry).toBeUndefined();
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(validateSpy).not.toHaveBeenCalled();
+            expect(startLogSpy).not.toHaveBeenCalled();
+            expect(startAndEndSpy).not.toHaveBeenCalled();
+        });
+
+        it('refuses when no class is registered for the action', async () => {
+            mockClassFactory.CreateInstance.mockReturnValue(null);
+            const result = await run(paramsFor({ Readers: [reader] }));
+            expect(result.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+        });
+
+        it('refuses a runtime-defined action outright, without asking the class factory', async () => {
+            const params = paramsFor({ Readers: [reader] });
+            params.Action = { ID: 'action-1', Name: 'Runtime Action', Type: 'Runtime', Code: 'return 1;' };
+            const runtimeSpy = vi.spyOn(engine as never, 'RunRuntimeAction' as never);
+
+            const result = await run(params);
+
+            expect(result.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+            expect(result.Message).toMatch(/runtime-defined/);
+            expect(runtimeSpy).not.toHaveBeenCalled();
+            expect(mockClassFactory.CreateInstance).not.toHaveBeenCalled();
+        });
+
+        it('refuses a deferred run outright, even for an action that supports an audience', async () => {
+            mockClassFactory.CreateInstance.mockReturnValue(new AudienceAwareAction());
+            const defer = vi.fn().mockResolvedValue({ Success: true, ResultCode: 'SUBMITTED', Message: 'submitted' });
+
+            const result = await run(paramsFor({ Readers: [reader] }, { DeferExecution: defer }));
+
+            expect(result.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+            expect(result.Message).toMatch(/deferred/);
+            expect(defer).not.toHaveBeenCalled();
+        });
+
+        it('treats a malformed audience as adding a reader: an unsupporting action is refused', async () => {
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            expect((await run(paramsFor({ Readers: 'everyone' }))).ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+            expect((await run(paramsFor({ Readers: [{ Name: 'no id' }] }))).ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+        });
+
+        it.each<[string, unknown]>([
+            ['null', null],
+            ['Readers not an array', { Readers: 'everyone' }],
+            ['a reader with no ID', { Readers: [{ Name: 'no id' }] }],
+            ['a null reader', { Readers: [null] }],
+        ])('refuses a malformed audience (%s) even for an action that supports one: it never runs and is never handed it', async (_label, audience) => {
+            const action = new AudienceAwareAction();
+            mockClassFactory.CreateInstance.mockReturnValue(action);
+            const validateSpy = vi.spyOn(engine as never, 'ValidateInputs' as never);
+
+            const result = await run(paramsFor(audience));
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+            expect(result.Message).toMatch(/malformed/);
+            expect(action.ranWith).toHaveLength(0);
+            expect(validateSpy).not.toHaveBeenCalled();
+        });
+
+        it('lets an action that declares SupportsAudience run, with the audience normalized to the distinct readers beyond the caller', async () => {
+            const action = new AudienceAwareAction();
+            mockClassFactory.CreateInstance.mockReturnValue(action);
+            vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({} as never);
+            vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
+            const params = paramsFor({ Readers: [{ ID: 'user-1', Name: 'Caller again', UserRoles: [] }, reader, { ...reader, ID: 'READER-2' }] });
+
+            const result = await run(params);
+
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+            expect(action.ranWith).toHaveLength(1);
+            expect(params.Audience).toEqual({ Readers: [reader] });
+        });
+
+        it('has no effect when the only reader is the caller: the audience is cleared and any action runs', async () => {
+            const action = new TestAction();
+            const runSpy = vi.spyOn(action, 'Run');
+            mockClassFactory.CreateInstance.mockReturnValue(action);
+            vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({} as never);
+            vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
+            const params = paramsFor({ Readers: [{ ID: 'user-1', Name: 'Caller', UserRoles: [] }] });
+
+            const result = await run(params);
+
+            expect(result.Success).toBe(true);
+            expect(runSpy).toHaveBeenCalledOnce();
+            expect(params.Audience).toBeUndefined();
+        });
+
+        it('has no effect without an audience (the action is not even instantiated for the gate)', async () => {
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({} as never);
+            vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
+
+            const result = await run(paramsFor(undefined));
+
+            expect(result.Success).toBe(true);
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -766,6 +924,33 @@ describe('ActionEngineServer', () => {
             await vi.waitFor(() => expect(mockEntity.Save).toHaveBeenCalled());
         });
 
+        it("REGRESSION: stamps UserID with the run's user, not the engine's", async () => {
+            let stampedUserID = '';
+            const mockEntity = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(v: string) { stampedUserID = v; },
+                set Params(_v: string) {},
+            };
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
+            const engineUser = engine.ContextUser;
+            engine.ContextUser = { ID: 'alice-id', Name: 'Alice' } as never;
+            try {
+                const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [], ContextUser: { ID: 'bob-id', Name: 'Bob' } };
+                await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, false);
+                expect(stampedUserID).toBe('bob-id');
+
+                await (engine as unknown as Record<string, Function>)['StartActionLog']({ Action: { ID: 'a1', Name: 'Test' }, Params: [] } as never, false);
+                expect(stampedUserID).toBe('alice-id');
+            } finally {
+                engine.ContextUser = engineUser;
+            }
+        });
+
         it('should not save when saveRecord is false', async () => {
             const mockEntity = {
                 NewRecord: vi.fn(),
@@ -831,6 +1016,25 @@ describe('ActionEngineServer', () => {
 
             // Save is queued fire-and-forget — assert it runs on the microtask queue.
             await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+        });
+
+        it('logs the action\'s own result code when it matches none of the metadata result codes', async () => {
+            let loggedCode: string | undefined;
+            const logEntity = {
+                Save: vi.fn().mockResolvedValue(true),
+                set EndedAt(_v: Date) {},
+                set Params(_v: string) {},
+                set ResultCode(v: string | undefined) { loggedCode = v; },
+                set Message(_v: string | undefined) {},
+            };
+
+            const params = { Params: [] };
+            const result = { Result: undefined, ResultCode: 'CUSTOM_CODE', Message: 'Done' };
+
+            await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
+
+            await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+            expect(loggedCode).toBe('CUSTOM_CODE');
         });
 
         it('should log error when save fails', async () => {
@@ -934,6 +1138,120 @@ describe('ActionEngineServer', () => {
             // The failed INSERT is surfaced (not swallowed) as a failure in the queue's flush diagnostics.
             const flush = await (engine as unknown as { _logQueue: { Flush(): Promise<{ failures: number }> } })._logQueue.Flush();
             expect(flush.failures).toBeGreaterThan(0);
+        });
+    });
+
+    describe('LogEntryPersisted (#6014)', () => {
+        /** A log entity whose every Save waits on `gate`, so a test controls when the row "lands". */
+        function gatedLog(gate: Promise<void>, saves: string[]) {
+            return {
+                ID: 'log-1',
+                NewRecord: vi.fn(),
+                LatestResult: { CompleteMessage: '' },
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(_v: string) {},
+                set Params(_v: string) {},
+                set ResultParams(_v: string) {},
+                set ResultCode(_v: string | undefined) {},
+                set Message(_v: string | undefined) {},
+                set EndedAt(_v: Date) {},
+                set RetentionPeriod(_v: unknown) {},
+                async Save() {
+                    await gate;
+                    saves.push('saved');
+                    return true;
+                },
+            };
+        }
+        const params = (skip: boolean) => ({
+            Action: { ID: 'action-1', Name: 'Test', DriverClass: 'TestAction' },
+            ContextUser: { ID: 'user-1', Name: 'Test' },
+            Filters: [],
+            Params: [],
+            SkipActionLog: skip,
+        });
+        const isSettled = async (p: Promise<void>) => {
+            let done = false;
+            void p.then(() => { done = true; });
+            await new Promise((r) => setTimeout(r, 5));
+            return done;
+        };
+
+        it('resolves only after the log entity\'s Save resolved, on the normal path', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => { release = r; });
+            const saves: string[] = [];
+            const entity = gatedLog(gate, saves);
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.LogEntry).toBe(entity);
+            expect(result.LogEntryPersisted).toBeInstanceOf(Promise);
+            expect(await isSettled(result.LogEntryPersisted!)).toBe(false);
+            expect(saves).toEqual([]);
+
+            release();
+            await result.LogEntryPersisted;
+            // Both the 'started' INSERT and the 'ended' UPDATE have landed.
+            expect(saves).toEqual(['saved', 'saved']);
+        });
+
+        it('is set on the validation-failure path (StartAndEndActionLog)', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => { release = r; });
+            const saves: string[] = [];
+            const entity = gatedLog(gate, saves);
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(false as never);
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.Success).toBe(false);
+            expect(result.LogEntry).toBe(entity);
+            expect(result.LogEntryPersisted).toBeInstanceOf(Promise);
+            expect(await isSettled(result.LogEntryPersisted!)).toBe(false);
+
+            release();
+            await result.LogEntryPersisted;
+            // The single force-persisted UPDATE is the write that creates the row.
+            expect(saves).toEqual(['saved']);
+        });
+
+        it('is absent when SkipActionLog is true', async () => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(true) as never);
+
+            expect(result.Success).toBe(true);
+            expect(result.LogEntry).toBeUndefined();
+            expect(result.LogEntryPersisted).toBeUndefined();
+        });
+
+        it('is absent when FailuresOnly drops the LogEntry of a successful run', async () => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'ResolveLoggingMode' as never).mockReturnValue('FailuresOnly' as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.Success).toBe(true);
+            expect(result.LogEntry).toBeUndefined();
+            expect(result.LogEntryPersisted).toBeUndefined();
         });
     });
 
@@ -1215,5 +1533,42 @@ describe('ActionEngineServer', () => {
             // on `params` so callers don't see our internal merged signal leaked.
             expect(params.AbortSignal).toBe(upstream.signal);
         });
+    });
+});
+
+describe('ActionEngineServer.RunRuntimeAction: the bridge context carries the calling run', () => {
+    it("passes the run's RunScope and Audience to the bridge builder", async () => {
+        const engine = new ActionEngineServer();
+        const seen: Array<{ runScope?: unknown; audience?: unknown }> = [];
+        mockClassFactory.CreateInstance.mockReturnValue({
+            BuildHandlers: (ctx: { runScope?: unknown; audience?: unknown }) => {
+                seen.push(ctx);
+                throw new Error('stop after BuildHandlers');
+            },
+            GetPreamble: () => '',
+        });
+        const runScope = { PrimaryScopeEntityName: 'Tenants', PrimaryScopeRecordID: 'tenant-1', SecondaryScopes: null };
+        const audience = { Readers: [{ ID: 'reader-1' }] };
+        const params = {
+            Action: {
+                ID: 'runtime-1',
+                Name: 'Runtime Action',
+                Type: 'Runtime',
+                Code: 'return 1;',
+                RuntimeActionConfigurationObject: { permissions: { allowedActions: [], allowedAgents: [], allowedEntities: [] } },
+            },
+            ContextUser: { ID: 'user-1' },
+            Params: [],
+            Filters: [],
+            RunScope: runScope,
+            Audience: audience,
+        } as unknown as RunActionParams;
+
+        const runtime = engine as unknown as { RunRuntimeAction(p: RunActionParams): Promise<unknown> };
+        await runtime.RunRuntimeAction(params).catch(() => undefined);
+
+        expect(seen).toHaveLength(1);
+        expect(seen[0].runScope).toBe(runScope);
+        expect(seen[0].audience).toBe(audience);
     });
 });

@@ -135,4 +135,73 @@ describe('TaskStore', () => {
         expect(TERMINAL_STATUSES.has('pending')).toBe(false);
         expect(TERMINAL_STATUSES.has('in_progress')).toBe(false);
     });
+
+    describe('Event-driven Subscribe / Notify / CancelTask (MJ-AI-10)', () => {
+        it('notifies subscribers immediately on Notify and auto-unsubscribes on terminal status', () => {
+            const store = new TaskStore();
+            const task = makeTask('t1', 'pending', new Date());
+            store.set('t1', task);
+
+            const seenStatuses: TaskStatus[] = [];
+            store.Subscribe('t1', (updated) => {
+                seenStatuses.push(updated.status);
+            });
+
+            task.status = 'in_progress';
+            store.Notify(task);
+
+            task.status = 'completed';
+            store.Notify(task);
+
+            // Any subsequent notify after terminal state should not invoke the auto-cleaned listener
+            store.Notify(task);
+
+            expect(seenStatuses).toEqual(['in_progress', 'completed']);
+        });
+
+        it('CancelTask aborts the registered AbortController and notifies subscribers immediately', () => {
+            const store = new TaskStore();
+            const task = makeTask('t-cancel', 'in_progress', new Date());
+            store.set('t-cancel', task);
+
+            const controller = store.RegisterAbortController('t-cancel');
+            const seenStatuses: TaskStatus[] = [];
+            store.Subscribe('t-cancel', (updated) => {
+                seenStatuses.push(updated.status);
+            });
+
+            expect(store.CancelTask('t-cancel', 'User requested stop')).toBe(true);
+            expect(task.status).toBe('cancelled');
+            expect(controller.signal.aborted).toBe(true);
+            expect(controller.signal.reason).toBe('User requested stop');
+            expect(seenStatuses).toEqual(['cancelled']);
+        });
+    });
+});
+
+describe('TaskStore ownership', () => {
+    const OWNER = 'AAAAAAAA-0000-0000-0000-000000000001';
+    const OTHER = 'BBBBBBBB-0000-0000-0000-000000000002';
+
+    it("returns a task only to the user who created it", () => {
+        const store = new TaskStore();
+        const task = makeTask('t1', 'completed', new Date());
+        store.Set('t1', task, OWNER);
+        expect(store.GetForUser('t1', OWNER.toLowerCase())).toBe(task);
+        expect(store.GetForUser('t1', OTHER)).toBeUndefined();
+    });
+
+    it('returns a task stored without an owner to no one', () => {
+        const store = new TaskStore();
+        store.Set('t1', makeTask('t1', 'pending', new Date()));
+        expect(store.GetForUser('t1', OWNER)).toBeUndefined();
+    });
+
+    it('forgets the owner when the task is removed', () => {
+        const store = new TaskStore();
+        store.Set('t1', makeTask('t1', 'pending', new Date()), OWNER);
+        store.Delete('t1');
+        store.Set('t1', makeTask('t1', 'pending', new Date()));
+        expect(store.GetForUser('t1', OWNER)).toBeUndefined();
+    });
 });

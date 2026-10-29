@@ -12,7 +12,7 @@
       "ExposeAsAction": true,
       "InvocationMode": "Any",
       "IconClass": "fa-solid fa-hammer",
-      "PayloadSelfWritePaths": "[\"task\", \"inputData\", \"requirements\", \"iterations\", \"code\", \"results\", \"errors\", \"logs\"]",
+      "PayloadSelfWritePaths": null,
       "FinalPayloadValidation": "{\"code\": \"string:!empty\", \"results\": \"any\", \"iterations\": \"number:[1+]\"}",
       "FinalPayloadValidationMode": "Warn",
       "MaxIterationsPerRun": 10
@@ -78,8 +78,8 @@
       "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:38.815Z",
-      "checksum": "67ad798867ea9b2efde1ad772351d9e34f46814ca6a11763d0698d6b625bdaec"
+      "lastModified": "2026-10-19T17:22:05.942Z",
+      "checksum": "c0e08e4eeaee80151d99944e442cf87079fa9fc704f9ac8949f9e038c77c0b13"
     }
   }
 ]
