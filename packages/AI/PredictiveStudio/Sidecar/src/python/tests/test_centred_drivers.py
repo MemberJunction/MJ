@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from sklearn.linear_model import LogisticRegression
 
 from app import artifacts, artifacts_v2, encoding as E, trainer as TR
+from app.baselines import NIL_UUID
 from app.main import _row_contributions, app
 from app.trainer_schemas import CandidateSpec, EvaluationProtocol, TrainerCompleted
 from tests.tools.trainer_fixture import NUMERIC, DriverSpec, FileServer, JsonObject, JsonValue, candidates, protocol, \
@@ -21,8 +22,7 @@ from tests.tools.trainer_fixture import NUMERIC, DriverSpec, FileServer, JsonObj
 from tests.tools.trainer_scaffold import TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
 client = TestClient(app)
-NIL = "00000000-0000-0000-0000-000000000000"
-LOGISTIC = CandidateSpec(name="lr", algorithmId=NIL, driverKey="logistic_regression", hyperparameters={})
+LOGISTIC = CandidateSpec(name="lr", algorithmId=NIL_UUID, driverKey="logistic_regression", hyperparameters={})
 LOGISTIC_ONLY: list[DriverSpec] = [("glm_candidate", "logistic_regression", {})]
 
 
@@ -126,7 +126,8 @@ def test_each_driver_averages_to_zero_over_the_training_rows() -> None:
 
 def test_a_model_without_coefficients_has_no_baseline_and_no_driver() -> None:
     X, enc = _numeric_frame(7, 400)
-    forest = CandidateSpec(name="rf", algorithmId=NIL, driverKey="random_forest", hyperparameters={"n_estimators": 10})
+    forest = CandidateSpec(name="rf", algorithmId=NIL_UUID, driverKey="random_forest",
+                           hyperparameters={"n_estimators": 10})
     m = _fit(X, enc, forest)
     assert m.driver_baseline is None
     assert m.contributions(X.head(3), None) == [None, None, None]
