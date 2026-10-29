@@ -1206,22 +1206,6 @@
     border-left: 3px solid var(--mj-status-error);
 }
 
-.cos-todo-row__done {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--mj-text-secondary);
-    font-size: 16px;
-    cursor: pointer;
-}
-
-.cos-todo-row__done:hover:not(:disabled) {
-    color: var(--mj-color-primary);
-}
-
 .cos-todo-row__main {
     flex: 1 1 auto;
     min-width: 0;

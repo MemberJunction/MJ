@@ -1318,7 +1318,16 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
 
         try {
             const { agentId, policy } = await this.resolveAgentAndUserPolicy(params, contextUser);
-            const operation = this.normalizeEmailOperation(this.getStringParam(params, 'Operation'));
+            const rawOperation = this.getStringParam(params, 'Operation');
+            const operation = this.normalizeEmailOperation(rawOperation);
+            if (!operation) {
+                return {
+                    Success: false,
+                    ResultCode: 'INVALID_OPERATION',
+                    Message: `Unknown Operation '${rawOperation}'. Use one of: ListMessages, SearchMessages, GetSingleMessage, CreateDraft, Send, Reply, Forward.`,
+                    Params: params.Params,
+                };
+            }
 
             const opCategory: 'Read' | 'Draft' | 'Send' =
                 operation === 'ListMessages' || operation === 'SearchMessages' || operation === 'GetSingleMessage'
@@ -1599,8 +1608,10 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
     /**
      * The operation names this action understands, plus the aliases earlier prompt versions used
      * (`SendEmail`, `ReplyToMessage`, `ForwardMessage`), so a stale prompt still reaches the right branch.
+     * A missing operation defaults to `ListMessages`; an unrecognised one returns null so the caller
+     * fails loudly instead of quietly doing a read the agent did not ask for.
      */
-    private normalizeEmailOperation(raw: string | null | undefined): EmailOperation {
+    private normalizeEmailOperation(raw: string | null | undefined): EmailOperation | null {
         const value = (raw ?? '').trim().toLowerCase();
         switch (value) {
             case '':
@@ -1623,7 +1634,7 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
             case 'forwardmessage':
                 return 'Forward';
             default:
-                return 'ListMessages';
+                return null;
         }
     }
 

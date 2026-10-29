@@ -1639,6 +1639,17 @@
           "primaryKey": {
             "ID": "F533C36E-A634-4417-99BC-DEBFC80D1035"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_OPERATION",
+            "IsSuccess": false,
+            "Description": "The Operation parameter is not one this action supports; nothing was read, drafted or sent"
+          },
+          "primaryKey": {
+            "ID": "8CD94F21-DDB1-4F62-86FD-1B266519C082"
+          }
         }
       ]
     },

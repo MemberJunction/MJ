@@ -232,7 +232,7 @@
                                 <div class="cos-todo-list">
                                     @for (item of Metrics.TodoItems.slice(0, 8); track item.Task.ID) {
                                         <div class="cos-todo-row" [class.cos-todo-row--overdue]="item.IsOverdue" (click)="OpenTaskRecord(item.Task.ID, $event)">
-                                            <button type="button" class="cos-todo-row__done"
+                                            <button mjButton variant="icon" size="sm"
                                                     [disabled]="BusyTodoID === item.Task.ID"
                                                     [title]="'Mark \'' + item.Task.Name + '\' done'"
                                                     [attr.aria-label]="'Mark ' + item.Task.Name + ' done'"
@@ -745,12 +745,9 @@
 
                         @if (FiredRoutineCount > 0) {
                             <div class="cos-routines-toggle">
-                                <button mjButton variant="flat" size="sm"
-                                        [title]="ShowFiredRoutines ? 'Hide one-time wakes that have already fired' : 'Show one-time wakes that have already fired'"
-                                        (click)="ToggleShowFiredRoutines()">
-                                    <i class="fa-solid" [class.fa-eye]="!ShowFiredRoutines" [class.fa-eye-slash]="ShowFiredRoutines"></i>
-                                    {{ ShowFiredRoutines ? 'Hide' : 'Show' }} fired ({{ FiredRoutineCount }})
-                                </button>
+                                <mj-filter-chip Label="Show fired" Icon="fa-solid fa-clock-rotate-left"
+                                                [Count]="FiredRoutineCount" [Active]="ShowFiredRoutines"
+                                                (Clicked)="ToggleShowFiredRoutines()" />
                             </div>
                         }
 

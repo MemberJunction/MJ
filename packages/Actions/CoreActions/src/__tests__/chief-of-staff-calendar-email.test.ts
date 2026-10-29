@@ -776,6 +776,19 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
             expect(send).toHaveBeenCalledTimes(1);
         });
 
+        it('rejects an unrecognised operation instead of silently treating it as a read', async () => {
+            // An agent typo like 'SendMail' used to fall through to ListMessages and report success.
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'SendAsUser', RequireApprovalForExternalComms: true }));
+
+            const res = await new ManageMyEmailInboxAction()['InternalRunAction'](sendParams([], 'SendMail'));
+
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('INVALID_OPERATION');
+            expect(res.Message).toContain('SendMail');
+            expect(savedApprovalRequests.length).toBe(0);
+            expect(mockGetProvider).not.toHaveBeenCalled();
+        });
+
         it('still refuses to send under DraftOnly, before any approval is considered', async () => {
             AgentUserPolicyEngine.Instance.SetCachedPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly', RequireApprovalForExternalComms: true }));
 
