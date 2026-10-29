@@ -574,11 +574,14 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   ): Promise<EmbeddingInternalResult> {
     const bound = this.createExecutionBound(prompt, promptParams, promptParams.cancellationToken);
     try {
+      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, params.Texts, params.InputType, candidate.vendorId);
       const embedResult = await this.RaceWithinBound(
         driver.EmbedTexts({
-          texts: params.Texts,
+          texts: prepared.texts,
           model: candidate.apiName,
           dimensions: params.Dimensions,
+          inputType: params.InputType,
+          maxInputTokens: prepared.maxInputTokens,
           CancellationToken: bound.Signal,
         }),
         bound,
