@@ -563,15 +563,12 @@ export class GeminiLLM extends BaseLLM {
             this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
-        switch (params.responseFormat) {
-            case 'JSON':
-                modelOptions.responseMimeType = 'application/json';
-                break;
-            case 'ModelSpecific':
-                if (params.modelSpecificResponseFormat) {
-                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                }
-                break;
+        // Provider options (e.g. a thinkingConfig) ride along with JSON too, not only ModelSpecific.
+        if (params.modelSpecificResponseFormat && (params.responseFormat === 'ModelSpecific' || params.responseFormat === 'JSON')) {
+            Object.assign(modelOptions, params.modelSpecificResponseFormat);
+        }
+        if (params.responseFormat === 'JSON') {
+            modelOptions.responseMimeType = 'application/json';
         }
 
         if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -617,27 +614,36 @@ export class GeminiLLM extends BaseLLM {
     private static readonly _warnedThinking = new Set<string>();
 
     private thinkingReplacementKey(modelName: string, config: ThinkingConfig): string {
-        return `${this.constructor.name}|${modelName}|${JSON.stringify(config)}`;
+        // Sorted keys, so the same setting with its keys in another order hits the same memo.
+        return `${this.constructor.name}|${modelName}|${JSON.stringify(config, Object.keys(config).sort())}`;
     }
 
     /**
      * Puts the `thinkingConfig` for `effortLevel` on the request (see {@link ResolveGeminiThinkingConfig}),
-     * or what replaced it after the model rejected it earlier in this process. Nothing is added when
-     * no effort is set; an effort that cannot be used is reported once.
+     * or what replaced it after the model rejected it earlier in this process. With no usable effort, a
+     * `thinkingConfig` already on the request (from `modelSpecificResponseFormat`) gets the same
+     * replacement, so a rejected setting is not re-sent on every call. An effort that cannot be used is
+     * reported once.
      */
     private applyThinkingConfig(requestConfig: Record<string, unknown>, modelName: string, effortLevel: string | undefined): void {
         const resolution = ResolveGeminiThinkingConfig(modelName, effortLevel);
         if (resolution.Ignored) {
             this.warnThinkingOnce(`${modelName}:${resolution.Ignored}`, `Gemini: ${resolution.Ignored}; sending no thinking setting, so the model thinks at its default.`);
         }
-        if (!resolution.Config) {
+        const supplied = requestConfig.thinkingConfig as ThinkingConfig | undefined;
+        const wanted = resolution.Config ?? supplied;
+        if (!wanted) {
             return;
         }
-        const key = this.thinkingReplacementKey(modelName, resolution.Config);
-        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : resolution.Config;
+        const key = this.thinkingReplacementKey(modelName, wanted);
+        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : wanted;
         if (config) {
             requestConfig.thinkingConfig = config;
+        } else if (!supplied || wanted === supplied) {
+            delete requestConfig.thinkingConfig;
         }
+        // Otherwise the effort's own setting was rejected with nothing to fall back to, and the caller's
+        // `thinkingConfig` stays, as it would have with no effort level.
     }
 
     /**

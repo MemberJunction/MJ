@@ -69,10 +69,11 @@ describe('ParsePnpmLockfile', () => {
   it('reads the resolved version of every direct importer dependency, peer-suffix stripped', () => {
     const lock = ParsePnpmLockfile(PNPM_LOCK) as MemberLockfile;
     expect(lock.Kind).toBe('pnpm');
+    // each entry carries the importer that declares it (#4129) — `.` for the repo root
     expect(lock.Direct).toEqual([
-      { Name: 'chalk', Version: '5.6.2' },
-      { Name: '@types/node', Version: '24.10.11' },
-      { Name: '@oclif/core', Version: '4.5.4' },
+      { Name: 'chalk', Version: '5.6.2', Importer: '.' },
+      { Name: '@types/node', Version: '24.10.11', Importer: '.' },
+      { Name: '@oclif/core', Version: '4.5.4', Importer: 'packages/CLI' },
     ]);
   });
 
@@ -151,10 +152,11 @@ describe('ParseNpmLockfile', () => {
   it('resolves each importer direct dep via the nearest-node_modules walk', () => {
     const lock = ParseNpmLockfile(NPM_LOCK) as MemberLockfile;
     expect(lock.Kind).toBe('npm');
-    expect(lock.Direct).toContainEqual({ Name: 'express', Version: '4.19.2' });
-    expect(lock.Direct).toContainEqual({ Name: 'typescript', Version: '5.4.5' });
+    // npm's root importer key is '' — recorded as '.' so both lockfile kinds name the root alike
+    expect(lock.Direct).toContainEqual({ Name: 'express', Version: '4.19.2', Importer: '.' });
+    expect(lock.Direct).toContainEqual({ Name: 'typescript', Version: '5.4.5', Importer: '.' });
     // packages/core sees ITS nested lodash, not the hoisted one
-    expect(lock.Direct).toContainEqual({ Name: 'lodash', Version: '4.17.20' });
+    expect(lock.Direct).toContainEqual({ Name: 'lodash', Version: '4.17.20', Importer: 'packages/core' });
   });
 
   it('skips linked workspace entries with a reason, and collects @types (with nesting parentage) + all resolutions', () => {
@@ -184,7 +186,7 @@ describe('ParseNpmLockfile', () => {
       },
     });
     const lock = ParseNpmLockfile(gitLock) as MemberLockfile;
-    expect(lock.Direct).toEqual([{ Name: 'plain', Version: '1.0.5' }]);
+    expect(lock.Direct).toEqual([{ Name: 'plain', Version: '1.0.5', Importer: '.' }]);
     expect(lock.Skipped).toContainEqual({ Name: 'git-dep', Version: 'github:user/repo#abc', Reason: 'git/url specifier' });
     expect(lock.Skipped).toContainEqual({ Name: 'url-dep', Version: 'https://example.com/x.tgz', Reason: 'git/url specifier' });
     // the git-resolved entry is also excluded from the at-depth resolutions
@@ -292,6 +294,33 @@ describe('DeriveLockfilePins', () => {
     // same major everywhere -> plain key; the direct declaration's version wins outright
     expect(Pins['@cerebras/cerebras_cloud_sdk']).toBe('1.64.1');
     expect(Conflicts).toEqual([]); // the at-depth 1.91.0 never voted, so there is nothing to report
+  });
+
+  // #4129: an app shell the workspace drops by design (apps/*) must not decide the workspace's pins.
+  // In the field its newer auth wrapper won while MJ's older inner SDK kept its pin — a pair no
+  // lockfile ever resolved, and the Explorer build failed.
+  it('counts votes only from importers the workspace includes when IncludedImporters is given', () => {
+    const appShellLock: MemberLockfile = {
+      Kind: 'npm',
+      Direct: [
+        { Name: '@azure/msal-browser', Version: '5.20.0', Importer: 'apps/MJExplorer' },
+        { Name: 'zod', Version: '3.24.1', Importer: 'packages/core' },
+      ],
+      Types: [],
+      Resolutions: [],
+      Skipped: [],
+    };
+    const members = [
+      { Repo: 'MJ', Lockfile: { ...lock([]), Direct: [{ Name: '@azure/msal-browser', Version: '5.17.0', Importer: 'packages/Angular/Explorer/auth-services' }] } },
+      { Repo: 'bizapps-x', Lockfile: appShellLock, IncludedImporters: new Set(['.', 'packages/core']) },
+    ];
+    const { Pins, Conflicts } = DeriveLockfilePins(members, new Set());
+    expect(Pins['@azure/msal-browser']).toBe('5.17.0'); // the excluded apps/MJExplorer 5.20.0 never voted
+    expect(Conflicts).toEqual([]);
+    expect(Pins.zod).toBe('3.24.1'); // an included importer still votes
+    // without the set (the pre-#4129 behaviour) every importer votes and the shell wins
+    const unscoped = DeriveLockfilePins([members[0], { Repo: 'bizapps-x', Lockfile: appShellLock }], new Set());
+    expect(unscoped.Pins['@azure/msal-browser']).toBe('5.20.0');
   });
 
   it('excludes @types parented ONLY by family registry copies; keeps @types with any non-family dependent', () => {
