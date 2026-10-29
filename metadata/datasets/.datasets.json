@@ -486,6 +486,23 @@
             "lastModified": "2026-10-28T00:36:08.042Z",
             "checksum": "7f96867dd88781e423857bebf45e0d71f83a29fa39d1d33d28332eb5366e0711"
           }
+        },
+        {
+          "fields": {
+            "Code": "EntityUniqueKeys",
+            "DatasetID": "@parent:ID",
+            "Sequence": 34,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Unique Keys",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Unique indexes and unique constraints of each entity's base table as column sets, linked to their entities during metadata post-processing"
+          },
+          "primaryKey": {
+            "ID": "FB8FFE72-BA0A-417B-AECD-3DF329A6D49C"
+          },
+          "sync": {
+            "lastModified": "2026-10-27T19:47:29.544Z",
+            "checksum": "436ce0029e2221338e3376093ed1086833bfe96a0c6ee3accbe51946767f7e0c"
+          }
         }
       ]
     },

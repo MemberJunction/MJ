@@ -236,6 +236,7 @@ import { MJEntityRecordDocumentFormComponent } from "./Entities/MJEntityRecordDo
 import { MJEntityRelationshipDisplayComponentFormComponent } from "./Entities/MJEntityRelationshipDisplayComponent/mjentityrelationshipdisplaycomponent.form.component";
 import { MJEntityRelationshipFormComponent } from "./Entities/MJEntityRelationship/mjentityrelationship.form.component";
 import { MJEntitySettingFormComponent } from "./Entities/MJEntitySetting/mjentitysetting.form.component";
+import { MJEntityUniqueKeyFormComponent } from "./Entities/MJEntityUniqueKey/mjentityuniquekey.form.component";
 import { MJEnvironmentFormComponent } from "./Entities/MJEnvironment/mjenvironment.form.component";
 import { MJErrorLogFormComponent } from "./Entities/MJErrorLog/mjerrorlog.form.component";
 import { MJExperimentFormComponent } from "./Entities/MJExperiment/mjexperiment.form.component";
@@ -1254,6 +1255,7 @@ declarations: [
     MJEntityFormContributionFormComponent,
     MJEntityOrganicKeyFormComponent,
     MJEntityRecordDocumentFormComponent,
+    MJEntityUniqueKeyFormComponent,
     MJOpenAppFormComponent,
     MJProcessRunDetailFormComponent,
     MJQueryPermissionFormComponent,

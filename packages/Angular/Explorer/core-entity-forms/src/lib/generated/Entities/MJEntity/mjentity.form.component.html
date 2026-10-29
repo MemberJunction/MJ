@@ -2938,6 +2938,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Unique Keys Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityUniqueKeys"
+        SectionName="Entity Unique Keys"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityUniqueKeys')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Unique Keys','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Unique Keys','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityUniqueKeys')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityUniqueKeys', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Feature Values Section -->
     <mj-collapsible-panel
         SectionKey="mJFeatureValues"

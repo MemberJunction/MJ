@@ -386,7 +386,8 @@ export class ClonePlanner {
                             RelationshipID: o.RelationshipID,
                             Policy: o.Policy,
                         })),
-                        IsUniqueFK: joinFieldInfo?.IsUnique,
+                        // The join column alone is a key: each child row belongs to one parent.
+                        IsUniqueFK: targetEntity ? EntityInfo.IsUniqueFieldSetOf(targetEntity, [candidate.JoinField]) : false,
                         CurrentDepth: candidate.Depth,
                         MaxDepth: maxDepth,
                     });
@@ -844,11 +845,14 @@ export class ClonePlanner {
                 if (depNode.EntityInfo.CloneConfig?.Fields?.UniqueKeys && depNode.EntityInfo.CloneConfig.Fields.UniqueKeys.length > 0) {
                     uqs.push(...depNode.EntityInfo.CloneConfig.Fields.UniqueKeys);
                 } else {
-                    // Metadata flags every column of a composite unique constraint IsUnique (Action
-                    // Params: Name and ActionID, unique together), so the flagged columns form one key.
-                    // A copy whose FK column is remapped then never collides with its source.
-                    const flagged = depNode.EntityInfo.Fields.filter((f) => f.IsUnique && !f.IsPrimaryKey).map((f) => f.Name);
-                    if (flagged.length > 0) uqs.push({ Fields: flagged, Scope: 'Global' });
+                    // Each unique index or constraint is its own key (Action Params: ActionID and
+                    // Name, unique together), so a copy whose FK column is remapped never collides
+                    // with its source. Filtered keys are left to the database: rows outside the
+                    // filter (often the NULLs) may repeat, which this check cannot tell apart.
+                    for (const uk of depNode.EntityInfo.UniqueKeySets ?? []) {
+                        const fields = uk.FieldNamesArray;
+                        if (!uk.IsFiltered && fields.length > 0) uqs.push({ Fields: fields, Scope: 'Global' });
+                    }
                 }
                 uniqueKeysByEntity[depNode.EntityName] = uqs;
             }

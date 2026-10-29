@@ -112,6 +112,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
             { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
             { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false },
+            { sectionKey: 'mJEntityUniqueKeys', sectionName: 'Entity Unique Keys', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }
