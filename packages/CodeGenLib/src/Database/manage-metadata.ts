@@ -8999,6 +8999,8 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * proposed display name. `DisplayName` never carries them (`createNewEntityDisplayName` strips
     * them the same way), so a proposal that kept the prefix — `CRM: Account Status Codes`, or
     * `CRM:Account Status Codes` with the separator space dropped — becomes `Account Status Codes`.
+    * Either affix strips only at a word boundary: under `Sales: `, `Salesforce Contacts` is a real
+    * name that happens to start with the prefix's letters, and stays whole.
     * Without a rule, or when stripping would leave nothing, the proposal is returned as given.
     */
    protected stripEntityNameAffixes(proposed: string, schemaName: string): string {
@@ -9010,14 +9012,25 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       // The rule's prefix is typically "CRM: "; match its core ("CRM") followed by any separator the
       // model kept or dropped, so both spellings above strip.
       const prefixCore = (rule.EntityNamePrefix ?? '').trim().replace(/[\s:]+$/, '');
-      if (prefixCore.length > 0 && name.startsWith(prefixCore)) {
+      if (prefixCore.length > 0 && name.startsWith(prefixCore)
+         && ManageMetadataBase.isWordBoundary(prefixCore.charAt(prefixCore.length - 1), name.charAt(prefixCore.length))) {
          name = name.substring(prefixCore.length).replace(/^[\s:]+/, '').trim();
       }
       const suffix = (rule.EntityNameSuffix ?? '').trim();
-      if (suffix.length > 0 && name.endsWith(suffix)) {
+      if (suffix.length > 0 && name.endsWith(suffix)
+         && ManageMetadataBase.isWordBoundary(name.charAt(name.length - suffix.length - 1), suffix.charAt(0))) {
          name = name.substring(0, name.length - suffix.length).trim();
       }
       return name.length > 0 ? name : proposed.trim();
+   }
+
+   /**
+    * True when two adjacent characters do not both belong to one word, so an affix may end (or
+    * begin) between them. An empty side is a boundary: the affix met the end of the name.
+    */
+   private static isWordBoundary(left: string, right: string): boolean {
+      const wordChar = /[\p{L}\p{N}_]/u;
+      return !(left.length > 0 && right.length > 0 && wordChar.test(left) && wordChar.test(right));
    }
 
    /**

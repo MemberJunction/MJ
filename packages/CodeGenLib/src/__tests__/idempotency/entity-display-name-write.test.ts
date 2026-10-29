@@ -123,6 +123,42 @@ describe('applyEntityDisplayName — the write goes through the SQL capture', ()
       expect(queries).toHaveLength(0);
    });
 
+   it('strips a prefix or suffix only at a word boundary — a real word that merely starts or ends with its letters stays whole', async () => {
+      configInfo.newEntityDefaults = {
+         ...(configInfo.newEntityDefaults ?? {}),
+         NameRulesBySchema: [
+            { SchemaName: 'sales', EntityNamePrefix: 'Sales: ', EntityNameSuffix: '' },
+            { SchemaName: 'ap', EntityNamePrefix: 'AP: ', EntityNameSuffix: '' },
+            { SchemaName: 'hr', EntityNamePrefix: 'HR: ', EntityNameSuffix: '' },
+            { SchemaName: 'crm', EntityNamePrefix: 'CRM: ', EntityNameSuffix: '' },
+            { SchemaName: 'ops', EntityNamePrefix: 'Ops ', EntityNameSuffix: '' },
+            { SchemaName: 'erp', EntityNamePrefix: 'ERP-', EntityNameSuffix: '' },
+            { SchemaName: 'legal', EntityNamePrefix: '', EntityNameSuffix: ' Entity' },
+         ],
+      } as typeof configInfo.newEntityDefaults;
+      const cases: Array<[schema: string, proposed: string, written: string]> = [
+         // The letters begin a longer word: no separator follows them, so this is not the prefix.
+         ['sales', 'Salesforce Contacts', 'Salesforce Contacts'],
+         ['ap', 'API Keys', 'API Keys'],
+         ['hr', 'HRIS Records', 'HRIS Records'],
+         ['ops', 'Opslog Entries', 'Opslog Entries'],
+         // The prefix followed by a separator, with or without its colon, still strips.
+         ['crm', 'CRM Accounts', 'Accounts'],
+         ['ops', 'Ops Tickets', 'Tickets'],
+         // A prefix that ends in punctuation carries its own boundary.
+         ['erp', 'ERP-Vendors', 'Vendors'],
+         // The suffix is matched the same way from the other end.
+         ['legal', 'NonprofitEntity', 'NonprofitEntity'],
+         ['legal', 'Legal Entity', 'Legal'],
+      ];
+      for (const [schema, proposed, written] of cases) {
+         const { pool, queries } = recordingConnection();
+         await mm.callApplyEntityDisplayName(pool, entity({ SchemaName: schema, Name: `${schema.toUpperCase()}_TBL` }), proposal(proposed));
+         expect(queries, `${schema}: ${proposed}`).toHaveLength(1);
+         expect(queries[0], `${schema}: ${proposed}`).toContain(`= '${written}'`);
+      }
+   });
+
    it('skips an unchanged, empty or over-long proposal', async () => {
       for (const proposed of ['Acct Stat Cd', '  Acct Stat Cd ', '', '   ', 'x'.repeat(256)]) {
          const { pool, queries } = recordingConnection();
