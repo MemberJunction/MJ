@@ -38,6 +38,7 @@ export type ProtocolRefusal =
   | { readonly Kind: 'forecast-slices'; readonly OutOfTime: boolean; readonly Subgroups: readonly string[] }
   | { readonly Kind: 'forecast-interval-method'; readonly Method: IntervalSpec['method'] }
   | { readonly Kind: 'forecast-multiple-series'; readonly GrainEntity: string }
+  | { readonly Kind: 'forecast-no-seasonal-naive' }
   | { readonly Kind: 'no-dummy-baseline' }
   | { readonly Kind: 'guard-field-edited-by-disallowed-author'; readonly Fields: readonly GuardField[]; readonly Author: Actor['kind']; readonly Setting: GuardFieldsEditableBy };
 
@@ -149,6 +150,8 @@ export class EvaluationProtocolRules {
         return `A forecast's intervals resample whole rolling origins (block-bootstrap); this protocol declares ${r.Method}.`;
       case 'forecast-multiple-series':
         return `A forecast trains one series per snapshot; this Prediction Unit has a row per ${r.GrainEntity} record per period, one series per ${r.GrainEntity} record (panel forecasts are not available).`;
+      case 'forecast-no-seasonal-naive':
+        return 'A forecast needs a declared seasonal-naive baseline: its season sets the MASE scale and it is a member of the publishing gate.';
       case 'no-dummy-baseline':
         return 'A dummy baseline (base rate or mean) is required: it is the "no signal" yardstick of the gate.';
       case 'guard-field-edited-by-disallowed-author':
@@ -172,8 +175,11 @@ export class EvaluationProtocolRules {
 
   /**
    * The protocol a pipeline gets when nobody declared one (agent builder, legacy migration, fixtures, Explorer "new
-   * protocol"). It passes {@link ValidateEvaluationProtocol}, and {@link ValidateProtocolForUnit} for the unit it was
-   * made for when `Holdout` is the kind that unit takes. A forecast gets block-bootstrap intervals, no prediction
+   * protocol"). It passes {@link ValidateEvaluationProtocol}. It passes {@link ValidateProtocolForUnit} for the unit it
+   * was made for when `Holdout` is the kind that unit takes and, for a rolling-origin holdout, has the unit's horizon;
+   * two cases are still refused: a rolling-origin `Holdout` whose horizon differs from the unit's (`horizon-mismatch`),
+   * and a forecast unit with a row per grain record per period (`forecast-multiple-series`: forecasts train one series).
+   * A forecast gets block-bootstrap intervals, no prediction
    * intervals and no slices (the rolling-origin backtest supports none), and a seasonal-naive baseline whose season is
    * the unit's seasonality, or 1 when the unit declares none (a season of 1 makes it the naive forecast).
    */
@@ -291,8 +297,9 @@ export class EvaluationProtocolRules {
 
   /**
    * What the rolling-origin backtest cannot honour, refused when the protocol is bound rather than when a run fails:
-   * prediction intervals, slices, intervals that do not resample whole origins, and more than one series (a unit with a
-   * row per grain record per period holds one series per grain record).
+   * prediction intervals, slices, intervals that do not resample whole origins, no seasonal-naive baseline (its season
+   * sets the MASE scale and it is a member of the publishing gate), and more than one series (a unit with a row per
+   * grain record per period holds one series per grain record).
    */
   private static checkForecast(p: EvaluationProtocolSpec, unit: PredictionUnitSpec): ProtocolRefusal[] {
     if (unit.label.outcome.kind !== 'forecast') return [];
@@ -300,6 +307,7 @@ export class EvaluationProtocolRules {
     if (p.predictionIntervals !== null) out.push({ Kind: 'forecast-prediction-intervals', Method: p.predictionIntervals.method });
     if (p.slices.outOfTime || p.slices.subgroups.length > 0) out.push({ Kind: 'forecast-slices', OutOfTime: p.slices.outOfTime, Subgroups: p.slices.subgroups });
     if (p.intervals.method !== 'block-bootstrap') out.push({ Kind: 'forecast-interval-method', Method: p.intervals.method });
+    if (!p.baselines.some((b) => b.kind === 'seasonal-naive')) out.push({ Kind: 'forecast-no-seasonal-naive' });
     if (unit.rows.kind === 'grain-x-periods') out.push({ Kind: 'forecast-multiple-series', GrainEntity: unit.rows.grainEntity });
     return out;
   }

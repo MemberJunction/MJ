@@ -37,9 +37,8 @@ export interface EvaluationProtocolVersionRow extends Pick<MJEvaluationProtocolE
 
 /** Evaluation Protocol version rows (static members on one owner). */
 export class EvaluationProtocolVersioning {
-  /** Pure: the columns of version 1 of a new lineage, its own lineage root with a minted upper-case ID. */
-  public static BuildV1Columns(draft: EvaluationProtocolDraft, actor: Actor): EvaluationProtocolVersionColumns {
-    const id = randomUUID().toUpperCase();
+  /** Pure: the columns of version 1 of a new lineage, its own lineage root: `id` is both its ID and its LineageRootID. */
+  public static BuildV1Columns(draft: EvaluationProtocolDraft, actor: Actor, id: string): EvaluationProtocolVersionColumns {
     return { ID: id, LineageRootID: id, Version: 1, Description: null, AuthoredBy: JSON.stringify(actor), ...EvaluationProtocolRules.EvaluationProtocolDraftColumns(draft) };
   }
 
@@ -73,10 +72,10 @@ export class EvaluationProtocolVersioning {
     if (!(await row.Save())) throw new Error(`Saving ${what} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
   }
 
-  /** Version 1 of a new protocol lineage: its own lineage root, with a client-supplied ID. */
+  /** Version 1 of a new protocol lineage: its own lineage root, with a client-minted upper-case ID. */
   public static async CreateEvaluationProtocolV1(draft: EvaluationProtocolDraft, actor: Actor, entityFactory: IEntityFactory, contextUser?: UserInfo): Promise<MJEvaluationProtocolEntity> {
     const row = await entityFactory.getEntityObject<MJEvaluationProtocolEntity>('MJ: Evaluation Protocols', contextUser);
-    await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, actor), `Evaluation Protocol "${draft.name}" v1`);
+    await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, actor, randomUUID().toUpperCase()), `Evaluation Protocol "${draft.name}" v1`);
     return row;
   }
 

@@ -33,23 +33,22 @@ const unit: PredictionUnitSpec = {
   decision: { action: 'call', actorRole: 'team', capacityPerPeriod: null, period: 'month' },
   incumbent: { kind: 'none' }, authoredBy: user,
 };
+const V1_ID = '7C1E2D3F-4A5B-4C6D-8E7F-901A2B3C4D5E';
 const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({
   Unit: unit, Holdout: { kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null }, Candidates: 2, Seed: 0, Name: 'renewal',
 });
 
 async function savedV1(): Promise<MemoryProtocolRow> {
   const row = new MemoryProtocolRow();
-  await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, user), 'v1');
+  await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, user, V1_ID), 'v1');
   return row;
 }
 
 describe('protocol version rows', () => {
-  it('writes version 1 as its own lineage root with a client-supplied ID, and the row parses back to the draft', async () => {
+  it('writes version 1 as its own lineage root with the given ID, and the row parses back to the draft', async () => {
     const v1 = await savedV1();
     expect(v1.Saves).toBe(1);
-    expect(v1.Version).toBe(1);
-    expect(v1.ID).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/);
-    expect(v1.LineageRootID).toBe(v1.ID);
+    expect([v1.ID, v1.LineageRootID, v1.Version]).toEqual([V1_ID, V1_ID, 1]);
     expect(EvaluationProtocol.ParseEvaluationProtocolRow(v1)).toEqual({ Ok: true, Value: { ...draft, id: v1.ID, lineageRootId: v1.ID, version: 1, authoredBy: user } });
   });
 
@@ -73,7 +72,7 @@ describe('protocol version rows', () => {
 
   it('throws with the save message when the row is not saved', async () => {
     const row = new MemoryProtocolRow('Violation of CHECK constraint');
-    await expect(EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, user), 'Evaluation Protocol "renewal" v1'))
+    await expect(EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1Columns(draft, user, V1_ID), 'Evaluation Protocol "renewal" v1'))
       .rejects.toThrow('Saving Evaluation Protocol "renewal" v1 failed: Violation of CHECK constraint');
   });
 });

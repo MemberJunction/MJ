@@ -118,6 +118,21 @@ describe('ValidateProtocolForUnit', () => {
     );
   });
 
+  it('refuses a rolling-origin horizon shorter than the unit\'s', () => {
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol(draftFor(series, rolling(5, 1))), series)).toEqual([
+      { Kind: 'horizon-mismatch', ProtocolHorizonPeriods: 1, UnitHorizonPeriods: 3 },
+    ]);
+  });
+
+  it('refuses blocked-time folds grouped by a key when the unit has no group key, naming that it has none', () => {
+    const p = protocol({ ...draftFor(series, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 3, groupKey: 'PersonID' } });
+    const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(p, series);
+    expect(refusals).toEqual([{ Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: null }]);
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
+      'The protocol groups its inner validation by "PersonID", but the Prediction Unit has no group key (its rows are grouped by their entity key); the folds would not be grouped the way the protocol says.',
+    );
+  });
+
   it('refuses a blocked-time inner gap shorter than the horizon', () => {
     const p = protocol({ ...draftFor(series, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 1, groupKey: null } });
     expect(EvaluationProtocolRules.ValidateProtocolForUnit(p, series)).toEqual([{ Kind: 'inner-gap-below-horizon', GapPeriods: 1, HorizonPeriods: 3 }]);
@@ -166,6 +181,21 @@ describe('ValidateProtocolForUnit', () => {
       expect(refusals).toEqual([{ Kind: 'forecast-slices', OutOfTime: true, Subgroups: ['Region'] }]);
       expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
         'Forecast slices are not available; this protocol declares out-of-time and subgroups Region.',
+      );
+    });
+
+    it('refuses declared subgroup slices without an out-of-time slice', () => {
+      const refusals = only(forecastProtocol({ slices: { outOfTime: false, subgroups: ['Region'] } }));
+      expect(refusals).toEqual([{ Kind: 'forecast-slices', OutOfTime: false, Subgroups: ['Region'] }]);
+      expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe('Forecast slices are not available; this protocol declares subgroups Region.');
+    });
+
+    it('refuses a protocol without a seasonal-naive baseline', () => {
+      const d = draftFor(series, rolling(5));
+      const refusals = only(forecastProtocol({ baselines: d.baselines.filter((b) => b.kind !== 'seasonal-naive') }));
+      expect(refusals).toEqual([{ Kind: 'forecast-no-seasonal-naive' }]);
+      expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
+        'A forecast needs a declared seasonal-naive baseline: its season sets the MASE scale and it is a member of the publishing gate.',
       );
     });
 
