@@ -961,6 +961,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Returns true when a cached `RunView` slot identified by `fingerprint` is eligible for
+     * in-place maintenance across entity saves (unfiltered, unordered, uncapped, no aggregates
+     * or narrowing segments).
+     */
+    public IsRunViewFingerprintMaintainableOnSave(fingerprint: string): boolean {
+        if (!fingerprint || !fingerprint.includes('|')) {
+            return false;
+        }
+        return !this.isSubsetFingerprint(fingerprint) && !this.isFilteredFingerprint(fingerprint);
+    }
+
+    /**
      * Returns true if the slot was cached under an ORDER BY (fingerprint segment [2]).
      *
      * An ordered slot's row SET can be maintained in place, but its ORDER cannot: an upsert

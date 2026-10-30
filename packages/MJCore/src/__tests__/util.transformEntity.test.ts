@@ -574,4 +574,36 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         expect(check).toEqual({ HasChildren: true, ChildEntityName: 'Meetings' });
         expect(batchedProvider.Count('FindISAChildEntity')).toBe(1);
     });
+
+    it('skips querying an IS-A child entity in RunViews when the user lacks Read permission on that child type', async () => {
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        vi.spyOn(meetingsInfo, 'GetUserPermisions').mockReturnValue({
+            CanRead: false,
+            CanCreate: false,
+            CanUpdate: false,
+            CanDelete: false,
+        } as ReturnType<EntityInfo['GetUserPermisions']>);
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const rows = Array.from({ length: 4 }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(productsInfo, id)!;
+        });
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(results).toHaveLength(4);
+        // Even indices (Meetings) remain unlinked plain parents; odd indices (Publications) link their child
+        expect(results[0].ISAChild).toBeNull();
+        expect(results[1].ISAChild?.EntityInfo.Name).toBe('Publications');
+        expect(results[2].ISAChild).toBeNull();
+        expect(results[3].ISAChild?.EntityInfo.Name).toBe('Publications');
+        // Meetings was never even queried via RunViews
+        expect(batchedProvider.RunViewsParams.map(p => p.EntityName)).toEqual(['Publications']);
+    });
 });

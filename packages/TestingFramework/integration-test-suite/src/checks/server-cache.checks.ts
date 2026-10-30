@@ -37,6 +37,16 @@ function KeyValuesOf(entity: BaseEntity): Record<string, string> {
     return Object.fromEntries(entity.PrimaryKey.KeyValuePairs.map(kv => [kv.FieldName, String(kv.Value)]));
 }
 
+/** Polls for at least one recorded `row_delta` write up to `timeoutMs` so fast local runs finish in ~25 ms instead of sleeping the full timeout. */
+async function WaitForRowDeltaWrite(ctx: IntegrationCheckContext, timeoutMs: number = 2000): Promise<void> {
+    const pollIntervalMs = 25;
+    let elapsed = 0;
+    while (ctx.Storage.RowDeltaWrites().length === 0 && elapsed < timeoutMs) {
+        await Settle(pollIntervalMs);
+        elapsed += pollIntervalMs;
+    }
+}
+
 /** The most recent write that asked for a `row_delta` broadcast, parsed; throws (fails the check) when there is none. */
 function LastRowDeltaWrite(ctx: IntegrationCheckContext, label: string): { payload: CacheRowDeltaPayload; bytes: number } {
     const writes = ctx.Storage.RowDeltaWrites();
@@ -1135,7 +1145,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             const savedKey = KeyValuesOf(setting);
             let deleted = false;
             try {
-                await Settle(2000);
+                await WaitForRowDeltaWrite(ctx);
                 const { payload, bytes } = LastRowDeltaWrite(ctx, 'S34 upsert');
                 AssertUpsertDelta(payload, entityInfo!, savedKey, baselineCount);
                 Assert(bytes < slotBytes + 2000, 'S34: the broadcast payload must be compact (one row), not the whole cached array');
@@ -1143,7 +1153,7 @@ export const ServerCacheChecks: NamedCheck[] = [
                 ctx.Storage.ResetCounts();
                 deleted = await setting.Delete();
                 Assert(deleted, `S34 delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
-                await Settle(2000);
+                await WaitForRowDeltaWrite(ctx);
                 AssertRemovalDelta(LastRowDeltaWrite(ctx, 'S34 removal').payload, entityInfo!, savedKey, baselineCount);
             } finally {
                 if (!deleted) {

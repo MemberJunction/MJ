@@ -156,7 +156,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
             .map(child => {
-                const schema = child.SchemaName || '__mj';
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
                 const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
@@ -175,7 +175,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
             .map((child, idx) => {
-                const schema = child.SchemaName || '__mj';
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
                 const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);

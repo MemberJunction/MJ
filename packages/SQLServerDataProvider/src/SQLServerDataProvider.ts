@@ -511,6 +511,7 @@ export class SQLServerDataProvider
    */
   private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
   private static readonly _viewColumnOrderCacheByDbKey = new Map<string, Promise<Map<string, string[]>>>();
+  private static readonly DEFAULT_SQL_SERVER_PORT = 1433;
 
   private static viewColumnOrderDbKey(pool: sql.ConnectionPool): string | null {
     const cfg = (
@@ -531,7 +532,10 @@ export class SQLServerDataProvider
       cfg.database.trim().length > 0
     ) {
       const host = cfg.server.trim().toLowerCase();
-      const port = typeof cfg.port === 'number' && cfg.port > 0 ? cfg.port : 1433;
+      const port =
+        typeof cfg.port === 'number' && cfg.port > 0
+          ? cfg.port
+          : SQLServerDataProvider.DEFAULT_SQL_SERVER_PORT;
       const instance =
         typeof cfg.options?.instanceName === 'string' && cfg.options.instanceName.trim().length > 0
           ? `/${cfg.options.instanceName.trim().toLowerCase()}`
@@ -3114,7 +3118,7 @@ export class SQLServerDataProvider
     const unionParts = childEntities
       .filter(child => child.PrimaryKeys.length > 0)
       .map(child => {
-        const schema = child.SchemaName || '__mj';
+        const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
         const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
         const nameLit = dialect.QuoteStringLiteral(child.Name);
@@ -3139,7 +3143,7 @@ export class SQLServerDataProvider
     const unionParts = childEntities
       .filter(child => child.PrimaryKeys.length > 0)
       .map((child, idx) => {
-        const schema = child.SchemaName || '__mj';
+        const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
         const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
         const nameLit = dialect.QuoteStringLiteral(child.Name);

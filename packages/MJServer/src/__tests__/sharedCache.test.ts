@@ -84,7 +84,7 @@ describe('shared cache event routing', () => {
         const deltaEvt = event({
             CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1',
             Action: 'row_delta',
-            Data: JSON.stringify({ kind: 'row_delta', upsertedRows: [{ ID: '1' }], deletedPrimaryKeys: [], rowCount: 1, maxUpdatedAt: '' }),
+            Data: JSON.stringify({ primaryKeyFields: ['ID'], upsertedRows: [{ ID: '1' }], deletedPrimaryKeys: [], rowCount: 1, maxUpdatedAt: '' }),
         });
         RouteSharedCacheEvent(deltaEvt, provider(false));
         expect(dispatch).toHaveBeenCalledWith(deltaEvt);

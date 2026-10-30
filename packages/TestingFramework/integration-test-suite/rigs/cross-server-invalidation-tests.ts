@@ -30,7 +30,7 @@
  *
  * Exit contract (harness standard): 0 all passed · 1 failures · 2 bootstrap/connectivity error.
  */
-import { RunView, CacheCategory } from '@memberjunction/core';
+import { RunView, CacheCategory, LocalCacheManager } from '@memberjunction/core';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
@@ -71,9 +71,7 @@ interface PubSubEvent { Action?: string; Category?: string; CacheKey?: string; D
  * binary-width slot's full repopulation.
  */
 function isMaintainableSlot(key: string | undefined): boolean {
-    const seg = (key ?? '').split('|');
-    if (!(seg[1] === '_' && seg[2] === '_' && seg[3] === '-1' && seg[4] === '0' && seg[5] === '_' && seg[6] === '_')) return false;
-    return seg.slice(7).every(x => !x || x.startsWith('imr:') || x === 'f:*' || x.includes('://'));
+    return LocalCacheManager.Instance.IsRunViewFingerprintMaintainableOnSave(key ?? '');
 }
 
 function describeEvent(e: PubSubEvent): string {

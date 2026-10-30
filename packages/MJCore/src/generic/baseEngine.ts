@@ -2923,60 +2923,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entityInfo = config.EntityName ? this.ProviderToUse?.EntityByName?.(config.EntityName) : undefined;
         const pkFields = delta.primaryKeyFields;
         const isUuidPk = pkFields.map(fieldName =>
-            Boolean(entityInfo?.Fields.find(f => f.Name === fieldName)?.IsUniqueIdentifier)
+            Boolean(entityInfo?.FieldByName(fieldName)?.IsUniqueIdentifier)
         );
 
-        const heldIndexByKey = new Map<string, number>();
-        for (let i = 0; i < heldRows.length; i++) {
-            const key = this.canonicalHeldRowPkKey(heldRows[i], pkFields, isUuidPk);
-            if (key === null) {
-                return 'reload';
-            }
-            heldIndexByKey.set(key, i);
-        }
-        if (heldIndexByKey.size !== heldRows.length) {
+        const heldIndexByKey = this.indexHeldRowsForDelta(heldRows, pkFields, isUuidPk);
+        if (!heldIndexByKey) {
             return 'reload';
         }
 
-        const matchedDeleteKeys = new Set<string>();
-        for (const delPk of delta.deletedPrimaryKeys) {
-            const key = this.canonicalPlainRecordPkKey(delPk, pkFields, isUuidPk);
-            if (key === null) {
-                return 'reload';
-            }
-            if (heldIndexByKey.has(key)) {
-                matchedDeleteKeys.add(key);
-            }
-        }
-
-        const upsertKeys: string[] = [];
-        const seenUpsertKeys = new Set<string>();
-        let netNewInserts = 0;
-        for (const upRow of delta.upsertedRows) {
-            const key = this.canonicalPlainRecordPkKey(upRow, pkFields, isUuidPk);
-            if (key === null || seenUpsertKeys.has(key)) {
-                return 'reload';
-            }
-            seenUpsertKeys.add(key);
-            upsertKeys.push(key);
-            if (!heldIndexByKey.has(key) || matchedDeleteKeys.has(key)) {
-                netNewInserts++;
-            }
-        }
-
-        // Strict cardinality verification: detects uninitialized state, missed pub/sub messages,
-        // or filtered-slot membership divergence and falls back to reading the warm cache slot.
-        const expectedNextLength = heldRows.length - matchedDeleteKeys.size + netNewInserts;
-        if (expectedNextLength !== delta.rowCount) {
+        const keyPlan = this.planRowDeltaKeys(delta, heldRows.length, heldIndexByKey, pkFields, isUuidPk);
+        if (!keyPlan) {
             return 'reload';
         }
 
         // Echo / duplicate delta suppression: when no rows are added or removed and every
         // upserted row's __mj_UpdatedAt matches the held row, skip materialization & emit churn.
         if (
-            matchedDeleteKeys.size === 0 &&
-            netNewInserts === 0 &&
-            this.upsertsMatchHeldTimestamps(heldRows, heldIndexByKey, delta.upsertedRows, upsertKeys, entityInfo)
+            keyPlan.matchedDeleteKeys.size === 0 &&
+            keyPlan.netNewInserts === 0 &&
+            this.upsertsMatchHeldTimestamps(heldRows, heldIndexByKey, delta.upsertedRows, keyPlan.upsertKeys, entityInfo)
         ) {
             LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds row_delta versions — skipped`, verboseOnly: true });
             return 'applied';
@@ -2997,9 +2962,98 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return 'superseded';
         }
 
+        const nextRows = this.mergeMaterializedDeltaRows(
+            heldRows,
+            pkFields,
+            isUuidPk,
+            keyPlan.matchedDeleteKeys,
+            keyPlan.upsertKeys,
+            materializedUpserts as Array<BaseEntity | Record<string, CacheRowValue>>
+        );
+
+        this.HandleSingleViewResult(config, {
+            Success: true,
+            Results: nextRows,
+            RowCount: nextRows.length,
+            TotalRowCount: delta.totalRowCount ?? nextRows.length,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            UserViewRunID: '',
+        });
+        await this.RebuildDerivedState(this._contextUser);
+        this.emitPropertyChange(config.PropertyName);
+        return 'applied';
+    }
+
+    private indexHeldRowsForDelta(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): Map<string, number> | null {
+        const heldIndexByKey = new Map<string, number>();
+        for (let i = 0; i < heldRows.length; i++) {
+            const key = this.canonicalHeldRowPkKey(heldRows[i], pkFields, isUuidPk);
+            if (key === null) {
+                return null;
+            }
+            heldIndexByKey.set(key, i);
+        }
+        return heldIndexByKey.size === heldRows.length ? heldIndexByKey : null;
+    }
+
+    private planRowDeltaKeys(
+        delta: CacheRowDeltaPayload,
+        heldRowCount: number,
+        heldIndexByKey: Map<string, number>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): { matchedDeleteKeys: Set<string>; upsertKeys: string[]; netNewInserts: number } | null {
+        const matchedDeleteKeys = new Set<string>();
+        for (const delPk of delta.deletedPrimaryKeys) {
+            const key = this.canonicalPlainRecordPkKey(delPk, pkFields, isUuidPk);
+            if (key === null) {
+                return null;
+            }
+            if (heldIndexByKey.has(key)) {
+                matchedDeleteKeys.add(key);
+            }
+        }
+
+        const upsertKeys: string[] = [];
+        const seenUpsertKeys = new Set<string>();
+        let netNewInserts = 0;
+        for (const upRow of delta.upsertedRows) {
+            const key = this.canonicalPlainRecordPkKey(upRow, pkFields, isUuidPk);
+            if (key === null || seenUpsertKeys.has(key)) {
+                return null;
+            }
+            seenUpsertKeys.add(key);
+            upsertKeys.push(key);
+            if (!heldIndexByKey.has(key) || matchedDeleteKeys.has(key)) {
+                netNewInserts++;
+            }
+        }
+
+        // Strict cardinality verification: detects uninitialized state, missed pub/sub messages,
+        // or filtered-slot membership divergence and falls back to reading the warm cache slot.
+        const expectedNextLength = heldRowCount - matchedDeleteKeys.size + netNewInserts;
+        if (expectedNextLength !== delta.rowCount) {
+            return null;
+        }
+        return { matchedDeleteKeys, upsertKeys, netNewInserts };
+    }
+
+    private mergeMaterializedDeltaRows(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        pkFields: string[],
+        isUuidPk: boolean[],
+        matchedDeleteKeys: ReadonlySet<string>,
+        upsertKeys: ReadonlyArray<string>,
+        materializedUpserts: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>
+    ): Array<BaseEntity | Record<string, CacheRowValue>> {
         const upsertByKey = new Map<string, BaseEntity | Record<string, CacheRowValue>>();
         for (let i = 0; i < upsertKeys.length; i++) {
-            upsertByKey.set(upsertKeys[i], materializedUpserts[i] as BaseEntity | Record<string, CacheRowValue>);
+            upsertByKey.set(upsertKeys[i], materializedUpserts[i]);
         }
 
         const consumedUpsertKeys = new Set<string>();
@@ -3020,19 +3074,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 nextRows.push(upsertByKey.get(key)!);
             }
         }
-
-        this.HandleSingleViewResult(config, {
-            Success: true,
-            Results: nextRows,
-            RowCount: nextRows.length,
-            TotalRowCount: delta.totalRowCount ?? nextRows.length,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            UserViewRunID: '',
-        });
-        await this.RebuildDerivedState(this._contextUser);
-        this.emitPropertyChange(config.PropertyName);
-        return 'applied';
+        return nextRows;
     }
 
     private getHeldRowsForDelta(
@@ -3045,7 +3087,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (entry?.loadedSuccessfully && Array.isArray(entry.data)) {
             return entry.data as Array<BaseEntity | Record<string, CacheRowValue>>;
         }
-        const propVal = (this as object as Record<string, CacheRowValue>)[config.PropertyName];
+        const propVal = Reflect.get(this, config.PropertyName) as CacheRowValue;
         if (Array.isArray(propVal) && (propVal.length > 0 || Boolean(entry))) {
             return propVal as Array<BaseEntity | Record<string, CacheRowValue>>;
         }

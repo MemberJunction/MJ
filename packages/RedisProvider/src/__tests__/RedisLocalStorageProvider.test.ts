@@ -1742,7 +1742,7 @@ describe('RedisLocalStorageProvider', () => {
 
                 const fullValue = JSON.stringify({ results: [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }] });
                 const compactDelta = JSON.stringify({
-                    kind: 'row_delta',
+                    primaryKeyFields: ['ID'],
                     upsertedRows: [{ ID: '2', Name: 'Bob' }],
                     deletedPrimaryKeys: [],
                     rowCount: 2,

@@ -312,7 +312,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
     }
 
     function makeDeltaEvent(delta: {
-        kind: 'row_delta';
         primaryKeyFields?: string[];
         upsertedRows: Array<Record<string, string | number | boolean | null>>;
         deletedPrimaryKeys: Array<Record<string, string | number>>;
@@ -360,7 +359,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [
                     { ID: 'r2', Note: 'two-updated' },
                     { ID: 'r4', Note: 'four-new' },
@@ -401,7 +399,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         const d1 = engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r1', Note: 'v2' }],
                 deletedPrimaryKeys: [],
                 rowCount: 2,
@@ -411,7 +408,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         const d2 = engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r2', Note: 'v2' }],
                 deletedPrimaryKeys: [],
                 rowCount: 2,
@@ -459,7 +455,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r2', Note: 'v1' }],
                 deletedPrimaryKeys: [],
                 rowCount: 2,
@@ -496,7 +491,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 primaryKeyFields: ['OrderID', 'LineNo'],
                 upsertedRows: [{ OrderID: 'o1', LineNo: 2, Qty: 5 }],
                 deletedPrimaryKeys: [{ OrderID: 'o1', LineNo: 1 }],
@@ -522,7 +516,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r3', Note: '0-first' }],
                 deletedPrimaryKeys: [],
                 rowCount: 3,
@@ -545,7 +538,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r1', Note: 'b' }],
                 deletedPrimaryKeys: [],
                 rowCount: 1,
@@ -568,7 +560,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r1', Note: 'a' }],
                 deletedPrimaryKeys: [],
                 rowCount: 1,
@@ -592,7 +583,6 @@ describe('BaseEngine.OnExternalCacheChange O(Δ) row_delta handling', () => {
         await engine.OnExternalCacheChangeForTest(
             config,
             makeDeltaEvent({
-                kind: 'row_delta',
                 upsertedRows: [{ ID: 'r2', Note: 'v1' }],
                 deletedPrimaryKeys: [],
                 rowCount: 99, // Drift! Expected 2, sender reports 99

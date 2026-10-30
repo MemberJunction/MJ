@@ -95,4 +95,39 @@ describe('BaseEntity in-place hydration', () => {
         expect(all['Name']).toBe('Ninth');
         expect(all['ProductTypeID']).toBe('t9');
     });
+
+    it('increments _finalizeGeneration on Hydrate() so an in-flight Finalize() from an earlier load cannot overwrite freshly hydrated fields', async () => {
+        const product = await newProduct();
+        product.Hydrate({ ID: 'p1', Name: 'First', ProductTypeID: 't1' });
+        const genBefore = (product as unknown as { _finalizeGeneration: number })._finalizeGeneration;
+
+        product.Hydrate({ ID: 'p2', Name: 'Second', ProductTypeID: 't2' });
+        const genAfter = (product as unknown as { _finalizeGeneration: number })._finalizeGeneration;
+
+        expect(genAfter).toBe(genBefore + 1);
+    });
+
+    it('LoadFromDataBatchAsISAParent delegates to an overridden LoadFromData on a custom entity subclass', async () => {
+        let customHookCalled = false;
+        class CustomProductEntity extends LoadHintTestEntity {
+            public override async LoadFromData(
+                data: Record<string, unknown>,
+                replaceOldValues?: boolean
+            ): Promise<boolean> {
+                customHookCalled = true;
+                return super.LoadFromData(data, replaceOldValues);
+            }
+        }
+
+        const entityInfo = provider.Entities.find(e => e.Name === 'Products')!;
+        const customEntity = new CustomProductEntity(entityInfo);
+        await customEntity.LoadFromDataBatchAsISAParent(
+            [{ entity: customEntity, data: { ID: 'p1', Name: 'Custom', ProductTypeID: 't1' } }],
+            provider as object as IMetadataProvider,
+            user
+        );
+
+        expect(customHookCalled).toBe(true);
+        expect(customEntity.Get('Name')).toBe('Custom');
+    });
 });
