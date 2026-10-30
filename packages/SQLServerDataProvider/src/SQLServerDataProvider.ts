@@ -494,11 +494,15 @@ export class SQLServerDataProvider
    * `sys.columns` scan in {@link loadViewColumnOrderCache} ran once or twice on EVERY request
    * (issue #3102 — ~9.6k scans/day in production vs the ~2 needed).
    *
-   * Keyed by normalized database target (`server:port[/instance]/database`) when `ConnectionPool.config`
-   * exposes the target coordinates — so RW, RO, and CodeGen pools connected to the SAME database share
-   * one `sys.columns` scan and one cross-pool invalidation domain — while pools pointing to DIFFERENT
-   * databases stay strictly isolated. Falls back to `_viewColumnOrderCacheByPool` (`WeakMap`) when a
-   * pool object does not expose `config.server` + `config.database` (e.g. lightweight test doubles).
+   * Keyed by normalized database target AND login (`user@server:port[/instance]/database`) when
+   * `ConnectionPool.config` exposes them — so pools opened with the same login against the SAME
+   * database (per-request RW providers around the boot-time pool) share one `sys.columns` scan and
+   * one cross-pool invalidation domain, while pools pointing to DIFFERENT databases, or using a
+   * different login (read-only, CodeGen), stay isolated: `sys.columns` only lists objects the login
+   * can see, so one login's scan must never stand in for another's. Pools without `config.user`
+   * (token/integrated auth) share by target alone. Falls back to `_viewColumnOrderCacheByPool`
+   * (`WeakMap`) when a pool object does not expose `config.server` + `config.database` (e.g.
+   * lightweight test doubles).
    *
    * The value is the load PROMISE (not the resolved Map) so concurrent per-request Config() calls
    * de-duplicate onto a single in-flight scan. Invalidated on metadata refresh (see

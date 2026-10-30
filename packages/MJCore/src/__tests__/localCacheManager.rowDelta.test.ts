@@ -18,12 +18,12 @@ function resetLocalCacheManager(): void {
     delete g['___SINGLETON__LocalCacheManager'];
 }
 
-interface RecordedWrite { key: string; category?: string; value: unknown; options?: LocalStorageWriteOptions }
+interface CapturedWrite { key: string; category?: string; value: unknown; options?: LocalStorageWriteOptions }
 
 /** Minimal isolating store that records every SetItem's write options. */
 class RecordingStorageProvider implements ILocalStorageProvider {
     public readonly SharesReferences = false;
-    public readonly writes: RecordedWrite[] = [];
+    public readonly Writes: CapturedWrite[] = [];
     private store = new Map<string, unknown>();
     private k(key: string, category?: string): string { return `${category ?? 'default'}::${key}`; }
     public async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
@@ -36,7 +36,7 @@ class RecordingStorageProvider implements ILocalStorageProvider {
         return out;
     }
     public async SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void> {
-        this.writes.push({ key, category, value: JSON.parse(JSON.stringify(value)), options });
+        this.Writes.push({ key, category, value: JSON.parse(JSON.stringify(value)), options });
         this.store.set(this.k(key, category), JSON.parse(JSON.stringify(value)));
     }
     public async Remove(key: string, category?: string): Promise<void> { this.store.delete(this.k(key, category)); }
@@ -46,9 +46,9 @@ class RecordingStorageProvider implements ILocalStorageProvider {
     public async GetCategoryKeys(category: string): Promise<string[]> {
         return Array.from(this.store.keys()).filter(k => k.startsWith(`${category}::`)).map(k => k.substring(category.length + 2));
     }
-    public rowDeltaWrites(): RecordedWrite[] { return this.writes.filter(w => w.options?.pubSubAction === 'row_delta'); }
-    public lastDelta(): CacheRowDeltaPayload {
-        const w = this.rowDeltaWrites().at(-1);
+    public RowDeltaWrites(): CapturedWrite[] { return this.Writes.filter(w => w.options?.pubSubAction === 'row_delta'); }
+    public LastDelta(): CacheRowDeltaPayload {
+        const w = this.RowDeltaWrites().at(-1);
         if (!w?.options?.pubSubData) throw new Error('no row_delta write recorded');
         return JSON.parse(w.options.pubSubData) as CacheRowDeltaPayload;
     }
@@ -79,14 +79,14 @@ describe('LocalCacheManager.ApplyRowChanges — row_delta broadcast contract', (
         await cache.Initialize(storage, { verboseLogging: false });
         fp = (cache as unknown as { GenerateRunViewFingerprint(p: RunViewParams): string }).GenerateRunViewFingerprint(params);
         await cache.SetRunViewResult(fp, params, seedRows(3), T0, undefined, 3);
-        storage.writes.length = 0;
+        storage.Writes.length = 0;
     });
 
     it('an upsert writes the full snapshot to storage but broadcasts only the changed row', async () => {
         const changed = { ID: 'id-2', Name: 'Row 2 (edited)', __mj_UpdatedAt: T1 };
         expect(await cache.ApplyRowChanges(fp, [{ Key: key('id-2'), Row: changed }], T1)).toBe(true);
 
-        const writes = storage.rowDeltaWrites();
+        const writes = storage.RowDeltaWrites();
         expect(writes).toHaveLength(1);
         expect(writes[0].key).toBe(fp);
         expect(writes[0].category).toBe(CacheCategory.RunViewCache);
@@ -95,7 +95,7 @@ describe('LocalCacheManager.ApplyRowChanges — row_delta broadcast contract', (
         expect(stored.results.map(r => r.ID)).toEqual(['id-1', 'id-2', 'id-3']);
         expect(stored.results[1].Name).toBe('Row 2 (edited)');
         // ...while the broadcast carries just the delta
-        const delta = storage.lastDelta();
+        const delta = storage.LastDelta();
         expect(delta.upsertedRows).toEqual([changed]);
         expect(delta.deletedPrimaryKeys).toEqual([]);
         expect(delta.primaryKeyFields).toEqual(['ID']);
@@ -108,7 +108,7 @@ describe('LocalCacheManager.ApplyRowChanges — row_delta broadcast contract', (
     it('an insert and a delete in one call broadcast one upserted row, one deleted key and the net rowCount', async () => {
         const inserted = { ID: 'id-9', Name: 'Row 9', __mj_UpdatedAt: T1 };
         await cache.ApplyRowChanges(fp, [{ Key: key('id-9'), Row: inserted }, { Key: key('id-1'), Row: null }], T1);
-        const delta = storage.lastDelta();
+        const delta = storage.LastDelta();
         expect(delta.upsertedRows).toEqual([inserted]);
         expect(delta.deletedPrimaryKeys).toEqual([{ ID: 'id-1' }]);
         expect(delta.rowCount).toBe(3); // 3 - 1 + 1
@@ -117,7 +117,7 @@ describe('LocalCacheManager.ApplyRowChanges — row_delta broadcast contract', (
 
     it('removing a key the slot does not hold changes nothing and broadcasts nothing', async () => {
         expect(await cache.ApplyRowChanges(fp, [{ Key: key('id-404'), Row: null }], T1)).toBe(true);
-        expect(storage.writes).toHaveLength(0);
+        expect(storage.Writes).toHaveLength(0);
     });
 
     it('composite primary keys are carried per field in deletedPrimaryKeys and primaryKeyFields', async () => {
@@ -126,10 +126,10 @@ describe('LocalCacheManager.ApplyRowChanges — row_delta broadcast contract', (
             { OrderID: 'o1', LineNo: 1, Qty: 1, __mj_UpdatedAt: T0 },
             { OrderID: 'o1', LineNo: 2, Qty: 1, __mj_UpdatedAt: T0 },
         ], T0, undefined, 2);
-        storage.writes.length = 0;
+        storage.Writes.length = 0;
         const ck = new CompositeKey([{ FieldName: 'OrderID', Value: 'o1' }, { FieldName: 'LineNo', Value: 2 }]);
         await cache.ApplyRowChanges(cfp, [{ Key: ck, Row: null }], T1);
-        const delta = storage.lastDelta();
+        const delta = storage.LastDelta();
         expect(delta.primaryKeyFields).toEqual(['OrderID', 'LineNo']);
         expect(delta.deletedPrimaryKeys).toEqual([{ OrderID: 'o1', LineNo: 2 }]);
         expect(delta.rowCount).toBe(1);
@@ -137,12 +137,12 @@ describe('LocalCacheManager.ApplyRowChanges — row_delta broadcast contract', (
 
     it('a slot that does not exist is not maintained: returns false and writes nothing', async () => {
         expect(await cache.ApplyRowChanges('Nope|_|_|-1|0|_|_', [{ Key: key('id-1'), Row: { ID: 'id-1' } }], T1)).toBe(false);
-        expect(storage.writes).toHaveLength(0);
+        expect(storage.Writes).toHaveLength(0);
     });
 
     it('the schemaHash of the slot is carried forward on the delta so peers can validate it', async () => {
         const stored = (await storage.GetItem<{ schemaHash?: string }>(fp, CacheCategory.RunViewCache))!;
         await cache.ApplyRowChanges(fp, [{ Key: key('id-3'), Row: { ID: 'id-3', Name: 'x', __mj_UpdatedAt: T1 } }], T1);
-        expect(storage.lastDelta().schemaHash).toBe(stored.schemaHash);
+        expect(storage.LastDelta().schemaHash).toBe(stored.schemaHash);
     });
 });

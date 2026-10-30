@@ -1,8 +1,8 @@
 import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
-import { CanonicalPrimaryKeyValue } from './util';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
+import { CanonicalPrimaryKeyValue } from './util';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
 import { ComputeContentHashOptions, EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -10,7 +10,7 @@ import { Metadata } from './metadata';
 import { RunView, type RunViewParams } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
-import { LogDebug, LogError, LogStatus, LogStatusEx } from './logging';
+import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from './logging';
 import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
@@ -6690,7 +6690,7 @@ export abstract class BaseEntity<T = unknown> {
                     const batchMap = await entityProvider.FindISAChildEntitiesBatch(parentInfo, pks, contextUser ?? sampleParent._contextCurrentUser);
                     const pkIsUuid = Boolean(parentInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
                     for (const p of groupParents) {
-                        const pkKey = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), pkIsUuid);
+                        const pkKey = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
                         const matched = batchMap.get(pkKey) ?? [];
                         p._childEntities = matched.map(name => ({ entityName: name }));
                     }
@@ -6801,7 +6801,7 @@ export abstract class BaseEntity<T = unknown> {
         if (typeof entityProvider?.FindISAChildEntitiesBatch === 'function') {
             const batchMap = await entityProvider.FindISAChildEntitiesBatch(parentInfo, pkValues, contextUser);
             for (const p of parents) {
-                const pkKey = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), pkIsUuid);
+                const pkKey = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
                 const firstMatch = batchMap.get(pkKey)?.[0];
                 if (firstMatch) {
                     let bucket = grouped.get(firstMatch);
@@ -6846,7 +6846,7 @@ export abstract class BaseEntity<T = unknown> {
                     for (const row of res.Results) {
                         const rawVal = row[pkName];
                         if (rawVal != null) {
-                            const norm = CanonicalPrimaryKeyValue(rawVal, pkIsUuid);
+                            const norm = CanonicalPrimaryKeyValue(String(rawVal), pkIsUuid);
                             if (!winnerByPk.has(norm)) {
                                 winnerByPk.set(norm, child.Name);
                             }
@@ -6856,7 +6856,7 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             for (const p of parents) {
-                const norm = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), pkIsUuid);
+                const norm = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
                 const childName = winnerByPk.get(norm);
                 if (childName) {
                     let bucket = grouped.get(childName);
@@ -6963,7 +6963,7 @@ export abstract class BaseEntity<T = unknown> {
             if (!res?.Success || !Array.isArray(res.Results)) {
                 // Not silent: the per-row path surfaced a failed child load; here the parents stay
                 // unlinked (plain parent records) and the cause goes to the log.
-                LogError(`BaseEntity: batched IS-A child load of '${slice.childName}' failed (${res?.ErrorMessage || 'no result'}); ${slice.parents.length} parent record(s) continue without their subtype`);
+                LogWarning(`BaseEntity: batched IS-A child load of '${slice.childName}' failed (${res?.ErrorMessage || 'no result'}); ${slice.parents.length} parent record(s) continue without their subtype`, 'IS-A');
                 for (const p of slice.parents) unlinkedParents.push(p);
                 continue;
             }
@@ -6972,12 +6972,12 @@ export abstract class BaseEntity<T = unknown> {
             for (const row of res.Results) {
                 const pkVal = row[slice.pkFieldName];
                 if (pkVal != null) {
-                    rowByPk.set(CanonicalPrimaryKeyValue(pkVal, slice.pkIsUuid), row);
+                    rowByPk.set(CanonicalPrimaryKeyValue(String(pkVal), slice.pkIsUuid), row);
                 }
             }
 
             for (const p of slice.parents) {
-                const pkKey = CanonicalPrimaryKeyValue(p.PrimaryKey.Values(), slice.pkIsUuid);
+                const pkKey = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), slice.pkIsUuid);
                 const childRow = rowByPk.get(pkKey);
                 if (!childRow) {
                     unlinkedParents.push(p);
@@ -6989,7 +6989,7 @@ export abstract class BaseEntity<T = unknown> {
                     // path degrades to a plain parent record instead, and says so once per slice.
                     if (!deniedChildLogged.has(slice.childName)) {
                         deniedChildLogged.add(slice.childName);
-                        LogError(`BaseEntity: current user cannot read IS-A child '${slice.childName}'; matching parent records are returned without their subtype`);
+                        LogWarning(`BaseEntity: current user cannot read IS-A child '${slice.childName}'; matching parent records are returned without their subtype`, 'IS-A');
                     }
                     unlinkedParents.push(p);
                     continue;

@@ -1,5 +1,5 @@
 /**
- * server-cache.checks.ts — the 'server-cache' bundle (S1–S31, plus the security pin S31b).
+ * server-cache.checks.ts — the 'server-cache' bundle (S1–S34, plus the security pin S31b).
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/server-cache-tests.ts.
  * Each check's body, its UniqueFilter tags (S1/S2/S3 share 's1'), and its display
@@ -8,19 +8,20 @@
  * suite.Test). Both the IntegrationTestDriver and the transitional tsx script
  * resolve these from the one registry (single source of truth).
  *
- * The mutation checks (S17/S23/S24/S29/S30/S31b) carry `RequiresMutation: true` instead of
+ * The mutation checks (S17/S23/S24/S29/S30/S31b/S34) carry `RequiresMutation: true` instead of
  * the original `if (process.env.RUN_MUTATION_TESTS === '1')` registration gate; the
  * driver/script filter them out unless the run opts into mutation. Checks are
  * registered in numeric order; order is load-bearing only for the S1→S2→S3 shared
  * 's1' slot, which numeric order preserves.
  */
 import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } from '@memberjunction/core';
+import type { CacheRowDeltaPayload, EntityInfo } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '@memberjunction/testing-integration';
-import { UniqueFilter } from '@memberjunction/testing-integration';
+import { UniqueFilter, Settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck } from '@memberjunction/testing-integration';
@@ -28,6 +29,44 @@ import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
+/** Small, unfiltered, always-present and writable by the test user: the slot S23/S34 maintain in place. */
+const ROW_DELTA_ENTITY = 'MJ: User Settings';
+
+/** The saved record's primary-key values by field name, taken before `Delete()` resets the instance. */
+function KeyValuesOf(entity: BaseEntity): Record<string, string> {
+    return Object.fromEntries(entity.PrimaryKey.KeyValuePairs.map(kv => [kv.FieldName, String(kv.Value)]));
+}
+
+/** The most recent write that asked for a `row_delta` broadcast, parsed; throws (fails the check) when there is none. */
+function LastRowDeltaWrite(ctx: IntegrationCheckContext, label: string): { payload: CacheRowDeltaPayload; bytes: number } {
+    const writes = ctx.Storage.RowDeltaWrites();
+    Assert(writes.length >= 1, `${label}: the in-place slot maintenance must write the slot with pubSubAction 'row_delta' (saw ${ctx.Storage.Writes.length} write(s), none row_delta)`);
+    const data = writes[writes.length - 1].Options?.pubSubData;
+    Assert(typeof data === 'string', `${label}: a row_delta write must carry pubSubData`);
+    return { payload: JSON.parse(data as string) as CacheRowDeltaPayload, bytes: (data as string).length };
+}
+
+/** A record-shaped payload row names the saved record when every primary-key field matches. */
+function RowIsRecord(row: Record<string, unknown>, entityInfo: EntityInfo, key: Record<string, string>): boolean {
+    return entityInfo.PrimaryKeys.every(pk => UUIDsEqual(String(row[pk.Name]), key[pk.Name]));
+}
+
+function AssertUpsertDelta(payload: CacheRowDeltaPayload, entityInfo: EntityInfo, savedKey: Record<string, string>, baselineCount: number): void {
+    AssertEqual(payload.upsertedRows.length, 1, 'S34: the delta must carry exactly the one upserted row');
+    Assert(RowIsRecord(payload.upsertedRows[0], entityInfo, savedKey), 'S34: the upserted row must be the saved record');
+    AssertEqual(payload.deletedPrimaryKeys.length, 0, 'S34: a save deletes nothing');
+    AssertEqual(payload.primaryKeyFields.join(','), entityInfo.PrimaryKeys.map(pk => pk.Name).join(','), 'S34: primaryKeyFields names the entity key');
+    AssertEqual(payload.rowCount, baselineCount + 1, 'S34: rowCount is the authoritative post-mutation slot size');
+    Assert(typeof payload.maxUpdatedAt === 'string' && payload.maxUpdatedAt.length > 0, 'S34: maxUpdatedAt is carried');
+}
+
+function AssertRemovalDelta(payload: CacheRowDeltaPayload, entityInfo: EntityInfo, savedKey: Record<string, string>, baselineCount: number): void {
+    AssertEqual(payload.upsertedRows.length, 0, 'S34: a delete upserts nothing');
+    AssertEqual(payload.deletedPrimaryKeys.length, 1, 'S34: the delta names exactly the one deleted key');
+    Assert(RowIsRecord(payload.deletedPrimaryKeys[0], entityInfo, savedKey), 'S34: the deleted key is the removed record');
+    AssertEqual(payload.rowCount, baselineCount, 'S34: rowCount returns to the baseline after the delete');
+}
+
 
 /** The ordered server-cache bundle. Numeric order is intentional and load-bearing. */
 /**
@@ -1078,55 +1117,39 @@ export const ServerCacheChecks: NamedCheck[] = [
             // options are the observable here.
             const rv = new RunView();
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-            const makeParams = () => ({ EntityName: 'MJ: User Settings', Fields: ['ID', 'Setting'], ResultType: 'simple' as const });
+            const entityInfo = md.EntityByName(ROW_DELTA_ENTITY);
+            Assert(!!entityInfo, `${ROW_DELTA_ENTITY} must exist`);
+            const makeParams = () => ({ EntityName: ROW_DELTA_ENTITY, Fields: [...entityInfo!.PrimaryKeys.map(pk => pk.Name), 'Setting'], ResultType: 'simple' as const });
             const baseline = await rv.RunView(makeParams(), ctx.User);
             Assert(baseline.Success, `S34 baseline failed: ${baseline.ErrorMessage}`);
             const baselineCount = baseline.Results.length;
+            const slotBytes = JSON.stringify(baseline.Results).length;
 
-            const setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', ctx.User);
+            const setting = await md.GetEntityObject<MJUserSettingEntity>(ROW_DELTA_ENTITY, ctx.User);
             setting.UserID = ctx.User.ID;
             setting.Setting = `mj.integrationtest.rowdelta.${Date.now()}`;
             setting.Value = 'integration-test';
             ctx.Storage.ResetCounts();
             Assert(await setting.Save(), `S34 save failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
-            const savedID = setting.ID; // Delete() resets the instance, so hold the key for the removal assertions
+            // Delete() resets the instance, so hold the saved key's values for the later assertions.
+            const savedKey = KeyValuesOf(setting);
+            let deleted = false;
             try {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                const writes = ctx.Storage.RowDeltaWrites();
-                Assert(writes.length >= 1, `S34: the in-place upsert must write the slot with pubSubAction 'row_delta' (saw ${ctx.Storage.Writes.length} writes, none row_delta)`);
-                const upsert = writes[writes.length - 1];
-                Assert(typeof upsert.Options?.pubSubData === 'string', 'S34: a row_delta write must carry pubSubData');
-                const payload = JSON.parse(upsert.Options!.pubSubData!) as {
-                    upsertedRows: Array<Record<string, unknown>>;
-                    deletedPrimaryKeys: Array<Record<string, unknown>>;
-                    primaryKeyFields: string[];
-                    rowCount: number;
-                    maxUpdatedAt: string;
-                };
-                AssertEqual(payload.upsertedRows.length, 1, 'S34: the delta must carry exactly the one upserted row');
-                Assert(UUIDsEqual(String(payload.upsertedRows[0]['ID']), savedID), 'S34: the upserted row must be the saved record');
-                AssertEqual(payload.deletedPrimaryKeys.length, 0, 'S34: a save deletes nothing');
-                AssertEqual(payload.primaryKeyFields.join(','), 'ID', 'S34: primaryKeyFields names the entity PK');
-                AssertEqual(payload.rowCount, baselineCount + 1, 'S34: rowCount is the authoritative post-mutation slot size');
-                Assert(typeof payload.maxUpdatedAt === 'string' && payload.maxUpdatedAt.length > 0, 'S34: maxUpdatedAt is carried');
-                Assert(upsert.Options!.pubSubData!.length < JSON.stringify(baseline.Results).length + 2000,
-                    'S34: the broadcast payload must be compact (one row), not the whole cached array');
-            } finally {
+                await Settle(2000);
+                const { payload, bytes } = LastRowDeltaWrite(ctx, 'S34 upsert');
+                AssertUpsertDelta(payload, entityInfo!, savedKey, baselineCount);
+                Assert(bytes < slotBytes + 2000, 'S34: the broadcast payload must be compact (one row), not the whole cached array');
+
                 ctx.Storage.ResetCounts();
-                Assert(await setting.Delete(), `S34 delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                deleted = await setting.Delete();
+                Assert(deleted, `S34 delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                await Settle(2000);
+                AssertRemovalDelta(LastRowDeltaWrite(ctx, 'S34 removal').payload, entityInfo!, savedKey, baselineCount);
+            } finally {
+                if (!deleted) {
+                    await setting.Delete().catch(() => undefined); // best-effort cleanup; never masks the real failure
+                }
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const deletes = ctx.Storage.RowDeltaWrites();
-            Assert(deletes.length >= 1, 'S34: the in-place removal must also write the slot as a row_delta');
-            const removal = JSON.parse(deletes[deletes.length - 1].Options!.pubSubData!) as {
-                upsertedRows: unknown[];
-                deletedPrimaryKeys: Array<Record<string, unknown>>;
-                rowCount: number;
-            };
-            AssertEqual(removal.upsertedRows.length, 0, 'S34: a delete upserts nothing');
-            AssertEqual(removal.deletedPrimaryKeys.length, 1, 'S34: the delta names exactly the one deleted key');
-            Assert(UUIDsEqual(String(removal.deletedPrimaryKeys[0]['ID']), savedID), 'S34: the deleted key is the removed record');
-            AssertEqual(removal.rowCount, baselineCount, 'S34: rowCount returns to the baseline after the delete');
         }
     }
 ];

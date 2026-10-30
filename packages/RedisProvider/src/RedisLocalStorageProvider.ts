@@ -1045,9 +1045,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             const writeOpts = typeof options === 'object' && options !== null ? options : undefined;
             // A 'row_delta' is only meaningful with its compact payload; without one, receivers would
             // reject the shape and reload, so publish the ordinary full 'set' instead.
-            const hasRowDelta = writeOpts?.pubSubAction === 'row_delta' && typeof writeOpts.pubSubData === 'string';
-            const pubAction: CacheChangedEvent['Action'] = hasRowDelta ? 'row_delta' : 'set';
-            const pubPayload = hasRowDelta ? writeOpts.pubSubData! : serialized;
+            const rowDeltaPayload = writeOpts?.pubSubAction === 'row_delta' && typeof writeOpts.pubSubData === 'string' ? writeOpts.pubSubData : null;
+            const pubAction: CacheChangedEvent['Action'] = rowDeltaPayload !== null ? 'row_delta' : 'set';
+            const pubPayload = rowDeltaPayload ?? serialized;
             this.publishChange(key, cat, pubAction, pubPayload);
         } catch (err) {
             if (this._enableLogging) {

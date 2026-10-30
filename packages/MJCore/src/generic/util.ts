@@ -29,8 +29,8 @@ import {
  *
  * Both sides of a match must use this function with the same `isUuid` for the same field.
  */
-export function CanonicalPrimaryKeyValue(value: unknown, isUuid: boolean): string {
-    const text = String(value).trim();
+export function CanonicalPrimaryKeyValue(value: string, isUuid: boolean): string {
+    const text = value.trim();
     return isUuid ? NormalizeUUID(text) : text;
 }
 

@@ -1,4 +1,3 @@
-import { CanonicalPrimaryKeyValue } from './util';
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
@@ -14,7 +13,8 @@ import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, EscapeSQLString } from '@memberjunction/global';
+import { CanonicalPrimaryKeyValue } from "./util";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, EscapeSQLString } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -937,7 +937,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const seen = new Set<string>();
         for (const rawPk of recordPKValues) {
             if (!rawPk) continue;
-            const norm = CanonicalPrimaryKeyValue(rawPk, pkIsUuid);
+            const norm = CanonicalPrimaryKeyValue(String(rawPk), pkIsUuid);
             if (!seen.has(norm)) {
                 seen.add(norm);
                 uniquePKs.push(String(rawPk).trim());
@@ -970,7 +970,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             for (const row of rows) {
                 const entityName = row.EntityName ?? row.ChildEntityName;
                 if (!entityName || row.RecordPK == null) continue;
-                const pkKey = CanonicalPrimaryKeyValue(row.RecordPK, pkIsUuid);
+                const pkKey = CanonicalPrimaryKeyValue(String(row.RecordPK), pkIsUuid);
                 const priority =
                     typeof row.Priority === 'number'
                         ? row.Priority
