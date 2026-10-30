@@ -641,14 +641,44 @@ function buildSchemaPatterns(schema: string): RegExp[] {
  * True when `sql` holds anything other than whitespace and comments: `-- …` lines, block comments and
  * bare `GO` separators are not statements. The header a caller writes above the statements it never
  * produced is exactly that, and it is not a migration.
+ *
+ * A single left-to-right pass, no regular expressions: CodeQL flags a lazy `[\s\S]*?` comment matcher
+ * as polynomial on an unclosed comment, and a scanner is also the clearer statement of what counts.
  */
 export function HasExecutableSQL(sql: string | null | undefined): boolean {
   if (!sql) return false;
-  const stripped = sql
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*--.*$/gm, '')
-    .replace(/^\s*GO\s*;?\s*$/gim, '');
-  return stripped.trim().length > 0;
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const c = sql[i];
+    if (c === '-' && sql[i + 1] === '-') {
+      // line comment: skip to end of line
+      while (i < n && sql[i] !== '\n') i++;
+    } else if (c === '/' && sql[i + 1] === '*') {
+      // block comment: skip to the closing */, or to the end if unclosed
+      const close = sql.indexOf('*/', i + 2);
+      i = close === -1 ? n : close + 2;
+    } else if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
+      i++;
+    } else if ((c === 'G' || c === 'g') && (sql[i + 1] === 'O' || sql[i + 1] === 'o') && IsBareGOLine(sql, i)) {
+      // batch separator on a line of its own: not a statement
+      while (i < n && sql[i] !== '\n') i++;
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when the `GO` at `at` is the only non-whitespace on its line, optionally followed by `;`. */
+function IsBareGOLine(sql: string, at: number): boolean {
+  let j = at - 1;
+  while (j >= 0 && (sql[j] === ' ' || sql[j] === '\t' || sql[j] === '\r')) j--;
+  if (j >= 0 && sql[j] !== '\n') return false;
+  let k = at + 2;
+  while (k < sql.length && (sql[k] === ' ' || sql[k] === '\t' || sql[k] === '\r' || sql[k] === ';')) k++;
+  // end of input, end of line, or a trailing line comment
+  return k >= sql.length || sql[k] === '\n' || (sql[k] === '-' && sql[k + 1] === '-');
 }
 
 export function ValidateMigrationSQL(sql: string, additionalProtectedSchemas: string[] = []): SQLValidationResult {

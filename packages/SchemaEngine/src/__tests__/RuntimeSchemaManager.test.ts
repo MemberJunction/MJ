@@ -10,11 +10,16 @@ describe('HasExecutableSQL', () => {
         expect(HasExecutableSQL('   \n\t')).toBe(false);
         expect(HasExecutableSQL('-- RSU Migration: Integration: PropFuel — \n-- Generated: 2026-10-29T11:03:09.541Z\n-- Affected tables: \n')).toBe(false);
         expect(HasExecutableSQL('/* header */\n-- note\nGO\n')).toBe(false);
+        expect(HasExecutableSQL('/* unclosed comment that never ends ' + 'a/'.repeat(20000))).toBe(false);
+        expect(HasExecutableSQL('  go;  \n\tGO\n')).toBe(false);
     });
 
     it('is true as soon as there is a statement', () => {
         expect(HasExecutableSQL('-- header\nCREATE TABLE [propfuel].[clicks] (click_id INT NOT NULL);')).toBe(true);
         expect(HasExecutableSQL('CREATE SCHEMA propfuel;')).toBe(true);
+        expect(HasExecutableSQL('GO -- separator with a trailing comment')).toBe(false);
+        expect(HasExecutableSQL('SELECT 1 /* trailing */')).toBe(true);
+        expect(HasExecutableSQL('/* a */ GOTO_label: SELECT 1')).toBe(true);
     });
 });
 
