@@ -4,23 +4,34 @@ Create a changeset file for the current branch's changes following MemberJunctio
 
 ## Instructions
 
-1. **Check for new migration files:**
-   - **CRITICAL**: Only check for migrations that were ADDED IN THIS BRANCH
-   - Compare ALL `migrations/` version directories to find NEW files added in current branch commits
-   - Run: `git diff next...HEAD --name-only | grep "^migrations/v[0-9]\\+/.*\\.sql$"`
-   - **IMPORTANT**: Use `next` branch as baseline (NOT `main`) to avoid counting migrations from other merged branches
-   - If the command returns any files, these are NEW migrations added in this branch
-   - Only if NEW migrations exist in THIS BRANCH, add `"@memberjunction/core": minor` to the changeset
-   - If the command returns empty (no new migration files), do NOT include core in the changeset
+1. **Check for database changes:**
+   - A database change is any migration file the branch adds **or modifies** (versioned
+     `migrations/vN/*.sql` or repeatable `migrations/R__*.sql`), or anything under `metadata/`
+     except its `CLAUDE.md` / `README.md`
+   - Run: `git diff origin/next...HEAD --name-only | grep -E "^(migrations/.*\\.sql|metadata/)" | grep -vE "^metadata/(CLAUDE|README)\\.md$"`
+   - **IMPORTANT**: Use `origin/next` as baseline (NOT `main`) to avoid counting migrations from other merged branches
+   - Any hit → the branch's level is `minor` and `"@memberjunction/core"` goes in the changeset
+   - No hit → the level is `patch` and `core` is listed only if its own files changed
 
 2. **Find modified packages:**
-   - Compare against `next` branch for TypeScript changes
-   - Run: `git diff next...HEAD --name-only | grep "^packages/" | cut -d'/' -f2 | sort -u`
-   - For each modified package directory, read its `package.json` to get the exact package name
-   - All modified packages get `patch` version bumps (unless it's @memberjunction/core with a minor bump from migrations)
+   - Map each changed file under `packages/` to its **nearest `package.json`** — not the first
+     folder under `packages/`, which for nested packages is `Angular`, `Actions` or `TestingFramework`
+   - Run:
+     ```bash
+     git diff --name-only origin/next...HEAD -- packages/ | while read -r f; do
+       d=$(dirname "$f")
+       while [ "$d" != "." ] && [ ! -f "$d/package.json" ]; do d=$(dirname "$d"); done
+       [ -f "$d/package.json" ] && node -p "require('./$d/package.json').name"
+     done | sort -u
+     ```
+   - List **every** package it prints, generated manifests and test-only changes included — the list
+     decides whose `CHANGELOG.md` carries the entry (see
+     [Which packages to list](../rules/changesets.md#which-packages-to-list))
+   - Every listed package gets the branch's level from step 1 — all `minor` or all `patch`
+   - No database change and no package files (docs, guides, CI, `.claude/` only) → no changeset
 
 3. **Analyze commit messages:**
-   - Run: `git log next...HEAD --oneline --no-merges`
+   - Run: `git log origin/next...HEAD --oneline --no-merges`
    - Use commit messages to generate a concise, descriptive summary (1-3 sentences)
 
 4. **Create changeset file:**
@@ -31,8 +42,8 @@ Create a changeset file for the current branch's changes following MemberJunctio
 ```markdown
 ---
 "@memberjunction/core": minor
-"@memberjunction/package-name": patch
-"@memberjunction/another-package": patch
+"@memberjunction/package-name": minor
+"@memberjunction/another-package": minor
 ---
 
 Summary of changes based on commit messages
@@ -49,12 +60,10 @@ Summary of changes based on commit messages
 The full rule, with its rationale, lives in [`.claude/rules/changesets.md`](../rules/changesets.md)
 and can be self-checked with `npm run check:changeset` (local only — nothing gates it in CI). In short:
 
-- **Minor bump**: the branch changes the DATABASE — it adds a migration under a `migrations/vN`
-  folder, **or** it changes anything under `metadata/`. Metadata counts because it BECOMES a
+- **Minor bump**: the branch changes the DATABASE — it adds or modifies a migration, **or** it
+  changes anything under `metadata/`. Metadata counts because it BECOMES a
   migration: the build engineer's release-time `mj sync push` turns accumulated metadata edits
   into one consolidated metadata-sync migration.
-  - Check: `git diff origin/next...HEAD --name-only | grep -E "^(migrations/v[0-9]+/.*\\.sql|metadata/)"`
-  - Any hit → `minor` is correct for the packages this branch changed.
 - **Patch bump**: everything else — TypeScript, tests, docs, guides, CI, refactors. Size and
   user-visibility are irrelevant; a 2,000-line feature with no migration and no metadata is a patch.
 - **Major bump**: NEVER use without explicit user approval (breaking changes)
@@ -70,7 +79,7 @@ npm run check:changeset
 - Never use the interactive `npx changeset add` command (has TTY issues in automated environments)
 - Always create changeset files manually
 - Package names must match exactly what's in each package's `package.json` (e.g., `DBAutoDoc` → `@memberjunction/db-auto-doc`)
-- If no migrations AND no package changes, ask the user what changed
+- If no database changes AND no package changes, the branch needs no changeset
 - **Use `next` as the baseline** for BOTH migration and package comparisons — *unless the branch is
   a backport to a certified line*, in which case the baseline is that line (`origin/lts/5`, …) and
   the rule inverts to patch-only. `npm run check:changeset` works this out from ancestry; see
@@ -84,8 +93,8 @@ If there are new migrations and changes to DBAutoDoc and MJCLI:
 ```markdown
 ---
 "@memberjunction/core": minor
-"@memberjunction/db-auto-doc": patch
-"@memberjunction/cli": patch
+"@memberjunction/db-auto-doc": minor
+"@memberjunction/cli": minor
 ---
 
 Add sample query generation feature with configurable maxTokens and update MJCLI commands for DBAutoDoc
