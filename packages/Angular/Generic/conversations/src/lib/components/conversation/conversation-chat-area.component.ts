@@ -108,6 +108,8 @@ import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID, IsValidUUID } from '@m
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
 import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
+import { ConversationRemoteBrowserController } from './conversation-remote-browser-controller';
+import { RemoteBrowserSurfaceComponent } from '../realtime/remote-browser/remote-browser-surface.component';
 import { DescribeCallFailureNotice } from '../realtime/realtime-call-failure-notice';
 import type {
   IMJChatAgentPresenceComponent,
@@ -399,6 +401,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * that authorization to a role to stop the server creating forks as well.
    */
   @Input() AllowForking = true;
+
+  /**
+   * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
+   * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
+   * that wants an agent-driven browser beside the chat sets true.
+   */
+  @Input() AllowRemoteBrowser = false;
 
   /**
    * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
@@ -1903,6 +1912,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
   public ShowArtifactPanel: boolean = false;
   public SelectedTaskGraphPanel: { parentTaskId: string; workflowTitle: string } | null = null;
+  public ShowRemoteBrowserPanel: boolean = false;
+  public RemoteBrowserUrlInput: string = '';
+  public IsRemoteBrowserNavigating: boolean = false;
+
+  /** Whether this conversation's browser is running, shown or not (the header button stays lit while it is). */
+  public get IsRemoteBrowserLive(): boolean {
+    return this.remoteBrowser?.ConversationId != null;
+  }
+
+  /** The conversation's browser, built on first open so a chat area that never opens one pays nothing. */
+  private remoteBrowser: ConversationRemoteBrowserController | null = null;
+
+  private ensureRemoteBrowser(): ConversationRemoteBrowserController {
+    if (!this.remoteBrowser) {
+      const browser = new ConversationRemoteBrowserController({
+        OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
+        // Fires on open, close and a real URL change, never per screencast frame.
+        OnStateChange: () => {
+          this.RemoteBrowserUrlInput = browser.CurrentUrl ?? '';
+          this.cdr.detectChanges();
+        },
+        OnSessionRefused: (message) => {
+          this.ShowRemoteBrowserPanel = false;
+          MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 6000);
+          this.cdr.detectChanges();
+        },
+      });
+      const provider = this.ProviderToUse;
+      browser.Initialize(this.agentClientService, provider instanceof GraphQLDataProvider ? provider : null);
+      this.remoteBrowser = browser;
+    }
+    return this.remoteBrowser;
+  }
+
+  @ViewChild('conversationRemoteBrowserSurface')
+  set ConversationRemoteBrowserSurface(surface: RemoteBrowserSurfaceComponent | undefined) {
+    if (surface) {
+      this.remoteBrowser?.BindSurface(surface);
+    } else {
+      this.remoteBrowser?.UnbindSurface();
+    }
+  }
 
   /** @deprecated Use {@link ShowArtifactPanel}. */
   public get showArtifactPanel(): boolean {
@@ -3539,6 +3590,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     window.removeEventListener('mouseup', this.boundOnResizeEnd);
     window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
     window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+
+    this.remoteBrowser?.Dispose();
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
@@ -3559,6 +3612,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
+    // A conversation's browser ends with it: the next conversation starts without one. Reloading the SAME
+    // conversation (the overlay-to-workspace handoff) keeps it.
+    const browserConversation = this.remoteBrowser?.ConversationId;
+    if (!browserConversation || !UUIDsEqual(browserConversation, this._conversationId)) {
+      this.ShowRemoteBrowserPanel = false;
+      void this.remoteBrowser?.Close();
+    }
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -7329,6 +7389,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     this.SelectedTaskGraphPanel = null;
+    this.ShowRemoteBrowserPanel = false;
     this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
@@ -7357,6 +7418,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     this.ShowArtifactPanel = false;
+    this.ShowRemoteBrowserPanel = false;
     this.SelectedArtifactId = null;
     this.SelectedTaskGraphPanel = {
       parentTaskId: data.parentTaskId,
@@ -7372,6 +7434,76 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
   }
+
+  public ToggleRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel) {
+      this.CloseRemoteBrowserPanel();
+    } else {
+      this.OpenRemoteBrowserPanel();
+    }
+  }
+
+  public OpenRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel || !this.AllowRemoteBrowser || !this.ConversationId) {
+      return;
+    }
+    // Open before the drawer renders: binding its surface starts the screencast for this conversation.
+    this.ensureRemoteBrowser().Open(this.ConversationId);
+    this.ShowArtifactPanel = false;
+    this.SelectedTaskGraphPanel = null;
+    this.SelectedArtifactId = null;
+    this.ShowRemoteBrowserPanel = true;
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  public CloseRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    void this.remoteBrowser?.Close();
+    this.cdr.detectChanges();
+  }
+
+  public async NavigateRemoteBrowserFromInput(): Promise<void> {
+    const rawUrl = this.RemoteBrowserUrlInput?.trim();
+    if (!rawUrl || this.IsRemoteBrowserNavigating) {
+      return;
+    }
+    this.IsRemoteBrowserNavigating = true;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.remoteBrowser?.Navigate(rawUrl);
+      // A refused session already said why (OnSessionRefused) and closed the browser.
+      if (result && !result.Success && this.IsRemoteBrowserLive) {
+        MJNotificationService.Instance.CreateSimpleNotification(result.ErrorMessage ?? 'The page could not be opened.', 'error', 5000);
+      }
+    } finally {
+      this.IsRemoteBrowserNavigating = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   */
+  public get EffectiveAppContext(): Record<string, unknown> | null {
+    const controller = this.remoteBrowser;
+    if (!controller) {
+      return this.AppContext;
+    }
+    const owns = controller.ConversationId !== null && controller.OwnsTools;
+    let memo = this.effectiveAppContextMemo;
+    if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {
+      memo = { Base: this.AppContext, Version: controller.StateVersion, Owns: owns, Value: controller.WithBrowserContext(this.AppContext) };
+      this.effectiveAppContextMemo = memo;
+    }
+    return memo.Value;
+  }
+  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable
