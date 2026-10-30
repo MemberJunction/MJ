@@ -14,9 +14,10 @@ from typing import NoReturn, ParamSpec, TypeVar
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats
 
-from app import artifacts, artifacts_v2, calibration as CAL, evaluation as EV, forecast as FC, snapshot as SN
-from app import temporal as T, trainer as TR
+from app import artifacts, artifacts_v2, calibration as CAL, evaluation as EV, forecast as FC, intervals as IV, scores
+from app import snapshot as SN, temporal as T, trainer as TR
 from app.baselines import NIL_UUID
 from app.encoding import ColumnSpec, NumericEncoding
 from app.failures import RunClock, TrainerFailure
@@ -765,3 +766,153 @@ def test_a_forecast_without_a_declared_dummy_fails_at_baselines(server: FileServ
                       [{"kind": "naive"}, {"kind": "seasonal-naive", "season": 12}])
     r = _failed(req)
     assert r.stage == "baselines" and "declares no dummy baseline" in r.message, r.message
+
+
+# ------------------------------------------------------------------------------------------ entity panels ---------
+
+PANEL_YEARS = (2019, 2020, 2021, 2022, 2023, 2024)
+RIDGE_ONLY: list[DriverSpec] = [("ridge_candidate", "ridge", {})]
+BLOCKED_BY_ENTITY: JsonObject = {"kind": "blocked-time", "folds": 5, "gapPeriods": 1, "groupKey": "EntityKey"}
+
+
+def _panel(entities: int = 150, seed: int = 21) -> pd.DataFrame:
+    """Yearly rows 2019-2024 per entity: y = 5 + x + an entity effect + AR(1) noise (phi 0.6) within the entity."""
+    rng = np.random.default_rng(seed)
+    rows: list[dict[str, object]] = []
+    for e in range(entities):
+        effect = rng.normal()
+        noise = rng.normal()
+        for year in PANEL_YEARS:
+            noise = 0.6 * noise + rng.normal()
+            x = rng.normal()
+            rows.append({"ID": f"p{e}-{year}", "EntityKey": f"E{e}", "T": f"{year}-01-01", "x": x,
+                         "Target": 5 + x + effect + noise})
+    return pd.DataFrame(rows)
+
+
+def _panel_request(server: FileServer, df: pd.DataFrame, tag: str, holdout_from: int = 2024,
+                   **proto_over: JsonValue) -> JsonObject:
+    hold = [str(i) for i, t in zip(df["ID"], df["T"]) if int(str(t)[:4]) >= holdout_from]
+    m, n = snapshot_files(df, {"x": NUMERIC}, hold)
+    over: dict[str, JsonValue] = {"innerValidation": BLOCKED_BY_ENTITY,
+                                  "residualDiagnostics": {"acfLags": 3, "ljungBoxAlpha": 0.05}}
+    over.update(proto_over)
+    return request(server, m, n, {"kind": "continuous"}, protocol("continuous", **over),
+                   candidates("continuous", RIDGE_ONLY), tag=tag)
+
+
+def _finalist_predictions(r: TrainerCompleted, frame: pd.DataFrame) -> np.ndarray:
+    art = next(a for a in r.artifacts if a.candidate == r.finalist)
+    model, _ = artifacts.load_v2_envelope(base64.b64decode(art.bytesBase64))
+    return np.asarray(model.predict(frame[["x"]]), dtype=np.float64)
+
+
+def _pooled_within_entity_acf(resid: np.ndarray, entity: list[str], lags: int) -> tuple[list[float], list[int]]:
+    """Autocorrelation of globally demeaned residuals over (t, t-k) pairs of the same entity only, rows of each
+    entity already in time order."""
+    e = resid - resid.mean()
+    den = float(np.mean(e * e))
+    by_entity: dict[str, list[float]] = {}
+    for v, g in zip(e.tolist(), entity):
+        by_entity.setdefault(g, []).append(v)
+    rhos: list[float] = []
+    pairs: list[int] = []
+    for k in range(1, lags + 1):
+        prods = [a * b for series in by_entity.values() for a, b in zip(series[k:], series[:-k])]
+        rhos.append(float(np.mean(prods)) / den)
+        pairs.append(len(prods))
+    return rhos, pairs
+
+
+def test_a_panel_reports_pooled_within_entity_residual_autocorrelation(server: FileServer) -> None:
+    """The finalist's in-sample development residuals, paired only within an entity, give the reported ACF and a
+    Box-Pierce statistic weighted by each lag's pairs; the AR(1) noise is flagged."""
+    df = _panel()
+    r = _completed(_panel_request(server, df, "panel-resid"))
+    dev = df[df["T"] < "2024"].reset_index(drop=True)
+    resid = dev["Target"].to_numpy(dtype=np.float64) - _finalist_predictions(r, dev)
+    rhos, pairs = _pooled_within_entity_acf(resid, list(dev["EntityKey"]), 3)
+    q = float(sum(n * rho * rho for n, rho in zip(pairs, rhos)))
+    d = r.residualDiagnostics
+    assert d is not None and d.ljungBox.lags == 3 and pairs == [600, 450, 300]
+    assert d.acf == pytest.approx(rhos, abs=1e-12)
+    assert d.ljungBox.statistic == pytest.approx(q, rel=1e-12)
+    assert d.ljungBox.pValue == pytest.approx(float(stats.chi2.sf(q, 3)), abs=1e-12)
+    assert d.autocorrelationFlagged and d.acf[0] > 0.3
+
+
+def test_panel_residual_lags_are_capped_below_the_periods_per_entity(server: FileServer) -> None:
+    """Five development periods per entity: 12 declared lags are capped at 4, the most a lag can be and still pair
+    two rows of one entity; the wire reports the lags used."""
+    df = _panel()
+    r = _completed(_panel_request(server, df, "panel-cap", residualDiagnostics={"acfLags": 12, "ljungBoxAlpha": 0.05}))
+    d = r.residualDiagnostics
+    assert d is not None and d.ljungBox.lags == 4 and len(d.acf) == 4
+
+
+def test_rows_seen_once_or_an_undeclared_check_report_no_residual_diagnostics(server: FileServer) -> None:
+    df = _panel()
+    r = _completed(_panel_request(server, df.assign(EntityKey=df["ID"]), "panel-once",
+                                  innerValidation={"kind": "repeated-stratified-kfold", "folds": 5, "repeats": 1}))
+    assert r.residualDiagnostics is None and r.innerSplitContrast is None
+    r = _completed(_panel_request(server, df, "panel-undeclared", residualDiagnostics=None))
+    assert r.residualDiagnostics is None and r.innerSplitContrast is not None
+
+
+def _oof(X: pd.DataFrame, y: np.ndarray, columns: list[ColumnSpec], folds: list[tuple[np.ndarray, np.ndarray]],
+         req: TrainerRequest) -> np.ndarray:
+    """Out-of-fold predictions of the request's one candidate over `X` (rows without a validation fold stay NaN)."""
+    enc = TR.EncodedLabel(y, "continuous", None, None)
+    out = np.full(len(X), np.nan)
+    for train, valid in folds:
+        model = TR.fit_predictor(req.candidates[0], columns, X, enc, train, req.protocol, 1)
+        out[valid] = model.predict(X.iloc[valid])
+    return out
+
+
+def test_a_blocked_time_panel_reports_the_random_row_contrast_on_the_same_rows(server: FileServer) -> None:
+    """Both scores are the finalist's RMSE on the blocked folds' validation rows (the last development year): once
+    from the blocked, entity-grouped folds, once from random-row 5-fold over every development row."""
+    df = _panel()
+    req = _panel_request(server, df, "panel-contrast")
+    r = _completed(req)
+    dev = df[df["T"] < "2024"].reset_index(drop=True)
+    y = dev["Target"].to_numpy(dtype=np.float64)
+    validated = np.flatnonzero(dev["T"] == "2023-01-01")
+    assign = np.empty(len(dev), dtype=np.int64)
+    assign[np.random.default_rng(0).permutation(len(dev))] = np.arange(len(dev)) % 5
+    random_folds = [(np.flatnonzero(assign != k), np.flatnonzero(assign == k)) for k in range(5)]
+    treq = TrainerRequest.model_validate(req)
+    snap = SN.load(treq, dt.datetime.now(dt.timezone.utc), RunClock(600, 600))
+    dev_rows = np.flatnonzero(np.array(snap.roles) == "development").astype(np.int64)
+    enc = TR.EncodedLabel(y, "continuous", None, None)
+    blocked_folds = [(f.train, f.valid)
+                     for f in TR.build_folds(treq.protocol, snap, dev_rows, enc, SN.period_ordinals(snap))]
+    X = snap.frame.iloc[dev_rows].reset_index(drop=True)
+    columns = list(snap.columns)
+
+    def rmse(pred: np.ndarray) -> float:
+        return math.sqrt(float(np.mean((y[validated] - pred[validated]) ** 2)))
+
+    c = r.innerSplitContrast
+    assert c is not None and c.rows == len(validated) == 150
+    assert c.blockedGroupedScore == pytest.approx(rmse(_oof(X, y, columns, blocked_folds, treq)), abs=1e-12)
+    assert c.randomRowScore == pytest.approx(rmse(_oof(X, y, columns, random_folds, treq)), abs=1e-12)
+    assert c.inflation == pytest.approx(c.blockedGroupedScore - c.randomRowScore, abs=1e-15)
+
+
+def test_a_cluster_bootstrap_resamples_whole_entities(server: FileServer) -> None:
+    """Two holdout years per entity: the primary interval is the percentile bootstrap over whole entities, not rows."""
+    df = _panel()
+    r = _completed(_panel_request(server, df, "panel-cluster", holdout_from=2023, innerValidation={
+        "kind": "grouped-kfold", "folds": 5, "repeats": 1, "groupKey": "EntityKey"},
+        intervals={"level": 0.95, "method": "cluster-bootstrap", "resamples": 1000, "pairedTest": "paired-bootstrap"}))
+    hold = df[df["T"] >= "2023"]
+    y = hold["Target"].to_numpy(dtype=np.float64)
+    pred = _finalist_predictions(r, hold)
+    rmse = scores.primary_score("rmse", None).aggregate
+    clustered = IV.bootstrap_ci(y, pred, rmse, 1000, 0, list(hold["EntityKey"]), 0.95)
+    rows = IV.bootstrap_ci(y, pred, rmse, 1000, 0, None, 0.95)
+    got = r.holdout.primary.interval
+    assert (got.lower, got.upper) == pytest.approx((clustered.lower, clustered.upper), abs=1e-12)
+    assert abs(got.lower - rows.lower) > 1e-6

@@ -1,13 +1,16 @@
 """The holdout stage: one scoring of the locked holdout for one finalist, baselines, paired comparisons, the publishing
 gate, calibration, slices, the operating point, prediction-interval coverage, held-out permutation importance, the
-incumbent diff and the artifacts.
+incumbent diff, the artifacts, and two development-row statistics: the residual autocorrelation of an entity panel and
+the random-row contrast of blocked-time inner validation.
 
 Order matters and is fixed: (1) the calibration decision uses only out-of-fold development predictions; (2) the
 finalist (calibrated or not) and every baseline are fitted on development rows; (3) the holdout is read ONCE, here,
 through a reader that counts the access, and `holdoutAccess` is stamped at that moment; (4) everything after uses only
 those predictions, except permutation importance, which re-predicts the same holdout rows (already read) with the
-finalist after permuting each source column's features. Every holdout statistic, importance included, is computed
-before the run clock's last check and before `computeSeconds` is stamped, so the reported cost is the whole run's.
+finalist after permuting each source column's features; (5) the development-row statistics read development rows
+only: the finalist's in-sample residuals pooled within entities, and the finalist refitted on random-row folds of the
+development rows. Every statistic, importance and the development-row statistics included, is computed before the run
+clock's last check and before `computeSeconds` is stamped, so the reported cost is the whole run's.
 
 A number that is undefined on these rows never reaches the wire as NaN (JSON cannot carry it): a holdout without
 every declared class fails the stage, an undefined secondary metric is left out (the contract lists the secondary
@@ -17,8 +20,10 @@ non-finite number fails the stage naming its field.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import math
+from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Protocol, Sequence, Tuple
 
@@ -27,7 +32,7 @@ import numpy.typing as npt
 import pandas as pd
 
 from . import artifacts, artifacts_v2, baselines as BL, calibration as CAL, encoding, intervals as IV, scores
-from . import importance as IM, snapshot as SN, trainer as TR
+from . import importance as IM, snapshot as SN, temporal as TM, trainer as TR
 from .array_types import FArr, IntArr
 from .failures import RunClock, TrainerFailure
 from .folds import Fold, grouped, repeated_stratified
@@ -36,16 +41,19 @@ from .snapshot import Snapshot
 from .snapshot_format import INCUMBENT_SCORE_COLUMN
 from .trainer import CandidateCV, EncodedLabel, SelectionOutcome, TrainedPredictor
 from .trainer_schemas import (
-    AutoCalibration, BaselineResult, CalibrationReport, CandidateInnerScore, CandidateSpec, CodeVersion, GateKeepSimple,
-    GateModel, GateNoSignal, HoldoutAccess, HoldoutScores, IncumbentDiff, IncumbentRef, Interval, IsotonicCalibration,
-    LeakageFlag, MetricKey, MetricWithInterval, NoCalibration, OperatingPoint, OutOfTimeSlice, PairedComparison,
-    PlattCalibration, PredictionIntervalCoverage, ReliabilityRow, ReturnedArtifact, RunCost, SliceResult,
-    SourceColumnImportance, SubgroupSlice, TrainerCompleted, TrainerRequest,
+    AutoCalibration, BaselineResult, BlockedTime, CalibrationReport, CandidateInnerScore, CandidateSpec, CodeVersion,
+    GateKeepSimple, GateModel, GateNoSignal, HoldoutAccess, HoldoutScores, IncumbentDiff, IncumbentRef, Interval,
+    IsotonicCalibration, LeakageFlag, LjungBox, MetricKey, MetricWithInterval, NoCalibration, OperatingPoint,
+    OutOfTimeSlice, PairedComparison, PlattCalibration, PredictionIntervalCoverage, ReliabilityRow,
+    ResidualDiagnostics, ReturnedArtifact, RunCost, SliceResult, SourceColumnImportance, SplitContrast, SubgroupSlice,
+    TrainerCompleted, TrainerRequest,
 )
 
 ReportedCalibration = Literal["platt", "isotonic", "auto", "not-applicable"]
 # Row permutations per source column in held-out permutation importance (the reference pipeline's count).
 PERMUTATION_REPEATS = 5
+# Folds of the random-row cross-validation set beside blocked-time folds (the reference pipeline's count).
+RANDOM_ROW_FOLDS = 5
 
 
 class _Bounds(Protocol):
@@ -548,6 +556,73 @@ def held_out_importance(req: TrainerRequest, finalist: TrainedPredictor, X_hold:
             for c in found]
 
 
+def panel_residuals(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, finalist: TrainedPredictor,
+                    X_dev: pd.DataFrame, y_dev: FArr, ordinals: IntArr) -> Optional[ResidualDiagnostics]:
+    """Residual autocorrelation of an entity panel: the finalist's in-sample residuals on the development rows
+    (label minus prediction), paired only within an entity in period order and pooled over entities, with a
+    Box-Pierce test whose lags are weighted by their pairs (the reference pipeline's `run._residual_panel`).
+
+    The lags are the declared `acfLags` capped at one less than the most development rows any entity has, so every
+    lag pairs two rows of some entity; `ljungBox.lags` reports the lags used. The reference pipeline's rule is
+    `max(1, min(3, periods - 1))` with `periods` that same maximum: equal here whenever 3 lags are declared. None when
+    the protocol declares no residual diagnostics, when no entity has two development rows (nothing repeats over
+    time), or for a multiclass task (its prediction is a probability vector, so a residual is not one number).
+
+    Raises:
+        TrainerFailure: Stage `holdout`, when the finalist cannot predict its development rows or the residuals are
+            constant (their autocorrelation is undefined).
+    """
+    rd = req.protocol.residualDiagnostics
+    if rd is None or enc.family == "multiclass":
+        return None
+    entities = [snap.entity_keys[int(i)] for i in dev]
+    most = max(Counter(entities).values())
+    if most < 2:
+        return None
+    lags = min(rd.acfLags, most - 1)
+    try:
+        resid = y_dev - np.asarray(finalist.predict(X_dev), dtype=np.float64)
+        rhos, pairs = TM.panel_acf(resid, entities, ordinals[dev], lags)
+    except ValueError as exc:
+        raise TrainerFailure("holdout", f"residual diagnostics: {exc}") from exc
+    q, p_value = TM.box_pierce(rhos, pairs)
+    return ResidualDiagnostics(acf=rhos, ljungBox=LjungBox(statistic=q, pValue=p_value, lags=lags),
+                               autocorrelationFlagged=p_value < rd.ljungBoxAlpha)
+
+
+def split_contrast(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, out: SelectionOutcome,
+                   columns: Sequence[encoding.ColumnSpec], primary: scores.PrimaryScore,
+                   clock: RunClock) -> Optional[SplitContrast]:
+    """What random-row cross-validation would have reported for blocked-time inner validation: on the rows the blocked
+    folds validated, the finalist's blocked out-of-fold score beside its out-of-fold score from random-row 5-fold over
+    every development row (the reference pipeline's `run._random_row_contrast`, whose fold assignment is the first
+    unstratified repeat). For a loss, a positive `inflation` is optimism random rows hide on serially correlated
+    entity-period data. None unless the inner validation is blocked in time.
+
+    Raises:
+        TrainerFailure: Stage `inner-cv` when the finalist cannot be fitted on a random-row fold or the development rows
+            cannot fill the folds; `timeout`/`budget-exceeded` from the run clock, checked after every fold.
+    """
+    if not isinstance(req.protocol.innerValidation, BlockedTime):
+        return None
+    y_dev = np.asarray(enc.y)[dev]
+    try:
+        random_folds = repeated_stratified(y_dev, RANDOM_ROW_FOLDS, 1, req.protocol.seed, stratify=False)
+    except ValueError as exc:
+        raise TrainerFailure("inner-cv", f"random-row contrast: {exc}") from exc
+    spec = next(c for c in req.candidates if c.name == out.selection.finalist)
+    every_row = np.arange(len(dev), dtype=np.int64)
+    # The trainer's one cross-validation loop, run on the random-row folds: every development row is validated once,
+    # so its out-of-fold predictions are in development-row order.
+    random_cv = TR.cross_validate(req.protocol, snap, columns, enc, dev, spec, req.threads, clock,
+                                  dataclasses.replace(out, folds=random_folds, validated=every_row))
+    y_val = np.asarray(y_dev, dtype=np.float64)[out.validated]
+    blocked = primary.aggregate(y_val, out.cv[spec.name].oof)
+    random_row = primary.aggregate(y_val, random_cv.oof[out.validated])
+    return SplitContrast(rows=len(out.validated), blockedGroupedScore=blocked, randomRowScore=random_row,
+                         inflation=blocked - random_row)
+
+
 def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr, hold: IntArr,
              out: SelectionOutcome, columns: Sequence[encoding.ColumnSpec], code: CodeVersion, clock: RunClock,
              leakage_flags: Sequence[LeakageFlag], incumbent_artifact: Optional[bytes]) -> TrainerCompleted:
@@ -598,6 +673,9 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
     coverage = interval_coverage(req, enc, r_oof, h.y, h.pred)
     sl = slice_results(req, snap, hold, ordinals, h.y, h.pred, primary, g)
     imp = held_out_importance(req, finalist, h.X, h.y, primary, columns, g)
+    # (5): development-row statistics
+    residual = panel_residuals(req, snap, enc, dev, finalist, X_dev, y_dev, ordinals)
+    contrast = split_contrast(req, snap, enc, dev, out, columns, primary, clock)
     clock.check("holdout statistics")
     budget = p.holdoutAccessBudget
     if reader.accesses != budget:
@@ -611,6 +689,6 @@ def evaluate(req: TrainerRequest, snap: Snapshot, enc: EncodedLabel, dev: IntArr
         holdout=HoldoutScores(primary=prim, secondary=secondary), baselines=base_results, comparisons=comparisons,
         gate=gate_model(d), artifacts=arts, incumbentDiff=inc_diff, calibration=calibration, slices=sl,
         operatingPoint=op, cost=RunCost(computeSeconds=cost, tokens=0, usd=0.0, budget=p.budgets, stoppedByBudget=False),
-        importance=imp, leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage, residualDiagnostics=None,
-        forecast=None, innerSplitContrast=None,
+        importance=imp, leakageFlags=list(leakage_flags), predictionIntervalCoverage=coverage,
+        residualDiagnostics=residual, forecast=None, innerSplitContrast=contrast,
     ))

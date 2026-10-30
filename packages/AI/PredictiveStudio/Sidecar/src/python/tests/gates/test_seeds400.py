@@ -12,6 +12,7 @@ guards that only demote `model`, so a sidecar `model` count within the cap bound
 from __future__ import annotations
 
 import base64
+import math
 import os
 from concurrent.futures import ProcessPoolExecutor
 
@@ -23,8 +24,9 @@ import pytest
 from app import artifacts, scores
 from tests.gates.conftest import W_BINARY_FEATURES, completed, last_cycle_ids, world, world_frame
 from tests.tools.trainer_fixture import (BINARY_LABELS as LM, BINARY_TASK as BIN, NUMERIC, FileServer, JsonObject,
-                                         candidates, protocol, refpipe_carve, request, scenario, scenario_dir,
-                                         scenario_seeds400, snapshot_files)
+                                         as_number, as_object, candidates, protocol, refpipe_carve, request,
+                                         scenario, scenario_dir, scenario_manifest, scenario_seeds400,
+                                         snapshot_files)
 
 FArr = npt.NDArray[np.float64]
 
@@ -158,3 +160,55 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
     low, high = COVERAGE_BAND
     assert low <= covered <= high, f"the model-minus-dummy interval covers the planted difference on {covered} of " \
                                    f"400 seeds (band {low}-{high})"
+
+
+# A shipped simple baseline's member name -> its declared baseline kind.
+_BASELINE_KIND = {"oneFeature": "one-feature", "glm": "glm"}
+
+
+def t2p_cover(seed: int) -> tuple[float, float, float]:
+    """(lower, upper, planted RMSE) for one T2p seed. The planted RMSE of the shipped predictor is its expected RMSE
+    under the planted process on the holdout rows: sqrt(mean((PopulationMean - prediction)^2) + entitySd^2
+    + sigma^2 / (1 - phi^2)), the entity effect and the stationary AR(1) noise being independent of the features."""
+    planted = as_object(scenario_manifest("T2p", seed)["planted"], "planted")
+    df = scenario("T2p", seed)
+    hold = refpipe_carve(df)
+    srv = FileServer()
+    try:
+        m, n = snapshot_files(df, {"UsageZ": NUMERIC, "Discount": NUMERIC}, hold)
+        proto = protocol("continuous",
+                         innerValidation={"kind": "blocked-time", "folds": 5, "gapPeriods": 1, "groupKey": "EntityKey"},
+                         intervals={"level": 0.95, "method": "cluster-bootstrap", "resamples": 1000,
+                                    "pairedTest": "paired-bootstrap"})
+        r = completed(request(srv, m, n, {"kind": "continuous"}, proto, candidates("continuous"), tag=f"t2p-{seed}"))
+    finally:
+        srv.close()
+    shipped = r.gate.shipped or r.finalist
+    art = next(a for a in r.artifacts if a.candidate == shipped)
+    model, _env = artifacts.load_v2_envelope(base64.b64decode(art.bytesBase64))
+    h = df.set_index("ID").loc[hold]
+    truth = pd.read_csv(scenario_dir("T2p", seed) / "truth.csv", dtype={"ID": str}).set_index("ID")
+    mu = truth.loc[hold, "PopulationMean"].to_numpy(dtype=np.float64)
+    yhat = np.asarray(model.predict(h[["UsageZ", "Discount"]]), dtype=np.float64)
+    phi = as_number(planted["phi"], "phi")
+    var_e = as_number(planted["entitySd"], "entitySd") ** 2 + as_number(planted["sigma"], "sigma") ** 2 / (1 - phi ** 2)
+    expected = math.sqrt(float(np.mean((mu - yhat) ** 2)) + var_e)
+    if r.gate.outcome == "keep-simple-baseline":
+        metric = next(b.holdout for b in r.baselines if b.baseline.kind == _BASELINE_KIND[shipped])
+    else:   # the model, or no signal: the finalist's own holdout score, as its artifact above
+        metric = r.holdout.primary
+    return metric.interval.lower, metric.interval.upper, expected
+
+
+@pytest.mark.seeds400
+@pytest.mark.gate("T2p -> S-T.5")
+def test_T2p_S_T_5_cluster_bootstrap_coverage() -> None:
+    assert SEED_LIMIT == 0, f"PS_SEED_LIMIT={SEED_LIMIT} is set: the coverage gate runs on all 400 seeds only; unset it"
+    seeds = seeds400("T2p")
+    with ProcessPoolExecutor(WORKERS) as ex:
+        out = list(ex.map(t2p_cover, seeds))
+    assert len(out) == 400, f"the coverage gate ran {len(out)} seeds, not 400"
+    covered = sum(1 for lo, hi, planted in out if lo <= planted <= hi)
+    low, high = COVERAGE_BAND
+    assert low <= covered <= high, f"the shipped RMSE's entity-cluster interval covers the planted RMSE on {covered} " \
+                                   f"of 400 seeds (band {low}-{high})"

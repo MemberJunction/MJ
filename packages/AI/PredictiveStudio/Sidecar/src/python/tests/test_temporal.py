@@ -181,6 +181,21 @@ def test_panel_acf_pools_within_entity_pairs_like_refpipe() -> None:
         T.panel_acf(e, g[:-1], o, 2)
 
 
+def test_box_pierce_weights_each_lag_by_its_pairs_like_refpipe() -> None:
+    """Q = sum over lags of (pairs at the lag) * rho^2, chi-square on the number of lags; pinned to the reference
+    pipeline's pooled panel statistic (`truthsuite.refpipe.run._residual_panel`) on the same panel."""
+    e, g, o = _panel_input()
+    rhos, pairs = T.panel_acf(e, g, o, 2)
+    q, p = T.box_pierce(rhos, pairs)
+    assert q == pytest.approx(2.590880830707293, abs=1e-12)
+    assert p == pytest.approx(0.273777262066157, abs=1e-12)
+    assert T.box_pierce([0.0, 0.0, 0.0], [10, 9, 8]) == (0.0, 1.0)
+    with pytest.raises(ValueError, match="2 autocorrelations for 1 pair count"):
+        T.box_pierce(rhos, pairs[:1])
+    with pytest.raises(ValueError, match="at least one lag"):
+        T.box_pierce([], [])
+
+
 def test_hac_se_matches_refpipe() -> None:
     d = _hac_input()
     assert T.hac_se(d, 3) == pytest.approx(0.20362898686899128, abs=1e-12)

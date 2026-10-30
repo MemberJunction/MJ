@@ -12,7 +12,8 @@ test, residual autocorrelation, and the series models.
   backtest           scores a forecaster and the three baselines at every origin, scaled by that origin's own MASE scale
   diebold_mariano    DM test of equal accuracy with HAC variance (h-1 lags) and the Harvey-Leybourne-Newbold correction
   hac_se             Newey-West (Bartlett) standard error of a mean
-  acf / ljung_box    residual autocorrelation and the Ljung-Box Q test; panel_acf pools within-entity pairs
+  acf / ljung_box    residual autocorrelation and the Ljung-Box Q test; panel_acf pools within-entity pairs and
+                     box_pierce tests them
   SeriesModel        AR(1) + constant, trend + season OLS, trend + season + AR(1); terms on the series' own previous
                      value are forecast recursively, so no target inside a test window is read
 
@@ -278,6 +279,18 @@ def panel_acf(resid: FArr, entity: Sequence[str], order: IntArr, nlags: int) -> 
         rhos.append(float((d.loc[m, "e"] * lag[m]).mean() / den))
         ns.append(int(m.sum()))
     return rhos, ns
+
+
+def box_pierce(rhos: Sequence[float], pairs: Sequence[int]) -> Tuple[float, float]:
+    """Pooled Box-Pierce Q over lags 1..len(rhos): the sum of each lag's pair count times its squared
+    autocorrelation (the pairs behind each rho of panel_acf, so lags with fewer within-entity pairs weigh less), and
+    its chi-square p-value on len(rhos) degrees of freedom (`truthsuite.refpipe.run._residual_panel`)."""
+    if len(rhos) != len(pairs):
+        raise ValueError(f"box_pierce got {len(rhos)} autocorrelations for {len(pairs)} pair count(s)")
+    if not rhos:
+        raise ValueError("box_pierce needs at least one lag")
+    q = float(sum(n * r * r for n, r in zip(pairs, rhos)))
+    return q, float(stats.chi2.sf(q, len(rhos)))
 
 
 def hac_se(d: FArr, lags: int) -> float:
