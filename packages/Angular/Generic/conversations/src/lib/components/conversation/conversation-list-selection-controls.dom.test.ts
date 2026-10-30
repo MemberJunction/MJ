@@ -65,6 +65,7 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   GetSharedByInfo: (): SharedByInfo | null => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanDeleteConversation: ConversationEngine.prototype.CanDeleteConversation,
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -225,6 +226,35 @@ describe('ConversationListComponent (DOM) — the selection bar', () => {
     });
     expect(barButton(f, 'Pin').disabled).toBe(true);
     expect(barButton(f, 'Move to folder').disabled).toBe(true);
+  });
+
+  /** U1 belongs to someone else and reaches the current user through a grant at `level`. */
+  const renderSharedAt = (level: SharedByInfo['Level'], user: UserInfo = currentUser) =>
+    render((c) => selectRows(c, ['U1']), { currentUser: user }, {
+      GetSharedByInfo: (id: string): SharedByInfo | null =>
+        id === 'U1' ? { UserID: 'someone-else', Name: 'Someone', Email: null, Level: level } : null,
+      Conversations: [conv('U1', 'Loose One', { UserID: 'someone-else' })]
+    });
+
+  for (const level of ['View', 'Edit'] as const) {
+    it(`disables Delete, and says why, when the selection is shared at ${level} level`, () => {
+      const { f } = renderSharedAt(level);
+      const remove = barButton(f, 'Delete');
+      expect(remove.disabled).toBe(true);
+      expect(remove.title).toBe(f.componentInstance.DeleteRefusedReason);
+      expect(remove.title).toContain('Owner access');
+    });
+  }
+
+  it('offers Delete for a conversation shared at Owner level', () => {
+    const { f } = renderSharedAt('Owner');
+    expect(barButton(f, 'Delete').disabled).toBe(false);
+    expect(barButton(f, 'Delete').title).toBe('Delete');
+  });
+
+  it('offers Delete to a Developer whatever the grant', () => {
+    const developer = { ID: 'u1', UserRoles: [{ Role: 'Developer' }] } as unknown as UserInfo;
+    const { f } = renderSharedAt('View', developer);
     expect(barButton(f, 'Delete').disabled).toBe(false);
   });
 
