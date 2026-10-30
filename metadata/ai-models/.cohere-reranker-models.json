@@ -113,7 +113,8 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "MaxInputTokens": 32768
           },
           "primaryKey": {
             "ID": "D58A6395-5193-42DC-8572-F5E734A919A9"
@@ -136,7 +137,7 @@
   {
     "fields": {
       "Name": "rerank-v4-fast",
-      "Description": "Cohere Rerank 4 Fast - Distilled, cost-efficient reranking model released December 16, 2025. 16K tokens per document, 100+ language support. Optimized for lower latency and higher throughput RAG pipelines where Rerank 4 Pro quality is not required. Cohere standard pricing applies: $1.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types). API id corrected 2026-10-05: the callable id is `rerank-v4.0-fast`, not `rerank-v4-fast` - Cohere spells it with the \".0\" in its own docs source (fern/pages/models/rerank-2.mdx, models.mdx and the 2025-12-11 rerank-v4 changelog). The record Name stays `rerank-v4-fast` because metadata/prompts/.default-rerank-prompt.json resolves it by name. Source: https://github.com/cohere-ai/cohere-developer-experience/blob/main/fern/pages/models/rerank-2.mdx",
+      "Description": "Cohere Rerank 4 Fast - Distilled, cost-efficient reranking model released December 16, 2025. 32K tokens per document, 100+ language support. Optimized for lower latency and higher throughput RAG pipelines where Rerank 4 Pro quality is not required. Cohere standard pricing applies: $1.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types). API id corrected 2026-10-05: the callable id is `rerank-v4.0-fast`, not `rerank-v4-fast` - Cohere spells it with the \".0\" in its own docs source (fern/pages/models/rerank-2.mdx, models.mdx and the 2025-12-11 rerank-v4 changelog). The record Name stays `rerank-v4-fast` because metadata/prompts/.default-rerank-prompt.json resolves it by name. Source: https://github.com/cohere-ai/cohere-developer-experience/blob/main/fern/pages/models/rerank-2.mdx",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 90,
       "IsActive": true,
@@ -157,7 +158,8 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "MaxInputTokens": 32768
           },
           "primaryKey": {
             "ID": "C4202F21-E55B-4040-950F-F5D4CB20341A"
@@ -175,6 +177,80 @@
     "sync": {
       "lastModified": "2026-10-06T20:21:37.842Z",
       "checksum": "e9d843c5825c71ec56fdd84255b13ba15db98f760b7ee6952faa6624d1922ae5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "rerank-v5.0-pro",
+      "Description": "Cohere Rerank 5 Pro - Flagship cross-encoder semantic reranking model released October 21, 2026 (~2B parameters). 32,768 token context window, 100+ language support, calibrated relevance scores across queries and domains, and Context Focus (relevant_spans) for passage-level span extraction within documents. Leads public retrieval benchmarks across reasoning-intensive search, enterprise documents, finance, healthcare, and scientific research. Source: https://docs.cohere.com/changelog/rerank-v5",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 120,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v5.0-pro",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "MaxInputTokens": 32768
+          },
+          "primaryKey": {
+            "ID": "A4F31A9E-296B-4DBF-8946-792403DDDBF3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A8D874AB-F5A2-4061-B73A-2D08D1CCCC03"
+    }
+  },
+  {
+    "fields": {
+      "Name": "rerank-v5.0-fast",
+      "Description": "Cohere Rerank 5 Fast - High-throughput, low-latency cross-encoder semantic reranking model released October 21, 2026 (~500M parameters). 32,768 token context window, 100+ language support, calibrated relevance scores across queries and domains, and Context Focus (relevant_spans) for passage-level span extraction. Outperforms Rerank 4 Pro across all four headline retrieval benchmarks while delivering up to 2.9x Rerank 5 Pro's throughput. Source: https://docs.cohere.com/changelog/rerank-v5",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 115,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v5.0-fast",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "MaxInputTokens": 32768
+          },
+          "primaryKey": {
+            "ID": "112054E5-83BC-4B05-82B9-BB291221CB01"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0B553260-0149-496B-8B9D-DDC8AEC4F1A9"
     }
   }
 ]

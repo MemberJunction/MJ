@@ -1,0 +1,85 @@
+<div class="qcg-wrap">
+  <table class="qcg-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Required</th>
+        <th>Default</th>
+        <th>Sample</th>
+        <th>Server-set</th>
+        <th>Detected by</th>
+        <th class="qcg-annotation">Description</th>
+        @if (EditMode) {
+          <th class="qcg-actions"><span class="qcg-sr-only">Actions</span></th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (param of Parameters; track TrackParameter($index, param)) {
+        <tr class="qcg-row">
+          <td class="qcg-fact qcg-name">
+            @if (EditMode && !param.IsSaved) {
+              <input class="mj-input qcg-input" [(ngModel)]="param.Name" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" aria-label="Parameter name" placeholder="Name used in the SQL" />
+            } @else {
+              <code>{{ param.Name }}</code>
+            }
+          </td>
+          @if (EditMode) {
+            <td>
+              <select class="mj-input qcg-select" [(ngModel)]="param.Type" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Type of ' + param.Name">
+                @for (t of Types; track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </td>
+            <td>
+              <input type="checkbox" [(ngModel)]="param.IsRequired" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="param.Name + ' is required'" />
+            </td>
+            <td>
+              <input class="mj-input qcg-input" [(ngModel)]="param.DefaultValue" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Default value of ' + param.Name" />
+            </td>
+            <td>
+              <input class="mj-input qcg-input" [(ngModel)]="param.SampleValue" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Sample value of ' + param.Name" />
+            </td>
+            <td>
+              <input type="checkbox" [(ngModel)]="param.IsServerSet" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Only the server sets ' + param.Name" />
+            </td>
+          } @else {
+            <td><code>{{ param.Type }}</code></td>
+            <td>{{ param.IsRequired ? 'Yes' : 'No' }}</td>
+            <td>@if (param.DefaultValue) { <code>{{ param.DefaultValue }}</code> } @else { <span class="qcg-muted">—</span> }</td>
+            <td>@if (param.SampleValue) { <code>{{ param.SampleValue }}</code> } @else { <span class="qcg-muted">—</span> }</td>
+            <td>{{ param.IsServerSet ? 'Yes' : 'No' }}</td>
+          }
+          <td class="qcg-fact">
+            <span class="qcg-detect" [class]="'qcg-detect qcg-detect--' + (param.DetectionMethod || 'none').toLowerCase()" [title]="DetectionTitle(param)">{{ DetectionLabel(param) }}</span>
+          </td>
+          <td class="qcg-annotation">
+            @if (EditMode) {
+              <textarea class="mj-input qcg-textarea" rows="1" [(ngModel)]="param.Description" [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="OnAnnotationChange()" [attr.aria-label]="'Description of ' + param.Name" placeholder="What the value means"></textarea>
+            } @else if (param.Description) {
+              <span>{{ param.Description }}</span>
+            } @else {
+              <span class="qcg-muted">—</span>
+            }
+          </td>
+          @if (EditMode) {
+            <td class="qcg-actions">
+              <button mjButton Variant="icon" type="button" (click)="Remove.emit(param)" [attr.aria-label]="'Remove parameter ' + param.Name" title="Remove parameter">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

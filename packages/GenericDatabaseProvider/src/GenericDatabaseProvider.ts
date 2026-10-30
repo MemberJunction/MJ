@@ -71,6 +71,7 @@ import {
     UserInfo,
     LocalCacheManager,
     CachedRunViewResult,
+    FieldSecurityViolation,
     LogError,
     LogStatus,
     LogStatusEx,
@@ -104,7 +105,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
+import { SQLParser, SqlDocument, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
+import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
+import { NamedQueryParameter, TypedBindValue, TypedQueryParameter } from './typedQueryParameter.js';
+import type { TypedQueryParameterValue } from './typedQueryParameter.js';
+import { StatementMemo } from './statementMemo.js';
+import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
+import { UndescribedColumnNames, WithheldColumnNames, WithholdColumns } from './fieldSecurity/queryColumnSecurity.js';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -115,6 +122,7 @@ import {
     GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
     MJQueryEntityExtended,
+    RenderedSQLCheckResult,
     MJQueryParameterEntity,
     MJUserViewEntityExtended,
     QueryEngine,
@@ -173,6 +181,31 @@ interface DatasetItemScope {
     RowFilter: string;
     /** Why the item is refused, or null when it may run. */
     Refusal: string | null;
+}
+
+/** The parameters of one materialized read, and how a value joins them. */
+interface MaterializedBinder {
+    readonly Parameters: unknown[];
+    /** Whether values bind as {@link TypedQueryParameter}s of their column's type. */
+    readonly Typed: boolean;
+    /** Adds `value`, compared with snapshot column `column`; its placeholder, or null when it cannot bind (→ live). */
+    Bind(column: string, value: unknown): string | null;
+}
+
+/** The keys a server-side query-result cache stores and reads one run's result under. */
+interface QueryResultCacheSlot {
+    /** The slot of the run's full result. */
+    readonly Key: string;
+    /** The slot of one page of it. */
+    PageKey(params: RunQueryParams): string;
+}
+
+/** The output columns a run must drop for its caller, and the description they were chosen from. */
+interface QueryColumnFilter {
+    /** The description's key ({@link StatementMemo.KeyOf}). */
+    readonly Key: string;
+    readonly Columns: readonly DescribedColumn[];
+    readonly Withheld: ReadonlySet<string>;
 }
 
 /**
@@ -5021,17 +5054,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 const item = params[i];
                 const query = this.resolveQuery(item.params);
                 if (!query) {
-                    errorResults.push({ queryIndex: i, queryId: item.params.QueryID || '', status: 'error', errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}` });
+                    errorResults.push({ queryIndex: i, queryId: item.params.QueryID || '', status: 'error', errorMessage: GenericDatabaseProvider.QueryUnavailableMessage(GenericDatabaseProvider.RequestedQueryLabel(item.params)) });
                     continue;
                 }
 
                 const definition = this.QueryDefinitionSignatureFor(query);
                 const runCheck = this.authorizeCacheCheckedQuery(query, item, definition, user);
                 if (!runCheck.canRun) {
-                    const deniedMsg = runCheck.deniedEntities.length > 0
-                        ? ` Denied entities: ${runCheck.deniedEntities.join(', ')}.`
-                        : '';
-                    const errorMessage = runCheck.renderError ?? `User does not have permission to run query: ${query.Name}.${deniedMsg}`;
+                    const errorMessage = runCheck.renderError ?? this.queryRunRefusalMessage(GenericDatabaseProvider.RequestedQueryLabel(item.params));
                     errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage });
                     continue;
                 }
@@ -5132,7 +5162,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const mayAnswerWithoutRunning = !!item.cacheStatus
             && !this.clientSlotDefinitionDiffers(item.cacheStatus, definition)
             && !!query.CacheValidationSQL;
-        return mayAnswerWithoutRunning ? this.authorizeQueryRun(query, item.params.Parameters, user) : query.UserCanRun(user);
+        if (mayAnswerWithoutRunning) {
+            return this.authorizeQueryRun(query, item.params.Parameters, user);
+        }
+        const result = query.UserCanRun(user);
+        if (!result.canRun) {
+            // RunQueriesWithCacheCheck short-circuits on !canRun before reaching
+            // runFullQueryAndReturnForQuery, so this refusal would otherwise never log.
+            this.logQueryRunRefusal(query, user, result);
+        }
+        return result;
     }
 
     /**
@@ -5161,9 +5200,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (!query) {
                 return { resolvable: false, authorized: false };
             }
+            // Pre-cache probe: a denial here falls through to execution, which logs at its own
+            // gate, so this probe does not log (no duplicate refusal lines on cached runs).
+            const run = user ? this.authorizeQueryRun(query, params.Parameters, user, false) : null;
             return {
                 resolvable: true,
-                authorized: !user || this.authorizeQueryRun(query, params.Parameters, user).canRun,
+                authorized: !run || run.canRun,
+                // A run that drops denied columns returns rows shaped by the user's denials, so its
+                // slot is the user's field-security segment's alone.
+                fieldSecurityKey: user && run?.needsColumnFiltering ? FieldSecuritySQLGate.CatalogDenialProfileKey(this.Entities, user) : undefined,
                 categoryPath: query.CategoryPath,
                 queryName: query.Name,
                 contextTokens: this.queryContextTokens(query),
@@ -5252,14 +5297,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *
      * @param query - The resolved MJQueryEntityExtended to validate
      * @param contextUser - The user attempting to execute the query
+     * @param requestedLabel - The identifier the caller supplied ({@link RequestedQueryLabel}); the
+     *   refusal echoes it and nothing else. The query's ID when omitted.
      * @throws Error if the user does not have permission to run the query
      */
-    protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
+    protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo, requestedLabel: string = query.ID): void {
         const user = contextUser || this.CurrentUser;
         if (user) {
             const result = query.UserCanRun(user);
             if (!result.canRun) {
-                throw new Error(this.queryRunRefusalMessage(query, result.deniedEntities));
+                // This gate, not the rendered-SQL one, is where a role-list denial lands: it
+                // short-circuits before any SQL is rendered.
+                this.logQueryRunRefusal(query, user, result);
+                throw new Error(this.queryRunRefusalMessage(requestedLabel));
             }
         }
 
@@ -5335,35 +5385,132 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * and field-level security on every column it references. A template that injects an
      * identifier, a `{% if %}` branch and a `{{query:"..."}}` composition are all checked as they
      * render. A query carrying `MJ: Query Permissions` rows is authorized by its role list alone.
-     * The refusal does not say which field or clause caused it.
      *
+     * A refusal reads exactly like the message for a query that does not exist
+     * ({@link QueryUnavailableMessage}): it never says which field, clause or entity caused it.
+     *
+     * @param requestedLabel - The identifier the caller supplied ({@link RequestedQueryLabel}); the
+     *   refusal echoes it and nothing else. The query's ID when omitted.
+     * @returns Whether the run must drop denied columns from its rows: true when a plain `*` or
+     *   `alias.*` that reaches only the output reads an entity the user is denied a field on.
      * @throws Error when the user may not run this rendering of the query
      */
-    protected ValidateRenderedQueryForExecution(query: MJQueryEntityExtended, renderedSQL: string, contextUser?: UserInfo): void {
+    protected ValidateRenderedQueryForExecution(
+        query: MJQueryEntityExtended,
+        renderedSQL: string,
+        contextUser?: UserInfo,
+        requestedLabel: string = query.ID,
+    ): { NeedsColumnFiltering: boolean } {
         const user = contextUser || this.CurrentUser;
         if (!user) {
-            return;
+            return { NeedsColumnFiltering: false };
         }
         const result = this.checkRenderedQuery(query, renderedSQL, user);
         if (!result.canRun) {
-            throw new Error(this.queryRunRefusalMessage(query, result.deniedEntities));
+            throw new Error(this.queryRunRefusalMessage(requestedLabel));
         }
+        return { NeedsColumnFiltering: result.needsColumnFiltering === true };
     }
 
-    /** The refusal for a user who may not run `query`; names entities the user cannot read, never a field. */
-    private queryRunRefusalMessage(query: MJQueryEntityExtended, deniedEntities: string[]): string {
-        const deniedMsg = deniedEntities.length > 0 ? ` Denied entities: ${deniedEntities.join(', ')}.` : '';
-        return `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`;
+    /**
+     * The message for a saved query that does not exist or that the caller may not run. The two
+     * are worded identically, so a refusal does not confirm that the query, or anything it reads,
+     * exists.
+     *
+     * It echoes only the identifier the caller supplied ({@link RequestedQueryLabel}), never one
+     * looked up from the resolved query: a refusal of a request by ID that named the query would
+     * both differ from that request's not-found message and disclose the query's name.
+     *
+     * @param label - What the caller asked for, as {@link RequestedQueryLabel} gives it
+     */
+    public static QueryUnavailableMessage(label: string): string {
+        return `Query '${label}' does not exist or you do not have permission to run it.`;
     }
 
-    /** The run-time checks of `query` for `user` on this provider's entities and dialect; logs a field-security refusal. */
-    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo): { canRun: boolean; deniedEntities: string[] } {
-        const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey);
-        if (result.fieldSecurityViolation) {
-            const v = result.fieldSecurityViolation;
-            LogStatusEx({ message: `RunQuery: query '${query.Name}' refused for user '${user.Email}' by field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''}).`, verboseOnly: true });
+    /**
+     * The identifier a request supplied, for {@link QueryUnavailableMessage}: its category path and
+     * name (`Sales/Reports/Top Customers`) when it names a query, its ID otherwise.
+     */
+    public static RequestedQueryLabel(params: Pick<RunQueryParams, 'QueryID' | 'QueryName' | 'CategoryPath'>): string {
+        if (params.QueryName) {
+            const path = (params.CategoryPath ?? '').split('/').map(s => s.trim()).filter(s => s.length > 0).join('/');
+            return path ? `${path}/${params.QueryName}` : params.QueryName;
+        }
+        return params.QueryID ?? '';
+    }
+
+    /** The refusal for a request the caller may not run, echoing `requestedLabel` ({@link QueryUnavailableMessage}). */
+    private queryRunRefusalMessage(requestedLabel: string): string {
+        return GenericDatabaseProvider.QueryUnavailableMessage(requestedLabel);
+    }
+
+    /**
+     * The OPERATOR's record of why a run was refused. The refusal returned to the caller is
+     * {@link QueryUnavailableMessage}, worded like not-found and naming no field, clause or entity:
+     * that is the information-disclosure guard, and it is unchanged. This is the server-side copy.
+     *
+     * Without it a refusal is unattributable: the query's own role list, SQL the field-security
+     * gate could not read, and a field-security violation all end in the same caller message.
+     *
+     * Previously only the field-security case logged anything, and only at `verboseOnly`, which
+     * CI does not enable — so a recurring ~3% integration-tier failure (ten checks across four
+     * bundles refusing together) could not be diagnosed from the logs at all. Called from every
+     * refusal gate, so no path is silent.
+     *
+     * The loaded-role count is here because an empty or undefined `UserRoles` denies every
+     * permission-bearing query at once — exactly the all-or-nothing signature those runs show.
+     * Telling "no roles loaded" apart from "roles loaded but not granted" is the first question
+     * to ask and it costs one integer.
+     */
+    private logQueryRunRefusal(
+        query: MJQueryEntityExtended,
+        user: UserInfo,
+        result: { deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation },
+    ): void {
+        const v = result.fieldSecurityViolation;
+        const queryRoles = (query.QueryPermissions ?? []).map(p => p.Role).join(', ');
+        const reason = v
+            ? `field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''})`
+            : result.deniedEntities.length > 0
+                ? `unreadable entities (${result.deniedEntities.join(', ')})`
+                : `the query's own role list (MJ: Query Permissions: [${queryRoles}])`;
+        const userRoles = user.UserRoles
+            ? `${user.UserRoles.length} ([${user.UserRoles.map(r => r.Role).join(', ')}])`
+            : 'undefined';
+        LogStatus(
+            `RunQuery: query '${query.Name}' (${query.ID}) refused for user '${user.Email}' by ${reason}. ` +
+            `Roles loaded for this user: ${userRoles}.`
+        );
+    }
+
+    /**
+     * The run-time checks of `query` for `user` on this provider's entities and dialect; logs a
+     * refusal unless `logRefusal` is false. For a user denied a field anywhere, the statement's
+     * projection stars are read first ({@link projectionStarOffsets}), so a plain `*` can run with
+     * its denied columns dropped instead of being refused.
+     */
+    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo, logRefusal = true): RenderedSQLCheckResult {
+        const stars = this.projectionStarOffsets(renderedSQL, user);
+        const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey, stars ? { ProjectionStarOffsets: stars } : undefined);
+        if (!result.canRun && logRefusal) {
+            this.logQueryRunRefusal(query, user, result);
         }
         return result;
+    }
+
+    /** Projection-star offsets per rendered statement and dialect ({@link FindProjectionStars}). */
+    private static readonly projectionStarMemo = new StatementMemo<ReadonlySet<number>>(500);
+
+    /**
+     * The projection stars of `renderedSQL` ({@link FindProjectionStars}), read only for a user
+     * denied a field on some entity and only when the text holds a `*`; undefined otherwise.
+     */
+    private projectionStarOffsets(renderedSQL: string, user: UserInfo): ReadonlySet<number> | undefined {
+        if (!renderedSQL.includes('*') || !FieldSecuritySQLGate.CatalogHasDenialsForUser(this.Entities, user)) {
+            return undefined;
+        }
+        const key = StatementMemo.KeyOf(renderedSQL, this.Dialect.Key);
+        return GenericDatabaseProvider.projectionStarMemo.GetOrCompute(key, () => FindProjectionStars(renderedSQL, this.Dialect));
     }
 
     /**
@@ -5375,11 +5522,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         query: MJQueryEntityExtended,
         parameters: Record<string, string> | undefined,
         user: UserInfo,
-    ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
+        logRefusal = true,
+    ): { canRun: boolean; deniedEntities: string[]; renderError?: string; needsColumnFiltering?: boolean } {
         const base = query.UserCanRun(user);
         if (!base.canRun || GenericDatabaseProvider.roleListGrants(query)) {
             // A role list authorizes on its own, whatever the SQL reads, and UserCanRun has
             // already confirmed the user holds one of its roles: nothing to render.
+            if (!base.canRun && logRefusal) {
+                // The batch/cache-checked path returns rather than throws, so this refusal would
+                // otherwise never reach a log at all.
+                this.logQueryRunRefusal(query, user, base);
+            }
             return base;
         }
         let renderedSQL: string;
@@ -5388,7 +5541,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         } catch (e) {
             return { canRun: false, deniedEntities: [], renderError: e instanceof Error ? e.message : String(e) };
         }
-        return this.checkRenderedQuery(query, renderedSQL, user);
+        return this.checkRenderedQuery(query, renderedSQL, user, logRefusal);
     }
 
     /** True when the query carries a role list (`MJ: Query Permissions` rows), which authorizes a run by itself. */
@@ -5531,49 +5684,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     private static readonly MATERIALIZED_SURROGATE_ORDER_COLUMN = '__mj_MaterializedRowID';
 
-    /** Quotes a SQL identifier for the target engine (SQL Server `[x]`, PostgreSQL `"x"`), escaping the closer. */
-    private static quoteMaterializedIdentifier(name: string, isPostgres: boolean): string {
-        return isPostgres ? `"${name.replace(/"/g, '""')}"` : `[${name.replace(/]/g, ']]')}]`;
-    }
-
     /**
      * PURE, dialect-aware builder for the Phase-2 materialized read query (plan §5). Given the query's
      * output columns, the materialized view (schema + name), the persisted read-filter spec, the caller's
-     * parameter values, and the platform, returns `{ sql, parameters }` whose WHERE injects each spec
-     * predicate as `column <op> <placeholder>` with the value **bound** (SQL Server `?`, PostgreSQL `$n`) —
-     * never interpolating a caller value (SQL-injection-safe by construction).
+     * parameter values, and the dialect, returns `{ sql, parameters }` whose WHERE injects each spec
+     * predicate as `column <op> <placeholder>` with the value **bound** — never interpolating a caller
+     * value (SQL-injection-safe by construction).
+     *
+     * With `columnTypes` (the snapshot's column types, as the server describes them) every value binds as
+     * a {@link TypedQueryParameter} of the filtered column's own type, referenced by the dialect's typed
+     * placeholder (`DialectBinding.TypedParameter`): a named, declared parameter on SQL Server, so a
+     * varchar column is compared with a varchar value and keeps its index seek; `$n::type` on PostgreSQL.
+     * Without `columnTypes` (deprecated) values bind untyped: with a `dialect`, as named parameters
+     * ({@link NamedQueryParameter}, referenced `@pN` on SQL Server, `$n` on PostgreSQL); with neither a
+     * dialect nor column types, as the legacy positional array (SQL Server `?`, PostgreSQL `$n`).
      *
      * Returns null on ANY condition that would make the materialized read UNFAITHFUL to the live query, so
      * the caller falls back to running live (always correct): an operator outside the safe set, a spec
      * parameter the caller did not supply (the live query would apply the param's default), a null value,
-     * or an empty/non-array value for a list (`IN`/`NOT IN`) predicate. No IO — fully unit-testable.
+     * an empty/non-array value for a list (`IN`/`NOT IN`) predicate, or (typed) a filtered column with no
+     * known type or a value its type cannot hold. No IO — fully unit-testable.
      */
-    /**
-     * True if `sql`'s top-level SELECT carries an ORDER BY. Used to refuse a materialized RowFilterBroad read:
-     * {@link buildMaterializedReadQuery} emits no ORDER BY and the snapshot is built with the source's top-level
-     * ORDER BY stripped, so an ordered query must be served LIVE (where its ordering — and therefore its
-     * pagination under StartRow/MaxRows — is preserved) rather than from the unordered snapshot. Parse failure or
-     * an un-reasoned statement shape returns `true` (refuse-to-live: treat unknown as ordered rather than risk
-     * serving mis-ordered pages). Mirrors MaterializationRefresher.stripTopLevelOrderBy's AST detection.
-     *
-     * @internal Materialized-read ordering-fidelity gate — NOT part of this package's supported public API;
-     * `static` only so it can be unit-tested. Do not call from outside `@memberjunction/generic-database-provider`.
-     */
-    public static queryHasTopLevelOrderBy(sql: string, platformKey: string | undefined): boolean {
-        if (!sql || sql.trim().length === 0) return false;
-        try {
-            const parsed = SQLParser.Astify(sql, GetDialect(platformKey ?? 'sqlserver'));
-            if (!parsed.astParsed || parsed.ast == null) return true; // unparseable → refuse to live
-            const stmtNode: unknown = Array.isArray(parsed.ast) ? (parsed.ast.length === 1 ? parsed.ast[0] : null) : parsed.ast;
-            if (stmtNode == null || typeof stmtNode !== 'object') return true;
-            const s = stmtNode as Record<string, unknown>;
-            if (s.type !== 'select') return true; // not a simple SELECT we can reason about → refuse to live
-            return s.orderby != null;
-        } catch {
-            return true; // parser threw → refuse to live (safe: served correctly by the live path)
-        }
-    }
-
     public static buildMaterializedReadQuery(opts: {
         outputColumns: string[];
         schemaName: string;
@@ -5583,52 +5714,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         /** Declared parameter type per paramName (from MJ: Query Parameters). Drives type-faithful binding so a
          *  scalar value matches the live path's typed literal instead of a raw string the DB implicitly coerces. */
         paramTypes?: Record<string, string>;
-        isPostgres: boolean;
+        /** The dialect the read runs in: identifier quoting and parameter references. */
+        dialect?: SQLDialect;
+        /** @deprecated Pass {@link dialect}. True for PostgreSQL when no dialect is given. */
+        isPostgres?: boolean;
+        /** The snapshot's column types, column name → SQL type (`varchar(50)`, `datetime2(7)`). Names match ignoring case. */
+        columnTypes?: Record<string, string>;
     }): { sql: string; parameters: unknown[] } | null {
-        const { outputColumns, schemaName, viewName, spec, paramValues, paramTypes, isPostgres } = opts;
+        const { outputColumns, schemaName, viewName, spec } = opts;
         if (!outputColumns || outputColumns.length === 0) return null;
         if (!spec || spec.length === 0) return null;
-
-        const q = (name: string) => GenericDatabaseProvider.quoteMaterializedIdentifier(name, isPostgres);
-        const parameters: unknown[] = [];
+        const dialect = opts.dialect ?? GetDialect(opts.isPostgres ? 'postgresql' : 'sqlserver');
+        const binder = GenericDatabaseProvider.materializedBinder(opts, dialect);
+        // A typed binding converts the value itself, so it takes native forms (a boolean, a UTC ISO date with
+        // its 'Z'); so does an untyped one whose driver binds booleans natively (PostgreSQL). SQL Server's
+        // untyped binding takes BIT 1/0 and a zone-less ISO string.
+        const nativeForms = binder.Typed || (opts.dialect ? typeof dialect.Binding.BooleanParameterValue(true) === 'boolean' : opts.isPostgres === true);
         const predicates: string[] = [];
-        // Placeholder for the NEXT bound value: SQL Server uses positional `?`; PostgreSQL uses `$n` (1-based,
-        // computed BEFORE the value is pushed so the index aligns with the array position).
-        const nextPlaceholder = () => (isPostgres ? `$${parameters.length + 1}` : '?');
-
         for (const e of spec) {
-            // Defensive: the spec is parsed from a persisted JSON string, so validate each element's shape
-            // before use — a malformed element (missing/non-string column/operator/paramName) returns null
-            // (→ caller falls back to live), never throws mid-build (Phase 2 §2: any uncertainty → live).
-            if (!e || typeof e.column !== 'string' || typeof e.operator !== 'string' || typeof e.paramName !== 'string') return null;
-            if (!GenericDatabaseProvider.RUNTIME_SAFE_READ_FILTER_OPERATORS.has(e.operator)) return null;
-            const val = paramValues ? paramValues[e.paramName] : undefined;
-            if (val === undefined || val === null) return null; // caller omitted it → live applies the default
-            const col = q(e.column);
-            const isListOp = e.operator === 'IN' || e.operator === 'NOT IN';
-            if (isListOp) {
-                if (!Array.isArray(val) || val.length === 0) return null; // empty/non-array IN → live
-                const phs = val.map((item) => {
-                    const ph = nextPlaceholder();
-                    parameters.push(item); // list elements bound as-is (array element type is not declared)
-                    return ph;
-                });
-                predicates.push(`${col} ${e.operator} (${phs.join(', ')})`);
-            } else {
-                // Bind the value AS ITS DECLARED TYPE. The live path renders params as typed SQL literals via the
-                // Nunjucks pipeline; binding the raw string here would instead make the DB implicitly coerce it,
-                // which can (a) error on PostgreSQL (text vs numeric/date) and (b) silently match DIFFERENT rows
-                // than live on SQL Server for format/whitespace-sensitive values. Coercing to the declared type
-                // aligns the two; an unconvertible value fails closed → live (never a wrong-rows materialized read).
-                const coerced = GenericDatabaseProvider.coerceMaterializedScalarValue(val, paramTypes?.[e.paramName], isPostgres);
-                if (!coerced.ok) return null;
-                const ph = nextPlaceholder();
-                parameters.push(coerced.value);
-                predicates.push(`${col} ${e.operator} ${ph}`);
-            }
+            const predicate = GenericDatabaseProvider.materializedPredicate(e, opts, dialect, binder, nativeForms);
+            if (predicate === null) return null;
+            predicates.push(predicate);
         }
-
-        const cols = outputColumns.map((c) => q(c)).join(', ');
+        const q = (name: string) => dialect.Writer.QuoteIdentifier(name);
+        const cols = outputColumns.map(c => q(c)).join(', ');
         // Deterministic page order. A materialized read carries no user ORDER BY (an ordered source query falls
         // back to live), so without an explicit order the paging engine would append `ORDER BY (SELECT NULL)` and
         // successive pages could skip or duplicate rows whenever the execution plan differs between calls. The
@@ -5637,7 +5746,94 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // buildDataSQL detects this ORDER BY and pages against it instead of the dialect default.
         const orderBy = q(GenericDatabaseProvider.MATERIALIZED_SURROGATE_ORDER_COLUMN);
         const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')} ORDER BY ${orderBy}`;
-        return { sql, parameters };
+        return { sql, parameters: binder.Parameters };
+    }
+
+    /**
+     * The parameter list one materialized read builds, and how a value joins it: typed by the filtered
+     * column when the snapshot's column types are known, otherwise untyped (the deprecated form).
+     */
+    private static materializedBinder(
+        opts: { isPostgres?: boolean; dialect?: SQLDialect; columnTypes?: Record<string, string> },
+        dialect: SQLDialect,
+    ): MaterializedBinder {
+        const parameters: unknown[] = [];
+        const types = opts.columnTypes
+            ? new Map(Object.entries(opts.columnTypes).map(([name, type]): [string, string] => [name.toLowerCase(), type]))
+            : null;
+        const untypedPlaceholder = (index: number): string => (opts.isPostgres ? `$${index + 1}` : '?');
+        return {
+            Parameters: parameters,
+            Typed: types !== null,
+            Bind(column: string, value: unknown): string | null {
+                if (types === null && opts.dialect) {
+                    return GenericDatabaseProvider.bindNamedParameter(parameters, dialect, value);
+                }
+                if (types === null) {
+                    parameters.push(value);
+                    return untypedPlaceholder(parameters.length - 1);
+                }
+                const sqlType = types.get(column.toLowerCase());
+                const bound = sqlType === undefined ? undefined : TypedBindValue(value, sqlType);
+                if (sqlType === undefined || bound === undefined) return null;
+                const reference = dialect.Binding.TypedParameter(parameters.length, sqlType);
+                parameters.push(new TypedQueryParameter(reference.Name, sqlType, bound));
+                return reference.Placeholder;
+            },
+        };
+    }
+
+    /**
+     * Adds `value` to `parameters` as a {@link NamedQueryParameter} and returns the dialect's placeholder for
+     * it (`@p0` bound as `p0` on SQL Server, `$1` on PostgreSQL). Passing the value by name keeps a SQL Server
+     * provider from rewriting `?` in the statement text, which the legacy positional array form does
+     * everywhere, inside a quoted identifier included. Null (→ live) for a value no parameter can carry.
+     */
+    private static bindNamedParameter(parameters: unknown[], dialect: SQLDialect, value: unknown): string | null {
+        const bound = GenericDatabaseProvider.namedParameterValue(value);
+        if (bound === undefined) return null;
+        const placeholder = dialect.Binding.ParameterPlaceholder(parameters.length);
+        parameters.push(new NamedQueryParameter(placeholder.startsWith('@') ? placeholder.slice(1) : placeholder, bound));
+        return placeholder;
+    }
+
+    /** `value` as a bind parameter value, or undefined when it is not a scalar a parameter can carry. */
+    private static namedParameterValue(value: unknown): TypedQueryParameterValue | undefined {
+        if (value === null || value instanceof Date) return value;
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+        return undefined;
+    }
+
+    /** One spec element as a bound predicate, or null when it cannot be served faithfully (→ live). */
+    private static materializedPredicate(
+        e: { column: string; operator: string; paramName: string; kind: 'scalar' | 'list' },
+        opts: { paramValues: Record<string, unknown> | undefined; paramTypes?: Record<string, string> },
+        dialect: SQLDialect,
+        binder: MaterializedBinder,
+        nativeForms: boolean,
+    ): string | null {
+        // Defensive: the spec is parsed from a persisted JSON string, so validate each element's shape
+        // before use — a malformed element (missing/non-string column/operator/paramName) returns null
+        // (→ caller falls back to live), never throws mid-build (Phase 2 §2: any uncertainty → live).
+        if (!e || typeof e.column !== 'string' || typeof e.operator !== 'string' || typeof e.paramName !== 'string') return null;
+        if (!GenericDatabaseProvider.RUNTIME_SAFE_READ_FILTER_OPERATORS.has(e.operator)) return null;
+        const val = opts.paramValues ? opts.paramValues[e.paramName] : undefined;
+        if (val === undefined || val === null) return null; // caller omitted it → live applies the default
+        const col = dialect.Writer.QuoteIdentifier(e.column);
+        if (e.operator === 'IN' || e.operator === 'NOT IN') {
+            if (!Array.isArray(val) || val.length === 0) return null; // empty/non-array IN → live
+            const placeholders = val.map(item => binder.Bind(e.column, item));
+            return placeholders.some(p => p === null) ? null : `${col} ${e.operator} (${placeholders.join(', ')})`;
+        }
+        // Bind the value AS ITS DECLARED TYPE. The live path renders params as typed SQL literals via the
+        // Nunjucks pipeline; binding the raw string here would instead make the DB implicitly coerce it,
+        // which can (a) error on PostgreSQL (text vs numeric/date) and (b) silently match DIFFERENT rows
+        // than live on SQL Server for format/whitespace-sensitive values. Coercing to the declared type
+        // aligns the two; an unconvertible value fails closed → live (never a wrong-rows materialized read).
+        const coerced = GenericDatabaseProvider.coerceMaterializedScalarValue(val, opts.paramTypes?.[e.paramName], nativeForms);
+        if (!coerced.ok) return null;
+        const placeholder = binder.Bind(e.column, coerced.value);
+        return placeholder === null ? null : `${col} ${e.operator} ${placeholder}`;
     }
 
     /**
@@ -5654,13 +5850,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * the live TYPE conversion would ALSO reject the value (→ caller falls back to live).
      *   - `number`  → `Number(value)` (JS trims); non-finite → refuse (live pushes a validation error → live).
      *   - `boolean` → live truthiness: ONLY 'true' (case-insensitive) or a real boolean `true` is true; everything
-     *                 else is false (live never refuses a boolean). SQL Server binds BIT 1/0; PostgreSQL binds bool.
+     *                 else is false (live never refuses a boolean). Native forms keep the boolean; otherwise BIT 1/0.
      *   - `date`    → `new Date(value).toISOString()` — the UTC ISO string, exactly what live stores/renders. NOT
      *                 the naive input string: live applies the local→UTC shift, so binding the raw string would
-     *                 diverge for any timed value. Invalid date → refuse.
+     *                 diverge for any timed value. Invalid date → refuse. Without native forms the ISO 'Z' zone
+     *                 suffix is dropped, because SQL Server rejects it for an untyped datetime2/datetime value
+     *                 (error 241); the zone-less string is the same UTC wall-clock.
      *   - `string`  → `String(value)` (matches live); `array`-element / unspecified → bound as-is.
+     *
+     * @param nativeForms - Keep booleans as booleans and the ISO zone suffix (typed bindings, PostgreSQL).
      */
-    private static coerceMaterializedScalarValue(value: unknown, type: string | undefined, isPostgres: boolean): { ok: true; value: unknown } | { ok: false } {
+    private static coerceMaterializedScalarValue(value: unknown, type: string | undefined, nativeForms: boolean): { ok: true; value: unknown } | { ok: false } {
         switch (type) {
             case 'number': {
                 const n = Number(typeof value === 'string' ? value.trim() : value);
@@ -5668,18 +5868,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
             case 'boolean': {
                 const b = typeof value === 'boolean' ? value : String(value).toLowerCase() === 'true';
-                return { ok: true, value: isPostgres ? b : b ? 1 : 0 };
+                return { ok: true, value: nativeForms ? b : b ? 1 : 0 };
             }
             case 'date': {
                 const d = value instanceof Date ? value : new Date(String(value));
                 if (Number.isNaN(d.getTime())) return { ok: false };
                 const iso = d.toISOString();
-                // SQL Server rejects the ISO 'Z' zone suffix for datetime2/datetime (error 241 — 'Z' is valid only
-                // for datetimeoffset), so binding it would throw and force a fallback to live. Strip it for SS: the
-                // value is already the UTC moment and a zone-less ISO string binds as that same datetime2 wall-clock,
-                // matching the live path's rendered literal (no row divergence). PostgreSQL's timestamptz accepts
-                // 'Z', so keep it there.
-                return { ok: true, value: isPostgres ? iso : iso.replace(/Z$/, '') };
+                return { ok: true, value: nativeForms ? iso : iso.replace(/Z$/, '') };
             }
             case 'string':
                 return { ok: true, value: String(value) };
@@ -5689,17 +5884,77 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * The snapshot's column types (lower-cased column name → SQL type) for a materialization, read by
+     * describing `SELECT * FROM <schema>.<view>` and kept until the snapshot is refreshed: the key carries
+     * the materialization's ID and `LastRefreshedAt`, which every refresh moves. Null when the view cannot
+     * be described (→ live).
+     */
+    private async materializedColumnTypes(
+        mat: { ID: string; SchemaName: string; ViewName: string; LastRefreshedAt: Date | string | null },
+        contextUser?: UserInfo,
+    ): Promise<Record<string, string> | null> {
+        const refreshed = mat.LastRefreshedAt instanceof Date ? mat.LastRefreshedAt.toISOString() : String(mat.LastRefreshedAt ?? '');
+        const key = StatementMemo.KeyOf(`${NormalizeUUID(mat.ID)}|${refreshed}|${mat.SchemaName}.${mat.ViewName}`, this.Dialect.Key);
+        const kept = GenericDatabaseProvider.materializedColumnTypeMemo.Get(key);
+        if (kept) return kept;
+        const writer = this.Dialect.Writer;
+        const described = await this.DescribeStatement(`SELECT * FROM ${writer.QuoteIdentifier(mat.SchemaName)}.${writer.QuoteIdentifier(mat.ViewName)}`, contextUser);
+        if (!described.Success) {
+            LogStatusEx({ message: `Materialized read: the column types of ${mat.SchemaName}.${mat.ViewName} could not be read (${described.Diagnostics.join('; ')}) — serving live.`, verboseOnly: true });
+            return null;
+        }
+        const types: Record<string, string> = {};
+        for (const c of described.Columns) types[c.Name.toLowerCase()] = c.SQLFullType;
+        GenericDatabaseProvider.materializedColumnTypeMemo.Set(key, types);
+        return types;
+    }
+
+    /** Snapshot column types per materialization and refresh ({@link materializedColumnTypes}). */
+    private static readonly materializedColumnTypeMemo = new StatementMemo<Record<string, string>>(500);
+
+    /** Top-level ORDER BY answers per (SQL, dialect) ({@link queryHasTopLevelOrderBy}). */
+    private static readonly topLevelOrderByMemo = new StatementMemo<boolean>(1000);
+
+    /**
+     * True if `sql`'s top-level query carries an ORDER BY. Used to refuse a materialized RowFilterBroad read:
+     * {@link buildMaterializedReadQuery} orders by the snapshot's row id and the snapshot is built with the
+     * source's top-level ORDER BY stripped, so an ordered query must be served LIVE (where its ordering — and
+     * therefore its pagination under StartRow/MaxRows — is preserved) rather than from the snapshot. Read with
+     * `SqlDocument.TopLevelOrderBy()`; SQL that is not read completely, or that is not one query, returns `true`
+     * (refuse-to-live: treat unknown as ordered rather than risk serving mis-ordered pages). Memoized per
+     * (SQL, dialect) in a bounded memo.
+     *
+     * @internal Materialized-read ordering-fidelity gate — NOT part of this package's supported public API;
+     * `static` only so it can be unit-tested. Do not call from outside `@memberjunction/generic-database-provider`.
+     */
+    public static queryHasTopLevelOrderBy(sql: string, platformKey: string | undefined): boolean {
+        if (!sql || sql.trim().length === 0) return false;
+        const dialect = GetDialect(platformKey ?? 'sqlserver');
+        return GenericDatabaseProvider.topLevelOrderByMemo.GetOrCompute(StatementMemo.KeyOf(sql, dialect.Key), () => {
+            const doc = SqlDocument.Parse(sql, dialect);
+            if (doc.TopLevelQuery() === null || doc.HasStackedStatements().Value) return true;
+            const orderBy = doc.TopLevelOrderBy();
+            return !orderBy.Complete || orderBy.Value !== null;
+        });
+    }
+
+    /**
      * Phase 2 (plan §5): resolve a materialized read plan for a query IF the caller opted into
      * `DataSource:'Materialized'` AND the query has a fresh, Active `RowFilterBroad` materialization whose
      * persisted spec fully covers the query's parameters. Returns null on ANY uncertainty → the caller runs
      * the live query (serving live is always correct — this is a transparent optimization, never a
      * correctness dependency).
+     *
+     * @param renderedSQL - The SQL the live path runs for this call (rendered, not paged). The ordering
+     *   check reads it; without it the check reads the platform SQL, where template syntax makes any
+     *   template query read as ordered (→ live).
      */
     protected async tryBuildMaterializedQueryPlan(
         query: MJQueryEntityExtended,
         params: RunQueryParams,
         contextUser?: UserInfo,
         contextValues?: Record<string, string>,
+        renderedSQL?: string,
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
         // A snapshot is shared by every caller and was built without this caller's Context (user, date), so a
@@ -5732,10 +5987,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
         // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
         // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
-        // Check the PLATFORM-resolved SQL (the exact SQL the live path executes — GetPlatformSQL, line ~3642),
-        // not the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
+        // Check the SQL the live path executes: the rendered statement when the caller has it (a template decides
+        // its ORDER BY only when it renders, and the structural reader does not read template syntax, so the
+        // template text of every template query would read as ordered), otherwise the PLATFORM-resolved SQL — not
+        // the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
         // ORDER BY the base SQL lacks, and parsing the base SQL would miss it and serve mis-ordered snapshot pages.
-        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.GetPlatformSQL(this.PlatformKey) ?? '', this.PlatformKey)) return null;
+        const orderingSQL = renderedSQL ?? query.GetPlatformSQL(this.PlatformKey) ?? '';
+        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(orderingSQL, this.PlatformKey)) return null;
 
         // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
         // to interpolate into ExtraFilter — it never carries caller input.
@@ -5745,11 +6003,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // band, but a cached 'Active' row would let this plan keep serving the held/disabled snapshot — the exact
         // stale-serve the DriftHold mechanism exists to prevent. Reading straight from the DB guarantees we see
         // the current terminal status. This is a single-row point lookup, so the bypass cost is negligible.
-        const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string }>(
+        const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string; LastRefreshedAt: Date | string | null }>(
             {
                 EntityName: 'MJ: Materialized Results',
                 ExtraFilter: `ID='${matId}'`,
-                Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName'],
+                Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName', 'LastRefreshedAt'],
                 ResultType: 'simple',
                 MaxRows: 1,
                 BypassCache: true,
@@ -5790,6 +6048,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const paramTypes: Record<string, string> = {};
         for (const p of query.QueryParameters ?? []) paramTypes[p.Name] = p.Type;
 
+        // Each value binds with the type of the snapshot column it is compared with (read once per refresh;
+        // the status read above stays uncached). Unknown types → live.
+        const columnTypes = await this.materializedColumnTypes({ ID: matId, SchemaName: mat.SchemaName, ViewName: mat.ViewName, LastRefreshedAt: mat.LastRefreshedAt ?? null }, contextUser);
+        if (!columnTypes) return null;
+
         return GenericDatabaseProvider.buildMaterializedReadQuery({
             outputColumns,
             schemaName: mat.SchemaName,
@@ -5799,7 +6062,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // already refused when the template rendered), so the row filter sees both.
             paramValues: params.ServerParameters ? { ...params.Parameters, ...params.ServerParameters } : params.Parameters,
             paramTypes,
-            isPostgres: this.PlatformKey === 'postgresql',
+            dialect: this.Dialect,
+            columnTypes,
         });
     }
 
@@ -5825,9 +6089,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             // Find and validate query
             const query = this.findAndValidateQuery(params, contextUser);
+            const requestedLabel = GenericDatabaseProvider.RequestedQueryLabel(params);
 
-            // Process parameters (composition + Nunjucks templates)
-            const resolved = this.processQueryParameters(query, params.Parameters, contextUser, params);
+            // Process parameters (composition + Nunjucks templates). A query on an external data source
+            // renders its values with that source's dialect, so its literals read as the remote database reads them.
+            const dialectKey = query.ExternalDataSourceID ? await this.externalQueryDialectKey(query, contextUser) : undefined;
+            const resolved = this.processQueryParameters(query, params.Parameters, contextUser, params, dialectKey);
             finalSQL = resolved.finalSQL;
             const appliedParameters = resolved.appliedParameters;
 
@@ -5836,14 +6103,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 await this.ValidateQueryApprovalAsync(query, resolved.renderResult);
             }
             // Authorize what will actually run, before any cache, materialized or external read.
-            this.ValidateRenderedQueryForExecution(query, finalSQL, contextUser);
+            const authorization = this.ValidateRenderedQueryForExecution(query, finalSQL, contextUser, requestedLabel);
+            // A projection star over an entity the user is denied a field on: the run drops the denied
+            // columns, chosen by the database's description of the statement. An external source's
+            // statement cannot be described here, so such a run is refused.
+            if (authorization.NeedsColumnFiltering && query.ExternalDataSourceID) {
+                throw new Error(this.queryRunRefusalMessage(requestedLabel));
+            }
+            const columnFilter = authorization.NeedsColumnFiltering ? await this.queryColumnFilter(query, finalSQL, requestedLabel, contextUser) : null;
+            const cacheSlot = this.queryResultCacheSlot(query, finalSQL, authorization.NeedsColumnFiltering, contextUser);
 
             // ── Phase 2: materialized read redirect (plan §5) ──
             // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
             // RowFilterBroad materialization, serve from the materialized table with the row-filter params
             // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
             // we fall through to the live execution below — a materialized read can never diverge from live.
-            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues);
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues, finalSQL);
             if (matPlan) {
                 // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
                 // live-rendered SQL), so a fallback below runs the live path unchanged.
@@ -5883,6 +6158,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         rows = paginated.paginatedResult;
                         matTotalRowCount = paginated.totalRowCount;
                     }
+                    rows = this.filterQueryRows(rows, columnFilter);
                     if (params.Enrichment?.EnricherKey) {
                         rows = await this.enrichQueryResults(rows, params, query, contextUser);
                     }
@@ -5939,10 +6215,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             let fullResult: Record<string, unknown>[] | undefined;
 
             if (useSQLPaging) {
+                // The paging wrapper may order by output position (`ORDER BY 1` on PostgreSQL); a page ordered
+                // by a column the caller is denied would reveal how its values rank, so such a run is refused.
+                if (columnFilter && columnFilter.Columns.length > 0 && columnFilter.Withheld.has(columnFilter.Columns[0].Name)) {
+                    throw new Error(this.queryRunRefusalMessage(requestedLabel));
+                }
                 // Check paged cache before executing SQL
-                const pagedCacheHit = await this.checkPagedQueryCache(query, params, appliedParameters);
+                const pagedCacheHit = await this.checkPagedQueryCache(query, params, appliedParameters, cacheSlot.PageKey(params));
                 if (pagedCacheHit) {
-                    return pagedCacheHit;
+                    return { ...pagedCacheHit, Results: this.filterQueryRows(pagedCacheHit.Results, columnFilter) };
                 }
 
                 const paging = QueryPagingEngine.WrapWithPaging(
@@ -5961,16 +6242,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 executionTime = Date.now() - start;
                 if (!dataResult) throw new Error('Error executing paged query SQL');
 
-                paginatedResult = dataResult;
-                this.ConvertByteArrayValuesToBase64(paginatedResult);
+                this.ConvertByteArrayValuesToBase64(dataResult);
+                paginatedResult = this.filterQueryRows(dataResult, columnFilter);
                 totalRowCount = countResult?.[0]?.TotalRowCount != null
                     ? Number(countResult[0].TotalRowCount)
                     : paginatedResult.length;
             } else {
                 // Check full-result cache before executing
-                const cachedResult = await this.checkQueryCache(query, params, appliedParameters);
+                const cachedResult = await this.checkQueryCache(query, params, appliedParameters, cacheSlot.Key);
                 if (cachedResult) {
-                    return cachedResult;
+                    return { ...cachedResult, Results: this.filterQueryRows(cachedResult.Results, columnFilter) };
                 }
 
                 // No paging requested — execute full query, apply in-memory pagination as fallback
@@ -5979,11 +6260,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 fullResult = timing.result;
 
                 const paginated = this.applyQueryPagination(fullResult, params);
-                paginatedResult = paginated.paginatedResult;
+                paginatedResult = this.filterQueryRows(paginated.paginatedResult, columnFilter);
                 totalRowCount = paginated.totalRowCount;
 
                 // Cache full (unpaginated) results if enabled (fire-and-forget)
-                void this.cacheQueryResults(query, params.Parameters || {}, fullResult);
+                void this.cacheQueryResults(query, params.Parameters || {}, fullResult, cacheSlot.Key);
             }
 
             // Optional, additive post-query enrichment (e.g. append an ML prediction
@@ -6035,6 +6316,69 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 RenderedSQL: finalSQL,
             };
         }
+    }
+
+    /** Descriptions of rendered statements, shared by every caller; schema-dependent, so they expire. */
+    private static readonly describedStatementMemo = new StatementMemo<readonly DescribedColumn[]>(500, 10 * 60 * 1000);
+
+    /**
+     * Describes the result set of `sql` without returning its rows: each output column's name,
+     * position, exact type, nullability and, for a pass-through column, the table or view column it
+     * comes from. The statement is never run for its rows (SQL Server compiles it only; PostgreSQL
+     * runs it under `LIMIT 0` in a transaction that is rolled back).
+     *
+     * This base implementation describes nothing: it reports a failure. Providers for a database
+     * that can describe a statement override it.
+     *
+     * @param sql - The rendered statement, in this provider's dialect.
+     * @param _contextUser - The user the description is for.
+     */
+    public async DescribeStatement(sql: string, _contextUser?: UserInfo): Promise<DescribeStatementResult> {
+        return DescribeStatementFailure(`${this.constructor.name} cannot describe a statement.`);
+    }
+
+    /**
+     * SECURITY — the output columns of `renderedSQL` that `user` must not receive
+     * ({@link WithheldColumnNames}), from the statement's description, kept per statement and dialect.
+     *
+     * @throws Error with the refusal message when the statement cannot be described: without the
+     *   description no column can be shown to be safe, so the run is refused.
+     */
+    private async queryColumnFilter(query: MJQueryEntityExtended, renderedSQL: string, requestedLabel: string, contextUser?: UserInfo): Promise<QueryColumnFilter> {
+        const user = contextUser || this.CurrentUser!;
+        const key = StatementMemo.KeyOf(renderedSQL, this.Dialect.Key);
+        let columns = GenericDatabaseProvider.describedStatementMemo.Get(key);
+        if (!columns) {
+            const described = await this.DescribeStatement(renderedSQL, user);
+            if (!described.Success) {
+                LogStatusEx({ message: `RunQuery: query '${query.Name}' refused for user '${user.Email}': its columns could not be described for field-level security (${described.Diagnostics.join('; ')}).`, verboseOnly: true });
+                throw new Error(this.queryRunRefusalMessage(requestedLabel));
+            }
+            columns = described.Columns;
+            GenericDatabaseProvider.describedStatementMemo.Set(key, columns);
+        }
+        const readEntities = [...(FieldSecuritySQLGate.RelationEntities(renderedSQL, this.Entities, this.PlatformKey) ?? []), ...this.declaredQueryEntities(query)];
+        return { Key: key, Columns: columns, Withheld: WithheldColumnNames(columns, this.Entities, readEntities, user) };
+    }
+
+    /** The catalog entities `query`'s `QueryEntities` rows name. */
+    private declaredQueryEntities(query: MJQueryEntityExtended): EntityInfo[] {
+        const byID = IndexByUUID(this.Entities);
+        return (query.QueryEntities ?? []).map(qe => byID.Get(qe.EntityID)).filter((e): e is EntityInfo => !!e);
+    }
+
+    /**
+     * `rows` with the filter's withheld columns dropped, as new row objects. A column the
+     * description does not list is dropped too, and the description is forgotten: the statement's
+     * shape changed since it was described (a view redefined), so the next run describes it again.
+     */
+    private filterQueryRows<T extends Record<string, unknown>>(rows: T[], filter: QueryColumnFilter | null): T[] {
+        if (!filter || rows.length === 0) return rows;
+        const undescribed = UndescribedColumnNames(rows, filter.Columns);
+        if (undescribed.size > 0) {
+            GenericDatabaseProvider.describedStatementMemo.Delete(filter.Key);
+        }
+        return WithholdColumns(rows, undescribed.size > 0 ? new Set([...filter.Withheld, ...undescribed]) : filter.Withheld);
     }
 
     /**
@@ -6194,21 +6538,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
         const query = this.resolveQuery(params);
         if (!query) {
-            let errorDetails = 'Query not found';
-            if (params.QueryName) {
-                errorDetails = `Query '${params.QueryName}' not found`;
-                if (params.CategoryPath) {
-                    errorDetails += ` in category path '${params.CategoryPath}'`;
-                } else if (params.CategoryID) {
-                    errorDetails += ` in category ID '${params.CategoryID}'`;
-                }
-            } else if (params.QueryID) {
-                errorDetails = `Query with ID '${params.QueryID}' not found`;
-            }
-            throw new Error(errorDetails);
+            // Worded exactly as a refusal (QueryUnavailableMessage), so neither confirms the query exists.
+            throw new Error(GenericDatabaseProvider.QueryUnavailableMessage(GenericDatabaseProvider.RequestedQueryLabel(params)));
         }
 
-        this.ValidateQueryForExecution(query, contextUser);
+        this.ValidateQueryForExecution(query, contextUser, GenericDatabaseProvider.RequestedQueryLabel(params));
         return query;
     }
 
@@ -6218,17 +6552,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *
      * Delegates to {@link RenderPipeline.Run} for the composition → template
      * pipeline. Paging is handled separately by the caller (InternalRunQuery).
+     *
+     * @param dialectKey - The dialect the template's values render for (`sqlString` literals,
+     *   booleans); this provider's platform when omitted. An external data source's query passes
+     *   the source's dialect.
      */
     protected processQueryParameters(
         query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
         serverSet?: Pick<RunQueryParams, 'ServerParameters' | 'TimeZone'>,
+        dialectKey?: string,
     ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         const result = RenderPipeline.Run(
             query.GetPlatformSQL(this.PlatformKey),
             {
                 Platform: this.PlatformKey as DatabasePlatform,
+                DialectKey: dialectKey,
+                QueryID: query.ID,
+                QueryName: query.Name,
                 ContextUser: contextUser ?? this.CurrentUser,
                 Parameters: parameters,
                 ServerParameters: serverSet?.ServerParameters,
@@ -6247,6 +6589,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters, renderResult: result };
+    }
+
+    /**
+     * The dialect key of the external data source `query` reads, so its template values render as
+     * that database reads literals; undefined when the source has no SQL dialect (a document
+     * store), in which case the query renders with this provider's platform as before.
+     */
+    private async externalQueryDialectKey(query: MJQueryEntityExtended, contextUser?: UserInfo): Promise<string | undefined> {
+        const router = this.resolveExternalReadRouterOrThrow(`Query '${query.Name}'`);
+        const key = await router.GetQueryDialectKey(query.ExternalDataSourceID!, contextUser, this);
+        return key ?? undefined;
     }
 
     /**
@@ -6475,13 +6828,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     // wrapWithMaxRows is now handled by RenderPipeline.applyMaxRows
 
     /**
+     * Where a server-side result cache keeps this run's rows: one slot per rendered statement and
+     * dialect, and, when the caller is denied a field the statement's projection star reads, per
+     * field-security profile ({@link FieldSecuritySQLGate.CatalogDenialProfileKey}). Callers whose
+     * runs drop the same columns share a slot; a restricted caller and an unrestricted one never do.
+     * The rendered statement carries every parameter value, server-set ones included, so they need
+     * no separate part of the key.
+     */
+    private queryResultCacheSlot(query: MJQueryEntityExtended, renderedSQL: string, needsColumnFiltering: boolean, contextUser?: UserInfo): QueryResultCacheSlot {
+        const user = contextUser || this.CurrentUser;
+        const profile = needsColumnFiltering && user ? FieldSecuritySQLGate.CatalogDenialProfileKey(this.Entities, user) : '';
+        const key = `${query.ID}|${StatementMemo.KeyOf(renderedSQL, this.Dialect.Key)}|fs:${profile}`;
+        return {
+            Key: key,
+            PageKey: (params: RunQueryParams) => `${key}|page:${QueryPagingEngine.ResolveStartRow(params.StartRow)}:${params.MaxRows ?? ''}`,
+        };
+    }
+
+    /**
      * Checks the query cache for existing results and returns them if valid.
      * Currently always returns null (query caching is not active).
+     *
+     * An override must look results up by `slotKey` alone, the same key {@link cacheQueryResults}
+     * stores under: it separates rendered statements and field-security profiles, so a slot never
+     * serves one caller rows shaped for another. The returned rows must be the statement's full
+     * output; the caller's withheld columns are dropped from them after the hit.
      */
     protected async checkQueryCache(
         _query: MJQueryEntityExtended,
         _params: RunQueryParams,
         _appliedParameters: Record<string, string>,
+        _slotKey: string,
     ): Promise<RunQueryResult | null> {
         return null;
     }
@@ -6490,11 +6867,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * Checks the paged cache for a specific page of query results.
      * Returns a full RunQueryResult on hit, null on miss.
      * Currently always returns null (query caching is not active).
+     *
+     * An override must look the page up by `slotKey` alone: it names the rendered statement, the
+     * caller's field-security profile and the page, so a page cached for a restricted caller is
+     * never served to an unrestricted one or the reverse. The caller's withheld columns are dropped
+     * from the returned rows after the hit.
      */
     protected async checkPagedQueryCache(
         _query: MJQueryEntityExtended,
         _params: RunQueryParams,
         _appliedParameters: Record<string, string>,
+        _slotKey: string,
     ): Promise<RunQueryResult | null> {
         return null;
     }
@@ -6647,8 +7030,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Caches query results if caching is enabled for the query.
      * Currently a no-op (query caching is not active).
+     *
+     * `results` is the statement's full output, before the caller's withheld columns are dropped.
+     * An override must store it under `slotKey`, the key {@link checkQueryCache} reads.
      */
-    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[]): Promise<void> {
+    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[], _slotKey: string): Promise<void> {
         // No-op: query caching has been removed
     }
 
