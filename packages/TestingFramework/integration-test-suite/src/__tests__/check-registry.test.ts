@@ -304,7 +304,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
-        'app-wiring': 10,
+        'app-wiring': 11,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,

@@ -1,0 +1,276 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Governance"
+        Subtitle="How much your Chief of Staff may do on its own, and what needs your approval"
+        Icon="fa-solid fa-shield-halved">
+
+
+        <ng-container toolbar>
+            <mj-refresh-button
+                [Loading]="IsLoading"
+                [ShowLabel]="true"
+                (Refresh)="LoadChiefOfStaffData()">
+            </mj-refresh-button>
+        </ng-container>
+    </mj-page-header>
+
+    <mj-page-body>
+        @if (FeedbackBanner) {
+            <div class="cos-banner"
+                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
+                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
+                 role="status">
+                <div class="cos-banner__content">
+                    <i class="fa-solid"
+                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
+                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
+                    <span>{{ FeedbackBanner.Message }}</span>
+                </div>
+                <button mjButton variant="flat" size="sm" (click)="DismissBanner()" aria-label="Dismiss notification">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        }
+
+        @if (IsLoading) {
+            <div class="cos-loading">
+                <mj-loading text="Loading governance policy..."></mj-loading>
+            </div>
+        } @else {
+            <div class="cos-governance-container">
+                <div class="cos-governance-header">
+                    <div>
+                        <h3 class="cos-governance-header__title">
+                            <i class="fa-solid fa-shield-halved"></i> Chief of Staff Governance Policy
+                        </h3>
+                        <p class="cos-governance-header__subtitle">
+                            Backed by <code>MJ: AI Agent User Policies</code> — controls coordination autonomy, communication channels, and approval guardrails for your Chief of Staff.
+                        </p>
+                    </div>
+                    <div class="cos-governance-header__actions">
+                        @if (PolicyEntity) {
+                            <button mjButton variant="outline" size="sm" (click)="OpenPolicyEntityRecord()">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Policy Record
+                            </button>
+                        }
+                        @if (PolicyDirty) {
+                            <button mjButton variant="outline" size="sm"
+                                    [disabled]="IsSavingPolicy"
+                                    (click)="ResetDraftPolicy()">
+                                Reset Changes
+                            </button>
+                        }
+                        <button mjButton variant="primary" size="sm"
+                                [disabled]="IsSavingPolicy || !PolicyDirty"
+                                (click)="SaveGovernancePolicy()">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            {{ IsSavingPolicy ? 'Saving...' : 'Save Policy Changes' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 1: Coordination Mode -->
+                <section class="cos-panel">
+                    <div class="cos-panel__header">
+                        <div>
+                            <h4 class="cos-panel__title">1. Autonomy & Coordination Mode</h4>
+                            <p class="cos-panel__subtitle">
+                                Select how proactively your Chief of Staff operates across your workspace
+                            </p>
+                        </div>
+                        <div class="cos-status-segmented" role="group" aria-label="Agent Status">
+                            @for (st of StatusOptions; track st) {
+                                <button mjButton
+                                        [variant]="DraftPolicy.Status === st ? 'primary' : 'outline'"
+                                        size="sm"
+                                        (click)="SetPolicyStatus(st)">
+                                    {{ st }}
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="cos-mode-cards">
+                        @for (mode of CoordinationModeOptions; track mode.Value) {
+                            <div class="cos-mode-card"
+                                 [class.cos-mode-card--selected]="DraftPolicy.CoordinationMode === mode.Value"
+                                 (click)="SetCoordinationMode(mode.Value)">
+                                <div class="cos-mode-card__top">
+                                    <span class="cos-mode-card__title">{{ mode.Label }}</span>
+                                    @if (DraftPolicy.CoordinationMode === mode.Value) {
+                                        <i class="fa-solid fa-circle-check cos-mode-card__check"></i>
+                                    }
+                                </div>
+                                <p class="cos-mode-card__desc">{{ mode.Description }}</p>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="cos-form-grid">
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">Custom Display Name</span>
+                            <input class="cos-input"
+                                   type="text"
+                                   [value]="DraftPolicy.DisplayNameOverride"
+                                   placeholder="e.g., Chief of Staff"
+                                   (input)="OnDisplayNameInput($event)" />
+                        </label>
+
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">Default Data Access Mode</span>
+                            <mj-dropdown [Data]="DataAccessModeOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                         [(ngModel)]="DraftPolicy.DefaultDataAccessMode" (ValueChange)="MarkPolicyDirty()">
+                            </mj-dropdown>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Section 2: Communication Channel Permissions -->
+                <section class="cos-panel">
+                    <div class="cos-panel__header">
+                        <div>
+                            <h4 class="cos-panel__title">2. Communication Channel Permissions</h4>
+                            <p class="cos-panel__subtitle">
+                                Configure what your Chief of Staff is permitted to do on each channel
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="cos-form-grid">
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">
+                                <i class="fa-solid fa-envelope"></i> Email Channel Mode
+                            </span>
+                            <mj-dropdown [Data]="EmailChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                         [(ngModel)]="DraftPolicy.EmailChannelMode" (ValueChange)="MarkPolicyDirty()">
+                            </mj-dropdown>
+                        </label>
+
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">
+                                <i class="fa-regular fa-calendar"></i> Calendar Channel Mode
+                            </span>
+                            <mj-dropdown [Data]="CalendarChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                         [(ngModel)]="DraftPolicy.CalendarChannelMode" (ValueChange)="MarkPolicyDirty()">
+                            </mj-dropdown>
+                        </label>
+
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">
+                                <i class="fa-solid fa-phone"></i> Phone Channel Mode
+                            </span>
+                            <mj-dropdown [Data]="PhoneChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                         [(ngModel)]="DraftPolicy.PhoneChannelMode" (ValueChange)="MarkPolicyDirty()">
+                            </mj-dropdown>
+                        </label>
+
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">
+                                <i class="fa-solid fa-comments"></i> Messaging Channel Mode
+                            </span>
+                            <mj-dropdown [Data]="MessagingChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                         [(ngModel)]="DraftPolicy.MessagingChannelMode" (ValueChange)="MarkPolicyDirty()">
+                            </mj-dropdown>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Section 3: Approval Guardrails & Financial Threshold -->
+                <section class="cos-panel">
+                    <div class="cos-panel__header">
+                        <div>
+                            <h4 class="cos-panel__title">3. Approval Guardrails & Standing Instructions</h4>
+                            <p class="cos-panel__subtitle">
+                                Enforce mandatory human-in-the-loop approval gates before sensitive actions execute
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="cos-toggle-list">
+                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForExternalComms')">
+                            <div>
+                                <div class="cos-toggle-row__title">Require Approval for External Communications</div>
+                                <div class="cos-toggle-row__desc">
+                                    Always create an approval request before sending emails or messages to external recipients.
+                                </div>
+                            </div>
+                            <button mjButton
+                                    [variant]="DraftPolicy.RequireApprovalForExternalComms ? 'primary' : 'outline'"
+                                    size="sm"
+                                    (click)="ToggleApprovalGuardrail('RequireApprovalForExternalComms'); $event.stopPropagation()">
+                                {{ DraftPolicy.RequireApprovalForExternalComms ? 'Required' : 'Not Required' }}
+                            </button>
+                        </div>
+
+                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForFinancials')">
+                            <div>
+                                <div class="cos-toggle-row__title">Require Approval for Financial Commitments</div>
+                                <div class="cos-toggle-row__desc">
+                                    Require explicit approval for any financial transaction above the auto-approve threshold.
+                                </div>
+                            </div>
+                            <button mjButton
+                                    [variant]="DraftPolicy.RequireApprovalForFinancials ? 'primary' : 'outline'"
+                                    size="sm"
+                                    (click)="ToggleApprovalGuardrail('RequireApprovalForFinancials'); $event.stopPropagation()">
+                                {{ DraftPolicy.RequireApprovalForFinancials ? 'Required' : 'Not Required' }}
+                            </button>
+                        </div>
+
+                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('RequireApprovalForDestructiveActions')">
+                            <div>
+                                <div class="cos-toggle-row__title">Require Approval for Destructive Actions</div>
+                                <div class="cos-toggle-row__desc">
+                                    Require human confirmation before deleting records, canceling events, or revoking access.
+                                </div>
+                            </div>
+                            <button mjButton
+                                    [variant]="DraftPolicy.RequireApprovalForDestructiveActions ? 'primary' : 'outline'"
+                                    size="sm"
+                                    (click)="ToggleApprovalGuardrail('RequireApprovalForDestructiveActions'); $event.stopPropagation()">
+                                {{ DraftPolicy.RequireApprovalForDestructiveActions ? 'Required' : 'Not Required' }}
+                            </button>
+                        </div>
+
+                        <div class="cos-toggle-row" (click)="ToggleApprovalGuardrail('AllowInterAgentCoordination')">
+                            <div>
+                                <div class="cos-toggle-row__title">Allow Inter-Agent Delegation & Coordination</div>
+                                <div class="cos-toggle-row__desc">
+                                    Permit your Chief of Staff to invoke specialist sub-agents and coordinate with peer agents.
+                                </div>
+                            </div>
+                            <button mjButton
+                                    [variant]="DraftPolicy.AllowInterAgentCoordination ? 'primary' : 'outline'"
+                                    size="sm"
+                                    (click)="ToggleApprovalGuardrail('AllowInterAgentCoordination'); $event.stopPropagation()">
+                                {{ DraftPolicy.AllowInterAgentCoordination ? 'Allowed' : 'Blocked' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="cos-form-grid cos-form-grid--spaced">
+                        <label class="cos-form-field">
+                            <span class="cos-form-field__label">Auto-Approve Financial Threshold (USD)</span>
+                            <input class="cos-input"
+                                   type="number"
+                                   min="0"
+                                   step="50"
+                                   [value]="DraftPolicy.AutoApproveAmountThreshold ?? ''"
+                                   placeholder="0.00"
+                                   (input)="OnThresholdInputEvent($event)" />
+                        </label>
+
+                        <label class="cos-form-field cos-form-field--full">
+                            <span class="cos-form-field__label">Standing Executive Instructions Override</span>
+                            <textarea class="cos-textarea"
+                                      rows="3"
+                                      [value]="DraftPolicy.InstructionsOverride"
+                                      placeholder="Optional standing instructions injected into every Chief of Staff run (e.g., preferred briefing style, VIP contacts, scheduling windows)..."
+                                      (input)="OnInstructionsOverrideInput($event)"></textarea>
+                        </label>
+                    </div>
+                </section>
+            </div>
+        }
+    </mj-page-body>
+</mj-page-layout>

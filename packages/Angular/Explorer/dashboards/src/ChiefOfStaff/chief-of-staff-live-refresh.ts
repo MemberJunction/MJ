@@ -2,13 +2,12 @@ import { MJEventType, type MJEvent } from '@memberjunction/global';
 import { BaseEntity, type BaseEntityEvent } from '@memberjunction/core';
 
 /**
- * Core entities whose change should reload the Chief of Staff cockpit. MJAPI broadcasts every
+ * Core entities whose change should reload the Chief of Staff pages. MJAPI broadcasts every
  * entity save and delete to browsers (the client raises them as `remote-invalidate`
  * BaseEntity events), including saves made by server-side code such as a wake run, so a
- * request or run created by the agent shows up without a manual refresh. Extension panels add
- * their own entities through their registration's `liveEntities`.
+ * request or run created by the agent shows up without a manual refresh.
  */
-export const COCKPIT_LIVE_ENTITIES: readonly string[] = [
+export const CHIEF_OF_STAFF_LIVE_ENTITIES: readonly string[] = [
     'MJ: AI Agent Requests',
     'MJ: User Routines',
     'MJ: User Routine Runs',
@@ -17,10 +16,9 @@ export const COCKPIT_LIVE_ENTITIES: readonly string[] = [
 
 /**
  * True when `event` is a BaseEntity save, delete or remote-invalidate for an entity the
- * cockpit shows: a core entity, or one of `extraEntities` declared by extension panels.
- * Entity names compare case-insensitively.
+ * Chief of Staff pages show. Entity names compare case-insensitively.
  */
-export function IsCockpitEntityChange(event: MJEvent, extraEntities: readonly string[] = []): boolean {
+export function IsChiefOfStaffEntityChange(event: MJEvent): boolean {
     if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode || !event.args) {
         return false;
     }
@@ -29,7 +27,7 @@ export function IsCockpitEntityChange(event: MJEvent, extraEntities: readonly st
         return false;
     }
     const name = entityName.trim().toLowerCase();
-    return [...COCKPIT_LIVE_ENTITIES, ...extraEntities].some((n) => n.trim().toLowerCase() === name);
+    return CHIEF_OF_STAFF_LIVE_ENTITIES.some((n) => n.trim().toLowerCase() === name);
 }
 
 function entityNameOf(event: BaseEntityEvent): string | null {

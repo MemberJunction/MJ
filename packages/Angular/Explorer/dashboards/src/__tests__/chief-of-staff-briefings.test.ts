@@ -9,32 +9,38 @@ vi.mock('@memberjunction/ng-notifications', async (importOriginal) => ({
   MJNotificationService: { get Instance() { return { CreateSimpleNotification: notify }; } },
 }));
 
-import { ChiefOfStaffDashboardComponent } from '../ChiefOfStaff/chief-of-staff-dashboard.component';
+import { ChiefOfStaffApprovalsComponent } from '../ChiefOfStaff/chief-of-staff-approvals.component';
 import type { MJConversationEntity, MJUserRoutineEntity } from '@memberjunction/core-entities';
 
 /**
  * A wake routine's briefings live in the routine's own conversation, which the chat sidebar never
- * lists. The cockpit's routine cards give two ways in: "Open briefing" deep-links into the Chat app
+ * lists. The routine cards on the Overview and Approvals & Wakes pages give two ways in: "Open briefing" deep-links into the Chat app
  * (query params as well as configuration, so an already-open Chat tab switches), and "Read" opens
- * the conversation in a slide-in reader without leaving the cockpit. Both need a routine that has
+ * the conversation in a slide-in reader without leaving the page. Both need a routine that has
  * run at least once, since the conversation is created on the first run.
  */
 
 type Open = Record<string, unknown>;
 
 interface Harness {
-  component: ChiefOfStaffDashboardComponent;
+  component: ChiefOfStaffApprovalsComponent;
   openNavItemByName: ReturnType<typeof vi.fn>;
   load: ReturnType<typeof vi.fn>;
 }
 
 function createComponent(options: { chatApp?: { ID: string } | null; conversationLoads?: boolean } = {}): Harness {
-  const component = Object.create(ChiefOfStaffDashboardComponent.prototype) as ChiefOfStaffDashboardComponent;
+  const component = Object.create(ChiefOfStaffApprovalsComponent.prototype) as ChiefOfStaffApprovalsComponent;
   const open = component as unknown as Open;
   const openNavItemByName = vi.fn(async () => 'tab-1');
   const load = vi.fn(async () => options.conversationLoads ?? true);
   open['navigationService'] = { OpenNavItemByName: openNavItemByName };
-  open['appManager'] = { GetAppByName: (name: string) => (name === 'Chat' ? (options.chatApp === undefined ? { ID: 'chat-app' } : options.chatApp) : null) };
+  open['appManager'] = {
+    GetAppByName: (name: string) => {
+      if (name === 'Chat') return options.chatApp === undefined ? { ID: 'chat-app' } : options.chatApp;
+      if (name === 'Chief of Staff') return { ID: 'cos-app' };
+      return null;
+    },
+  };
   open['cdr'] = { markForCheck: vi.fn(), detectChanges: vi.fn() };
   Object.defineProperty(component, 'ProviderToUse', {
     get: () => ({
@@ -49,7 +55,7 @@ function createComponent(options: { chatApp?: { ID: string } | null; conversatio
 const ran = { ID: 'R1', Name: 'Chief of Staff — Wake (default)', ConversationID: 'C1' } as MJUserRoutineEntity;
 const neverRan = { ID: 'R2', Name: 'Chief of Staff — Wake (new)', ConversationID: null } as MJUserRoutineEntity;
 
-describe('ChiefOfStaffDashboardComponent — a routine\'s briefings', () => {
+describe('ChiefOfStaffApprovalsComponent — a routine\'s briefings', () => {
   it('a routine that has run can open its briefings; one that never ran cannot', () => {
     const { component } = createComponent();
     expect(component.CanOpenBriefing(ran)).toBe(true);
@@ -113,5 +119,15 @@ describe('ChiefOfStaffDashboardComponent — a routine\'s briefings', () => {
     const { component } = createComponent();
     await component.OpenBriefingReader(neverRan);
     expect(component.IsBriefingReaderOpen).toBe(false);
+  });
+});
+
+describe('ChiefOfStaffApprovalsComponent — moving between pages', () => {
+  it('opens another page through its nav item in the Chief of Staff app', () => {
+    const { component, openNavItemByName } = createComponent();
+
+    component.OpenPage('governance');
+
+    expect(openNavItemByName).toHaveBeenCalledWith('Governance', undefined, 'cos-app');
   });
 });

@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseEntity } from '@memberjunction/core';
-import { ChiefOfStaffDashboardComponent } from '../ChiefOfStaff/chief-of-staff-dashboard.component';
+import { ChiefOfStaffOverviewComponent } from '../ChiefOfStaff/chief-of-staff-overview.component';
 
 /**
- * The cockpit reloads itself when an entity it shows changes anywhere: MJAPI broadcasts every
+ * A Chief of Staff page reloads itself when an entity it shows changes anywhere: MJAPI broadcasts every
  * save and delete (a wake run creating an approval request included) and the client raises it
  * as a `remote-invalidate` BaseEntity event. A burst of events is one reload. A detached tab
  * (the user is on another tab) does not reload in the background; it reloads once when it is
@@ -18,23 +18,19 @@ import { ChiefOfStaffDashboardComponent } from '../ChiefOfStaff/chief-of-staff-d
 type Open = Record<string, unknown>;
 
 interface Harness {
-  component: ChiefOfStaffDashboardComponent;
+  component: ChiefOfStaffOverviewComponent;
   load: ReturnType<typeof vi.fn>;
   reattached: Subject<unknown>;
   detached: { value: boolean };
 }
 
-function createComponent(panelLiveEntities: string[] = []): Harness {
-  const component = Object.create(ChiefOfStaffDashboardComponent.prototype) as ChiefOfStaffDashboardComponent;
+function createComponent(): Harness {
+  const component = Object.create(ChiefOfStaffOverviewComponent.prototype) as ChiefOfStaffOverviewComponent;
   const open = component as unknown as Open;
   const load = vi.fn(async () => undefined);
   const reattached = new Subject<unknown>();
   const detached = { value: false };
-  open['LoadCockpitData'] = load;
-  // Object.create skips field initializers; give it the registered panels the test wants.
-  open['Panels'] = panelLiveEntities.length
-    ? [{ Metadata: { placement: 'tab', panelKey: 'p', label: 'P', liveEntities: panelLiveEntities }, Component: class {} }]
-    : [];
+  open['LoadChiefOfStaffData'] = load;
   open['destroy$'] = new Subject<void>();
   open['navigationService'] = { IsResourceDetached: () => detached.value, ResourceReattached$: reattached };
   (open['subscribeToLiveEntityChanges'] as () => void).call(component);
@@ -45,12 +41,12 @@ function raise(entityName: string): void {
   MJGlobal.Instance.RaiseEvent({
     event: MJEventType.ComponentEvent,
     eventCode: BaseEntity.BaseEventCode,
-    component: {}, // the sender; the cockpit keys on the event code and args, not on this
+    component: {}, // the sender; the page keys on the event code and args, not on this
     args: { type: 'remote-invalidate', entityName, baseEntity: null, payload: { action: 'save' } },
   });
 }
 
-describe('ChiefOfStaffDashboardComponent — reloads when what it shows changes', () => {
+describe('ChiefOfStaffOverviewComponent — reloads when what it shows changes', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
@@ -72,15 +68,6 @@ describe('ChiefOfStaffDashboardComponent — reloads when what it shows changes'
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(load).not.toHaveBeenCalled();
-  });
-
-  it('reloads for an entity a registered extension panel shows', async () => {
-    const { load } = createComponent(['My_App: Tasks']);
-
-    raise('My_App: Tasks');
-    await vi.advanceTimersByTimeAsync(2000);
-
-    expect(load).toHaveBeenCalledTimes(1);
   });
 
   it('defers the reload while the tab is detached and runs it once when the tab is shown again', async () => {

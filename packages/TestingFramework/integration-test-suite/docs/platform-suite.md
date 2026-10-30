@@ -27,7 +27,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `codegen-determinism` | 6 (CD1–CD6) | IT50 - CodeGen Artifact Consistency | client | deterministic; CD6 source legs skip outside the repo tree |
 | `metadata-sync` | 9 (MS1–MS9) | IT49 - MetadataSync Parsing Contracts | server | deterministic; zero DB writes |
 | `class-resolution` | 5 (CR1–CR5) | IT48 - ClassFactory Resolution Contracts | server | deterministic; read-only |
-| `app-wiring` | 10 (AW1–AW10) | IT26 - Application Wiring (all shipped apps) | client | deterministic; read-only |
+| `app-wiring` | 11 (AW1–AW11) | IT26 - Application Wiring (all shipped apps) | client | deterministic; read-only |
 | `open-app-teardown` | 2 (OAT1–OAT2) | IT21 - Open-App Metadata Teardown | server (raw SQL via dialect) | deterministic; self-seeding lifecycle |
 | `scheduled-jobs` | 2 (SJ1–SJ2) | IT09 - Scheduled Jobs Engine Lifecycle | server | deterministic |
 | `scheduling-concurrency` | 3 (SC1–SC3) | IT41 - Scheduling Concurrency | server | deterministic |
@@ -139,7 +139,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 ## 3. Applications and OpenApp lifecycle
 
-### 3.1 `app-wiring` (AW1–AW10) — IT26
+### 3.1 `app-wiring` (AW1–AW11) — IT26
 
 **Machinery under test.** The "every shipped app is wired correctly" contract (Domain 12, catalog rows G1–G9, S1, S2, S7) asserted **over the real GraphQL wire** (client-first transport). Every check parameterizes over *all* applications in metadata rather than naming apps, so new apps inherit the contract automatically. The value is lock-in (all 77 DriverClass refs currently resolve, zero collisions) plus four latent risks flagged in the bug register: DriverClass collision (**B20**, risk #1), DefaultSequence conflicts (**B21**), write-only slug uniqueness (**B22**), and nav-item drift.
 
@@ -159,6 +159,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `app-wiring.AW8` | G9: app-scoped Application Settings point at real apps | every non-null `ApplicationID` on a setting resolves (null = global setting, valid) | orphaned settings silently never applying |
 | `app-wiring.AW9` | S1/S2: AgentSettings DefaultAgentID + RelevantAgents resolve | for every app with parseable `AgentSettings`: `DefaultAgentID` and every `RelevantAgents[].AgentID` exist in `MJ: AI Agents` | the default-agent resolution chain dead-ending — an app whose chat surface cannot resolve its agent |
 | `app-wiring.AW10` | S7: non-Active apps never fan out to new users | no Deprecated/Disabled/Pending app has `DefaultForNewUser === true`; the Active filter returns only Active apps | a retired app still being handed to every new user |
+| `app-wiring.AW11` | Nav items added through `NavItem.*` Application Settings | every `NavItem.*` setting is app-scoped, its `Value` is a JSON object with `Label` and `ResourceType` (+ `DriverClass` when Custom), its Label is not already a nav item of that app, and its DriverClass is not used by any other app's nav item or extension | an Open App's added page that `BaseApplication.GetNavItems()` silently skips, or that renders another app's component |
 
 **Pinned gaps and adjacent guards.**
 

@@ -154,7 +154,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
 
     /**
      * Keeps the cache in step with the entity layer. A policy saved anywhere in this process (the
-     * cockpit's Governance tab through GraphQL, the Configure Agent User Policy action, a script)
+     * Chief of Staff app's Governance page through GraphQL, the Configure Agent User Policy action, a script)
      * replaces the cached copy; a delete evicts it; a remote invalidation from another server clears
      * the cache so the next read reloads. Without this the agent kept running on the policy it first
      * loaded until the API restarted, whatever the Governance tab showed.

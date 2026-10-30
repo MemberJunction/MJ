@@ -1,21 +1,21 @@
 /**
- * Pure, unit-testable helpers for the "My Chief of Staff" Executive Cockpit's
- * agent context + client tools.
+ * Pure, unit-testable helpers for the Chief of Staff application's pages (Overview,
+ * Approvals & Wakes, Governance): their agent context, client tools and policy drafts.
  *
  * Core only: everything here reads core entities (`MJ: AI Agent User Policies`,
  * `MJ: User Routines`, `MJ: AI Agent Requests`). Business data such as priorities, tasks and
- * to-dos comes from Open Apps that extend the cockpit with registered panels
- * (see `chief-of-staff-panel.ts`); core never names an Open App's entities.
+ * to-dos comes from Open Apps that add their own nav items to the Chief of Staff application
+ * through `NavItem.*` application settings; core never names an Open App's entities.
  *
  * 🚨 SAFETY BOUNDARY 🚨
- * The Chief of Staff Cockpit exposes ONLY navigation / tab-switch / search /
+ * The Chief of Staff pages expose ONLY navigation / search /
  * refresh / detail-view tools to the co-agent. DELIBERATELY NOT exposed as client tools
  * (mutations stay human-driven in the UI):
  * - Approving or rejecting `MJ: AI Agent Requests`
  * - Modifying or saving `MJ: AI Agent User Policies` governance toggles / thresholds
  * - Triggering "Wake Now" or pausing/resuming `MJ: User Routines`
  *
- * Published context exposes only aggregate counts, active tab/filter state, governance
+ * Published context exposes only aggregate counts, the current page and search, governance
  * mode summaries, and bounded display names (capped at 25) — never raw request payloads,
  * custom instructions overrides, or private message content.
  */
@@ -35,20 +35,35 @@ import {
 } from '../shared/agent-tool-validation';
 
 /**
- * The cockpit serves one agent, identified by its metadata name. The id is resolved at runtime
+ * The pages serve one agent, identified by its metadata name. The id is resolved at runtime
  * through `AIEngineBase.GetAgentByName`, never hardcoded.
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
-/** The cockpit's own tabs. Extension panels add tabs under their own keys. */
-export type CoreChiefOfStaffTab = 'overview' | 'approvals-wakes' | 'governance';
-export const CORE_CHIEF_OF_STAFF_TABS: readonly CoreChiefOfStaffTab[] = [
+/** The name of the Chief of Staff application whose nav items open the pages. */
+export const CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
+
+/** The Chief of Staff application's own pages; each is one nav item. */
+export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'governance';
+export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
     'overview',
     'approvals-wakes',
     'governance',
 ] as const;
-/** A tab key: one of the core tabs or the key of a registered extension tab panel. */
-export type ChiefOfStaffTab = string;
+
+/** Each page's nav item label; must match the application's `DefaultNavItems`. */
+export const CHIEF_OF_STAFF_PAGE_LABELS: Readonly<Record<ChiefOfStaffPage, string>> = {
+    overview: 'Overview',
+    'approvals-wakes': 'Approvals & Wakes',
+    governance: 'Governance',
+};
+
+/** Each page's Font Awesome icon; matches the application's `DefaultNavItems`. */
+export const CHIEF_OF_STAFF_PAGE_ICONS: Readonly<Record<ChiefOfStaffPage, string>> = {
+    overview: 'fa-solid fa-compass',
+    'approvals-wakes': 'fa-solid fa-bell-concierge',
+    governance: 'fa-solid fa-shield-halved',
+};
 
 export type PolicyStatusValue = MJAIAgentUserPolicyEntity['Status'];
 export type PolicyCoordinationModeValue = MJAIAgentUserPolicyEntity['CoordinationMode'];
@@ -71,7 +86,7 @@ export interface RoutineSummaryItem {
     LastRunStatus: MJUserRoutineEntity['LastRunStatus'];
 }
 
-/** The status label the cockpit shows for a routine: the entity's Status, or 'Fired' for a spent one-shot. */
+/** The status label the pages show for a routine: the entity's Status, or 'Fired' for a spent one-shot. */
 export type RoutineDisplayStatusValue = RoutineSummaryItem['Status'] | 'Fired';
 
 /**
@@ -204,6 +219,97 @@ export interface PolicyGovernanceSummary {
     AutoApproveAmountThreshold: number | null;
 }
 
+/** The Governance page's editable copy of the user's policy. */
+export interface GovernancePolicyDraft {
+    DisplayNameOverride: string;
+    Status: PolicyStatusValue;
+    OnboardingStatus: MJAIAgentUserPolicyEntity['OnboardingStatus'];
+    CoordinationMode: PolicyCoordinationModeValue;
+    DefaultDataAccessMode: PolicyDataAccessModeValue;
+    EmailChannelMode: PolicyEmailChannelModeValue;
+    CalendarChannelMode: PolicyCalendarChannelModeValue;
+    PhoneChannelMode: PolicyPhoneChannelModeValue;
+    MessagingChannelMode: PolicyMessagingChannelModeValue;
+    AllowInterAgentCoordination: boolean;
+    RequireApprovalForExternalComms: boolean;
+    RequireApprovalForFinancials: boolean;
+    RequireApprovalForDestructiveActions: boolean;
+    AutoApproveAmountThreshold: number | null;
+    InstructionsOverride: string;
+}
+
+/** The draft shown before the user has a policy record. */
+export function CreateDefaultPolicyDraft(): GovernancePolicyDraft {
+    return {
+        DisplayNameOverride: 'Chief of Staff',
+        Status: 'Active',
+        OnboardingStatus: 'Completed',
+        CoordinationMode: 'Coordinator',
+        DefaultDataAccessMode: 'UserCeiling',
+        EmailChannelMode: 'DraftOnly',
+        CalendarChannelMode: 'ProposeWithApproval',
+        PhoneChannelMode: 'Disabled',
+        MessagingChannelMode: 'Enabled',
+        AllowInterAgentCoordination: true,
+        RequireApprovalForExternalComms: true,
+        RequireApprovalForFinancials: true,
+        RequireApprovalForDestructiveActions: true,
+        AutoApproveAmountThreshold: 0,
+        InstructionsOverride: '',
+    };
+}
+
+/** A draft copied from the user's policy record, or the default draft when there is none. */
+export function BuildPolicyDraftFromEntity(entity: MJAIAgentUserPolicyEntity | null): GovernancePolicyDraft {
+    if (!entity) {
+        return CreateDefaultPolicyDraft();
+    }
+    return {
+        DisplayNameOverride: entity.DisplayNameOverride ?? '',
+        Status: entity.Status,
+        OnboardingStatus: entity.OnboardingStatus,
+        CoordinationMode: entity.CoordinationMode,
+        DefaultDataAccessMode: entity.DefaultDataAccessMode,
+        EmailChannelMode: entity.EmailChannelMode,
+        CalendarChannelMode: entity.CalendarChannelMode,
+        PhoneChannelMode: entity.PhoneChannelMode,
+        MessagingChannelMode: entity.MessagingChannelMode,
+        AllowInterAgentCoordination: entity.AllowInterAgentCoordination,
+        RequireApprovalForExternalComms: entity.RequireApprovalForExternalComms,
+        RequireApprovalForFinancials: entity.RequireApprovalForFinancials,
+        RequireApprovalForDestructiveActions: entity.RequireApprovalForDestructiveActions,
+        AutoApproveAmountThreshold: entity.AutoApproveAmountThreshold,
+        InstructionsOverride: entity.InstructionsOverride ?? '',
+    };
+}
+
+/** The display name: the draft's override, or 'My Chief of Staff'. */
+export function ChiefOfStaffDisplayName(draft: Pick<GovernancePolicyDraft, 'DisplayNameOverride'>): string {
+    const override = draft.DisplayNameOverride.trim();
+    return override.length > 0 ? override : 'My Chief of Staff';
+}
+
+/** The governance summary published in the agent context. */
+export function BuildGovernanceSummary(draft: GovernancePolicyDraft, hasPolicyRecord: boolean): PolicyGovernanceSummary {
+    return {
+        HasPolicyRecord: hasPolicyRecord,
+        DisplayName: ChiefOfStaffDisplayName(draft),
+        Status: draft.Status,
+        OnboardingStatus: draft.OnboardingStatus,
+        CoordinationMode: draft.CoordinationMode,
+        DefaultDataAccessMode: draft.DefaultDataAccessMode,
+        EmailChannelMode: draft.EmailChannelMode,
+        CalendarChannelMode: draft.CalendarChannelMode,
+        PhoneChannelMode: draft.PhoneChannelMode,
+        MessagingChannelMode: draft.MessagingChannelMode,
+        AllowInterAgentCoordination: draft.AllowInterAgentCoordination,
+        RequireApprovalForExternalComms: draft.RequireApprovalForExternalComms,
+        RequireApprovalForFinancials: draft.RequireApprovalForFinancials,
+        RequireApprovalForDestructiveActions: draft.RequireApprovalForDestructiveActions,
+        AutoApproveAmountThreshold: draft.AutoApproveAmountThreshold,
+    };
+}
+
 export interface ChiefOfStaffMetrics {
     PendingApprovalCount: number;
     HighPriorityPendingCount: number;
@@ -212,14 +318,12 @@ export interface ChiefOfStaffMetrics {
 }
 
 export interface ChiefOfStaffAgentContextInput {
-    ActiveTab: ChiefOfStaffTab;
+    Page: ChiefOfStaffPage;
     SearchText: string;
     Metrics: ChiefOfStaffMetrics;
     Governance: PolicyGovernanceSummary;
     Routines: readonly RoutineSummaryItem[];
     PendingRequests: readonly RequestSummaryItem[];
-    /** Fields reported by extension panels, merged in after the core fields (core keys win). */
-    ExtensionContext?: AgentContextRecord;
 }
 
 export type AgentContextScalar = string | number | boolean | null;
@@ -230,7 +334,7 @@ export type AgentContextRecord = Record<
 
 /**
  * Returns `true` when an `MJ: AI Agent Requests` row represents an actionable approval or
- * review request for the Executive Cockpit's Pending Approvals queue, and `false` when it
+ * review request for the Chief of Staff's Pending Approvals queue, and `false` when it
  * is a conversational `Information` turn created by `BaseAgent` when ending a chat turn.
  */
 export function IsApprovalRequest(req: {
@@ -253,14 +357,14 @@ export function ParseOptionalDate(val: Date | string | null | undefined): Date |
     return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/** ExtraFilters for the cockpit's three core-entity queries. Every clause is bound to the current user: the cockpit never shows another user's Chief of Staff data. */
-export interface CockpitScopeFilters {
+/** ExtraFilters for the pages' three core-entity queries. Every clause is bound to the current user: the pages never show another user's Chief of Staff data. */
+export interface ChiefOfStaffScopeFilters {
     Policy: string;
     Routines: string;
     Requests: string;
 }
 
-export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): CockpitScopeFilters {
+export function BuildChiefOfStaffScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): ChiefOfStaffScopeFilters {
     const user = EscapeSQLString(currentUserId);
     const agent = EscapeSQLString(chiefOfStaffAgentId);
     return {
@@ -271,7 +375,7 @@ export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgen
 }
 
 
-/** The cockpit's core counts: pending approvals and active wakes. */
+/** The core counts: pending approvals and active wakes. */
 export function CalculateChiefOfStaffMetrics(
     routines: readonly RoutineSummaryItem[],
     requests: readonly RequestSummaryItem[],
@@ -304,9 +408,9 @@ export function BuildChiefOfStaffAgentContext(
     const routineNames = input.Routines.map((r) => `${r.Name} (${r.Status})`).filter((n) => !!n);
     const boundedRoutineNames = BoundNameList(routineNames, AGENT_CONTEXT_NAME_LIST_CAP);
 
-    const core: AgentContextRecord = {
-        Surface: 'ChiefOfStaffDashboard',
-        ActiveTab: input.ActiveTab,
+    return {
+        Surface: 'ChiefOfStaff',
+        Page: input.Page,
         SearchText: input.SearchText,
         PendingApprovalCount: input.Metrics.PendingApprovalCount,
         HighPriorityPendingCount: input.Metrics.HighPriorityPendingCount,
@@ -333,16 +437,13 @@ export function BuildChiefOfStaffAgentContext(
         },
         VisibleWakeRoutineNames: boundedRoutineNames,
     };
-    // Extensions add their own fields; a core field is never overwritten by one.
-    return { ...(input.ExtensionContext ?? {}), ...core };
 }
 
-/** Validates a tab parameter against the tabs the cockpit currently offers (core plus extension tabs). */
-export function ValidateChiefOfStaffTabParam(
+/** Validates a page parameter against the Chief of Staff application's own pages. */
+export function ValidateChiefOfStaffPageParam(
     raw: string | number | boolean | null | undefined,
-    validTabs: readonly string[] = CORE_CHIEF_OF_STAFF_TABS,
-): { ok: true; value: ChiefOfStaffTab } | { ok: false; result: AgentToolResult } {
-    return ValidateEnumParam(raw, validTabs, 'tab');
+): { ok: true; value: ChiefOfStaffPage } | { ok: false; result: AgentToolResult } {
+    return ValidateEnumParam(raw, CHIEF_OF_STAFF_PAGES, 'page');
 }
 
 export function ValidateSearchQueryParam(

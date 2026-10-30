@@ -1,15 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
     CHIEF_OF_STAFF_AGENT_NAME,
-    CORE_CHIEF_OF_STAFF_TABS,
+    CHIEF_OF_STAFF_PAGES,
+    CHIEF_OF_STAFF_PAGE_LABELS,
+    CHIEF_OF_STAFF_PAGE_ICONS,
     BuildChiefOfStaffAgentContext,
-    BuildCockpitScopeFilters,
+    BuildChiefOfStaffScopeFilters,
+    BuildGovernanceSummary,
+    BuildPolicyDraftFromEntity,
+    ChiefOfStaffDisplayName,
+    CreateDefaultPolicyDraft,
     CalculateChiefOfStaffMetrics,
     IsApprovalRequest,
     PolicyGovernanceSummary,
     RequestSummaryItem,
     RoutineSummaryItem,
-    ValidateChiefOfStaffTabParam,
+    ValidateChiefOfStaffPageParam,
     ValidateSearchQueryParam,
     IsSpentOneShotRoutine,
     RoutineDisplayStatus,
@@ -100,7 +106,7 @@ describe('CalculateChiefOfStaffMetrics', () => {
 
         expect(IsApprovalRequest(requests[0])).toBe(true);
         expect(IsApprovalRequest(requests[1])).toBe(false);
-        // Classification is by the RequestType name only; no request-type id is hardcoded in the cockpit.
+        // Classification is by the RequestType name only; no request-type id is hardcoded in the Chief of Staff pages.
         expect(IsApprovalRequest({ RequestType: 'information', RequestTypeID: null })).toBe(false);
         expect(IsApprovalRequest({ RequestType: null, RequestTypeID: '44444444-0000-0000-0000-000000000002' })).toBe(true);
 
@@ -118,7 +124,7 @@ describe('CalculateChiefOfStaffMetrics', () => {
 
 describe('BuildChiefOfStaffAgentContext', () => {
     const baseInput = () => ({
-        ActiveTab: 'governance',
+        Page: 'governance' as const,
         SearchText: 'Briefing',
         Metrics: CalculateChiefOfStaffMetrics([], []),
         Governance: makeDefaultGovernance(),
@@ -138,8 +144,8 @@ describe('BuildChiefOfStaffAgentContext', () => {
             PendingRequests: requests,
         });
 
-        expect(ctx['Surface']).toBe('ChiefOfStaffDashboard');
-        expect(ctx['ActiveTab']).toBe('governance');
+        expect(ctx['Surface']).toBe('ChiefOfStaff');
+        expect(ctx['Page']).toBe('governance');
         expect(ctx['PendingApprovalCount']).toBe(1);
         expect(ctx['ActiveWakeRoutineCount']).toBe(AGENT_CONTEXT_NAME_LIST_CAP + 4);
         expect((ctx['VisibleWakeRoutineNames'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
@@ -151,28 +157,15 @@ describe('BuildChiefOfStaffAgentContext', () => {
         const ctx = BuildChiefOfStaffAgentContext(baseInput());
         expect(Object.keys(ctx).some((k) => /Priority(Objective|Progress)|Todo|HealthFilter/.test(k))).toBe(false);
     });
-
-    it('merges extension panel fields, and a core field always wins a name clash', () => {
-        const ctx = BuildChiefOfStaffAgentContext({
-            ...baseInput(),
-            ExtensionContext: { PriorityObjectiveCount: 3, ActiveTab: 'spoofed' },
-        });
-        expect(ctx['PriorityObjectiveCount']).toBe(3);
-        expect(ctx['ActiveTab']).toBe('governance');
-    });
 });
 
 describe('Validation helpers', () => {
-    it('accepts the core tabs by default and rejects anything else', () => {
-        for (const tab of CORE_CHIEF_OF_STAFF_TABS) {
-            expect(ValidateChiefOfStaffTabParam(tab)).toEqual({ ok: true, value: tab });
+    it('accepts the Chief of Staff pages and rejects anything else', () => {
+        for (const page of CHIEF_OF_STAFF_PAGES) {
+            expect(ValidateChiefOfStaffPageParam(page)).toEqual({ ok: true, value: page });
         }
-        expect(ValidateChiefOfStaffTabParam('priorities').ok).toBe(false);
-    });
-
-    it('accepts an extension tab when the caller passes it in the valid set', () => {
-        const valid = [...CORE_CHIEF_OF_STAFF_TABS, 'priorities'];
-        expect(ValidateChiefOfStaffTabParam('priorities', valid)).toEqual({ ok: true, value: 'priorities' });
+        expect(ValidateChiefOfStaffPageParam('priorities').ok).toBe(false);
+        expect(ValidateChiefOfStaffPageParam(undefined).ok).toBe(false);
     });
 
     it('validates the search query parameter', () => {
@@ -181,12 +174,12 @@ describe('Validation helpers', () => {
     });
 });
 
-describe('BuildCockpitScopeFilters', () => {
+describe('BuildChiefOfStaffScopeFilters', () => {
     const USER = 'UUUUUUUU-0000-0000-0000-000000000001';
     const AGENT = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
 
     it('scopes policy, routines, and requests to the current user and the Chief of Staff agent', () => {
-        const f = BuildCockpitScopeFilters(USER, AGENT);
+        const f = BuildChiefOfStaffScopeFilters(USER, AGENT);
         expect(f.Policy).toBe(`AgentID = '${AGENT}' AND UserID = '${USER}'`);
         expect(f.Routines).toBe(
             `UserID = '${USER}' AND (RoutineType = 'AgentWake' OR TargetID = '${AGENT}')`,
@@ -197,22 +190,22 @@ describe('BuildCockpitScopeFilters', () => {
     });
 
     it('never produces a clause that is not bound to the user', () => {
-        const f = BuildCockpitScopeFilters(USER, AGENT);
+        const f = BuildChiefOfStaffScopeFilters(USER, AGENT);
         for (const clause of [f.Policy, f.Routines, f.Requests]) {
             expect(clause).toContain(USER);
         }
     });
 
     it('escapes the user id', () => {
-        expect(BuildCockpitScopeFilters("a'b", AGENT).Policy).toContain("UserID = 'a''b'");
+        expect(BuildChiefOfStaffScopeFilters("a'b", AGENT).Policy).toContain("UserID = 'a''b'");
     });
     it('escapes the agent id like any other bound value', () => {
-        expect(BuildCockpitScopeFilters(USER, "x'y").Policy).toContain("AgentID = 'x''y'");
+        expect(BuildChiefOfStaffScopeFilters(USER, "x'y").Policy).toContain("AgentID = 'x''y'");
     });
 });
 
 describe('CHIEF_OF_STAFF_AGENT_NAME', () => {
-    it('is the metadata name the cockpit resolves to an agent id at runtime', () => {
+    it('is the metadata name the Chief of Staff pages resolve to an agent id at runtime', () => {
         expect(CHIEF_OF_STAFF_AGENT_NAME).toBe('Chief of Staff');
     });
 });
@@ -296,5 +289,48 @@ describe('Email approval payload: the draft travels in the request Comments as J
     it('omits the CC header when there is nobody on copy', () => {
         const draft = ParseEmailApprovalPayload(JSON.stringify({ To: 'a@b.io', Subject: 'Hi', Body: 'x' }));
         expect(FormatEmailDraftForClipboard(draft!)).toBe('To: a@b.io\nSubject: Hi\n\nx');
+    });
+});
+
+describe('Chief of Staff pages', () => {
+    it('gives every page a nav item label and icon', () => {
+        expect(CHIEF_OF_STAFF_PAGES.map((p) => CHIEF_OF_STAFF_PAGE_LABELS[p])).toEqual(['Overview', 'Approvals & Wakes', 'Governance']);
+        for (const page of CHIEF_OF_STAFF_PAGES) {
+            expect(CHIEF_OF_STAFF_PAGE_ICONS[page]).toMatch(/^fa-/);
+        }
+    });
+});
+
+describe('Policy drafts', () => {
+    it('starts from the default draft when the user has no policy record', () => {
+        expect(BuildPolicyDraftFromEntity(null)).toEqual(CreateDefaultPolicyDraft());
+    });
+
+    it('copies a policy record, turning null text fields into empty strings', () => {
+        const entity = {
+            ...CreateDefaultPolicyDraft(),
+            DisplayNameOverride: null,
+            InstructionsOverride: null,
+            CoordinationMode: 'Autonomous',
+            AutoApproveAmountThreshold: 250,
+        } as unknown as Parameters<typeof BuildPolicyDraftFromEntity>[0];
+        const draft = BuildPolicyDraftFromEntity(entity);
+        expect(draft.DisplayNameOverride).toBe('');
+        expect(draft.InstructionsOverride).toBe('');
+        expect(draft.CoordinationMode).toBe('Autonomous');
+        expect(draft.AutoApproveAmountThreshold).toBe(250);
+    });
+
+    it('names the Chief of Staff from the override, else "My Chief of Staff"', () => {
+        expect(ChiefOfStaffDisplayName({ DisplayNameOverride: '  Ada  ' })).toBe('Ada');
+        expect(ChiefOfStaffDisplayName({ DisplayNameOverride: '   ' })).toBe('My Chief of Staff');
+    });
+
+    it('summarizes the draft for the agent context without the standing instructions', () => {
+        const draft = { ...CreateDefaultPolicyDraft(), InstructionsOverride: 'private standing instructions' };
+        const summary = BuildGovernanceSummary(draft, true);
+        expect(summary.HasPolicyRecord).toBe(true);
+        expect(summary.DisplayName).toBe('Chief of Staff');
+        expect(JSON.stringify(summary)).not.toContain('private standing instructions');
     });
 });

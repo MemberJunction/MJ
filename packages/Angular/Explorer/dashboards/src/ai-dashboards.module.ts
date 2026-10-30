@@ -70,10 +70,9 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
-import {
-  ChiefOfStaffDashboardComponent,
-  LoadChiefOfStaffDashboard
-} from './ChiefOfStaff/chief-of-staff-dashboard.component';
+import { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
+import { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+import { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 
 // Knowledge Hub components
 import {
@@ -171,7 +170,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
-    ChiefOfStaffDashboardComponent
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent
   ],
   imports: [
     ConversationsModule,
@@ -261,7 +262,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -288,6 +291,8 @@ export class AIDashboardsModule {
         LoadRealtimeManagement();
         LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
-        LoadChiefOfStaffDashboard();
+        LoadChiefOfStaffOverview();
+        LoadChiefOfStaffApprovals();
+        LoadChiefOfStaffGovernance();
     }
 }

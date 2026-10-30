@@ -140,18 +140,17 @@ Architecture: the former 5,147-line monolith was decomposed into 6 tab component
 
 The Predictive Studio app (`src/PredictiveStudio/`) is a multi-section, lazy-loaded surface for training, comparing, deploying, and monitoring ML models (see the [Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)). Its sections include Home, Algorithm Catalog, Pipeline Builder, Experiments, Model Registry, Compare Runs, and **Models in Production** (`PSProductionResourceComponent` — deployed models, what each writes, schedule, last run, and a generic prediction-distribution mini-viz, all driven by `MJ: ML Model Scoring Bindings` + `MJ: Process Runs`). The panels read live engine data via `PredictiveStudioEngine`; Promote/Validate/Archive and experiment Pause/Resume/Cancel are wired to Remote Operations behind a confirm modal, and Home's "Ask the agent" CTA opens a docked, seeded Model-Dev-Agent chat. See [`src/PredictiveStudio/`](src/PredictiveStudio/) and the guide's [Business-User Experience](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md#16-the-business-user-experience) section.
 
-### Chief of Staff Executive Cockpit
+### Chief of Staff
 
-The Chief of Staff cockpit (`src/ChiefOfStaff/`, driver class `ChiefOfStaffDashboard`; also registered as `ChiefOfStaffResource`) is the single-page control surface for a user's personal Chief of Staff agent. It is a direct `BaseResourceComponent` subclass with `<mj-tab-nav>` tabs under a shared `<mj-page-header>` (stat badges for pending approvals and active wakes, a `<mj-page-search>` and a refresh button). The cockpit uses core entities only; Open Apps add their own data through registered panels.
+The **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`) is the control surface for a user's personal Chief of Staff agent. Each page is its own nav item and its own `BaseResourceComponent` in `src/ChiefOfStaff/`, all extending `BaseChiefOfStaffPage` ([`chief-of-staff-page-base.ts`](src/ChiefOfStaff/chief-of-staff-page-base.ts)), which holds the shared data load, request and routine actions, briefing reader, live reload and agent context. The pages use core entities only.
 
-Core tabs:
-- **Overview** (`overview`): KPI cards (pending approvals, high-priority approvals, active wakes, governance posture), the pending approval queue with inline Approve / Reject, the next wake routines, and an extension column for registered `overview` panels
-- **Approvals & Wakes** (`approvals-wakes`): the pending `MJ: AI Agent Requests` queue with Approve / Reject / Details (the Details dialog is `<mj-agent-request-dialog>`), a "Recent Resolved Decisions" list, and the user's AgentWake `MJ: User Routines` with Wake Now / Pause-Resume / Read Briefing / open-record actions
-- **Governance Policy** (`governance`): the user's `MJ: AI Agent User Policies` row for the Chief of Staff agent as an editable draft — coordination mode, status, data-access mode, the four channel modes (email / calendar / phone / messaging) as `<mj-dropdown>` controls, inter-agent coordination, the three approval guardrails, auto-approve amount threshold, display-name and standing-instructions overrides — with Save / Reset
+| Nav item | Driver class | What it shows |
+|---|---|---|
+| **Overview** (default) | `ChiefOfStaffOverview` (also registered as `ChiefOfStaffDashboard` and `ChiefOfStaffResource`, so tabs saved before the split still open) | KPI cards (active wakes, pending approvals, governance posture), the top pending approvals with inline Approve / Reject, and the next wake routines. Cards and "Manage" buttons open the other pages through their nav items (`OpenPage`). |
+| **Approvals & Wakes** | `ChiefOfStaffApprovals` | The pending `MJ: AI Agent Requests` queue with Approve / Reject / Details (`<mj-agent-request-dialog>`), "Recent Resolved Decisions", and the user's AgentWake `MJ: User Routines` with Wake Now / Pause-Resume / Read Briefing / open-record actions. A `<mj-page-search>` filters both lists; `search` round-trips through the query params. |
+| **Governance** | `ChiefOfStaffGovernance` | The user's `MJ: AI Agent User Policies` row for the Chief of Staff agent as an editable draft: coordination mode, status, data-access mode, the four channel modes, inter-agent coordination, the approval guardrails, the auto-approve threshold, and display-name and standing-instructions overrides, with Save / Reset. |
 
-Registered `tab` panels appear between Overview and Approvals & Wakes, keyed by their `panelKey`.
-
-Data (one `RunViews` batch in `LoadCockpitData`; every filter comes from `BuildCockpitScopeFilters` and is bound to the signed-in user — with no current user the cockpit loads nothing and shows an error banner):
+Data (one `RunViews` batch in `LoadChiefOfStaffData`; every filter comes from `BuildChiefOfStaffScopeFilters` and is bound to the signed-in user — with no current user a page loads nothing and shows an error banner):
 - `MJ: AI Agent User Policies` filtered to the Chief of Staff agent (resolved by name, `CHIEF_OF_STAFF_AGENT_NAME`) and the current user
 - `MJ: User Routines` for the current user where `RoutineType = 'AgentWake'` or the target is the Chief of Staff agent
 - `MJ: AI Agent Requests` for the Chief of Staff agent **and** `RequestForUserID = current user`, excluding `Information` requests (max 100); each queue row shows its `RequestType` as a badge
@@ -160,32 +159,21 @@ Wake routines are listed in display order (`SortRoutinesForDisplay`: next wake f
 
 Mutations (all `BaseEntity.Save()` with `LatestResult.CompleteMessage` surfaced in a banner): `QuickRespondToRequest` (sets `Status` to Approved/Rejected, `RespondedAt`, `ResponseSource = 'Dashboard'`, `ResponseByUserID`), `TriggerWakeNow` (runs the `Run User Routine Now` action), `ToggleRoutineStatus` (Active ↔ Paused) and `SaveGovernancePolicy` (creates the policy row if none exists).
 
-Deep links: `tab` and `search` round-trip through `UpdateQueryParams` / `OnQueryParamsChanged`; defaults (`overview`, empty search) are omitted from the URL. A registered panel's `panelKey` is a valid `tab` value.
+Live reload: a save or remote invalidation of any entity in `CHIEF_OF_STAFF_LIVE_ENTITIES` (`IsChiefOfStaffEntityChange`) reloads an attached page once per burst; a detached page reloads when it is shown again.
 
-**Extension panels** ([`src/ChiefOfStaff/chief-of-staff-panel.ts`](src/ChiefOfStaff/chief-of-staff-panel.ts)). An Open App adds cockpit UI by registering a component that extends `BaseChiefOfStaffPanel`:
+**Adding pages from another app.** An Open App adds its own pages to the Chief of Staff application with `MJ: Application Settings` rows, not by extending these components. Each row is scoped to the Chief of Staff application (`ApplicationID`), named `NavItem.<unique key>` (for example `NavItem.bizapps-tasks.priorities`), and holds one nav item as JSON in `Value`:
 
-```typescript
-@RegisterClassEx(BaseChiefOfStaffPanel, {
-    key: 'my-app:priorities',
-    skipNullKeyWarning: true,
-    metadata: { placement: 'tab', panelKey: 'priorities', label: 'Priorities & OKRs', icon: 'fa-solid fa-bullseye', sortKey: 10, liveEntities: ['My_App: Tasks'] },
-})
-@Component({ standalone: false, selector: 'my-app-cos-priorities', templateUrl: './priorities-panel.component.html' })
-export class MyPrioritiesPanel extends BaseChiefOfStaffPanel {
-    protected async LoadPanelData(): Promise<void> {
-        // load with this.ProviderToUse, then report what the agent should know
-        this.ReportAgentContext({ PriorityObjectiveCount: 3 });
-    }
-}
+```json
+{ "Label": "Priorities", "Icon": "fa-solid fa-bullseye", "ResourceType": "Custom", "DriverClass": "BizAppsTasksPriorities", "Sequence": 15 }
 ```
 
-`CollectChiefOfStaffPanels` gathers the registrations (a later registration for the same `panelKey` wins) and sorts them by `sortKey`, then label. The cockpit mounts each one with `ngComponentOutlet` and passes `Registration`, `Provider` and a `Context` (`ChiefOfStaffPanelContext`: `RefreshToken`, `SearchText`, `AgentID`, `ReportAgentContext`, `ShowBanner`). A panel reloads when `RefreshToken` changes, gets `OnSearchTextChanged` when the cockpit search changes, and its reported fields are merged into the agent context (a core field always wins a name clash). A change to any entity in a panel's `liveEntities` reloads the cockpit (`IsCockpitEntityChange`).
+`BaseApplication.GetNavItems()` (`@memberjunction/ng-base-application`, `MergeNavItemExtensions`) adds these to every application's nav bar, so the mechanism is generic. The core pages sit at 10, 20 and 30, so `Sequence: 15` lands between Overview and Approvals & Wakes; an item without a `Sequence` goes last. An extension never becomes the default item, and one whose `Label` is already present is skipped. The `DriverClass` is a `BaseResourceComponent` registered by the app's client package; the page loads its own data, publishes its own agent context and reloads itself. The app's teardown deletes its rows. An extension cannot add cards to the Overview page.
 
-Where it appears: the single **Cockpit** nav item of the **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`). The application is opt-in (`DefaultForNewUser: false`) and is not registered in the AI application. It deliberately carries no other nav items: `DriverClass` values must be unique across all applications (integration check `app-wiring.AW4`), and the Agent Requests and Routines screens already belong to the AI and Routines applications; the cockpit's Approvals & Wakes tab links to those records directly.
+The application is opt-in (`DefaultForNewUser: false`) and is not registered in the AI application. Its `DriverClass` values must be unique across all applications (integration check `app-wiring.AW4`); the Agent Requests and Routines screens already belong to the AI and Routines applications, and the Approvals & Wakes page links to those records directly.
 
 Not yet implemented from the Phase 2 plan: `QuietHoursStart` / `QuietHoursEnd` and `MaxAutonomousActionsPerRun` do not exist on `MJ: AI Agent User Policies` and are not shown.
 
-Agent context and client tools (tab switch / search / refresh only — no mutations) are built by the pure helpers in [`src/ChiefOfStaff/chief-of-staff-agent-context.ts`](src/ChiefOfStaff/chief-of-staff-agent-context.ts); see the package `CLAUDE.md` registry row for the boundary.
+Agent context and client tools (open page / search / refresh only — no mutations) are built by the pure helpers in [`src/ChiefOfStaff/chief-of-staff-agent-context.ts`](src/ChiefOfStaff/chief-of-staff-agent-context.ts); see the package `CLAUDE.md` registry row for the boundary.
 
 ### Additional Dashboards
 - **API Keys**: API key management with scopes, applications, and usage tracking
