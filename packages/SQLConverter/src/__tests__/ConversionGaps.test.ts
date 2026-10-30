@@ -3,7 +3,8 @@ import { ConvertFile } from '../rules/BatchConverter.js';
 import { DeclareDmlBlockRule } from '../rules/DeclareDmlBlockRule.js';
 import { GetRulesForDialects } from '../rules/TSQLToPostgresRules.js';
 import { ClassifyBatch } from '../rules/StatementClassifier.js';
-import { CreateConversionContext, CONVERSION_GAP_MARKERS } from '../rules/types.js';
+import { CreateConversionContext, CONVERSION_GAP_MARKERS, type IConversionRule } from '../rules/types.js';
+import { FindBracketIdentifiersInDollarBlocks } from '../rules/ExpressionHelpers.js';
 
 /**
  * Regression cover for MJ issue #3857: `mj migrate convert` (legacy path) wrote output
@@ -83,5 +84,76 @@ describe('conversion gaps (issue #3857)', () => {
     expect(emitted).toContain(CONVERSION_GAP_MARKERS[0]);
     expect(CONVERSION_GAP_MARKERS[0]).toBe('-- Could not parse');
     expect(CONVERSION_GAP_MARKERS[1]).toBe('-- ERROR converting batch');
+  });
+});
+
+/**
+ * #6074: a T-SQL bracket identifier left inside a dollar-quoted block has no gap marker, and the
+ * PostProcessor's bracket pass skips those blocks, so the file reported 0 gaps and failed on apply.
+ */
+describe('bracket identifiers left in a dollar-quoted block', () => {
+  it('finds a bracket identifier in code inside the block, and only there', () => {
+    const sql = [
+      'SELECT [Outside] FROM x;',
+      'DO $mj$',
+      'BEGIN',
+      "  p_ID := (SELECT [ID] FROM [__mj].[Entity] WHERE \"Name\" = '[not code]');",
+      '  -- [a comment]',
+      "  IF p.proargtypes[0] = 'jsonb'::regtype AND v = ANY(ARRAY['a']) AND (f(x))[1] = 1 THEN NULL; END IF;",
+      'END $mj$;',
+    ].join('\n');
+
+    expect(FindBracketIdentifiersInDollarBlocks(sql)).toEqual([`p_ID := (SELECT [ID] FROM [__mj].[Entity] WHERE "Name" = '[not code]');`]);
+  });
+
+  it('does not take a $ in string data or a comment for the start of a block', () => {
+    const sql = [
+      "INSERT INTO t (a, b) VALUES ('pay $USD$ [categories] now', 'then $USD$ again');",
+      '-- a $tag$ in a comment',
+      "INSERT INTO t (a) VALUES ('[title] $tag$');",
+    ].join('\n');
+
+    expect(FindBracketIdentifiersInDollarBlocks(sql)).toEqual([]);
+  });
+
+  it('counts each such line as a gap of the converted file, whichever rule left it', () => {
+    // A rule that emits a bracket inside its DO block, as ExecBlockRule did before #6074
+    const leaky: IConversionRule = {
+      Name: 'LeakyRule',
+      SourceDialect: 'tsql',
+      TargetDialect: 'postgres',
+      AppliesTo: [ClassifyBatch(CLEAN_BLOCK)],
+      Priority: 0,
+      BypassSqlglot: true,
+      PostProcess: () => 'DO $mj$\nBEGIN\n  PERFORM (SELECT [ID] FROM [__mj].[Widget]);\nEND $mj$;',
+    };
+    const result = ConvertFile({
+      Source: CLEAN_BLOCK,
+      SourceIsFile: false,
+      Rules: [leaky],
+      Schema: '__mj',
+      SourceDialect: 'tsql',
+      TargetDialect: 'postgres',
+      IncludeHeader: false,
+      EnablePostProcess: true,
+    });
+
+    expect(result.Stats.Gaps).toBe(1);
+    expect(result.Stats.GapBatches[0]).toContain('T-SQL bracket identifier left in a dollar-quoted block:');
+  });
+
+  it('converts a metadata-sync SET subquery cleanly, with no brackets and no gaps', () => {
+    const result = convertSQL([
+      'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+      '  @Name_ab12 NVARCHAR(MAX)',
+      'SET',
+      "  @ID_ab12 = (SELECT [ID] FROM [${flyway:defaultSchema}].[Widget] WHERE LOWER([Name]) = LOWER(N'Widgets'))",
+      'SET',
+      "  @Name_ab12 = N'x' EXEC [${flyway:defaultSchema}].spUpdateWidget @ID = @ID_ab12,",
+      '  @Name = @Name_ab12',
+    ].join('\n'));
+
+    expect(result.Stats.Gaps).toBe(0);
+    expect(result.OutputSQL).toContain(`p_ID_ab12 := (SELECT "ID" FROM __mj."Widget" WHERE LOWER("Name") = LOWER('Widgets'));`);
   });
 });

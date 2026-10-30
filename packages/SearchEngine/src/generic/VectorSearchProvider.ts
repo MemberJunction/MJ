@@ -267,6 +267,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                     Texts: [query],
                     ModelID: model.ID,
                     Dimensions: dimensions,
+                    InputType: 'query',
                     ContextUser: contextUser,
                     Description: `Vector search query embedding for model ${model.Name}`,
                 });
