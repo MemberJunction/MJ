@@ -271,6 +271,7 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
             ExtraFilter: `ID='${this.IntegrationID}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, user);
         const integration = integResult.Success ? integResult.Results[0] : undefined;
         if (!integration) {

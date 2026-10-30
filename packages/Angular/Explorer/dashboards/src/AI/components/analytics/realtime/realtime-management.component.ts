@@ -285,7 +285,9 @@ export class RealtimeManagementComponent extends BaseAngularComponent implements
     public CloseReasonClass(reason: string | null): string {
         switch (reason) {
             case 'Error': return 'reason-pill reason-error';
-            case 'Janitor': return 'reason-pill reason-janitor';
+            case 'Janitor':
+            case 'TimeLimit':
+            case 'Idle': return 'reason-pill reason-janitor';
             case 'HostEnded': return 'reason-pill reason-hostended';
             case 'Shutdown': return 'reason-pill reason-shutdown';
             case 'Explicit': return 'reason-pill reason-explicit';

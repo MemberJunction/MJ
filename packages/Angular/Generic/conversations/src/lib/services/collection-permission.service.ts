@@ -76,6 +76,7 @@ export class CollectionPermissionService {
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `CollectionID='${collectionId}' AND UserID='${userId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, currentUser);
 

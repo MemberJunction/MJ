@@ -164,6 +164,7 @@ export * from './checks/materialized-entity-read.checks';
 export * from './checks/form-contributions.checks';
 export * from './checks/cache-architecture.checks';
 export * from './checks/performance-benchmark.checks';
+export * from './checks/chief-of-staff.checks';
 export * from './checks/query-extraction.checks';
 export * from './checks/query-refresh.checks';
 export * from './checks/metadata-sync-queries.checks';
@@ -172,5 +173,7 @@ export * from './checks/query-security.checks';
 export * from './checks/sqlpipe-matrix.checks';
 export * from './checks/sqlpipe-extraction-fixtures.checks';
 export * from './checks/sqlpipe-matrix-client.checks';
+export * from './checks/agent-execution-primitives.checks';
+export * from './checks/agent-execution-primitives-live.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';

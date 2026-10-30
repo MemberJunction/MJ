@@ -2063,6 +2063,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ExtraFilter: `AgentSessionID='${EscapeSQLString(agentSessionID)}' AND ChannelID='${EscapeSQLString(channelID)}'`,
                 ResultType: 'entity_object',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2451,6 +2452,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 Fields: ['ID', 'IsEnabled'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2613,6 +2615,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 OrderBy: '__mj_CreatedAt DESC',
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             contextUser,
         );
@@ -2704,6 +2707,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                     ExtraFilter: `AgentSessionID='${EscapeSQLString(agentSessionID)}' AND ChannelID='${EscapeSQLString(channelID)}'`,
                     ResultType: 'entity_object',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 },
                 contextUser,
             );
@@ -3042,6 +3046,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ExtraFilter: `AgentSessionID='${session.ID}' AND Role='${mappedRole}'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             },
             writeUser,

@@ -18,6 +18,9 @@ import {
     type RealtimeTurnDetectionSettings,
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
+    type RealtimeDriverFacts,
+    type SupportedTurnSettingsMap,
+    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import { BaseSingleton, RegisterClass } from '@memberjunction/global';
 import { ElevenLabsPremadeVoices } from './elevenLabsVoices';
@@ -100,6 +103,13 @@ function resolveTrimmedConfigString(config: JSONObject | undefined, key: string)
 }
 
 /**
+ * The one declaration of what this driver honours; feeds both {@link ELEVENLABS_SUPPORTED_TURN_SETTINGS}
+ * and the driver's static facts. A const here (not read off the class) because the class is defined later
+ * in the module.
+ */
+const ELEVENLABS_TURN_SETTING_FIDELITY: SupportedTurnSettingsMap = { Eagerness: 'exact' };
+
+/**
  * The turn-detection settings this driver can actually deliver to ElevenLabs (#3534).
  *
  * MJ's {@link RealtimeTurnDetectionSettings} carries four — `Mode`, `Eagerness`, `Threshold`,
@@ -113,7 +123,8 @@ function resolveTrimmedConfigString(config: JSONObject | undefined, key: string)
  * one — is exactly the transmitted-then-discarded defect #3374 and #3859 exist to end. A caller
  * that needs to know what will survive can ask.
  */
-export const ELEVENLABS_SUPPORTED_TURN_SETTINGS: ReadonlyArray<keyof RealtimeTurnDetectionSettings> = ['Eagerness'];
+export const ELEVENLABS_SUPPORTED_TURN_SETTINGS: ReadonlyArray<keyof RealtimeTurnDetectionSettings> =
+    Object.keys(ELEVENLABS_TURN_SETTING_FIDELITY) as Array<keyof RealtimeTurnDetectionSettings>;
 
 /**
  * Maps MJ's normalized `Eagerness` onto ElevenLabs' `turnEagerness`.
@@ -415,6 +426,9 @@ export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManaged
  *   (with the session's client-tool set and the override enablement that lets each session
  *   supply its own system prompt, voice and opening utterance); PATCH when the order-insensitive tool fingerprint
  *   differs or any required override is not enabled. Results are instance-cached per name+tools.
+ * - a host session cap (`MaxSessionSeconds`) is agent-BODY state (`conversation.max_duration_seconds`),
+ *   so it is part of the managed agent's NAME ({@link ManagedAgentName}): each distinct cap gets its
+ *   own agent and uncapped sessions keep the plain-named agent, never PATCHed with anyone's cap.
  *
  * **Per-session prompt, voice AND opening-utterance authority** stays with MJ: the managed agent
  * stores only a placeholder prompt and explicitly enables the overrides in
@@ -441,6 +455,12 @@ export class ElevenLabsManagedAgentCache extends BaseSingleton<ElevenLabsManaged
  */
 @RegisterClass(BaseRealtimeModel, 'ElevenLabsRealtime')
 export class ElevenLabsRealtime extends BaseRealtimeModel {
+    /** ElevenLabs conversational-agent session ceiling (2 hours): the provider ceiling MJ uses for ElevenLabs Agents (#6182 design). */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 7200,
+        SupportedTurnSettings: ELEVENLABS_TURN_SETTING_FIDELITY,
+    };
+
     private elevenClient: ElevenLabsClient | null = null;
 
     /**
@@ -535,6 +555,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
                 overrides: ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
                 config: params.Config ?? {},
             },
+            // The cap actually put on the agent. With no host cap (or a verbatim agent id MJ does not manage) the agent's
+            // own max_duration_seconds applies — ElevenLabs creates agents with 600 s, not the 7200 s ceiling — and it
+            // is not known here, so none is reported.
+            MaxSessionSeconds: resolvedModel.startsWith(ELEVENLABS_AGENT_ID_PREFIX) ? undefined : this.resolveNativeMaxDuration(params),
         };
     }
 
@@ -632,6 +656,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      *   the order-insensitive client-tool fingerprint differs or any required per-session
      *   override is not enabled. The resolution is instance-cached per name + fingerprint —
      *   deliberately NOT per voice, which is a per-session override rather than agent state.
+     *   A host session cap selects a cap-suffixed name ({@link ManagedAgentName}).
      */
     protected async ensureAgent(params: RealtimeSessionParams): Promise<string> {
         const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
@@ -644,28 +669,34 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             return model;
         }
         const tools = params.Tools ?? [];
+        // The session cap is agent-BODY state, so it is part of the agent's IDENTITY (its name),
+        // not a value PATCHed onto one shared agent: otherwise a capped session would leave its
+        // cap on the agent a later uncapped session uses, and concurrent sessions with different
+        // caps would PATCH one agent back and forth. Uncapped sessions keep the plain name.
+        const maxSessionSeconds = this.resolveNativeMaxDuration(params);
+        const name = ElevenLabsRealtime.ManagedAgentName(model, maxSessionSeconds);
         // The cache key carries the DESIRED model settings alongside the tool fingerprint (#3859).
         // Without them, a config-bag llm/temperature change inside one process lifetime would be
         // served from cache and never reach the drift check — the same never-re-PATCHed defect,
-        // one layer earlier.
+        // one layer earlier. (The cap needs no place here: the name already carries it.)
         const fingerprint = ElevenLabsRealtime.ToolSetFingerprint(tools)
             + '|' + ElevenLabsRealtime.ModelSettingsFingerprint(params.Config);
-        const cached = this.agentCache.get(model);
+        const cached = this.agentCache.get(name);
         if (cached && cached.fingerprint === fingerprint && Date.now() - cached.cachedAt < ENSURE_CACHE_TTL_MS) {
             return cached.agentId;
         }
         // Publish the in-flight ensure BEFORE awaiting it, so a second caller arriving mid-flight
         // joins this one rather than starting a rival find-create and forking a duplicate agent.
-        const pending = this.findCreateOrUpdateAgent(model, tools, params.Config);
-        this.agentCache.set(model, { agentId: pending, fingerprint, cachedAt: Date.now() });
+        const pending = this.findCreateOrUpdateAgent(name, tools, params.Config, maxSessionSeconds);
+        this.agentCache.set(name, { agentId: pending, fingerprint, cachedAt: Date.now() });
         try {
             return await pending;
         } catch (error) {
             // A REJECTED promise is a cache entry too. Evict it, or one transient REST failure
             // would be replayed from memory to every later session for this name — disabling the
             // agent until the process restarts, without ever retrying the API.
-            if (this.agentCache.get(model)?.agentId === pending) {
-                this.agentCache.delete(model);
+            if (this.agentCache.get(name)?.agentId === pending) {
+                this.agentCache.delete(name);
             }
             throw error;
         }
@@ -677,16 +708,17 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * Drift is THREE independent comparisons, each against what the remote can actually witness:
      * the tool fingerprint (plain — computed HERE from `tools`, never the composite cache key,
      * whose `|settings` suffix the remote could never equal), the override enablement, and the
-     * agent-body model settings (#3859).
+     * agent-body model settings (#3859), which include the native max duration.
      */
     private async findCreateOrUpdateAgent(
         name: string,
         tools: RealtimeToolDefinition[],
-        config?: JSONObject
+        config?: JSONObject,
+        maxSessionSeconds?: number
     ): Promise<string> {
         const existing = await this.findAgentByName(name);
         if (!existing) {
-            return this.createAgent(this.buildAgentBody(name, tools, config));
+            return this.createAgent(this.buildAgentBody(name, tools, config, maxSessionSeconds));
         }
         const detail = await this.getAgent(existing.agentId);
         const remoteFingerprint = ElevenLabsRealtime.ToolSetFingerprint(
@@ -694,10 +726,38 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         );
         if (remoteFingerprint !== ElevenLabsRealtime.ToolSetFingerprint(tools)
             || !ElevenLabsRealtime.OverridesSatisfied(detail)
-            || !ElevenLabsRealtime.ModelSettingsSatisfied(detail, config)) {
-            await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config));
+            || !ElevenLabsRealtime.ModelSettingsSatisfied(detail, config, maxSessionSeconds)) {
+            await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config, maxSessionSeconds));
         }
         return existing.agentId;
+    }
+
+    /**
+     * The managed agent's NAME — its identity for find-by-name and the ensure cache. With no
+     * host cap it is `baseName` exactly (today's agent, untouched); with a cap it is suffixed,
+     * so each distinct cap owns its own agent and no session's cap reaches another's agent.
+     *
+     * @param baseName The managed agent name from `params.Model` (or the default).
+     * @param maxSessionSeconds The clamped native max duration, or `undefined` when the host set none.
+     */
+    public static ManagedAgentName(baseName: string, maxSessionSeconds: number | undefined): string {
+        return maxSessionSeconds === undefined ? baseName : `${baseName} (max ${maxSessionSeconds}s)`;
+    }
+
+    /**
+     * The value for the agent's native `conversation.max_duration_seconds`: the host's
+     * `MaxSessionSeconds` clamped to the provider ceiling by the one clamp in the base class.
+     *
+     * **Sent only when the host set a cap.** The clamp alone would return the provider ceiling
+     * even for a host that set nothing, which would stamp 7200 onto every managed agent and fight
+     * a hand-tuned value; with no host cap the field stays unset and ElevenLabs enforces its own
+     * ceiling.
+     */
+    private resolveNativeMaxDuration(params: RealtimeSessionParams): number | undefined {
+        if (this.ClampSessionSeconds(params.MaxSessionSeconds) === undefined) {
+            return undefined;
+        }
+        return this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
     }
 
     /**
@@ -770,6 +830,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * delegate to long-running agents), and the platform-settings enablement of every
      * per-session override the driver sends ({@link buildRequiredOverrideEnablement}).
      *
+     * `maxSessionSeconds` (already clamped by {@link resolveNativeMaxDuration}; omitted = unset)
+     * becomes `conversation.max_duration_seconds`, the agent's native session cap.
+     *
      * `params.Config.llm` (when a string) selects the agent's underlying LLM; all other
      * provider-level agent settings are deployment concerns (use a verbatim agent id for full
      * control).
@@ -777,7 +840,8 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     protected buildAgentBody(
         name: string,
         tools: RealtimeToolDefinition[],
-        config?: JSONObject
+        config?: JSONObject,
+        maxSessionSeconds?: number
     ): ElevenLabs.conversationalAi.BodyCreateAgentV1ConvaiAgentsCreatePost {
         const prompt: ElevenLabs.PromptAgentApiModelOutput = {
             prompt: MANAGED_AGENT_BASE_PROMPT,
@@ -802,6 +866,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const conversationConfig: ElevenLabs.ConversationalConfig = { agent: { prompt } };
         if (turnEagerness !== undefined) {
             conversationConfig.turn = { turnEagerness };
+        }
+        // Agent-BODY state like eagerness: no per-session override exists, so it joins the drift check.
+        if (maxSessionSeconds !== undefined) {
+            conversationConfig.conversation = { maxDurationSeconds: maxSessionSeconds };
         }
         return {
             name,
@@ -904,7 +972,11 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * deployment may tune it, and a config bag that says nothing must not stampede a PATCH war
      * against a hand-tuned value.
      */
-    public static ModelSettingsSatisfied(agent: ElevenLabs.GetAgentResponseModel, config?: JSONObject): boolean {
+    public static ModelSettingsSatisfied(
+        agent: ElevenLabs.GetAgentResponseModel,
+        config?: JSONObject,
+        maxSessionSeconds?: number
+    ): boolean {
         const prompt = agent.conversationConfig?.agent?.prompt;
         const wantedLlm = resolveTrimmedConfigString(config, 'llm');
         if (wantedLlm !== undefined && prompt?.llm !== wantedLlm) {
@@ -918,6 +990,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const wantedEagerness = resolveTurnEagerness(config);
         if (wantedEagerness !== undefined
             && agent.conversationConfig?.turn?.turnEagerness !== wantedEagerness) {
+            return false;
+        }
+        if (maxSessionSeconds !== undefined
+            && agent.conversationConfig?.conversation?.maxDurationSeconds !== maxSessionSeconds) {
             return false;
         }
         return true;

@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT147 - Archive Seed (staging actions and host data source)",
+    "Name": "IT149 - Archive Seed (staging actions and host data source)",
     "Description": "Covers the server-side seams of seeding a SQL Server integration from a backup archive, against the tier's own SQL Server. AS1 Drop SQL Server Staging Database drops a throwaway database that exists (SUCCESS, DB_ID null afterwards); AS2 an MJ: External Data Sources row in {\"authMode\":\"host\"} mode with DefaultDatabase set to the tier's database resolves through ExternalDataSourceRouter and the SQL Server driver's TestConnection succeeds with the host's own login (the bundle registers the host connection resolver from the tier's DB config, since mj test does not boot MJServer); AS3 Load SQL Server Integration From Staging against a missing staging database returns STAGING_NOT_FOUND. The restore itself is not covered (the tier has no .bak fixture); unit tests and the manual run cover it. Self-cleaning: Teardown drops the throwaway database and deletes the data source row.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

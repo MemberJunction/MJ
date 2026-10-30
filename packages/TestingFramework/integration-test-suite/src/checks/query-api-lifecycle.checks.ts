@@ -289,7 +289,7 @@ async function countQueriesNamed(ctx: IntegrationCheckContext, name: string): Pr
         EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${requireFixture().Category.ID}' AND Name='${name}'`, ResultType: 'count_only', BypassCache: true,
     }, ctx.User);
     Assert(result.Success, `${BUNDLE}: counting queries named ${name} failed: ${result.ErrorMessage}`);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 /** Every stored column of the queries and their child rows, timestamps included, as one canonical string. */

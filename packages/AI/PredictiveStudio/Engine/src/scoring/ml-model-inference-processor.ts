@@ -344,6 +344,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           ExtraFilter: `ID='${pipelineId}'`,
           ResultType: 'simple',
           MaxRows: 1,
+          SkipTotalRowCount: true,
         },
         context.ContextUser,
       );

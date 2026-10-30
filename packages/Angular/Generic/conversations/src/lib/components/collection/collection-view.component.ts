@@ -449,6 +449,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
           ExtraFilter: `ArtifactID='${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         }, this.CurrentUser);
 

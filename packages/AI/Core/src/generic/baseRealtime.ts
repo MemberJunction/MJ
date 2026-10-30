@@ -1,5 +1,5 @@
 import { BaseModel } from "./baseModel";
-import type { RealtimeReasoningPlane } from "./modelConfiguration";
+import type { RealtimeReasoningPlane, RealtimeTurnDetectionSettings } from "./modelConfiguration";
 import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
 import type { RealtimeVideoFrame } from "./realtimeVideoOutput";
 
@@ -115,7 +115,82 @@ export function RealtimeDiagLog(message: string): void {
     }
 }
 
+/**
+ * How faithfully a driver honours one normalized turn-detection field.
+ * - `'exact'` — the value reaches the provider as the author wrote it (modulo spelling).
+ * - `'approximate'` — the driver translates it onto a coarser or different provider quantity (a ladder,
+ *   a bucket), so the provider behaves like the request but not to the same precision.
+ */
+export type TurnSettingFidelity = 'exact' | 'approximate';
+
+/**
+ * The normalized turn settings a driver honours, keyed by field, with fidelity. A field absent from
+ * the map is ignored by the driver; an absent map means the driver maps none. A listed field can
+ * still depend on `Mode`: OpenAI-protocol drivers (OpenAI, Eleven Realtime) apply `Eagerness` only
+ * with `Mode: 'semanticVad'`.
+ */
+export type SupportedTurnSettingsMap = Readonly<Partial<Record<keyof RealtimeTurnDetectionSettings, TurnSettingFidelity>>>;
+
+/**
+ * Static, instance-free facts about a realtime driver, read before any session exists.
+ * Open on purpose: later facts are added here.
+ */
+export interface RealtimeDriverFacts {
+    /**
+     * The longest one session can run, in seconds, as MJ runs it — after the driver's own
+     * mitigations (reconnect, token refresh). `undefined` means unknown; never put a guess here.
+     * Positive integers only.
+     */
+    ProviderMaxSessionSeconds?: number;
+
+    /**
+     * The normalized {@link RealtimeTurnDetectionSettings} fields this driver maps to its provider, with
+     * fidelity. Declare only what the driver's mapping actually sends; leave the key off when it maps none.
+     */
+    SupportedTurnSettings?: SupportedTurnSettingsMap;
+}
+
+/**
+ * The ONE place a driver instance's static {@link BaseRealtimeModel.DriverFacts} is read.
+ * Runtime reads go through here so a subclass's own static wins over the base default.
+ */
+export function RealtimeDriverFactsOf(driver: BaseRealtimeModel): Readonly<RealtimeDriverFacts> {
+    return (driver.constructor as typeof BaseRealtimeModel).DriverFacts;
+}
+
+/**
+ * The ONE implementation of the session-cap rule, shared by the drivers ({@link BaseRealtimeModel.ClampSessionSeconds})
+ * and the MJAPI relay: returns the smallest candidate that is a positive integer; ignores `undefined`,
+ * `0`, negatives, fractions (rejected, never floored: no guessing), `NaN`, `Infinity` and non-numbers.
+ * `undefined` when none qualifies.
+ */
+export function ClampSessionSecondsValue(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+    let smallest: number | undefined;
+    for (const c of candidates) {
+        if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
+        if (smallest === undefined || c < smallest) smallest = c;
+    }
+    return smallest;
+}
+
 export abstract class BaseRealtimeModel extends BaseModel {
+    /**
+     * Static facts about this driver, readable before a session instance exists.
+     * Default is a frozen `{}` (everything unknown), shared by every driver without an override, so it must never be mutated.
+     * Subclasses declare `public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = { ... }`.
+     * Read at runtime via {@link RealtimeDriverFactsOf}, not directly, so subclass statics win.
+     */
+    public static readonly DriverFacts: Readonly<RealtimeDriverFacts> = Object.freeze({});
+
+    /**
+     * Returns the smallest candidate that is a positive integer; see {@link ClampSessionSecondsValue}.
+     * The rule "the caller's bag wins only if smaller" lives there, once: pass the provider
+     * cap and the bag cap together.
+     */
+    protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+        return ClampSessionSecondsValue(...candidates);
+    }
+
     /**
      * Whether this driver subclass supports dynamic, multi-tool sets projected into the realtime
      * session (e.g. direct action invocation on realtime co-agents).
@@ -398,6 +473,16 @@ export interface ClientRealtimeSessionConfig {
      * it to the call. Absent when the session asked for no avatar, and from drivers that render none.
      */
     AvatarStatus?: RealtimeAvatarStatus;
+
+    /**
+     * The effective session cap in seconds for this minted session: `min(provider ceiling, host cap)`.
+     * With no host cap it reports the provider ceiling; `undefined` when the driver does not know the cap that
+     * applies. ElevenLabs Agents is that case without a host cap (or with a verbatim agent id): the agent's own
+     * `max_duration_seconds` applies, which ElevenLabs sets to 600 s on a new agent, not the 7200 s ceiling.
+     * Server-side information carried on the prep result — the GraphQL resolver does not forward it
+     * to the browser today — and never an input: the cap on the wire is the driver's own decision.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**
@@ -406,6 +491,12 @@ export interface ClientRealtimeSessionConfig {
  * flag defaults to "unsupported" for any driver that hasn't declared it, so the container stays safe.
  */
 export interface RealtimeSessionCapabilities {
+    /** Mirrors {@link RealtimeDriverFacts.ProviderMaxSessionSeconds} for this session's driver; `undefined` = unknown. */
+    ProviderMaxSessionSeconds?: number;
+
+    /** Mirrors {@link RealtimeDriverFacts.SupportedTurnSettings} for this session's driver; `undefined` = none declared. */
+    SupportedTurnSettings?: SupportedTurnSettingsMap;
+
     /**
      * Whether the session can change its turn-taking / auto-response mode on a **live** socket (no
      * reconnect) via {@link IRealtimeSession.Reconfigure}. `true` for providers with a runtime-mutable
@@ -913,6 +1004,9 @@ export interface RealtimeSessionParams {
      * bound and the janitor stamps no extra deadline, so the session runs under the provider's own
      * default session/token limits and MJ's normal session lifecycle (manual end, disconnect, idle
      * cleanup). This is the default for authenticated/internal sessions, which don't need an abuse cap.
+     *
+     * Honoured by: the Vertex relay (it hands the cap to the relay ticket, which bounds the relayed
+     * session), ElevenRealtime and ElevenLabsRealtime.
      */
     MaxSessionSeconds?: number;
 

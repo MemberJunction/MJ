@@ -1599,7 +1599,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT147 - Archive Seed (staging actions and host data source)",
+            "TestID": "@lookup:MJ: Tests.Name=IT149 - Archive Seed (staging actions and host data source)",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1627,6 +1627,17 @@
           },
           "primaryKey": {
             "ID": "DDD6658B-7337-4F0B-95A5-E1BE7676C3B7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT138 - Chief of Staff Core Layers",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "11AB8052-68A5-4D56-AC6B-CD0A4C29E82A"
           }
         },
         {
@@ -1773,6 +1784,17 @@
           "sync": {
             "lastModified": "2026-10-28T22:16:26.042Z",
             "checksum": "4350cf7f90727ee834ebb77f6f0ad7971f0b456d2ee186f56df1ab71bfb7c1b1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT147 - Agent Execution Primitives and Multi-Step Loops (deterministic)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE16C846-7B58-46CC-8B65-DC6AD0630062"
           }
         }
       ]
@@ -2008,7 +2030,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 19,
+            "Sequence": 20,
             "Status": "Active"
           },
           "primaryKey": {
@@ -2065,6 +2087,17 @@
           },
           "primaryKey": {
             "ID": "B4E0BF50-AACE-4F59-9B07-F3CA6EE1EC7C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT148 - Agent Execution Primitives and Multi-Step Loops (live providers)",
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A75E0239-7423-476F-B9C1-24F44E373ED7"
           }
         }
       ]

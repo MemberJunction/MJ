@@ -1884,6 +1884,12 @@ importers:
         specifier: 6.2.0-edge.6
         version: link:../Zhipu
     devDependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.6
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.6
+        version: link:../../../MJGlobal
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -16211,6 +16217,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.6
         version: link:../MJCoreEntities
+      '@memberjunction/core-entities-server':
+        specifier: 6.2.0-edge.6
+        version: link:../MJCoreEntitiesServer
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.6
         version: link:../GenericDatabaseProvider
