@@ -1,13 +1,15 @@
-import { BaseEntity, ValidationErrorInfo, ValidationErrorType, ValidationResult, WellKnownUserSource } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { MJProjectEntityExtended } from '@memberjunction/core-entities';
+import { BaseEntity, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult, WellKnownUserSource } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MAX_BRANCH_DEPTH, MJProjectEntityExtended } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: Projects` (conversation folder) entity.
  *
  * Keeps a folder's owner and place in its owner's hands: see {@link checkFolderOwnerOnlyChange}. Uses the
- * synchronous `Validate()` so the rule runs on every save, like `MJConversationEntityServer`.
+ * synchronous `Validate()` so the rule runs on every save, like `MJConversationEntityServer`. `ValidateAsync()`
+ * refuses a parent that would make the folder its own ancestor.
  */
 @RegisterClass(BaseEntity, 'MJ: Projects')
 export class MJProjectEntityServer extends MJProjectEntityExtended {
@@ -19,6 +21,52 @@ export class MJProjectEntityServer extends MJProjectEntityExtended {
             result.Success = false;
         }
         return result;
+    }
+
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        const violation = await this.checkParentCycle();
+        if (violation) {
+            result.Errors.push(violation);
+            result.Success = false;
+        }
+        return result;
+    }
+
+    /**
+     * Refuses a `ParentID` that makes the folder its own ancestor. The sidebar builds the tree from the top, so a
+     * cycle hides every folder in it from everyone. Walks up from the new parent as the system user, since the
+     * chain can pass through folders the caller cannot read, for at most the engine's {@link MAX_BRANCH_DEPTH}
+     * levels.
+     */
+    private async checkParentCycle(): Promise<ValidationErrorInfo | null> {
+        if (!this.ParentID || !this.GetFieldByName('ParentID')?.Dirty) {
+            return null;
+        }
+        const refuse = (message: string) => new ValidationErrorInfo('ParentID', message, this.ParentID, ValidationErrorType.Failure);
+        if (UUIDsEqual(this.ParentID, this.ID)) {
+            return refuse('A folder cannot be moved into itself or one of its subfolders.');
+        }
+        if (!this.IsSaved) {
+            return null; // nothing points at a new folder yet
+        }
+        const rv = new RunView(this.RunViewProviderToUse);
+        const readUser = UserCache.Instance.GetSystemUser() ?? this.ContextCurrentUser;
+        let cursor: string | null = this.ParentID;
+        for (let depth = 0; cursor && depth < MAX_BRANCH_DEPTH; depth++) {
+            const read = await rv.RunView<{ ParentID: string | null }>(
+                { EntityName: 'MJ: Projects', ExtraFilter: `ID='${EscapeSQLString(cursor)}'`, Fields: ['ParentID'], ResultType: 'simple' },
+                readUser,
+            );
+            if (!read.Success) {
+                return refuse(`Could not check the folder's new place: ${read.ErrorMessage}`);
+            }
+            cursor = read.Results[0]?.ParentID ?? null;
+            if (cursor && UUIDsEqual(cursor, this.ID)) {
+                return refuse('A folder cannot be moved into itself or one of its subfolders.');
+            }
+        }
+        return cursor ? refuse(`Folders cannot be nested more than ${MAX_BRANCH_DEPTH} levels deep.`) : null;
     }
 }
 

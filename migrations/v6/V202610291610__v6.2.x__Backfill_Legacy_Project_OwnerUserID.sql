@@ -193,13 +193,14 @@ GO
 --         the upgrade inherit by default. Re-running sets the same value again.
 --         AdditionalData that is not a JSON object is kept, not overwritten: it moves
 --         under "previousAdditionalData" as a JSON string. Empty or NULL becomes a new
---         object.
+--         object. The object check trims tabs, CR and LF as well as spaces, so a
+--         newline-led object is updated in place (TRIM ... FROM needs SQL Server 2017+).
 UPDATE c
 SET
     c.AdditionalData = CASE
-        WHEN ISJSON(c.AdditionalData) = 1 AND LEFT(LTRIM(c.AdditionalData), 1) = N'{'
+        WHEN ISJSON(c.AdditionalData) = 1 AND LEFT(TRIM(CHAR(9) + CHAR(10) + CHAR(13) + N' ' FROM c.AdditionalData), 1) = N'{'
             THEN JSON_MODIFY(c.AdditionalData, '$.inheritFolderAccess', CAST(0 AS BIT))
-        WHEN c.AdditionalData IS NULL OR LTRIM(RTRIM(c.AdditionalData)) = N''
+        WHEN c.AdditionalData IS NULL OR TRIM(CHAR(9) + CHAR(10) + CHAR(13) + N' ' FROM c.AdditionalData) = N''
             THEN N'{"inheritFolderAccess":false}'
         ELSE N'{"inheritFolderAccess":false,"previousAdditionalData":"' + STRING_ESCAPE(c.AdditionalData, 'json') + N'"}'
     END,

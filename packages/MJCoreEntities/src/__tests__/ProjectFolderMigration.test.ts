@@ -51,7 +51,13 @@ describe('V202610291610 conversation-folder migration', () => {
     it('keeps AdditionalData that is not a JSON object instead of overwriting it', () => {
         const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
         expect(pass3).toContain(`N'{"inheritFolderAccess":false,"previousAdditionalData":"' + STRING_ESCAPE(c.AdditionalData, 'json') + N'"}'`);
-        expect(pass3).toMatch(/WHEN c\.AdditionalData IS NULL OR LTRIM\(RTRIM\(c\.AdditionalData\)\) = N''\s+THEN N'\{"inheritFolderAccess":false\}'/);
+        expect(pass3).toMatch(/WHEN c\.AdditionalData IS NULL OR TRIM\(CHAR\(9\) \+ CHAR\(10\) \+ CHAR\(13\) \+ N' ' FROM c\.AdditionalData\) = N''\s+THEN N'\{"inheritFolderAccess":false\}'/);
+    });
+
+    it('updates a newline- or tab-led JSON object in place instead of keeping it as a string', () => {
+        const pass3 = migration.slice(migration.indexOf('-- Pass 3'));
+        // A plain LTRIM strips only spaces, so "\n{...}" missed the object branch and fell to the ELSE.
+        expect(pass3).toContain("LEFT(TRIM(CHAR(9) + CHAR(10) + CHAR(13) + N' ' FROM c.AdditionalData), 1) = N'{'");
     });
 
     it('replaces the read filter only while it still holds the text V202609260053 installed', () => {

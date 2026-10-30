@@ -67,6 +67,9 @@ import { Subscription } from 'rxjs';
  * `mj: conversations` and `mj: ai agent sessions` carry the anonymous realtime-session ownership key
  * (`ExternalID` / `ConversationID`), which their server entities refuse an anonymous visitor to change — a rule
  * that decides on `Dirty`, so the baseline must be the stored row, not a client-supplied one (#4931).
+ *
+ * `mj: projects` (conversation folders) is refused a change to `OwnerUserID` or `ParentID` by anyone but the
+ * stored owner, a rule that reads the stored owner, so it must hold even if a host stops tracking its changes.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -75,6 +78,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: conversations',
   'mj: ai agent sessions',
   'mj: ai agent runs',
+  'mj: projects',
 ]);
 
 export class ResolverBase {

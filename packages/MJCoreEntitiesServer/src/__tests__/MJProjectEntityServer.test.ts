@@ -12,21 +12,47 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
+/** The stored folders the cycle check reads, by ID: each one's ParentID. */
+const storedParents = new Map<string, string | null>();
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class StubRunView {
+        public async RunView(params: { ExtraFilter: string }) {
+            const id = /ID='([^']+)'/.exec(params.ExtraFilter)?.[1] ?? '';
+            return { Success: true, Results: storedParents.has(id) ? [{ ParentID: storedParents.get(id) }] : [] };
+        }
+    }
+    return { ...actual, RunView: StubRunView };
+});
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: { Instance: { GetSystemUser: () => ({ ID: 'system' }) } },
+}));
+
 vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for MJProjectEntityExtended. */
     class StubProjectEntity {
+        public ID = 'folder-a';
         public IsSaved = true;
         public ContextCurrentUser: unknown = null;
         public TransactionGroup: unknown = null;
+        public RunViewProviderToUse: unknown = null;
         public Fields = new Map<string, { Dirty: boolean; OldValue?: unknown; Value?: unknown }>();
+        public get ParentID(): string | null {
+            return (this.Fields.get('ParentID')?.Value as string | null) ?? null;
+        }
         public Validate(): { Success: boolean; Errors: unknown[] } {
+            return { Success: true, Errors: [] };
+        }
+        public async ValidateAsync(): Promise<{ Success: boolean; Errors: unknown[] }> {
             return { Success: true, Errors: [] };
         }
         public GetFieldByName(name: string): unknown {
             return this.Fields.get(name) ?? null;
         }
     }
-    return { MJProjectEntityExtended: StubProjectEntity };
+    return { MJProjectEntityExtended: StubProjectEntity, MAX_BRANCH_DEPTH: 32 };
 });
 
 import { MJProjectEntityServer } from '../custom/MJProjectEntityServer.server';
@@ -88,5 +114,37 @@ describe("MJProjectEntityServer — only the owner changes a folder's owner or p
         expect(folder(OWNER, colleague, { Name: { Dirty: true, OldValue: 'a', Value: 'b' } }).Validate().Success).toBe(true);
         expect(folder(OWNER, null, { OwnerUserID: { Dirty: true, OldValue: OWNER, Value: null } }).Validate().Success).toBe(true);
         expect(folder(OWNER, colleague, { OwnerUserID: { Dirty: true, OldValue: OWNER, Value: null } }, false).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJProjectEntityServer — refuses a parent that makes a cycle', () => {
+    /** folder-a, saved by its owner, moved under `parent`. */
+    const moveA = (parent: string, saved = true) =>
+        folder(OWNER, { ID: OWNER }, { ParentID: { Dirty: true, OldValue: null, Value: parent } }, saved).ValidateAsync();
+
+    it('refuses A under B when B is already under A', async () => {
+        storedParents.clear();
+        storedParents.set('folder-b', 'folder-a');
+        storedParents.set('folder-a', null);
+        const result = await moveA('folder-b');
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('ParentID');
+    });
+
+    it('refuses a deeper cycle, and A under itself even as a new folder', async () => {
+        storedParents.clear();
+        storedParents.set('folder-c', 'folder-b');
+        storedParents.set('folder-b', 'folder-a');
+        storedParents.set('folder-a', null);
+        expect((await moveA('folder-c')).Success).toBe(false);
+        expect((await moveA('folder-a', false)).Success).toBe(false);
+    });
+
+    it('allows a normal reparent', async () => {
+        storedParents.clear();
+        storedParents.set('folder-c', 'folder-b');
+        storedParents.set('folder-b', null);
+        storedParents.set('folder-a', null);
+        expect((await moveA('folder-c')).Success).toBe(true);
     });
 });

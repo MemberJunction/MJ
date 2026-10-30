@@ -78,7 +78,8 @@ export function IsInheritingFolderAccessInSQL(additionalData: string | null | un
 /**
  * `AdditionalData` rewritten as compact JSON when it holds a JSON object, so the stored text always uses the
  * spelling {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} matches. Anything else (null, an array, text that is not
- * JSON) comes back unchanged.
+ * JSON) comes back unchanged. The round trip through `JSON.parse` rounds an integer beyond 2^53, so such a
+ * number in the object is stored rounded.
  */
 export function CanonicalizeConversationAdditionalData(additionalData: string | null | undefined): string | null | undefined {
     if (!additionalData) {

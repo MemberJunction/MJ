@@ -102,6 +102,10 @@ describe('ResolverBase.MustLoadTruthFromDatabase & hasCompleteOldValues', () => 
         expect(probe.MustLoad({ Name: 'MJ: AI Agent Sessions', TrackRecordChanges: false }, true)).toBe(true);
     });
 
+    it("always loads a conversation folder, so client OldValues cannot pose as its stored owner", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Projects', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
     it('still trusts OldValues on other untracked entities without field security when OldValues___ covers all writable fields', () => {
         const fields = buildTagEntityFields();
         const completeOldValues = [
