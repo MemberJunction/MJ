@@ -40,6 +40,41 @@ function createGraphQLProviderStub(currentUserId: string | null = 'user-1'): IMe
     configurable: true,
     writable: true,
   });
+  provider.GetEntityObject = vi.fn().mockImplementation(async (entityName: string) => {
+    if (entityName === 'MJ: Artifact Versions') {
+      return {
+        ID: '',
+        ArtifactID: '',
+        VersionNumber: 1,
+        Name: 'Loaded Version',
+        Content: JSON.stringify({
+          SpecVersion: '1.0',
+          Status: 'Delivered',
+          Archetype: {
+            ArchetypeID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Product Launch',
+          },
+          Film: {
+            OneSentence: 'Overview film',
+            Audience: 'General',
+            Purpose: 'Demo',
+            DurationSeconds: 30,
+            Formats: ['16:9'],
+            Language: 'en-US',
+          },
+          Beats: [{ ID: 'b1', Label: 'Hook', StartSec: 0, EndSec: 5 }],
+          Scenes: [],
+        }),
+        Load: vi.fn().mockImplementation(async function (this: { ID: string }, id: string) {
+          this.ID = id;
+          return true;
+        }),
+      };
+    }
+    return {
+      Load: vi.fn().mockResolvedValue(true),
+    };
+  });
   return provider as unknown as IMetadataProvider;
 }
 
@@ -538,8 +573,28 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
 
     const instance = fixture.componentInstance;
     expect(instance.SelectedProductionConversationId).toBe('conv-777');
-    expect(instance.IsIterateFocusMode).toBe(false);
-    expect(query(fixture, '[data-testid="productions-grid"]')).not.toBeNull();
+    expect(instance.IsIterateFocusMode).toBe(true);
+    expect(query(fixture, '[data-testid="productions-grid"]')).toBeNull();
+    expect(query(fixture, '[data-testid="production-overview-viewer"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="production-full-viewer"]')).toBeNull();
+
+    // Toggling "Storyboard, review & versions" swaps overview for full artifact viewer panel, and "Back to overview" restores overview
+    const openFullBtn = query(fixture, '[data-testid="production-open-full-viewer-button"]');
+    expect(openFullBtn).not.toBeNull();
+    expect(openFullBtn?.textContent).toContain('Storyboard, review & versions');
+    openFullBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsFullViewerMode).toBe(true);
+    expect(query(fixture, '[data-testid="production-full-viewer"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="production-overview-viewer"]')).toBeNull();
+
+    const backToOverviewBtn = query(fixture, '[data-testid="production-back-to-overview-button"]');
+    expect(backToOverviewBtn).not.toBeNull();
+    expect(backToOverviewBtn?.textContent).toContain('Back to overview');
+    backToOverviewBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsFullViewerMode).toBe(false);
+    expect(query(fixture, '[data-testid="production-overview-viewer"]')).not.toBeNull();
 
     const iterateBtn = query(fixture, '[data-testid="production-iterate-button"]');
     expect(iterateBtn).not.toBeNull();
@@ -557,11 +612,13 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     expect(query(fixture, '[data-testid="production-iterate-copilot"]')).toBeNull();
     expect(query(fixture, '[data-testid="productions-copilot-slidein"]')).not.toBeNull();
 
-    // Clicking "All productions" in the viewer toolbar restores the grid while keeping the viewer and slide-in open
+    // Clicking "All productions" in the viewer toolbar returns to the grid while keeping the slide-in open
     const allProdsBtn = query(fixture, '[data-testid="production-all-productions-button"]');
     expect(allProdsBtn).not.toBeNull();
     allProdsBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushAsync();
     fixture.detectChanges();
+    expect(instance.SelectedProduction).toBeNull();
     expect(instance.IsIterateFocusMode).toBe(false);
     expect(query(fixture, '[data-testid="productions-grid"]')).not.toBeNull();
 
@@ -1072,6 +1129,106 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('shows mj-empty-state with Try again when MJ: Artifact Versions Load(VersionID) returns false, and recovers on retry', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    let shouldSucceed = false;
+    (customProvider as unknown as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject = vi
+      .fn()
+      .mockImplementation(async () => ({
+        ID: 'ver-retry-1',
+        ArtifactID: 'prod-retry-1',
+        VersionNumber: 2,
+        Name: 'Retry Version',
+        LatestResult: { CompleteMessage: 'Version network failure' },
+        Content: JSON.stringify({
+          SpecVersion: '1.0',
+          Status: 'Delivered',
+          Archetype: { Name: 'Product Launch' },
+          Film: {
+            OneSentence: 'Recovered film',
+            Audience: 'General',
+            Purpose: 'Demo',
+            DurationSeconds: 15,
+            Formats: ['16:9'],
+            Language: 'en-US',
+          },
+          Scenes: [],
+        }),
+        Load: vi.fn().mockImplementation(async () => shouldSucceed),
+      }));
+
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [
+          {
+            ID: 'prod-retry-1',
+            Name: 'Retry Production',
+            Description: '',
+            __mj_UpdatedAt: new Date('2026-04-15T12:00:00Z'),
+          },
+        ],
+      }),
+      RunViews: vi.fn().mockResolvedValue([
+        {
+          Success: true,
+          Results: [{ ID: 'ver-retry-1', ArtifactID: 'prod-retry-1', VersionNumber: 2 }],
+        },
+        {
+          Success: true,
+          Results: [{ ArtifactVersionID: 'ver-retry-1', Name: 'status', Value: 'Delivered' }],
+        },
+      ]),
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    await instance.SelectProduction(instance.AllProductions[0]);
+    fixture.detectChanges();
+
+    expect(instance.VersionLoadError).toContain('Version network failure');
+    expect(query(fixture, '[data-testid="production-overview-error"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="production-overview-viewer"]')).toBeNull();
+
+    shouldSucceed = true;
+    await instance.RetryLoadSelectedProductionVersion();
+    fixture.detectChanges();
+
+    expect(instance.VersionLoadError).toBeNull();
+    expect(query(fixture, '[data-testid="production-overview-error"]')).toBeNull();
+    expect(query(fixture, '[data-testid="production-overview-viewer"]')).not.toBeNull();
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
+
 
 

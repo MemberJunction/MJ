@@ -12,6 +12,7 @@ import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core'
 import {
   BrandKitEngine,
   MJArtifactEntity,
+  MJArtifactVersionEntity,
   MJBrandKitEntity,
   MJEnvironmentEntityExtended,
   ResourceData,
@@ -460,18 +461,31 @@ export class VideoStudioProductionsResourceComponent
   }
 
   public SelectedProductionConversationId: string | null = null;
+  public SelectedVersionEntity: MJArtifactVersionEntity | null = null;
+  public IsLoadingSelectedVersion = false;
+  public VersionLoadError: string | null = null;
+  public IsFullViewerMode = false;
   public ShowGridInFocusMode = false;
 
+  public get IsProductionFocusMode(): boolean {
+    return this.SelectedProduction !== null && !this.ShowGridInFocusMode;
+  }
+
   public get IsIterateFocusMode(): boolean {
-    return (
-      this.SelectedProduction !== null &&
-      this.IsCopilotSlideInOpen &&
-      !this.ShowGridInFocusMode
-    );
+    return this.IsProductionFocusMode;
   }
 
   public ShowAllProductions(): void {
-    this.ShowGridInFocusMode = true;
+    this.CloseDetailPane();
+  }
+
+  public OpenFullViewer(): void {
+    this.IsFullViewerMode = true;
+    this.cdr.markForCheck();
+  }
+
+  public BackToOverview(): void {
+    this.IsFullViewerMode = false;
     this.cdr.markForCheck();
   }
 
@@ -648,7 +662,35 @@ export class VideoStudioProductionsResourceComponent
 
   public OnSlideInPendingArtifactConsumed(): void {
     this.SlideInState.ClearPendingArtifact();
+    this.suppressDuplicateSlideInArtifactPanel();
     this.cdr.markForCheck();
+  }
+
+  private suppressDuplicateSlideInArtifactPanel(): void {
+    const apply = () => {
+      const chatArea = (
+        this.CopilotPanel as unknown as {
+          chatArea?: Record<string, unknown> & { cdr?: { markForCheck: () => void } };
+        }
+      )?.chatArea;
+      if (!chatArea) {
+        return;
+      }
+      const host = this;
+      Object.defineProperty(chatArea, 'ShowArtifactPanel', {
+        get(this: Record<string, unknown>) {
+          return host.SelectedProduction ? false : Boolean(this['_vsShowArtifactPanel']);
+        },
+        set(this: Record<string, unknown>, value: boolean) {
+          this['_vsShowArtifactPanel'] = value;
+        },
+        configurable: true,
+      });
+      chatArea.cdr?.markForCheck();
+    };
+    apply();
+    queueMicrotask(apply);
+    setTimeout(apply, 0);
   }
 
   public get FallbackBrandKitId(): string | null {
@@ -668,6 +710,10 @@ export class VideoStudioProductionsResourceComponent
   ): Promise<void> {
     this.ShowGridInFocusMode = false;
     this.SelectedProduction = item;
+    this.IsFullViewerMode = false;
+    this.SelectedVersionEntity = null;
+    this.VersionLoadError = null;
+    this.IsLoadingSelectedVersion = Boolean(item?.VersionID);
     this.CanShareSelected = false;
     this.CanEditSelected = false;
     this.SelectedProductionConversationId = null;
@@ -699,7 +745,10 @@ export class VideoStudioProductionsResourceComponent
     }
 
     if (item) {
-      const convId = await this.resolveProductionConversationId(item.ID);
+      const [convId] = await Promise.all([
+        this.resolveProductionConversationId(item.ID),
+        this.loadSelectedProductionVersion(item),
+      ]);
       if (this.SelectedProduction !== item) {
         return;
       }
@@ -709,6 +758,68 @@ export class VideoStudioProductionsResourceComponent
     this.CopilotAppContext = this.buildCopilotAppContext();
     this.syncAgentContext();
     this.cdr.markForCheck();
+  }
+
+  public async RetryLoadSelectedProductionVersion(): Promise<void> {
+    if (!this.SelectedProduction) {
+      return;
+    }
+    await this.loadSelectedProductionVersion(this.SelectedProduction);
+  }
+
+  private async loadSelectedProductionVersion(
+    item: ProductionCardSnapshot,
+  ): Promise<void> {
+    const versionId = (item.VersionID ?? '').trim();
+    if (!versionId) {
+      if (this.SelectedProduction === item) {
+        this.IsLoadingSelectedVersion = false;
+        this.SelectedVersionEntity = null;
+        this.VersionLoadError = "This production doesn't have a saved version yet.";
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+
+    this.IsLoadingSelectedVersion = true;
+    this.VersionLoadError = null;
+    this.SelectedVersionEntity = null;
+    this.cdr.markForCheck();
+
+    try {
+      const versionEntity =
+        await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>(
+          'MJ: Artifact Versions',
+          this.ProviderToUse.CurrentUser,
+        );
+      const loaded = await versionEntity.Load(versionId);
+      if (this.SelectedProduction !== item) {
+        return;
+      }
+      if (!loaded) {
+        const detail = versionEntity.LatestResult?.CompleteMessage?.trim();
+        this.VersionLoadError = detail
+          ? `Couldn't load production version: ${detail}`
+          : "Couldn't load this production version.";
+        this.SelectedVersionEntity = null;
+        return;
+      }
+      this.SelectedVersionEntity = versionEntity;
+      this.VersionLoadError = null;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(message);
+      if (this.SelectedProduction !== item) {
+        return;
+      }
+      this.VersionLoadError = `Couldn't load production version: ${message}`;
+      this.SelectedVersionEntity = null;
+    } finally {
+      if (this.SelectedProduction === item) {
+        this.IsLoadingSelectedVersion = false;
+        this.cdr.markForCheck();
+      }
+    }
   }
 
   /**
@@ -725,6 +836,7 @@ export class VideoStudioProductionsResourceComponent
       this.SelectedProduction.ID,
       this.SelectedProduction.VersionNumber,
     );
+    this.suppressDuplicateSlideInArtifactPanel();
     this.syncAgentContext();
     this.cdr.markForCheck();
   }

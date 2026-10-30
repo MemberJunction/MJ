@@ -309,11 +309,17 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     await flush();
     fixture.detectChanges();
 
-    expect(text(fixture, '.vp-header__title')).toBe('Q3 Executive Film');
-    expect(text(fixture, '.vp-header__one-sentence')).toBe('Q3 revenue grew 18% year-over-year.');
+    expect(query(fixture, '.vp-header__title')).toBeNull();
+    expect(query(fixture, '.vp-header__one-sentence')).toBeNull();
     expect(text(fixture, '.vp-badge--status')).toBe('Delivered');
     expect(query(fixture, '.vp-badge--status')?.classList.contains('vp-badge--success')).toBe(true);
     expect(text(fixture, '.vp-badge--duration')).toBe('0:15');
+
+    const stageEl = query(fixture, '.vp-stage')!;
+    const firstBadgeEl = query(fixture, '.vp-badge')!;
+    expect(stageEl).not.toBeNull();
+    expect(firstBadgeEl).not.toBeNull();
+    expect(Boolean(stageEl.compareDocumentPosition(firstBadgeEl) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
 
     const formatBtns = queryAll(fixture, '.vp-format-switcher button');
     expect(formatBtns).toHaveLength(2);
@@ -948,5 +954,80 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     const audioBadgeSilent = query(fixtureSilent, '[data-testid="vp-badge-audio"]');
     expect(audioBadgeSilent).not.toBeNull();
     expect(audioBadgeSilent?.textContent).toContain('Silent (no voiceover)');
+  });
+
+  it('stats panel renders rows that have values (including beats strip, brand kit, quality score, version) and hides empty rows without ever showing "none" or "undefined"', () => {
+    const populatedSpec = makeSpec({
+      BrandKitID: 'Acme Brand Kit',
+    });
+    const populatedFixture = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(populatedSpec)),
+      },
+    });
+
+    const overviewEl = query(populatedFixture, '[data-testid="vp-overview"]');
+    expect(overviewEl).not.toBeNull();
+    expect(query(populatedFixture, '.vp-overview__main .vp-stage')).not.toBeNull();
+    const statsPanel = query(populatedFixture, '.vp-overview > aside[data-testid="vp-stats-panel"]');
+    expect(statsPanel).not.toBeNull();
+    const styleTexts = Array.from(document.querySelectorAll('style'))
+      .map(s => s.textContent ?? '')
+      .join('\n');
+    expect(styleTexts).toContain('@container (max-width: 760px)');
+    expect(query(populatedFixture, '[data-stat="status"] mj-video-badge')).not.toBeNull();
+    expect(query(populatedFixture, '[data-stat="status"] dd')?.textContent?.trim()).toBe('Delivered');
+    expect(query(populatedFixture, '[data-stat="length"] dd')?.textContent?.trim()).toBe('0:15');
+    expect(queryAll(populatedFixture, '[data-stat="formats"] mj-video-format-glyph')).toHaveLength(2);
+    expect(query(populatedFixture, '[data-stat="archetype"] dd')?.textContent?.trim()).toBe('KPI Briefing');
+    expect(query(populatedFixture, '[data-stat="brand-kit"] dd')?.textContent?.trim()).toBe('Acme Brand Kit');
+    expect(query(populatedFixture, '[data-stat="beats"] .vp-stats__beats-count')?.textContent?.trim()).toBe('2 beats');
+    expect(query(populatedFixture, '[data-stat="beats"] mj-video-beat-strip')).not.toBeNull();
+    expect(query(populatedFixture, '[data-stat="sound"] dd')?.textContent).toContain('Voiceover (1 segment) · Sidecar captions');
+    expect(query(populatedFixture, '[data-stat="data"] dd')?.textContent).toContain('Contains data');
+    expect(query(populatedFixture, '[data-stat="quality"] dd')?.textContent?.trim()).toBe('92 / 100');
+    expect(query(populatedFixture, '[data-stat="version"] dd')?.textContent?.trim()).toBe('v1 · 2026-10-01');
+    expect(query(populatedFixture, '[data-stat="generated-imagery"]')).toBeNull();
+
+    const sparseSpec = makeSpec({
+      Archetype: { Name: 'none' },
+      BrandKitID: 'undefined',
+      Beats: [],
+      DataBindings: [],
+      Audio: {
+        Captions: 'None',
+        Cues: [],
+      },
+      Review: {
+        Gates: [],
+        Rounds: [],
+        Scores: undefined,
+      },
+      Output: undefined,
+    });
+    const sparseVersion = {
+      ID: 'ver-sparse',
+      ArtifactID: 'art-sparse',
+      VersionNumber: 0,
+      Name: 'Sparse Film',
+      Content: JSON.stringify(sparseSpec),
+    } as unknown as MJArtifactVersionEntity;
+
+    populatedFixture.componentRef.setInput('artifactVersion', sparseVersion);
+    populatedFixture.detectChanges();
+
+    expect(query(populatedFixture, '[data-stat="archetype"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="brand-kit"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="beats"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="sound"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="data"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="generated-imagery"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="quality"]')).toBeNull();
+    expect(query(populatedFixture, '[data-stat="version"]')).toBeNull();
+
+    const statsText = (query(populatedFixture, '[data-testid="vp-stats-panel"]')?.textContent ?? '').toLowerCase();
+    expect(statsText).not.toContain('none');
+    expect(statsText).not.toContain('undefined');
   });
 });

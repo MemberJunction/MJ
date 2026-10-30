@@ -224,6 +224,14 @@
   white-space: nowrap;
 }
 
+.vs-production-detail-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
 .vs-production-detail-body {
   display: flex;
   flex: 1;
@@ -239,6 +247,14 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.vs-production-detail-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--mj-space-6);
 }
 
 .vs-productions-workspace--focus {

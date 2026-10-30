@@ -7,102 +7,189 @@
       Message="The production data couldn't be read."
     ></mj-empty-state>
   } @else {
-    <header class="vp-header">
-      <div class="vp-header__titles">
-        <h2 class="vp-header__title">{{ Title }}</h2>
-        <p class="vp-header__one-sentence">{{ Spec.Film.OneSentence }}</p>
-      </div>
-      <div class="vp-header__badges">
-        @if (HasDataBadge) {
-          <span class="vp-badge vp-badge--data">
-            <span class="vp-badge__label">Contains data</span>
-            @if (DataAsOfText) {
-              <span class="vp-badge__separator">·</span>
-              <span class="vp-badge__as-of">{{ DataAsOfText }}</span>
+    <div class="vp-overview" data-testid="vp-overview">
+      <div class="vp-overview__main">
+        <div class="vp-stage">
+          @if (HasRenderedOutput && SelectedVideo; as video) {
+            @if (video.FileID) {
+              <mj-storage-media-player
+                [FileID]="video.FileID"
+                [PosterFileID]="Spec.Output?.PosterFileID ?? null"
+                [Provider]="ProviderToUse"
+                [ShowTranscript]="false"
+                [ShowTranscriptToggle]="false"
+                [ShowWaveform]="false"
+              ></mj-storage-media-player>
+            } @else if (video.InlineBase64) {
+              <mj-media-player
+                [Tracks]="InlineTracks"
+                [ShowTranscript]="false"
+                [ShowTranscriptToggle]="false"
+                [ShowWaveform]="false"
+              ></mj-media-player>
             }
-          </span>
-        }
-        @if (GeneratedSummaryLine; as genLine) {
-          <span
-            class="vp-badge vp-badge--generated"
-            role="note"
-            title="Illustrative AI-generated imagery. See Review for provenance."
-          >
-            {{ genLine }}
-          </span>
-        }
-        @if (NarrationSummaryText; as narrationText) {
-          <span
-            class="vp-badge vp-badge--audio"
-            [class.vp-badge--audio-muted]="Spec.Audio.Narration?.Enabled === false"
-            data-testid="vp-badge-audio"
-          >
-            <i
-              class="fa-solid"
-              [class.fa-volume-high]="Spec.Audio.Narration?.Enabled !== false"
-              [class.fa-volume-xmark]="Spec.Audio.Narration?.Enabled === false"
-              aria-hidden="true"
-            ></i>
-            <span>{{ narrationText }}</span>
-          </span>
-        }
-        <span
-          [class]="'vp-badge vp-badge--status vp-badge--' + StatusBadgeVariant"
-          [attr.data-status]="Spec.Status"
-        >
-          {{ Spec.Status }}
-        </span>
-        <span class="vp-badge vp-badge--duration">
-          {{ FormattedDuration }}
-        </span>
-      </div>
-    </header>
+          } @else {
+            <mj-empty-state
+              Icon="fa-solid fa-clapperboard"
+              Title="Not rendered yet"
+            ></mj-empty-state>
+          }
+        </div>
 
-    @if (AvailableFormats.length > 0) {
-      <div class="vp-format-switcher" role="group" aria-label="Video format switcher">
-        @for (fmt of AvailableFormats; track fmt) {
-          <button
-            type="button"
-            mjButton
-            Size="sm"
-            Variant="outline"
-            [Toggleable]="true"
-            [Selected]="SelectedFormat === fmt"
-            [attr.data-format]="fmt"
-            (click)="SelectFormat(fmt)"
-          >
-            <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
-          </button>
+        @if (AvailableFormats.length > 0) {
+          <div class="vp-format-switcher" role="group" aria-label="Video format switcher">
+            @for (fmt of AvailableFormats; track fmt) {
+              <button
+                type="button"
+                mjButton
+                Size="sm"
+                Variant="outline"
+                [Toggleable]="true"
+                [Selected]="SelectedFormat === fmt"
+                [attr.data-format]="fmt"
+                (click)="SelectFormat(fmt)"
+              >
+                <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+              </button>
+            }
+          </div>
+        }
+
+        @if (InlineStorageWarningText; as warningText) {
+          <mj-alert class="vp-inline-warning" Variant="warning">{{ warningText }}</mj-alert>
         }
       </div>
-    }
 
-    <div class="vp-stage">
-      @if (HasRenderedOutput && SelectedVideo; as video) {
-        @if (video.FileID) {
-          <mj-storage-media-player
-            [FileID]="video.FileID"
-            [PosterFileID]="Spec.Output?.PosterFileID ?? null"
-            [Provider]="ProviderToUse"
-            [ShowTranscript]="false"
-            [ShowTranscriptToggle]="false"
-            [ShowWaveform]="false"
-          ></mj-storage-media-player>
-        } @else if (video.InlineBase64) {
-          <mj-alert Variant="warning">Stored inline: no file storage account was set up.</mj-alert>
-          <mj-media-player
-            [Tracks]="InlineTracks"
-            [ShowTranscript]="false"
-            [ShowTranscriptToggle]="false"
-            [ShowWaveform]="false"
-          ></mj-media-player>
-        }
-      } @else {
-        <mj-empty-state
-          Icon="fa-solid fa-clapperboard"
-          Title="Not rendered yet"
-        ></mj-empty-state>
-      }
+      <aside class="vp-stats" data-testid="vp-stats-panel" aria-label="Production stats">
+        <dl class="vp-stats__list">
+          @if (StatusText; as statusText) {
+            <div class="vp-stats__row" data-stat="status">
+              <dt class="vp-stats__label">Status</dt>
+              <dd class="vp-stats__value">
+                <mj-video-badge
+                  [class]="'vp-badge vp-badge--status vp-badge--' + StatusBadgeVariant"
+                  [Variant]="StatusBadgeVariant"
+                  [attr.data-status]="statusText"
+                >
+                  {{ statusText }}
+                </mj-video-badge>
+              </dd>
+            </div>
+          }
+
+          @if (HasDurationStat) {
+            <div class="vp-stats__row" data-stat="length">
+              <dt class="vp-stats__label">Length</dt>
+              <dd class="vp-stats__value vp-stats__value--tabular vp-badge--duration">
+                {{ FormattedDuration }}
+              </dd>
+            </div>
+          }
+
+          @if (DisplayFormats.length > 0) {
+            <div class="vp-stats__row" data-stat="formats">
+              <dt class="vp-stats__label">Formats</dt>
+              <dd class="vp-stats__value vp-stats__formats">
+                @for (fmt of DisplayFormats; track fmt) {
+                  <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+                }
+              </dd>
+            </div>
+          }
+
+          @if (ArchetypeText; as archetypeText) {
+            <div class="vp-stats__row" data-stat="archetype">
+              <dt class="vp-stats__label">Archetype</dt>
+              <dd class="vp-stats__value">{{ archetypeText }}</dd>
+            </div>
+          }
+
+          @if (BrandKitText; as brandKitText) {
+            <div class="vp-stats__row" data-stat="brand-kit">
+              <dt class="vp-stats__label">Brand kit</dt>
+              <dd class="vp-stats__value">{{ brandKitText }}</dd>
+            </div>
+          }
+
+          @if (BeatsCountText; as beatsCount) {
+            <div class="vp-stats__row vp-stats__row--beats" data-stat="beats">
+              <dt class="vp-stats__label">Beats</dt>
+              <dd class="vp-stats__value vp-stats__beats">
+                <span class="vp-stats__beats-count">{{ beatsCount }}</span>
+                <mj-video-beat-strip
+                  [Beats]="BeatStripItems"
+                  [ShowLabels]="false"
+                ></mj-video-beat-strip>
+              </dd>
+            </div>
+          }
+
+          @if (SoundSummaryText; as soundText) {
+            <div class="vp-stats__row" data-stat="sound">
+              <dt class="vp-stats__label">Sound</dt>
+              <dd class="vp-stats__value">
+                <span
+                  class="vp-badge vp-badge--audio"
+                  [class.vp-badge--audio-muted]="Spec.Audio?.Narration?.Enabled === false"
+                  data-testid="vp-badge-audio"
+                >
+                  <i
+                    class="fa-solid"
+                    [class.fa-volume-high]="Spec.Audio?.Narration?.Enabled !== false"
+                    [class.fa-volume-xmark]="Spec.Audio?.Narration?.Enabled === false"
+                    aria-hidden="true"
+                  ></i>
+                  <span>{{ soundText }}</span>
+                </span>
+              </dd>
+            </div>
+          }
+
+          @if (HasDataBadge) {
+            <div class="vp-stats__row" data-stat="data">
+              <dt class="vp-stats__label">Data</dt>
+              <dd class="vp-stats__value">
+                <span class="vp-badge vp-badge--data">
+                  <span class="vp-badge__label">Contains data</span>
+                  @if (DataAsOfText) {
+                    <span class="vp-badge__separator">·</span>
+                    <span class="vp-badge__as-of">{{ DataAsOfText }}</span>
+                  }
+                </span>
+              </dd>
+            </div>
+          }
+
+          @if (GeneratedSummaryLine; as genLine) {
+            <div class="vp-stats__row" data-stat="generated-imagery">
+              <dt class="vp-stats__label">AI-generated imagery</dt>
+              <dd class="vp-stats__value">
+                <span
+                  class="vp-badge vp-badge--generated"
+                  role="note"
+                  title="Illustrative AI-generated imagery. See Review for provenance."
+                >
+                  {{ genLine }}
+                </span>
+              </dd>
+            </div>
+          }
+
+          @if (QualityScoreText; as qualityText) {
+            <div class="vp-stats__row" data-stat="quality">
+              <dt class="vp-stats__label">Quality</dt>
+              <dd class="vp-stats__value vp-stats__value--tabular">{{ qualityText }}</dd>
+            </div>
+          }
+
+          @if (VersionAndUpdatedText; as versionText) {
+            <div class="vp-stats__row" data-stat="version">
+              <dt class="vp-stats__label">Version</dt>
+              <dd class="vp-stats__value vp-stats__value--tabular">{{ versionText }}</dd>
+            </div>
+          }
+        </dl>
+      </aside>
     </div>
   }
 </div>
