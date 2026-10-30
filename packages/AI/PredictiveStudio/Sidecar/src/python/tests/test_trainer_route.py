@@ -757,3 +757,11 @@ def test_selection_takes_the_simplest_candidate_within_one_standard_error(server
     assert r.finalist == "ar1_const"
     best = min(r.innerScores, key=lambda s: s.inner.value)
     assert best.candidate == "trend_season_ar1"
+
+
+def test_a_forecast_without_a_declared_dummy_fails_at_baselines(server: FileServer) -> None:
+    """As on the tabular path: the gate needs its no-signal yardstick declared."""
+    req = _with_proto(_forecast_request(server, _monthly_series(), "fc-no-dummy"), "baselines",
+                      [{"kind": "naive"}, {"kind": "seasonal-naive", "season": 12}])
+    r = _failed(req)
+    assert r.stage == "baselines" and "declares no dummy baseline" in r.message, r.message
