@@ -18,6 +18,7 @@ import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } fro
 import type { UserInfo } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -1003,6 +1004,129 @@ export const ServerCacheChecks: NamedCheck[] = [
             } finally {
                 await view.Delete().catch(() => undefined);
             }
+        }
+    },
+    {
+        Id: 'server-cache.S32',
+        Name: 'S32: CacheLocal:false on a narrow-Fields miss keeps the narrow SQL projection and writes nothing — and does not poison the full-width slot',
+        Fn: async (ctx): Promise<void> => {
+            // Server mode widens a cache-eligible narrow miss to the entity superset and stores it so
+            // later Fields subsets hit (S1 -> S2 -> S3). CacheLocal:false is the explicit opt-out: the
+            // caller's narrow SELECT reaches the database as written and no partial row set is stored
+            // where a later full-width reader could be served it.
+            const rv = new RunView();
+            const filter = UniqueFilter('Name', 's32');
+            const setsBefore = ctx.Storage.SetCount('RunViewCache');
+            const narrow = await rv.RunView({
+                EntityName: ENTITY,
+                ExtraFilter: filter,
+                Fields: ['Name'],
+                ResultType: 'simple',
+                CacheLocal: false,
+            }, ctx.User);
+            Assert(narrow.Success && narrow.Results.length > 0, `S32 narrow read failed: ${narrow.ErrorMessage}`);
+            // Direct SQL path: requested fields + PK, never widened (same contract as S7 / S24).
+            AssertRowShape(narrow.Results[0], ['ID', 'Name'], 'S32: CacheLocal:false narrow shape (requested fields + PK)');
+            AssertEqual(ctx.Storage.SetCount('RunViewCache'), setsBefore, 'S32: CacheLocal:false must not write the RunView cache');
+
+            const full = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'simple' }, ctx.User);
+            Assert(full.Success && full.Results.length > 0, `S32 full read failed: ${full.ErrorMessage}`);
+            Assert(RowKeys(full.Results[0]).length > 20,
+                `S32: a full-width read after a CacheLocal:false narrow read must come back full width, not from a narrow slot (got ${RowKeys(full.Results[0]).length} columns)`);
+        }
+    },
+    {
+        Id: 'server-cache.S33',
+        Name: 'S33: batch RunViews honors CacheLocal:false per param — the opted-out index stays narrow and unwritten while its sibling widens and caches',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            ctx.Storage.ResetCounts();
+            const [optedOut, defaulted] = await rv.RunViews([
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33a'), Fields: ['Name'], ResultType: 'simple', CacheLocal: false },
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33b'), Fields: ['Name'], ResultType: 'simple' },
+            ], ctx.User);
+            Assert(optedOut.Success && optedOut.Results.length > 0, `S33 opted-out index failed: ${optedOut.ErrorMessage}`);
+            Assert(defaulted.Success && defaulted.Results.length > 0, `S33 default index failed: ${defaulted.ErrorMessage}`);
+            // Both indexes MISS, so both come back in the direct-SQL shape (requested Fields + PK, the S9
+            // contract). What distinguishes them is the cache: the default index widened its SELECT and
+            // stored the superset slot; the CacheLocal:false index wrote nothing.
+            AssertRowShape(optedOut.Results[0], ['ID', 'Name'], 'S33: opted-out index keeps the direct-SQL narrow shape');
+            AssertRowShape(defaulted.Results[0], ['ID', 'Name'], 'S33: default index miss shape (requested Fields + PK)');
+            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 1,
+                'S33: exactly one cache write — the default index populates its superset slot, the CacheLocal:false index writes nothing');
+            // And the default index's slot really is the widened superset: a full-width re-read of its
+            // filter is served from cache (0 ms), while the opted-out filter has nothing to serve.
+            const [reDefault, reOptedOut] = await rv.RunViews([
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33b'), ResultType: 'simple' },
+                { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's33a'), ResultType: 'simple' },
+            ], ctx.User);
+            Assert(reDefault.Success && reOptedOut.Success, 'S33 re-reads must succeed');
+            AssertEqual(reDefault.ExecutionTime, 0, 'S33: the default index left a superset slot that serves a full-width re-read from cache');
+            Assert(RowKeys(reOptedOut.Results[0]).length > 20, `S33: the opted-out filter's full-width re-read is full width (got ${RowKeys(reOptedOut.Results[0]).length} columns)`);
+        }
+    },
+    {
+        Id: 'server-cache.S34',
+        Name: 'S34 (mutation): in-place slot maintenance writes the slot with a compact row_delta broadcast — only the changed row, never the full array',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            // A save of a row in an unfiltered auto-maintained slot upserts the cached array in place
+            // (S23). The write that persists that upsert must ask the storage provider to broadcast a
+            // `row_delta` carrying only the mutated row, so distributed peers (Redis 'full' mode)
+            // apply O(Δ) instead of re-materializing all N cached rows from a full 'set' payload.
+            // The in-memory store has no pub/sub, so the instrumented provider's recorded write
+            // options are the observable here.
+            const rv = new RunView();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const makeParams = () => ({ EntityName: 'MJ: User Settings', Fields: ['ID', 'Setting'], ResultType: 'simple' as const });
+            const baseline = await rv.RunView(makeParams(), ctx.User);
+            Assert(baseline.Success, `S34 baseline failed: ${baseline.ErrorMessage}`);
+            const baselineCount = baseline.Results.length;
+
+            const setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', ctx.User);
+            setting.UserID = ctx.User.ID;
+            setting.Setting = `mj.integrationtest.rowdelta.${Date.now()}`;
+            setting.Value = 'integration-test';
+            ctx.Storage.ResetCounts();
+            Assert(await setting.Save(), `S34 save failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            const savedID = setting.ID; // Delete() resets the instance, so hold the key for the removal assertions
+            try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const writes = ctx.Storage.RowDeltaWrites();
+                Assert(writes.length >= 1, `S34: the in-place upsert must write the slot with pubSubAction 'row_delta' (saw ${ctx.Storage.Writes.length} writes, none row_delta)`);
+                const upsert = writes[writes.length - 1];
+                Assert(typeof upsert.Options?.pubSubData === 'string', 'S34: a row_delta write must carry pubSubData');
+                const payload = JSON.parse(upsert.Options!.pubSubData!) as {
+                    upsertedRows: Array<Record<string, unknown>>;
+                    deletedPrimaryKeys: Array<Record<string, unknown>>;
+                    primaryKeyFields: string[];
+                    rowCount: number;
+                    maxUpdatedAt: string;
+                };
+                AssertEqual(payload.upsertedRows.length, 1, 'S34: the delta must carry exactly the one upserted row');
+                Assert(UUIDsEqual(String(payload.upsertedRows[0]['ID']), savedID), 'S34: the upserted row must be the saved record');
+                AssertEqual(payload.deletedPrimaryKeys.length, 0, 'S34: a save deletes nothing');
+                AssertEqual(payload.primaryKeyFields.join(','), 'ID', 'S34: primaryKeyFields names the entity PK');
+                AssertEqual(payload.rowCount, baselineCount + 1, 'S34: rowCount is the authoritative post-mutation slot size');
+                Assert(typeof payload.maxUpdatedAt === 'string' && payload.maxUpdatedAt.length > 0, 'S34: maxUpdatedAt is carried');
+                Assert(upsert.Options!.pubSubData!.length < JSON.stringify(baseline.Results).length + 2000,
+                    'S34: the broadcast payload must be compact (one row), not the whole cached array');
+            } finally {
+                ctx.Storage.ResetCounts();
+                Assert(await setting.Delete(), `S34 delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const deletes = ctx.Storage.RowDeltaWrites();
+            Assert(deletes.length >= 1, 'S34: the in-place removal must also write the slot as a row_delta');
+            const removal = JSON.parse(deletes[deletes.length - 1].Options!.pubSubData!) as {
+                upsertedRows: unknown[];
+                deletedPrimaryKeys: Array<Record<string, unknown>>;
+                rowCount: number;
+            };
+            AssertEqual(removal.upsertedRows.length, 0, 'S34: a delete upserts nothing');
+            AssertEqual(removal.deletedPrimaryKeys.length, 1, 'S34: the delta names exactly the one deleted key');
+            Assert(UUIDsEqual(String(removal.deletedPrimaryKeys[0]['ID']), savedID), 'S34: the deleted key is the removed record');
+            AssertEqual(removal.rowCount, baselineCount, 'S34: rowCount returns to the baseline after the delete');
         }
     }
 ];
