@@ -115,24 +115,25 @@ export class ContentVectorInfrastructure {
 
     /**
      * Resolve the target `MJ: Vector Indexes` row ID for a content source using the pipeline's
-     * vector-index resolution cascade:
+     * vector-index resolution cascade (`groupKeyFor`):
      * 1. `ContentSource.VectorIndexID`
      * 2. `ContentType.VectorIndexID`
-     * 3. `EntityDocument.VectorIndexID` (when `EntityDocumentID` is set on the source)
-     * 4. `ContentPipeline.DefaultVectorIndexID` on the active default `MJ: AI Configurations` row,
+     * 3. `ContentPipeline.DefaultVectorIndexID` on the active default `MJ: AI Configurations` row,
      *    or the sole vector index when `VectorIndexes.length === 1`.
+     *
+     * Returns `null` (and logs) when no default index can be unambiguously resolved, so callers
+     * recording an informational `VectorIndexID` do not abort ingestion.
      */
     public async ResolveVectorIndexID(source: {
         ID: string;
         ContentTypeID?: string | null;
         VectorIndexID?: string | null;
-        EntityDocumentID?: string | null;
-    }): Promise<string> {
+    }): Promise<string | null> {
         if (source.VectorIndexID) {
             return source.VectorIndexID;
         }
         const kh = KnowledgeHubMetadataEngine.Instance;
-        await kh.Config?.(false, this.contextUser, this.provider);
+        await kh.Config(false, this.contextUser, this.provider);
         const cachedSource = kh.GetContentSourceByID(source.ID);
         if (cachedSource?.VectorIndexID) {
             return cachedSource.VectorIndexID;
@@ -144,16 +145,16 @@ export class ContentVectorInfrastructure {
                 return contentType.VectorIndexID;
             }
         }
-        const entityDocumentID = source.EntityDocumentID ?? cachedSource?.EntityDocumentID;
-        if (entityDocumentID) {
-            const entityDocument = kh.GetEntityDocumentByID?.(entityDocumentID);
-            if (entityDocument?.VectorIndexID) {
-                return entityDocument.VectorIndexID;
-            }
+        try {
+            await AIEngine.Instance.Config(false, this.contextUser, this.provider);
+            const defaultIndex = await this.resolveDefaultVectorIndex();
+            return defaultIndex.ID;
+        } catch (error) {
+            LogError(
+                `ContentVectorInfrastructure.ResolveVectorIndexID: could not resolve default vector index for source '${source.ID}': ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return null;
         }
-        await AIEngine.Instance.Config(false, this.contextUser, this.provider);
-        const defaultIndex = await this.resolveDefaultVectorIndex();
-        return defaultIndex.ID;
     }
 
     /**

@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { AutotagBase, AutotagUpload } from '@memberjunction/content-autotagging';
+import { AutotagBase } from '@memberjunction/content-autotagging';
 import {
     BasePipelineStage,
     DiscoveredItem,
@@ -23,8 +23,6 @@ import {
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
 import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from '../ContentSourceConfigurationResolver.js';
-
-void AutotagUpload;
 
 /** The registered name. */
 export const DISCOVER_STAGE = 'Discover';
@@ -71,6 +69,14 @@ export class DiscoverStage extends BasePipelineStage {
         const isSync = IsSyncMode(context.Configuration);
         const { resolved, driver, isPushOnly } = await this.resolveWalkSource(contentSourceID, isSync, context);
         if (isPushOnly) {
+            const stampedAt = new Date();
+            record.SetExtension(
+                'Pipeline',
+                'columns',
+                isSync
+                    ? { LastDiscoveredAt: stampedAt, LastSyncedAt: stampedAt }
+                    : { ForceDiscovery: false, LastDiscoveredAt: stampedAt },
+            );
             return Outcome.Skipped(
                 `Driver '${resolved.DriverClass}' is push-only; ${isSync ? 'Sync' : 'Discover'} does not walk this source`,
             );

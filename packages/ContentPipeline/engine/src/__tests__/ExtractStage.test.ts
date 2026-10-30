@@ -20,6 +20,7 @@ import type { DetectionRow } from '../DetectionCatalog.js';
 /** Detection rules as metadata supplies them: html read by the test extractor, media not text. */
 const FILE_TYPES: DetectionRow[] = [
     { Name: 'HTML', FileExtension: '.html', ByteSignature: null, IsText: true, ExtractorKey: 'extract-html' },
+    { Name: 'DOCX', FileExtension: '.docx', ByteSignature: null, IsText: true, ExtractorKey: 'extract-docx' },
     { Name: 'PNG', FileExtension: '.png', ByteSignature: null, IsText: false, ExtractorKey: null },
     { Name: 'MP3', FileExtension: '.mp3', ByteSignature: null, IsText: false, ExtractorKey: null },
     { Name: 'MP4', FileExtension: '.mp4', ByteSignature: null, IsText: false, ExtractorKey: null },
@@ -34,6 +35,15 @@ class HtmlTestExtractor extends BaseContentExtractor {
     public readonly SupportedFileTypes = ['html'];
     public async Extract(_request: ExtractRequest): Promise<ExtractResult> {
         return blocks;
+    }
+}
+
+@RegisterClass(BaseContentExtractor, 'extract-docx')
+class DocxTestExtractor extends BaseContentExtractor {
+    public readonly Key = 'extract-docx';
+    public readonly SupportedFileTypes = ['docx'];
+    public async Extract(_request: ExtractRequest): Promise<ExtractResult> {
+        return { Blocks: [{ Text: 'read by the docx extractor' }] };
     }
 }
 
@@ -161,6 +171,49 @@ describe('ExtractStage — reading', () => {
 
         expect(outcome.Status).toBe('Complete');
         expect(fetchContent).not.toHaveBeenCalled();
+        expect(record.Get('FileType')).toBe('html');
+        expect(record.Get('Text')).toBe('read by the html extractor');
+    });
+
+    it('resolves an uploaded file named "Invoice #12.docx" to docx directly from MJ: Files.Name without cutting at #', async () => {
+        const { FileStorageEngine } = await import('@memberjunction/storage');
+        vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'uploads/blob-no-extension',
+            Driver: {
+                // ZIP local file header magic bytes (PK\x03\x04) — ambiguous zip signature that .docx must beat
+                GetObject: async () => Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]),
+            },
+        } as never);
+
+        const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'upload://file-invoice-12', 'ITEM-INVOICE-12'));
+        record.SetExtension('Pipeline', 'fileID', 'FILE-INVOICE-12');
+        record.Propose('Title', 'Unrelated display title', 4, 'Upload');
+
+        const outcome = await new ExtractStage().Run(record, {
+            ...contextWith(),
+            Provider: {
+                GetEntityObject: async () => ({
+                    Name: 'Invoice #12.docx',
+                    ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    ProviderID: 'P1',
+                    InnerLoad: async () => true,
+                }),
+            } as never,
+        });
+
+        expect(outcome.Status).toBe('Complete');
+        expect(record.Get('FileType')).toBe('docx');
+        expect(record.Get('Text')).toBe('read by the docx extractor');
+    });
+
+    it('does not treat a crawled RSS item titled "Node.js 22 released" as having a file extension', async () => {
+        stubFetch('Plain RSS article body about Node.js 22.');
+        const record = itemAt('https://blog.nodejs.org/release/v22');
+        record.Propose('Title', 'Node.js 22 released', 9, 'Discover.RSS');
+        record.Restore('FileType', 'html', 1, 'SourceDefault');
+
+        const outcome = await new ExtractStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
         expect(record.Get('FileType')).toBe('html');
         expect(record.Get('Text')).toBe('read by the html extractor');
     });

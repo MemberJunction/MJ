@@ -12,8 +12,8 @@
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJContentItemEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { AutotagBase, ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { IsRouteFailure, RouteVectorRecords } from '../VectorRouting.js';
 import {
     BasePipelineStage,
@@ -26,7 +26,6 @@ import {
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
-import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 import { WhereEqual } from '../Filters.js';
 
 /** The registered name for the chunk-level stage. */
@@ -111,7 +110,8 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
 
     /**
      * Remove the bytes this record was kept as, if any: the stored object and its `MJ: Files` row.
-     * Never deletes an uploaded file that belongs to the caller rather than a durable copy created by `ExtractStage`.
+     * For a caller-owned upload root (`upload://<fileId>` with matching `FileID`), clears `FileID`
+     * on the Content Item without deleting the storage object or `MJ: Files` row.
      *
      * @returns Whether a copy was removed, or null when there is one and it could not be reached.
      */
@@ -120,11 +120,21 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         if (!fileID) {
             return false;
         }
-        if (await this.isCallerOwnedFile(record, context)) {
-            return false;
-        }
+        const isCallerFile = this.isCallerOwnedFile(record, fileID);
         if (context.IsTest) {
-            return true;
+            return !isCallerFile;
+        }
+        if (isCallerFile) {
+            try {
+                await this.detachFileFromRecord(record, context);
+                return false;
+            } catch (error) {
+                throw new TransientStageError(
+                    `Detaching caller file for '${record.Identity.Key}' failed: ` +
+                        `${error instanceof Error ? error.message : String(error)}`,
+                    { cause: error },
+                );
+            }
         }
         try {
             const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
@@ -157,44 +167,18 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
     }
 
     /**
-     * True when `FileID` points to a caller-uploaded file rather than a durable copy created by `ExtractStage`
-     * (or when source ownership cannot be verified, failing safe to keep the file):
-     * 1. The item's locator uses the `upload://` scheme (set by `ContentUploadIngestor.Ingest`), or
-     * 2. The item's Content Source uses a push-only driver (`driver.IsPushOnly === true`).
+     * A file belongs to the caller when, and only when, the item's locator is
+     * exactly `upload://<fileId>` (no `#member` suffix) and its `FileID` equals
+     * that `<fileId>`. Everything else with a `FileID` is a durable copy made
+     * by `ExtractStage` (including archive members' durable copies).
      */
-    private async isCallerOwnedFile(record: WorkingRecord, context: StageContext): Promise<boolean> {
+    private isCallerOwnedFile(record: WorkingRecord, fileID: string): boolean {
         const url = record.Identity.EphemeralID;
-        if (typeof url === 'string' && url.startsWith('upload://')) {
-            return true;
-        }
-        const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
-        if (!contentSourceID) {
+        if (typeof url !== 'string' || !url.startsWith('upload://') || url.includes('#')) {
             return false;
         }
-        try {
-            const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
-            const resolved = await resolver.Resolve(contentSourceID, context.ContextUser);
-            if (!resolved.IsValid || !resolved.DriverClass) {
-                const detail = resolved.Problems.map((p) => p.Message).join('; ') || 'missing DriverClass';
-                LogError(
-                    `DeleteStage: could not verify ownership of FileID on '${record.Identity.Key}' (ContentSource '${contentSourceID}': ${detail}); keeping the file.`,
-                );
-                return true;
-            }
-            const driver = MJGlobal.Instance.ClassFactory.TryCreateInstance<AutotagBase>(AutotagBase, resolved.DriverClass);
-            if (!driver.Resolved || !driver.Instance) {
-                LogError(
-                    `DeleteStage: driver '${resolved.DriverClass}' for ContentSource '${contentSourceID}' is not registered; keeping the file on '${record.Identity.Key}'.`,
-                );
-                return true;
-            }
-            return driver.Instance.IsPushOnly === true;
-        } catch (error) {
-            LogError(
-                `DeleteStage: failed to resolve ContentSource '${contentSourceID}' while checking file ownership for '${record.Identity.Key}' (${error instanceof Error ? error.message : String(error)}); keeping the file.`,
-            );
-            return true;
-        }
+        const locatorFileID = url.slice('upload://'.length);
+        return locatorFileID.length > 0 && UUIDsEqual(locatorFileID, fileID);
     }
 
     /** Clear `FileID` on the owning Content Item before deleting its `MJ: Files` row, so `FK_ContentItem_File` does not block `spDeleteFile`. */
