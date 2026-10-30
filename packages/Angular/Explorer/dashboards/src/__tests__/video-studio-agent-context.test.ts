@@ -18,10 +18,13 @@ import {
     BuildProductionsAgentContext,
     FilterBrandKitCards,
     BuildBrandKitsAgentContext,
+    MapBrandKitToCard,
     FilterArchetypeCards,
     GroupArchetypesByCategory,
     BuildArchetypesAgentContext,
     BuildArchetypeBeatStripItems,
+    MapArchetypeToCard,
+    DeriveBeatKeyFromLabel,
     ARCHETYPE_CATEGORIES,
     ProductionCardSnapshot,
     ProductionFilterState,
@@ -287,6 +290,49 @@ describe('FilterBrandKitCards & BuildBrandKitsAgentContext', () => {
         expect(ctx['DefaultBrandKitCount']).toBe(1);
         expect(ctx['HasActiveFilters']).toBe(true);
     });
+
+    it('maps a Brand Kit entity row and assets into a BrandKitCardSnapshot via MapBrandKitToCard', () => {
+        const card = MapBrandKitToCard(
+            {
+                ID: 'kit-mapped-1',
+                Name: 'Acme Executive Kit',
+                Description: 'Executive palette',
+                CompanyID: 'comp-1',
+                Company: 'Acme Corp',
+                IsDefault: true,
+                Status: 'Active',
+                StyleObject: {
+                    Palette: [
+                        { Name: 'Primary', Value: ' #0F172A ' },
+                        { Name: '', Value: '#38BDF8' },
+                        { Name: 'Blank', Value: '   ' },
+                    ],
+                },
+            },
+            [
+                { AssetType: 'Font', FileID: 'file-font-1', IsPrimary: true, Sequence: 1 },
+                { AssetType: 'LogoMark', FileID: 'file-logomark-2', IsPrimary: false, Sequence: 2 },
+                { AssetType: 'Logo', FileID: 'file-logo-primary', IsPrimary: true, Sequence: 5 },
+            ],
+        );
+
+        expect(card).toEqual({
+            ID: 'kit-mapped-1',
+            Name: 'Acme Executive Kit',
+            Description: 'Executive palette',
+            CompanyID: 'comp-1',
+            CompanyName: 'Acme Corp',
+            IsDefault: true,
+            Status: 'Active',
+            Swatches: [
+                { Name: 'Primary', Value: '#0F172A' },
+                { Name: 'Color', Value: '#38BDF8' },
+            ],
+            PrimaryLogoFileID: 'file-logo-primary',
+            PrimaryLogoUrl: null,
+            AssetCount: 3,
+        });
+    });
 });
 
 // ============================================================================
@@ -361,6 +407,55 @@ describe('FilterArchetypeCards, GroupArchetypesByCategory & BuildArchetypesAgent
         expect(ctx['CompanyArchetypeCount']).toBe(1);
         expect(ctx['SelectedArchetypeId']).toBe('arch-1');
         expect(ctx['AvailableCategories']).toEqual([...ARCHETYPE_CATEGORIES]);
+    });
+
+    it('maps an archetype entity row into an ArchetypeCardSnapshot via MapArchetypeToCard and derives unique beat keys via DeriveBeatKeyFromLabel', () => {
+        const card = MapArchetypeToCard({
+            ID: 'arch-mapped-1',
+            Name: 'Data Story Walkthrough',
+            Description: 'Narrative chart breakdown',
+            Category: 'DataStory',
+            Status: 'Active',
+            CompanyID: null,
+            Company: null,
+            DefaultDurationSeconds: 60,
+            MinDurationSeconds: 30,
+            MaxDurationSeconds: 90,
+            DefaultFormats: '16:9, 9:16',
+            BeatTemplateObject: [
+                { Key: 'hook', Label: 'Hook', DefaultDurationSeconds: 20 },
+                { Key: 'insight', Label: 'Key Insight', DefaultDurationSeconds: 40 },
+            ],
+        });
+
+        expect(card).toEqual({
+            ID: 'arch-mapped-1',
+            Name: 'Data Story Walkthrough',
+            Description: 'Narrative chart breakdown',
+            Category: 'DataStory',
+            Status: 'Active',
+            CompanyID: null,
+            CompanyName: null,
+            IsShipped: true,
+            DefaultDurationSeconds: 60,
+            MinDurationSeconds: 30,
+            MaxDurationSeconds: 90,
+            DefaultFormats: '16:9, 9:16',
+            BeatCount: 2,
+            BeatLabels: ['Hook', 'Key Insight'],
+            BeatItems: [
+                { Key: 'hook', Label: 'Hook', Seconds: 20 },
+                { Key: 'insight', Label: 'Key Insight', Seconds: 40 },
+            ],
+        });
+
+        const used = new Set<string>();
+        const k1 = DeriveBeatKeyFromLabel('Call to Action!', 1, used);
+        const k2 = DeriveBeatKeyFromLabel('Call to Action!', 2, used);
+        const k3 = DeriveBeatKeyFromLabel('   ', 3, used);
+        expect(k1).toBe('call_to_action');
+        expect(k2).toBe('call_to_action_2');
+        expect(k3).toBe('beat_3');
     });
 });
 

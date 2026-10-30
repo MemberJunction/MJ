@@ -1,0 +1,474 @@
+<div class="vs-arch-editor" data-testid="vs-archetype-editor">
+  <div class="vs-arch-editor__body">
+    @if (SaveError) {
+      <div
+        class="vs-arch-editor__error"
+        role="alert"
+        data-testid="vs-arch-editor-error"
+      >
+        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+        <span>{{ SaveError }}</span>
+      </div>
+    }
+
+    <!-- Start from -->
+    <div class="vs-arch-editor__field">
+      <div class="vs-arch-editor__label-row">
+        <span class="vs-arch-editor__label" id="vs-arch-editor-start-from-label">
+          Start from
+        </span>
+        <span class="vs-arch-editor__hint">
+          Copies fields into this form without changing the original
+        </span>
+      </div>
+      <mj-dropdown
+        data-testid="vs-arch-editor-start-from"
+        AriaLabelledBy="vs-arch-editor-start-from-label"
+        [Data]="StartFromOptions"
+        TextField="Label"
+        ValueField="ID"
+        [ValuePrimitive]="true"
+        [ngModel]="SelectedSourceId"
+        (ngModelChange)="OnStartFromChange($event)"
+      ></mj-dropdown>
+    </div>
+
+    <!-- Name, Category, Company -->
+    <div class="vs-arch-editor__row-3">
+      <label class="vs-arch-editor__field">
+        <span class="vs-arch-editor__label">Name</span>
+        <input
+          type="text"
+          class="vs-arch-editor__input"
+          data-testid="vs-arch-editor-name"
+          placeholder="e.g. Quarterly Member Update"
+          [(ngModel)]="Name"
+          [disabled]="IsSaving"
+        />
+      </label>
+
+      <div class="vs-arch-editor__field">
+        <span class="vs-arch-editor__label" id="vs-arch-editor-category-label">
+          Category
+        </span>
+        <mj-dropdown
+          data-testid="vs-arch-editor-category"
+          AriaLabelledBy="vs-arch-editor-category-label"
+          [Data]="CategoryOptions"
+          TextField="Text"
+          ValueField="Value"
+          [ValuePrimitive]="true"
+          [(ngModel)]="Category"
+        ></mj-dropdown>
+      </div>
+
+      <div class="vs-arch-editor__field">
+        <span class="vs-arch-editor__label" id="vs-arch-editor-company-label">
+          Company
+        </span>
+        <mj-dropdown
+          data-testid="vs-arch-editor-company"
+          AriaLabelledBy="vs-arch-editor-company-label"
+          Placeholder="Select a company..."
+          [Data]="AvailableCompanies"
+          TextField="Name"
+          ValueField="ID"
+          [ValuePrimitive]="true"
+          [(ngModel)]="CompanyID"
+        ></mj-dropdown>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <label class="vs-arch-editor__field">
+      <div class="vs-arch-editor__label-row">
+        <span class="vs-arch-editor__label">Description</span>
+        <span class="vs-arch-editor__hint">
+          One short paragraph — the Director reads it to choose and shape this archetype
+        </span>
+      </div>
+      <textarea
+        class="vs-arch-editor__textarea"
+        data-testid="vs-arch-editor-description"
+        rows="2"
+        placeholder="Describe what this archetype is for and the story arc it follows..."
+        [(ngModel)]="Description"
+        [disabled]="IsSaving"
+      ></textarea>
+    </label>
+
+    <!-- Length & Formats -->
+    <div class="vs-arch-editor__length-formats">
+      <div class="vs-arch-editor__length-group">
+        <div class="vs-arch-editor__field">
+          <div class="vs-arch-editor__label-row">
+            <span class="vs-arch-editor__label" id="vs-arch-editor-default-dur-label">
+              Default length (s)
+            </span>
+            <span
+              class="vs-arch-editor__time-readout"
+              data-testid="vs-arch-editor-default-readout"
+            >
+              {{ FormatTime(DefaultDurationSeconds) }}
+            </span>
+          </div>
+          <mj-numeric-input
+            data-testid="vs-arch-editor-default-duration"
+            AriaLabelledBy="vs-arch-editor-default-dur-label"
+            [Min]="1"
+            [Max]="600"
+            [Step]="1"
+            [Disabled]="IsSaving"
+            [ngModel]="DefaultDurationSeconds"
+            (ngModelChange)="OnDefaultDurationChange($event)"
+          ></mj-numeric-input>
+        </div>
+
+        <div class="vs-arch-editor__field">
+          <div class="vs-arch-editor__label-row">
+            <span class="vs-arch-editor__label" id="vs-arch-editor-min-dur-label">
+              Shortest (s)
+            </span>
+            <span
+              class="vs-arch-editor__time-readout"
+              data-testid="vs-arch-editor-min-readout"
+            >
+              {{ FormatTime(MinDurationSeconds) }}
+            </span>
+          </div>
+          <mj-numeric-input
+            data-testid="vs-arch-editor-min-duration"
+            AriaLabelledBy="vs-arch-editor-min-dur-label"
+            [Min]="1"
+            [Max]="600"
+            [Step]="1"
+            [Disabled]="IsSaving"
+            [ngModel]="MinDurationSeconds"
+            (ngModelChange)="OnMinDurationChange($event)"
+          ></mj-numeric-input>
+        </div>
+
+        <div class="vs-arch-editor__field">
+          <div class="vs-arch-editor__label-row">
+            <span class="vs-arch-editor__label" id="vs-arch-editor-max-dur-label">
+              Longest (s)
+            </span>
+            <span
+              class="vs-arch-editor__time-readout"
+              data-testid="vs-arch-editor-max-readout"
+            >
+              {{ FormatTime(MaxDurationSeconds) }}
+            </span>
+          </div>
+          <mj-numeric-input
+            data-testid="vs-arch-editor-max-duration"
+            AriaLabelledBy="vs-arch-editor-max-dur-label"
+            [Min]="1"
+            [Max]="600"
+            [Step]="1"
+            [Disabled]="IsSaving"
+            [ngModel]="MaxDurationSeconds"
+            (ngModelChange)="OnMaxDurationChange($event)"
+          ></mj-numeric-input>
+        </div>
+      </div>
+
+      <div class="vs-arch-editor__field">
+        <span class="vs-arch-editor__label">Formats</span>
+        <div
+          class="vs-arch-editor__format-toggles"
+          role="group"
+          aria-label="Default video formats"
+        >
+          @for (format of AvailableFormats; track format) {
+            <button
+              type="button"
+              mjButton
+              Variant="outline"
+              Size="sm"
+              [Toggleable]="true"
+              [Selected]="IsFormatSelected(format)"
+              [attr.data-testid]="'vs-arch-editor-format-' + format"
+              [disabled]="IsSaving"
+              (click)="ToggleFormat(format)"
+            >
+              <mj-video-format-glyph [Format]="format" Size="sm"></mj-video-format-glyph>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Beats -->
+    <section class="vs-arch-editor__beats-section" data-testid="vs-arch-editor-beats-section">
+      <div class="vs-arch-editor__beats-header">
+        <span class="vs-arch-editor__label">
+          Beats ({{ Beats.length }})
+        </span>
+        <span class="vs-arch-editor__time-readout" data-testid="vs-arch-editor-beats-sum">
+          {{ FormatTime(BeatsTotalSeconds) }} total
+        </span>
+      </div>
+
+      <mj-video-beat-strip
+        data-testid="vs-arch-editor-beat-strip"
+        [Beats]="LiveBeatStripItems"
+      ></mj-video-beat-strip>
+
+      @if (HasBeatsDurationMismatch) {
+        <div
+          class="vs-arch-editor__mismatch"
+          data-testid="vs-arch-editor-beats-mismatch"
+        >
+          <span class="vs-arch-editor__mismatch-text">
+            Beats add up to {{ FormatTime(BeatsTotalSeconds) }} of {{ FormatTime(DefaultDurationSeconds) }}
+          </span>
+          <button
+            type="button"
+            mjButton
+            Variant="flat"
+            Size="sm"
+            data-testid="vs-arch-editor-fit-to-length"
+            [disabled]="IsSaving"
+            (click)="FitBeatsToLength()"
+          >
+            <span>Fit to length</span>
+          </button>
+        </div>
+      }
+
+      <div class="vs-arch-editor__beat-rows">
+        @for (beat of Beats; track beat.TrackId; let idx = $index) {
+          <div
+            class="vs-arch-editor__beat-row"
+            [attr.data-testid]="'vs-arch-editor-beat-row-' + idx"
+          >
+            <span class="vs-arch-editor__beat-index" aria-hidden="true">
+              {{ idx + 1 }}
+            </span>
+
+            <input
+              type="text"
+              class="vs-arch-editor__input vs-arch-editor__beat-label-input"
+              [attr.data-testid]="'vs-arch-editor-beat-label-' + idx"
+              [attr.aria-label]="'Beat ' + (idx + 1) + ' label'"
+              placeholder="Beat label"
+              [ngModel]="beat.Label"
+              (ngModelChange)="OnBeatLabelChange(idx, $event)"
+              [disabled]="IsSaving"
+            />
+
+            <input
+              type="text"
+              class="vs-arch-editor__input vs-arch-editor__beat-purpose-input"
+              [attr.data-testid]="'vs-arch-editor-beat-purpose-' + idx"
+              [attr.aria-label]="'Beat ' + (idx + 1) + ' purpose'"
+              placeholder="What this beat accomplishes"
+              [ngModel]="beat.Purpose"
+              (ngModelChange)="OnBeatPurposeChange(idx, $event)"
+              [disabled]="IsSaving"
+            />
+
+            <div class="vs-arch-editor__beat-seconds-wrap">
+              <mj-numeric-input
+                [attr.data-testid]="'vs-arch-editor-beat-seconds-' + idx"
+                [AriaLabel]="'Beat ' + (idx + 1) + ' seconds'"
+                [Min]="1"
+                [Max]="600"
+                [Step]="1"
+                [Disabled]="IsSaving"
+                [ngModel]="beat.Seconds"
+                (ngModelChange)="OnBeatSecondsChange(idx, $event)"
+              ></mj-numeric-input>
+              <span class="vs-arch-editor__beat-time-readout">
+                {{ FormatTime(beat.Seconds) }}
+              </span>
+            </div>
+
+            <div class="vs-arch-editor__beat-actions">
+              <button
+                type="button"
+                mjButton
+                Variant="icon"
+                Size="sm"
+                [AriaLabel]="'Move beat ' + (idx + 1) + ' up'"
+                [attr.data-testid]="'vs-arch-editor-beat-up-' + idx"
+                [disabled]="IsSaving || idx === 0"
+                (click)="MoveBeatUp(idx)"
+              >
+                <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+              </button>
+              <button
+                type="button"
+                mjButton
+                Variant="icon"
+                Size="sm"
+                [AriaLabel]="'Move beat ' + (idx + 1) + ' down'"
+                [attr.data-testid]="'vs-arch-editor-beat-down-' + idx"
+                [disabled]="IsSaving || idx === Beats.length - 1"
+                (click)="MoveBeatDown(idx)"
+              >
+                <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+              </button>
+              <button
+                type="button"
+                mjButton
+                Variant="icon"
+                Size="sm"
+                [AriaLabel]="'Remove beat ' + (idx + 1)"
+                [attr.data-testid]="'vs-arch-editor-beat-remove-' + idx"
+                [disabled]="IsSaving || Beats.length <= 1"
+                (click)="RemoveBeat(idx)"
+              >
+                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="vs-arch-editor__beats-footer">
+        <button
+          type="button"
+          mjButton
+          Variant="outline"
+          Size="sm"
+          data-testid="vs-arch-editor-add-beat"
+          [disabled]="IsSaving"
+          (click)="AddBeat()"
+        >
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>Add beat</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Advanced (collapsed) -->
+    <section class="vs-arch-editor__advanced">
+      <button
+        type="button"
+        class="vs-arch-editor__advanced-toggle"
+        data-testid="vs-arch-editor-advanced-toggle"
+        [attr.aria-expanded]="IsAdvancedOpen"
+        (click)="ToggleAdvanced()"
+      >
+        <i
+          class="fa-solid"
+          [class.fa-chevron-right]="!IsAdvancedOpen"
+          [class.fa-chevron-down]="IsAdvancedOpen"
+          aria-hidden="true"
+        ></i>
+        <span>Advanced (guidance, pacing, data binding)</span>
+      </button>
+
+      @if (IsAdvancedOpen) {
+        <div
+          class="vs-arch-editor__advanced-body"
+          data-testid="vs-arch-editor-advanced-body"
+        >
+          <label class="vs-arch-editor__field">
+            <span class="vs-arch-editor__label">Guidance (markdown)</span>
+            <textarea
+              class="vs-arch-editor__textarea"
+              data-testid="vs-arch-editor-guidance"
+              rows="3"
+              placeholder="Markdown guidance for the Director and Storyboard..."
+              [(ngModel)]="Guidance"
+              [disabled]="IsSaving"
+            ></textarea>
+          </label>
+
+          <div class="vs-arch-editor__pacing-grid">
+            <div class="vs-arch-editor__field">
+              <div class="vs-arch-editor__label-row">
+                <span class="vs-arch-editor__label" id="vs-arch-editor-pacing-avg-label">
+                  Average cut cadence (s)
+                </span>
+                <span class="vs-arch-editor__time-readout">
+                  {{ FormatTime(PacingAvgSeconds) }}
+                </span>
+              </div>
+              <mj-numeric-input
+                data-testid="vs-arch-editor-pacing-avg"
+                AriaLabelledBy="vs-arch-editor-pacing-avg-label"
+                [Min]="1"
+                [Max]="60"
+                [Step]="1"
+                [Disabled]="IsSaving"
+                [(ngModel)]="PacingAvgSeconds"
+              ></mj-numeric-input>
+            </div>
+
+            <label class="vs-arch-editor__field">
+              <span class="vs-arch-editor__label">Hold rules</span>
+              <input
+                type="text"
+                class="vs-arch-editor__input"
+                data-testid="vs-arch-editor-pacing-hold-rules"
+                placeholder="e.g. Hold key numbers and charts for at least 3 seconds"
+                [(ngModel)]="PacingHoldRules"
+                [disabled]="IsSaving"
+              />
+            </label>
+          </div>
+
+          <div class="vs-arch-editor__field">
+            <span class="vs-arch-editor__label">Beat data binding &amp; guidance</span>
+            <div class="vs-arch-editor__advanced-beats">
+              @for (beat of Beats; track beat.TrackId; let idx = $index) {
+                <div class="vs-arch-editor__advanced-beat-row">
+                  <span class="vs-arch-editor__advanced-beat-name">
+                    {{ idx + 1 }}. {{ beat.Label || 'Beat ' + (idx + 1) }}
+                  </span>
+                  <div class="vs-arch-editor__advanced-beat-switch">
+                    <mj-switch
+                      [attr.data-testid]="'vs-arch-editor-beat-databinding-' + idx"
+                      [AriaLabel]="'Requires data binding for ' + (beat.Label || 'Beat ' + (idx + 1))"
+                      [Disabled]="IsSaving"
+                      [(ngModel)]="beat.RequiresDataBinding"
+                    ></mj-switch>
+                    <span class="vs-arch-editor__hint">Data bound</span>
+                  </div>
+                  <input
+                    type="text"
+                    class="vs-arch-editor__input"
+                    [attr.data-testid]="'vs-arch-editor-beat-guidance-' + idx"
+                    [attr.aria-label]="'Guidance for ' + (beat.Label || 'Beat ' + (idx + 1))"
+                    placeholder="Optional beat guidance..."
+                    [(ngModel)]="beat.Guidance"
+                    [disabled]="IsSaving"
+                  />
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </section>
+  </div>
+
+  <footer class="vs-arch-editor__footer">
+    <button
+      type="button"
+      mjButton
+      Variant="primary"
+      Size="md"
+      data-testid="vs-arch-editor-save"
+      [disabled]="IsSaving"
+      (click)="Save()"
+    >
+      <span>{{ IsSaving ? 'Saving...' : 'Save' }}</span>
+    </button>
+    <button
+      type="button"
+      mjButton
+      Variant="secondary"
+      Size="md"
+      data-testid="vs-arch-editor-cancel"
+      [disabled]="IsSaving"
+      (click)="Cancel()"
+    >
+      <span>Cancel</span>
+    </button>
+  </footer>
+</div>

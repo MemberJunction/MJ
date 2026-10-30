@@ -16,6 +16,7 @@ import {
   MJDialogComponent,
   MJDropdownComponent,
   MJEmptyStateComponent,
+  MJFilterChipComponent,
   MJFilterFieldComponent,
   MJFilterPanelComponent,
   MJFilterPopoverComponent,
@@ -26,7 +27,9 @@ import {
   MJPageSearchComponent,
   MJRefreshButtonComponent,
   MJStatBadgeComponent,
+  MJSwitchComponent,
 } from '@memberjunction/ng-ui-components';
+import { VSArchetypeEditorComponent } from './VideoStudio/components/vs-archetype-editor.component';
 import { VSAudioOptionsComponent } from './VideoStudio/components/vs-audio-options.component';
 import { VSCopilotPanelComponent } from './VideoStudio/components/vs-copilot-panel.component';
 import { VSProductionBriefComponent } from './VideoStudio/components/vs-production-brief.component';
@@ -57,6 +60,7 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     BrandKitCreatorComponent,
     ArtifactShareModalComponent,
     ArtifactCollectionPickerModalComponent,
+    VSArchetypeEditorComponent,
     VSAudioOptionsComponent,
     VSProductionBriefComponent,
     VSCopilotPanelComponent,
@@ -69,6 +73,7 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     MJDialogActionsComponent,
     MJDropdownComponent,
     MJEmptyStateComponent,
+    MJFilterChipComponent,
     MJNumericInputComponent,
     MJPageLayoutComponent,
     MJPageHeaderComponent,
@@ -79,11 +84,13 @@ import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources
     MJFilterFieldComponent,
     MJRefreshButtonComponent,
     MJStatBadgeComponent,
+    MJSwitchComponent,
   ],
   exports: [
     VideoStudioProductionsResourceComponent,
     VideoStudioBrandKitsResourceComponent,
     VideoStudioArchetypesResourceComponent,
+    VSArchetypeEditorComponent,
     VSAudioOptionsComponent,
     VSProductionBriefComponent,
     VSCopilotPanelComponent,
@@ -97,6 +104,7 @@ export {
   VideoStudioProductionsResourceComponent,
   VideoStudioBrandKitsResourceComponent,
   VideoStudioArchetypesResourceComponent,
+  VSArchetypeEditorComponent,
   VSAudioOptionsComponent,
   VSProductionBriefComponent,
   VSCopilotPanelComponent,

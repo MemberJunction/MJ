@@ -17,10 +17,10 @@
  *     saves the form, then deletes the created kit from its card
  *     (`[data-testid^="brand-kit-delete-"]`).
  *   • Archetypes tab (`VideoStudioArchetypesResource`) — opens a shipped
- *     archetype card, verifies `archetype-shipped-readonly-banner`, clicks
- *     `archetype-clone-button`, picks a company in
- *     `archetype-clone-company-select`, clicks `archetype-clone-confirm`, and
- *     expects the new company-owned archetype's entity form.
+ *     archetype card in `archetypes-grid`, verifies `archetype-shipped-readonly-banner`,
+ *     clicks `archetype-make-copy-button`, edits the name in `vs-archetype-editor`
+ *     (`archetype-editor-name-input`), saves via `archetype-editor-save-btn`, and
+ *     verifies the new company-owned archetype card appears.
  *
  * NOTE: VS-UX-2 extends this spec with the second half (conversational
  * Video Producer / Sage storyboard creation + Productions gallery playback).
@@ -165,7 +165,7 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
     await expect(createdCard).toBeHidden({ timeout: 30_000 });
   });
 
-  test('Archetypes tab opens a shipped card, verifies read-only banner, clones to a company, and opens the new archetype form', async ({
+  test('Archetypes tab opens a shipped card, verifies read-only banner, makes a copy in vs-archetype-editor, and saves the new company archetype', async ({
     page,
   }) => {
     await openVideoStudioTab(page, 'Archetypes');
@@ -173,8 +173,8 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
       page.locator('mj-video-studio-archetypes-resource'),
     ).toBeVisible({ timeout: 30_000 });
 
-    const groups = page.getByTestId('archetypes-groups');
-    await expect(groups).toBeVisible({ timeout: 30_000 });
+    const grid = page.getByTestId('archetypes-grid');
+    await expect(grid).toBeVisible({ timeout: 30_000 });
 
     const shippedCard = page
       .locator('[data-testid^="archetype-card-"]')
@@ -188,28 +188,25 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
     await expect(slideout).toBeVisible();
     await expect(slideout.getByTestId('archetype-shipped-readonly-banner')).toBeVisible();
 
-    const cloneBtn = slideout.getByTestId('archetype-clone-button');
-    await expect(cloneBtn).toBeVisible();
-    await cloneBtn.click();
+    const makeCopyBtn = slideout.getByTestId('archetype-make-copy-button');
+    await expect(makeCopyBtn).toBeVisible();
+    await makeCopyBtn.click();
 
-    const cloneDialog = page.getByTestId('archetype-clone-dialog');
-    await expect(cloneDialog).toBeVisible();
+    const editor = page.getByTestId('vs-archetype-editor');
+    await expect(editor).toBeVisible();
 
-    const cloneNameInput = cloneDialog.getByTestId('archetype-clone-name-input');
-    await expect(cloneNameInput).toBeVisible();
-    await cloneNameInput.fill(`E2E Cloned Archetype ${Date.now()}`);
+    const editorNameInput = editor.getByTestId('vs-arch-editor-name');
+    await expect(editorNameInput).toBeVisible();
+    const copyName = `E2E Copied Archetype ${Date.now()}`;
+    await editorNameInput.fill(copyName);
 
-    const companySelect = cloneDialog.getByTestId('archetype-clone-company-select');
-    await expect(companySelect).toBeVisible();
-    await companySelect.selectOption({ index: 1 });
+    const saveBtn = editor.getByTestId('vs-arch-editor-save');
+    await expect(saveBtn).toBeVisible();
+    await saveBtn.click();
 
-    const confirmCloneBtn = cloneDialog.getByTestId('archetype-clone-confirm');
-    await expect(confirmCloneBtn).toBeVisible();
-    await confirmCloneBtn.click();
-
-    await expect(page.locator('mj-record-form-container').first()).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(
+      page.locator('[data-testid^="archetype-card-"]').filter({ hasText: copyName }).first(),
+    ).toBeVisible({ timeout: 30_000 });
   });
 });
 
