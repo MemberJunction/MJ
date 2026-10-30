@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT138 - Query Extraction Correctness",
+    "Description": "Saves fixture queries with extraction on (a normal save) over a fixture schema (mjit_extract: two tables and a view over a view, created and dropped by the bundle) and core MJ views, and asserts exactly what extraction wrote, on SQL Server and PostgreSQL. QE1 field rows of a query over tables: order, base and full type per platform, nullability (SQL Server reports it; PostgreSQL's describe does not), computed, and the schema.object source of a column no entity backs. QE2 a query over a view on a view keeps the inner types. QE3 a query over __mj.vwUsers binds each column to its MJ: Users field. QE4 Query Entities lists entities read in a CTE body, a join and an EXISTS subquery, never a CTE name spelled like an entity view. QE5 parameters are required only when a use sits outside every if, typed by their filters, with defaults and doc-comment and trailing --: descriptions on the right rows. QE6 the fields are the union of every branch render, with a note naming the else-branch column. QE7 an external-data-source query is Skipped and gets no fields. QE8 a query whose table is named by a template parameter keeps its declared fields. QE9 two output columns with one name are refused at save. QE10 ExtractionStatus, ExtractedSQLHash and UsesTemplate are recorded. QE11 a composition that leaves out a required parameter of its target is refused at save (MJQ_COMPOSITION_MISSING_ARGUMENT); one that passes it records its dependency by full path with the argument mapping. QE12 a JSDoc-style header (leading stars, an optional {type}, a '- ' separator, continuation lines, a bracket- or double-quoted field name) describes parameters and fields, and a header description beats a trailing --: one (MJQ_DOC_DUPLICATE, a located Warning); the {type} is not stored (Type follows the filter) and the summary is not written to the query's Description. QE13 an @param naming no parameter (MJQ_DOC_UNKNOWN_PARAMETER) and an unknown @tag (MJQ_DOC_UNKNOWN_TAG) are located Warnings in ExtractionMessage and write no row. QE14 an unpassed target parameter named like an outer parameter (MJQ_COMPOSITION_IMPLICIT_ARGUMENT) refuses the save of a new query, writing no query or dependency row, and is a Warning when a stored query (saved with extraction off) is refreshed. QE15 arithmetic and Context-token composition arguments are recorded in ParameterMapping as expressions, and the outer parameter they read is one required parameter of the composer; Context is never a parameter. Self-cleaning.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Extraction writes exactly the fields, entities and parameters the SQL and the database server establish, on both platforms."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "query-extraction"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C8A4A26F-EEFA-421D-A7D2-C97A3D22D263"
+  },
+  "sync": {
+    "lastModified": "2026-10-28T22:16:26.098Z",
+    "checksum": "b3ac91bdb4c5a0d03004cbb378e700b14113075fe470b063965844387f6f5131"
+  }
+}

@@ -38,6 +38,9 @@ const ssDialect = new SQLServerDialect();
  */
 @RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
+    /** Widest key SQL Server accepts for a nonclustered index without failing later writes. */
+    private static readonly MAX_NONCLUSTERED_INDEX_KEY_BYTES = 1700;
+
     /** @inheritdoc */
     get Dialect(): SQLDialect {
         return ssDialect;
@@ -648,6 +651,21 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
      */
     protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
         return f.Length !== -1;
+    }
+
+    /**
+     * SQL Server refuses an unbounded column as an index key (error 1919), so the statement fails
+     * on every run. A key wider than 1,700 bytes is created with only a warning (1945), and any
+     * later insert or update of a longer value then fails. `Length` is in bytes for `nvarchar`.
+     */
+    protected ForeignKeyIndexSkipReason(f: EntityFieldInfo): string | null {
+        if (!this.isIndexableKeyColumn(f)) {
+            return 'unbounded, which SQL Server cannot use as an index key';
+        }
+        if (f.Length > SQLServerCodeGenProvider.MAX_NONCLUSTERED_INDEX_KEY_BYTES) {
+            return `${f.Length} bytes, over SQL Server's ${SQLServerCodeGenProvider.MAX_NONCLUSTERED_INDEX_KEY_BYTES}-byte index key limit`;
+        }
+        return null;
     }
 
     protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {

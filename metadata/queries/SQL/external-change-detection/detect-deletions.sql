@@ -7,7 +7,7 @@ SELECT
 FROM 
     __mj.vwRecordChanges rc
 LEFT JOIN 
-    [{{ SchemaName }}].[{{ BaseView }}] ot 
+    {{ SchemaName | sqlIdentifier }}.{{ BaseView | sqlIdentifier }} ot 
     ON 
     rc.RecordID = {{ PrimaryKeyJoin }}
 WHERE 
