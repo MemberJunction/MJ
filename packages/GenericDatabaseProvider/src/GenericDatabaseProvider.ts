@@ -4171,7 +4171,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             serverCached: resolved.serverCached,
                             fingerprint: resolved.fingerprint,
                         });
+                    } else if (entityInfo.TrackRecordChanges) {
+                        // The client's copy is older and the entity tracks record changes: Phase 2 reads
+                        // the DB status and sends only the changed rows, not the full cached copy.
+                        serverCacheMissItems.push({ index, item, entityInfo });
                     } else {
+                        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${resolved.serverCached!.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
                         serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
                     }
                 } else {
@@ -4186,6 +4191,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
+            /** Queues a differential reply: the rows changed since the client's copy, and the deleted IDs. */
+            const queueDifferential = (
+                index: number,
+                item: RunViewWithCacheCheckParams,
+                entityInfo: EntityInfo,
+                whereSQL: string,
+                serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+            ): void => {
+                LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${item.params.EntityName || 'unknown'}" — sending only changed rows (from DB)`, verboseOnly: true });
+                differentialItems.push({
+                    index, params: item.params, entityInfo, whereSQL,
+                    clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
+                    clientRowCount: item.cacheStatus!.rowCount,
+                    serverStatus,
+                });
+            };
 
             if (serverCacheMissItems.length > 0) {
                 // Build WHERE clauses and run batched DB status check only for cache misses / TTL-expired slots
@@ -4229,6 +4250,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
+                            } else if (entityInfo.TrackRecordChanges) {
+                                queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
                             } else {
                                 LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-VERIFIED-CACHE] "${entityLabel}" — server cache verified against DB, serving ${serverCached.rowCount} rows without full SQL query`, verboseOnly: true });
                                 serverCacheStaleItems.push({ index, item, entityInfo, serverCached });
@@ -4252,13 +4275,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
                     } else if (entityInfo.TrackRecordChanges) {
-                        LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${entityLabel}" — sending only changed rows (from DB)`, verboseOnly: true });
-                        differentialItems.push({
-                            index, params: item.params, entityInfo, whereSQL,
-                            clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
-                            clientRowCount: item.cacheStatus!.rowCount,
-                            serverStatus,
-                        });
+                        queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
                     } else {
                         LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
@@ -4312,7 +4329,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ...noCacheStatusNeedsDB.map(({ index, item }) =>
                     this.runFullQueryAndCacheResult<T>(item.params, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
-                // Server cache stale — serve from server's cached data (zero DB)
+                // Server cache newer than the client, no change tracking — serve from server's cached data (zero DB)
                 ...serverCacheStaleItems.map(({ index, serverCached }) =>
                     this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
                 ),
@@ -4763,7 +4780,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Checks the server's LocalCacheManager for cached data matching the client's request.
-     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
+     * Returns the resolution if found ('current', 'stale' when the server slot is newer than the client's copy, or
      * 'needs_verification' when the server slot's freshness window has elapsed),
      * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
      */
@@ -4830,8 +4847,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return { status: 'current', result: { viewIndex: index, status: 'current' } };
         }
 
-        // Server has newer data than client — we can serve it directly from cache
-        LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-CACHE] "${entityLabel}" — serving ${cached.rowCount} rows from server cache, no DB hit`, verboseOnly: true });
+        // Server has newer data than the client; the caller decides between the cached copy and a differential
         return { status: 'stale', serverCached: cached };
     }
 
