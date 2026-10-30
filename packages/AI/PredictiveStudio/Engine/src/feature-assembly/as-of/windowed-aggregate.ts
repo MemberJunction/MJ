@@ -8,10 +8,9 @@
  * boolean or text).
  */
 import { OrdinalCompare } from '@memberjunction/global';
-import type { WindowedAggregateSource } from '@memberjunction/predictive-studio-core';
+import { MS_PER_DAY, UtcDay, type CellValue, type WindowedAggregateSource } from '@memberjunction/predictive-studio-core';
 import type { SourceRow } from '../data-access';
 import { PredictionUnitRowReader } from '../../prediction-unit/unit-row-reader';
-import { MS_PER_DAY, UtcDay, type CellValue } from '../../prediction-unit/utc-day';
 import { AssemblyRefused } from './refusal';
 
 /** One child row reduced to what an as-of aggregate reads: its day, end and void days, value and change stamp. */

@@ -44,7 +44,7 @@
  * processor dynamically by work-type key via {@link resolveMLInferenceProcessor}.
  */
 
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView } from '@memberjunction/core';
 import type {
   IRecordProcessor,
@@ -55,7 +55,7 @@ import type {
 import type {
   MJMLModelEntity,
 } from '@memberjunction/core-entities';
-import {
+import { UtcDay,
   resolveOutcomeConfig,
   resolveScoreBand,
   resolveOutcomeStyle,
@@ -86,11 +86,10 @@ import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-his
 import type { SeriesHistory } from '../feature-assembly/as-of/series-features';
 import { PredictionUnitRowReader } from '../prediction-unit/unit-row-reader';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
-import { UtcDay } from '../prediction-unit/utc-day';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { UnitModelLineageParser } from '../training/unit-model-lineage';
-import { RunViewPipelineUnitLookup } from './seams';
+import { RunViewPipelineUnitLookup, RunViewTrainingRowsLookup } from './seams';
 import {
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
@@ -236,7 +235,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       if (!prediction) {
         return { Status: 'Failed', ErrorMessage: 'Sidecar returned no prediction for the record' };
       }
-      return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction) };
+      return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction, record.RecordID) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: scoring failed for record '${record.RecordID}': ${message}`);
@@ -264,10 +263,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       const rows = records.map((r) => this.recordToPlain(r));
       const assembly = await this.assembleFeatures(model, rows, context);
       const response = await this.callSidecar(model, assembly);
-      return records.map((_r, i) => {
+      return records.map((r, i) => {
         const prediction = response.predictions[i];
         return prediction
-          ? { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) }
+          ? { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction, r.RecordID) }
           : { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
       });
     } catch (err) {
@@ -362,6 +361,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       leakageGuard: pipeline.leakageGuard,
       outcomeConfig: pipeline.outcomeConfig,
       unit,
+      trainingRowIds: new UUIDSet(await (this.deps.trainingRows || new RunViewTrainingRowsLookup()).TrainingRowIdsOf(model.ID, context.ContextUser, context.Provider)),
     };
   }
 
@@ -635,8 +635,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   // region: result shaping ------------------------------------------------------
 
-  /** Shape a single sidecar prediction into the record result payload. */
-  private toPayload(model: LoadedModel, prediction: Prediction): MLInferenceResultPayload {
+  /** Shape a single sidecar prediction for the record `recordId` (its serialized key) into the record result payload. */
+  private toPayload(model: LoadedModel, prediction: Prediction, recordId: string): MLInferenceResultPayload {
     const band = resolveScoreBand(prediction.score, model.outcomeConfig);
     const style = resolveOutcomeStyle(prediction.class, model.outcomeConfig);
     return {
@@ -657,6 +657,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // Stamp when the prediction was produced so write-back can persist a "last scored at"
       // column via OutputMapping (`{ "<YourColumn>": "$.scoredAt" }`). ISO-8601 UTC.
       scoredAt: new Date().toISOString(),
+      inTraining: model.trainingRowIds.Has(recordId),
     };
   }
 
@@ -701,6 +702,12 @@ export interface MLInferenceResultPayload {
    * which moves on any edit, not just scoring.
    */
   scoredAt: string;
+  /**
+   * True when this record contributed a development row to the model's Training Snapshot (its id is a development row
+   * id of the snapshot's manifest): per row, so a record held out in the locked holdout, or never in the snapshot, is
+   * false. Always false for a model trained without a snapshot.
+   */
+  inTraining: boolean;  // case-violation-ok-legacy-back-compat: matches the existing MLInferenceResultPayload member casing
   /** Qualitative status label evaluated against model OutcomeConfig (e.g. "High", "Low Risk", "Severe"). */
   status?: string;
   /** Normalized status tier key (e.g. "high", "medium", "low"). */

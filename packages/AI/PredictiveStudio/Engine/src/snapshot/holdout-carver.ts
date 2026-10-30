@@ -2,65 +2,187 @@
  * @module snapshot/holdout-carver
  *
  * Assigns each assembled row its manifest role before the snapshot is written; the roles are part of the manifest,
- * so they are part of the snapshot's fingerprint.
+ * so they are part of the snapshot's fingerprint. The locked holdout is the one the bound Evaluation Protocol declares
+ * ({@link HoldoutCarvers.CarverForProtocol}, the one place a holdout kind maps to a carver): a date carve on the
+ * declared column, a seeded row-hash carve, or a forecast's rolling-origin test periods. Each carver records what it
+ * carved ({@link IHoldoutCarver.Summary}), and the run stores that summary with its results.
  */
-import { HoldoutCarve, type HoldoutSplit, type SnapshotRowRole } from '@memberjunction/predictive-studio-core';
+import {
+  HoldoutCarve, UtcDay,
+  type CarveRow, type DecisionSpec, type EvaluationProtocolSpec, type HoldoutCarveSummary, type HoldoutSplit, type PredictionUnitSpec,
+  type SnapshotRowRole,
+} from '@memberjunction/predictive-studio-core';
 import type { AssembledRow } from '../feature-assembly/as-of/as-of-assembler';
-import { LockedHoldoutSplitter } from '../training/locked-holdout';
+import type { UnitRow } from '../prediction-unit/unit-row-reader';
 import { TrainingRefusedError } from '../training/training-refusal';
-import { UtcDay } from '../prediction-unit/utc-day';
 
-/** Assigns every assembled row a manifest role, by row id. */
+type DateCarved = Extract<HoldoutSplit, { readonly kind: 'date-carved' }>;
+type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
+
+/** The date column a date carve reads from the unit row itself, rather than from the row's source fields. */
+const DECISION_DATE_COLUMN = 'DecisionDate';
+
+/**
+ * Assigns the assembled rows their manifest roles and records what it carved. The carve reads only the unit rows'
+ * dates, keys and labels and the protocol, never the order the rows arrive in.
+ */
 export interface IHoldoutCarver {
-  AssignRoles(rows: readonly AssembledRow[]): ReadonlyMap<string, SnapshotRowRole>;
+  /**
+   * The roles of the rows kept in the snapshot, by row id. A row absent from the map is left out of the snapshot (a
+   * date carve's rows on or after `holdoutEnd`); the summary counts it.
+   *
+   * @param rows the assembled rows
+   * @param unitRows the unit row behind each assembled row, by row id
+   * @throws TrainingRefusedError (`carve` stage) when the holdout cannot be carved
+   */
+  AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): ReadonlyMap<string, SnapshotRowRole>;
+  /** What the last {@link AssignRoles} carved, as the run stores it; null before any carve. */
+  Summary(): HoldoutCarveSummary | null;
 }
 
 /**
- * Holds out the trailing fraction of the rows: the latest decisions are the locked holdout, so the model is judged on
- * decisions made after every decision it learned from.
- *
- * It relies on the rows arriving in decision-date order and does not re-sort them: the unit row reader sorts the unit
- * rows by decision date, then row id, and the assembler keeps that order. The holdout size follows the locked-holdout
- * rule: at least one row for a positive fraction, never every row, none when there is at most one row.
- *
- * The carve is positional, so rows that share a decision date can straddle the boundary: the earlier row ids of that
- * date stay in development and the later ones are held out. The boundary is still deterministic (decision-date order,
- * row-id tiebreak), and no development row is decided after a holdout row.
+ * The date carve: rows whose carve date is on or after the cutoff (and before `holdoutEnd`, when set) are the locked
+ * holdout, earlier rows are development, later rows are left out of the snapshot and counted. The carve date is the
+ * unit row's decision date when the protocol's `dateColumn` is `DecisionDate`, else the row's own field of that name.
+ * The carve groups rows by the unit row's group key, so a new-entity report holds out whole groups (the unit row
+ * reader fills it with the unit's group key value, or the row's entity key when the unit declares none; a protocol
+ * whose report names another key is refused before any row is read).
  */
-export class TrailingFractionCarver implements IHoldoutCarver {
-  constructor(private readonly fraction: number) {}
+export class DateCarvedCarver implements IHoldoutCarver {
+  private last: HoldoutCarveSummary | null = null;
 
-  public AssignRoles(rows: readonly AssembledRow[]): ReadonlyMap<string, SnapshotRowRole> {
-    const n = rows.length;
-    const holdout = LockedHoldoutSplitter.HoldoutCount(n, this.fraction);
-    return new Map(rows.map((r, i): [string, SnapshotRowRole] => [r.RowId, i >= n - holdout ? 'locked-holdout' : 'development']));
+  /**
+   * @param holdout the protocol's date-carved holdout
+   * @param period the unit's decision period, the slice each holdout period summarises
+   */
+  constructor(private readonly holdout: DateCarved, private readonly period: DecisionSpec['period']) {}
+
+  /** @throws TrainingRefusedError (`carve` stage) for a row without a readable carve date, or a carve that leaves no development or no holdout row */
+  public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): ReadonlyMap<string, SnapshotRowRole> {
+    const carve = HoldoutCarve.CarveLockedHoldout(rows.map((a) => this.carveRow(HoldoutCarvers.UnitRowOf(unitRows, a.RowId))), this.holdout);
+    if (carve.Ok === false) throw new TrainingRefusedError({ stage: 'carve', reason: carve.Refusal });
+    const d = carve.Deployment;
+    const ne = carve.NewEntity;
+    this.last = {
+      kind: 'date-carved', cutoff: this.holdout.cutoff, holdoutEnd: this.holdout.holdoutEnd, developmentRowCount: d.DevelopmentRowCount,
+      holdoutRowCount: d.HoldoutRowCount, excludedAfterHoldoutEnd: d.ExcludedAfterHoldoutEnd, holdoutClassCounts: d.HoldoutClassCounts,
+      holdoutPeriods: HoldoutCarve.HoldoutPeriods(d.HoldoutCarveDates, this.period),
+      newEntity: ne === null ? null : {
+        holdoutEntityKeys: ne.HoldoutEntityKeys.length, trainingRowCount: ne.TrainingRowIds.length, holdoutRowCount: ne.HoldoutRowIds.length,
+        excludedRowCount: ne.ExcludedRowCount, sharedEntityKeys: ne.SharedEntityKeys,
+      },
+    };
+    return new Map(d.Rows.map((r): [string, SnapshotRowRole] => [r.RowId, r.Role]));
+  }
+
+  public Summary(): HoldoutCarveSummary | null {
+    return this.last;
+  }
+
+  /** The unit row as the date carve reads it; a row whose carve column is empty or names no day is refused. */
+  private carveRow(u: UnitRow): CarveRow {
+    const column = this.holdout.dateColumn;
+    const day = column === DECISION_DATE_COLUMN ? u.DecisionDate : UtcDay.ToUtcDay(u.Source[column]);
+    if (day === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: u.RowId, column } });
+    // `||`: the reader always fills GroupKey; a hand-built row without one is its own group, as the reader would make it.
+    return { RowId: u.RowId, EntityKey: u.GroupKey || u.EntityKey, CarveDate: UtcDay.UtcDayIso(day), Label: typeof u.Label === 'string' ? u.Label : null };
+  }
+}
+
+/**
+ * The seeded row-hash carve for units whose rows share one fixed decision date (no date to carve on): a row is held
+ * out when the protocol seed's hash of its row id falls below the fraction, whatever the order the rows were read in.
+ */
+export class SeededRandomCarver implements IHoldoutCarver {
+  private last: HoldoutCarveSummary | null = null;
+
+  /**
+   * @param fraction the protocol's holdout fraction, in (0, 1)
+   * @param seed the protocol's seed
+   */
+  constructor(private readonly fraction: number, private readonly seed: number) {}
+
+  public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): ReadonlyMap<string, SnapshotRowRole> {
+    const carve = HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowId), this.fraction, this.seed);
+    this.last = {
+      kind: 'seeded-random', cutoff: null, holdoutEnd: null, developmentRowCount: carve.DevelopmentRowIds.length, holdoutRowCount: carve.HoldoutRowIds.length,
+      excludedAfterHoldoutEnd: 0, holdoutClassCounts: SeededRandomCarver.classCounts(carve.HoldoutRowIds, unitRows), holdoutPeriods: [], newEntity: null,
+    };
+    return new Map<string, SnapshotRowRole>([
+      ...carve.DevelopmentRowIds.map((id): [string, SnapshotRowRole] => [id, 'development']),
+      ...carve.HoldoutRowIds.map((id): [string, SnapshotRowRole] => [id, 'locked-holdout']),
+    ]);
+  }
+
+  public Summary(): HoldoutCarveSummary | null {
+    return this.last;
+  }
+
+  /** Holdout rows per class label; null when no holdout row has a text label (a numeric task). */
+  private static classCounts(holdoutRowIds: readonly string[], unitRows: ReadonlyMap<string, UnitRow>): Readonly<Record<string, number>> | null {
+    const counts: Record<string, number> = {};
+    for (const id of holdoutRowIds) {
+      const label = HoldoutCarvers.UnitRowOf(unitRows, id).Label;
+      if (typeof label === 'string') counts[label] = (counts[label] || 0) + 1;
+    }
+    return Object.keys(counts).length > 0 ? counts : null;
   }
 }
 
 /**
  * Holds out a forecast's rolling-origin test periods: the last `origins × horizonPeriods` distinct periods, the rows the
  * trainer scores its outer origins on (Core's `HoldoutCarve.RollingOriginCarve`, so the manifest's locked-holdout rows
- * are exactly the trainer's design). Each row's period comes from the unit row it was assembled from.
+ * are exactly the trainer's design). Each row's period is its unit row's period.
  */
 export class RollingOriginCarver implements IHoldoutCarver {
-  /**
-   * @param holdout the protocol's rolling-origin holdout
-   * @param periods each unit row's period, by row id (the unit's time column; null when the row has none)
-   */
-  constructor(private readonly holdout: Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>, private readonly periods: ReadonlyMap<string, Date | null>) {}
+  private last: HoldoutCarveSummary | null = null;
 
-  /**
-   * @throws TrainingRefusedError (`carve` stage) for a row without a period, or a series too short for the design
-   */
-  public AssignRoles(rows: readonly AssembledRow[]): ReadonlyMap<string, SnapshotRowRole> {
+  /** @param holdout the protocol's rolling-origin holdout */
+  constructor(private readonly holdout: RollingOrigin) {}
+
+  /** @throws TrainingRefusedError (`carve` stage) for a row without a period, or a series too short for the design */
+  public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): ReadonlyMap<string, SnapshotRowRole> {
     const periodRows = rows.map((r) => {
-      const period = this.periods.get(r.RowId);
-      if (!period) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: r.RowId, column: 'Period' } });
+      const period = HoldoutCarvers.UnitRowOf(unitRows, r.RowId).Period;
+      if (period === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: r.RowId, column: 'Period' } });
       return { RowId: r.RowId, Period: UtcDay.UtcDayIso(period) };
     });
     const carved = HoldoutCarve.RollingOriginCarve(periodRows, this.holdout);
     if (carved.Ok === false) throw new TrainingRefusedError({ stage: 'carve', reason: carved.Refusal });
     const held = new Set(carved.HoldoutRowIds);
+    this.last = {
+      // The first test period is where the holdout starts; a rolling-origin holdout has no end and keeps every row.
+      kind: 'rolling-origin', cutoff: carved.HoldoutPeriods[0] || null, holdoutEnd: null, developmentRowCount: rows.length - held.size,
+      holdoutRowCount: held.size, excludedAfterHoldoutEnd: 0, holdoutClassCounts: null, holdoutPeriods: carved.HoldoutPeriods, newEntity: null,
+    };
     return new Map(rows.map((r): [string, SnapshotRowRole] => [r.RowId, held.has(r.RowId) ? 'locked-holdout' : 'development']));
+  }
+
+  public Summary(): HoldoutCarveSummary | null {
+    return this.last;
+  }
+}
+
+/** The carver a protocol declares, and the unit-row lookup the carvers share (static members on one owner). */
+export class HoldoutCarvers {
+  /** The carver for the protocol's holdout kind: the only place a holdout kind maps to a carver. */
+  public static CarverForProtocol(protocol: Pick<EvaluationProtocolSpec, 'holdout' | 'seed'>, unit: Pick<PredictionUnitSpec, 'decision'>): IHoldoutCarver {
+    const holdout = protocol.holdout;
+    switch (holdout.kind) {
+      case 'date-carved': return new DateCarvedCarver(holdout, unit.decision.period);
+      case 'seeded-random': return new SeededRandomCarver(holdout.fraction, protocol.seed);
+      case 'rolling-origin': return new RollingOriginCarver(holdout);
+      default: {
+        const unknown: never = holdout;
+        throw new Error(`Holdout carve: unknown holdout kind ${JSON.stringify(unknown)}`);
+      }
+    }
+  }
+
+  /** The unit row behind an assembled row; an assembled row without one is a caller error (the rows came from elsewhere). */
+  public static UnitRowOf(unitRows: ReadonlyMap<string, UnitRow>, rowId: string): UnitRow {
+    const u = unitRows.get(rowId);
+    if (!u) throw new Error(`Holdout carve: assembled row ${rowId} is not a unit row`);
+    return u;
   }
 }

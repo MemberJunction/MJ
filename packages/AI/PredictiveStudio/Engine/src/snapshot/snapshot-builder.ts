@@ -9,7 +9,7 @@
 import type { UserInfo } from '@memberjunction/core';
 import { OrdinalCompare } from '@memberjunction/global';
 import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import {
+import { UtcDay,
   IncumbentExpressions, TaskTypeRules, LABEL_COLUMN, INCUMBENT_SCORE_COLUMN, SLICE_COLUMN_PREFIX, SNAPSHOT_MATRIX_FORMAT,
   type ClassBalanceEntry, type FeatureColumnSpec, type PredictionUnitSpec, type SnapshotCell, type SnapshotFeatureColumn,
   type SnapshotFeatureColumnHeader, type SnapshotMatrixHeader, type SnapshotRowKey, type SnapshotRowRole,
@@ -18,7 +18,6 @@ import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix } from '../feature-assembly/as-of/as-of-assembler';
 import type { UnitRow } from '../prediction-unit/unit-row-reader';
 import type { SourceRow } from '../feature-assembly/data-access';
-import { UtcDay } from '../prediction-unit/utc-day';
 import type { IEntityFactory } from '../training/types';
 import type { UnitRowsRead } from '../training/training-engine';
 import { SnapshotHash } from './snapshot-hash';
@@ -95,8 +94,13 @@ const MISSING_SLICE_VALUE = '(missing)';
 
 /** Builds Training Snapshots; stateless, construct once and reuse. */
 export class TrainingSnapshotBuilder {
-  /** Content → files → fingerprint; reuses an existing snapshot with the same content hash, else writes files and row. */
-  public async Build(input: SnapshotBuildInput): Promise<BuiltSnapshot> {
+  /**
+   * Kept rows → content → files → fingerprint; reuses an existing snapshot with the same content hash, else writes files
+   * and row. Only the assembled rows the carver gave a role are in the snapshot: a row it left out (a date carve's row
+   * on or after `holdoutEnd`) is in no file and no count of the row; the unit read's counts are unchanged.
+   */
+  public async Build(built: SnapshotBuildInput): Promise<BuiltSnapshot> {
+    const input = TrainingSnapshotBuilder.KeptRows(built);
     const content = this.BuildContent(input);
     const files = SnapshotFiles.SerializeSnapshotFiles(content);
     const hashes = this.Fingerprint(input, files);
@@ -106,6 +110,15 @@ export class TrainingSnapshotBuilder {
     const saved = await this.SaveSnapshotRow(input, content, stored, hashes);
     if (saved.Status === 'saved') return { Entity: saved.Entity, Content: content, Reused: false };
     return { Entity: await this.SnapshotSavedFirst(input, hashes.ContentHash, saved.Error), Content: content, Reused: true };
+  }
+
+  /**
+   * The build input over the rows the carver kept: the assembled rows that have a role, in their assembled order. The
+   * matrix, manifest, provenance, slice and incumbent cells and the class balance all read the kept rows only.
+   */
+  public static KeptRows(input: SnapshotBuildInput): SnapshotBuildInput {
+    const rows = input.Assembled.Rows.filter((a) => input.Roles.has(a.RowId));
+    return rows.length === input.Assembled.Rows.length ? input : { ...input, Assembled: { ...input.Assembled, Rows: rows } };
   }
 
   /** The snapshot content: header, matrix rows (+ incumbent/slice cells), manifest in matrix order, provenance. */
@@ -332,9 +345,9 @@ export class TrainingSnapshotBuilder {
   }
 
   /**
-   * The carver's role for an assembled row. Every assembled row must have one: a missing role is a caller error (the
-   * carver was given other rows), not a data refusal, and silently defaulting it would let the manifest and the
-   * counts stored beside it disagree.
+   * The carver's role for a kept row. Every row the snapshot holds has one ({@link KeptRows} keeps only rows with a
+   * role); a missing role here is a caller error (the content was built without the kept rows), never defaulted, so the
+   * manifest and the counts stored beside it cannot disagree.
    */
   private static roleOf(input: SnapshotBuildInput, rowId: string): SnapshotRowRole {
     const role = input.Roles.get(rowId);

@@ -77,8 +77,8 @@ export class TrainingDelegation {
    * disk) so a model never gets trained to one family and scored from another.
    *
    * The Record Changes history the as-of assembly replays is left to the engine's default: a complete-read
-   * `RunViewRecordHistoryReader` over the same `dataAccess`; so is the holdout carver (a forecast protocol's
-   * rolling-origin test periods, otherwise the trailing `LockedHoldoutFraction`). A unit run's Training Snapshot files go to the storage provider
+   * `RunViewRecordHistoryReader` over the same `dataAccess`; so is the holdout carver (the one the bound protocol's
+   * holdout declares: date-carved, seeded-random or rolling-origin). A unit run's Training Snapshot files go to the storage provider
    * `PS_SNAPSHOT_STORAGE_PROVIDER` names, recorded as `MJ: Files` rows, and snapshots are found by content hash
    * through the same provider and user. A unit pipeline reads the Evaluation Protocol it is bound to through the
    * same provider and user and trains through the trainer, which is the same `MJSidecarTrainer` as `sidecar`, so both

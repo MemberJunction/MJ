@@ -7,7 +7,7 @@ import sql from 'mssql';
 import { RunView } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { UtcDay } from '@memberjunction/predictive-studio';
+import { UtcDay } from '@memberjunction/predictive-studio-core';
 import type { TruthHarness } from '../harness/types';
 import { TruthConnection } from '../db/connection';
 import { UnitFixtures } from './unit-fixtures';

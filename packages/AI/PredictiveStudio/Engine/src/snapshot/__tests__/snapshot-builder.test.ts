@@ -9,7 +9,7 @@ import { FileStorageBase, FileStorageEngine, LocalFileSystemStorage } from '@mem
 import type { FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { TrainingSnapshotBuilder, type SnapshotBuildInput } from '../snapshot-builder';
 import { InMemorySnapshotFileStore, StorageProviderSnapshotFileStore } from '../snapshot-file-store';
-import { TrailingFractionCarver } from '../holdout-carver';
+import type { SnapshotRowRole } from '@memberjunction/predictive-studio-core';
 import { SnapshotHash } from '../snapshot-hash';
 import { SnapshotFiles } from '../snapshot-serialization';
 import type { IEntityFactory } from '../../training/types';
@@ -174,7 +174,8 @@ class FakeEntityFactory implements IEntityFactory {
   }
 }
 
-const roles = new TrailingFractionCarver(1 / 3).AssignRoles(assembled.Rows);
+/** r1 and r2 develop the model, r3 (decided last) is the locked holdout. */
+const roles: ReadonlyMap<string, SnapshotRowRole> = new Map<string, SnapshotRowRole>([['r1', 'development'], ['r2', 'development'], ['r3', 'locked-holdout']]);
 const input = (files: InMemorySnapshotFileStore, factory: IEntityFactory = new FakeEntityFactory()): SnapshotBuildInput => ({
   PipelineID: 'pipe', FeatureSpecVersion: 3, Unit: unit, UnitRead: unitRead, Features: features, Assembled: assembled, Roles: roles,
   EvaluationProtocolID: null, IncumbentScore: false, SliceFields: [], Files: files, EntityFactory: factory, ExistingByContentHash: async () => null,
@@ -185,7 +186,7 @@ describe('TrainingSnapshotBuilder', () => {
   it('writes three files, fingerprints them and stores the counts the gates read', async () => {
     const files = new InMemorySnapshotFileStore('provider-local');
     const factory = new FakeEntityFactory();
-    const built = await new TrainingSnapshotBuilder().Build({ PipelineID: 'pipe', FeatureSpecVersion: 3, Unit: unit, UnitRead: unitRead, Features: features, Assembled: assembled, Roles: new TrailingFractionCarver(1 / 3).AssignRoles(assembled.Rows), EvaluationProtocolID: null, IncumbentScore: false, SliceFields: [], Files: files, EntityFactory: factory, ExistingByContentHash: async () => null });
+    const built = await new TrainingSnapshotBuilder().Build({ PipelineID: 'pipe', FeatureSpecVersion: 3, Unit: unit, UnitRead: unitRead, Features: features, Assembled: assembled, Roles: roles, EvaluationProtocolID: null, IncumbentScore: false, SliceFields: [], Files: files, EntityFactory: factory, ExistingByContentHash: async () => null });
     const s = built.Entity;
     expect(files.Saved.size).toBe(3);
     expect([s.ManifestRowCount, s.HoldoutRowCount, s.RowsRead, s.CensoredRowsExcluded, s.ReadComplete]).toEqual([3, 1, 5, 2, true]);
@@ -245,9 +246,22 @@ describe('TrainingSnapshotBuilder', () => {
 });
 
 describe('TrainingSnapshotBuilder manifest roles', () => {
-  it('refuses an assembled row the carver gave no role, and stores the class balance of the manifest it wrote', async () => {
-    const partial = new Map([...roles].filter(([id]) => id !== 'r2'));
-    await expect(new TrainingSnapshotBuilder().Build({ ...input(new InMemorySnapshotFileStore('p')), Roles: partial })).rejects.toThrow(/r2/);
+  it('leaves out an assembled row the carver gave no role: no file, count or class balance holds it, and the read counts stay', async () => {
+    // r3 is decided after the holdout end: the carver gives it no role, so the snapshot holds r1 (development) and r2 (holdout).
+    const carved = new Map<string, SnapshotRowRole>([['r1', 'development'], ['r2', 'locked-holdout']]);
+    const files = new InMemorySnapshotFileStore('p');
+    const built = await new TrainingSnapshotBuilder().Build({ ...input(files), Roles: carved });
+    const s = built.Entity;
+    expect(built.Content.Manifest.map((m) => [m.rowId, m.role])).toEqual([['r1', 'development'], ['r2', 'locked-holdout']]);
+    expect(built.Content.Rows).toHaveLength(2);
+    expect(built.Content.Provenance.map((p) => p.rowId)).toEqual(['r1', 'r2']);
+    expect([s.ManifestRowCount, s.HoldoutRowCount, s.RowsRead, s.CensoredRowsExcluded]).toEqual([2, 1, 5, 2]);
+    expect(s.ClassBalance).toBe(JSON.stringify([{ label: '0', rows: 1 }, { label: '1', rows: 1 }]));
+    const stored = SnapshotFiles.ParseManifestLines(files.Saved.get(s.RowManifestFileID)?.Bytes ?? new Uint8Array());
+    expect(stored.map((m) => m.rowId)).toEqual(['r1', 'r2']);
+  });
+
+  it('stores the class balance of the manifest it wrote', async () => {
     const built = await new TrainingSnapshotBuilder().Build(input(new InMemorySnapshotFileStore('p')));
     const labelOf = new Map(unitRead.Rows.map((r) => [r.RowId, String(r.Label)]));
     const counts = new Map<string, number>();

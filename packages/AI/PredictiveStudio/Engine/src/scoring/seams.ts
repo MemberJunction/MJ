@@ -16,7 +16,8 @@ import type { PredictRequest, PredictResponse } from '@memberjunction/predictive
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 import { MLSidecarProvider } from '../sidecar-provider';
 
-import type { IMLModelLoader, IPipelineUnitLookup, ISidecarPredictor } from './types';
+import type { IMLModelLoader, IPipelineUnitLookup, ISidecarPredictor, ITrainingRowsLookup } from './types';
+import { TrainingKeys } from './training-keys';
 
 /**
  * `RunView`-backed {@link IMLModelLoader}. Loads the model as a full
@@ -62,6 +63,17 @@ export class RunViewPipelineUnitLookup implements IPipelineUnitLookup {
     const row = result.Results[0];
     if (!row) throw new Error(`ML Training Pipeline ${pipelineId} was not found or not readable, so whether its models belong to a Prediction Unit is unknown`);
     return row.PredictionUnitID || null;
+  }
+}
+
+/**
+ * {@link ITrainingRowsLookup} over the model's Training Snapshot: the development row ids of its verified row manifest
+ * ({@link TrainingKeys.LoadTrainingRowIds}). A failed read throws naming the model.
+ */
+export class RunViewTrainingRowsLookup implements ITrainingRowsLookup {
+  /** @inheritdoc */
+  public async TrainingRowIdsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>> {
+    return TrainingKeys.LoadTrainingRowIds(modelId, provider, contextUser);
   }
 }
 

@@ -17,6 +17,7 @@ import { OrdinalCompare } from '@memberjunction/global';
 import type { HoldoutSplit } from './evaluation-protocol';
 import type { DecisionSpec } from './prediction-unit';
 import type { SnapshotRowKey } from './assembly-contract';
+import { UtcDay } from './utc-day';
 
 type DateCarved = Extract<HoldoutSplit, { readonly kind: 'date-carved' }>;
 type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
@@ -242,21 +243,21 @@ export class HoldoutCarve {
   }
 
   private static parseWindow(holdout: DateCarved): { readonly Ok: true; readonly Window: CarveWindow } | { readonly Ok: false; readonly Refusal: CarveRefusal } {
-    const cutoff = HoldoutCarve.utcDay(holdout.cutoff);
+    const cutoff = UtcDay.ToUtcDay(holdout.cutoff);
     if (cutoff === null) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.cutoff } };
-    if (holdout.holdoutEnd === null) return { Ok: true, Window: { Cutoff: cutoff, End: null } };
-    const end = HoldoutCarve.utcDay(holdout.holdoutEnd);
+    if (holdout.holdoutEnd === null) return { Ok: true, Window: { Cutoff: cutoff.getTime(), End: null } };
+    const end = UtcDay.ToUtcDay(holdout.holdoutEnd);
     if (end === null) return { Ok: false, Refusal: { kind: 'unparseable-cutoff', value: holdout.holdoutEnd } };
-    return { Ok: true, Window: { Cutoff: cutoff, End: end } };
+    return { Ok: true, Window: { Cutoff: cutoff.getTime(), End: end.getTime() } };
   }
 
   /** The rows with their parsed carve dates, sorted by row id; the first unparseable date refuses the carve. */
   private static parseCarveDates(rows: readonly CarveRow[]): { readonly Ok: true; readonly Rows: readonly DatedRow[] } | { readonly Ok: false; readonly Refusal: CarveRefusal } {
     const dated: DatedRow[] = [];
     for (const row of rows) {
-      const time = HoldoutCarve.utcDay(row.CarveDate);
-      if (time === null) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowId, value: row.CarveDate } };
-      dated.push({ Row: row, Time: time });
+      const day = UtcDay.ToUtcDay(row.CarveDate);
+      if (day === null) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowId, value: row.CarveDate } };
+      dated.push({ Row: row, Time: day.getTime() });
     }
     dated.sort((a, b) => OrdinalCompare(a.Row.RowId, b.Row.RowId));
     return { Ok: true, Rows: dated };
@@ -372,24 +373,11 @@ export class HoldoutCarve {
     return time >= w.Cutoff ? 'in-window' : 'before-cutoff';
   }
 
-  /**
-   * The UTC midnight (ms) of a date's `yyyy-mm-dd` date part, read the way the unit row reader reads a date string;
-   * null when the text has no such part or names no calendar day (`2024-02-30`). A time and zone after the date part
-   * are ignored, so the day never depends on the host's time zone.
-   */
-  private static utcDay(text: string): number | null {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(text.trim());
-    if (m === null) return null;
-    const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
-    const time = Date.UTC(year, month - 1, day);
-    const back = new Date(time);
-    return back.getUTCFullYear() === year && back.getUTCMonth() === month - 1 && back.getUTCDate() === day ? time : null;
-  }
-
+  /** The UTC midnight (ms) of a date ({@link UtcDay.ToUtcDay}); {@link HoldoutCarveDateError} when it names no calendar day. */
   private static requireUtcDay(text: string): number {
-    const time = HoldoutCarve.utcDay(text);
-    if (time === null) throw new HoldoutCarveDateError(text);
-    return time;
+    const day = UtcDay.ToUtcDay(text);
+    if (day === null) throw new HoldoutCarveDateError(text);
+    return day.getTime();
   }
 
   private static iso(time: number): string {

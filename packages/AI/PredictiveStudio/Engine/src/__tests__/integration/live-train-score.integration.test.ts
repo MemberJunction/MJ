@@ -470,6 +470,8 @@ function readMetric(model: RecordingEntity, field: 'Metrics' | 'HoldoutMetrics',
  * do; the fake provider has no RunView for the production lookup, so the answer is given here.
  */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+/** A model trained without a Training Snapshot: no record was a training row. */
+const NO_TRAINING_ROWS = { TrainingRowIdsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
 
 describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score (real sidecar)', () => {
   // 3,000 rows: the locked holdout is a seeded, stratified 20% sample (LockedHoldoutSplitter), and on
@@ -558,7 +560,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader,
       artifactLoader,
       sidecar: new LiveSidecarPredictor(sidecar),
-      pipelineUnits: NO_PIPELINE_UNITS,
+      pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
 
@@ -654,7 +656,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
       sidecar: new LiveSidecarPredictor(sidecar),
-      pipelineUnits: NO_PIPELINE_UNITS,
+      pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
     const [pos, neg] = await processor.ProcessBatch(
@@ -707,7 +709,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
       sidecar: new LiveSidecarPredictor(sidecar),
-      pipelineUnits: NO_PIPELINE_UNITS,
+      pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS,
     };
     const processor = new MLModelInferenceProcessor({ modelId: model.ID, deps: scoreDeps }, makeAssemblerForRows(DATASET));
     const [hi, lo] = await processor.ProcessBatch(

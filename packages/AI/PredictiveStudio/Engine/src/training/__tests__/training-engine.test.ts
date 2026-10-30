@@ -24,7 +24,6 @@ import { TrainingRefusedError } from '../training-refusal';
 import { TrainerRequestBuilder } from '../trainer-request';
 import { WasTrainingLeakageFlagged } from '../../operations/delegation';
 import { SnapshotRetrainer } from '../../snapshot/snapshot-retrainer';
-import { RollingOriginCarver, TrailingFractionCarver } from '../../snapshot/holdout-carver';
 import { InMemoryArtifactStore } from '../artifact-store';
 import { ProtocolRowFixture } from './fixtures/protocol-row';
 import { TrainerResultFixtures } from './fixtures/trainer-result';
@@ -532,6 +531,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
       artifactLoader: artifacts,
       sidecar: { predict: async () => ({ predictions: [] }) },
       pipelineUnits: { PredictionUnitIDOf: async (id: string) => (id === pipeline.ID ? UnitYearsWorld.UnitID : null) },
+      trainingRows: { TrainingRowIdsOf: async () => new Set<string>() },
       predictionUnits: deps.predictionUnits,
       assemblyMetadata: deps.assemblyMetadata,
       dataAccess: deps.dataAccess,
@@ -740,14 +740,38 @@ describe('TrainingEngine — no unit pipeline trains without the protocol versio
   });
 });
 
-describe('TrainingEngine.DefaultHoldoutCarver', () => {
-  it("carves a rolling-origin protocol's test periods and every other protocol's trailing fraction", async () => {
-    const { engine, deps, pipeline } = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
-    const assembly = await engine.AssembleForTraining(pipeline.ID, deps);
-    const resolved = { validation: { Strategy: 'train_test_split' as const, TestSize: 0.2, LockedHoldoutFraction: 0.2 } };
-    const rolling = { ...protocolSpec(), holdout: { kind: 'rolling-origin' as const, origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' as const } };
-    expect(TrainingEngine.DefaultHoldoutCarver(resolved, rolling, assembly.UnitRead)).toBeInstanceOf(RollingOriginCarver);
-    expect(TrainingEngine.DefaultHoldoutCarver(resolved, protocolSpec(), assembly.UnitRead)).toBeInstanceOf(TrailingFractionCarver);
+describe("TrainingEngine — the protocol's locked holdout", () => {
+  it('carves on the protocol cutoff, leaves the rows on or after its holdout end out of the snapshot, and stores the carve on the run', async () => {
+    // A 2023 cycle before the world's 2024 and 2025 cycles: 2023 develops, 2024 is held out, 2025 is after the holdout end.
+    const earlier = [0, 1, 2, 3].map((p) => ({ ID: `y2023-${p}`, PersonID: `p${p}`, StartDate: '2023-01-01', EventsAttended: 100 + p, Region: 'EU', Renewed: p !== 1 }));
+    const harness = TrainingHarness.ForUnit([...earlier, ...UnitYearsWorld.Years()], UnitYearsWorld.UnitColumns());
+    harness.deps.protocols = new FakeEvaluationProtocolStore([ProtocolRowFixture.Row({
+      Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: '2024-01-01', holdoutEnd: '2025-01-01', newEntityReport: null }),
+    })]);
+    harness.deps.trainer = new FakeTrainer(cannedFor);
+    const { run } = await harness.engine.trainModel({ pipelineId: harness.pipeline.ID }, harness.deps);
+    const content = await storedContent(harness.files, harness.snapshots[0]);
+    expect(content.Manifest.map((m) => [m.rowId, m.role]).sort()).toEqual([
+      ...[0, 1, 2, 3].map((p) => [`y2023-${p}`, 'development']), ...[0, 1, 2, 3].map((p) => [`y2024-${p}`, 'locked-holdout']),
+    ]);
+    expect(content.Rows).toHaveLength(8);
+    expect([harness.snapshots[0].ManifestRowCount, harness.snapshots[0].HoldoutRowCount]).toEqual([8, 4]);
+    const results = storedResults(run.ValidationResults);
+    if (results.status !== 'completed') throw new Error('expected a completed run');
+    expect(results.carve).toEqual({
+      kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: '2025-01-01', developmentRowCount: 4, holdoutRowCount: 4, excludedAfterHoldoutEnd: 4,
+      holdoutClassCounts: { 0: 1, 1: 3 }, holdoutPeriods: ['2024-01-01'], newEntity: null,
+    });
+  });
+
+  it('refuses a protocol cutoff that leaves nothing to test on at the carve stage, recording the refusal on the run', async () => {
+    const { engine, deps, pipeline, runs, trainer } = protocolHarness(cannedFor, ProtocolRowFixture.Row({
+      Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: '2026-01-01', holdoutEnd: null, newEntityReport: null }),
+    }));
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'carve', reason: { kind: 'no-holdout-rows', cutoff: '2026-01-01', holdoutEnd: null } } });
+    expect(trainer.Requests).toHaveLength(0);
+    const results = storedResults(runs[0].ValidationResults);
+    expect(results).toMatchObject({ status: 'refused', refusal: { stage: 'carve', reason: { kind: 'no-holdout-rows' } } });
   });
 });
 
@@ -773,6 +797,11 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     expect(run.ValidationResults).not.toContain('bytesBase64');
     expect(results.trainerRequest?.evaluationProtocolId).toBe(ProtocolRowFixture.ID);
     expect(results.legacy).toBeNull();
+    // The protocol's date carve: the 2024 cycle develops the model, the 2025 cycle is the locked holdout.
+    expect(results.carve).toEqual({
+      kind: 'date-carved', cutoff: '2025-01-01', holdoutEnd: null, developmentRowCount: 4, holdoutRowCount: 4, excludedAfterHoldoutEnd: 0,
+      holdoutClassCounts: { 0: 1, 1: 3 }, holdoutPeriods: ['2025-01-01'], newEntity: null,
+    });
     expect(artifacts.Saved.size).toBe(3);
     const xgbFile = results.trainer?.artifacts.find((a) => a.candidate === 'xgb')?.fileId;
     expect(model.ArtifactFileID).toBe(xgbFile);

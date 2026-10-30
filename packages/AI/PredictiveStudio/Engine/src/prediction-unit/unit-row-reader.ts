@@ -8,12 +8,11 @@
  * and counted. The source is read completely or the read is refused.
  */
 import { OrdinalCompare } from '@memberjunction/global';
-import { TaskTypeRules, PredictionUnit, type LabelRule, type PredictionUnitSpec, type ReadPolicy, type RowFilter, type TaskType, type TrainingRefusal, type UnitRefusal, type UnitResolutionCounts, type UnitRows } from '@memberjunction/predictive-studio-core';
+import { UtcDay, type CellValue, TaskTypeRules, PredictionUnit, type LabelRule, type PredictionUnitSpec, type ReadPolicy, type RowFilter, type TaskType, type TrainingRefusal, type UnitRefusal, type UnitResolutionCounts, type UnitRows } from '@memberjunction/predictive-studio-core';
 import type { ICountingDataAccess, SourceRow } from '../feature-assembly/data-access';
 import { CompleteReader } from '../feature-assembly/read-policy';
 import type { AssemblyEntityInfo, IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import type { AssemblyRowRef } from '../feature-assembly/as-of/as-of-assembler';
-import { UtcDay, type CellValue } from './utc-day';
 
 export type CanonicalLabelValue = string | number;
 

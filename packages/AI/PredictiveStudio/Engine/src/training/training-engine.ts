@@ -38,15 +38,16 @@
  * (censored and label-known rows excluded and counted), the target is validated, and the matrix is
  * assembled as of each row's decision date by {@link TrainingEngine.AssembleForTraining} — the same
  * `AsOfFeatureAssembler` the scoring path calls. The assembled rows are frozen into an immutable
- * Training Snapshot (the locked holdout is a forecast protocol's rolling-origin test periods, otherwise
- * the trailing fraction of rows in decision-date order; identical content reuses the existing snapshot;
- * the protocol decides the incumbent-score and slice columns). The protocol trainer (`TrainingDeps.trainer`) is sent pre-authorised downloads of the
+ * Training Snapshot (the locked holdout is the one the protocol declares: a date carve on its cutoff, with
+ * rows on or after its `holdoutEnd` left out of the snapshot; a seeded row-hash carve; or a forecast's
+ * rolling-origin test periods; identical content reuses the existing snapshot; the protocol decides the
+ * incumbent-score and slice columns). The protocol trainer (`TrainingDeps.trainer`) is sent pre-authorised downloads of the
  * snapshot files, its result is recorded on the run (compute, code version), every returned artifact
  * is stored in `MJ: Files`, and the model row is created from the finalist's artifact with the
  * trainer's held-out permutation importance; a single feature dominating that importance flags the run
  * (the same LEAKAGE WARNING note as above) and the model stays `Draft`. The run stores the trainer's result with its artifacts
- * as file references, never their bytes, the unit resolution counts and the request settings a
- * retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
+ * as file references, never their bytes, the unit resolution counts, the holdout carve's summary and
+ * the request settings a retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
  * categorical levels scoring reuses, the snapshot's ID and content hash, and the protocol. A refusal
  * is recorded on the run as a `refused` envelope ({@link TrainingRefusedError}); a failed trainer
  * result is a `trainer` refusal.
@@ -89,6 +90,7 @@ import {
   type EvaluationProtocolSpec,
   type TrainerCompleted,
   type TrainerResult,
+  type HoldoutCarveSummary,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
@@ -103,7 +105,7 @@ import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '.
 import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingRefusedError } from './training-refusal';
-import { RollingOriginCarver, TrailingFractionCarver, type IHoldoutCarver } from '../snapshot/holdout-carver';
+import { HoldoutCarvers } from '../snapshot/holdout-carver';
 import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapshot-builder';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
@@ -180,6 +182,8 @@ interface TrainerRunInputs {
   readonly Input: TrainModelInput;
   readonly Unit: PredictionUnitSpec;
   readonly Snapshot: BuiltSnapshot;
+  /** The protocol's holdout carve over the snapshot's rows, stored with the run's results. */
+  readonly Carve: HoldoutCarveSummary;
   readonly Files: ISnapshotFileStore;
   readonly Training: ProtocolTraining;
   readonly UnitLineage: UnitModelLineage;
@@ -188,6 +192,12 @@ interface TrainerRunInputs {
   readonly MajorityBaselineRule: ReturnType<typeof EvaluationLineage.ParseMajorityBaselineRule>;
   readonly UsdPerSecond: number | null;
   readonly Deps: TrainingDeps;
+}
+
+/** A frozen Training Snapshot and the holdout carve its manifest roles came from. */
+interface FrozenSnapshot {
+  readonly Snapshot: BuiltSnapshot;
+  readonly Carve: HoldoutCarveSummary;
 }
 
 /** What a completed trainer result decides about its run and model (computed once per run). */
@@ -332,11 +342,11 @@ export class TrainingEngine {
         Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata, SliceFields: protocol.Protocol.slices.subgroups,
       });
       if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
-      const snapshot = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, protocol, deps);
+      const { Snapshot: snapshot, Carve: carve } = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, protocol, deps);
       run.TrainingSnapshotID = snapshot.Entity.ID;
       const unitResolved: ResolvedPipeline = { ...resolved, targetEntityName: unitRead.RowEntity.Name, targetVariable: LABEL_COLUMN, problemType: TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome) };
       const model = await this.trainThroughTrainer({
-        Run: run, Resolved: unitResolved, Input: input, Unit: unit, Snapshot: snapshot, Files: snapshotFiles, Training: training,
+        Run: run, Resolved: unitResolved, Input: input, Unit: unit, Snapshot: snapshot, Carve: carve, Files: snapshotFiles, Training: training,
         UnitLineage: this.unitLineage(unit, resolved, unitRead, assembly.Features, assembly.Assembled.CategoryLevels, snapshot.Entity),
         Counts: unitRead.Counts, Uncovered: assembly.Assembled.UncoveredRowsExcluded, MajorityBaselineRule: majorityBaselineRule, UsdPerSecond: usdPerSecond, Deps: deps,
       });
@@ -402,27 +412,33 @@ export class TrainingEngine {
   }
 
   /**
-   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the holdout carver (by
-   * default {@link DefaultHoldoutCarver}), and identical content reuses the
+   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the holdout carver (the
+   * deps' carver, else the one the bound protocol declares, {@link HoldoutCarvers.CarverForProtocol}); rows the carve
+   * leaves out (a date carve's rows on or after `holdoutEnd`) are not in the snapshot. Identical content reuses the
    * snapshot that already holds it. The bound protocol decides the evaluation columns: the incumbent-score column when
    * it declares an incumbent-heuristic baseline and the unit has a rule to score it, and one slice column per subgroup
-   * field it declares.
+   * field it declares. Returns the snapshot and the carve's summary.
+   *
+   * @throws TrainingRefusedError (`carve` stage) when the protocol's holdout cannot be carved from the rows
    */
   private async freezeSnapshot(
     resolved: ResolvedPipeline, assembly: UnitTrainingAssembly, assembled: AsOfAssembledMatrix, files: ISnapshotFileStore,
     loaded: LoadedProtocol, deps: TrainingDeps,
-  ): Promise<BuiltSnapshot> {
+  ): Promise<FrozenSnapshot> {
     const protocol = loaded.Protocol;
-    const carver = deps.holdoutCarver || TrainingEngine.DefaultHoldoutCarver(resolved, protocol, assembly.UnitRead);
+    const carver = deps.holdoutCarver || HoldoutCarvers.CarverForProtocol(protocol, assembly.Unit);
+    const roles = carver.AssignRoles(assembled.Rows, new Map(assembly.UnitRead.Rows.map((r) => [r.RowId, r])));
+    const carve = carver.Summary();
+    if (carve === null) throw new Error('TrainingEngine: the holdout carver assigned roles but recorded no carve summary');
     const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
-    return new TrainingSnapshotBuilder().Build({
+    const snapshot = await new TrainingSnapshotBuilder().Build({
       PipelineID: resolved.pipeline.ID,
       FeatureSpecVersion: resolved.pipeline.Version,
       Unit: assembly.Unit,
       UnitRead: assembly.UnitRead,
       Features: assembly.Features,
       Assembled: assembled,
-      Roles: carver.AssignRoles(assembled.Rows),
+      Roles: roles,
       EvaluationProtocolID: loaded.RowID,
       IncumbentScore: assembly.Unit.incumbent.kind === 'rule' && protocol.baselines.some((b) => b.kind === 'incumbent-heuristic'),
       SliceFields: protocol.slices.subgroups,
@@ -431,17 +447,7 @@ export class TrainingEngine {
       ContextUser: deps.contextUser,
       ExistingByContentHash: (contentHash) => snapshots.FindByContentHash(contentHash),
     });
-  }
-
-  /**
-   * The holdout carver a unit run uses unless the deps supply one: a forecast protocol's rolling-origin test periods
-   * (the trainer refuses a manifest whose holdout is not its design's test periods), otherwise the trailing
-   * `LockedHoldoutFraction` of the rows in decision-date order.
-   */
-  public static DefaultHoldoutCarver(resolved: Pick<ResolvedPipeline, 'validation'>, protocol: Pick<EvaluationProtocolSpec, 'holdout'>, unitRead: UnitRowsRead): IHoldoutCarver {
-    const holdout = protocol.holdout;
-    if (holdout.kind === 'rolling-origin') return new RollingOriginCarver(holdout, new Map(unitRead.Rows.map((r) => [r.RowId, r.Period])));
-    return new TrailingFractionCarver(resolved.validation.LockedHoldoutFraction);
+    return { Snapshot: snapshot, Carve: carve };
   }
 
   /**
@@ -449,8 +455,8 @@ export class TrainingEngine {
    * pipeline's own algorithm as the single candidate; the timeout is the protocol's compute budget, or less when an
    * enclosing budget has less left), record the result on the run (compute, code version, status), store every
    * returned artifact in `MJ: Files`, create the model row from the finalist's artifact and complete the run with the
-   * stored result (artifacts as file references, never bytes), the request settings a retrain replays and the leakage
-   * note of the single-feature-dominance check over the trainer's importance. A failed
+   * stored result (artifacts as file references, never bytes), the holdout carve's summary, the request settings a
+   * retrain replays and the leakage note of the single-feature-dominance check over the trainer's importance. A failed
    * result is the refusal `trainer-failed` and a result whose code version cannot be recorded is `lineage-incomplete`;
    * both keep the compute they recorded.
    */
@@ -472,8 +478,7 @@ export class TrainingEngine {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
       legacy: null, legacyRequest: null,
       trainer: TrainerContract.ToStoredTrainerResult(result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
-      // The protocol's holdout carve summary is written here once the protocol carvers replace the trailing carve.
-      carve: null,
+      carve: x.Carve,
     };
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(snapshot.Content.Header.featureSchema.map((f) => f.Name));

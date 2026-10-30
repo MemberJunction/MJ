@@ -8,11 +8,11 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, JsonParse, TrainingRunResultsParser, type FeatureImportance, type PredictionUnitSpec, type SnapshotRowKey } from '@memberjunction/predictive-studio-core';
-import { DetectSingleFeatureDominance, PredictionUnitRowReader, ProviderAssemblyMetadata, RunViewDataAccess, PredictionUnitVersioning, SnapshotFiles, StorageProviderSnapshotFileStore, type UnitRowReadResult } from '@memberjunction/predictive-studio';
+import { DetectSingleFeatureDominance, PredictionUnitRowReader, ProviderAssemblyMetadata, RunViewDataAccess, PredictionUnitVersioning, SnapshotManifest, StorageProviderSnapshotFileStore, type UnitRowReadResult } from '@memberjunction/predictive-studio';
 import { C1CorpusFixture, C1_CORPUS_DIR, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 
 /** The Training Snapshot columns the snapshot assertions read. */
-type SnapshotCounts = Pick<MJTrainingSnapshotEntity, 'ManifestRowCount' | 'CensoredRowsExcluded' | 'LabelKnownRowsExcluded' | 'RowManifestFileID'>;
+type SnapshotCounts = Pick<MJTrainingSnapshotEntity, 'ManifestRowCount' | 'CensoredRowsExcluded' | 'LabelKnownRowsExcluded' | 'RowManifestFileID' | 'RowManifestSha256'>;
 
 /** A key set compared with the reference's keys. */
 interface KeyComparison { readonly Matched: number; readonly Expected: number; readonly Extra: number }
@@ -38,16 +38,16 @@ export class PredictionUnitGates {
     if (!run.TrainingSnapshotID) return null;
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<SnapshotCounts>({
       EntityName: 'MJ: Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`,
-      Fields: ['ManifestRowCount', 'CensoredRowsExcluded', 'LabelKnownRowsExcluded', 'RowManifestFileID'], ResultType: 'simple',
+      Fields: ['ManifestRowCount', 'CensoredRowsExcluded', 'LabelKnownRowsExcluded', 'RowManifestFileID', 'RowManifestSha256'], ResultType: 'simple',
     }, h.User);
     if (!r.Success) throw new Error(`Reading Training Snapshot ${run.TrainingSnapshotID} failed: ${r.ErrorMessage || 'unknown error'}`);
     return r.Results[0] || null;
   }
 
-  /** The snapshot's row manifest, read back from storage and parsed. */
-  private static async manifestOf(h: TruthHarness, manifestFileId: string): Promise<SnapshotRowKey[]> {
+  /** The snapshot's row manifest, read back from storage, verified against the row's SHA-256 and parsed. */
+  private static async manifestOf(h: TruthHarness, snapshot: Pick<SnapshotCounts, 'RowManifestFileID' | 'RowManifestSha256'>): Promise<SnapshotRowKey[]> {
     const files = new StorageProviderSnapshotFileStore(UnitFixtures.EntityFactory(h), h.Provider, h.User);
-    return SnapshotFiles.ParseManifestLines(await files.Get(manifestFileId));
+    return SnapshotManifest.ReadSnapshotManifest(snapshot, files);
   }
 
   /** The reference's resolved C1 keys, `<person id>|<period index>` lower-cased. */
@@ -120,7 +120,7 @@ export class PredictionUnitGates {
     const resolved = results.Ok && results.Value.status === 'completed' ? results.Value.unitResolution.resolvedRows : -1;
     const snapshot = await PredictionUnitGates.snapshotCounts(h, run);
     if (!snapshot) return { Passed: false, Measured: { censoredRowsExcluded: stored, resolvedRows: resolved }, Detail: `run ${run.ID} has no Training Snapshot` };
-    const manifest = await PredictionUnitGates.manifestOf(h, snapshot.RowManifestFileID);
+    const manifest = await PredictionUnitGates.manifestOf(h, snapshot);
     const keys = PredictionUnitGates.compareKeys(await PredictionUnitGates.referenceC1Keys(), await PredictionUnitGates.manifestC1Keys(h, manifest));
     const snapshotHolds = snapshot.CensoredRowsExcluded === 1756 && snapshot.LabelKnownRowsExcluded === 44 && snapshot.ManifestRowCount === 4873 && manifest.length === 4873;
     const manifestHolds = keys.Matched === 4873 && keys.Expected === 4873 && keys.Extra === 0;
@@ -162,7 +162,7 @@ export class PredictionUnitGates {
     if (!scores.Ok || scores.Predictions.length === 0) throw new Error(`dry-run scoring of W5 2026 failed: ${scores.ErrorMessage || 'no predictions'}`);
     const meanPrediction = scores.Predictions.reduce((s, p) => s + p.Score, 0) / scores.Predictions.length;
     const meanTrue = newest.reduce((s, t) => s + t.TrueP, 0) / newest.length;
-    const censoredDecisionRows = (await PredictionUnitGates.manifestOf(h, snapshot.RowManifestFileID)).filter((m) => m.decisionDate === W5_CENSORED_DECISION_DAY).length;
+    const censoredDecisionRows = (await PredictionUnitGates.manifestOf(h, snapshot)).filter((m) => m.decisionDate === W5_CENSORED_DECISION_DAY).length;
     const snapshotHolds = snapshot.CensoredRowsExcluded === 2147 && censoredDecisionRows === 0;
     const passed = unitResolution.censoredRowsExcluded === 2147 && censoredInMatrix === 0 && Math.abs(meanPrediction - meanTrue) <= 0.05 && snapshotHolds;
     return {

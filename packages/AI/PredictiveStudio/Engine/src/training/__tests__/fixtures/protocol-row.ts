@@ -1,6 +1,8 @@
 /**
  * The binary Evaluation Protocol row the Engine training tests bind a pipeline to: a log-loss protocol with the
- * dummy, one-feature and GLM baselines, a repeated stratified K-fold inner validation and a Region slice.
+ * dummy, one-feature and GLM baselines, a repeated stratified K-fold inner validation and a Region slice. Its holdout
+ * is date-carved on the decision date at 2025-01-01, so the unit-years world's 2024 cycle is development and its 2025
+ * cycle the locked holdout.
  */
 import { ALLOWED_OUTCOMES, type EvaluationProtocolColumns } from '@memberjunction/predictive-studio-core';
 
@@ -13,7 +15,7 @@ export class ProtocolRowFixture {
   public static Row(overrides: Partial<EvaluationProtocolColumns> = {}): EvaluationProtocolColumns {
     return {
       ID: ProtocolRowFixture.ID, LineageRootID: ProtocolRowFixture.ID, Version: 1, Name: 'Default binary protocol',
-      Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'OrderDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null }),
+      Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: '2025-01-01', holdoutEnd: null, newEntityReport: null }),
       InnerValidation: JSON.stringify({ kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 }),
       Seed: 0, HoldoutAccessBudget: 1,
       PrimaryScore: JSON.stringify({ family: 'binary', metric: 'log-loss' }),

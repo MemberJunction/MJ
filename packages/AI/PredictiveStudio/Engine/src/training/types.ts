@@ -248,8 +248,8 @@ export interface TrainingDeps {
    */
   snapshotFiles?: ISnapshotFileStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /**
-   * Assigns each unit row its manifest role; defaults to `TrainingEngine.DefaultHoldoutCarver` (a forecast protocol's
-   * rolling-origin test periods, otherwise a `TrailingFractionCarver` over the pipeline's `LockedHoldoutFraction`).
+   * Assigns each unit row its manifest role and records the carve; defaults to the carver the bound Evaluation
+   * Protocol's holdout declares (`HoldoutCarvers.CarverForProtocol`: date-carved, seeded-random or rolling-origin).
    */
   holdoutCarver?: IHoldoutCarver;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Reads snapshots by content hash and ID, and training runs by ID; defaults to a `RunViewTrainingSnapshotStore` on `provider`. */

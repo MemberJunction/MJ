@@ -59,6 +59,7 @@ import type {
   AssemblyRefusal, ChangeHistoryCoverage, ColumnEncoding, ColumnEncodingKind, ColumnProvenance, FeatureColumnSpec, FeatureVersionPin,
   PredictionUnitSpec, PreprocessingOp, ReadPolicy, UncoveredRowsCount, ValueProvenance, WindowedAggregateSource,
 } from '@memberjunction/predictive-studio-core';
+import { UtcDay, MS_PER_DAY, type CellValue } from '@memberjunction/predictive-studio-core';
 import { EscapeSQLString, OrdinalCompare } from '@memberjunction/global';
 import type { ICountingDataAccess, SourceRow } from '../data-access';
 import type { AssemblyEntityInfo, IAssemblyMetadata } from '../assembly-metadata';
@@ -69,7 +70,6 @@ import { RecordHistory, type EntityHistory, type IRecordHistoryReader } from './
 import { AssemblyRefused } from './refusal';
 import { WindowedAggregates, type ChildRow, type ChildRowIndex } from './windowed-aggregate';
 import { SeriesFeatures, type SeriesHistory } from './series-features';
-import { UtcDay, MS_PER_DAY, type CellValue } from '../../prediction-unit/utc-day';
 
 /** One unit row to assemble: its id, its entity key, the day it is decided on and (for period units) its period. */
 export interface AssemblyRowRef { readonly RowId: string; readonly EntityKey: string; readonly DecisionDate: Date; readonly Period: Date | null }

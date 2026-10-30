@@ -19,6 +19,7 @@ export * from './types';
 export * from './artifact-loader';
 export * from './model-readiness';
 export * from './seams';
+export * from './training-keys';
 export * from './ml-model-inference-processor';
 export * from './register';
 export * from './startup-register';

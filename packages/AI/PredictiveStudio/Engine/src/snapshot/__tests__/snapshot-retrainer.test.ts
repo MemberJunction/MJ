@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TRAINING_RUN_RESULTS_SCHEMA, type TrainerRequest, type TrainerResult } from '@memberjunction/predictive-studio-core';
-import { SnapshotIntegrityError, SnapshotRetrainer } from '../snapshot-retrainer';
+import { SnapshotRetrainer } from '../snapshot-retrainer';
+import { SnapshotIntegrityError } from '../snapshot-manifest';
 import type { ITrainerEvaluator } from '../../training/types';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { TrainerAnswers, TrainingHarness } from '../../__tests__/fakes/training-fakes';

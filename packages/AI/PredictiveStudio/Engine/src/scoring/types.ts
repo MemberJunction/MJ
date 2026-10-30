@@ -28,6 +28,7 @@
  */
 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UUIDSet } from '@memberjunction/global';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
@@ -108,6 +109,15 @@ export interface IPipelineUnitLookup {
 }
 
 /**
+ * Which records a model was trained on. Scoring asks once per loaded model, so each result can say whether its record
+ * contributed a development row to the model's Training Snapshot.
+ */
+export interface ITrainingRowsLookup {
+  /** The row ids of the model's snapshot manifest whose role is `development`; empty for a model without a snapshot. */
+  TrainingRowIdsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>>;
+}
+
+/**
  * The frozen inference contract resolved off a loaded `MJ: ML Models` row — the
  * artifact bytes plus everything the sidecar needs to *apply* (never re-fit) the
  * model. Cached warm per processor run and reused across every record in a batch.
@@ -142,6 +152,11 @@ export interface LoadedModel {
    * levels its Lineage stored, and the unit's row entity. Null for a model trained without a unit (the legacy path).
    */
   unit: LoadedUnitModel | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /**
+   * The records that contributed a development row to the model's Training Snapshot (its manifest's development row
+   * ids, compared as UUIDs); empty for a model trained without a snapshot.
+   */
+  trainingRowIds: UUIDSet;  // case-violation-ok-legacy-back-compat: matches the existing LoadedModel member casing
 }
 
 /** What scoring needs to assemble a unit model's features exactly as training did. */
@@ -168,6 +183,8 @@ export interface MLInferenceDeps {
   sidecar: ISidecarPredictor;
   /** Which unit a model's pipeline points at; defaults to a `RunViewPipelineUnitLookup` on the run's provider. */
   pipelineUnits?: IPipelineUnitLookup;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** Which records a model was trained on; defaults to a `RunViewTrainingRowsLookup` (the snapshot manifest) on the run's provider. */
+  trainingRows?: ITrainingRowsLookup;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Prediction Unit store a unit model's unit is loaded from; defaults to a `RunViewPredictionUnitStore` on the run's provider. */
   predictionUnits?: IPredictionUnitStore;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   /** Entity metadata a unit model's assembly resolves against; defaults to a `ProviderAssemblyMetadata` on the run's provider. */

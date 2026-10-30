@@ -10,6 +10,8 @@ import type { IMLModelLoader, ISidecarPredictor } from '../../scoring/types';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+/** A model trained without a Training Snapshot: no record was a training row. */
+const NO_TRAINING_ROWS = { TrainingRowIdsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
 
 
 /**
@@ -231,7 +233,7 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const artifacts = new InMemoryArtifactLoader();
     artifacts.Set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
-    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS } });
+    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS } });
 
     const result = await runner.run({
       modelId: 'model-1',
@@ -257,7 +259,7 @@ describe('ProductionScoreRecordSetRunner — scoring a list over a non-ID key', 
     const artifacts = new InMemoryArtifactLoader();
     artifacts.Set('file-1', new TextEncoder().encode('bytes'));
     const sidecar = new RecordingSidecar();
-    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS } });
+    const runner = new ProductionScoreRecordSetRunner({ deps: { modelLoader: new ModelLoader(), artifactLoader: artifacts, sidecar, pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS } });
 
     const result = await runner.run({
       modelId: 'model-1',

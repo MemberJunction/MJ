@@ -11,14 +11,13 @@
 import { CompositeKey, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, OrdinalCompare, UUIDMap } from '@memberjunction/global';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
-import type { ChangeHistoryCoverage, ChangeHistoryPolicy, JsonValue, ParseResult, ReadPolicy } from '@memberjunction/predictive-studio-core';
+import type { CellValue, ChangeHistoryCoverage, ChangeHistoryPolicy, JsonValue, ParseResult, ReadPolicy } from '@memberjunction/predictive-studio-core';
 import { JsonParse } from '@memberjunction/predictive-studio-core';
 import type { ICountingDataAccess, SourceRow } from '../data-access';
 import { CompleteReader } from '../read-policy';
 import { KeyedReader } from './read-by-keys';
 import { AssemblyRefused } from './refusal';
 import type { AssemblyEntityInfo } from '../assembly-metadata';
-import type { CellValue } from '../../prediction-unit/utc-day';
 
 export interface RecordChangeRow {
   readonly ID: string;

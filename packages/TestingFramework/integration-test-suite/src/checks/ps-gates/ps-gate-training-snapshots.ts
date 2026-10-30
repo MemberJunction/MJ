@@ -7,10 +7,10 @@
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import type { FeatureColumnSpec, PredictionUnitSpec, ValueProvenance } from '@memberjunction/predictive-studio-core';
+import { UtcDay, type FeatureColumnSpec, type PredictionUnitSpec, type ValueProvenance } from '@memberjunction/predictive-studio-core';
 import {
   BuildProductionMLInferenceDeps, MLModelInferenceProcessor, PredictionUnitRowReader, RunViewTrainingSnapshotStore, SnapshotFiles, SnapshotHash, SnapshotIntegrityError,
-  StorageProviderSnapshotFileStore, TrainingDelegation, TrainingEngine, UtcDay,
+  StorageProviderSnapshotFileStore, TrainingDelegation, TrainingEngine,
   type AsOfAssembledMatrix, type AssembledRow, type MatrixCell, type RetrainResult, type SourceRow, type UnitTrainingAssembly,
 } from '@memberjunction/predictive-studio';
 import { HarnessSidecar, ProvenanceResolver, UnitFixtures, type GateMeasurement, type ScoredRowBinding, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';

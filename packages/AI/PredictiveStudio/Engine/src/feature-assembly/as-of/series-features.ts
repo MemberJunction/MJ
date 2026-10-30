@@ -5,8 +5,7 @@
  * aggregate periods [t − endLag − periods + 1, t − endLag]. Every lag and endLag is >= the horizon (the parser
  * refuses otherwise), so nothing inside the horizon is ever read.
  */
-import type { DatedSource, TemporalSpec } from '@memberjunction/predictive-studio-core';
-import { MS_PER_DAY } from '../../prediction-unit/utc-day';
+import { MS_PER_DAY, type DatedSource, type TemporalSpec } from '@memberjunction/predictive-studio-core';
 
 /** A series feature reference, derived from the contract's `series` source (never restated). */
 // case-violation-ok-legacy-back-compat: contracts.ts wire name

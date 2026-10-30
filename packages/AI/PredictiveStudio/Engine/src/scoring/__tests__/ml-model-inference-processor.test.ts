@@ -130,7 +130,7 @@ function memberRecord(id: string, tenure: number, events: number, city: string):
   return { EntityID: 'ent-members', RecordID: id, Record: { ID: id, tenure, events_at_signup: events, city } };
 }
 
-function buildDeps(model: FakeMLModel | null = new FakeMLModel()): {
+function buildDeps(model: FakeMLModel | null = new FakeMLModel(), trainingRowIds: ReadonlySet<string> = new Set<string>()): {
   deps: MLInferenceDeps;
   loader: FakeModelLoader;
   sidecar: FakeSidecar;
@@ -142,7 +142,9 @@ function buildDeps(model: FakeMLModel | null = new FakeMLModel()): {
   artifacts.Set('file-1', new TextEncoder().encode('fake-model-bytes'));
   // The members pipeline has no Prediction Unit: these models are legacy models.
   const noUnits = { PredictionUnitIDOf: async () => null };
-  return { deps: { modelLoader: loader, artifactLoader: artifacts, sidecar, pipelineUnits: noUnits }, loader, sidecar, artifacts };
+  // The model's training rows (the development rows of its snapshot manifest); none by default.
+  const trainingRows = { TrainingRowIdsOf: async (modelId: string) => (modelId === 'model-1' ? trainingRowIds : new Set<string>()) };
+  return { deps: { modelLoader: loader, artifactLoader: artifacts, sidecar, pipelineUnits: noUnits, trainingRows }, loader, sidecar, artifacts };
 }
 
 function buildProcessor(deps: MLInferenceDeps): MLModelInferenceProcessor {
@@ -163,6 +165,8 @@ describe('MLModelInferenceProcessor.ProcessRecord — per-record scoring', () =>
     expect(payload.problemType).toBe('classification');
     expect(typeof payload.score).toBe('number');
     expect(payload.class).toBe('renew');
+    // A model trained without a snapshot has no training rows.
+    expect(payload.inTraining).toBe(false);
 
     // --- The sidecar got ONE row, shaped to the model's frozen schema ---
     expect(sidecar.Requests.length).toBe(1);
@@ -401,7 +405,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
   const pipelineUnits = { PredictionUnitIDOf: async (pipelineId: string) => (pipelineId === 'pipe-u' ? UnitYearsWorld.UnitID : null) };
 
   /** A Validated unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
-  async function unitModel(lineageOverride?: string, lookup: typeof pipelineUnits = pipelineUnits): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
+  async function unitModel(lineageOverride?: string, lookup: typeof pipelineUnits = pipelineUnits, trainingRowIds: ReadonlySet<string> = new Set<string>()): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
     const dataAccess = new TableDataAccess(UnitYearsWorld.Tables());
     const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess));
     if (training.Assembled.Status !== 'assembled') throw new Error('training assembly refused');
@@ -416,7 +420,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
       targetEntityName: 'Years', sourceBindings: [], featureSteps: steps, asOfStrategy: { Mode: 'none' },
     });
     if (lineageOverride !== undefined) model.Lineage = lineageOverride;
-    const { deps, sidecar } = buildDeps(model);
+    const { deps, sidecar } = buildDeps(model, trainingRowIds);
     return { deps: { ...deps, pipelineUnits: lookup, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
   }
 
@@ -518,5 +522,22 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const results = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).ProcessBatch(records, ctx(UnitYearsWorld.YearsEntity.ID));
     expect(results.map((r) => r.Status)).toEqual(['Succeeded', 'Succeeded']);
     expect(sidecar.Requests[0].rows).toEqual([{ EventsAttended: 20, Status: 'Active' }, { EventsAttended: 21, Status: 'Lapsed' }]);
+  });
+
+  it('marks a record that was a development row of the training snapshot as in training, and a held-out record as not', async () => {
+    // The 2024 cycle developed the model; 2025 was its locked holdout. Row ids are compared as UUIDs (case-insensitively).
+    const { deps } = await unitModel(undefined, pipelineUnits, new Set(['Y2024-0', 'Y2024-1', 'Y2024-2', 'Y2024-3']));
+    const records: RecordRef[] = [{ EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2024-2' }, { EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2025-2' }];
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps });
+    const batch = await processor.ProcessBatch(records, ctx(UnitYearsWorld.YearsEntity.ID));
+    expect(batch.map((r) => (r.ResultPayload as MLInferenceResultPayload).inTraining)).toEqual([true, false]);
+    const single = await processor.ProcessRecord(records[0], ctx(UnitYearsWorld.YearsEntity.ID));
+    expect((single.ResultPayload as MLInferenceResultPayload).inTraining).toBe(true);
+  });
+
+  it('fails the run when the training rows cannot be read, naming the cause', async () => {
+    const { deps } = await unitModel();
+    const failing: MLInferenceDeps = { ...deps, trainingRows: { TrainingRowIdsOf: async () => { throw new Error('Loading the training run of model model-1 failed: timeout'); } } };
+    await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps: failing }).Preflight(ctx(UnitYearsWorld.YearsEntity.ID))).rejects.toThrow('Loading the training run of model model-1 failed: timeout');
   });
 });

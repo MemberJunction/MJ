@@ -21,6 +21,8 @@ import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
+/** A model trained without a Training Snapshot: no record was a training row. */
+const NO_TRAINING_ROWS = { TrainingRowIdsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
 
 
 /**
@@ -103,7 +105,7 @@ function setup(models: FakeModel[]): { deps: MLInferenceDeps; map: Map<string, F
   const map = new Map(models.map((m) => [m.ID, m]));
   const artifacts = new InMemoryArtifactLoader();
   artifacts.Set('file-1', new TextEncoder().encode('bytes'));
-  return { deps: { modelLoader: new MapModelLoader(map), artifactLoader: artifacts, sidecar: new FakeSidecar(), pipelineUnits: NO_PIPELINE_UNITS }, map, artifacts };
+  return { deps: { modelLoader: new MapModelLoader(map), artifactLoader: artifacts, sidecar: new FakeSidecar(), pipelineUnits: NO_PIPELINE_UNITS, trainingRows: NO_TRAINING_ROWS }, map, artifacts };
 }
 
 describe('model readiness helpers', () => {

@@ -8,7 +8,7 @@
  * run that logged no trainer request is refused.
  */
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import {
+import { UtcDay,
   PredictionUnit,
   TrainerContract,
   TrainingRunResultsParser,
@@ -18,30 +18,14 @@ import {
   type TrainerRequestConfig,
   type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
-import { UtcDay } from '../prediction-unit/utc-day';
 import type { TrainingDeps } from '../training/types';
 import { TrainerRequestBuilder } from '../training/trainer-request';
 import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore } from '../training/evaluation-protocol-store';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { SnapshotFiles, type SnapshotContent } from './snapshot-serialization';
-import { SnapshotHash } from './snapshot-hash';
+import { SnapshotIntegrityError, SnapshotManifest } from './snapshot-manifest';
 import { StorageProviderSnapshotFileStore, type ISnapshotFileStore } from './snapshot-file-store';
 import { RunViewTrainingSnapshotStore, type ITrainingSnapshotStore } from './training-snapshot-store';
-
-/** What a retraining verifies: one of the three stored files, or the content hash the row's identity yields. */
-export type SnapshotIntegrityTarget = 'matrix' | 'manifest' | 'provenance' | 'content';
-
-/**
- * A stored snapshot file whose bytes no longer match the SHA-256 on its snapshot row (`File` names the file), or a
- * snapshot whose matrix and manifest hashes and identity columns no longer yield its `ContentHash` (`File` is
- * `'content'`).
- */
-export class SnapshotIntegrityError extends Error {
-  constructor(public readonly File: SnapshotIntegrityTarget, public readonly Expected: string, public readonly Actual: string) {
-    super(`Snapshot ${File} sha256 mismatch: stored ${Expected}, read ${Actual}`);
-    this.name = 'SnapshotIntegrityError';
-  }
-}
 
 /** The outcome of retraining a completed run from its Training Snapshot. */
 export interface RetrainResult {
@@ -209,9 +193,9 @@ export class SnapshotRetrainer {
       files.Get(snapshot.RowManifestFileID),
       files.Get(snapshot.ProvenanceFileID),
     ]);
-    const matrixSha256 = SnapshotRetrainer.verifiedSha256('matrix', matrix, snapshot.MatrixSha256);
-    const manifestSha256 = SnapshotRetrainer.verifiedSha256('manifest', manifest, snapshot.RowManifestSha256);
-    SnapshotRetrainer.verifiedSha256('provenance', provenance, snapshot.ProvenanceSha256);
+    const matrixSha256 = SnapshotManifest.VerifiedSha256('matrix', matrix, snapshot.MatrixSha256);
+    const manifestSha256 = SnapshotManifest.VerifiedSha256('manifest', manifest, snapshot.RowManifestSha256);
+    SnapshotManifest.VerifiedSha256('provenance', provenance, snapshot.ProvenanceSha256);
     const contentHash = SnapshotFiles.ComputeSnapshotContentHash({
       MatrixSha256: matrixSha256,
       RowManifestSha256: manifestSha256,
@@ -242,12 +226,5 @@ export class SnapshotRetrainer {
   /** Where the snapshot files are read: `deps.snapshotFiles`, or the storage-provider store on the request's provider. */
   protected FileStore(deps: TrainingDeps): ISnapshotFileStore {
     return deps.snapshotFiles || new StorageProviderSnapshotFileStore(deps.entityFactory, deps.provider, deps.contextUser);
-  }
-
-  /** The bytes' SHA-256 when it equals the stored one; otherwise `SnapshotIntegrityError` naming the file. */
-  private static verifiedSha256(file: SnapshotIntegrityTarget, bytes: Uint8Array, expected: string): string {
-    const actual = SnapshotHash.Sha256Hex(bytes);
-    if (actual !== expected) throw new SnapshotIntegrityError(file, expected, actual);
-    return actual;
   }
 }
