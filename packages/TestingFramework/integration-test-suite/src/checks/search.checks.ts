@@ -26,7 +26,7 @@ import type { MJSearchExecutionLogEntity, MJSearchScopeEntity } from '@memberjun
 import { GraphQLDataProvider, GraphQLSearchClient } from '@memberjunction/graphql-dataprovider';
 import { SearchEngine, DefaultSearchScopePermissionResolver } from '@memberjunction/search-engine';
 import type { SearchResultItem } from '@memberjunction/search-engine';
-import { Assert, AssertEqual, SEEDED_NOGRANT_EMAIL, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SEEDED_NOGRANT_EMAIL, SEED_FIXTURES_COMMAND, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -233,9 +233,8 @@ export const SearchChecks: NamedCheck[] = [
         Name: 'SR7: GraphQLSearchClient scope list round-trips over the wire with no phantom scopes (Network transport only)',
         Fn: async (ctx): Promise<void> => {
             if (!(ctx.Provider instanceof GraphQLDataProvider)) {
-                console.warn('  ⚠ search.SR7 SKIPPED — this run is not on the GraphQL client transport; '
-                    + 'run the client dispatcher (bootstrapIntegrationClient) to exercise the wire leg');
-                return;
+                SkipCheck('this run is not on the GraphQL client transport; '
+                    + 'run the client dispatcher (bootstrapIntegrationClient) to exercise the wire leg.');
             }
             const client = new GraphQLSearchClient(ctx.Provider);
             const wireScopes = await client.GetSearchScopes();
@@ -265,9 +264,8 @@ export const SearchChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const noGrant = await loadSeededNoGrantUser(ctx);
             if (!noGrant || UUIDsEqual(noGrant.ID, ctx.User.ID)) {
-                console.warn(`  ⚠ search.SR8 SKIPPED — seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not found (or is the context user); `
+                SkipCheck(`seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not found (or is the context user); `
                     + `seed with: ${SEED_FIXTURES_COMMAND}`);
-                return;
             }
             AssertEqual(noGrant.UserRoles.length, 0, `fixture invalid: '${SEEDED_NOGRANT_EMAIL}' has roles; it must have none`);
             const engine = SearchEngine.Instance;
