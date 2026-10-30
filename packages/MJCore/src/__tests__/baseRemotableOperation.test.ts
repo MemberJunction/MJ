@@ -14,6 +14,7 @@ import {
     RemoteOperationError,
     RemoteOpServerContext,
 } from '../generic/baseRemotableOperation';
+import { DispatchRemoteOperationInProcess } from '../generic/remoteOperationDispatch';
 import { IMetadataProvider, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
 import { UserInfo } from '../generic/securityInfo';
@@ -295,5 +296,57 @@ describe('ProviderBase.RouteOperation — default transport', () => {
         const result = await new TestMetadataProvider().RouteOperation('Test.Greet', { name: 'x' });
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('NOT_SUPPORTED');
+    });
+});
+
+describe('DispatchRemoteOperationInProcess — contractFingerprint gate', () => {
+    it('returns CONTRACT_MISMATCH before Authorize/InternalExecute when options.contractFingerprint differs from op.ContractFingerprint', async () => {
+        let authorizeCalled = false;
+        let executeCalled = false;
+
+        @RegisterClass(BaseRemotableOperation, 'Test.FingerprintedOp')
+        class FingerprintedOp extends BaseRemotableOperation<GreetInput, GreetOutput> {
+            public readonly OperationKey = 'Test.FingerprintedOp';
+            public override readonly ContractFingerprint = 'sha256:server-v2';
+
+            protected override async Authorize(): Promise<boolean> {
+                authorizeCalled = true;
+                return true;
+            }
+
+            protected override async InternalExecute(input: GreetInput): Promise<GreetOutput> {
+                executeCalled = true;
+                return { message: `Hello, ${input.name}` };
+            }
+        }
+        void FingerprintedOp;
+
+        const provider = new TestMetadataProvider();
+        const user = new UserInfo(provider, { ID: 'user-fp-test', Name: 'FP Tester' });
+
+        const mismatch = await DispatchRemoteOperationInProcess<GreetInput, GreetOutput>(
+            'Test.FingerprintedOp',
+            { name: 'Ada' },
+            { user, contractFingerprint: 'sha256:client-v1' },
+            provider,
+        );
+        expect(mismatch.Success).toBe(false);
+        expect(mismatch.ResultCode).toBe('CONTRACT_MISMATCH');
+        expect(mismatch.ErrorMessage).toContain('sha256:client-v1');
+        expect(mismatch.ErrorMessage).toContain('sha256:server-v2');
+        expect(authorizeCalled).toBe(false);
+        expect(executeCalled).toBe(false);
+
+        const match = await DispatchRemoteOperationInProcess<GreetInput, GreetOutput>(
+            'Test.FingerprintedOp',
+            { name: 'Ada' },
+            { user, contractFingerprint: 'sha256:server-v2' },
+            provider,
+        );
+        expect(match.Success).toBe(true);
+        expect(match.ResultCode).toBe('SUCCESS');
+        expect(match.Output).toEqual({ message: 'Hello, Ada' });
+        expect(authorizeCalled).toBe(true);
+        expect(executeCalled).toBe(true);
     });
 });

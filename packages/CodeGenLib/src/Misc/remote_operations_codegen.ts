@@ -12,7 +12,12 @@ import { logError } from './status_logging';
  * generation prompt (`remote-operation-generation.template.md`) advertises the same defaults, so the model
  * never declares them. All are exported by `@memberjunction/core`.
  */
-export const DEFAULT_REMOTE_OP_LIBRARY_ITEMS: ReadonlyArray<string> = ['RunView', 'Metadata', 'RunQuery'];
+export const DEFAULT_REMOTE_OP_LIBRARY_ITEMS: ReadonlyArray<string> = [
+    'RunView',
+    'Metadata',
+    'RunQuery',
+    'RemoteOperationError',
+];
 
 /**
  * Minimal entity descriptor shape needed to resolve a Remote Operation's schema.

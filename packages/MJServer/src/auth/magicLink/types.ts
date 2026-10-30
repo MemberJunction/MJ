@@ -115,8 +115,9 @@ export interface CreateMagicLinkInviteParams {
   firstName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   lastName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /**
-   * Optional per-invite post-redemption redirect URL. Must match an allowed frontend origin
-   * (`magicLink.explorerUrl` origin or `cors.allowedOrigins`). Cryptographically bound to the
+   * Optional per-invite post-redemption redirect URL. Must match an explicit allowed frontend
+   * origin (`magicLink.explorerUrl`, `magicLink.allowedRedirectOrigins`, or non-wildcard
+   * `cors.allowedOrigins`; wildcard `'*'` is always rejected). Cryptographically bound to the
    * invite's token hash via RS256 so it cannot be tampered with or swapped across invites.
    */
   RedirectUrl?: string;

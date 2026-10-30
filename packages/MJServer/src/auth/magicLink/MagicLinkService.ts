@@ -80,7 +80,9 @@ interface ProvisionResult {
 
 /**
  * Validates that a candidate `redirectUrl` is a well-formed `http:` or `https:` URL whose
- * origin matches at least one normalized entry in `allowedOrigins` (or `'...'` contains `'*'`).
+ * origin matches at least one concrete normalized entry in `allowedOrigins`.
+ * Wildcard `'*'` entries are explicitly ignored/rejected so session tokens can never be
+ * redirected to unvalidated origins.
  */
 export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigins: readonly string[]): boolean {
   const trimmed = redirectUrl.trim();
@@ -99,11 +101,8 @@ export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigin
   const normalizedTargetOrigin = parsed.origin.toLowerCase();
   for (const rawAllowed of allowedOrigins) {
     const candidate = (rawAllowed ?? '').trim();
-    if (!candidate) {
+    if (!candidate || candidate === '*') {
       continue;
-    }
-    if (candidate === '*') {
-      return true;
     }
     try {
       const allowedUrl = new URL(candidate);
@@ -343,9 +342,12 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
         };
       }
 
+      const nowMs = Date.now();
       invite.ExpiresAt = expiresAt;
-      if (invite.Status === 'Expired' && expiresAt.getTime() > Date.now()) {
+      if (invite.Status === 'Expired' && expiresAt.getTime() > nowMs && invite.UseCount < invite.MaxUses) {
         invite.Status = 'Active';
+      } else if (invite.Status === 'Active' && expiresAt.getTime() <= nowMs) {
+        invite.Status = 'Expired';
       }
 
       if (!(await invite.Save())) {
@@ -644,16 +646,21 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     return `${base}/magic-link/redeem?token=${encodeURIComponent(rawToken)}${rtParam}`;
   }
 
-  /** Collects the origins a caller-supplied per-invite `RedirectUrl` is permitted to target. */
+  /**
+   * Collects concrete frontend origins a caller-supplied per-invite `RedirectUrl` is permitted
+   * to target (`explorerUrl`, `magicLink.allowedRedirectOrigins`, and non-wildcard `cors.allowedOrigins`).
+   */
   private allowedRedirectOrigins(): string[] {
     const origins: string[] = [];
-    if (this.config.explorerUrl?.trim()) {
-      origins.push(this.config.explorerUrl.trim());
-    }
-    const corsOrigins = configInfo.cors?.allowedOrigins ?? [];
-    for (const o of corsOrigins) {
-      if (o?.trim()) {
-        origins.push(o.trim());
+    const candidates: readonly (string | undefined)[] = [
+      this.config.explorerUrl ?? configInfo.magicLink?.explorerUrl,
+      ...(this.config.allowedRedirectOrigins ?? configInfo.magicLink?.allowedRedirectOrigins ?? []),
+      ...(configInfo.cors?.allowedOrigins ?? []),
+    ];
+    for (const raw of candidates) {
+      const trimmed = raw?.trim();
+      if (trimmed && trimmed !== '*') {
+        origins.push(trimmed);
       }
     }
     return origins;

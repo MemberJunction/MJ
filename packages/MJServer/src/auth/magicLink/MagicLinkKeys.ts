@@ -151,10 +151,15 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   }
 
   /**
-   * Signs a short-lived redirect binding JWT (`mj_purpose = 'magic-link-redirect'`) that
-   * cryptographically binds a validated `redirectUrl` to a specific invite's `tokenHash` and expiry.
+   * Signs a redirect binding JWT (`mj_purpose = 'magic-link-redirect'`) that cryptographically
+   * binds a validated `redirectUrl` to a specific invite's `tokenHash`.
+   *
+   * Note: Expiration is intentionally omitted from the redirect binding JWT because the database
+   * invite row's `ExpiresAt` (enforced atomically during `RedeemInvite`) is the authoritative,
+   * mutable expiration — allowing `UpdateInviteExpiry()` to extend an invite without invalidating
+   * an already-delivered `&rt=` parameter.
    */
-  public SignRedirectBinding(tokenHash: string, redirectUrl: string, expiresAtEpochSeconds: number): string {
+  public SignRedirectBinding(tokenHash: string, redirectUrl: string, _expiresAtEpochSeconds?: number): string {
     this.ensureInitialized();
     const nowSeconds = Math.floor(Date.now() / 1000);
     return jwt.sign(
@@ -163,7 +168,6 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
         mj_th: tokenHash,
         mj_redirect: redirectUrl,
         iat: nowSeconds,
-        exp: Math.max(expiresAtEpochSeconds, nowSeconds + 60),
       },
       this.privateKeyPem,
       { algorithm: 'RS256', keyid: this._kid },
@@ -172,13 +176,18 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
 
   /**
    * Verifies a redirect binding JWT produced by {@link SignRedirectBinding} and ensures it matches
-   * `expectedTokenHash` (preventing cross-invite substitution). Returns the bound URL or `null`.
+   * `expectedTokenHash` (preventing cross-invite substitution) and carries a valid `http(s)` URL.
+   * Ignores JWT `exp` so bindings minted before an `UpdateInviteExpiry()` extension remain valid
+   * while the underlying invite row is valid. Returns the bound URL or `null`.
    */
   public VerifyRedirectBinding(bindingToken: string, expectedTokenHash: string): string | null {
     this.ensureInitialized();
     try {
       const publicPem = this.publicKey!.export({ type: 'spki', format: 'pem' }) as string;
-      const decoded = jwt.verify(bindingToken, publicPem, { algorithms: ['RS256'] });
+      const decoded = jwt.verify(bindingToken, publicPem, {
+        algorithms: ['RS256'],
+        ignoreExpiration: true,
+      });
       if (!decoded || typeof decoded !== 'object') {
         return null;
       }
@@ -189,6 +198,10 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
         typeof record.mj_redirect !== 'string' ||
         !record.mj_redirect
       ) {
+        return null;
+      }
+      const parsed = new URL(record.mj_redirect);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         return null;
       }
       return record.mj_redirect;

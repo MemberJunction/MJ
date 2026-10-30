@@ -155,17 +155,19 @@ describe('MagicLinkService programmatic extension capabilities (Item 3.6)', () =
     } as object as UserInfo;
 
     beforeEach(() => {
+        mockCorsConfig.allowedOrigins = ['https://portal.example.com', 'https://forms.example.com'];
         MagicLinkKeyManager.Instance.Initialize();
         vi.clearAllMocks();
     });
 
     describe('IsMagicLinkRedirectUrlAllowed', () => {
-        it('allows matching http(s) origins and rejects non-http schemes or unlisted origins', () => {
+        it('allows matching http(s) origins and rejects non-http schemes, unlisted origins, and wildcard *', () => {
             const allowed = ['https://explorer.example.com', 'https://forms.example.com:8443'];
             expect(IsMagicLinkRedirectUrlAllowed('https://forms.example.com:8443/respond/abc?step=2', allowed)).toBe(true);
             expect(IsMagicLinkRedirectUrlAllowed('https://evil.example.com/phish', allowed)).toBe(false);
             expect(IsMagicLinkRedirectUrlAllowed('javascript:alert(1)', allowed)).toBe(false);
-            expect(IsMagicLinkRedirectUrlAllowed('https://anywhere.example.org/ok', ['*'])).toBe(true);
+            expect(IsMagicLinkRedirectUrlAllowed('https://anywhere.example/cb', ['*'])).toBe(false);
+            expect(IsMagicLinkRedirectUrlAllowed('https://anywhere.example.org/ok', ['*', ''])).toBe(false);
         });
     });
 
@@ -219,6 +221,49 @@ describe('MagicLinkService programmatic extension capabilities (Item 3.6)', () =
             expect(res.success).toBe(false);
             expect(res.errorCode).toBe('invalid_redirect_url');
             expect(invites.size).toBe(0);
+        });
+
+        it('ignores wildcard * in cors.allowedOrigins while honoring explicit magicLink.allowedRedirectOrigins', async () => {
+            mockCorsConfig.allowedOrigins = ['*'];
+            const invites = new Map<string, StoredInviteState>();
+            const provider = makeFakeProvider(invites);
+            const service = new MagicLinkService(
+                'https://api.example.com',
+                makeConfig({
+                    explorerUrl: 'https://explorer.example.com',
+                    allowedRedirectOrigins: ['https://surveys.example.com'],
+                }),
+            );
+
+            // Wildcard CORS does NOT open up arbitrary redirect origins
+            const rejected = await service.CreateInvite(
+                {
+                    email: 'respondent@example.com',
+                    ApplicationId: 'app-forms',
+                    RedirectUrl: 'https://anywhere.example/cb',
+                    SendEmail: false,
+                },
+                ownerUser,
+                provider,
+            );
+            expect(rejected.success).toBe(false);
+            expect(rejected.errorCode).toBe('invalid_redirect_url');
+
+            // Explicit magicLink.allowedRedirectOrigins works cleanly under wildcard CORS
+            const permitted = await service.CreateInvite(
+                {
+                    email: 'respondent@example.com',
+                    ApplicationId: 'app-forms',
+                    RedirectUrl: 'https://surveys.example.com/respond/99',
+                    SendEmail: false,
+                },
+                ownerUser,
+                provider,
+            );
+            expect(permitted.success).toBe(true);
+            const url = new URL(permitted.redemptionUrl!);
+            const rt = url.searchParams.get('rt') ?? undefined;
+            expect(service.ResolveVerifiedRedirectUrl(permitted.rawToken!, rt)).toBe('https://surveys.example.com/respond/99');
         });
     });
 
@@ -277,6 +322,66 @@ describe('MagicLinkService programmatic extension capabilities (Item 3.6)', () =
             expect(updated.success).toBe(true);
             expect(updated.status).toBe('Active');
             expect(updated.expiresAt).toBe(newExpiry.toISOString());
+        });
+
+        it('keeps &rt= redirect binding valid after UpdateInviteExpiry extends an invite past its initial expiry, and guards UseCount/past-expiry transitions', async () => {
+            const invites = new Map<string, StoredInviteState>();
+            const provider = makeFakeProvider(invites);
+            const service = new MagicLinkService('https://api.example.com', makeConfig());
+
+            const rawToken = 'mj_ml_1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff';
+            const tokenHash = HashToken(rawToken);
+            const pastExpiry = new Date(Date.now() - 3600_000);
+            // Mint redirect binding with a past ExpiresAt epoch
+            const rt = MagicLinkKeyManager.Instance.SignRedirectBinding(
+                tokenHash,
+                'https://forms.example.com/survey/extended',
+                Math.floor(pastExpiry.getTime() / 1000),
+            );
+
+            invites.set('inv-extend-rt', {
+                ID: 'inv-extend-rt',
+                TokenHash: tokenHash,
+                Email: 'respondent@example.com',
+                ApplicationID: 'app-forms',
+                RoleID: 'role-guest',
+                ExpiresAt: pastExpiry,
+                MaxUses: 1,
+                UseCount: 0,
+                CreatedByUserID: ownerUser.ID,
+                Status: 'Expired',
+            });
+
+            // Extend invite into the future without re-issuing the URL
+            const extendedExpiry = new Date(Date.now() + 24 * 3600_000);
+            const extended = await service.UpdateInviteExpiry('inv-extend-rt', extendedExpiry, ownerUser, provider);
+            expect(extended.success).toBe(true);
+            expect(extended.status).toBe('Active');
+
+            // Original &rt= binding still resolves the allowlisted RedirectUrl
+            expect(service.ResolveVerifiedRedirectUrl(rawToken, rt)).toBe('https://forms.example.com/survey/extended');
+
+            // Shortening an Active invite to <= now transitions Status to Expired
+            const shortened = await service.UpdateInviteExpiry('inv-extend-rt', new Date(Date.now() - 1000), ownerUser, provider);
+            expect(shortened.success).toBe(true);
+            expect(shortened.status).toBe('Expired');
+
+            // An Expired invite whose UseCount >= MaxUses is NOT reactivated to Active
+            invites.set('inv-exhausted-expired', {
+                ID: 'inv-exhausted-expired',
+                TokenHash: HashToken('mj_ml_exhausted'),
+                Email: 'used@example.com',
+                ApplicationID: 'app-forms',
+                RoleID: 'role-guest',
+                ExpiresAt: pastExpiry,
+                MaxUses: 1,
+                UseCount: 1,
+                CreatedByUserID: ownerUser.ID,
+                Status: 'Expired',
+            });
+            const notReactivated = await service.UpdateInviteExpiry('inv-exhausted-expired', extendedExpiry, ownerUser, provider);
+            expect(notReactivated.success).toBe(true);
+            expect(notReactivated.status).toBe('Expired');
         });
     });
 

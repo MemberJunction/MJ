@@ -195,6 +195,7 @@ describe('RemoteOperationGeneratorBase', () => {
             expect(out).not.toContain('import { RegisterClass }');
         });
         it('a file with a body imports the essentials + defaults from core, and RegisterClass from global', async () => {
+            expect(DEFAULT_REMOTE_OP_LIBRARY_ITEMS).toContain('RemoteOperationError');
             const out = await generate([
                 makeOp({ GenerationType: 'AI', CodeApprovalStatus: 'Approved', Code: 'return { ok: true };' }),
             ]);

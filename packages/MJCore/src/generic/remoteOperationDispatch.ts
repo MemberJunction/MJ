@@ -44,12 +44,21 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         };
     }
 
-    const user = options.user ?? fallbackUser;
+    const user = options?.user ?? fallbackUser;
     if (!user) {
         return {
             Success: false,
             ResultCode: 'NO_USER',
             ErrorMessage: `No acting user available for operation '${operationKey}'`,
+        };
+    }
+
+    const requestedFingerprint = options?.contractFingerprint?.trim();
+    if (requestedFingerprint && op.ContractFingerprint && requestedFingerprint !== op.ContractFingerprint) {
+        return {
+            Success: false,
+            ResultCode: 'CONTRACT_MISMATCH',
+            ErrorMessage: `Contract fingerprint mismatch for operation '${operationKey}' (client='${requestedFingerprint}', server='${op.ContractFingerprint}')`,
         };
     }
 
