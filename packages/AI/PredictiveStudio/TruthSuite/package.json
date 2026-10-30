@@ -13,6 +13,7 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:regeneration": "vitest run --config vitest.regeneration.config.ts",
     "test:python": "node scripts/run-pytest.mjs && node scripts/run-pytest.mjs --mypy",
+    "test:gate-parity-refpipe": "node scripts/run-pytest.mjs -p no:cacheprovider tests/test_gate_parity_refpipe.py",
     "truth:loom": "node scripts/fetch-loom.mjs",
     "truth:data": "tsx src/data/cli.ts",
     "truth:provision": "node scripts/provision.mjs",

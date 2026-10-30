@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "setup:python": "node scripts/setup-python.mjs",
-    "test:python": "node scripts/run-pytest.mjs"
+    "test:python": "node scripts/run-pytest.mjs",
+    "test:gate-parity": "node scripts/run-pytest.mjs -p no:cacheprovider tests/test_gate_parity.py"
   },
   "keywords": [
     "memberjunction",
