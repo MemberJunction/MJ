@@ -46,7 +46,10 @@ vi.mock('fs', async () => {
         ...actual,
         default: {
             ...actual,
-            existsSync: vi.fn().mockReturnValue(true),
+            // The output directory '/out' "exists", but no generated file in it does: an existing
+            // file would be read back (WriteFileIfChanged compares before writing), and the real
+            // filesystem has no '/out'.
+            existsSync: vi.fn((target: string) => !String(target).startsWith('/out/')),
             writeFileSync: vi.fn(),
             // The emit path routes through writeFileIfChanged, which creates the output
             // directory before writing. Unmocked, that hits the real filesystem at '/out'.
